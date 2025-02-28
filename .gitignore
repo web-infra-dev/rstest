@@ -1,0 +1,33 @@
+.DS_Store
+*.log*
+*.cpuprofile
+node_modules/
+
+dist/
+dist-*
+compiled/
+coverage/
+doc_build/
+playwright-report/
+tsconfig.tsbuildinfo
+.swc
+
+# CSS Modules dist files
+*.css.d.ts
+*.less.d.ts
+*.scss.d.ts
+
+# Test temp files
+test-temp-*
+
+.vscode/**/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.nx/
+.history/
+.env.local
+.env.*.local
+
+# ignore directory for artifacts produced by tests
+test-results/

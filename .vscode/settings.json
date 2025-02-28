@@ -1,0 +1,18 @@
+{
+  "search.useIgnoreFiles": true,
+  "search.exclude": {
+    "**/.git": true,
+    "**/dist": true,
+    "**/dist-*": true,
+    "**/coverage": true,
+    "**/compiled": true,
+    "**/doc_build": true,
+    "**/node_modules": true,
+    "**/tsconfig.tsbuildinfo": true
+  },
+  "files.exclude": {
+    "**/.DS_Store": true
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

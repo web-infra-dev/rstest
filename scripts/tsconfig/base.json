@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false,
+    "target": "ES2021",
+    "lib": ["DOM", "ESNext"],
+    "allowJs": false,
+    "checkJs": false,
+    "module": "ES2020",
+    "strict": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "moduleResolution": "Bundler",
+    "useDefineForClassFields": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base"
+}
