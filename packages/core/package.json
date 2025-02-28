@@ -1,0 +1,41 @@
+{
+  "name": "@rstest/core",
+  "version": "0.0.0",
+  "description": "The Rsbuild-based test tool.",
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/core"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist-types/index.d.ts",
+  "files": [
+    "bin",
+    "dist",
+    "dist-types",
+    "compiled",
+    "types.d.ts"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@rslib/core": "0.5.1",
+    "@rstest/tsconfig": "workspace:*"
+  },
+  "engines": {
+    "node": ">=16.7.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  }
+}
