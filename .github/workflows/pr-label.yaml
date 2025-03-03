@@ -1,5 +1,5 @@
 name: PR Labeler
-// 因为权限问题禁用 PR Labeler CI
+
 on:
   # TODO: Disabled due to private repo permission
   # pull_request_target:
