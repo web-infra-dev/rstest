@@ -2,6 +2,9 @@
   "name": "@rstest/core",
   "version": "0.0.0",
   "description": "The Rsbuild-based test tool.",
+  "bin": {
+    "rstest": "./bin/rstest.js"
+  },
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
@@ -27,6 +30,8 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "picocolors": "^1.1.1",
+    "rslog": "^1.2.3",
     "@rslib/core": "0.5.2",
     "@rstest/tsconfig": "workspace:*"
   },

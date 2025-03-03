@@ -1,1 +1,1 @@
-console.log('hello world');
+export { runCLI } from './cli';
