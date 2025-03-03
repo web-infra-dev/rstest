@@ -27,7 +27,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@rslib/core": "0.5.1",
+    "@rslib/core": "0.5.2",
     "@rstest/tsconfig": "workspace:*"
   },
   "engines": {
