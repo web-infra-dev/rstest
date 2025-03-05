@@ -3,6 +3,7 @@ import cac, { type CAC } from 'cac';
 import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';
 import { getAbsolutePath } from '../utils/helper';
+import { logger } from '../utils/logger';
 
 type CommonOptions = {
   root?: string;
@@ -29,7 +30,7 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function init(options: CommonOptions): Promise<{
+export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
   configFilePath: string | null;
 }> {
@@ -64,14 +65,22 @@ export function setupCommands(): void {
   cli
     .command('run [...filters]', 'run Rstest without watch mode')
     .action(async (options: CommonOptions) => {
-      await init(options);
-      console.log('run Rstest without watch mode');
+      try {
+        const { config } = await initCli(options);
+        const { createRstest } = await import('../core');
+        const rstest = createRstest(config);
+        await rstest.runTests();
+      } catch (err) {
+        logger.error('Failed to run Rstest.');
+        logger.error(err);
+        process.exit(1);
+      }
     });
 
   cli
     .command('watch [...filters]', 'run Rstest in watch mode')
     .action(async (options: CommonOptions) => {
-      await init(options);
+      await initCli(options);
       console.log('run Rstest in watch mode');
     });
 

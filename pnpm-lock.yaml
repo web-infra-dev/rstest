@@ -18,8 +18,8 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^22.8.1
-        version: 22.13.5
+        specifier: ^22.13.8
+        version: 22.13.8
       check-dependency-version-consistency:
         specifier: ^5.0.0
         version: 5.0.0
@@ -51,8 +51,20 @@ importers:
         specifier: ^2.11.1
         version: 2.11.1
       typescript:
-        specifier: ^5.7.3
-        version: 5.7.3
+        specifier: ^5.8.2
+        version: 5.8.2
+
+  examples/node:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@types/node':
+        specifier: ^22.13.8
+        version: 22.13.8
+      typescript:
+        specifier: ^5.8.2
+        version: 5.8.2
 
   packages/core:
     dependencies:
@@ -62,7 +74,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.5.2
-        version: 0.5.2(typescript@5.7.3)
+        version: 0.5.2(typescript@5.8.2)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -75,6 +87,9 @@ importers:
       rslog:
         specifier: ^1.2.3
         version: 1.2.3
+      tinyglobby:
+        specifier: ^0.2.12
+        version: 0.2.12
 
   scripts/tsconfig: {}
 
@@ -473,8 +488,8 @@ packages:
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
 
-  '@types/node@22.13.5':
-    resolution: {integrity: sha512-+lTU0PxZXn0Dr1NBtC7Y8cR21AJr87dLLU953CWA6pMxxv/UDc7jYAY90upcrie1nRcD6XNG5HOYEDtgW5TxAg==}
+  '@types/node@22.13.8':
+    resolution: {integrity: sha512-G3EfaZS+iOGYWLLRCEAXdWK9my08oHNZ+FHluRiggIYJPOXzhOiDgpVCUHaUvyIC5/fj7C/p637jdzC666AOKQ==}
 
   '@yarnpkg/lockfile@1.1.0':
     resolution: {integrity: sha512-GpSwvyXOcOOlV70vbnzjj4fW5xW/FdUF6nQEt1ENy7m4ZCczi1+/buVUPAqmGfqznsORNFzUMjctTIp8a9tuCQ==}
@@ -1349,8 +1364,8 @@ packages:
     resolution: {integrity: sha512-2/AwEFQDFEy30iOLjrvHDIH7e4HEWH+f1Yl1bI5XMqzuoCUqwYCdxachgsgv0og/JdVZUhbfjcJAoHj5L1753A==}
     engines: {node: '>=16'}
 
-  typescript@5.7.3:
-    resolution: {integrity: sha512-84MVSjMEHP+FQRPy3pX9sTVV/INIex71s9TL2Gm5FG/WG1SqXeKyZ0k7/blY/4FdOzI12CBy1vGc4og/eus0fw==}
+  typescript@5.8.2:
+    resolution: {integrity: sha512-aJn6wq13/afZp/jT9QZmwEjDqqvSGp1VT5GVg+f/t6/oVyrgXM6BY1h9BRh/O5p3PlUPAe+WuiEZOmb/49RqoQ==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -1748,13 +1763,13 @@ snapshots:
     transitivePeerDependencies:
       - '@rspack/tracing'
 
-  '@rslib/core@0.5.2(typescript@5.7.3)':
+  '@rslib/core@0.5.2(typescript@5.8.2)':
     dependencies:
       '@rsbuild/core': 1.2.14
-      rsbuild-plugin-dts: 0.5.2(@rsbuild/core@1.2.14)(typescript@5.7.3)
+      rsbuild-plugin-dts: 0.5.2(@rsbuild/core@1.2.14)(typescript@5.8.2)
       tinyglobby: 0.2.12
     optionalDependencies:
-      typescript: 5.7.3
+      typescript: 5.8.2
     transitivePeerDependencies:
       - '@rspack/tracing'
 
@@ -1823,17 +1838,17 @@ snapshots:
   '@types/fs-extra@11.0.4':
     dependencies:
       '@types/jsonfile': 6.1.4
-      '@types/node': 22.13.5
+      '@types/node': 22.13.8
 
   '@types/js-yaml@4.0.9': {}
 
   '@types/jsonfile@6.1.4':
     dependencies:
-      '@types/node': 22.13.5
+      '@types/node': 22.13.8
 
   '@types/node@12.20.55': {}
 
-  '@types/node@22.13.5':
+  '@types/node@22.13.8':
     dependencies:
       undici-types: 6.20.0
 
@@ -2524,7 +2539,7 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rsbuild-plugin-dts@0.5.2(@rsbuild/core@1.2.14)(typescript@5.7.3):
+  rsbuild-plugin-dts@0.5.2(@rsbuild/core@1.2.14)(typescript@5.8.2):
     dependencies:
       '@ast-grep/napi': 0.35.0
       '@rsbuild/core': 1.2.14
@@ -2533,7 +2548,7 @@ snapshots:
       tinyglobby: 0.2.12
       tsconfig-paths: 4.2.0
     optionalDependencies:
-      typescript: 5.7.3
+      typescript: 5.8.2
 
   rslog@1.2.3: {}
 
@@ -2662,7 +2677,7 @@ snapshots:
 
   type-fest@4.35.0: {}
 
-  typescript@5.7.3: {}
+  typescript@5.8.2: {}
 
   undici-types@6.20.0: {}
 

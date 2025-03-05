@@ -3,9 +3,10 @@ import { dirname, isAbsolute, join } from 'node:path';
 import {
   type LoadConfigOptions,
   loadConfig as loadRsbuildConfig,
+  mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { DEFAULT_CONFIG_EXTENSIONS, DEFAULT_CONFIG_NAME } from './constants';
-import type { RstestConfig } from './types';
+import type { NormalizedConfig, RstestConfig } from './types';
 import { color } from './utils/helper';
 import { logger } from './utils/logger';
 
@@ -73,7 +74,7 @@ export async function loadConfig({
   const configFilePath = resolveConfigPath(cwd, path);
 
   if (!configFilePath) {
-    logger.debug('no config file found.');
+    logger.debug('no config file found');
     return {
       content: {},
       filePath: configFilePath,
@@ -89,3 +90,18 @@ export async function loadConfig({
 
   return { content: content as RstestConfig, filePath: configFilePath };
 }
+
+export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig =>
+  mergeRsbuildConfig<RstestConfig>(...configs);
+
+const createDefaultConfig = (): NormalizedConfig => ({
+  root: process.cwd(),
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: ['**/node_modules/**', '**/dist/**'],
+});
+
+export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
+  const merged = mergeRstestConfig(createDefaultConfig(), config);
+
+  return merged as NormalizedConfig;
+};
