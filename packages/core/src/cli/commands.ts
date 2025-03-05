@@ -3,6 +3,7 @@ import cac, { type CAC } from 'cac';
 import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';
 import { getAbsolutePath } from '../utils/helper';
+import { logger } from '../utils/logger';
 
 type CommonOptions = {
   root?: string;
@@ -64,8 +65,16 @@ export function setupCommands(): void {
   cli
     .command('run [...filters]', 'run Rstest without watch mode')
     .action(async (options: CommonOptions) => {
-      await init(options);
-      console.log('run Rstest without watch mode');
+      try {
+        const { config } = await init(options);
+        const { createRstest } = await import('../core');
+        const rstest = createRstest(config);
+        await rstest.runTests();
+      } catch (err) {
+        logger.error('Failed to run Rstest.');
+        logger.error(err);
+        process.exit(1);
+      }
     });
 
   cli
