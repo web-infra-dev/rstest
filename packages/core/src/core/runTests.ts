@@ -1,7 +1,8 @@
 import { logger as RsbuildLogger, createRsbuild } from '@rsbuild/core';
 import { glob } from 'tinyglobby';
 import type { RstestContext } from '../types';
-import { isDebug } from '../utils/logger';
+import { color } from '../utils/helper';
+import { isDebug, logger } from '../utils/logger';
 
 const getTestEntries = async (context: RstestContext) => {
   const { include, exclude, root } = context.normalizedConfig;
@@ -20,6 +21,15 @@ const getTestEntries = async (context: RstestContext) => {
 
 export async function runTests(context: RstestContext): Promise<void> {
   const entries = await getTestEntries(context);
+
+  if (!Object.keys(entries).length) {
+    const { include, exclude } = context.normalizedConfig;
+    logger.log(color.red('No test files found.\n'));
+    logger.log(color.gray('include:'), include.join(color.gray(', ')));
+    logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
+    logger.log('');
+    return;
+  }
 
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
 
