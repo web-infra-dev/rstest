@@ -103,5 +103,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   const merged = mergeRstestConfig(createDefaultConfig(), config);
 
+  // The following configurations need overrides
+  merged.include = config.include || merged.include;
+  merged.exclude = config.exclude || merged.exclude;
+
   return merged as NormalizedConfig;
 };
