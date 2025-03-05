@@ -18,7 +18,7 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
       '@types/node':
-        specifier: ^22.8.1
+        specifier: ^22.13.8
         version: 22.13.8
       check-dependency-version-consistency:
         specifier: ^5.0.0
@@ -51,7 +51,7 @@ importers:
         specifier: ^2.11.1
         version: 2.11.1
       typescript:
-        specifier: ^5.7.3
+        specifier: ^5.8.2
         version: 5.8.2
 
   examples/node:

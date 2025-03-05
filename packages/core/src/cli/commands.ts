@@ -30,7 +30,7 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function init(options: CommonOptions): Promise<{
+export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
   configFilePath: string | null;
 }> {
@@ -66,7 +66,7 @@ export function setupCommands(): void {
     .command('run [...filters]', 'run Rstest without watch mode')
     .action(async (options: CommonOptions) => {
       try {
-        const { config } = await init(options);
+        const { config } = await initCli(options);
         const { createRstest } = await import('../core');
         const rstest = createRstest(config);
         await rstest.runTests();
@@ -80,7 +80,7 @@ export function setupCommands(): void {
   cli
     .command('watch [...filters]', 'run Rstest in watch mode')
     .action(async (options: CommonOptions) => {
-      await init(options);
+      await initCli(options);
       console.log('run Rstest in watch mode');
     });
 
