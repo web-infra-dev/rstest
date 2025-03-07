@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.8.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "organizeImports": {
     "enabled": true,
     "include": [
@@ -18,15 +18,26 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["*.vue", "*.svelte", "tsconfig.json", "tsconfig.*.json"],
     "ignoreUnknown": true
   },
   "formatter": {
-    "enabled": false
+    "ignore": [],
+    "indentStyle": "space"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    },
+    "jsxRuntime": "reactClassic"
+  },
+  "json": {
+    "formatter": {
+      "enabled": false
+    }
   },
   "css": {
-    "parser": {
-      "cssModules": true
+    "formatter": {
+      "enabled": false
     }
   },
   "linter": {
