@@ -20,4 +20,3 @@ export interface RstestConfig {
 }
 
 export type NormalizedConfig = Required<RstestConfig>;
-  
