@@ -6,6 +6,12 @@ export interface RstestConfig {
    */
   root?: string;
   /**
+   * Project name
+   *
+   * @default rstest
+   */
+  name?: string;
+  /**
    * A list of glob patterns that match your test files.
    *
    * @default ['**\/*.{test,spec}.?(c|m)[jt]s?(x)']
