@@ -10,6 +10,11 @@ type TestSuite = {
   tests: TestCase[];
 };
 
+type TestSuiteResult = {
+  status: 'skip' | 'pass' | 'fail';
+  name: string;
+};
+
 class TestRunner {
   public suites: TestSuite[] = [];
 
@@ -32,25 +37,30 @@ class TestRunner {
     currentSuite.tests.push({ description, fn });
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<TestSuiteResult[]> {
+    const results: TestSuiteResult[] = [];
     for (const suite of this.suites) {
       console.log(`Suite: ${suite.description}`);
 
       for (const test of suite.tests) {
         if (test.skipped) {
           console.log(`  - ${test.description}`);
+          results.push({ status: 'skip', name: test.description });
           continue;
         }
         try {
           await test.fn();
+          results.push({ status: 'pass', name: test.description });
           console.log(`  ✓ ${test.description}`);
         } catch (error) {
+          results.push({ status: 'fail', name: test.description });
           console.log(`  ✗ ${test.description}`);
           console.error(`    ${error}`);
         }
       }
       console.log('');
     }
+    return results;
   }
 }
 

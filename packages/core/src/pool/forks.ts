@@ -11,7 +11,9 @@ export const createForksPool = (
   } = {},
 ): {
   name: string;
-  runTest: (entryInfo: EntryInfo) => Promise<void>;
+  runTest: (entryInfo: EntryInfo) => Promise<{
+    hasFailed: boolean;
+  }>;
   close: () => Promise<void>;
 } => {
   const {
