@@ -2,16 +2,12 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import vm from 'node:vm';
-import * as RstestAPI from './api';
-import { runner } from './runner';
-import { logger } from './utils/logger';
+import * as RstestAPI from '../api';
+import { runner } from '../runner';
+import type { EntryInfo } from '../types';
+import { logger } from '../utils/logger';
 
-type EntryInfo = {
-  filePath: string;
-  originPath: string;
-};
-
-export const runInPool = async ({
+const runInPool = async ({
   filePath,
   originPath,
 }: EntryInfo): Promise<void> => {
@@ -48,3 +44,5 @@ export const runInPool = async ({
 
   await runner.run();
 };
+
+export default runInPool;

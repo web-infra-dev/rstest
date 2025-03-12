@@ -1,5 +1,7 @@
 import type { NormalizedConfig, RstestConfig } from './config';
 
+export type RstestCommand = 'watch' | 'run';
+
 export type RstestContext = {
   /** The Rstest core version. */
   version: string;
@@ -9,6 +11,13 @@ export type RstestContext = {
   originalConfig: Readonly<RstestConfig>;
   /** The normalized Rstest config. */
   normalizedConfig: NormalizedConfig;
+  /**
+   * The command type.
+   *
+   * - dev: `rstest dev`
+   * - run: `rstest run`
+   */
+  command: RstestCommand;
 };
 
 export type RstestInstance = {

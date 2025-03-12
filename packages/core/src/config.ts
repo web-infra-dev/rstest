@@ -99,6 +99,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   exclude: ['**/node_modules/**', '**/dist/**'],
+  pool: {
+    type: 'forks',
+  },
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
@@ -107,6 +110,12 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   // The following configurations need overrides
   merged.include = config.include || merged.include;
   merged.exclude = config.exclude || merged.exclude;
+  merged.pool =
+    typeof config.pool === 'string'
+      ? {
+          type: config.pool,
+        }
+      : merged.pool;
 
   return merged as NormalizedConfig;
 };

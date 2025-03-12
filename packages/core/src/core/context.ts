@@ -1,12 +1,12 @@
 import { withDefaultConfig } from '../config';
-import type { RstestConfig, RstestContext } from '../types';
+import type { RstestCommand, RstestConfig, RstestContext } from '../types';
 import { getAbsolutePath } from '../utils/helper';
 
 export function createContext(
-  options: { cwd: string },
+  options: { cwd: string; command: RstestCommand },
   userConfig: RstestConfig,
 ): RstestContext {
-  const { cwd } = options;
+  const { cwd, command } = options;
   const rootPath = userConfig.root
     ? getAbsolutePath(cwd, userConfig.root)
     : cwd;
@@ -14,6 +14,7 @@ export function createContext(
   const rstestConfig = withDefaultConfig(userConfig);
 
   return {
+    command,
     version: RSTEST_VERSION,
     rootPath,
     originalConfig: userConfig,
