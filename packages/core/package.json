@@ -29,7 +29,8 @@
     "dev": "rslib build --watch"
   },
   "dependencies": {
-    "@rsbuild/core": "^1.2.14"
+    "@rsbuild/core": "^1.2.14",
+    "tinypool": "^1.0.2"
   },
   "devDependencies": {
     "@rslib/core": "0.5.2",

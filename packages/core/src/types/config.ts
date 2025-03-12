@@ -1,3 +1,16 @@
+export type RstestPoolType = 'forks';
+
+export type RstestPoolOptions = {
+  /** Pool used to run tests in. */
+  type: RstestPoolType;
+  /** Maximum number or percentage of workers to run tests in. */
+  maxWorkers?: number | string;
+  /** Minimum number or percentage of workers to run tests in. */
+  minWorkers?: number | string;
+  /** Pass additional arguments to node process in the child processes. */
+  execArgv?: string[];
+};
+
 export interface RstestConfig {
   /**
    * Project root
@@ -23,6 +36,12 @@ export interface RstestConfig {
    * @default ['**\/node_modules/**', '**\/dist/**']
    */
   exclude?: string[];
+  /**
+   * Pool used to run tests in.
+   */
+  pool?: RstestPoolType | RstestPoolOptions;
 }
 
-export type NormalizedConfig = Required<RstestConfig>;
+export type NormalizedConfig = Required<Omit<RstestConfig, 'pool'>> & {
+  pool: RstestPoolOptions;
+};

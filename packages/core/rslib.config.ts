@@ -9,14 +9,15 @@ export default defineConfig({
         bundle: false,
         distPath: './dist-types',
       },
+      source: {
+        entry: {
+          index: './src/index.ts',
+          worker: './src/worker/index.ts',
+        },
+        define: {
+          RSTEST_VERSION: JSON.stringify(require('./package.json').version),
+        },
+      },
     },
   ],
-  source: {
-    entry: {
-      index: './src/index.ts',
-    },
-    define: {
-      RSTEST_VERSION: JSON.stringify(require('./package.json').version),
-    },
-  },
 });

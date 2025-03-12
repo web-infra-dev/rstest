@@ -68,7 +68,7 @@ export function setupCommands(): void {
       try {
         const { config } = await initCli(options);
         const { createRstest } = await import('../core');
-        const rstest = createRstest(config);
+        const rstest = createRstest(config, 'run');
         await rstest.runTests();
       } catch (err) {
         logger.error('Failed to run Rstest.');
