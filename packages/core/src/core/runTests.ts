@@ -31,6 +31,15 @@ const createRsbuildServer = async (
             },
             target: 'node',
           },
+          tools: {
+            rspack: (config) => {
+              config.optimization = {
+                ...(config.optimization || {}),
+                moduleIds: 'named',
+                chunkIds: 'named',
+              };
+            },
+          },
         },
       },
     },

@@ -61,5 +61,9 @@ export const runInPool = async (
     },
   });
 
-  await pool.runTest(entryInfo);
+  const { hasFailed } = await pool.runTest(entryInfo);
+
+  if (hasFailed) {
+    process.exitCode = 1;
+  }
 };

@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "@rstest/tests",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "rstest run"
+  },
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "typescript": "^5.8.2"
+  }
+}

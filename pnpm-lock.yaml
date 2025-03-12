@@ -96,6 +96,15 @@ importers:
 
   scripts/tsconfig: {}
 
+  tests:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      typescript:
+        specifier: ^5.8.2
+        version: 5.8.2
+
 packages:
 
   '@ast-grep/napi-darwin-arm64@0.35.0':

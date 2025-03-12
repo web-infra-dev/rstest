@@ -10,7 +10,9 @@ import { logger } from '../utils/logger';
 const runInPool = async ({
   filePath,
   originPath,
-}: EntryInfo): Promise<void> => {
+}: EntryInfo): Promise<{
+  hasFailed: boolean;
+}> => {
   const codeContent = await fs.readFile(filePath, 'utf-8');
 
   const localModule = {
@@ -42,7 +44,11 @@ const runInPool = async ({
     logger.error(`No test suites found in file: ${originPath}`);
   }
 
-  await runner.run();
+  const results = await runner.run();
+
+  return {
+    hasFailed: results.some((suite) => suite.status === 'fail'),
+  };
 };
 
 export default runInPool;
