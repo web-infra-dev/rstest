@@ -21,5 +21,5 @@ export function prepareCli(): void {
   }
 
   logger.greet(`  ${`Rstest v${RSTEST_VERSION}`}\n`);
-  logger.log(`  ${`Rstest v${RSTEST_VERSION}`}`);
+  logger.log('');
 }
