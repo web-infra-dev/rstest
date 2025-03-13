@@ -6,7 +6,7 @@ describe('Node API', () => {
     expect(
       path
         .resolve(__dirname, './index.test.ts')
-        .endsWith('basic/test/index.test.ts'),
+        .endsWith(path.posix.join('basic', 'test', 'index.test.ts')),
     ).toBeTruthy();
   });
 });
