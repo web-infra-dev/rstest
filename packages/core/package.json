@@ -30,7 +30,8 @@
   },
   "dependencies": {
     "@rsbuild/core": "^1.2.14",
-    "tinypool": "^1.0.2"
+    "tinypool": "^1.0.2",
+    "std-env": "^3.8.1"
   },
   "devDependencies": {
     "@rslib/core": "0.5.2",
