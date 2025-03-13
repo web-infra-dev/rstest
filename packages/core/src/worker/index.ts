@@ -3,17 +3,16 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import vm from 'node:vm';
 import * as RstestAPI from '../api';
-import { runner } from '../runner';
+import { type TestSuiteResult, runner } from '../runner';
 import type { EntryInfo } from '../types';
 import { logger } from '../utils/logger';
 
 const runInPool = async ({
   filePath,
   originPath,
-}: EntryInfo): Promise<{
-  hasFailed: boolean;
-}> => {
+}: EntryInfo): Promise<TestSuiteResult> => {
   const codeContent = await fs.readFile(filePath, 'utf-8');
+  const fileDir = path.dirname(originPath);
 
   const localModule = {
     children: [],
@@ -22,12 +21,14 @@ const runInPool = async ({
     id: originPath,
     isPreloading: false,
     loaded: false,
-    path: path.dirname(originPath),
+    path: fileDir,
   };
 
   const context = {
     module: localModule,
     require: createRequire(originPath),
+    __dirname: fileDir,
+    __filename: originPath,
     global: {
       '@rstest/core': RstestAPI,
     },
@@ -46,9 +47,7 @@ const runInPool = async ({
 
   const results = await runner.run();
 
-  return {
-    hasFailed: results.some((suite) => suite.status === 'fail'),
-  };
+  return results;
 };
 
 export default runInPool;

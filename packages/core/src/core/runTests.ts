@@ -96,9 +96,7 @@ export async function runTests(context: RstestContext): Promise<void> {
 
   const { close, entryInfo } = await createRsbuildServer(name, entries);
 
-  await Promise.all(
-    entryInfo.map((entryInfo) => runInPool(entryInfo, context)),
-  );
+  await runInPool(entryInfo, context);
 
   await close();
 }

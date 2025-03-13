@@ -3,6 +3,8 @@ type TestCase = {
   description: string;
   fn: () => void | Promise<void>;
   skipped?: boolean;
+  todo?: boolean;
+  fails?: boolean;
 };
 
 type TestSuite = {
@@ -10,9 +12,15 @@ type TestSuite = {
   tests: TestCase[];
 };
 
-type TestSuiteResult = {
-  status: 'skip' | 'pass' | 'fail';
+export type TestSuiteResult = {
+  status: 'skip' | 'pass' | 'fail' | 'todo';
   name: string;
+};
+
+export type TestResult = {
+  status: 'skip' | 'pass' | 'fail' | 'todo';
+  name: string;
+  results: TestSuiteResult[];
 };
 
 class TestRunner {
@@ -37,7 +45,34 @@ class TestRunner {
     currentSuite.tests.push({ description, fn });
   }
 
-  async run(): Promise<TestSuiteResult[]> {
+  skip(description: string, fn: () => void | Promise<void>): void {
+    if (this.suites.length === 0) {
+      throw new Error('Test case must be defined within a suite');
+    }
+
+    const currentSuite = this.suites[this.suites.length - 1]!;
+    currentSuite.tests.push({ description, fn, skipped: true });
+  }
+
+  todo(description: string, fn: () => void | Promise<void>): void {
+    if (this.suites.length === 0) {
+      throw new Error('Test case must be defined within a suite');
+    }
+
+    const currentSuite = this.suites[this.suites.length - 1]!;
+    currentSuite.tests.push({ description, fn, todo: true });
+  }
+
+  fails(description: string, fn: () => void | Promise<void>): void {
+    if (this.suites.length === 0) {
+      throw new Error('Test case must be defined within a suite');
+    }
+
+    const currentSuite = this.suites[this.suites.length - 1]!;
+    currentSuite.tests.push({ description, fn, fails: true });
+  }
+
+  async run(): Promise<TestResult> {
     const results: TestSuiteResult[] = [];
     for (const suite of this.suites) {
       console.log(`Suite: ${suite.description}`);
@@ -46,6 +81,23 @@ class TestRunner {
         if (test.skipped) {
           console.log(`  - ${test.description}`);
           results.push({ status: 'skip', name: test.description });
+          continue;
+        }
+        if (test.todo) {
+          console.log(`  - ${test.description}`);
+          results.push({ status: 'todo', name: test.description });
+          continue;
+        }
+        if (test.fails) {
+          try {
+            await test.fn();
+            results.push({ status: 'fail', name: test.description });
+            console.log(`  ✗ ${test.description}`);
+            console.error('    Expect test to fail');
+          } catch (error) {
+            results.push({ status: 'pass', name: test.description });
+            console.log(`  ✓ ${test.description}`);
+          }
           continue;
         }
         try {
@@ -60,7 +112,18 @@ class TestRunner {
       }
       console.log('');
     }
-    return results;
+
+    return {
+      name: 'test',
+      status: results.some((result) => result.status === 'fail')
+        ? 'fail'
+        : results.every((result) => result.status === 'todo')
+          ? 'todo'
+          : results.every((result) => result.status === 'skip')
+            ? 'skip'
+            : 'pass',
+      results,
+    };
   }
 }
 
@@ -69,5 +132,17 @@ export const runner: TestRunner = new TestRunner();
 export const describe: (description: string, fn: () => void) => void =
   runner.describe.bind(runner);
 
-export const it: (description: string, fn: () => void | Promise<void>) => void =
-  runner.it.bind(runner);
+type TestFn = (description: string, fn: () => void | Promise<void>) => void;
+
+type TestAPI = TestFn & {
+  fails: TestFn;
+  todo: TestFn;
+  skip: TestFn;
+};
+
+const it = runner.it.bind(runner) as TestAPI;
+
+it.fails = runner.fails.bind(runner);
+it.todo = runner.todo.bind(runner);
+it.skip = runner.skip.bind(runner);
+export { it };

@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { type Options, Tinypool } from 'tinypool';
+import type { TestResult } from '../runner';
 import type { EntryInfo } from '../types';
 
 export const createForksPool = (
@@ -11,9 +12,7 @@ export const createForksPool = (
   } = {},
 ): {
   name: string;
-  runTest: (entryInfo: EntryInfo) => Promise<{
-    hasFailed: boolean;
-  }>;
+  runTest: (entryInfo: EntryInfo) => Promise<TestResult>;
   close: () => Promise<void>;
 } => {
   const {
