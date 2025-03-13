@@ -45,7 +45,8 @@ const resolveConfigPath = (root: string, customConfig?: string) => {
     if (fs.existsSync(customConfigPath)) {
       return customConfigPath;
     }
-    logger.warn(`Cannot find config file: ${color.dim(customConfigPath)}\n`);
+    logger.warn(`Cannot find config file: ${color.dim(customConfigPath)}`);
+    logger.log('');
   }
 
   const configFilePath = findConfig(join(root, DEFAULT_CONFIG_NAME));

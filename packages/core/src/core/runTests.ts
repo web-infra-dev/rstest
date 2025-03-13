@@ -87,7 +87,8 @@ export async function runTests(context: RstestContext): Promise<void> {
   const entries = await getTestEntries({ include, exclude, root });
 
   if (!Object.keys(entries).length) {
-    logger.log(color.red('No test files found.\n'));
+    logger.log(color.red('No test files found.'));
+    logger.log('');
     logger.log(color.gray('include:'), include.join(color.gray(', ')));
     logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
     logger.log('');
