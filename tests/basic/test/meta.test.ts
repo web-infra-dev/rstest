@@ -3,7 +3,7 @@ import { aDirName, aFileName, indexFileName } from '../src/meta';
 
 describe('Meta', () => {
   it('should get test file meta correctly', async () => {
-    expect(__dirname.endsWith('/basic/test')).toBeTruthy();
+    expect(__dirname.endsWith('/rstest/tests/basic/test')).toBeTruthy();
     expect(__filename.endsWith('/basic/test/meta.test.ts')).toBeTruthy();
   });
 
