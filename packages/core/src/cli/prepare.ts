@@ -20,6 +20,6 @@ export function prepareCli(): void {
     console.log();
   }
 
-  logger.greet(`  ${`Rstest v${RSTEST_VERSION}`}\n`);
-  logger.log(`  ${`Rstest v${RSTEST_VERSION}`}`);
+  logger.greet(`  ${`Rstest v${RSTEST_VERSION}`}`);
+  logger.log('');
 }

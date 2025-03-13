@@ -1,5 +1,6 @@
 import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
+import { isCI } from 'std-env';
 import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';
 import { getAbsolutePath } from '../utils/helper';
@@ -63,6 +64,25 @@ export function setupCommands(): void {
   applyCommonOptions(cli);
 
   cli
+    .command('[...filters]', 'run Rstest')
+    .action(async (options: CommonOptions) => {
+      try {
+        const { config } = await initCli(options);
+        const { createRstest } = await import('../core');
+        if (isCI) {
+          const rstest = createRstest(config, 'run');
+          await rstest.runTests();
+        } else {
+          console.log('TODO: run Rstest in watch mode');
+        }
+      } catch (err) {
+        logger.error('Failed to run Rstest.');
+        logger.error(err);
+        process.exit(1);
+      }
+    });
+
+  cli
     .command('run [...filters]', 'run Rstest without watch mode')
     .action(async (options: CommonOptions) => {
       try {
@@ -81,7 +101,7 @@ export function setupCommands(): void {
     .command('watch [...filters]', 'run Rstest in watch mode')
     .action(async (options: CommonOptions) => {
       await initCli(options);
-      console.log('run Rstest in watch mode');
+      console.log('TODO: run Rstest in watch mode');
     });
 
   cli.parse();
