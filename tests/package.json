@@ -3,7 +3,7 @@
   "name": "@rstest/tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "rstest"
+    "test": "rstest run"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
