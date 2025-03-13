@@ -73,8 +73,12 @@ export const runInPool = async (
     process.exitCode = 1;
   }
 
-  logger.log(` ${color.gray('Test Files')} ${getStatusString(results)}`);
-  logger.log(`       ${color.gray('Test')} ${getStatusString(testResults)}`);
+  logger.log(
+    `${color.gray('Test Files'.padStart(12))} ${getStatusString(results)}`,
+  );
+  logger.log(
+    `${color.gray('Tests'.padStart(12))} ${getStatusString(testResults)}`,
+  );
   logger.log('');
 };
 
