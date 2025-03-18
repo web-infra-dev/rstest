@@ -72,8 +72,17 @@ class TestRunner {
     currentSuite.tests.push({ description, fn, fails: true });
   }
 
-  async run(): Promise<TestResult> {
+  async run(originPath: string): Promise<TestResult> {
     const results: TestSuiteResult[] = [];
+    if (this.suites.length === 0) {
+      console.error(`No test suites found in file: ${originPath}\n`);
+      return {
+        name: 'test',
+        status: 'fail',
+        results,
+      };
+    }
+
     for (const suite of this.suites) {
       console.log(`Suite: ${suite.description}`);
 

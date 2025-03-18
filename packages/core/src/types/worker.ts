@@ -3,14 +3,15 @@ export type EntryInfo = {
   originPath: string;
 };
 
-export type RunnerRPC = void;
-export type RuntimeRPC = {
-  readFile: (filename: string) => string;
-};
+// biome-ignore lint/complexity/noBannedTypes: <explanation>
+export type RunnerRPC = {};
+// biome-ignore lint/complexity/noBannedTypes: <explanation>
+export type RuntimeRPC = {};
 
 export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
+    assetFiles: Record<string, string>;
   };
   rpcMethods: RuntimeRPC;
 };

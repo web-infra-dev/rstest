@@ -18,14 +18,14 @@ export async function runTests(context: RstestContext): Promise<void> {
     return;
   }
 
-  const { close, readFile, entries } = await createRsbuildServer(
+  const { close, entries, assetFiles } = await createRsbuildServer(
     name,
     sourceEntries,
   );
 
   const { results, testResults } = await runInPool({
     entries,
-    readFile,
+    assetFiles,
     context,
   });
 
