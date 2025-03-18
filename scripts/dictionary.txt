@@ -5,6 +5,7 @@ applescript
 atrules
 autodocs
 biomejs
+Birpc
 brotli
 browserslistrc
 bundleless

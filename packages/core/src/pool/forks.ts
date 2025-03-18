@@ -1,18 +1,47 @@
+import EventEmitter from 'node:events';
 import { resolve } from 'node:path';
+import v8 from 'node:v8';
+import { createBirpc } from 'birpc';
 import { type Options, Tinypool } from 'tinypool';
 import type { TestResult } from '../runner';
-import type { EntryInfo } from '../types';
+import type { RunWorkerOptions, RunnerRPC, RuntimeRPC } from '../types';
 
-export const createForksPool = (
-  poolOptions: {
-    env?: Record<string, string>;
-    maxWorkers?: number;
-    minWorkers?: number;
-    execArgv?: string[];
-  } = {},
-): {
+function createChannel(rpcMethods: RuntimeRPC) {
+  const emitter = new EventEmitter();
+  const cleanup = () => emitter.removeAllListeners();
+
+  const events = { message: 'message', response: 'response' };
+  const channel = {
+    onMessage: (callback: any) => {
+      emitter.on(events.message, callback);
+    },
+    postMessage: (message: any) => {
+      emitter.emit(events.response, message);
+    },
+  };
+
+  createBirpc<RunnerRPC, RuntimeRPC>(rpcMethods, {
+    serialize: v8.serialize,
+    deserialize: (v) => v8.deserialize(Buffer.from(v)),
+    post(v) {
+      emitter.emit(events.message, v);
+    },
+    on(fn) {
+      emitter.on(events.response, fn);
+    },
+  });
+
+  return { channel, cleanup };
+}
+
+export const createForksPool = (poolOptions: {
+  env?: Record<string, string>;
+  maxWorkers?: number;
+  minWorkers?: number;
+  execArgv?: string[];
+}): {
   name: string;
-  runTest: (entryInfo: EntryInfo) => Promise<TestResult>;
+  runTest: (options: RunWorkerOptions) => Promise<TestResult>;
   close: () => Promise<void>;
 } => {
   const {
@@ -36,7 +65,14 @@ export const createForksPool = (
 
   return {
     name: 'forks',
-    runTest: (entryInfo: EntryInfo) => pool.run(entryInfo),
+    runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
+      const { channel, cleanup } = createChannel(rpcMethods);
+      try {
+        return await pool.run(options, { channel });
+      } finally {
+        cleanup();
+      }
+    },
     close: () => pool.destroy(),
   };
 };

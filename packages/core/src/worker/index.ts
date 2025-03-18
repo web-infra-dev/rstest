@@ -1,17 +1,73 @@
-import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import v8 from 'node:v8';
 import vm from 'node:vm';
+import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
+import type { TinypoolWorkerMessage } from 'tinypool';
 import * as RstestAPI from '../api';
 import { type TestSuiteResult, runner } from '../runner';
-import type { EntryInfo } from '../types';
+import type { RunWorkerOptions, RunnerRPC, RuntimeRPC } from '../types';
 import { logger } from '../utils/logger';
 
+export type WorkerRPC = BirpcReturn<RuntimeRPC, RunnerRPC>;
+
+const processSend = process.send!.bind(process);
+const processOn = process.on!.bind(process);
+const processOff = process.off!.bind(process);
+const dispose: (() => void)[] = [];
+
+export type WorkerRpcOptions = Pick<
+  BirpcOptions<RunnerRPC>,
+  'on' | 'post' | 'serialize' | 'deserialize'
+>;
+
+export function createForksRpcOptions(
+  nodeV8: typeof import('v8') = v8,
+): WorkerRpcOptions {
+  return {
+    serialize: nodeV8.serialize,
+    deserialize: (v) => nodeV8.deserialize(Buffer.from(v)),
+    post(v) {
+      processSend(v);
+    },
+    on(fn) {
+      const handler = (message: any, ...extras: any) => {
+        // Do not react on Tinypool's internal messaging
+        if ((message as TinypoolWorkerMessage)?.__tinypool_worker_message__) {
+          return;
+        }
+        return fn(message, ...extras);
+      };
+      processOn('message', handler);
+      dispose.push(() => processOff('message', handler));
+    },
+  };
+}
+
+export function createRuntimeRpc(
+  options: Pick<
+    BirpcOptions<void>,
+    'on' | 'post' | 'serialize' | 'deserialize'
+  >,
+): { rpc: WorkerRPC } {
+  const rpc = createBirpc<RuntimeRPC, any>(
+    {},
+    {
+      ...options,
+    },
+  );
+
+  return {
+    rpc,
+  };
+}
+
 const runInPool = async ({
-  filePath,
-  originPath,
-}: EntryInfo): Promise<TestSuiteResult> => {
-  const codeContent = await fs.readFile(filePath, 'utf-8');
+  entryInfo: { filePath, originPath },
+}: RunWorkerOptions['options']): Promise<TestSuiteResult> => {
+  const { rpc } = createRuntimeRpc(createForksRpcOptions());
+
+  const codeContent = await rpc.readFile(filePath);
   const fileDir = path.dirname(originPath);
 
   const localModule = {
