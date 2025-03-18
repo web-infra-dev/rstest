@@ -32,7 +32,7 @@
     "@rsbuild/core": "^1.2.18",
     "tinypool": "^1.0.2",
     "std-env": "^3.8.1",
-    "birpc": "0.2.19"
+    "birpc": "2.2.0"
   },
   "devDependencies": {
     "@rslib/core": "0.5.4",
