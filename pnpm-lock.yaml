@@ -69,8 +69,8 @@ importers:
   packages/core:
     dependencies:
       '@rsbuild/core':
-        specifier: ^1.2.18
-        version: 1.2.18
+        specifier: ^1.2.19
+        version: 1.2.19
       birpc:
         specifier: 0.2.19
         version: 0.2.19
@@ -399,8 +399,8 @@ packages:
     resolution: {integrity: sha512-cq8o4cWH0ibXh9VGi5P20Tu9XF/0fFXl9EUinr9QfTM7a7p0oTA4iJRCQWppXR1Pg8dSM0UCItCkPwsk9qWWYA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@rsbuild/core@1.2.18':
-    resolution: {integrity: sha512-hnqYu75ewn4X4f+/FqLZ5DUv1CaqLuzJl1HGgkOMWg1gj8b5kmidGHcGFCgRMQqJacdMGJGAy0yJHGLVuDPYNg==}
+  '@rsbuild/core@1.2.19':
+    resolution: {integrity: sha512-k76is4HygmbYYMLG2V1d1yQeurHHC+ZEtGs/nwE11y6HmwSndoFhmjOeQbQ2Ul0b2B8HErksqSMtlCxd37YPPQ==}
     engines: {node: '>=16.7.0'}
     hasBin: true
 
@@ -1781,7 +1781,7 @@ snapshots:
 
   '@pkgr/core@0.1.1': {}
 
-  '@rsbuild/core@1.2.18':
+  '@rsbuild/core@1.2.19':
     dependencies:
       '@rspack/core': 1.2.8(@swc/helpers@0.5.15)
       '@rspack/lite-tapable': 1.0.1
@@ -1793,8 +1793,8 @@ snapshots:
 
   '@rslib/core@0.5.4(typescript@5.8.2)':
     dependencies:
-      '@rsbuild/core': 1.2.18
-      rsbuild-plugin-dts: 0.5.4(@rsbuild/core@1.2.18)(typescript@5.8.2)
+      '@rsbuild/core': 1.2.19
+      rsbuild-plugin-dts: 0.5.4(@rsbuild/core@1.2.19)(typescript@5.8.2)
       tinyglobby: 0.2.12
     optionalDependencies:
       typescript: 5.8.2
@@ -2569,10 +2569,10 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rsbuild-plugin-dts@0.5.4(@rsbuild/core@1.2.18)(typescript@5.8.2):
+  rsbuild-plugin-dts@0.5.4(@rsbuild/core@1.2.19)(typescript@5.8.2):
     dependencies:
       '@ast-grep/napi': 0.36.1
-      '@rsbuild/core': 1.2.18
+      '@rsbuild/core': 1.2.19
       magic-string: 0.30.17
       picocolors: 1.1.1
       tinyglobby: 0.2.12
