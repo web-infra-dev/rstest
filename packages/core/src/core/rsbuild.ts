@@ -95,12 +95,15 @@ export const createRsbuildServer = async (
     assets: true,
   });
 
-  const readFileSync = (fileName: string) => {
-    if ('readFileSync' in outputFileSystem) {
-      // bundle require needs a synchronous method, although readFileSync is not within the outputFileSystem type definition, but nodejs fs API implemented.
-      return outputFileSystem.readFileSync(fileName, 'utf-8');
-    }
-    return fs.readFileSync(fileName, 'utf-8');
+  const readFile = async (fileName: string) => {
+    return new Promise<string>((resolve, reject) => {
+      outputFileSystem.readFile(fileName, (err, data) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(typeof data === 'string' ? data : data!.toString());
+      });
+    });
   };
 
   const entries = Object.keys(entrypoints!).map((entry) => {
@@ -122,10 +125,12 @@ export const createRsbuildServer = async (
   return {
     entries,
     assetFiles: Object.fromEntries(
-      assets!.map((a) => {
-        const filePath = path.join(outputPath!, a.name);
-        return [filePath, readFileSync(filePath)];
-      }),
+      await Promise.all(
+        assets!.map(async (a) => {
+          const filePath = path.join(outputPath!, a.name);
+          return [filePath, await readFile(filePath)];
+        }),
+      ),
     ),
     close: devServer.close,
   };
