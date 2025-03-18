@@ -29,7 +29,7 @@ export async function runTests(context: RstestContext): Promise<void> {
     context,
   });
 
-  if (testResults.some((r) => r.status === 'fail')) {
+  if (results.some((r) => r.status === 'fail')) {
     process.exitCode = 1;
   }
 

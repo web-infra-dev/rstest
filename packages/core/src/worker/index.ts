@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
 import * as RstestAPI from '../api';
-import { type TestSuiteResult, runner } from '../runner';
+import { type TestResult, runner } from '../runner';
 import type { RunWorkerOptions, RunnerRPC, RuntimeRPC } from '../types';
 import { logger } from '../utils/logger';
 
@@ -64,7 +64,7 @@ export function createRuntimeRpc(
 
 const runInPool = async ({
   entryInfo: { filePath, originPath },
-}: RunWorkerOptions['options']): Promise<TestSuiteResult> => {
+}: RunWorkerOptions['options']): Promise<TestResult> => {
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
 
   const codeContent = await rpc.readFile(filePath);
@@ -93,17 +93,28 @@ const runInPool = async ({
   const code = `'use strict';(${Object.keys(context).join(',')})=>{{
    ${codeContent}
   }}`;
+  try {
+    const fn = vm.runInThisContext(code);
+    fn(...Object.values(context));
 
-  const fn = vm.runInThisContext(code);
-  fn(...Object.values(context));
+    if (runner.suites.length === 0) {
+      logger.error(`No test suites found in file: ${originPath}`);
+    }
 
-  if (runner.suites.length === 0) {
-    logger.error(`No test suites found in file: ${originPath}`);
+    const results = await runner.run();
+
+    return results;
+  } catch (err) {
+    logger.error(
+      `run file ${originPath} failed:\n`,
+      err instanceof Error ? err.message : err,
+    );
+    return {
+      status: 'fail',
+      name: originPath,
+      results: [],
+    };
   }
-
-  const results = await runner.run();
-
-  return results;
 };
 
 export default runInPool;
