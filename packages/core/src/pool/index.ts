@@ -22,10 +22,10 @@ const parseWorkers = (maxWorkers: string | number): number => {
 export const runInPool = async ({
   entries,
   context,
-  readFile,
+  assetFiles,
 }: {
-  readFile: (filename: string) => string;
   entries: EntryInfo[];
+  assetFiles: Record<string, string>;
   context: RstestContext;
 }): Promise<{
   results: TestResult[];
@@ -72,7 +72,10 @@ export const runInPool = async ({
 
   const results = await Promise.all(
     entries.map((entryInfo) =>
-      pool.runTest({ options: { entryInfo }, rpcMethods: { readFile } }),
+      pool.runTest({
+        options: { entryInfo, assetFiles },
+        rpcMethods: {},
+      }),
     ),
   );
 

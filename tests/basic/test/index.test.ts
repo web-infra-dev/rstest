@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { sayHi } from '../src/index';
 
@@ -8,5 +9,19 @@ describe('Index', () => {
 
   it('should test source code correctly', () => {
     expect(sayHi()).toBe('hi');
+  });
+
+  it('should use node API correctly', async () => {
+    expect(
+      path.posix
+        .resolve(__dirname, '../src/index.ts')
+        .endsWith('/basic/src/index.ts'),
+    ).toBeTruthy();
+  });
+
+  it('should use require.resolve correctly', async () => {
+    expect(
+      require.resolve('../src/index.ts').endsWith('/basic/src/index.ts'),
+    ).toBeTruthy();
   });
 });
