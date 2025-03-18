@@ -1,7 +1,6 @@
 import os from 'node:os';
-import type { TestSuiteResult } from '../runner';
+import type { TestResult, TestSuiteResult } from '../runner';
 import type { EntryInfo, RstestContext } from '../types';
-import { color, logger } from '../utils';
 import { createForksPool } from './forks';
 
 const getNumCpus = (): number => {
@@ -20,10 +19,18 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
-export const runInPool = async (
-  entryInfo: EntryInfo[],
-  context: RstestContext,
-): Promise<void> => {
+export const runInPool = async ({
+  entries,
+  context,
+  readFile,
+}: {
+  readFile: (filename: string) => string;
+  entries: EntryInfo[];
+  context: RstestContext;
+}): Promise<{
+  results: TestResult[];
+  testResults: TestSuiteResult[];
+}> => {
   // Some options may crash worker, e.g. --prof, --title.
   // https://github.com/nodejs/node/issues/41103
   const execArgv = process.execArgv.filter(
@@ -64,47 +71,12 @@ export const runInPool = async (
   });
 
   const results = await Promise.all(
-    entryInfo.map((entry) => pool.runTest(entry)),
+    entries.map((entryInfo) =>
+      pool.runTest({ options: { entryInfo }, rpcMethods: { readFile } }),
+    ),
   );
 
   const testResults = results.flatMap((r) => r.results!);
 
-  if (testResults.some((r) => r.status === 'fail')) {
-    process.exitCode = 1;
-  }
-
-  logger.log(
-    `${color.gray('Test Files'.padStart(12))} ${getStatusString(results)}`,
-  );
-  logger.log(
-    `${color.gray('Tests'.padStart(12))} ${getStatusString(testResults)}`,
-  );
-  logger.log('');
+  return { results, testResults };
 };
-
-export function getStatusString(
-  tasks: TestSuiteResult[],
-  name = 'tests',
-  showTotal = true,
-): string {
-  if (tasks.length === 0) {
-    return color.dim(`no ${name}`);
-  }
-
-  const passed = tasks.filter((result) => result.status === 'pass');
-  const failed = tasks.filter((result) => result.status === 'fail');
-  const skipped = tasks.filter((result) => result.status === 'skip');
-  const todo = tasks.filter((result) => result.status === 'todo');
-
-  return (
-    [
-      failed.length ? color.bold(color.red(`${failed.length} failed`)) : null,
-      passed.length ? color.bold(color.green(`${passed.length} passed`)) : null,
-      skipped.length ? color.yellow(`${skipped.length} skipped`) : null,
-      todo.length ? color.gray(`${todo.length} todo`) : null,
-    ]
-      .filter(Boolean)
-      .join(color.dim(' | ')) +
-    (showTotal ? color.gray(` (${tasks.length})`) : '')
-  );
-}
