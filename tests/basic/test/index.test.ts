@@ -13,7 +13,7 @@ describe('Index', () => {
 
   it('should use node API correctly', async () => {
     expect(
-      path
+      path.posix
         .resolve(__dirname, '../src/index.ts')
         .endsWith('/basic/src/index.ts'),
     ).toBeTruthy();
