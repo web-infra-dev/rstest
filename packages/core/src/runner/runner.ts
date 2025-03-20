@@ -69,6 +69,7 @@ class TestRunner {
         results,
       };
     }
+    console.log(`Running test file: ${testPath}`, this.suites.length);
 
     for (const suite of this.suites) {
       console.log(`Suite: ${suite.description}`);
