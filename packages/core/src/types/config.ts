@@ -40,6 +40,12 @@ export interface RstestConfig {
    * Pool used to run tests in.
    */
   pool?: RstestPoolType | RstestPoolOptions;
+  /**
+   * Run tests in an isolated environment
+   *
+   * @default true
+   */
+  isolate?: boolean;
 }
 
 export type NormalizedConfig = Required<Omit<RstestConfig, 'pool'>> & {

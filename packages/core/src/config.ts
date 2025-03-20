@@ -103,6 +103,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   pool: {
     type: 'forks',
   },
+  isolate: true,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

@@ -47,7 +47,7 @@ export const runInPool = async ({
   const numCpus = getNumCpus();
 
   const {
-    normalizedConfig: { pool: poolOptions },
+    normalizedConfig: { pool: poolOptions, isolate },
   } = context;
 
   const threadsCount =
@@ -65,6 +65,7 @@ export const runInPool = async ({
 
   const pool = createForksPool({
     ...poolOptions,
+    isolate,
     maxWorkers,
     minWorkers,
     execArgv: [...(poolOptions?.execArgv ?? []), ...execArgv],
