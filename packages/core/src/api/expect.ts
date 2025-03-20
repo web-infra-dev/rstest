@@ -1,43 +1,140 @@
-// TODO: This is a minimal expect API, in order to run the overall process
-export class Expectation<T> {
-  constructor(private actual: T) {}
+import * as chai from 'chai';
 
-  toBe(expected: T): void {
-    if (this.actual !== expected) {
-      throw new Error(`Expected ${expected} but got ${this.actual}`);
+import {
+  ASYMMETRIC_MATCHERS_OBJECT,
+  type Assertion,
+  type ExpectStatic,
+  GLOBAL_EXPECT,
+  JestAsymmetricMatchers,
+  JestChaiExpect,
+  JestExtend,
+  type MatcherState,
+  type Tester,
+  addCustomEqualityTesters,
+  customMatchers,
+  getState,
+  setState,
+} from '@vitest/expect';
+import { getCurrentTest } from '../runner/state';
+import type { TestCase } from '../types';
+import { getWorkerState } from '../worker/state';
+
+chai.use(JestExtend);
+chai.use(JestChaiExpect);
+// TODO
+// chai.use(SnapshotPlugin);
+chai.use(JestAsymmetricMatchers);
+
+export type RstestExpect = ExpectStatic & {
+  unreachable: (message?: string) => never;
+  soft: <T>(actual: T, message?: string) => Assertion<T>;
+  // poll: <T>(
+  //   actual: () => T,
+  //   options?: ExpectPollOptions
+  // ) => PromisifyAssertion<Awaited<T>>
+  addEqualityTesters: (testers: Array<Tester>) => void;
+  assertions: (expected: number) => void;
+  hasAssertions: () => void;
+  // addSnapshotSerializer: (plugin: PrettyFormatPlugin) => void
+};
+
+export function createExpect(test?: TestCase): RstestExpect {
+  const expect = ((value: any, message?: string): Assertion => {
+    const { assertionCalls } = getState(expect);
+    setState({ assertionCalls: assertionCalls + 1 }, expect);
+    const assert = chai.expect(value, message) as unknown as Assertion;
+    const _test = test || getCurrentTest();
+    if (_test) {
+      // @ts-expect-error internal
+      return assert.withTest(_test) as Assertion;
     }
-  }
-  toBeDefined(): void {
-    if (typeof this.actual === 'undefined') {
-      throw new Error('Expected defined but got undefined');
+    return assert;
+  }) as RstestExpect;
+  Object.assign(expect, chai.expect);
+  Object.assign(expect, (globalThis as any)[ASYMMETRIC_MATCHERS_OBJECT]);
+
+  expect.getState = () => getState<MatcherState>(expect);
+  expect.setState = (state) => setState(state as Partial<MatcherState>, expect);
+
+  const globalState = getState((globalThis as any)[GLOBAL_EXPECT]) || {};
+
+  setState<MatcherState>(
+    {
+      ...globalState,
+      assertionCalls: 0,
+      isExpectingAssertions: false,
+      isExpectingAssertionsError: null,
+      expectedAssertionsNumber: null,
+      expectedAssertionsNumberErrorGen: null,
+      get testPath() {
+        return getWorkerState().filePath;
+      },
+    },
+    expect,
+  );
+
+  // @ts-expect-error untyped
+  expect.extend = (matchers) => chai.expect.extend(expect, matchers);
+  expect.addEqualityTesters = (customTesters) =>
+    addCustomEqualityTesters(customTesters);
+
+  expect.soft = (...args) => {
+    // @ts-expect-error private soft access
+    return expect(...args).withContext({ soft: true }) as Assertion;
+  };
+
+  // TODO
+  // expect.poll = createExpectPoll(expect);
+
+  expect.unreachable = (message?: string) => {
+    chai.assert.fail(
+      `expected ${message ? `"${message}" ` : ''}not to be reached`,
+    );
+  };
+
+  function assertions(expected: number) {
+    const errorGen = () =>
+      new Error(
+        `expected number of assertions to be ${expected}, but got ${
+          expect.getState().assertionCalls
+        }`,
+      );
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(errorGen(), assertions);
     }
+
+    expect.setState({
+      expectedAssertionsNumber: expected,
+      expectedAssertionsNumberErrorGen: errorGen,
+    });
   }
 
-  toEqual(expected: T): void {
-    const actualStr = JSON.stringify(this.actual);
-    const expectedStr = JSON.stringify(expected);
-
-    if (actualStr !== expectedStr) {
-      throw new Error(`Expected ${expectedStr} but got ${actualStr}`);
+  function hasAssertions() {
+    const error = new Error('expected any number of assertion, but got none');
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(error, hasAssertions);
     }
+
+    expect.setState({
+      isExpectingAssertions: true,
+      isExpectingAssertionsError: error,
+    });
   }
 
-  toBeGreaterThan(expected: number): void {
-    if (typeof this.actual !== 'number') {
-      throw new Error('Actual value must be a number');
-    }
-    if (this.actual <= expected) {
-      throw new Error(`Expected ${this.actual} to be greater than ${expected}`);
-    }
-  }
+  chai.util.addMethod(expect, 'assertions', assertions);
+  chai.util.addMethod(expect, 'hasAssertions', hasAssertions);
 
-  toBeTruthy(): void {
-    if (!this.actual) {
-      throw new Error(`Expected ${this.actual} to be truthy`);
-    }
-  }
+  expect.extend(customMatchers);
+
+  return expect;
 }
 
-export function expect<T>(actual: T): Expectation<T> {
-  return new Expectation(actual);
-}
+const expect: RstestExpect = createExpect();
+
+Object.defineProperty(globalThis, GLOBAL_EXPECT, {
+  value: expect,
+  writable: true,
+  configurable: true,
+});
+
+export { expect };

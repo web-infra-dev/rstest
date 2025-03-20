@@ -30,13 +30,15 @@
   },
   "dependencies": {
     "@rsbuild/core": "^1.2.19",
-    "tinypool": "^1.0.2",
+    "birpc": "2.2.0",
+    "chai": "^5.2.0",
     "std-env": "^3.8.1",
-    "birpc": "2.2.0"
+    "tinypool": "^1.0.2"
   },
   "devDependencies": {
     "@rslib/core": "0.5.4",
     "@rstest/tsconfig": "workspace:*",
+    "@vitest/expect": "^3.0.9",
     "cac": "^6.7.14",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.3",
