@@ -43,6 +43,7 @@ export const createForksPool = (poolOptions: {
   maxWorkers?: number;
   minWorkers?: number;
   execArgv?: string[];
+  isolate?: boolean;
 }): {
   name: string;
   runTest: (options: RunWorkerOptions) => Promise<TestResult>;
@@ -53,6 +54,7 @@ export const createForksPool = (poolOptions: {
     minWorkers: minThreads,
     env,
     execArgv = [],
+    isolate = true,
   } = poolOptions;
 
   const options: Options = {
@@ -63,6 +65,7 @@ export const createForksPool = (poolOptions: {
     maxThreads,
     minThreads,
     concurrentTasksPerWorker: 1,
+    isolateWorkers: isolate,
   };
 
   const pool = new Tinypool(options);
