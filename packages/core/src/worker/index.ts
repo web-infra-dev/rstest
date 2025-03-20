@@ -1,8 +1,8 @@
-import * as RstestAPI from '../api';
-import { type TestResult, runner } from '../runner';
-import type { RunWorkerOptions } from '../types';
+import { runner } from '../runner';
+import type { RunWorkerOptions, TestResult } from '../types';
 import { logger } from '../utils/logger';
 import { loadModule } from './loadModule';
+import { setWorkerState } from './state';
 
 const runInPool = async ({
   entryInfo: { filePath, originPath },
@@ -10,6 +10,14 @@ const runInPool = async ({
 }: RunWorkerOptions['options']): Promise<TestResult> => {
   // const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
+
+  setWorkerState({
+    filePath,
+    environment: 'node',
+  });
+
+  const RstestAPI = await import('../api');
+
   const rstestContext = {
     global: {
       '@rstest/core': RstestAPI,

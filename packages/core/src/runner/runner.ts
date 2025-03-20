@@ -1,27 +1,11 @@
 // TODO: This is a minimal runner, in order to run the overall process
-type TestCase = {
-  description: string;
-  fn: () => void | Promise<void>;
-  skipped?: boolean;
-  todo?: boolean;
-  fails?: boolean;
-};
-
-type TestSuite = {
-  description: string;
-  tests: TestCase[];
-};
-
-export type TestSuiteResult = {
-  status: 'skip' | 'pass' | 'fail' | 'todo';
-  name: string;
-};
-
-export type TestResult = {
-  status: 'skip' | 'pass' | 'fail' | 'todo';
-  name: string;
-  results: TestSuiteResult[];
-};
+import type {
+  TestCase,
+  TestResult,
+  TestSuite,
+  TestSuiteResult,
+} from '../types';
+import { setCurrentTest } from './state';
 
 class TestRunner {
   public suites: TestSuite[] = [];
@@ -36,13 +20,18 @@ class TestRunner {
     fn();
   }
 
+  setCurrentTest(test: TestCase): void {
+    const currentSuite = this.suites[this.suites.length - 1]!;
+    currentSuite.tests.push(test);
+    setCurrentTest(test);
+  }
+
   it(description: string, fn: () => void | Promise<void>): void {
     if (this.suites.length === 0) {
       throw new Error('Test case must be defined within a suite');
     }
 
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push({ description, fn });
+    this.setCurrentTest({ description, fn });
   }
 
   skip(description: string, fn: () => void | Promise<void>): void {
@@ -50,8 +39,7 @@ class TestRunner {
       throw new Error('Test case must be defined within a suite');
     }
 
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push({ description, fn, skipped: true });
+    this.setCurrentTest({ description, fn, skipped: true });
   }
 
   todo(description: string, fn: () => void | Promise<void>): void {
@@ -59,8 +47,7 @@ class TestRunner {
       throw new Error('Test case must be defined within a suite');
     }
 
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push({ description, fn, todo: true });
+    this.setCurrentTest({ description, fn, todo: true });
   }
 
   fails(description: string, fn: () => void | Promise<void>): void {
@@ -68,8 +55,7 @@ class TestRunner {
       throw new Error('Test case must be defined within a suite');
     }
 
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push({ description, fn, fails: true });
+    this.setCurrentTest({ description, fn, fails: true });
   }
 
   async run(originPath: string): Promise<TestResult> {
