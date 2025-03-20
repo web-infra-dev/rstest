@@ -4,14 +4,25 @@ import { color, getTestEntries, logger } from '../utils';
 import { createRsbuildServer } from './rsbuild';
 import { printSummaryLog } from './summary';
 
-export async function runTests(context: RstestContext): Promise<void> {
+export async function runTests(
+  context: RstestContext,
+  fileFilters: string[],
+): Promise<void> {
   const { include, exclude, root, name } = context.normalizedConfig;
 
-  const sourceEntries = await getTestEntries({ include, exclude, root });
+  const sourceEntries = await getTestEntries({
+    include,
+    exclude,
+    root,
+    fileFilters,
+  });
 
   if (!Object.keys(sourceEntries).length) {
     logger.log(color.red('No test files found.'));
     logger.log('');
+    if (fileFilters.length) {
+      logger.log(color.gray('filter: '), fileFilters.join(color.gray(', ')));
+    }
     logger.log(color.gray('include:'), include.join(color.gray(', ')));
     logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
     logger.log('');
