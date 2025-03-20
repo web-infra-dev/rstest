@@ -1,3 +1,4 @@
+import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 // TODO: This is a minimal runner, in order to run the overall process
 import type {
   TestCase,
@@ -58,10 +59,10 @@ class TestRunner {
     this.setCurrentTest({ description, fn, fails: true });
   }
 
-  async run(originPath: string): Promise<TestResult> {
+  async run(testPath: string): Promise<TestResult> {
     const results: TestSuiteResult[] = [];
     if (this.suites.length === 0) {
-      console.error(`No test suites found in file: ${originPath}\n`);
+      console.error(`No test suites found in file: ${testPath}\n`);
       return {
         name: 'test',
         status: 'fail',
@@ -85,7 +86,10 @@ class TestRunner {
         }
         if (test.fails) {
           try {
+            this.beforeRunTest(testPath);
             await test.fn();
+            this.afterRunTest();
+
             results.push({ status: 'fail', name: test.description });
             console.log(`  ✗ ${test.description}`);
             console.error('    Expect test to fail');
@@ -96,7 +100,9 @@ class TestRunner {
           continue;
         }
         try {
+          this.beforeRunTest(testPath);
           await test.fn();
+          this.afterRunTest();
           results.push({ status: 'pass', name: test.description });
           console.log(`  ✓ ${test.description}`);
         } catch (error) {
@@ -119,6 +125,39 @@ class TestRunner {
             : 'pass',
       results,
     };
+  }
+
+  beforeRunTest(testPath: string): void {
+    setState(
+      {
+        assertionCalls: 0,
+        isExpectingAssertions: false,
+        isExpectingAssertionsError: null,
+        expectedAssertionsNumber: null,
+        expectedAssertionsNumberErrorGen: null,
+        testPath,
+      },
+      (globalThis as any)[GLOBAL_EXPECT],
+    );
+  }
+
+  afterRunTest(): void {
+    const {
+      assertionCalls,
+      expectedAssertionsNumber,
+      expectedAssertionsNumberErrorGen,
+      isExpectingAssertions,
+      isExpectingAssertionsError,
+    } = getState((globalThis as any)[GLOBAL_EXPECT]);
+    if (
+      expectedAssertionsNumber !== null &&
+      assertionCalls !== expectedAssertionsNumber
+    ) {
+      throw expectedAssertionsNumberErrorGen!();
+    }
+    if (isExpectingAssertions === true && assertionCalls === 0) {
+      throw isExpectingAssertionsError;
+    }
   }
 }
 

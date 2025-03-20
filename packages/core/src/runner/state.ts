@@ -6,6 +6,6 @@ export function setCurrentTest<T extends TestCase>(test: T | undefined): void {
   _test = test;
 }
 
-export function getCurrentTest<T extends TestCase | undefined>(): T {
+export function getCurrentTest<T extends TestCase | undefined = TestCase>(): T {
   return _test as T;
 }
