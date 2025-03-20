@@ -1,6 +1,10 @@
 import os from 'node:os';
-import type { TestResult, TestSuiteResult } from '../runner';
-import type { EntryInfo, RstestContext } from '../types';
+import type {
+  EntryInfo,
+  RstestContext,
+  TestResult,
+  TestSuiteResult,
+} from '../types';
 import { createForksPool } from './forks';
 
 const getNumCpus = (): number => {

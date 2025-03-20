@@ -3,8 +3,12 @@ import { resolve } from 'node:path';
 import v8 from 'node:v8';
 import { createBirpc } from 'birpc';
 import { type Options, Tinypool } from 'tinypool';
-import type { TestResult } from '../runner';
-import type { RunWorkerOptions, RunnerRPC, RuntimeRPC } from '../types';
+import type {
+  RunWorkerOptions,
+  RunnerRPC,
+  RuntimeRPC,
+  TestResult,
+} from '../types';
 
 function createChannel(rpcMethods: RuntimeRPC) {
   const emitter = new EventEmitter();

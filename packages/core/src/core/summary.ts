@@ -1,4 +1,4 @@
-import type { TestResult, TestSuiteResult } from '../runner';
+import type { TestResult, TestSuiteResult } from '../types';
 import { color, logger } from '../utils';
 
 export const getStatusString = (
