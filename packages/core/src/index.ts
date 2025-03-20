@@ -1,3 +1,3 @@
 export { defineConfig } from './config';
 
-export * from './api';
+export * from './api/public';

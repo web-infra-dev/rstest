@@ -15,3 +15,8 @@ export type RunWorkerOptions = {
   };
   rpcMethods: RuntimeRPC;
 };
+
+export type WorkerState = {
+  environment: string;
+  filePath: string;
+};

@@ -15,15 +15,14 @@ import {
   getState,
   setState,
 } from '@vitest/expect';
-import { getCurrentTest } from '../runner/state';
-import type { TestCase } from '../types';
-import { getWorkerState } from '../worker/state';
+import type { TestCase, WorkerState } from '../types';
 
 chai.use(JestExtend);
 chai.use(JestChaiExpect);
 // TODO
 // chai.use(SnapshotPlugin);
 chai.use(JestAsymmetricMatchers);
+export { GLOBAL_EXPECT };
 
 export type RstestExpect = ExpectStatic & {
   unreachable: (message?: string) => never;
@@ -38,12 +37,18 @@ export type RstestExpect = ExpectStatic & {
   // addSnapshotSerializer: (plugin: PrettyFormatPlugin) => void
 };
 
-export function createExpect(test?: TestCase): RstestExpect {
+export function createExpect({
+  getCurrentTest,
+  workerState,
+}: {
+  workerState: WorkerState;
+  getCurrentTest: () => TestCase | undefined;
+}): RstestExpect {
   const expect = ((value: any, message?: string): Assertion => {
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
     const assert = chai.expect(value, message) as unknown as Assertion;
-    const _test = test || getCurrentTest();
+    const _test = getCurrentTest();
     if (_test) {
       // @ts-expect-error internal
       return assert.withTest(_test) as Assertion;
@@ -67,7 +72,7 @@ export function createExpect(test?: TestCase): RstestExpect {
       expectedAssertionsNumber: null,
       expectedAssertionsNumberErrorGen: null,
       get testPath() {
-        return getWorkerState().filePath;
+        return workerState.filePath;
       },
     },
     expect,
@@ -128,13 +133,3 @@ export function createExpect(test?: TestCase): RstestExpect {
 
   return expect;
 }
-
-const expect: RstestExpect = createExpect();
-
-Object.defineProperty(globalThis, GLOBAL_EXPECT, {
-  value: expect,
-  writable: true,
-  configurable: true,
-});
-
-export { expect };
