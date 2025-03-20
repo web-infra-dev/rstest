@@ -1,3 +1,4 @@
+import { normalize } from 'node:path';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
 import { isCI } from 'std-env';
@@ -31,10 +32,7 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function initCli(
-  filters: string[],
-  options: CommonOptions,
-): Promise<{
+export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
   configFilePath: string | null;
 }> {
@@ -49,10 +47,6 @@ export async function initCli(
 
   if (options.root) {
     config.root = root;
-  }
-
-  if (filters.length) {
-    config.include = filters;
   }
 
   return {
@@ -74,10 +68,10 @@ export function setupCommands(): void {
     .command('[...filters]', 'run Rstest')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
-        const { config } = await initCli(filters, options);
+        const { config } = await initCli(options);
         const { createRstest } = await import('../core');
         if (isCI) {
-          const rstest = createRstest(config, 'run');
+          const rstest = createRstest(config, 'run', filters.map(normalize));
           await rstest.runTests();
         } else {
           console.log('TODO: run Rstest in watch mode');
@@ -93,9 +87,9 @@ export function setupCommands(): void {
     .command('run [...filters]', 'run Rstest without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
-        const { config } = await initCli(filters, options);
+        const { config } = await initCli(options);
         const { createRstest } = await import('../core');
-        const rstest = createRstest(config, 'run');
+        const rstest = createRstest(config, 'run', filters.map(normalize));
         await rstest.runTests();
       } catch (err) {
         logger.error('Failed to run Rstest.');
@@ -106,8 +100,8 @@ export function setupCommands(): void {
 
   cli
     .command('watch [...filters]', 'run Rstest in watch mode')
-    .action(async (filters: string[], options: CommonOptions) => {
-      await initCli(filters, options);
+    .action(async (_filters: string[], options: CommonOptions) => {
+      await initCli(options);
       console.log('TODO: run Rstest in watch mode');
     });
 
