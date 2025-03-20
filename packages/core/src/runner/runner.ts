@@ -6,10 +6,10 @@ import type {
   TestSuite,
   TestSuiteResult,
 } from '../types';
-import { setCurrentTest } from './state';
 
-class TestRunner {
-  public suites: TestSuite[] = [];
+export class TestRunner {
+  private suites: TestSuite[] = [];
+  private _test: TestCase | undefined;
 
   describe(description: string, fn: () => void): void {
     const currentSuite: TestSuite = {
@@ -24,7 +24,7 @@ class TestRunner {
   setCurrentTest(test: TestCase): void {
     const currentSuite = this.suites[this.suites.length - 1]!;
     currentSuite.tests.push(test);
-    setCurrentTest(test);
+    this._test = test;
   }
 
   it(description: string, fn: () => void | Promise<void>): void {
@@ -33,6 +33,10 @@ class TestRunner {
     }
 
     this.setCurrentTest({ description, fn });
+  }
+
+  getCurrentTest(): TestCase | undefined {
+    return this._test;
   }
 
   skip(description: string, fn: () => void | Promise<void>): void {
@@ -69,7 +73,6 @@ class TestRunner {
         results,
       };
     }
-    console.log(`Running test file: ${testPath}`, this.suites.length);
 
     for (const suite of this.suites) {
       console.log(`Suite: ${suite.description}`);
@@ -162,22 +165,37 @@ class TestRunner {
   }
 }
 
-export const runner: TestRunner = new TestRunner();
-
-export const describe: (description: string, fn: () => void) => void =
-  runner.describe.bind(runner);
-
 type TestFn = (description: string, fn: () => void | Promise<void>) => void;
 
-type TestAPI = TestFn & {
+export type TestAPI = TestFn & {
   fails: TestFn;
   todo: TestFn;
   skip: TestFn;
 };
 
-const it = runner.it.bind(runner) as TestAPI;
+export type RunnerAPI = {
+  describe: (description: string, fn: () => void) => void;
+  it: TestAPI;
+  test: TestAPI;
+};
 
-it.fails = runner.fails.bind(runner);
-it.todo = runner.todo.bind(runner);
-it.skip = runner.skip.bind(runner);
-export { it };
+export function createRunner(): { api: RunnerAPI; runner: TestRunner } {
+  const runner: TestRunner = new TestRunner();
+
+  const describe: (description: string, fn: () => void) => void =
+    runner.describe.bind(runner);
+  const it = runner.it.bind(runner) as TestAPI;
+
+  it.fails = runner.fails.bind(runner);
+  it.todo = runner.todo.bind(runner);
+  it.skip = runner.skip.bind(runner);
+
+  return {
+    api: {
+      describe,
+      it,
+      test: it,
+    },
+    runner,
+  };
+}
