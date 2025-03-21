@@ -104,6 +104,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     type: 'forks',
   },
   isolate: true,
+  globals: false,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

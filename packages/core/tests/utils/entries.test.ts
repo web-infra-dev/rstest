@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { describe, expect, it } from '@rstest/core';
 import { filterFiles } from '../../src/utils/entries';
 
 describe('test filterFiles', () => {

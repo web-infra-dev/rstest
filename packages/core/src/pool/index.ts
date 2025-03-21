@@ -78,7 +78,7 @@ export const runInPool = async ({
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
-        options: { entryInfo, assetFiles },
+        options: { entryInfo, assetFiles, context },
         rpcMethods: {},
       }),
     ),

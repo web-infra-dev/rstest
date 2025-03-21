@@ -46,6 +46,12 @@ export interface RstestConfig {
    * @default true
    */
   isolate?: boolean;
+  /**
+   * Provide global APIs
+   *
+   * @default false
+   */
+  globals?: boolean;
 }
 
 export type NormalizedConfig = Required<Omit<RstestConfig, 'pool'>> & {
