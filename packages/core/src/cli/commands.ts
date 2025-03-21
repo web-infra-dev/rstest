@@ -11,6 +11,7 @@ type CommonOptions = {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
+  globals?: boolean;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -29,7 +30,8 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '-r, --root <root>',
       'specify the project root directory, can be an absolute path or a path relative to cwd',
-    );
+    )
+    .option('--globals', 'provide global APIs');
 };
 
 export async function initCli(options: CommonOptions): Promise<{
@@ -47,6 +49,10 @@ export async function initCli(options: CommonOptions): Promise<{
 
   if (options.root) {
     config.root = root;
+  }
+
+  if (options.globals !== undefined) {
+    config.globals = options.globals;
   }
 
   return {

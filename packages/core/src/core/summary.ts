@@ -32,6 +32,7 @@ export const printSummaryLog = (
   results: TestResult[],
   testResults: TestSuiteResult[],
 ): void => {
+  logger.log('');
   logger.log(
     `${color.gray('Test Files'.padStart(12))} ${getStatusString(results)}`,
   );
