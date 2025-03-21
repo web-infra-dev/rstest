@@ -1,6 +1,8 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 // TODO: This is a minimal runner, in order to run the overall process
 import type {
+  RunnerAPI,
+  TestAPI,
   TestCase,
   TestResult,
   TestSuite,
@@ -164,20 +166,6 @@ export class TestRunner {
     }
   }
 }
-
-type TestFn = (description: string, fn: () => void | Promise<void>) => void;
-
-export type TestAPI = TestFn & {
-  fails: TestFn;
-  todo: TestFn;
-  skip: TestFn;
-};
-
-export type RunnerAPI = {
-  describe: (description: string, fn: () => void) => void;
-  it: TestAPI;
-  test: TestAPI;
-};
 
 export function createRunner(): { api: RunnerAPI; runner: TestRunner } {
   const runner: TestRunner = new TestRunner();

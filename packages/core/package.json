@@ -17,6 +17,15 @@
   "bin": {
     "rstest": "./bin/rstest.js"
   },
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./globals": {
+      "types": "./globals.d.ts"
+    }
+  },
   "files": [
     "bin",
     "dist",

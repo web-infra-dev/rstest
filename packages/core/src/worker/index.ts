@@ -1,13 +1,32 @@
-import type { RunWorkerOptions, TestResult, WorkerState } from '../types';
+import { globalApis } from '../constants';
+import type {
+  Rstest,
+  RunWorkerOptions,
+  TestResult,
+  WorkerState,
+} from '../types';
 import { logger } from '../utils/logger';
 import { loadModule } from './loadModule';
+
+const getGlobalApi = (api: Rstest) => {
+  return globalApis.reduce<{
+    [key in keyof Rstest]?: Rstest[key];
+  }>((apis, key) => {
+    apis[key] = api[key] as any;
+    return apis;
+  }, {});
+};
 
 const runInPool = async ({
   entryInfo: { filePath, originPath },
   assetFiles,
+  context,
 }: RunWorkerOptions['options']): Promise<TestResult> => {
   // const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
+  const {
+    normalizedConfig: { globals },
+  } = context;
 
   const workerState: WorkerState = {
     filePath,
@@ -21,6 +40,7 @@ const runInPool = async ({
     global: {
       '@rstest/core': api,
     },
+    ...(globals ? getGlobalApi(api) : {}),
   };
 
   try {

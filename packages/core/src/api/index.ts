@@ -1,9 +1,6 @@
-import { type RunnerAPI, type TestRunner, createRunner } from '../runner';
-import type { WorkerState } from '../types';
-import { GLOBAL_EXPECT, type RstestExpect, createExpect } from './expect';
-export type Rstest = RunnerAPI & {
-  expect: RstestExpect;
-};
+import { type TestRunner, createRunner } from '../runner';
+import type { Rstest, RstestExpect, WorkerState } from '../types';
+import { GLOBAL_EXPECT, createExpect } from './expect';
 
 export const createRstestRuntime = (
   workerState: WorkerState,

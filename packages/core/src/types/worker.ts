@@ -1,3 +1,5 @@
+import type { RstestContext } from './core';
+
 export type EntryInfo = {
   filePath: string;
   originPath: string;
@@ -12,6 +14,7 @@ export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     assetFiles: Record<string, string>;
+    context: RstestContext;
   };
   rpcMethods: RuntimeRPC;
 };

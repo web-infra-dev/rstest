@@ -3,19 +3,17 @@ import * as chai from 'chai';
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   type Assertion,
-  type ExpectStatic,
   GLOBAL_EXPECT,
   JestAsymmetricMatchers,
   JestChaiExpect,
   JestExtend,
   type MatcherState,
-  type Tester,
   addCustomEqualityTesters,
   customMatchers,
   getState,
   setState,
 } from '@vitest/expect';
-import type { TestCase, WorkerState } from '../types';
+import type { RstestExpect, TestCase, WorkerState } from '../types';
 
 chai.use(JestExtend);
 chai.use(JestChaiExpect);
@@ -23,19 +21,6 @@ chai.use(JestChaiExpect);
 // chai.use(SnapshotPlugin);
 chai.use(JestAsymmetricMatchers);
 export { GLOBAL_EXPECT };
-
-export type RstestExpect = ExpectStatic & {
-  unreachable: (message?: string) => never;
-  soft: <T>(actual: T, message?: string) => Assertion<T>;
-  // poll: <T>(
-  //   actual: () => T,
-  //   options?: ExpectPollOptions
-  // ) => PromisifyAssertion<Awaited<T>>
-  addEqualityTesters: (testers: Array<Tester>) => void;
-  assertions: (expected: number) => void;
-  hasAssertions: () => void;
-  // addSnapshotSerializer: (plugin: PrettyFormatPlugin) => void
-};
 
 export function createExpect({
   getCurrentTest,
