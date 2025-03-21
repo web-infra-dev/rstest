@@ -4,7 +4,7 @@ import cac, { type CAC } from 'cac';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';
-import { getAbsolutePath } from '../utils/helper';
+import { formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 
 type CommonOptions = {
@@ -93,7 +93,7 @@ export function setupCommands(): void {
         await rstest.runTests();
       } catch (err) {
         logger.error('Failed to run Rstest.');
-        logger.error(err);
+        logger.error(formatError(err));
         process.exit(1);
       }
     });
