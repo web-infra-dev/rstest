@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { glob } from 'tinyglobby';
 
-const filterFiles = (
+export const filterFiles = (
   testFiles: string[],
   filters: string[],
   dir: string,
