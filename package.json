@@ -42,7 +42,7 @@
     "nx": "^20.6.1",
     "prettier": "^3.5.3",
     "prettier-plugin-packagejson": "^2.5.10",
-    "simple-git-hooks": "^2.11.1",
+    "simple-git-hooks": "^2.12.1",
     "typescript": "^5.8.2"
   },
   "packageManager": "pnpm@10.4.1",
