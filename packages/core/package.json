@@ -46,7 +46,7 @@
     "tinypool": "^1.0.2"
   },
   "devDependencies": {
-    "@rslib/core": "0.5.4",
+    "@rslib/core": "0.5.5",
     "@rstest/tsconfig": "workspace:*",
     "@vitest/expect": "^3.0.9",
     "cac": "^6.7.14",
