@@ -4,6 +4,8 @@ export type TestCase = {
   skipped?: boolean;
   todo?: boolean;
   fails?: boolean;
+  // TODO
+  onFinished?: any[];
 };
 
 export type TestSuite = {

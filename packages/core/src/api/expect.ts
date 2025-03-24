@@ -14,6 +14,7 @@ import {
   setState,
 } from '@vitest/expect';
 import type { RstestExpect, TestCase, WorkerState } from '../types';
+import { createExpectPoll } from './poll';
 
 chai.use(JestExtend);
 chai.use(JestChaiExpect);
@@ -73,8 +74,7 @@ export function createExpect({
     return expect(...args).withContext({ soft: true }) as Assertion;
   };
 
-  // TODO
-  // expect.poll = createExpectPoll(expect);
+  expect.poll = createExpectPoll(expect);
 
   expect.unreachable = (message?: string) => {
     chai.assert.fail(
