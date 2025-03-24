@@ -6,7 +6,7 @@ import { RunnerRuntime } from './runtime';
 export function createRunner(): {
   api: RunnerAPI;
   runner: {
-    runTest: (testFilePath: string) => Promise<TestResult>;
+    runTest: (testFilePath: string, rootPath: string) => Promise<TestResult>;
     getCurrentTest: RunnerRuntime['getCurrentTest'];
   };
 } {
@@ -28,8 +28,12 @@ export function createRunner(): {
       test: it,
     },
     runner: {
-      runTest: async (testFilePath: string) => {
-        return testRunner.runTest(runtimeAPI.getTests(), testFilePath);
+      runTest: async (testFilePath: string, rootPath: string) => {
+        return testRunner.runTests(
+          runtimeAPI.getTests(),
+          testFilePath,
+          rootPath,
+        );
       },
       getCurrentTest: () => runtimeAPI.getCurrentTest(),
     },

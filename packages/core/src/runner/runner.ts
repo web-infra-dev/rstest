@@ -1,10 +1,15 @@
+import { relative } from 'node:path';
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import type { TestResult, TestSuite, TestSuiteResult } from '../types';
+import type { Test, TestResult, TestSuiteResult } from '../types';
 
 export class TestRunner {
-  async runTest(suites: TestSuite[], testPath: string): Promise<TestResult> {
+  async runTests(
+    tests: Test[],
+    testPath: string,
+    rootPath: string,
+  ): Promise<TestResult> {
     const results: TestSuiteResult[] = [];
-    if (suites.length === 0) {
+    if (tests.length === 0) {
       console.error(`No test suites found in file: ${testPath}\n`);
       return {
         name: 'test',
@@ -13,19 +18,28 @@ export class TestRunner {
       };
     }
 
-    for (const suite of suites) {
-      console.log(`Suite: ${suite.description}`);
+    console.log('Run test file:', relative(rootPath, testPath));
 
-      for (const test of suite.tests) {
+    const runTest = async (test: Test, prefix = '') => {
+      if (test.type === 'suite') {
+        if (test.tests.length === 0) {
+          console.error(`No test found in suite : ${test.description}\n`);
+          results.push({ status: 'fail', name: test.description });
+        }
+
+        for (const suite of test.tests) {
+          await runTest(suite, `${prefix}${test.description} > `);
+        }
+      } else {
         if (test.skipped) {
-          console.log(`  - ${test.description}`);
+          console.log(`  - ${prefix}${test.description}`);
           results.push({ status: 'skip', name: test.description });
-          continue;
+          return;
         }
         if (test.todo) {
-          console.log(`  - ${test.description}`);
+          console.log(`  - ${prefix}${test.description}`);
           results.push({ status: 'todo', name: test.description });
-          continue;
+          return;
         }
         if (test.fails) {
           try {
@@ -34,28 +48,32 @@ export class TestRunner {
             this.afterRunTest();
 
             results.push({ status: 'fail', name: test.description });
-            console.log(`  ✗ ${test.description}`);
+            console.log(`  ✗ ${prefix}${test.description}`);
             console.error('    Expect test to fail');
           } catch (error) {
             results.push({ status: 'pass', name: test.description });
-            console.log(`  ✓ ${test.description}`);
+            console.log(`  ✓ ${prefix}${test.description}`);
           }
-          continue;
+          return;
         }
         try {
           this.beforeRunTest(testPath);
           await test.fn();
           this.afterRunTest();
           results.push({ status: 'pass', name: test.description });
-          console.log(`  ✓ ${test.description}`);
+          console.log(`  ✓ ${prefix}${test.description}`);
         } catch (error) {
           results.push({ status: 'fail', name: test.description });
-          console.log(`  ✗ ${test.description}`);
+          console.log(`  ✗ ${prefix}${test.description}`);
           console.error(`    ${error}`);
         }
       }
-      console.log('');
+    };
+
+    for (const test of tests) {
+      await runTest(test);
     }
+    console.log('');
 
     return {
       name: 'test',
