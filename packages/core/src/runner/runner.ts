@@ -1,73 +1,10 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-// TODO: This is a minimal runner, in order to run the overall process
-import type {
-  RunnerAPI,
-  TestAPI,
-  TestCase,
-  TestResult,
-  TestSuite,
-  TestSuiteResult,
-} from '../types';
+import type { TestResult, TestSuite, TestSuiteResult } from '../types';
 
 export class TestRunner {
-  private suites: TestSuite[] = [];
-  private _test: TestCase | undefined;
-
-  describe(description: string, fn: () => void): void {
-    const currentSuite: TestSuite = {
-      description,
-      tests: [],
-    };
-
-    this.suites.push(currentSuite);
-    fn();
-  }
-
-  setCurrentTest(test: TestCase): void {
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push(test);
-    this._test = test;
-  }
-
-  it(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn });
-  }
-
-  getCurrentTest(): TestCase | undefined {
-    return this._test;
-  }
-
-  skip(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, skipped: true });
-  }
-
-  todo(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, todo: true });
-  }
-
-  fails(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, fails: true });
-  }
-
-  async run(testPath: string): Promise<TestResult> {
+  async runTest(suites: TestSuite[], testPath: string): Promise<TestResult> {
     const results: TestSuiteResult[] = [];
-    if (this.suites.length === 0) {
+    if (suites.length === 0) {
       console.error(`No test suites found in file: ${testPath}\n`);
       return {
         name: 'test',
@@ -76,7 +13,7 @@ export class TestRunner {
       };
     }
 
-    for (const suite of this.suites) {
+    for (const suite of suites) {
       console.log(`Suite: ${suite.description}`);
 
       for (const test of suite.tests) {
@@ -133,7 +70,7 @@ export class TestRunner {
     };
   }
 
-  beforeRunTest(testPath: string): void {
+  private beforeRunTest(testPath: string): void {
     setState(
       {
         assertionCalls: 0,
@@ -147,7 +84,7 @@ export class TestRunner {
     );
   }
 
-  afterRunTest(): void {
+  private afterRunTest(): void {
     const {
       assertionCalls,
       expectedAssertionsNumber,
@@ -165,25 +102,4 @@ export class TestRunner {
       throw isExpectingAssertionsError;
     }
   }
-}
-
-export function createRunner(): { api: RunnerAPI; runner: TestRunner } {
-  const runner: TestRunner = new TestRunner();
-
-  const describe: (description: string, fn: () => void) => void =
-    runner.describe.bind(runner);
-  const it = runner.it.bind(runner) as TestAPI;
-
-  it.fails = runner.fails.bind(runner);
-  it.todo = runner.todo.bind(runner);
-  it.skip = runner.skip.bind(runner);
-
-  return {
-    api: {
-      describe,
-      it,
-      test: it,
-    },
-    runner,
-  };
 }

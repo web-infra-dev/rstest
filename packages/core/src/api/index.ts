@@ -1,11 +1,20 @@
-import { type TestRunner, createRunner } from '../runner';
-import type { Rstest, RstestExpect, WorkerState } from '../types';
+import { createRunner } from '../runner';
+import type {
+  Rstest,
+  RstestExpect,
+  TestCase,
+  TestResult,
+  WorkerState,
+} from '../types';
 import { GLOBAL_EXPECT, createExpect } from './expect';
 
 export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
-  runner: TestRunner;
+  runner: {
+    runTest: (testPath: string) => Promise<TestResult>;
+    getCurrentTest: () => TestCase | undefined;
+  };
   api: Rstest;
 } => {
   const { runner, api: runnerAPI } = createRunner();

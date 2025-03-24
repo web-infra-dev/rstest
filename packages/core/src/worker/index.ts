@@ -52,7 +52,7 @@ const runInPool = async ({
       assetFiles,
     });
 
-    const results = await runner.run(originPath);
+    const results = await runner.runTest(originPath);
 
     return results;
   } catch (err) {
