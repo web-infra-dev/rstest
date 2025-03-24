@@ -5,9 +5,9 @@ export type EntryInfo = {
   originPath: string;
 };
 
-// biome-ignore lint/complexity/noBannedTypes: <explanation>
+// biome-ignore lint/complexity/noBannedTypes: TODO
 export type RunnerRPC = {};
-// biome-ignore lint/complexity/noBannedTypes: <explanation>
+// biome-ignore lint/complexity/noBannedTypes: TODO
 export type RuntimeRPC = {};
 
 export type RunWorkerOptions = {
