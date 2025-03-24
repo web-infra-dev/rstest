@@ -12,7 +12,7 @@ export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
   runner: {
-    runTest: (testPath: string) => Promise<TestResult>;
+    runTest: (testPath: string, rootPath: string) => Promise<TestResult>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;

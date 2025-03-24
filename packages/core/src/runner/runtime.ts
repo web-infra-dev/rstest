@@ -1,35 +1,58 @@
-import type { TestCase, TestSuite } from '../types';
+import type { Test, TestCase, TestSuite } from '../types';
 
 export class RunnerRuntime {
-  private suites: TestSuite[] = [];
+  private tests: Array<Test> = [];
   private _test: TestCase | undefined;
+
+  private _currentTest: Test[] = [];
 
   describe(description: string, fn: () => void): void {
     const currentSuite: TestSuite = {
       description,
       tests: [],
+      type: 'suite',
     };
-
-    this.suites.push(currentSuite);
+    this.addTest(currentSuite);
     fn();
+    this.resetCurrentTest();
   }
 
-  getTests(): TestSuite[] {
-    return this.suites;
+  resetCurrentTest(): void {
+    this._currentTest.pop();
   }
 
-  setCurrentTest(test: TestCase): void {
-    const currentSuite = this.suites[this.suites.length - 1]!;
-    currentSuite.tests.push(test);
-    this._test = test;
+  addTest(test: TestSuite | TestCase): void {
+    if (this._currentTest.length === 0) {
+      this.tests.push(test);
+    } else {
+      const current = this._currentTest[this._currentTest.length - 1]!;
+
+      if (current.type === 'case') {
+        throw new Error(
+          'Calling the test function inside another test function is not allowed. Please put it inside "describe" so it can be properly collected.',
+        );
+      }
+      current.tests.push(test);
+    }
+
+    this._currentTest.push(test);
+
+    if (test.type === 'case') {
+      this._test = test;
+    }
+  }
+
+  getTests(): Test[] {
+    return this.tests;
+  }
+
+  addTestCase(test: TestCase): void {
+    this.addTest(test);
+    this.resetCurrentTest();
   }
 
   it(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn });
+    this.addTestCase({ description, fn, type: 'case' });
   }
 
   getCurrentTest(): TestCase | undefined {
@@ -37,26 +60,14 @@ export class RunnerRuntime {
   }
 
   skip(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, skipped: true });
+    this.addTestCase({ description, fn, skipped: true, type: 'case' });
   }
 
   todo(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, todo: true });
+    this.addTestCase({ description, fn, todo: true, type: 'case' });
   }
 
   fails(description: string, fn: () => void | Promise<void>): void {
-    if (this.suites.length === 0) {
-      throw new Error('Test case must be defined within a suite');
-    }
-
-    this.setCurrentTest({ description, fn, fails: true });
+    this.addTestCase({ description, fn, fails: true, type: 'case' });
   }
 }

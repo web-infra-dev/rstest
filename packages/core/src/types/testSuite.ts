@@ -5,13 +5,21 @@ export type TestCase = {
   todo?: boolean;
   fails?: boolean;
   // TODO
+  only?: boolean;
+  // TODO
   onFinished?: any[];
+  type: 'case';
 };
 
 export type TestSuite = {
   description: string;
-  tests: TestCase[];
+  // TODO
+  filepath?: string;
+  tests: Array<TestSuite | TestCase>;
+  type: 'suite';
 };
+
+export type Test = TestSuite | TestCase;
 
 export type TestSuiteResult = {
   status: 'skip' | 'pass' | 'fail' | 'todo';
