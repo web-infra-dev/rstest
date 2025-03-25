@@ -37,6 +37,12 @@ export interface RstestConfig {
    */
   exclude?: string[];
   /**
+   * Allows the test suite to pass when no files are found.
+   *
+   * @default false
+   */
+  passWithNoTests?: boolean;
+  /**
    * Pool used to run tests in.
    */
   pool?: RstestPoolType | RstestPoolOptions;

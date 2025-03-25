@@ -1,15 +1,31 @@
 import { relative } from 'node:path';
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import type { Test, TestResult, TestSuiteResult } from '../types';
+import type {
+  RstestContext,
+  Test,
+  TestResult,
+  TestSuiteResult,
+} from '../types';
 
 export class TestRunner {
   async runTests(
     tests: Test[],
     testPath: string,
-    rootPath: string,
+    context: RstestContext,
   ): Promise<TestResult> {
+    const {
+      rootPath,
+      normalizedConfig: { passWithNoTests },
+    } = context;
     const results: TestSuiteResult[] = [];
     if (tests.length === 0) {
+      if (passWithNoTests) {
+        return {
+          name: 'test',
+          status: 'pass',
+          results,
+        };
+      }
       console.error(`No test suites found in file: ${testPath}\n`);
       return {
         name: 'test',
@@ -23,7 +39,11 @@ export class TestRunner {
     const runTest = async (test: Test, prefix = '') => {
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
-          console.error(`No test found in suite : ${test.description}\n`);
+          if (passWithNoTests) {
+            console.warn(`   No test found in suite: ${test.description}\n`);
+            return;
+          }
+          console.error(`No test found in suite: ${test.description}\n`);
           results.push({ status: 'fail', name: test.description });
         }
 
@@ -75,15 +95,22 @@ export class TestRunner {
     }
     console.log('');
 
-    return {
-      name: 'test',
-      status: results.some((result) => result.status === 'fail')
+    const getTestStatus = (results: TestSuiteResult[]) => {
+      if (results.length === 0) {
+        return 'pass';
+      }
+      return results.some((result) => result.status === 'fail')
         ? 'fail'
         : results.every((result) => result.status === 'todo')
           ? 'todo'
           : results.every((result) => result.status === 'skip')
             ? 'skip'
-            : 'pass',
+            : 'pass';
+    };
+
+    return {
+      name: 'test',
+      status: getTestStatus(results),
       results,
     };
   }

@@ -105,6 +105,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   },
   isolate: true,
   globals: false,
+  passWithNoTests: false,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
