@@ -12,6 +12,7 @@ type CommonOptions = {
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
+  passWithNoTests?: boolean;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -31,7 +32,11 @@ const applyCommonOptions = (cli: CAC) => {
       '-r, --root <root>',
       'specify the project root directory, can be an absolute path or a path relative to cwd',
     )
-    .option('--globals', 'provide global APIs');
+    .option('--globals', 'provide global APIs')
+    .option(
+      '--passWithNoTests',
+      'Allows the test suite to pass when no files are found.',
+    );
 };
 
 export async function initCli(options: CommonOptions): Promise<{
@@ -47,12 +52,15 @@ export async function initCli(options: CommonOptions): Promise<{
     configLoader: options.configLoader,
   });
 
-  if (options.root) {
-    config.root = root;
-  }
-
-  if (options.globals !== undefined) {
-    config.globals = options.globals;
+  const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
+    'root',
+    'globals',
+    'passWithNoTests',
+  ];
+  for (const key of keys) {
+    if (options[key] !== undefined) {
+      (config[key] as any) = options[key];
+    }
   }
 
   return {

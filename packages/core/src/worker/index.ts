@@ -26,7 +26,6 @@ const runInPool = async ({
   const codeContent = assetFiles[filePath]!;
   const {
     normalizedConfig: { globals },
-    rootPath,
   } = context;
 
   const workerState: WorkerState = {
@@ -53,7 +52,7 @@ const runInPool = async ({
       assetFiles,
     });
 
-    const results = await runner.runTest(originPath, rootPath);
+    const results = await runner.runTest(originPath, context);
 
     return results;
   } catch (err) {

@@ -1,6 +1,7 @@
 import { createRunner } from '../runner';
 import type {
   Rstest,
+  RstestContext,
   RstestExpect,
   TestCase,
   TestResult,
@@ -12,7 +13,7 @@ export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
   runner: {
-    runTest: (testPath: string, rootPath: string) => Promise<TestResult>;
+    runTest: (testPath: string, context: RstestContext) => Promise<TestResult>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;
