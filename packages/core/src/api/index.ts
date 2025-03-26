@@ -4,7 +4,7 @@ import type {
   RstestExpect,
   RunnerHooks,
   TestCase,
-  TestResult,
+  TestSummaryResult,
   WorkerContext,
   WorkerState,
 } from '../types';
@@ -18,7 +18,7 @@ export const createRstestRuntime = (
       testPath: string,
       context: WorkerContext,
       hooks: RunnerHooks,
-    ) => Promise<TestResult>;
+    ) => Promise<TestSummaryResult>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;

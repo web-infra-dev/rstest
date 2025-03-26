@@ -2,7 +2,7 @@ import type {
   RunnerAPI,
   RunnerHooks,
   TestAPI,
-  TestResult,
+  TestSummaryResult,
   WorkerContext,
 } from '../types';
 
@@ -16,7 +16,7 @@ export function createRunner(): {
       testFilePath: string,
       context: WorkerContext,
       hooks: RunnerHooks,
-    ) => Promise<TestResult>;
+    ) => Promise<TestSummaryResult>;
     getCurrentTest: RunnerRuntime['getCurrentTest'];
   };
 } {

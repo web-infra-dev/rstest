@@ -3,7 +3,7 @@ import type {
   Rstest,
   RunWorkerOptions,
   TestResult,
-  TestSuiteResult,
+  TestSummaryResult,
   WorkerState,
 } from '../types';
 import { logger } from '../utils';
@@ -24,7 +24,7 @@ const runInPool = async ({
   setupEntries,
   assetFiles,
   context,
-}: RunWorkerOptions['options']): Promise<TestResult> => {
+}: RunWorkerOptions['options']): Promise<TestSummaryResult> => {
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {
@@ -69,7 +69,7 @@ const runInPool = async ({
     });
 
     const results = await runner.runTest(originPath, context, {
-      onTestEnd: async (result: TestSuiteResult) => {
+      onTestEnd: async (result: TestResult) => {
         await rpc.onTestEnd(result);
       },
     });

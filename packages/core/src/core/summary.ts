@@ -1,8 +1,8 @@
-import type { TestResult, TestSuiteResult } from '../types';
+import type { TestResult, TestSummaryResult } from '../types';
 import { color, logger } from '../utils';
 
 export const getStatusString = (
-  tasks: TestSuiteResult[],
+  tasks: TestResult[],
   name = 'tests',
   showTotal = true,
 ): string => {
@@ -29,8 +29,8 @@ export const getStatusString = (
 };
 
 export const printSummaryLog = (
-  results: TestResult[],
-  testResults: TestSuiteResult[],
+  results: TestSummaryResult[],
+  testResults: TestResult[],
 ): void => {
   logger.log('');
   logger.log(

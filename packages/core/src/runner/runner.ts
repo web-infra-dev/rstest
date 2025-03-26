@@ -5,11 +5,11 @@ import type {
   Test,
   TestResult,
   TestResultStatus,
-  TestSuiteResult,
+  TestSummaryResult,
   WorkerContext,
 } from '../types';
 
-const getTestStatus = (results: TestSuiteResult[]): TestResultStatus => {
+const getTestStatus = (results: TestResult[]): TestResultStatus => {
   if (results.length === 0) {
     return 'pass';
   }
@@ -28,12 +28,12 @@ export class TestRunner {
     testPath: string,
     context: WorkerContext,
     hooks: RunnerHooks,
-  ): Promise<TestResult> {
+  ): Promise<TestSummaryResult> {
     const {
       rootPath,
       normalizedConfig: { passWithNoTests },
     } = context;
-    const results: TestSuiteResult[] = [];
+    const results: TestResult[] = [];
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {

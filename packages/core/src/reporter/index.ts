@@ -1,9 +1,9 @@
 import color from 'picocolors';
 
-import type { TestSuiteResult } from '../types';
+import type { TestResult } from '../types';
 
 export class DefaultReporter {
-  onTestEnd(result: TestSuiteResult): void {
+  onTestEnd(result: TestResult): void {
     switch (result.status) {
       case 'fail':
         console.log(`  ${color.red('✗')} ${result.prefix}${result.name}`);

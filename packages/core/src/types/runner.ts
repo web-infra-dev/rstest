@@ -1,5 +1,5 @@
-import type { TestSuiteResult } from './testSuite';
+import type { TestResult } from './testSuite';
 
 export type RunnerHooks = {
-  onTestEnd?: (result: TestSuiteResult) => Promise<void>;
+  onTestEnd?: (result: TestResult) => Promise<void>;
 };

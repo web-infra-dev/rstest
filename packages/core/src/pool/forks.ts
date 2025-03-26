@@ -7,7 +7,7 @@ import type {
   RunWorkerOptions,
   RuntimeRPC,
   ServerRPC,
-  TestResult,
+  TestSummaryResult,
 } from '../types';
 
 function createChannel(rpcMethods: RuntimeRPC) {
@@ -46,7 +46,7 @@ export const createForksPool = (poolOptions: {
   isolate?: boolean;
 }): {
   name: string;
-  runTest: (options: RunWorkerOptions) => Promise<TestResult>;
+  runTest: (options: RunWorkerOptions) => Promise<TestSummaryResult>;
   close: () => Promise<void>;
 } => {
   const {
