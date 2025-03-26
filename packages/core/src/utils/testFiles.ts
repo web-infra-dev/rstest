@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { glob } from 'tinyglobby';
+import { castArray, getAbsolutePath } from '../utils';
 
 export const filterFiles = (
   testFiles: string[],
@@ -59,6 +60,19 @@ export const getTestEntries = async ({
     filterFiles(testFiles, fileFilters, root).map((entry) => {
       const name = path.relative(root, entry);
       return [name, entry];
+    }),
+  );
+};
+
+export const getSetupFiles = (
+  setups: string[] | string | undefined,
+  rootPath: string,
+): Record<string, string> => {
+  return Object.fromEntries(
+    castArray(setups).map((setupFile) => {
+      const setupFilePath = getAbsolutePath(rootPath, setupFile);
+      const name = path.relative(rootPath, setupFilePath);
+      return [name, setupFilePath];
     }),
   );
 };

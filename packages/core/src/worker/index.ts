@@ -5,7 +5,7 @@ import type {
   TestResult,
   WorkerState,
 } from '../types';
-import { logger } from '../utils/logger';
+import { logger } from '../utils';
 import { loadModule } from './loadModule';
 
 const getGlobalApi = (api: Rstest) => {
@@ -19,6 +19,7 @@ const getGlobalApi = (api: Rstest) => {
 
 const runInPool = async ({
   entryInfo: { filePath, originPath },
+  setupEntries,
   assetFiles,
   context,
 }: RunWorkerOptions['options']): Promise<TestResult> => {
@@ -44,6 +45,19 @@ const runInPool = async ({
   };
 
   try {
+    // run setup files
+    for (const { filePath, originPath } of setupEntries) {
+      const setupCodeContent = assetFiles[filePath]!;
+
+      loadModule({
+        codeContent: setupCodeContent,
+        distPath: filePath,
+        originPath: originPath,
+        rstestContext,
+        assetFiles,
+      });
+    }
+
     loadModule({
       codeContent,
       distPath: filePath,

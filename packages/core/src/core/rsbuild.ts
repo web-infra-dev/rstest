@@ -21,8 +21,10 @@ const isMultiCompiler = <
 export const createRsbuildServer = async (
   name: string,
   sourceEntries: Record<string, string>,
+  setupFiles: Record<string, string>,
 ): Promise<{
   entries: EntryInfo[];
+  setupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   close: () => Promise<void>;
 }> => {
@@ -49,7 +51,10 @@ export const createRsbuildServer = async (
       environments: {
         [name]: {
           source: {
-            entry: sourceEntries,
+            entry: {
+              ...sourceEntries,
+              ...setupFiles,
+            },
           },
           dev: {
             writeToDisk: false,
@@ -106,7 +111,11 @@ export const createRsbuildServer = async (
     });
   };
 
-  const entries = Object.keys(entrypoints!).map((entry) => {
+  const entries: EntryInfo[] = [];
+  const setupEntries: EntryInfo[] = [];
+
+  // TODO: check compile error, such as setupFiles not found
+  for (const entry of Object.keys(entrypoints!)) {
     const e = entrypoints![entry]!;
 
     const filePath = path.join(
@@ -114,16 +123,22 @@ export const createRsbuildServer = async (
       e.assets![e.assets!.length - 1]!.name,
     );
 
-    const originPath = sourceEntries[entry]!;
-
-    return {
-      filePath,
-      originPath,
-    };
-  });
+    if (setupFiles[entry]) {
+      setupEntries.push({
+        filePath,
+        originPath: setupFiles[entry],
+      });
+    } else if (sourceEntries[entry]) {
+      entries.push({
+        filePath,
+        originPath: sourceEntries[entry],
+      });
+    }
+  }
 
   return {
     entries,
+    setupEntries,
     assetFiles: Object.fromEntries(
       await Promise.all(
         assets!.map(async (a) => {

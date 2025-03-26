@@ -13,6 +13,7 @@ export type RuntimeRPC = {};
 export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
+    setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     context: RstestContext;
   };
