@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { filterFiles } from '../../src/utils/entries';
+import { filterFiles } from '../../src/utils/testFiles';
 
 describe('test filterFiles', () => {
   it('should filter files correctly', () => {

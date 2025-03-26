@@ -1,6 +1,6 @@
 import { runInPool } from '../pool';
 import type { RstestContext } from '../types';
-import { color, getTestEntries, logger } from '../utils';
+import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { createRsbuildServer } from './rsbuild';
 import { printSummaryLog } from './summary';
 
@@ -8,7 +8,10 @@ export async function runTests(
   context: RstestContext,
   fileFilters: string[],
 ): Promise<void> {
-  const { include, exclude, root, name } = context.normalizedConfig;
+  const {
+    normalizedConfig: { include, exclude, root, name, setupFiles: setups },
+    rootPath,
+  } = context;
 
   const sourceEntries = await getTestEntries({
     include,
@@ -16,6 +19,8 @@ export async function runTests(
     root,
     fileFilters,
   });
+
+  const setupFiles = getSetupFiles(setups, rootPath);
 
   if (!Object.keys(sourceEntries).length) {
     logger.log(color.red('No test files found.'));
@@ -29,14 +34,13 @@ export async function runTests(
     return;
   }
 
-  const { close, entries, assetFiles } = await createRsbuildServer(
-    name,
-    sourceEntries,
-  );
+  const { close, entries, assetFiles, setupEntries } =
+    await createRsbuildServer(name, sourceEntries, setupFiles);
 
   const { results, testResults } = await runInPool({
     entries,
     assetFiles,
+    setupEntries,
     context,
   });
 

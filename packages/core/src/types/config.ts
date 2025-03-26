@@ -37,6 +37,10 @@ export interface RstestConfig {
    */
   exclude?: string[];
   /**
+   * Path to setup files. They will be run before each test file.
+   */
+  setupFiles?: string[] | string;
+  /**
    * Allows the test suite to pass when no files are found.
    *
    * @default false
@@ -60,6 +64,9 @@ export interface RstestConfig {
   globals?: boolean;
 }
 
-export type NormalizedConfig = Required<Omit<RstestConfig, 'pool'>> & {
+export type NormalizedConfig = Required<
+  Omit<RstestConfig, 'pool' | 'setupFiles'>
+> & {
   pool: RstestPoolOptions;
+  setupFiles?: string[] | string;
 };

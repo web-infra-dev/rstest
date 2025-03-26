@@ -5,6 +5,13 @@ export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
 
+export const castArray = <T>(arr?: T | T[]): T[] => {
+  if (arr === undefined) {
+    return [];
+  }
+  return Array.isArray(arr) ? arr : [arr];
+};
+
 export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
   return (
     obj !== null &&

@@ -27,8 +27,10 @@ export const runInPool = async ({
   entries,
   context,
   assetFiles,
+  setupEntries,
 }: {
   entries: EntryInfo[];
+  setupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   context: RstestContext;
 }): Promise<{
@@ -78,7 +80,7 @@ export const runInPool = async ({
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
-        options: { entryInfo, assetFiles, context },
+        options: { entryInfo, assetFiles, context, setupEntries },
         rpcMethods: {},
       }),
     ),
