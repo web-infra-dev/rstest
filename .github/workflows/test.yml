@@ -25,6 +25,7 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
+        node_version: [18, 20, 22]
 
     steps:
       - name: Checkout
@@ -53,7 +54,7 @@ jobs:
         # if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node_version }}
           cache: 'pnpm'
 
       - name: Install Dependencies

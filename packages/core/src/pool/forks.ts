@@ -1,5 +1,7 @@
 import EventEmitter from 'node:events';
 import { resolve } from 'node:path';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import v8 from 'node:v8';
 import { createBirpc } from 'birpc';
 import { type Options, Tinypool } from 'tinypool';
@@ -9,6 +11,9 @@ import type {
   RuntimeRPC,
   TestResult,
 } from '../types';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function createChannel(rpcMethods: RuntimeRPC) {
   const emitter = new EventEmitter();
@@ -59,7 +64,7 @@ export const createForksPool = (poolOptions: {
 
   const options: Options = {
     runtime: 'child_process',
-    filename: resolve(import.meta.dirname, './worker.js'),
+    filename: resolve(__dirname, './worker.js'),
     env,
     execArgv,
     maxThreads,
