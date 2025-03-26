@@ -1,9 +1,9 @@
 import v8 from 'node:v8';
-import type { BirpcOptions, BirpcReturn } from 'birpc';
+import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
-import type { RunnerRPC, RuntimeRPC } from '../types';
+import type { RuntimeRPC, ServerRPC } from '../types';
 
-export type WorkerRPC = BirpcReturn<RuntimeRPC, RunnerRPC>;
+export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
 const processSend = process.send!.bind(process);
 const processOn = process.on!.bind(process);
@@ -11,7 +11,7 @@ const processOff = process.off!.bind(process);
 const dispose: (() => void)[] = [];
 
 export type WorkerRpcOptions = Pick<
-  BirpcOptions<RunnerRPC>,
+  BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
 >;
 
@@ -35,5 +35,18 @@ export function createForksRpcOptions(
       processOn('message', handler);
       dispose.push(() => processOff('message', handler));
     },
+  };
+}
+
+export function createRuntimeRpc(
+  options: Pick<
+    BirpcOptions<void>,
+    'on' | 'post' | 'serialize' | 'deserialize'
+  >,
+): { rpc: WorkerRPC } {
+  const rpc = createBirpc<RuntimeRPC, ServerRPC>({}, options);
+
+  return {
+    rpc,
   };
 }

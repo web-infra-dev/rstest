@@ -5,8 +5,8 @@ import { createBirpc } from 'birpc';
 import { type Options, Tinypool } from 'tinypool';
 import type {
   RunWorkerOptions,
-  RunnerRPC,
   RuntimeRPC,
+  ServerRPC,
   TestResult,
 } from '../types';
 
@@ -24,7 +24,7 @@ function createChannel(rpcMethods: RuntimeRPC) {
     },
   };
 
-  createBirpc<RunnerRPC, RuntimeRPC>(rpcMethods, {
+  createBirpc<ServerRPC, RuntimeRPC>(rpcMethods, {
     serialize: v8.serialize,
     deserialize: (v) => v8.deserialize(Buffer.from(v)),
     post(v) {

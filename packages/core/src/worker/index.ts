@@ -3,10 +3,12 @@ import type {
   Rstest,
   RunWorkerOptions,
   TestResult,
+  TestSuiteResult,
   WorkerState,
 } from '../types';
 import { logger } from '../utils';
 import { loadModule } from './loadModule';
+import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 
 const getGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
@@ -23,7 +25,7 @@ const runInPool = async ({
   assetFiles,
   context,
 }: RunWorkerOptions['options']): Promise<TestResult> => {
-  // const { rpc } = createRuntimeRpc(createForksRpcOptions());
+  const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {
     normalizedConfig: { globals },
@@ -66,7 +68,11 @@ const runInPool = async ({
       assetFiles,
     });
 
-    const results = await runner.runTest(originPath, context);
+    const results = await runner.runTest(originPath, context, {
+      onTestEnd: async (result: TestSuiteResult) => {
+        await rpc.onTestEnd(result);
+      },
+    });
 
     return results;
   } catch (err) {

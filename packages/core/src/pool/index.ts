@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { DefaultReporter } from '../reporter';
 import type {
   EntryInfo,
   RstestContext,
@@ -77,11 +78,17 @@ export const runInPool = async ({
     },
   });
 
+  const reporters = new DefaultReporter();
+
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
         options: { entryInfo, assetFiles, context, setupEntries },
-        rpcMethods: {},
+        rpcMethods: {
+          onTestEnd: async (result: TestSuiteResult) => {
+            reporters.onTestEnd(result);
+          },
+        },
       }),
     ),
   );

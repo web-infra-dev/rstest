@@ -1,21 +1,30 @@
 import type { RstestContext } from './core';
-
+import type { TestSuiteResult } from './testSuite';
 export type EntryInfo = {
   filePath: string;
   originPath: string;
 };
 
+/** Server to Runtime */
 // biome-ignore lint/complexity/noBannedTypes: TODO
-export type RunnerRPC = {};
-// biome-ignore lint/complexity/noBannedTypes: TODO
-export type RuntimeRPC = {};
+export type ServerRPC = {};
+
+/** Runtime to Server */
+export type RuntimeRPC = {
+  onTestEnd: (result: TestSuiteResult) => Promise<void>;
+};
+
+export type WorkerContext = Pick<
+  RstestContext,
+  'normalizedConfig' | 'rootPath'
+>;
 
 export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
-    context: RstestContext;
+    context: WorkerContext;
   };
   rpcMethods: RuntimeRPC;
 };
