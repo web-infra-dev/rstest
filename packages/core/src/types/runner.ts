@@ -1,5 +1,8 @@
 import type { TestResult } from './testSuite';
 
 export type RunnerHooks = {
-  onTestEnd?: (result: TestResult) => Promise<void>;
+  /**
+   * Called after the test is finished running.
+   */
+  onTestCaseResult?: (result: TestResult) => Promise<void>;
 };

@@ -1,4 +1,5 @@
 import { withDefaultConfig } from '../config';
+import { DefaultReporter } from '../reporter';
 import type { RstestCommand, RstestConfig, RstestContext } from '../types';
 import { getAbsolutePath } from '../utils/helper';
 
@@ -13,10 +14,13 @@ export function createContext(
 
   const rstestConfig = withDefaultConfig(userConfig);
 
+  const reporters = [new DefaultReporter()];
+
   return {
     command,
     version: RSTEST_VERSION,
     rootPath,
+    reporters,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,
   };

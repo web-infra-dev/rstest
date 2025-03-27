@@ -69,8 +69,8 @@ const runInPool = async ({
     });
 
     const results = await runner.runTest(originPath, context, {
-      onTestEnd: async (result: TestResult) => {
-        await rpc.onTestEnd(result);
+      onTestCaseResult: async (result: TestResult) => {
+        await rpc.onTestCaseResult(result);
       },
     });
 

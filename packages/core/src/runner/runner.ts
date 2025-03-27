@@ -64,7 +64,7 @@ export class TestRunner {
             prefix,
             name: test.description,
           };
-          hooks.onTestEnd?.(result);
+          hooks.onTestCaseResult?.(result);
         }
 
         for (const suite of test.tests) {
@@ -78,7 +78,7 @@ export class TestRunner {
             prefix,
             name: test.description,
           };
-          hooks.onTestEnd?.(result);
+          hooks.onTestCaseResult?.(result);
           results.push(result);
           return;
         }
@@ -88,7 +88,7 @@ export class TestRunner {
             prefix,
             name: test.description,
           };
-          hooks.onTestEnd?.(result);
+          hooks.onTestCaseResult?.(result);
           results.push(result);
           return;
         }
@@ -104,7 +104,7 @@ export class TestRunner {
               name: test.description,
               duration: Date.now() - start,
             };
-            hooks.onTestEnd?.(result);
+            hooks.onTestCaseResult?.(result);
 
             results.push(result);
             console.error('    Expect test to fail');
@@ -115,7 +115,7 @@ export class TestRunner {
               name: test.description,
               duration: Date.now() - start,
             };
-            hooks.onTestEnd?.(result);
+            hooks.onTestCaseResult?.(result);
 
             results.push(result);
           }
@@ -131,7 +131,7 @@ export class TestRunner {
             name: test.description,
             duration: Date.now() - start,
           };
-          hooks.onTestEnd?.(result);
+          hooks.onTestCaseResult?.(result);
 
           results.push(result);
         } catch (error) {
@@ -141,7 +141,7 @@ export class TestRunner {
             name: test.description,
             duration: Date.now() - start,
           };
-          hooks.onTestEnd?.(result);
+          hooks.onTestCaseResult?.(result);
 
           results.push(result);
           console.error(`    ${error}`);

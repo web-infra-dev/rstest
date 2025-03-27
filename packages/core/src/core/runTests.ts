@@ -1,8 +1,7 @@
 import { runInPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
-import { createRsbuildServer } from './rsbuild';
-import { printSummaryLog } from './summary';
+import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function runTests(
   context: RstestContext,
@@ -13,6 +12,7 @@ export async function runTests(
   const {
     normalizedConfig: { include, exclude, root, name, setupFiles: setups },
     rootPath,
+    reporters,
   } = context;
 
   const sourceEntries = await getTestEntries({
@@ -36,9 +36,15 @@ export async function runTests(
     return;
   }
 
-  const buildStart = Date.now();
+  const rsbuildInstance = await prepareRsbuild(name, sourceEntries, setupFiles);
+
   const { close, entries, assetFiles, setupEntries } =
-    await createRsbuildServer(name, sourceEntries, setupFiles);
+    await createRsbuildServer({
+      name,
+      sourceEntries,
+      setupFiles,
+      rsbuildInstance,
+    });
 
   const buildEnd = Date.now();
 
@@ -51,15 +57,19 @@ export async function runTests(
   });
   const testEnd = Date.now();
 
+  const duration = {
+    totalTime: testEnd - start,
+    buildTime: buildEnd - start,
+    testTime: testEnd - testStart,
+  };
+
   if (results.some((r) => r.status === 'fail')) {
     process.exitCode = 1;
   }
 
-  printSummaryLog(results, testResults, {
-    totalTime: Date.now() - start,
-    buildTime: buildEnd - buildStart,
-    testTime: testEnd - testStart,
-  });
+  for (const reporter of reporters) {
+    reporter.onTestRunEnd?.(results, testResults, duration);
+  }
 
   await close();
 }
