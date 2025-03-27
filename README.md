@@ -11,7 +11,6 @@ Rstest offers full Jest-compatible APIs while providing native, out-of-the-box s
 
 ## 💡 Current status
 
-d
 Rstest is currently much under active development, there are no published npm packages available at this time.
 
 We welcome developers to clone the repository and [run it locally](./CONTRIBUTING.md) to explore its features as they are being developed. You can check some available [examples](https://github.com/web-infra-dev/rstest/tree/main/examples) in the repository to see how it works.
