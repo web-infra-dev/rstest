@@ -7,9 +7,9 @@ import { createBirpc } from 'birpc';
 import { type Options, Tinypool } from 'tinypool';
 import type {
   RunWorkerOptions,
-  RunnerRPC,
   RuntimeRPC,
-  TestResult,
+  ServerRPC,
+  TestSummaryResult,
 } from '../types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +29,7 @@ function createChannel(rpcMethods: RuntimeRPC) {
     },
   };
 
-  createBirpc<RunnerRPC, RuntimeRPC>(rpcMethods, {
+  createBirpc<ServerRPC, RuntimeRPC>(rpcMethods, {
     serialize: v8.serialize,
     deserialize: (v) => v8.deserialize(Buffer.from(v)),
     post(v) {
@@ -51,7 +51,7 @@ export const createForksPool = (poolOptions: {
   isolate?: boolean;
 }): {
   name: string;
-  runTest: (options: RunWorkerOptions) => Promise<TestResult>;
+  runTest: (options: RunWorkerOptions) => Promise<TestSummaryResult>;
   close: () => Promise<void>;
 } => {
   const {

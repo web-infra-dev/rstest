@@ -1,4 +1,10 @@
-import type { RstestContext, RunnerAPI, TestAPI, TestResult } from '../types';
+import type {
+  RunnerAPI,
+  RunnerHooks,
+  TestAPI,
+  TestSummaryResult,
+  WorkerContext,
+} from '../types';
 
 import { TestRunner } from './runner';
 import { RunnerRuntime } from './runtime';
@@ -8,8 +14,9 @@ export function createRunner(): {
   runner: {
     runTest: (
       testFilePath: string,
-      context: RstestContext,
-    ) => Promise<TestResult>;
+      context: WorkerContext,
+      hooks: RunnerHooks,
+    ) => Promise<TestSummaryResult>;
     getCurrentTest: RunnerRuntime['getCurrentTest'];
   };
 } {
@@ -31,11 +38,16 @@ export function createRunner(): {
       test: it,
     },
     runner: {
-      runTest: async (testFilePath: string, context: RstestContext) => {
+      runTest: async (
+        testFilePath: string,
+        context: WorkerContext,
+        hooks: RunnerHooks,
+      ) => {
         return testRunner.runTests(
           runtimeAPI.getTests(),
           testFilePath,
           context,
+          hooks,
         );
       },
       getCurrentTest: () => runtimeAPI.getCurrentTest(),

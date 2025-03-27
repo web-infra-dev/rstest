@@ -1,9 +1,10 @@
 import os from 'node:os';
+import { DefaultReporter } from '../reporter';
 import type {
   EntryInfo,
   RstestContext,
   TestResult,
-  TestSuiteResult,
+  TestSummaryResult,
 } from '../types';
 import { createForksPool } from './forks';
 
@@ -34,8 +35,8 @@ export const runInPool = async ({
   assetFiles: Record<string, string>;
   context: RstestContext;
 }): Promise<{
-  results: TestResult[];
-  testResults: TestSuiteResult[];
+  results: TestSummaryResult[];
+  testResults: TestResult[];
 }> => {
   // Some options may crash worker, e.g. --prof, --title.
   // https://github.com/nodejs/node/issues/41103
@@ -77,11 +78,17 @@ export const runInPool = async ({
     },
   });
 
+  const reporters = new DefaultReporter();
+
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
         options: { entryInfo, assetFiles, context, setupEntries },
-        rpcMethods: {},
+        rpcMethods: {
+          onTestEnd: async (result: TestResult) => {
+            reporters.onTestEnd(result);
+          },
+        },
       }),
     ),
   );

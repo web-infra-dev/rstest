@@ -21,13 +21,16 @@ export type TestSuite = {
 
 export type Test = TestSuite | TestCase;
 
-export type TestSuiteResult = {
-  status: 'skip' | 'pass' | 'fail' | 'todo';
-  name: string;
-};
+export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
 export type TestResult = {
+  status: TestResultStatus;
+  name: string;
+  prefix?: string;
+};
+
+export type TestSummaryResult = {
   status: 'skip' | 'pass' | 'fail' | 'todo';
   name: string;
-  results: TestSuiteResult[];
+  results: TestResult[];
 };

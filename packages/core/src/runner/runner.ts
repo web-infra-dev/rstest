@@ -1,23 +1,39 @@
 import { relative } from 'node:path';
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 import type {
-  RstestContext,
+  RunnerHooks,
   Test,
   TestResult,
-  TestSuiteResult,
+  TestResultStatus,
+  TestSummaryResult,
+  WorkerContext,
 } from '../types';
+
+const getTestStatus = (results: TestResult[]): TestResultStatus => {
+  if (results.length === 0) {
+    return 'pass';
+  }
+  return results.some((result) => result.status === 'fail')
+    ? 'fail'
+    : results.every((result) => result.status === 'todo')
+      ? 'todo'
+      : results.every((result) => result.status === 'skip')
+        ? 'skip'
+        : 'pass';
+};
 
 export class TestRunner {
   async runTests(
     tests: Test[],
     testPath: string,
-    context: RstestContext,
-  ): Promise<TestResult> {
+    context: WorkerContext,
+    hooks: RunnerHooks,
+  ): Promise<TestSummaryResult> {
     const {
       rootPath,
       normalizedConfig: { passWithNoTests },
     } = context;
-    const results: TestSuiteResult[] = [];
+    const results: TestResult[] = [];
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
@@ -43,8 +59,12 @@ export class TestRunner {
             console.warn(`   No test found in suite: ${test.description}\n`);
             return;
           }
-          console.error(`No test found in suite: ${test.description}\n`);
-          results.push({ status: 'fail', name: test.description });
+          const result = {
+            status: 'fail' as const,
+            prefix,
+            name: test.description,
+          };
+          hooks.onTestEnd?.(result);
         }
 
         for (const suite of test.tests) {
@@ -52,13 +72,23 @@ export class TestRunner {
         }
       } else {
         if (test.skipped) {
-          console.log(`  - ${prefix}${test.description}`);
-          results.push({ status: 'skip', name: test.description });
+          const result = {
+            status: 'skip' as const,
+            prefix,
+            name: test.description,
+          };
+          hooks.onTestEnd?.(result);
+          results.push(result);
           return;
         }
         if (test.todo) {
-          console.log(`  - ${prefix}${test.description}`);
-          results.push({ status: 'todo', name: test.description });
+          const result = {
+            status: 'todo' as const,
+            prefix,
+            name: test.description,
+          };
+          hooks.onTestEnd?.(result);
+          results.push(result);
           return;
         }
         if (test.fails) {
@@ -67,12 +97,24 @@ export class TestRunner {
             await test.fn();
             this.afterRunTest();
 
-            results.push({ status: 'fail', name: test.description });
-            console.log(`  ✗ ${prefix}${test.description}`);
+            const result = {
+              status: 'fail' as const,
+              prefix,
+              name: test.description,
+            };
+            hooks.onTestEnd?.(result);
+
+            results.push(result);
             console.error('    Expect test to fail');
           } catch (error) {
-            results.push({ status: 'pass', name: test.description });
-            console.log(`  ✓ ${prefix}${test.description}`);
+            const result = {
+              status: 'pass' as const,
+              prefix,
+              name: test.description,
+            };
+            hooks.onTestEnd?.(result);
+
+            results.push(result);
           }
           return;
         }
@@ -80,11 +122,23 @@ export class TestRunner {
           this.beforeRunTest(testPath);
           await test.fn();
           this.afterRunTest();
-          results.push({ status: 'pass', name: test.description });
-          console.log(`  ✓ ${prefix}${test.description}`);
+          const result = {
+            status: 'pass' as const,
+            prefix,
+            name: test.description,
+          };
+          hooks.onTestEnd?.(result);
+
+          results.push(result);
         } catch (error) {
-          results.push({ status: 'fail', name: test.description });
-          console.log(`  ✗ ${prefix}${test.description}`);
+          const result = {
+            status: 'fail' as const,
+            prefix,
+            name: test.description,
+          };
+          hooks.onTestEnd?.(result);
+
+          results.push(result);
           console.error(`    ${error}`);
         }
       }
@@ -93,20 +147,6 @@ export class TestRunner {
     for (const test of tests) {
       await runTest(test);
     }
-    console.log('');
-
-    const getTestStatus = (results: TestSuiteResult[]) => {
-      if (results.length === 0) {
-        return 'pass';
-      }
-      return results.some((result) => result.status === 'fail')
-        ? 'fail'
-        : results.every((result) => result.status === 'todo')
-          ? 'todo'
-          : results.every((result) => result.status === 'skip')
-            ? 'skip'
-            : 'pass';
-    };
 
     return {
       name: 'test',
