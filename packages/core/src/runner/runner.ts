@@ -71,6 +71,7 @@ export class TestRunner {
           await runTest(suite, `${prefix}${test.description} > `);
         }
       } else {
+        const start = Date.now();
         if (test.skipped) {
           const result = {
             status: 'skip' as const,
@@ -101,6 +102,7 @@ export class TestRunner {
               status: 'fail' as const,
               prefix,
               name: test.description,
+              duration: Date.now() - start,
             };
             hooks.onTestEnd?.(result);
 
@@ -111,6 +113,7 @@ export class TestRunner {
               status: 'pass' as const,
               prefix,
               name: test.description,
+              duration: Date.now() - start,
             };
             hooks.onTestEnd?.(result);
 
@@ -126,6 +129,7 @@ export class TestRunner {
             status: 'pass' as const,
             prefix,
             name: test.description,
+            duration: Date.now() - start,
           };
           hooks.onTestEnd?.(result);
 
@@ -135,6 +139,7 @@ export class TestRunner {
             status: 'fail' as const,
             prefix,
             name: test.description,
+            duration: Date.now() - start,
           };
           hooks.onTestEnd?.(result);
 
@@ -144,6 +149,8 @@ export class TestRunner {
       }
     };
 
+    const start = Date.now();
+
     for (const test of tests) {
       await runTest(test);
     }
@@ -152,6 +159,7 @@ export class TestRunner {
       name: 'test',
       status: getTestStatus(results),
       results,
+      duration: Date.now() - start,
     };
   }
 

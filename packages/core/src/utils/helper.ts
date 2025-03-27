@@ -36,4 +36,26 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
+export const prettyTime = (milliseconds: number): string => {
+  const format = (time: string) => color.bold(time);
+
+  if (milliseconds < 1000) {
+    return `${Math.round(milliseconds)} ms`;
+  }
+
+  const seconds = milliseconds / 1000;
+
+  if (seconds < 10) {
+    const digits = seconds >= 0.01 ? 2 : 3;
+    return `${format(seconds.toFixed(digits))} s`;
+  }
+
+  if (seconds < 60) {
+    return `${format(seconds.toFixed(1))} s`;
+  }
+
+  const minutes = seconds / 60;
+  return `${format(minutes.toFixed(2))} m`;
+};
+
 export { color };

@@ -1,5 +1,5 @@
 import type { TestResult, TestSummaryResult } from '../types';
-import { color, logger } from '../utils';
+import { color, logger, prettyTime } from '../utils';
 
 export const getStatusString = (
   tasks: TestResult[],
@@ -31,6 +31,11 @@ export const getStatusString = (
 export const printSummaryLog = (
   results: TestSummaryResult[],
   testResults: TestResult[],
+  duration: {
+    totalTime: number;
+    buildTime: number;
+    testTime: number;
+  },
 ): void => {
   logger.log('');
   logger.log(
@@ -38,6 +43,10 @@ export const printSummaryLog = (
   );
   logger.log(
     `${color.gray('Tests'.padStart(12))} ${getStatusString(testResults)}`,
+  );
+
+  logger.log(
+    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}`)})`,
   );
   logger.log('');
 };
