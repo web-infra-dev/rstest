@@ -27,10 +27,12 @@ export type TestResult = {
   status: TestResultStatus;
   name: string;
   prefix?: string;
+  duration?: number;
 };
 
 export type TestSummaryResult = {
   status: 'skip' | 'pass' | 'fail' | 'todo';
   name: string;
   results: TestResult[];
+  duration?: number;
 };

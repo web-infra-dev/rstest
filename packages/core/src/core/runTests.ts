@@ -8,6 +8,8 @@ export async function runTests(
   context: RstestContext,
   fileFilters: string[],
 ): Promise<void> {
+  const start = Date.now();
+
   const {
     normalizedConfig: { include, exclude, root, name, setupFiles: setups },
     rootPath,
@@ -34,21 +36,30 @@ export async function runTests(
     return;
   }
 
+  const buildStart = Date.now();
   const { close, entries, assetFiles, setupEntries } =
     await createRsbuildServer(name, sourceEntries, setupFiles);
 
+  const buildEnd = Date.now();
+
+  const testStart = Date.now();
   const { results, testResults } = await runInPool({
     entries,
     assetFiles,
     setupEntries,
     context,
   });
+  const testEnd = Date.now();
 
   if (results.some((r) => r.status === 'fail')) {
     process.exitCode = 1;
   }
 
-  printSummaryLog(results, testResults);
+  printSummaryLog(results, testResults, {
+    totalTime: Date.now() - start,
+    buildTime: buildEnd - buildStart,
+    testTime: testEnd - testStart,
+  });
 
   await close();
 }

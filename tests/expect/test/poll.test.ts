@@ -19,7 +19,9 @@ describe('Expect Poll API', () => {
     }, 100);
 
     await expect
-      .poll(() => logs.some((log) => log.includes('hello world!')))
+      .poll(() => logs.some((log) => log.includes('hello world!')), {
+        timeout: 300,
+      })
       .toBeTruthy();
   });
 
