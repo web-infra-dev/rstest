@@ -4,7 +4,6 @@ export type Duration = {
   totalTime: number;
   buildTime: number;
   testTime: number;
-  prepareTime: number;
 };
 export interface Reporter {
   /**

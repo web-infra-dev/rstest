@@ -38,9 +38,6 @@ export async function runTests(
 
   const rsbuildInstance = await prepareRsbuild(name, sourceEntries, setupFiles);
 
-  const prepareEnd = Date.now();
-
-  const buildStart = Date.now();
   const { close, entries, assetFiles, setupEntries } =
     await createRsbuildServer({
       name,
@@ -61,9 +58,8 @@ export async function runTests(
   const testEnd = Date.now();
 
   const duration = {
-    prepareTime: prepareEnd - start,
     totalTime: testEnd - start,
-    buildTime: buildEnd - buildStart,
+    buildTime: buildEnd - start,
     testTime: testEnd - testStart,
   };
 

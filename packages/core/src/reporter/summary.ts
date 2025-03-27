@@ -42,7 +42,7 @@ export const printSummaryLog = (
   );
 
   logger.log(
-    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}, prepare ${prettyTime(duration.prepareTime)}`)})`,
+    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}`)})`,
   );
   logger.log('');
 };
