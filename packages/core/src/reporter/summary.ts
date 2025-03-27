@@ -1,7 +1,7 @@
-import type { TestResult, TestSummaryResult } from '../types';
+import type { Duration, TestResult, TestSummaryResult } from '../types';
 import { color, logger, prettyTime } from '../utils';
 
-export const getStatusString = (
+export const getSummaryStatusString = (
   tasks: TestResult[],
   name = 'tests',
   showTotal = true,
@@ -31,22 +31,18 @@ export const getStatusString = (
 export const printSummaryLog = (
   results: TestSummaryResult[],
   testResults: TestResult[],
-  duration: {
-    totalTime: number;
-    buildTime: number;
-    testTime: number;
-  },
+  duration: Duration,
 ): void => {
   logger.log('');
   logger.log(
-    `${color.gray('Test Files'.padStart(12))} ${getStatusString(results)}`,
+    `${color.gray('Test Files'.padStart(12))} ${getSummaryStatusString(results)}`,
   );
   logger.log(
-    `${color.gray('Tests'.padStart(12))} ${getStatusString(testResults)}`,
+    `${color.gray('Tests'.padStart(12))} ${getSummaryStatusString(testResults)}`,
   );
 
   logger.log(
-    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}`)})`,
+    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}, prepare ${prettyTime(duration.prepareTime)}`)})`,
   );
   logger.log('');
 };

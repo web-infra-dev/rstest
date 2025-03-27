@@ -1,7 +1,13 @@
-import type { TestResult } from '../types';
+import type {
+  Duration,
+  Reporter,
+  TestResult,
+  TestSummaryResult,
+} from '../types';
 import { color, prettyTime } from '../utils';
+import { printSummaryLog } from './summary';
 
-export class DefaultReporter {
+export class DefaultReporter implements Reporter {
   onTestCaseResult(result: TestResult): void {
     const statusColorfulStr = {
       fail: color.red('✗'),
@@ -20,5 +26,13 @@ export class DefaultReporter {
     console.log(
       `  ${icon} ${result.prefix}${result.name}${color.gray(duration)}`,
     );
+  }
+
+  onTestRunEnd(
+    results: TestSummaryResult[],
+    testResults: TestResult[],
+    duration: Duration,
+  ): void {
+    printSummaryLog(results, testResults, duration);
   }
 }

@@ -1,5 +1,4 @@
 import os from 'node:os';
-import { DefaultReporter } from '../reporter';
 import type {
   EntryInfo,
   RstestContext,
@@ -51,6 +50,7 @@ export const runInPool = async ({
 
   const {
     normalizedConfig: { pool: poolOptions, isolate },
+    reporters,
   } = context;
 
   const threadsCount =
@@ -78,15 +78,15 @@ export const runInPool = async ({
     },
   });
 
-  const reporters = new DefaultReporter();
-
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
         options: { entryInfo, assetFiles, context, setupEntries },
         rpcMethods: {
           onTestCaseResult: async (result: TestResult) => {
-            reporters.onTestCaseResult(result);
+            await Promise.all(
+              reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
+            );
           },
         },
       }),
