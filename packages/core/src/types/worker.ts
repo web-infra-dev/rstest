@@ -11,7 +11,7 @@ export type ServerRPC = {};
 
 /** Runtime to Server */
 export type RuntimeRPC = {
-  onTestEnd: (result: TestResult) => Promise<void>;
+  onTestCaseResult: (result: TestResult) => Promise<void>;
 };
 
 export type WorkerContext = Pick<

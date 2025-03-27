@@ -85,8 +85,8 @@ export const runInPool = async ({
       pool.runTest({
         options: { entryInfo, assetFiles, context, setupEntries },
         rpcMethods: {
-          onTestEnd: async (result: TestResult) => {
-            reporters.onTestEnd(result);
+          onTestCaseResult: async (result: TestResult) => {
+            reporters.onTestCaseResult(result);
           },
         },
       }),

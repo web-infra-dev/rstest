@@ -1,9 +1,8 @@
-import color from 'picocolors';
 import type { TestResult } from '../types';
-import { prettyTime } from '../utils';
+import { color, prettyTime } from '../utils';
 
 export class DefaultReporter {
-  onTestEnd(result: TestResult): void {
+  onTestCaseResult(result: TestResult): void {
     const statusColorfulStr = {
       fail: color.red('✗'),
       pass: color.green('✓'),
