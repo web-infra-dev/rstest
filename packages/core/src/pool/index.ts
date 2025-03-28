@@ -23,6 +23,10 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
+/**
+ * This method is modified based on source found in
+ * https://github.com/vitest-dev/vitest/blob/main/packages/vitest/src/node/pool.ts
+ */
 export const runInPool = async ({
   entries,
   context,
