@@ -7,7 +7,7 @@ import {
   type Rspack,
   createRsbuild,
 } from '@rsbuild/core';
-import type { EntryInfo } from '../types';
+import type { EntryInfo, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
 
 const isMultiCompiler = <
@@ -45,6 +45,9 @@ export const prepareRsbuild = async (
             writeToDisk: false,
           },
           output: {
+            sourceMap: {
+              js: 'source-map',
+            },
             externals: {
               '@rstest/core': 'global @rstest/core',
             },
@@ -52,6 +55,10 @@ export const prepareRsbuild = async (
           },
           tools: {
             rspack: (config) => {
+              config.output ??= {};
+              config.output.devtoolModuleFilenameTemplate =
+                '[absolute-resource-path]';
+
               config.optimization = {
                 ...(config.optimization || {}),
                 moduleIds: 'named',
@@ -81,6 +88,7 @@ export const createRsbuildServer = async ({
   entries: EntryInfo[];
   setupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
+  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
   close: () => Promise<void>;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
@@ -167,6 +175,21 @@ export const createRsbuildServer = async ({
         }),
       ),
     ),
+    getSourcemap: async (
+      sourcePath: string,
+    ): Promise<SourceMapInput | null> => {
+      const asset = assets?.find(
+        (asset) => path.join(outputPath!, asset.name) === sourcePath,
+      );
+      const sourceMapPath = asset?.info.related?.sourceMap?.[0];
+
+      if (sourceMapPath) {
+        const filePath = path.join(outputPath!, sourceMapPath);
+        const sourceMap = await readFile(filePath);
+        return JSON.parse(sourceMap);
+      }
+      return null;
+    },
     close: devServer.close,
   };
 };

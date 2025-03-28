@@ -80,11 +80,15 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  const code = `'use strict';(${Object.keys(context).join(',')})=>{{
-   ${codeContent}
-  }}`;
+  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{{`;
+  const code = `${codeDefinition}${codeContent}\n}}`;
 
-  const fn = vm.runInThisContext(code);
+  const fn = vm.runInThisContext(code, {
+    // Used in stack traces produced by this script.
+    filename: distPath,
+    lineOffset: 0,
+    columnOffset: -codeDefinition.length,
+  });
   fn(...Object.values(context));
 
   return localModule.exports;

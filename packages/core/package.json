@@ -47,6 +47,8 @@
   },
   "devDependencies": {
     "@rslib/core": "0.5.5",
+    "@jridgewell/trace-mapping": "0.3.25",
+    "stacktrace-parser": "0.1.11",
     "@rstest/tsconfig": "workspace:*",
     "@vitest/expect": "^3.0.9",
     "cac": "^6.7.14",

@@ -1,5 +1,12 @@
 import { relative } from 'node:path';
-import type { Duration, TestResult, TestSummaryResult } from '../types';
+import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
+import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
+import type {
+  Duration,
+  GetSourcemap,
+  TestResult,
+  TestSummaryResult,
+} from '../types';
 import { color, logger, prettyTime } from '../utils';
 
 export const getSummaryStatusString = (
@@ -48,10 +55,15 @@ export const printSummaryLog = (
   logger.log('');
 };
 
-export const printSummaryErrorLogs = ({
+export const printSummaryErrorLogs = async ({
   testResults,
   rootPath,
-}: { rootPath: string; testResults: TestResult[] }): void => {
+  getSourcemap,
+}: {
+  rootPath: string;
+  testResults: TestResult[];
+  getSourcemap: GetSourcemap;
+}): Promise<void> => {
   const failedTests = testResults.filter((i) => i.status === 'fail');
 
   if (failedTests.length === 0) {
@@ -59,18 +71,86 @@ export const printSummaryErrorLogs = ({
   }
 
   logger.log('');
-  logger.log(color.bold('  Summary of all failing tests:'));
+  logger.log(color.bold('Summary of all failing tests:'));
   logger.log('');
 
   for (const test of failedTests) {
     const relativePath = relative(rootPath, test.testPath);
     logger.log(
-      `  ${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
+      `${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
     );
+
     if (test.errors) {
       for (const error of test.errors) {
-        logger.log(color.red(`    ${error.message}`));
+        const errorName = error.name || 'Unknown Error';
+
+        logger.log(
+          `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}`,
+        );
+        if (error.stack) {
+          const stackFrames = await parseErrorStacktrace({
+            stack: error.stack,
+            getSourcemap,
+          });
+
+          logger.log();
+
+          printStack(stackFrames);
+        }
       }
     }
   }
 };
+
+function printStack(stackFrames: StackFrame[]) {
+  for (const frame of stackFrames) {
+    logger.log(
+      color.gray(
+        `  at ${frame.methodName} (${frame.file}:${frame.lineNumber}:${frame.column})`,
+      ),
+    );
+    // TODO: print code frame
+  }
+  logger.log();
+}
+
+const stackIgnores: (RegExp | string)[] = [
+  /\/@rstest\/core/,
+  /rstest\/packages\/core\/dist/,
+  /node_modules\/tinypool/,
+];
+
+function parseErrorStacktrace({
+  stack,
+  getSourcemap,
+}: {
+  stack: string;
+  getSourcemap: GetSourcemap;
+}): Promise<StackFrame[]> {
+  return Promise.all(
+    stackTraceParse(stack)
+      .filter(
+        (frame) =>
+          frame.file && !stackIgnores.some((entry) => frame.file?.match(entry)),
+      )
+      .map(async (frame) => {
+        const sourcemap = await getSourcemap(frame.file!);
+        if (sourcemap) {
+          const traceMap = new TraceMap(sourcemap);
+          const { line, column, source, name } = originalPositionFor(traceMap, {
+            line: frame.lineNumber!,
+            column: frame.column!,
+          });
+
+          return {
+            ...frame,
+            file: source,
+            lineNumber: line,
+            name,
+            column,
+          };
+        }
+        return frame;
+      }),
+  );
+}
