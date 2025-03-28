@@ -2,7 +2,6 @@ import { globalApis } from '../constants';
 import type {
   Rstest,
   RunWorkerOptions,
-  TestResult,
   TestSummaryResult,
   WorkerState,
 } from '../types';
@@ -69,7 +68,10 @@ const runInPool = async ({
     });
 
     const results = await runner.runTest(originPath, context, {
-      onTestCaseResult: async (result: TestResult) => {
+      onTestFileStart: async (test) => {
+        await rpc.onTestFileStart(test);
+      },
+      onTestCaseResult: async (result) => {
         await rpc.onTestCaseResult(result);
       },
     });
@@ -81,6 +83,7 @@ const runInPool = async ({
       err instanceof Error ? err.message : err,
     );
     return {
+      testPath: originPath,
       status: 'fail',
       name: originPath,
       results: [],

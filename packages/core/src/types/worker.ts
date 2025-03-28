@@ -1,5 +1,6 @@
 import type { RstestContext } from './core';
-import type { TestResult } from './testSuite';
+import type { TestFileInfo, TestResult } from './testSuite';
+
 export type EntryInfo = {
   filePath: string;
   originPath: string;
@@ -11,6 +12,7 @@ export type ServerRPC = {};
 
 /** Runtime to Server */
 export type RuntimeRPC = {
+  onTestFileStart: (test: TestFileInfo) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
 };
 

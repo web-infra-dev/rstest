@@ -1,3 +1,4 @@
+import { relative } from 'node:path';
 import type { Duration, TestResult, TestSummaryResult } from '../types';
 import { color, logger, prettyTime } from '../utils';
 
@@ -45,4 +46,31 @@ export const printSummaryLog = (
     `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}`)})`,
   );
   logger.log('');
+};
+
+export const printSummaryErrorLogs = ({
+  testResults,
+  rootPath,
+}: { rootPath: string; testResults: TestResult[] }): void => {
+  const failedTests = testResults.filter((i) => i.status === 'fail');
+
+  if (failedTests.length === 0) {
+    return;
+  }
+
+  logger.log('');
+  logger.log(color.bold('  Summary of all failing tests:'));
+  logger.log('');
+
+  for (const test of failedTests) {
+    const relativePath = relative(rootPath, test.testPath);
+    logger.log(
+      `  ${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
+    );
+    if (test.errors) {
+      for (const error of test.errors) {
+        logger.log(color.red(`    ${error.message}`));
+      }
+    }
+  }
 };

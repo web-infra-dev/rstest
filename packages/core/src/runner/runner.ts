@@ -1,4 +1,3 @@
-import { relative } from 'node:path';
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 import type {
   RunnerHooks,
@@ -30,13 +29,13 @@ export class TestRunner {
     hooks: RunnerHooks,
   ): Promise<TestSummaryResult> {
     const {
-      rootPath,
       normalizedConfig: { passWithNoTests },
     } = context;
     const results: TestResult[] = [];
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
+          testPath,
           name: 'test',
           status: 'pass',
           results,
@@ -44,13 +43,14 @@ export class TestRunner {
       }
       console.error(`No test suites found in file: ${testPath}\n`);
       return {
+        testPath,
         name: 'test',
         status: 'fail',
         results,
       };
     }
 
-    console.log('Run test file:', relative(rootPath, testPath));
+    hooks.onTestFileStart?.({ filePath: testPath });
 
     const runTest = async (test: Test, prefix = '') => {
       if (test.type === 'suite') {
@@ -63,6 +63,7 @@ export class TestRunner {
             status: 'fail' as const,
             prefix,
             name: test.description,
+            testPath,
           };
           hooks.onTestCaseResult?.(result);
         }
@@ -77,6 +78,7 @@ export class TestRunner {
             status: 'skip' as const,
             prefix,
             name: test.description,
+            testPath,
           };
           hooks.onTestCaseResult?.(result);
           results.push(result);
@@ -87,6 +89,7 @@ export class TestRunner {
             status: 'todo' as const,
             prefix,
             name: test.description,
+            testPath,
           };
           hooks.onTestCaseResult?.(result);
           results.push(result);
@@ -103,16 +106,22 @@ export class TestRunner {
               prefix,
               name: test.description,
               duration: Date.now() - start,
+              testPath,
+              errors: [
+                {
+                  message: 'Expect test to fail',
+                },
+              ],
             };
             hooks.onTestCaseResult?.(result);
 
             results.push(result);
-            console.error('    Expect test to fail');
           } catch (error) {
             const result = {
               status: 'pass' as const,
               prefix,
               name: test.description,
+              testPath,
               duration: Date.now() - start,
             };
             hooks.onTestCaseResult?.(result);
@@ -130,6 +139,7 @@ export class TestRunner {
             prefix,
             name: test.description,
             duration: Date.now() - start,
+            testPath,
           };
           hooks.onTestCaseResult?.(result);
 
@@ -140,11 +150,12 @@ export class TestRunner {
             prefix,
             name: test.description,
             duration: Date.now() - start,
+            errors: Array.isArray(error) ? error : [error],
+            testPath,
           };
           hooks.onTestCaseResult?.(result);
 
           results.push(result);
-          console.error(`    ${error}`);
         }
       }
     };
@@ -156,6 +167,7 @@ export class TestRunner {
     }
 
     return {
+      testPath,
       name: 'test',
       status: getTestStatus(results),
       results,
