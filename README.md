@@ -19,9 +19,10 @@ We plan to release a preview version for testing by June 2025, followed by the f
 
 ## 🙏 Credits
 
-Rsbuild has been inspired by several outstanding projects in the community. We would like to acknowledge and express our sincere gratitude to the following projects:
+Rstest has been inspired by several outstanding projects in the community. We would like to acknowledge and express our sincere gratitude to the following projects:
 
 - Several API design patterns have been influenced by [Jest](https://jestjs.io/) and [Vitest](https://vitest.dev/).
+- Some functions in Rstest are referenced from Vitest, such as the `expect` and `expect.poll` API, etc.
 
 ## 📖 License
 

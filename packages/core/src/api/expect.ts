@@ -1,3 +1,8 @@
+/**
+ * This method is modified based on source found in
+ * https://github.com/vitest-dev/vitest/blob/master/packages/vitest/src/integrations/chai/poll.ts
+ *
+ */
 import * as chai from 'chai';
 
 import {
