@@ -1,4 +1,4 @@
-import type { TestResult, TestSummaryResult } from './testSuite';
+import type { TestFileInfo, TestResult, TestSummaryResult } from './testSuite';
 
 export type Duration = {
   totalTime: number;
@@ -6,6 +6,10 @@ export type Duration = {
   testTime: number;
 };
 export interface Reporter {
+  /**
+   * Called before test file run.
+   */
+  onTestFileStart?: (test: TestFileInfo) => void;
   /**
    * Called when the test has finished running or was just skipped.
    */

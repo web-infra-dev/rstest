@@ -14,7 +14,7 @@ export function createContext(
 
   const rstestConfig = withDefaultConfig(userConfig);
 
-  const reporters = [new DefaultReporter()];
+  const reporters = [new DefaultReporter({ rootPath })];
 
   return {
     command,

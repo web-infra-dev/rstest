@@ -83,9 +83,14 @@ export const runInPool = async ({
       pool.runTest({
         options: { entryInfo, assetFiles, context, setupEntries },
         rpcMethods: {
-          onTestCaseResult: async (result: TestResult) => {
+          onTestCaseResult: async (result) => {
             await Promise.all(
               reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
+            );
+          },
+          onTestFileStart: async (test) => {
+            await Promise.all(
+              reporters.map((reporter) => reporter.onTestFileStart?.(test)),
             );
           },
         },

@@ -19,20 +19,32 @@ export type TestSuite = {
   type: 'suite';
 };
 
+export type TestFileInfo = {
+  filePath: string;
+};
+
 export type Test = TestSuite | TestCase;
 
 export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
+type TestError = {
+  message: string;
+};
+
 export type TestResult = {
   status: TestResultStatus;
   name: string;
+  testPath: string;
   prefix?: string;
   duration?: number;
+  errors?: TestError[];
 };
 
+// TODO: rename to TestFileResult
 export type TestSummaryResult = {
   status: 'skip' | 'pass' | 'fail' | 'todo';
   name: string;
   results: TestResult[];
   duration?: number;
+  testPath: string;
 };
