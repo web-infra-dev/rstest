@@ -1,4 +1,4 @@
-import { posix, relative } from 'node:path';
+import { parse, relative, sep } from 'node:path';
 import type {
   Duration,
   GetSourcemap,
@@ -20,10 +20,12 @@ export class DefaultReporter implements Reporter {
   onTestFileStart(test: TestFileInfo): void {
     const { rootPath } = this;
     const relativePath = relative(rootPath, test.filePath);
-    const { dir, base } = posix.parse(relativePath);
-    console.log('relativePath', relativePath, dir);
+    const { dir, base } = parse(relativePath);
+
     console.log('');
-    console.log(`${color.gray(`> ${dir ? `${dir}/` : ''}`)}${base}`);
+    console.log(
+      `${color.gray(`> ${dir ? `${dir.split(sep).join('/')}/` : ''}`)}${base}`,
+    );
     console.log('');
   }
 
