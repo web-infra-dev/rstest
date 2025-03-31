@@ -38,31 +38,30 @@ jobs:
           npm install -g corepack@latest --force
           corepack enable
 
-      # TODO: Temporarily disabled due to repo permission issues
-      # - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-      #   id: changes
-      #   with:
-      #     predicate-quantifier: 'every'
-      #     filters: |
-      #       changed:
-      #         - "!**/*.md"
-      #         - "!**/*.mdx"
-      #         - "!**/_meta.json"
-      #         - "!**/dictionary.txt"
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: changes
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            changed:
+              - "!**/*.md"
+              - "!**/*.mdx"
+              - "!**/_meta.json"
+              - "!**/dictionary.txt"
 
       - name: Setup Node.js
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
         with:
           node-version: ${{ matrix.node_version }}
           cache: 'pnpm'
 
       - name: Install Dependencies
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm install
 
       - name: Run Test
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm run test
 
   # ======== e2e ========
@@ -85,29 +84,28 @@ jobs:
           npm install -g corepack@latest --force
           corepack enable
 
-      # TODO: Temporarily disabled due to repo permission issues
-      # - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-      #   id: changes
-      #   with:
-      #     predicate-quantifier: 'every'
-      #     filters: |
-      #       changed:
-      #         - "!**/*.md"
-      #         - "!**/*.mdx"
-      #         - "!**/_meta.json"
-      #         - "!**/dictionary.txt"
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: changes
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            changed:
+              - "!**/*.md"
+              - "!**/*.mdx"
+              - "!**/_meta.json"
+              - "!**/dictionary.txt"
 
       - name: Setup Node.js
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
         with:
           node-version: 22
           cache: 'pnpm'
 
       - name: Install Dependencies
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm install
 
       - name: E2E Test
-        # if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.changed == 'true'
         run: pnpm run e2e
