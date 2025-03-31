@@ -92,6 +92,14 @@ export class TestRunner {
         for (const suite of test.tests) {
           await runTest(suite, `${prefix}${test.description} > `);
         }
+
+        if (test.afterAllListeners) {
+          for (const fn of test.afterAllListeners) {
+            try {
+              await fn();
+            } catch (error) {}
+          }
+        }
       } else {
         const start = Date.now();
         if (test.skipped) {

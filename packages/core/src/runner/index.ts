@@ -22,19 +22,17 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
   const testRunner: TestRunner = new TestRunner();
 
-  const describe: (description: string, fn: () => void) => void =
-    runtimeAPI.describe.bind(runtimeAPI);
   const it = runtimeAPI.it.bind(runtimeAPI) as TestAPI;
-
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
   it.todo = runtimeAPI.todo.bind(runtimeAPI);
   it.skip = runtimeAPI.skip.bind(runtimeAPI);
 
   return {
     api: {
-      describe,
+      describe: runtimeAPI.describe.bind(runtimeAPI),
       it,
       test: it,
+      afterAll: runtimeAPI.afterAll.bind(runtimeAPI),
     },
     runner: {
       runTest: async (testFilePath: string, hooks: RunnerHooks) => {

@@ -4,6 +4,8 @@ import type {
   PromisifyAssertion,
   Tester,
 } from '@vitest/expect';
+import type { AfterAllListener } from './testSuite';
+import type { MaybePromise } from './utils';
 
 type TestFn = (description: string, fn: () => void | Promise<void>) => void;
 
@@ -13,10 +15,13 @@ export type TestAPI = TestFn & {
   skip: TestFn;
 };
 
+type AfterAllAPI = (fn: AfterAllListener) => MaybePromise<void>;
+
 export type RunnerAPI = {
   describe: (description: string, fn: () => void) => void;
   it: TestAPI;
   test: TestAPI;
+  afterAll: AfterAllAPI;
 };
 
 interface ExpectPollOptions {
