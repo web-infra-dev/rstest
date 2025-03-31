@@ -1,6 +1,7 @@
 import { parse, relative } from 'node:path';
 import type {
   Duration,
+  GetSourcemap,
   Reporter,
   TestFileInfo,
   TestResult,
@@ -52,12 +53,22 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onTestRunEnd(
-    results: TestSummaryResult[],
-    testResults: TestResult[],
-    duration: Duration,
-  ): void {
-    printSummaryErrorLogs({ testResults, rootPath: this.rootPath });
+  async onTestRunEnd({
+    results,
+    testResults,
+    duration,
+    getSourcemap,
+  }: {
+    results: TestSummaryResult[];
+    testResults: TestResult[];
+    duration: Duration;
+    getSourcemap: GetSourcemap;
+  }): Promise<void> {
+    await printSummaryErrorLogs({
+      testResults,
+      rootPath: this.rootPath,
+      getSourcemap,
+    });
     printSummaryLog(results, testResults, duration);
   }
 }

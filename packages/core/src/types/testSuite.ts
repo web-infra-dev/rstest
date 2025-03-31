@@ -29,6 +29,8 @@ export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
 type TestError = {
   message: string;
+  name?: string;
+  stack?: string;
 };
 
 export type TestResult = {

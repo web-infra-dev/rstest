@@ -38,7 +38,7 @@ export async function runTests(
 
   const rsbuildInstance = await prepareRsbuild(name, sourceEntries, setupFiles);
 
-  const { close, entries, assetFiles, setupEntries } =
+  const { close, entries, assetFiles, setupEntries, getSourcemap } =
     await createRsbuildServer({
       name,
       sourceEntries,
@@ -68,7 +68,12 @@ export async function runTests(
   }
 
   for (const reporter of reporters) {
-    reporter.onTestRunEnd?.(results, testResults, duration);
+    await reporter.onTestRunEnd?.({
+      results,
+      testResults,
+      duration,
+      getSourcemap,
+    });
   }
 
   await close();
