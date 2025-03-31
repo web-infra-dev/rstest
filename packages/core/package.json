@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@rsbuild/core": "^1.3.1",
-    "birpc": "2.2.0",
+    "birpc": "2.3.0",
     "chai": "^5.2.0",
     "std-env": "^3.8.1",
     "tinypool": "^1.0.2"
