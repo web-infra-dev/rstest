@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { relative } from 'node:path';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
@@ -85,7 +86,7 @@ export const printSummaryErrorLogs = async ({
         const errorName = error.name || 'Unknown Error';
 
         logger.log(
-          `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}`,
+          `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
         );
         if (error.stack) {
           const stackFrames = await parseErrorStacktrace({
@@ -93,7 +94,9 @@ export const printSummaryErrorLogs = async ({
             getSourcemap,
           });
 
-          logger.log();
+          if (stackFrames[0]) {
+            await printCodeFrame(stackFrames[0]);
+          }
 
           printStack(stackFrames);
         }
@@ -102,14 +105,34 @@ export const printSummaryErrorLogs = async ({
   }
 };
 
+async function printCodeFrame(frame: StackFrame) {
+  const source = fs.readFileSync(frame.file!, 'utf-8');
+  const { codeFrameColumns } = await import('@babel/code-frame');
+  const result = codeFrameColumns(
+    source,
+    {
+      start: {
+        line: frame!.lineNumber!,
+        column: frame!.column!,
+      },
+    },
+    {
+      highlightCode: true,
+      linesBelow: 2,
+    },
+  );
+
+  logger.log(result);
+  logger.log('');
+}
+
 function printStack(stackFrames: StackFrame[]) {
   for (const frame of stackFrames) {
     logger.log(
       color.gray(
-        `  at ${frame.methodName} (${frame.file}:${frame.lineNumber}:${frame.column})`,
+        `        at ${frame.methodName} (${frame.file}:${frame.lineNumber}:${frame.column})`,
       ),
     );
-    // TODO: print code frame
   }
   logger.log();
 }
