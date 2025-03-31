@@ -3,7 +3,7 @@ import { describe, expect, it } from '@rstest/core';
 describe('Dynamic import', () => {
   it('should test correctly with dynamic import', async () => {
     const { sayHi } = await import('../src/index');
-    expect(sayHi()).toBe('hi');
+    expect(sayHi()).toBe('hi1');
   });
 
   it.todo(
