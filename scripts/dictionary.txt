@@ -51,6 +51,7 @@ imagex
 importee
 jfif
 jiti
+jridgewell
 jscpuprofile
 jsesc
 jsxs
