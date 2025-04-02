@@ -3,6 +3,7 @@ import type {
   Duration,
   GetSourcemap,
   Reporter,
+  SnapshotSummary,
   TestFileInfo,
   TestResult,
   TestSummaryResult,
@@ -58,10 +59,12 @@ export class DefaultReporter implements Reporter {
     testResults,
     duration,
     getSourcemap,
+    snapshotSummary,
   }: {
     results: TestSummaryResult[];
     testResults: TestResult[];
     duration: Duration;
+    snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
   }): Promise<void> {
     await printSummaryErrorLogs({
@@ -69,6 +72,12 @@ export class DefaultReporter implements Reporter {
       rootPath: this.rootPath,
       getSourcemap,
     });
-    printSummaryLog(results, testResults, duration);
+    printSummaryLog({
+      results,
+      testResults,
+      duration,
+      rootPath: this.rootPath,
+      snapshotSummary,
+    });
   }
 }

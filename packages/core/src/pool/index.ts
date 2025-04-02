@@ -110,6 +110,12 @@ export const runInPool = async ({
     ),
   );
 
+  for (const result of results) {
+    if (result.snapshotResult) {
+      context.snapshotManager.add(result.snapshotResult);
+    }
+  }
+
   const testResults = results.flatMap((r) => r.results!);
 
   return { results, testResults };

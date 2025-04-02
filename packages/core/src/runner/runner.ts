@@ -196,13 +196,14 @@ export class TestRunner {
     }
 
     // saves files and returns SnapshotResult
-    await snapshotClient.finish(testPath);
+    const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
       testPath,
       name: 'test',
       status: getTestStatus(results),
       results,
+      snapshotResult,
       duration: Date.now() - start,
     };
   }

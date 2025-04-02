@@ -1,3 +1,5 @@
+import type { SnapshotResult } from '@vitest/snapshot';
+
 // TODO: Unify filePath、testPath、originPath、sourcePath
 import type { MaybePromise } from './utils';
 
@@ -63,4 +65,5 @@ export type TestSummaryResult = {
   results: TestResult[];
   duration?: number;
   testPath: string;
+  snapshotResult?: SnapshotResult;
 };

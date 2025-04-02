@@ -13,6 +13,7 @@ export async function runTests(
     normalizedConfig: { include, exclude, root, name, setupFiles: setups },
     rootPath,
     reporters,
+    snapshotManager,
   } = context;
 
   const sourceEntries = await getTestEntries({
@@ -71,6 +72,7 @@ export async function runTests(
     await reporter.onTestRunEnd?.({
       results,
       testResults,
+      snapshotSummary: snapshotManager.summary,
       duration,
       getSourcemap,
     });
