@@ -62,6 +62,12 @@ export interface RstestConfig {
    * @default false
    */
   globals?: boolean;
+  /**
+   * Update snapshot files. Will update all changed snapshots and delete obsolete ones.
+   *
+   * @default false
+   */
+  update?: boolean;
 }
 
 export type NormalizedConfig = Required<

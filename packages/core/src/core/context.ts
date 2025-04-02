@@ -1,4 +1,5 @@
 import { SnapshotManager } from '@vitest/snapshot/manager';
+import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import type { RstestCommand, RstestConfig, RstestContext } from '../types';
@@ -17,7 +18,7 @@ export function createContext(
 
   const reporters = [new DefaultReporter({ rootPath })];
   const snapshotManager = new SnapshotManager({
-    updateSnapshot: 'all',
+    updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
   });
 
   return {
