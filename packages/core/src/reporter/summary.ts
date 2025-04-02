@@ -1,6 +1,7 @@
 import fs from 'node:fs';
-import { posix } from 'node:path';
+import path from 'node:path';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
+import type { SnapshotSummary } from '@vitest/snapshot';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   Duration,
@@ -8,7 +9,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, logger, prettyTime } from '../utils';
+import { color, logger, prettyTime, slash } from '../utils';
 
 export const getSummaryStatusString = (
   tasks: TestResult[],
@@ -37,12 +38,107 @@ export const getSummaryStatusString = (
   );
 };
 
-export const printSummaryLog = (
-  results: TestFileResult[],
-  testResults: TestResult[],
-  duration: Duration,
+/**
+ * This method is modified based on source found in
+ * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L52
+ */
+export const formatTestPath = (root: string, testFilePath: string): string => {
+  let testPath = testFilePath;
+  if (path.isAbsolute(testPath)) {
+    testPath = path.relative(root, testPath);
+  }
+
+  const dir = path.dirname(testPath);
+  const ext = testPath.match(/(\.(spec|test)\.[cm]?[tj]sx?)$/)?.[0] || '';
+  const base = path.basename(testPath, ext);
+
+  return slash(color.dim(`${dir}/`) + color.bold(base)) + color.dim(ext);
+};
+
+/**
+ * This method is modified based on source found in
+ * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
+ */
+export const printSnapshotSummaryLog = (
+  snapshots: SnapshotSummary,
+  rootDir: string,
 ): void => {
+  const summary: string[] = [];
+
+  if (snapshots.added) {
+    summary.push(color.bold(color.green(`${snapshots.added} written`)));
+  }
+  if (snapshots.unmatched) {
+    summary.push(color.bold(color.red(`${snapshots.unmatched} failed`)));
+  }
+  if (snapshots.updated) {
+    summary.push(color.bold(color.green(`${snapshots.updated} updated `)));
+  }
+
+  if (snapshots.filesRemoved) {
+    if (snapshots.didUpdate) {
+      summary.push(
+        color.bold(color.green(`${snapshots.filesRemoved} files removed `)),
+      );
+    } else {
+      summary.push(
+        color.bold(color.yellow(`${snapshots.filesRemoved} files obsolete `)),
+      );
+    }
+  }
+  const F_DOWN_RIGHT = '↳';
+
+  if (snapshots.filesRemovedList?.length) {
+    const [head, ...tail] = snapshots.filesRemovedList;
+    summary.push(
+      `${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, head!)}`,
+    );
+
+    for (const key of tail) {
+      summary.push(
+        `  ${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, key)}`,
+      );
+    }
+  }
+
+  if (snapshots.unchecked) {
+    if (snapshots.didUpdate) {
+      summary.push(color.bold(color.green(`${snapshots.unchecked} removed`)));
+    } else {
+      summary.push(color.bold(color.yellow(`${snapshots.unchecked} obsolete`)));
+    }
+
+    for (const uncheckedFile of snapshots.uncheckedKeysByFile) {
+      summary.push(
+        `${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, uncheckedFile.filePath)}`,
+      );
+      for (const key of uncheckedFile.keys) {
+        summary.push(`  ${color.gray(F_DOWN_RIGHT)} ${key}`);
+      }
+    }
+  }
+
+  for (const [index, snapshot] of summary.entries()) {
+    const title = index === 0 ? 'Snapshots' : '';
+    logger.log(`${color.gray(title.padStart(12))} ${snapshot}`);
+  }
+};
+
+export const printSummaryLog = ({
+  results,
+  testResults,
+  snapshotSummary,
+  duration,
+  rootPath,
+}: {
+  results: TestFileResult[];
+  testResults: TestResult[];
+  snapshotSummary: SnapshotSummary;
+  duration: Duration;
+  rootPath: string;
+}): void => {
   logger.log('');
+  printSnapshotSummaryLog(snapshotSummary, rootPath);
   logger.log(
     `${color.gray('Test Files'.padStart(12))} ${getSummaryStatusString(results)}`,
   );
@@ -51,7 +147,7 @@ export const printSummaryLog = (
   );
 
   logger.log(
-    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}`)})`,
+    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
   logger.log('');
 };
@@ -76,7 +172,7 @@ export const printSummaryErrorLogs = async ({
   logger.log('');
 
   for (const test of failedTests) {
-    const relativePath = posix.relative(rootPath, test.testPath);
+    const relativePath = path.posix.relative(rootPath, test.testPath);
     logger.log(
       `${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
     );
@@ -141,6 +237,7 @@ const stackIgnores: (RegExp | string)[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
   /node_modules\/tinypool/,
+  /node_modules\/chai/,
 ];
 
 function parseErrorStacktrace({
