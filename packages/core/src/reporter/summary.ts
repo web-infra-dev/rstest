@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { relative } from 'node:path';
+import { posix } from 'node:path';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type {
@@ -76,7 +76,7 @@ export const printSummaryErrorLogs = async ({
   logger.log('');
 
   for (const test of failedTests) {
-    const relativePath = relative(rootPath, test.testPath);
+    const relativePath = posix.relative(rootPath, test.testPath);
     logger.log(
       `${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
     );

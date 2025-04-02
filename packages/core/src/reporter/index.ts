@@ -1,4 +1,4 @@
-import { parse, relative } from 'node:path';
+import { relative } from 'node:path';
 import type {
   Duration,
   GetSourcemap,
@@ -7,7 +7,7 @@ import type {
   TestResult,
   TestSummaryResult,
 } from '../types';
-import { color, prettyTime } from '../utils';
+import { color, parsePosix, prettyTime } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
@@ -20,7 +20,7 @@ export class DefaultReporter implements Reporter {
   onTestFileStart(test: TestFileInfo): void {
     const { rootPath } = this;
     const relativePath = relative(rootPath, test.filePath);
-    const { dir, base } = parse(relativePath);
+    const { dir, base } = parsePosix(relativePath);
 
     console.log('');
     console.log(`${color.gray(`> ${dir ? `${dir}/` : ''}`)}${base}`);

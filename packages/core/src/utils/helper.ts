@@ -1,9 +1,18 @@
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, parse, sep } from 'node:path';
 import color from 'picocolors';
 
 export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
+
+export const parsePosix = (filePath: string): { dir: string; base: string } => {
+  const { dir, base } = parse(filePath);
+
+  return {
+    dir: dir.split(sep).join('/'),
+    base,
+  };
+};
 
 export const castArray = <T>(arr?: T | T[]): T[] => {
   if (arr === undefined) {
