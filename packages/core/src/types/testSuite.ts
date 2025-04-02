@@ -33,7 +33,7 @@ export type Test = TestSuite | TestCase;
 
 export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
-type TestError = {
+export type TestError = {
   message: string;
   name?: string;
   stack?: string;

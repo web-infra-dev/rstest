@@ -1,13 +1,13 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
 import { getSnapshotClient } from '../api/snapshot';
 import type {
   RunnerHooks,
   Test,
+  TestError,
   TestResult,
   TestResultStatus,
   TestSummaryResult,
-  WorkerContext,
+  WorkerState,
 } from '../types';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {
@@ -23,16 +23,32 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
         : 'pass';
 };
 
+const formatTestError = (err: any): TestError[] => {
+  const errors = Array.isArray(err) ? err : [err];
+
+  return errors.map((error) => {
+    const errObj: TestError = {
+      ...error,
+      // Some error attributes cannot be enumerated
+      message: error.message,
+      name: err.name,
+      stack: err.stack,
+    };
+    return errObj;
+  });
+};
+
 export class TestRunner {
   async runTests(
     tests: Test[],
     testPath: string,
-    context: WorkerContext,
+    state: WorkerState,
     hooks: RunnerHooks,
   ): Promise<TestSummaryResult> {
     const {
       normalizedConfig: { passWithNoTests },
-    } = context;
+      snapshotOptions,
+    } = state;
     const results: TestResult[] = [];
     if (tests.length === 0) {
       if (passWithNoTests) {
@@ -55,10 +71,7 @@ export class TestRunner {
     hooks.onTestFileStart?.({ filePath: testPath });
     const snapshotClient = getSnapshotClient();
 
-    await snapshotClient.setup(testPath, {
-      updateSnapshot: 'all',
-      snapshotEnvironment: new NodeSnapshotEnvironment(),
-    });
+    await snapshotClient.setup(testPath, snapshotOptions);
 
     const runTest = async (test: Test, prefix = '') => {
       if (test.type === 'suite') {
@@ -158,7 +171,7 @@ export class TestRunner {
             prefix,
             name: test.description,
             duration: Date.now() - start,
-            errors: Array.isArray(error) ? error : [error],
+            errors: formatTestError(error),
             testPath,
           };
           hooks.onTestCaseResult?.(result);

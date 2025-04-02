@@ -3,7 +3,6 @@ import type {
   RunnerHooks,
   TestAPI,
   TestSummaryResult,
-  WorkerContext,
   WorkerState,
 } from '../types';
 
@@ -15,7 +14,6 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   runner: {
     runTest: (
       testFilePath: string,
-      context: WorkerContext,
       hooks: RunnerHooks,
     ) => Promise<TestSummaryResult>;
     getCurrentTest: RunnerRuntime['getCurrentTest'];
@@ -39,15 +37,11 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       test: it,
     },
     runner: {
-      runTest: async (
-        testFilePath: string,
-        context: WorkerContext,
-        hooks: RunnerHooks,
-      ) => {
+      runTest: async (testFilePath: string, hooks: RunnerHooks) => {
         return testRunner.runTests(
           runtimeAPI.getTests(),
           testFilePath,
-          context,
+          workerState,
           hooks,
         );
       },

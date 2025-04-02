@@ -5,7 +5,6 @@ import type {
   RunnerHooks,
   TestCase,
   TestSummaryResult,
-  WorkerContext,
   WorkerState,
 } from '../types';
 import { GLOBAL_EXPECT, createExpect } from './expect';
@@ -16,7 +15,6 @@ export const createRstestRuntime = (
   runner: {
     runTest: (
       testPath: string,
-      context: WorkerContext,
       hooks: RunnerHooks,
     ) => Promise<TestSummaryResult>;
     getCurrentTest: () => TestCase | undefined;
