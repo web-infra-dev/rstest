@@ -2,8 +2,8 @@ import os from 'node:os';
 import type {
   EntryInfo,
   RstestContext,
+  TestFileResult,
   TestResult,
-  TestSummaryResult,
 } from '../types';
 import { createForksPool } from './forks';
 
@@ -38,7 +38,7 @@ export const runInPool = async ({
   assetFiles: Record<string, string>;
   context: RstestContext;
 }): Promise<{
-  results: TestSummaryResult[];
+  results: TestFileResult[];
   testResults: TestResult[];
 }> => {
   // Some options may crash worker, e.g. --prof, --title.

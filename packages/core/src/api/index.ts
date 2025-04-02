@@ -4,7 +4,7 @@ import type {
   RstestExpect,
   RunnerHooks,
   TestCase,
-  TestSummaryResult,
+  TestFileResult,
   WorkerState,
 } from '../types';
 import { GLOBAL_EXPECT, createExpect } from './expect';
@@ -13,10 +13,7 @@ export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
   runner: {
-    runTest: (
-      testPath: string,
-      hooks: RunnerHooks,
-    ) => Promise<TestSummaryResult>;
+    runTest: (testPath: string, hooks: RunnerHooks) => Promise<TestFileResult>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;

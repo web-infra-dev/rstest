@@ -3,7 +3,7 @@ import { globalApis } from '../constants';
 import type {
   Rstest,
   RunWorkerOptions,
-  TestSummaryResult,
+  TestFileResult,
   WorkerState,
 } from '../types';
 import { logger } from '../utils';
@@ -25,7 +25,7 @@ const runInPool = async ({
   assetFiles,
   updateSnapshot,
   context,
-}: RunWorkerOptions['options']): Promise<TestSummaryResult> => {
+}: RunWorkerOptions['options']): Promise<TestFileResult> => {
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {

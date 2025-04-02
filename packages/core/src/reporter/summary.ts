@@ -5,8 +5,8 @@ import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   Duration,
   GetSourcemap,
+  TestFileResult,
   TestResult,
-  TestSummaryResult,
 } from '../types';
 import { color, logger, prettyTime } from '../utils';
 
@@ -38,7 +38,7 @@ export const getSummaryStatusString = (
 };
 
 export const printSummaryLog = (
-  results: TestSummaryResult[],
+  results: TestFileResult[],
   testResults: TestResult[],
   duration: Duration,
 ): void => {
