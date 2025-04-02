@@ -1,4 +1,6 @@
 // TODO: Unify filePath、testPath、originPath、sourcePath
+import type { MaybePromise } from './utils';
+
 export type TestCase = {
   filePath: string;
   description: string;
@@ -17,13 +19,19 @@ export type TestCase = {
   promises?: Promise<any>[];
 };
 
+export type AfterAllListener = () => MaybePromise<void>;
+
 export type TestSuite = {
   description: string;
   // TODO
   filepath?: string;
+  /** nested cases and suite could in a suite */
   tests: Array<TestSuite | TestCase>;
   type: 'suite';
+  afterAllListeners?: AfterAllListener[];
 };
+
+export type TestSuiteListeners = keyof Pick<TestSuite, 'afterAllListeners'>;
 
 export type TestFileInfo = {
   filePath: string;

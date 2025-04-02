@@ -129,6 +129,7 @@ systemjs
 tailwindcss
 taze
 templating
+tinyexec
 tinyglobby
 transpiling
 treeshaking
