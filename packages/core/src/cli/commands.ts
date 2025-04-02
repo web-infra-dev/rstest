@@ -13,6 +13,7 @@ type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
   passWithNoTests?: boolean;
+  update?: boolean;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -33,6 +34,7 @@ const applyCommonOptions = (cli: CAC) => {
       'specify the project root directory, can be an absolute path or a path relative to cwd',
     )
     .option('--globals', 'provide global APIs')
+    .option('-u, --update', 'update snapshot files')
     .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found.',
@@ -56,6 +58,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'root',
     'globals',
     'passWithNoTests',
+    'update',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
