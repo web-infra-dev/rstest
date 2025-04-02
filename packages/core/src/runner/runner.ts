@@ -4,9 +4,9 @@ import type {
   RunnerHooks,
   Test,
   TestError,
+  TestFileResult,
   TestResult,
   TestResultStatus,
-  TestSummaryResult,
   WorkerState,
 } from '../types';
 
@@ -44,7 +44,7 @@ export class TestRunner {
     testPath: string,
     state: WorkerState,
     hooks: RunnerHooks,
-  ): Promise<TestSummaryResult> {
+  ): Promise<TestFileResult> {
     const {
       normalizedConfig: { passWithNoTests },
       snapshotOptions,

@@ -6,8 +6,8 @@ import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   Duration,
   GetSourcemap,
+  TestFileResult,
   TestResult,
-  TestSummaryResult,
 } from '../types';
 import { color, logger, prettyTime, slash } from '../utils';
 
@@ -131,7 +131,7 @@ export const printSummaryLog = ({
   duration,
   rootPath,
 }: {
-  results: TestSummaryResult[];
+  results: TestFileResult[];
   testResults: TestResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;

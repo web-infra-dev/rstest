@@ -1,6 +1,6 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
-import type { TestFileInfo, TestResult, TestSummaryResult } from './testSuite';
+import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
 import type { MaybePromise } from './utils';
 
 export type Duration = {
@@ -33,7 +33,7 @@ export interface Reporter {
     getSourcemap,
     snapshotSummary,
   }: {
-    results: TestSummaryResult[];
+    results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
