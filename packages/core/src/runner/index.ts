@@ -4,12 +4,13 @@ import type {
   TestAPI,
   TestSummaryResult,
   WorkerContext,
+  WorkerState,
 } from '../types';
 
 import { TestRunner } from './runner';
 import { RunnerRuntime } from './runtime';
 
-export function createRunner(): {
+export function createRunner({ workerState }: { workerState: WorkerState }): {
   api: RunnerAPI;
   runner: {
     runTest: (
@@ -20,7 +21,7 @@ export function createRunner(): {
     getCurrentTest: RunnerRuntime['getCurrentTest'];
   };
 } {
-  const runtimeAPI: RunnerRuntime = new RunnerRuntime();
+  const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
   const testRunner: TestRunner = new TestRunner();
 
   const describe: (description: string, fn: () => void) => void =

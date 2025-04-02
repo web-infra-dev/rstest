@@ -1,3 +1,4 @@
+import type { SnapshotManager } from '@vitest/snapshot/manager';
 import type { NormalizedConfig, RstestConfig } from './config';
 import type { Reporter } from './reporter';
 
@@ -20,6 +21,7 @@ export type RstestContext = {
    */
   command: RstestCommand;
   reporters: Reporter[];
+  snapshotManager: SnapshotManager;
 };
 
 export type RstestInstance = {

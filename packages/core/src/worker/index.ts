@@ -32,6 +32,7 @@ const runInPool = async ({
 
   const workerState: WorkerState = {
     filePath,
+    sourcePath: originPath,
     environment: 'node',
   };
 

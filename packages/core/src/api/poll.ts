@@ -1,6 +1,6 @@
 /**
  * This method is modified based on source found in
- * https://github.com/vitest-dev/vitest/blob/master/packages/vitest/src/integrations/chai/poll.ts
+ * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/chai/poll.ts
  *
  */
 import type { Assertion } from '@vitest/expect';

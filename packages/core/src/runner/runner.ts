@@ -1,4 +1,6 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
+import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
+import { getSnapshotClient } from '../api/snapshot';
 import type {
   RunnerHooks,
   Test,
@@ -51,6 +53,12 @@ export class TestRunner {
     }
 
     hooks.onTestFileStart?.({ filePath: testPath });
+    const snapshotClient = getSnapshotClient();
+
+    await snapshotClient.setup(testPath, {
+      updateSnapshot: 'all',
+      snapshotEnvironment: new NodeSnapshotEnvironment(),
+    });
 
     const runTest = async (test: Test, prefix = '') => {
       if (test.type === 'suite') {
@@ -165,6 +173,9 @@ export class TestRunner {
     for (const test of tests) {
       await runTest(test);
     }
+
+    // saves files and returns SnapshotResult
+    await snapshotClient.finish(testPath);
 
     return {
       testPath,

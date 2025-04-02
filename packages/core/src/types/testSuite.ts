@@ -1,4 +1,6 @@
+// TODO: Unify filePath、testPath、originPath、sourcePath
 export type TestCase = {
+  filePath: string;
   description: string;
   fn: () => void | Promise<void>;
   skipped?: boolean;
@@ -9,6 +11,10 @@ export type TestCase = {
   // TODO
   onFinished?: any[];
   type: 'case';
+  /**
+   * Store promises (from async expects) to wait for them before finishing the test
+   */
+  promises?: Promise<any>[];
 };
 
 export type TestSuite = {

@@ -1,7 +1,6 @@
 /**
  * This method is modified based on source found in
- * https://github.com/vitest-dev/vitest/blob/master/packages/vitest/src/integrations/chai/poll.ts
- *
+ * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/chai/poll.ts
  */
 import * as chai from 'chai';
 
@@ -20,11 +19,11 @@ import {
 } from '@vitest/expect';
 import type { RstestExpect, TestCase, WorkerState } from '../types';
 import { createExpectPoll } from './poll';
+import { SnapshotPlugin } from './snapshot';
 
 chai.use(JestExtend);
 chai.use(JestChaiExpect);
-// TODO
-// chai.use(SnapshotPlugin);
+chai.use(SnapshotPlugin);
 chai.use(JestAsymmetricMatchers);
 export { GLOBAL_EXPECT };
 

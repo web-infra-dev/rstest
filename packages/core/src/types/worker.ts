@@ -33,5 +33,8 @@ export type RunWorkerOptions = {
 
 export type WorkerState = {
   environment: string;
+  /** Test file source code path */
+  sourcePath: string;
+  /** Test file path (distPath) */
   filePath: string;
 };

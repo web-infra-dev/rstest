@@ -23,7 +23,7 @@ export const createRstestRuntime = (
   };
   api: Rstest;
 } => {
-  const { runner, api: runnerAPI } = createRunner();
+  const { runner, api: runnerAPI } = createRunner({ workerState });
 
   const expect: RstestExpect = createExpect({
     workerState,
