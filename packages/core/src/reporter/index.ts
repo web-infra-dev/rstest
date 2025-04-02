@@ -4,8 +4,8 @@ import type {
   GetSourcemap,
   Reporter,
   TestFileInfo,
+  TestFileResult,
   TestResult,
-  TestSummaryResult,
 } from '../types';
 import { color, parsePosix, prettyTime } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
@@ -59,7 +59,7 @@ export class DefaultReporter implements Reporter {
     duration,
     getSourcemap,
   }: {
-    results: TestSummaryResult[];
+    results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;

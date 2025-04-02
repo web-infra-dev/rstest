@@ -56,9 +56,8 @@ export type TestResult = {
   errors?: TestError[];
 };
 
-// TODO: rename to TestFileResult
-export type TestSummaryResult = {
-  status: 'skip' | 'pass' | 'fail' | 'todo';
+export type TestFileResult = {
+  status: TestResultStatus;
   name: string;
   results: TestResult[];
   duration?: number;

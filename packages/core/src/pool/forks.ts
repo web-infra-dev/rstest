@@ -9,7 +9,7 @@ import type {
   RunWorkerOptions,
   RuntimeRPC,
   ServerRPC,
-  TestSummaryResult,
+  TestFileResult,
 } from '../types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,7 +51,7 @@ export const createForksPool = (poolOptions: {
   isolate?: boolean;
 }): {
   name: string;
-  runTest: (options: RunWorkerOptions) => Promise<TestSummaryResult>;
+  runTest: (options: RunWorkerOptions) => Promise<TestFileResult>;
   close: () => Promise<void>;
 } => {
   const {
