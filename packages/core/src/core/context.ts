@@ -1,3 +1,4 @@
+import { SnapshotManager } from '@vitest/snapshot/manager';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import type { RstestCommand, RstestConfig, RstestContext } from '../types';
@@ -15,12 +16,16 @@ export function createContext(
   const rstestConfig = withDefaultConfig(userConfig);
 
   const reporters = [new DefaultReporter({ rootPath })];
+  const snapshotManager = new SnapshotManager({
+    updateSnapshot: 'all',
+  });
 
   return {
     command,
     version: RSTEST_VERSION,
     rootPath,
     reporters,
+    snapshotManager,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,
   };

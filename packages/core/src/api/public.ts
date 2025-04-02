@@ -1,3 +1,4 @@
+import '../types/global';
 import type { Rstest } from '../types';
 
 export declare const expect: Rstest['expect'];

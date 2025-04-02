@@ -3,8 +3,13 @@ import type { Test, TestCase, TestSuite } from '../types';
 export class RunnerRuntime {
   private tests: Array<Test> = [];
   private _test: TestCase | undefined;
+  private sourcePath: string;
 
   private _currentTest: Test[] = [];
+
+  constructor(sourcePath: string) {
+    this.sourcePath = sourcePath;
+  }
 
   describe(description: string, fn: () => void): void {
     const currentSuite: TestSuite = {
@@ -46,8 +51,11 @@ export class RunnerRuntime {
     return this.tests;
   }
 
-  addTestCase(test: TestCase): void {
-    this.addTest(test);
+  addTestCase(test: Omit<TestCase, 'filePath'>): void {
+    this.addTest({
+      ...test,
+      filePath: this.sourcePath,
+    });
     this.resetCurrentTest();
   }
 

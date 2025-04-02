@@ -1,3 +1,4 @@
+import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
 import { globalApis } from '../constants';
 import type {
   Rstest,
@@ -22,6 +23,7 @@ const runInPool = async ({
   entryInfo: { filePath, originPath },
   setupEntries,
   assetFiles,
+  updateSnapshot,
   context,
 }: RunWorkerOptions['options']): Promise<TestSummaryResult> => {
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
@@ -31,7 +33,13 @@ const runInPool = async ({
   } = context;
 
   const workerState: WorkerState = {
+    ...context,
+    snapshotOptions: {
+      updateSnapshot,
+      snapshotEnvironment: new NodeSnapshotEnvironment(),
+    },
     filePath,
+    sourcePath: originPath,
     environment: 'node',
   };
 
@@ -67,7 +75,7 @@ const runInPool = async ({
       assetFiles,
     });
 
-    const results = await runner.runTest(originPath, context, {
+    const results = await runner.runTest(originPath, {
       onTestFileStart: async (test) => {
         await rpc.onTestFileStart(test);
       },

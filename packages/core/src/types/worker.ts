@@ -1,3 +1,5 @@
+import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { RstestContext } from './core';
 import type { TestFileInfo, TestResult } from './testSuite';
 
@@ -27,11 +29,19 @@ export type RunWorkerOptions = {
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     context: WorkerContext;
+    updateSnapshot: SnapshotUpdateState;
   };
   rpcMethods: RuntimeRPC;
 };
 
-export type WorkerState = {
+export type WorkerState = WorkerContext & {
   environment: string;
+  /** Test file source code path */
+  sourcePath: string;
+  /** Test file path (distPath) */
   filePath: string;
+  snapshotOptions: {
+    updateSnapshot: SnapshotUpdateState;
+    snapshotEnvironment: SnapshotEnvironment;
+  };
 };

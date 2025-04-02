@@ -82,10 +82,18 @@ export const runInPool = async ({
     },
   });
 
+  const { updateSnapshot } = context.snapshotManager.options;
+
   const results = await Promise.all(
     entries.map((entryInfo) =>
       pool.runTest({
-        options: { entryInfo, assetFiles, context, setupEntries },
+        options: {
+          entryInfo,
+          assetFiles,
+          context,
+          setupEntries,
+          updateSnapshot,
+        },
         rpcMethods: {
           onTestCaseResult: async (result) => {
             await Promise.all(

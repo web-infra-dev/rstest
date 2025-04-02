@@ -52,6 +52,7 @@
     "@rstest/tsconfig": "workspace:*",
     "@types/babel__code-frame": "^7.0.6",
     "@vitest/expect": "^3.1.1",
+    "@vitest/snapshot": "^3.1.1",
     "cac": "^6.7.14",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.3",
