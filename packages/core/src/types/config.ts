@@ -1,3 +1,5 @@
+import type { BuiltInReporterNames, Reporter } from './reporter';
+
 export type RstestPoolType = 'forks';
 
 export type RstestPoolOptions = {
@@ -68,6 +70,17 @@ export interface RstestConfig {
    * @default false
    */
   update?: boolean;
+  /**
+   * Custom reporter for output.
+   * TODO:
+   * - [ ] support built-in reporters
+   *
+   * @default []
+   */
+  reporters?:
+    | Reporter
+    | BuiltInReporterNames
+    | (Reporter | BuiltInReporterNames)[];
 }
 
 export type NormalizedConfig = Required<

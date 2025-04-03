@@ -21,6 +21,8 @@ export function createContext(
     updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
   });
 
+  console.log('👹', userConfig);
+
   return {
     command,
     version: RSTEST_VERSION,

@@ -13,6 +13,9 @@ export type { SourceMapInput };
 export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
+
+export type BuiltInReporterNames = 'default';
+
 export interface Reporter {
   /**
    * Called before test file run.
