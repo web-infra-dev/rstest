@@ -76,7 +76,6 @@ export const loadModule = ({
     require: createRequire(originPath, distPath, rstestContext, assetFiles),
     __dirname: fileDir,
     __filename: originPath,
-
     ...rstestContext,
   };
 

@@ -107,6 +107,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   update: false,
+  reporters: ['default'],
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
@@ -115,6 +116,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   // The following configurations need overrides
   merged.include = config.include || merged.include;
   merged.exclude = config.exclude || merged.exclude;
+  merged.reporters = config.reporters ?? merged.reporters;
   merged.pool =
     typeof config.pool === 'string'
       ? {

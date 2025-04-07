@@ -4,4 +4,4 @@ export * from './api/public';
 
 // TODO: Move below to @rstest/node exports point.
 export { createRstest } from './core';
-export type { RstestConfig } from './types';
+export type { RstestConfig, RstestCommand } from './types';
