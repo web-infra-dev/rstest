@@ -2,13 +2,23 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test snapshot file state', () => {
   it('should generator snapshot file correctly', async () => {
+    const snapshotFilePath = join(
+      __dirname,
+      'fixtures',
+      '__snapshots__',
+      'index.test.ts.snap',
+    );
+
+    fs.rmSync(snapshotFilePath, {
+      force: true,
+    });
     await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/index.test.ts'],
@@ -18,12 +28,6 @@ describe('test snapshot file state', () => {
         },
       },
     });
-    const snapshotFilePath = join(
-      __dirname,
-      'fixtures',
-      '__snapshots__',
-      'index.test.ts.snap',
-    );
 
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
@@ -44,5 +48,7 @@ describe('test snapshot file state', () => {
     expect(content).toContain(
       '[`test toMatchSnapshot name > say hi 1`] = `"hi"`',
     );
+
+    fs.rmSync(snapshotFilePath);
   });
 });
