@@ -17,9 +17,10 @@ describe('test snapshot file state', () => {
     fs.rmSync(snapshotFilePath, {
       force: true,
     });
+
     await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/index.test.ts'],
+      args: ['run', '-u', 'fixtures/index.test.ts'],
       options: {
         nodeOptions: {
           cwd: __dirname,
