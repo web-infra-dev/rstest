@@ -27,6 +27,12 @@ describe('test snapshot file state', () => {
       },
     });
 
+    await new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(true);
+      }, 100);
+    });
+
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
     const content = fs.readFileSync(snapshotFilePath, 'utf-8');
