@@ -29,7 +29,13 @@ declare module '@vitest/expect' {
   }
 
   interface ExpectPollOptions {
+    /**
+     * @default 50
+     */
     interval?: number;
+    /**
+     * @default 1000
+     */
     timeout?: number;
     message?: string;
   }
@@ -40,7 +46,20 @@ declare module '@vitest/expect' {
     poll: <T>(
       actual: () => T,
       options?: ExpectPollOptions,
-    ) => PromisifyAssertion<Awaited<T>>;
+    ) => Omit<
+      PromisifyAssertion<Awaited<T>>,
+      | 'rejects'
+      | 'resolves'
+      | 'toThrow'
+      | 'toThrowError'
+      | 'throw'
+      | 'throws'
+      | 'matchSnapshot'
+      | 'toMatchSnapshot'
+      | 'toMatchInlineSnapshot'
+      | 'toThrowErrorMatchingSnapshot'
+      | 'toThrowErrorMatchingInlineSnapshot'
+    >;
     addEqualityTesters: (testers: Array<Tester>) => void;
     assertions: (expected: number) => void;
     hasAssertions: () => void;
