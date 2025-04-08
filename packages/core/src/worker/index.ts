@@ -1,4 +1,3 @@
-import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
 import { globalApis } from '../constants';
 import type {
   Rstest,
@@ -9,6 +8,7 @@ import type {
 import { logger } from '../utils';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
+import { RstestSnapshotEnvironment } from './snapshot';
 
 const getGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
@@ -23,6 +23,7 @@ const runInPool = async ({
   entryInfo: { filePath, originPath },
   setupEntries,
   assetFiles,
+  sourceMaps,
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']): Promise<TestFileResult> => {
@@ -36,7 +37,9 @@ const runInPool = async ({
     ...context,
     snapshotOptions: {
       updateSnapshot,
-      snapshotEnvironment: new NodeSnapshotEnvironment(),
+      snapshotEnvironment: new RstestSnapshotEnvironment({
+        sourceMaps,
+      }),
     },
     filePath,
     sourcePath: originPath,
@@ -86,10 +89,7 @@ const runInPool = async ({
 
     return results;
   } catch (err) {
-    logger.error(
-      `run file ${originPath} failed:\n`,
-      err instanceof Error ? err.message : err,
-    );
+    logger.error(`run file ${originPath} failed:\n`, err);
     return {
       testPath: originPath,
       status: 'fail',

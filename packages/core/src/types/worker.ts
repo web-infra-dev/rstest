@@ -1,6 +1,7 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { RstestContext } from './core';
+import type { SourceMapInput } from './reporter';
 import type { TestFileInfo, TestResult } from './testSuite';
 
 export type EntryInfo = {
@@ -28,6 +29,7 @@ export type RunWorkerOptions = {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
+    sourceMaps: Record<string, SourceMapInput>;
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
   };

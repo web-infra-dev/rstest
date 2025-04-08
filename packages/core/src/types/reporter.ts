@@ -12,9 +12,7 @@ export type Duration = {
 
 export type { SourceMapInput, SnapshotSummary };
 
-export type GetSourcemap = (
-  sourcePath: string,
-) => Promise<SourceMapInput | null>;
+export type GetSourcemap = (sourcePath: string) => SourceMapInput | null;
 
 export type { BuiltInReporterNames };
 

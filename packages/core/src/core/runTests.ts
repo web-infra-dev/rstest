@@ -39,7 +39,7 @@ export async function runTests(
 
   const rsbuildInstance = await prepareRsbuild(name, sourceEntries, setupFiles);
 
-  const { close, entries, assetFiles, setupEntries, getSourcemap } =
+  const { close, entries, assetFiles, sourceMaps, setupEntries, getSourcemap } =
     await createRsbuildServer({
       name,
       sourceEntries,
@@ -54,6 +54,7 @@ export async function runTests(
     entries,
     assetFiles,
     setupEntries,
+    sourceMaps,
     context,
   });
   const testEnd = Date.now();
