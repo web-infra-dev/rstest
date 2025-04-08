@@ -172,7 +172,7 @@ export const printSummaryErrorLogs = async ({
   logger.log('');
 
   for (const test of failedTests) {
-    const relativePath = path.posix.relative(rootPath, test.testPath);
+    const relativePath = path.relative(rootPath, test.testPath);
     logger.log(
       `${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
     );

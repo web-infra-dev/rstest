@@ -11,9 +11,7 @@ describe('test snapshot file state', () => {
   it('should generator snapshot file correctly', async () => {
     const snapshotFilePath = join(
       __dirname,
-      'fixtures',
-      '__snapshots__',
-      'index.test.ts.snap',
+      'fixtures/__snapshots__/index.test.ts.snap',
     );
 
     fs.rmSync(snapshotFilePath, {
