@@ -7,6 +7,7 @@
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
+    "path-serializer": "0.3.4",
     "strip-ansi": "^7.1.0",
     "tinyexec": "^1.0.1",
     "typescript": "^5.8.3"

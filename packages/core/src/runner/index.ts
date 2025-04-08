@@ -16,7 +16,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       testFilePath: string,
       hooks: RunnerHooks,
     ) => Promise<TestFileResult>;
-    getCurrentTest: RunnerRuntime['getCurrentTest'];
+    getCurrentTest: TestRunner['getCurrentTest'];
   };
 } {
   const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
@@ -43,7 +43,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
           hooks,
         );
       },
-      getCurrentTest: () => runtimeAPI.getCurrentTest(),
+      getCurrentTest: () => testRunner.getCurrentTest(),
     },
   };
 }

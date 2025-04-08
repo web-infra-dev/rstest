@@ -22,8 +22,6 @@ function registerTestSuiteListener(
 export class RunnerRuntime {
   /** all test cases */
   private tests: Test[] = [];
-  /** current test case */
-  private _test: TestCase | undefined;
   /** current test suite, could be undefined if no explicit suite declared */
   // private _suite: TestSuite | undefined;
   /** a calling stack of the current test suites and case */
@@ -77,10 +75,6 @@ export class RunnerRuntime {
     }
 
     this._currentTest.push(test);
-
-    if (test.type === 'case') {
-      this._test = test;
-    }
   }
 
   getTests(): Test[] {
@@ -107,10 +101,6 @@ export class RunnerRuntime {
 
   it(description: string, fn: () => void | Promise<void>): void {
     this.addTestCase({ description, fn, type: 'case' });
-  }
-
-  getCurrentTest(): TestCase | undefined {
-    return this._test;
   }
 
   getCurrentSuite(): TestSuite {
