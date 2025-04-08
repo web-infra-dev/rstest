@@ -88,7 +88,8 @@ export const createRsbuildServer = async ({
   entries: EntryInfo[];
   setupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
-  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
+  sourceMaps: Record<string, SourceMapInput>;
+  getSourcemap: (sourcePath: string) => SourceMapInput | null;
   close: () => Promise<void>;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
@@ -163,6 +164,24 @@ export const createRsbuildServer = async ({
     }
   }
 
+  const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
+    (
+      await Promise.all(
+        assets!.map(async (asset) => {
+          const sourceMapPath = asset?.info.related?.sourceMap?.[0];
+
+          const assetFilePath = path.join(outputPath!, asset.name);
+          if (sourceMapPath) {
+            const filePath = path.join(outputPath!, sourceMapPath);
+            const sourceMap = await readFile(filePath);
+            return [assetFilePath, JSON.parse(sourceMap)];
+          }
+          return [assetFilePath, null];
+        }),
+      )
+    ).filter((asset) => asset[1] !== null),
+  );
+
   return {
     entries,
     setupEntries,
@@ -175,20 +194,9 @@ export const createRsbuildServer = async ({
         }),
       ),
     ),
-    getSourcemap: async (
-      sourcePath: string,
-    ): Promise<SourceMapInput | null> => {
-      const asset = assets?.find(
-        (asset) => path.join(outputPath!, asset.name) === sourcePath,
-      );
-      const sourceMapPath = asset?.info.related?.sourceMap?.[0];
-
-      if (sourceMapPath) {
-        const filePath = path.join(outputPath!, sourceMapPath);
-        const sourceMap = await readFile(filePath);
-        return JSON.parse(sourceMap);
-      }
-      return null;
+    sourceMaps,
+    getSourcemap: (sourcePath: string): SourceMapInput | null => {
+      return sourceMaps[sourcePath] || null;
     },
     close: devServer.close,
   };

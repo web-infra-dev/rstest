@@ -2,6 +2,7 @@ import os from 'node:os';
 import type {
   EntryInfo,
   RstestContext,
+  SourceMapInput,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -32,10 +33,12 @@ export const runInPool = async ({
   context,
   assetFiles,
   setupEntries,
+  sourceMaps,
 }: {
   entries: EntryInfo[];
   setupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
+  sourceMaps: Record<string, SourceMapInput>;
   context: RstestContext;
 }): Promise<{
   results: TestFileResult[];
@@ -91,6 +94,7 @@ export const runInPool = async ({
           entryInfo,
           assetFiles,
           context,
+          sourceMaps,
           setupEntries,
           updateSnapshot,
         },

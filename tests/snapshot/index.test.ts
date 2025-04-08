@@ -5,7 +5,13 @@ describe('test snapshot', () => {
     expect('hello world').toMatchSnapshot();
   });
 
-  it.todo('test toMatchInlineSnapshot API', () => {
-    expect('hello world').toMatchInlineSnapshot();
+  it('test toMatchInlineSnapshot API', () => {
+    expect('hello world').toMatchInlineSnapshot(`"hello world"`);
+    expect({ a: 1, b: 2 }).toMatchInlineSnapshot(`
+      {
+        "a": 1,
+        "b": 2,
+      }
+    `);
   });
 });
