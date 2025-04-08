@@ -22,6 +22,10 @@
       "types": "./dist-types/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./node": {
+      "types": "./dist-types/node.d.ts",
+      "default": "./dist/node.js"
+    },
     "./globals": {
       "types": "./globals.d.ts"
     }

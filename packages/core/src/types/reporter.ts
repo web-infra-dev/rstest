@@ -1,5 +1,6 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
+import type { BuiltInReporterNames } from '../core/context';
 import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
 import type { MaybePromise } from './utils';
 
@@ -14,6 +15,9 @@ export type { SourceMapInput, SnapshotSummary };
 export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
+
+export type { BuiltInReporterNames };
+
 export interface Reporter {
   /**
    * Called before test file run.

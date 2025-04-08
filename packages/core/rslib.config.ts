@@ -12,6 +12,7 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          node: './src/node.ts',
           cli: './src/cli.ts',
           worker: './src/worker/index.ts',
         },
