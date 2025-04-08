@@ -1,7 +1,6 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import stripAnsi from 'strip-ansi';
 import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('reporters', () => {
   it('default', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -19,13 +18,13 @@ describe('reporters', () => {
       },
     });
 
-    const logs = stripAnsi(process.stdout);
-    expect(logs).toContain('✓ basic > a');
-    expect(logs).toContain('✗ basic > b');
+    await cli.exec;
+    expect(cli.stdout).toContain('✓ basic > a');
+    expect(cli.stdout).toContain('✗ basic > b');
   });
 
   it('custom', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', './rstest.customReporterConfig.ts'],
       options: {
@@ -35,14 +34,16 @@ describe('reporters', () => {
       },
     });
 
-    const logs = stripAnsi(process.stdout);
-    expect(logs).toContain('[custom reporter] onTestFileStart');
-    expect(logs.match(/\[custom reporter\] onTestCaseResult/g)?.length).toBe(2);
-    expect(logs).toContain('[custom reporter] onTestRunEnd');
+    await cli.exec;
+    expect(cli.stdout).toContain('[custom reporter] onTestFileStart');
+    expect(
+      cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
+    ).toBe(2);
+    expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
   });
 
   it('empty', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', './rstest.emptyReporterConfig.ts'],
       options: {
@@ -52,8 +53,8 @@ describe('reporters', () => {
       },
     });
 
-    const logs = stripAnsi(process.stdout);
-    expect(logs).not.toContain('✓ basic > a');
-    expect(logs).not.toContain('✗ basic > b');
+    await cli.exec;
+    expect(cli.stdout).not.toContain('✓ basic > a');
+    expect(cli.stdout).not.toContain('✗ basic > b');
   });
 });
