@@ -9,6 +9,6 @@
     "@rstest/core": "workspace:*",
     "strip-ansi": "^7.1.0",
     "tinyexec": "^1.0.1",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.3"
   }
 }
