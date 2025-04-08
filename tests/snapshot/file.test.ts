@@ -32,6 +32,8 @@ describe('test snapshot file state', () => {
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
     const content = fs.readFileSync(snapshotFilePath, 'utf-8');
+
+    // should generator snapshot name correctly
     expect(content).toContain(
       '[`test toMatchSnapshot API 1`] = `"hello world"`',
     );
