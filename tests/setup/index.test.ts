@@ -1,5 +1,4 @@
-import { dirname } from 'node:path';
-import { join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -45,7 +44,9 @@ describe('test setup file', async () => {
     // test error log
     expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('error/rstest.setup.ts:1:6')),
+      logs.find((log) =>
+        log.includes(['error', 'rstest.setup.ts:1:6'].join(sep)),
+      ),
     ).toBeTruthy();
   });
 });
