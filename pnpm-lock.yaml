@@ -165,6 +165,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  tests/watch:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
 packages:
 
   '@ast-grep/napi-darwin-arm64@0.36.2':
