@@ -87,8 +87,7 @@ export function setupCommands(): void {
       try {
         const { config } = await initCli(options);
         const { createRstest } = await import('../core');
-        // TODO: remove RSTEST_SELF_CI when we can run test without CLI.
-        if (isCI && !RSTEST_SELF_CI) {
+        if (isCI) {
           const rstest = createRstest(config, 'run', filters.map(normalize));
           await rstest.runTests();
         } else {
@@ -119,9 +118,11 @@ export function setupCommands(): void {
 
   cli
     .command('watch [...filters]', 'run Rstest in watch mode')
-    .action(async (_filters: string[], options: CommonOptions) => {
-      await initCli(options);
-      console.log('TODO: run Rstest in watch mode');
+    .action(async (filters: string[], options: CommonOptions) => {
+      const { config } = await initCli(options);
+      const { createRstest } = await import('../core');
+      const rstest = createRstest(config, 'watch', filters.map(normalize));
+      await rstest.runTests();
     });
 
   cli.parse();

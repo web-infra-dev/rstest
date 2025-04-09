@@ -14,6 +14,7 @@ describe('watch', () => {
 
     const { cli } = await runRstestCli({
       command: 'rstest',
+      args: ['watch'],
       options: {
         nodeOptions: {
           cwd: __dirname,

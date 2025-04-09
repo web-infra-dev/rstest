@@ -1,10 +1,4 @@
 import { defineConfig } from '@rslib/core';
-import { isCI } from 'std-env';
-
-const isRunningInRstestCi =
-  isCI &&
-  process.env.GITHUB_ACTIONS &&
-  process.env.GITHUB_REPOSITORY === 'web-infra-dev/rstest';
 
 export default defineConfig({
   lib: [
@@ -47,7 +41,6 @@ export default defineConfig({
         },
         define: {
           RSTEST_VERSION: JSON.stringify(require('./package.json').version),
-          RSTEST_SELF_CI: JSON.stringify(isRunningInRstestCi),
         },
       },
     },

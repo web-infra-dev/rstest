@@ -74,7 +74,7 @@ export async function runRstestCli({
   command,
   options,
   args = [],
-}: { command: string; options?: Partial<Options>; args?: any[] }) {
+}: { command: string; options?: Partial<Options>; args?: string[] }) {
   const process = x(command, args, options as Options);
   const cli = new Cli(process);
   return { cli };
