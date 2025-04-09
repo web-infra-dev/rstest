@@ -3,6 +3,7 @@ import { getSnapshotClient } from '../api/snapshot';
 import type {
   RunnerHooks,
   Test,
+  TestCase,
   TestError,
   TestFileResult,
   TestResult,
@@ -39,6 +40,9 @@ const formatTestError = (err: any): TestError[] => {
 };
 
 export class TestRunner {
+  /** current test case */
+  private _test: TestCase | undefined;
+
   async runTests(
     tests: Test[],
     testPath: string,
@@ -124,13 +128,17 @@ export class TestRunner {
           results.push(result);
           return;
         }
+
+        let result: TestResult;
+        this.setCurrentTest(test);
+
         if (test.fails) {
           try {
             this.beforeRunTest(testPath);
             await test.fn();
             this.afterRunTest();
 
-            const result = {
+            result = {
               status: 'fail' as const,
               prefix,
               name: test.description,
@@ -142,50 +150,44 @@ export class TestRunner {
                 },
               ],
             };
-            hooks.onTestCaseResult?.(result);
-
-            results.push(result);
           } catch (error) {
-            const result = {
+            result = {
               status: 'pass' as const,
               prefix,
               name: test.description,
               testPath,
               duration: Date.now() - start,
             };
-            hooks.onTestCaseResult?.(result);
-
-            results.push(result);
           }
-          return;
+        } else {
+          try {
+            this.beforeRunTest(testPath);
+            await test.fn();
+            this.afterRunTest();
+            result = {
+              status: 'pass' as const,
+              prefix,
+              name: test.description,
+              duration: Date.now() - start,
+              testPath,
+            };
+          } catch (error) {
+            result = {
+              status: 'fail' as const,
+              prefix,
+              name: test.description,
+              duration: Date.now() - start,
+              errors: formatTestError(error),
+              testPath,
+            };
+          }
         }
-        try {
-          this.beforeRunTest(testPath);
-          await test.fn();
-          this.afterRunTest();
-          const result = {
-            status: 'pass' as const,
-            prefix,
-            name: test.description,
-            duration: Date.now() - start,
-            testPath,
-          };
-          hooks.onTestCaseResult?.(result);
 
-          results.push(result);
-        } catch (error) {
-          const result = {
-            status: 'fail' as const,
-            prefix,
-            name: test.description,
-            duration: Date.now() - start,
-            errors: formatTestError(error),
-            testPath,
-          };
-          hooks.onTestCaseResult?.(result);
+        this.resetCurrentTest();
 
-          results.push(result);
-        }
+        hooks.onTestCaseResult?.(result);
+
+        results.push(result);
       }
     };
 
@@ -206,6 +208,18 @@ export class TestRunner {
       snapshotResult,
       duration: Date.now() - start,
     };
+  }
+
+  private resetCurrentTest(): void {
+    this._test = undefined;
+  }
+
+  private setCurrentTest(test: TestCase): void {
+    this._test = test;
+  }
+
+  getCurrentTest(): TestCase | undefined {
+    return this._test;
   }
 
   private beforeRunTest(testPath: string): void {
