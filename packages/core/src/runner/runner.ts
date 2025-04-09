@@ -1,4 +1,5 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
+import type { SnapshotState } from '@vitest/snapshot';
 import { getSnapshotClient } from '../api/snapshot';
 import type {
   RunnerHooks,
@@ -119,7 +120,10 @@ export class TestRunner {
 
         if (test.fails) {
           try {
-            this.beforeRunTest(testPath);
+            this.beforeRunTest(
+              testPath,
+              snapshotClient.getSnapshotState(testPath),
+            );
             await test.fn();
             this.afterRunTest();
 
@@ -146,7 +150,10 @@ export class TestRunner {
           }
         } else {
           try {
-            this.beforeRunTest(testPath);
+            this.beforeRunTest(
+              testPath,
+              snapshotClient.getSnapshotState(testPath),
+            );
             await test.fn();
             this.afterRunTest();
             result = {
@@ -207,7 +214,7 @@ export class TestRunner {
     return this._test;
   }
 
-  private beforeRunTest(testPath: string): void {
+  private beforeRunTest(testPath: string, snapshotState: SnapshotState): void {
     setState(
       {
         assertionCalls: 0,
@@ -216,6 +223,7 @@ export class TestRunner {
         expectedAssertionsNumber: null,
         expectedAssertionsNumberErrorGen: null,
         testPath,
+        snapshotState,
       },
       (globalThis as any)[GLOBAL_EXPECT],
     );
