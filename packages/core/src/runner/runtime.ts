@@ -19,6 +19,8 @@ function registerTestSuiteListener(
   suite[listenersKey].push(fn);
 }
 
+type CollectStatus = 'lazy' | 'running';
+
 export class RunnerRuntime {
   /** all test cases */
   private tests: Test[] = [];
@@ -27,6 +29,14 @@ export class RunnerRuntime {
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
   private sourcePath: string;
+
+  /**
+   * Collect test status:
+   * - lazy: add fn to `currentCollectList` to delay collection;
+   * - running: collect it immediately.
+   */
+  private collectStatus: CollectStatus = 'lazy';
+  private currentCollectList: Array<() => MaybePromise<void>> = [];
 
   constructor(sourcePath: string) {
     this.sourcePath = sourcePath;
@@ -45,15 +55,26 @@ export class RunnerRuntime {
     };
   }
 
-  describe(description: string, fn: () => void): void {
+  describe(description: string, fn: () => MaybePromise<void>): void {
     const currentSuite: TestSuite = {
       description,
       tests: [],
       type: 'suite',
     };
-    this.addTest(currentSuite);
-    fn();
-    this.resetCurrentTest();
+
+    // describe may be async, so we need to collect it later
+    this.collectStatus = 'lazy';
+
+    this.currentCollectList.push(async () => {
+      this.addTest(currentSuite);
+      const result = fn();
+      if (result instanceof Promise) {
+        await result;
+      }
+      // call current collect immediately
+      await this.collectCurrentTest();
+      this.resetCurrentTest();
+    });
   }
 
   resetCurrentTest(): void {
@@ -76,17 +97,41 @@ export class RunnerRuntime {
 
     this._currentTest.push(test);
   }
+  private async collectCurrentTest(): Promise<void> {
+    const currentCollectList = this.currentCollectList;
+    // reset currentCollectList
+    this.currentCollectList = [];
+    while (currentCollectList.length > 0) {
+      this.collectStatus = 'running';
+      const fn = currentCollectList.shift()!;
+      await fn();
+    }
+  }
 
-  getTests(): Test[] {
+  async getTests(): Promise<Test[]> {
+    while (this.currentCollectList.length > 0) {
+      await this.collectCurrentTest();
+    }
+
     return this.tests;
   }
 
   addTestCase(test: Omit<TestCase, 'filePath'>): void {
-    this.addTest({
-      ...test,
-      filePath: this.sourcePath,
-    });
-    this.resetCurrentTest();
+    if (this.collectStatus === 'lazy') {
+      this.currentCollectList.push(() => {
+        this.addTest({
+          ...test,
+          filePath: this.sourcePath,
+        });
+        this.resetCurrentTest();
+      });
+    } else {
+      this.addTest({
+        ...test,
+        filePath: this.sourcePath,
+      });
+      this.resetCurrentTest();
+    }
   }
 
   /**
