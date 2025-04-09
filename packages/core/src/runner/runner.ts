@@ -4,12 +4,12 @@ import type {
   RunnerHooks,
   Test,
   TestCase,
-  TestError,
   TestFileResult,
   TestResult,
   TestResultStatus,
   WorkerState,
 } from '../types';
+import { formatTestError } from '../utils/runtime';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {
   if (results.length === 0) {
@@ -22,21 +22,6 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
       : results.every((result) => result.status === 'skip')
         ? 'skip'
         : 'pass';
-};
-
-const formatTestError = (err: any): TestError[] => {
-  const errors = Array.isArray(err) ? err : [err];
-
-  return errors.map((error) => {
-    const errObj: TestError = {
-      ...error,
-      // Some error attributes cannot be enumerated
-      message: error.message,
-      name: err.name,
-      stack: err.stack,
-    };
-    return errObj;
-  });
 };
 
 export class TestRunner {

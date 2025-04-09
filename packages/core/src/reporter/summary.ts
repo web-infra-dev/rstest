@@ -154,14 +154,19 @@ export const printSummaryLog = ({
 
 export const printSummaryErrorLogs = async ({
   testResults,
+  results,
   rootPath,
   getSourcemap,
 }: {
   rootPath: string;
+  results: TestFileResult[];
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
 }): Promise<void> => {
-  const failedTests = testResults.filter((i) => i.status === 'fail');
+  const failedTests: TestResult[] = [
+    ...results.filter((i) => i.status === 'fail' && i.errors),
+    ...testResults.filter((i) => i.status === 'fail'),
+  ];
 
   if (failedTests.length === 0) {
     return;
@@ -173,8 +178,10 @@ export const printSummaryErrorLogs = async ({
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
+    const testName = `${test.prefix || ''}${test.name}`;
+
     logger.log(
-      `${color.bgRed(' FAIL ')} ${relativePath} > ${test.prefix}${test.name}`,
+      `${color.bgRed(' FAIL ')} ${relativePath} ${testName ? `> ${testName}` : ''}`,
     );
 
     if (test.errors) {
@@ -254,13 +261,18 @@ function parseErrorStacktrace({
           frame.file && !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = await getSourcemap(frame.file!);
+        const sourcemap = getSourcemap(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
             column: frame.column!,
           });
+
+          if (!source) {
+            // some Rspack runtime wrapper code, should filter them out
+            return null;
+          }
 
           return {
             ...frame,
@@ -272,5 +284,7 @@ function parseErrorStacktrace({
         }
         return frame;
       }),
+  ).then((frames) =>
+    frames.filter((frame): frame is StackFrame => frame !== null),
   );
 }

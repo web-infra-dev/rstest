@@ -69,6 +69,7 @@ export class DefaultReporter implements Reporter {
   }): Promise<void> {
     await printSummaryErrorLogs({
       testResults,
+      results,
       rootPath: this.rootPath,
       getSourcemap,
     });
