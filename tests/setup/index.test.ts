@@ -42,6 +42,8 @@ describe('test setup file', async () => {
     expect(process.exitCode).toBe(1);
 
     const logs = process.stdout.split('\n').filter(Boolean);
+    // TODO: test
+    console.log('logs', logs);
     // test error log
     expect(
       logs.find((log) => log.includes("throw new Error('Rstest setup error')")),
