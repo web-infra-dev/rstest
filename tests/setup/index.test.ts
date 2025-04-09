@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test setup file', async () => {
   it('should run setup file correctly', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -18,17 +18,16 @@ describe('test setup file', async () => {
       },
     });
 
-    expect(process.exitCode).toBe(0);
-
-    const logs = process.stdout
+    await cli.exec;
+    const logs = cli.stdout
       .split('\n')
       .filter((log) => log.startsWith('[afterAll]'));
-
+    expect(cli.exec.process?.exitCode).toBe(0);
     expect(logs).toEqual(['[afterAll] setup']);
   });
 
   it('should test error when run setup file failed', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -38,9 +37,9 @@ describe('test setup file', async () => {
       },
     });
 
-    expect(process.exitCode).toBe(1);
-
-    const logs = process.stdout.split('\n').filter(Boolean);
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    const logs = cli.stdout.split('\n').filter(Boolean);
     // test error log
     expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
     expect(
