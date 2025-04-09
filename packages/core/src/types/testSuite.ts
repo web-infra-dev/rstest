@@ -58,11 +58,7 @@ export type TestResult = {
   errors?: TestError[];
 };
 
-export type TestFileResult = {
-  status: TestResultStatus;
-  name: string;
+export type TestFileResult = TestResult & {
   results: TestResult[];
-  duration?: number;
-  testPath: string;
   snapshotResult?: SnapshotResult;
 };

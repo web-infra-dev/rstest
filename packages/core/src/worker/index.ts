@@ -5,7 +5,7 @@ import type {
   TestFileResult,
   WorkerState,
 } from '../types';
-import { logger } from '../utils';
+import { formatTestError } from '../utils/runtime';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -89,12 +89,12 @@ const runInPool = async ({
 
     return results;
   } catch (err) {
-    logger.error(`run file ${originPath} failed:\n`, err);
     return {
       testPath: originPath,
       status: 'fail',
-      name: originPath,
+      name: '',
       results: [],
+      errors: formatTestError(err),
     };
   }
 };

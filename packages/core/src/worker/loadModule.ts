@@ -1,6 +1,6 @@
 import { createRequire as createNativeRequire } from 'node:module';
-import path from 'node:path';
 import vm from 'node:vm';
+import path from 'pathe';
 import { logger } from '../utils/logger';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);

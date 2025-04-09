@@ -1,4 +1,4 @@
-import { isAbsolute, join, parse, sep } from 'node:path';
+import { isAbsolute, join, parse, sep } from 'pathe';
 import color from 'picocolors';
 
 export function getAbsolutePath(base: string, filepath: string): string {

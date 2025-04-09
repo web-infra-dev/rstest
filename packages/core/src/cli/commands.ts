@@ -1,6 +1,6 @@
-import { normalize } from 'node:path';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
+import { normalize } from 'pathe';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';

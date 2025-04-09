@@ -1,4 +1,4 @@
-import { relative } from 'node:path';
+import { relative } from 'pathe';
 import type {
   Duration,
   GetSourcemap,
@@ -69,6 +69,7 @@ export class DefaultReporter implements Reporter {
   }): Promise<void> {
     await printSummaryErrorLogs({
       testResults,
+      results,
       rootPath: this.rootPath,
       getSourcemap,
     });
