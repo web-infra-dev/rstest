@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import {
   type RsbuildInstance,
   logger as RsbuildLogger,
@@ -7,6 +6,7 @@ import {
   type Rspack,
   createRsbuild,
 } from '@rsbuild/core';
+import path from 'pathe';
 import type { EntryInfo, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
 

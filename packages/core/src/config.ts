@@ -1,10 +1,10 @@
 import fs from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
 import {
   type LoadConfigOptions,
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
+import { dirname, isAbsolute, join } from 'pathe';
 import { DEFAULT_CONFIG_EXTENSIONS, DEFAULT_CONFIG_NAME } from './constants';
 import type { NormalizedConfig, RstestConfig } from './types';
 import { color } from './utils/helper';
