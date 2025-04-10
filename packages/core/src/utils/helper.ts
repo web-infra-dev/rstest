@@ -1,5 +1,7 @@
 import { isAbsolute, join, parse, sep } from 'pathe';
 import color from 'picocolors';
+import type { TestResult } from '../types';
+import { TEST_DELIMITER } from './constants';
 
 export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
@@ -70,5 +72,12 @@ export const prettyTime = (milliseconds: number): string => {
   const minutes = seconds / 60;
   return `${format(minutes.toFixed(2))} m`;
 };
+
+const getTaskNames = (test: Pick<TestResult, 'name' | 'prefixes'>): string[] =>
+  (test.prefixes || []).concat(test.name).filter(Boolean);
+
+export const getTaskNameWithPrefix = (
+  test: Pick<TestResult, 'name' | 'prefixes'>,
+): string => getTaskNames(test).join(` ${TEST_DELIMITER} `);
 
 export { color };

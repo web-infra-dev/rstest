@@ -9,7 +9,14 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, logger, prettyTime, slash } from '../utils';
+import {
+  TEST_DELIMITER,
+  color,
+  getTaskNameWithPrefix,
+  logger,
+  prettyTime,
+  slash,
+} from '../utils';
 
 export const getSummaryStatusString = (
   tasks: TestResult[],
@@ -178,10 +185,11 @@ export const printSummaryErrorLogs = async ({
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
-    const testName = `${test.prefix || ''}${test.name}`;
+    const nameStr = getTaskNameWithPrefix(test);
 
+    //  FAIL  tests/index.test.ts > suite name > test case name
     logger.log(
-      `${color.bgRed(' FAIL ')} ${relativePath} ${testName ? `> ${testName}` : ''}`,
+      `${color.bgRed(' FAIL ')} ${relativePath} ${nameStr.length ? `${TEST_DELIMITER} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {

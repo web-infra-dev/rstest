@@ -5,10 +5,13 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join } from 'pathe';
-import { DEFAULT_CONFIG_EXTENSIONS, DEFAULT_CONFIG_NAME } from './constants';
 import type { NormalizedConfig, RstestConfig } from './types';
-import { color } from './utils/helper';
-import { logger } from './utils/logger';
+import {
+  DEFAULT_CONFIG_EXTENSIONS,
+  DEFAULT_CONFIG_NAME,
+  color,
+  logger,
+} from './utils';
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
 
