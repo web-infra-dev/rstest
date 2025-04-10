@@ -22,19 +22,20 @@ describe('RunnerRuntime', () => {
 
     const tests = await runtime.getTests();
 
-    expect(tests.map((test) => test.description)).toEqual([
+    expect(tests.map((test) => test.name)).toEqual([
       'suite - 0',
       'suite - 1',
       'test - 2',
     ]);
 
-    expect(
-      (tests[0] as TestSuite).tests.map((test) => test.description),
-    ).toEqual(['test - 0', 'test - 1']);
+    expect((tests[0] as TestSuite).tests.map((test) => test.name)).toEqual([
+      'test - 0',
+      'test - 1',
+    ]);
 
     expect(
       ((tests[0] as TestSuite).tests[1] as TestSuite).tests.map(
-        (test) => test.description,
+        (test) => test.name,
       ),
     ).toEqual(['test - 1 - 1']);
   });
