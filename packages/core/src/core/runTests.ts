@@ -55,9 +55,6 @@ export async function runTests(
   });
 
   const run = async () => {
-    const start = Date.now();
-    const buildEnd = Date.now();
-    const testStart = Date.now();
     const {
       entries,
       setupEntries,
@@ -65,7 +62,9 @@ export async function runTests(
       sourceMaps,
       getSourcemap,
       close,
+      buildTime,
     } = await getRsbuildStats();
+    const testStart = Date.now();
 
     const { results, testResults } = await runInPool({
       entries,
@@ -74,12 +73,12 @@ export async function runTests(
       assetFiles,
       context,
     });
-    const testEnd = Date.now();
+    const testTime = Date.now() - testStart;
 
     const duration = {
-      totalTime: testEnd - start,
-      buildTime: buildEnd - start,
-      testTime: testEnd - testStart,
+      totalTime: testTime + buildTime,
+      buildTime,
+      testTime,
     };
 
     if (results.some((r) => r.status === 'fail')) {

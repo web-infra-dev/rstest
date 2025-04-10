@@ -115,6 +115,7 @@ export const createRsbuildServer = async ({
   rootPath: string;
 }): Promise<
   () => Promise<{
+    buildTime: number;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
@@ -158,10 +159,17 @@ export const createRsbuildServer = async ({
   const getRsbuildStats = async () => {
     const stats = await devServer.environments[name]!.getStats();
 
-    const { entrypoints, outputPath, assets } = stats.toJson({
+    const {
+      entrypoints,
+      outputPath,
+      assets,
+      time: buildTime,
+    } = stats.toJson({
       entrypoints: true,
       outputPath: true,
       assets: true,
+      // get the compilation time
+      timings: true,
     });
 
     const readFile = async (fileName: string) => {
@@ -221,6 +229,7 @@ export const createRsbuildServer = async ({
     return {
       entries,
       setupEntries,
+      buildTime: buildTime!,
       // Resources need to be obtained synchronously when the test is loaded, so files need to be read in advance
       assetFiles: Object.fromEntries(
         await Promise.all(
