@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('afterAll', () => {
   it('afterAll should be invoked in the correct order', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -18,7 +18,8 @@ describe('afterAll', () => {
       },
     });
 
-    const logs = process.stdout
+    await cli.exec;
+    const logs = cli.stdout
       .split('\n')
       .filter((log) => log.startsWith('[afterAll]'));
 

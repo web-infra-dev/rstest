@@ -82,7 +82,7 @@ export function setupCommands(): void {
   applyCommonOptions(cli);
 
   cli
-    .command('[...filters]', 'run Rstest')
+    .command('[...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -91,7 +91,8 @@ export function setupCommands(): void {
           const rstest = createRstest(config, 'run', filters.map(normalize));
           await rstest.runTests();
         } else {
-          console.log('TODO: run Rstest in watch mode');
+          const rstest = createRstest(config, 'watch', filters.map(normalize));
+          await rstest.runTests();
         }
       } catch (err) {
         logger.error('Failed to run Rstest.');
@@ -101,7 +102,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('run [...filters]', 'run Rstest without watch mode')
+    .command('run [...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -117,9 +118,11 @@ export function setupCommands(): void {
 
   cli
     .command('watch [...filters]', 'run Rstest in watch mode')
-    .action(async (_filters: string[], options: CommonOptions) => {
-      await initCli(options);
-      console.log('TODO: run Rstest in watch mode');
+    .action(async (filters: string[], options: CommonOptions) => {
+      const { config } = await initCli(options);
+      const { createRstest } = await import('../core');
+      const rstest = createRstest(config, 'watch', filters.map(normalize));
+      await rstest.runTests();
     });
 
   cli.parse();
