@@ -1,12 +1,9 @@
 import { describe, expect, it } from '@rstest/core';
+import { sleep } from '../../../scripts/utils';
 
 describe('Test Async Suite', () => {
   describe('0', async () => {
-    await new Promise<void>((resolve) => {
-      setTimeout(() => {
-        resolve();
-      }, 100);
-    });
+    await sleep(100);
 
     it('0-0', () => {
       console.log('run 0-0');
