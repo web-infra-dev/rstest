@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('Test Async Suite', () => {
   it('should run async suite in the correct order', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/async.test.ts'],
       options: {
@@ -18,7 +18,9 @@ describe('Test Async Suite', () => {
       },
     });
 
-    const logs = process.stdout.split('\n').filter(Boolean);
+    await cli.exec;
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
 
     // test execution order
     expect(logs.filter((log) => log.startsWith('run'))).toMatchInlineSnapshot(`
