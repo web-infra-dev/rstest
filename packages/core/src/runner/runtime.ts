@@ -1,4 +1,5 @@
 import type { MaybePromise } from 'src/types/utils';
+import { ROOT_SUITE_NAME } from '../constants';
 import type {
   AfterAllListener,
   Test,
@@ -49,15 +50,15 @@ export class RunnerRuntime {
 
   getDefaultRootSuite(): TestSuite {
     return {
-      description: 'Rstest:_internal_root_suite',
+      name: ROOT_SUITE_NAME,
       tests: [],
       type: 'suite',
     };
   }
 
-  describe(description: string, fn: () => MaybePromise<void>): void {
+  describe(name: string, fn: () => MaybePromise<void>): void {
     const currentSuite: TestSuite = {
-      description,
+      name,
       tests: [],
       type: 'suite',
     };
@@ -144,8 +145,8 @@ export class RunnerRuntime {
     }
   }
 
-  it(description: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ description, fn, type: 'case' });
+  it(name: string, fn: () => void | Promise<void>): void {
+    this.addTestCase({ name, fn, type: 'case' });
   }
 
   getCurrentSuite(): TestSuite {
@@ -161,15 +162,15 @@ export class RunnerRuntime {
     throw new Error('Expect to find a suite, but got undefined');
   }
 
-  skip(description: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ description, fn, skipped: true, type: 'case' });
+  skip(name: string, fn: () => void | Promise<void>): void {
+    this.addTestCase({ name, fn, skipped: true, type: 'case' });
   }
 
-  todo(description: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ description, fn, todo: true, type: 'case' });
+  todo(name: string, fn: () => void | Promise<void>): void {
+    this.addTestCase({ name, fn, todo: true, type: 'case' });
   }
 
-  fails(description: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ description, fn, fails: true, type: 'case' });
+  fails(name: string, fn: () => void | Promise<void>): void {
+    this.addTestCase({ name, fn, fails: true, type: 'case' });
   }
 }

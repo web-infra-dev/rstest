@@ -19,15 +19,21 @@ describe('afterAll', () => {
     });
 
     await cli.exec;
-    const logs = cli.stdout
-      .split('\n')
-      .filter((log) => log.startsWith('[afterAll]'));
+    const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expect(logs).toEqual([
+    expect(logs.filter((log) => log.startsWith('[afterAll]'))).toEqual([
       '[afterAll] in level B-A',
       '[afterAll] in level B-B',
       '[afterAll] in level A',
       '[afterAll] root',
     ]);
+
+    // test log print
+    expect(
+      logs.find((log) => log.includes('✓ level A > it in level A')),
+    ).toBeTruthy();
+    expect(
+      logs.find((log) => log.includes('_internal_root_suite')),
+    ).toBeFalsy();
   });
 });

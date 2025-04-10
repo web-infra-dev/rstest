@@ -1,4 +1,5 @@
 import { relative } from 'pathe';
+import { TEST_DELIMITER } from '../constants';
 import type {
   Duration,
   GetSourcemap,
@@ -8,7 +9,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, parsePosix, prettyTime } from '../utils';
+import { color, getTaskNames, parsePosix, prettyTime } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
@@ -24,7 +25,9 @@ export class DefaultReporter implements Reporter {
     const { dir, base } = parsePosix(relativePath);
 
     console.log('');
-    console.log(`${color.gray(`> ${dir ? `${dir}/` : ''}`)}${base}`);
+    console.log(
+      `${color.gray(`${TEST_DELIMITER} ${dir ? `${dir}/` : ''}`)}${base}`,
+    );
     console.log('');
   }
 
@@ -42,10 +45,9 @@ export class DefaultReporter implements Reporter {
         : '';
 
     const icon = statusColorfulStr[result.status];
+    const nameStr = getTaskNames(result).join(` ${TEST_DELIMITER} `);
 
-    console.log(
-      `  ${icon} ${result.prefix}${result.name}${color.gray(duration)}`,
-    );
+    console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
 
     if (result.errors) {
       for (const error of result.errors) {

@@ -7,8 +7,8 @@ import { runRstestCli, waitFile } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('test snapshot file state', () => {
-  it('should generator snapshot file correctly', async () => {
+describe('test snapshot', () => {
+  it('should generator snapshot file correctly with -u', async () => {
     const snapshotFilePath = join(
       __dirname,
       'fixtures/__snapshots__/index.test.ts.snap',
@@ -35,22 +35,29 @@ describe('test snapshot file state', () => {
 
     // should generator snapshot name correctly
     expect(content).toContain(
-      '[`test toMatchSnapshot API 1`] = `"hello world"`',
-    );
-    expect(content).toContain(
-      '[`test toMatchSnapshot API 2`] = `"hello Rstest"`',
-    );
-    expect(content).toContain(
-      '[`test toMatchSnapshot API 3`] = `"hello world 1"`',
-    );
-
-    expect(content).toContain(
-      '[`test toMatchSnapshot API - 1 1`] = `"hello world - 1"`',
-    );
-    expect(content).toContain(
-      '[`test toMatchSnapshot name > say hi 1`] = `"hi"`',
+      '[`test snapshot > test snapshot generate 1`] = `"hello world"`',
     );
 
     fs.rmSync(snapshotFilePath);
+  });
+
+  describe('test snapshot file state', () => {
+    it('test toMatchSnapshot API', () => {
+      expect('hello world').toMatchSnapshot();
+      expect('hello Rstest').toMatchSnapshot();
+    });
+
+    it('test toMatchSnapshot API', () => {
+      // test repeat test case name
+      expect('hello world 1').toMatchSnapshot();
+    });
+
+    it('test toMatchSnapshot API - 1', () => {
+      expect('hello world - 1').toMatchSnapshot();
+    });
+
+    it('test toMatchSnapshot name', () => {
+      expect('hi').toMatchSnapshot('say hi');
+    });
   });
 });
