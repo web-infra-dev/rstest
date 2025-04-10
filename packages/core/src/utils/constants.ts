@@ -1,4 +1,4 @@
-import type { Rstest } from './types';
+import type { Rstest } from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
 

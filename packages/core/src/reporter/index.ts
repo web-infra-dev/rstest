@@ -1,5 +1,4 @@
 import { relative } from 'pathe';
-import { TEST_DELIMITER } from '../constants';
 import type {
   Duration,
   GetSourcemap,
@@ -9,7 +8,13 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, getTaskNames, parsePosix, prettyTime } from '../utils';
+import {
+  TEST_DELIMITER,
+  color,
+  getTaskNameWithPrefix,
+  parsePosix,
+  prettyTime,
+} from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
@@ -45,7 +50,7 @@ export class DefaultReporter implements Reporter {
         : '';
 
     const icon = statusColorfulStr[result.status];
-    const nameStr = getTaskNames(result).join(` ${TEST_DELIMITER} `);
+    const nameStr = getTaskNameWithPrefix(result);
 
     console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
 

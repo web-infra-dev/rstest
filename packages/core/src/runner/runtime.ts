@@ -1,5 +1,4 @@
 import type { MaybePromise } from 'src/types/utils';
-import { ROOT_SUITE_NAME } from '../constants';
 import type {
   AfterAllListener,
   Test,
@@ -7,6 +6,7 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../types';
+import { ROOT_SUITE_NAME } from '../utils';
 
 type ListenersKey<T extends TestSuiteListeners> =
   T extends `${infer U}Listeners` ? U : never;

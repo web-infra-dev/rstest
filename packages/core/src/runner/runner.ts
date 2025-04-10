@@ -1,6 +1,5 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 import { getSnapshotClient } from '../api/snapshot';
-import { ROOT_SUITE_NAME } from '../constants';
 import type {
   RunnerHooks,
   Test,
@@ -10,6 +9,7 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../types';
+import { ROOT_SUITE_NAME } from '../utils';
 import { formatTestError } from '../utils/runtime';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {

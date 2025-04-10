@@ -1,10 +1,10 @@
-import { globalApis } from '../constants';
 import type {
   Rstest,
   RunWorkerOptions,
   TestFileResult,
   WorkerState,
 } from '../types';
+import { globalApis } from '../utils/constants';
 import { formatTestError } from '../utils/runtime';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';

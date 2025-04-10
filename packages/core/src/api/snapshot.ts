@@ -10,7 +10,7 @@ import {
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
 import type { TestCase } from '../types';
-import { getTaskNames } from '../utils';
+import { getTaskNameWithPrefix } from '../utils';
 
 let _client: SnapshotClient;
 
@@ -126,7 +126,7 @@ function getError(expected: () => void | Error, promise: string | undefined) {
 function getTestNames(test: TestCase) {
   return {
     filepath: test.filePath,
-    name: getTaskNames(test).join(' > '),
+    name: getTaskNameWithPrefix(test),
     // testId: test.id,
   };
 }

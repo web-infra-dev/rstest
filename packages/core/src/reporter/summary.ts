@@ -3,14 +3,20 @@ import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import path from 'pathe';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
-import { TEST_DELIMITER } from '../constants';
 import type {
   Duration,
   GetSourcemap,
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, getTaskNames, logger, prettyTime, slash } from '../utils';
+import {
+  TEST_DELIMITER,
+  color,
+  getTaskNameWithPrefix,
+  logger,
+  prettyTime,
+  slash,
+} from '../utils';
 
 export const getSummaryStatusString = (
   tasks: TestResult[],
@@ -179,11 +185,11 @@ export const printSummaryErrorLogs = async ({
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
-    const names = getTaskNames(test);
+    const nameStr = getTaskNameWithPrefix(test);
 
     //  FAIL  tests/index.test.ts > suite name > test case name
     logger.log(
-      `${color.bgRed(' FAIL ')} ${relativePath} ${names.length ? `${TEST_DELIMITER} ${names.join(` ${TEST_DELIMITER} `)}` : ''}`,
+      `${color.bgRed(' FAIL ')} ${relativePath} ${nameStr.length ? `${TEST_DELIMITER} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {
