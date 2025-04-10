@@ -15,3 +15,9 @@ export const waitFile = async (filePath: string, timeout = 3000) => {
     }, timeout);
   });
 };
+
+export const sleep = (ms: number) => {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+};
