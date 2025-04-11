@@ -15,7 +15,11 @@ Rstest is currently much under active development, there are no published npm pa
 
 We welcome developers to clone the repository and [run it locally](./CONTRIBUTING.md) to explore its features as they are being developed. You can check some available [examples](https://github.com/web-infra-dev/rstest/tree/main/examples) in the repository to see how it works.
 
+## 🔥 Roadmap
+
 We plan to release a preview version for testing by June 2025, followed by the first stable release later in 2025.
+
+More details can be found on [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
 
 ## 🙏 Credits
 
