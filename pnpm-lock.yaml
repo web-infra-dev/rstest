@@ -147,13 +147,13 @@ importers:
         specifier: ^5.8.3
         version: 5.8.3
 
-  tests/afterAll:
+  tests/cli:
     devDependencies:
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
 
-  tests/cli:
+  tests/lifecycle:
     devDependencies:
       '@rstest/core':
         specifier: workspace:*
