@@ -79,6 +79,14 @@ export class TestRunner {
           hooks.onTestCaseResult?.(result);
         }
 
+        if (test.beforeAllListeners) {
+          for (const fn of test.beforeAllListeners) {
+            try {
+              await fn();
+            } catch (error) {}
+          }
+        }
+
         for (const suite of test.tests) {
           await runTest(
             suite,

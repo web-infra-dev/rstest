@@ -10,7 +10,7 @@ describe('afterAll', () => {
   it('afterAll should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run'],
+      args: ['run', 'afterAll'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -35,5 +35,29 @@ describe('afterAll', () => {
     expect(
       logs.find((log) => log.includes('_internal_root_suite')),
     ).toBeFalsy();
+  });
+});
+
+describe('beforeAll', () => {
+  it('beforeAll should be invoked in the correct order', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'beforeAll'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.filter((log) => log.startsWith('[beforeAll]'))).toEqual([
+      '[beforeAll] root',
+      '[beforeAll] in level A',
+      '[beforeAll] in level B-A',
+      '[beforeAll] in level B-B',
+    ]);
   });
 });
