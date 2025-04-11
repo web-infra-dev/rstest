@@ -1,14 +1,17 @@
 import fs from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
 import {
   type LoadConfigOptions,
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
-import { DEFAULT_CONFIG_EXTENSIONS, DEFAULT_CONFIG_NAME } from './constants';
+import { dirname, isAbsolute, join } from 'pathe';
 import type { NormalizedConfig, RstestConfig } from './types';
-import { color } from './utils/helper';
-import { logger } from './utils/logger';
+import {
+  DEFAULT_CONFIG_EXTENSIONS,
+  DEFAULT_CONFIG_NAME,
+  color,
+  logger,
+} from './utils';
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
 

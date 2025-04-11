@@ -80,6 +80,9 @@ importers:
       chai:
         specifier: ^5.2.0
         version: 5.2.0
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
       std-env:
         specifier: ^3.9.0
         version: 3.9.0
@@ -160,6 +163,12 @@ importers:
         version: link:../../packages/core
 
   tests/reporter:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  tests/watch:
     devDependencies:
       '@rstest/core':
         specifier: workspace:*

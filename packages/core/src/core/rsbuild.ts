@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import {
   type RsbuildInstance,
   logger as RsbuildLogger,
@@ -7,6 +6,7 @@ import {
   type Rspack,
   createRsbuild,
 } from '@rsbuild/core';
+import path from 'pathe';
 import type { EntryInfo, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
 
@@ -19,9 +19,33 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+class TestFileWatchPlugin {
+  private contextToWatch: string | null = null;
+
+  constructor(contextToWatch: string) {
+    this.contextToWatch = contextToWatch;
+  }
+
+  apply(compiler: Rspack.Compiler) {
+    compiler.hooks.afterCompile.tap(
+      'Rstest:TestFileWatchPlugin',
+      (compilation) => {
+        if (this.contextToWatch === null) {
+          return;
+        }
+
+        const contextDep = compilation.contextDependencies;
+        if (!contextDep.has(this.contextToWatch)) {
+          contextDep.add(this.contextToWatch);
+        }
+      },
+    );
+  }
+}
+
 export const prepareRsbuild = async (
   name: string,
-  sourceEntries: Record<string, string>,
+  globTestSourceEntries: () => Promise<Record<string, string>>,
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
@@ -35,12 +59,6 @@ export const prepareRsbuild = async (
       },
       environments: {
         [name]: {
-          source: {
-            entry: {
-              ...sourceEntries,
-              ...setupFiles,
-            },
-          },
           dev: {
             writeToDisk: false,
           },
@@ -64,6 +82,15 @@ export const prepareRsbuild = async (
                 moduleIds: 'named',
                 chunkIds: 'named',
               };
+
+              config.plugins!.push(new TestFileWatchPlugin(process.cwd()));
+              config.entry = async () => {
+                const sourceEntries = await globTestSourceEntries();
+                return {
+                  ...sourceEntries,
+                  ...setupFiles,
+                };
+              };
             },
           },
         },
@@ -76,22 +103,27 @@ export const prepareRsbuild = async (
 
 export const createRsbuildServer = async ({
   name,
-  sourceEntries,
+  globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
+  rootPath,
 }: {
   rsbuildInstance: RsbuildInstance;
   name: string;
-  sourceEntries: Record<string, string>;
+  globTestSourceEntries: () => Promise<Record<string, string>>;
   setupFiles: Record<string, string>;
-}): Promise<{
-  entries: EntryInfo[];
-  setupEntries: EntryInfo[];
-  assetFiles: Record<string, string>;
-  sourceMaps: Record<string, SourceMapInput>;
-  getSourcemap: (sourcePath: string) => SourceMapInput | null;
-  close: () => Promise<void>;
-}> => {
+  rootPath: string;
+}): Promise<
+  () => Promise<{
+    buildTime: number;
+    entries: EntryInfo[];
+    setupEntries: EntryInfo[];
+    assetFiles: Record<string, string>;
+    sourceMaps: Record<string, SourceMapInput>;
+    getSourcemap: (sourcePath: string) => SourceMapInput | null;
+    close: () => Promise<void>;
+  }>
+> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler;
 
@@ -101,6 +133,10 @@ export const createRsbuildServer = async ({
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;
+      });
+
+      api.modifyRspackConfig((config) => {
+        config?.plugins?.push(new TestFileWatchPlugin(rootPath));
       });
     },
   };
@@ -115,89 +151,101 @@ export const createRsbuildServer = async ({
     await rsbuildInstance.inspectConfig({ writeToDisk: true });
   }
 
-  const stats = await devServer.environments[name]!.getStats();
-
   const outputFileSystem =
     (isMultiCompiler(rspackCompiler!)
       ? rspackCompiler.compilers[0]!.outputFileSystem
       : rspackCompiler!.outputFileSystem) || fs;
 
-  const { entrypoints, outputPath, assets } = stats.toJson({
-    entrypoints: true,
-    outputPath: true,
-    assets: true,
-  });
+  const getRsbuildStats = async () => {
+    const stats = await devServer.environments[name]!.getStats();
 
-  const readFile = async (fileName: string) => {
-    return new Promise<string>((resolve, reject) => {
-      outputFileSystem.readFile(fileName, (err, data) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(typeof data === 'string' ? data : data!.toString());
-      });
+    const {
+      entrypoints,
+      outputPath,
+      assets,
+      time: buildTime,
+    } = stats.toJson({
+      entrypoints: true,
+      outputPath: true,
+      assets: true,
+      // get the compilation time
+      timings: true,
     });
-  };
 
-  const entries: EntryInfo[] = [];
-  const setupEntries: EntryInfo[] = [];
+    const readFile = async (fileName: string) => {
+      return new Promise<string>((resolve, reject) => {
+        outputFileSystem.readFile(fileName, (err, data) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(typeof data === 'string' ? data : data!.toString());
+        });
+      });
+    };
 
-  // TODO: check compile error, such as setupFiles not found
-  for (const entry of Object.keys(entrypoints!)) {
-    const e = entrypoints![entry]!;
+    const entries: EntryInfo[] = [];
+    const setupEntries: EntryInfo[] = [];
+    const sourceEntries = await globTestSourceEntries();
+    // TODO: check compile error, such as setupFiles not found
+    for (const entry of Object.keys(entrypoints!)) {
+      const e = entrypoints![entry]!;
 
-    const filePath = path.join(
-      outputPath!,
-      e.assets![e.assets!.length - 1]!.name,
+      const filePath = path.join(
+        outputPath!,
+        e.assets![e.assets!.length - 1]!.name,
+      );
+
+      if (setupFiles[entry]) {
+        setupEntries.push({
+          filePath,
+          originPath: setupFiles[entry],
+        });
+      } else if (sourceEntries[entry]) {
+        entries.push({
+          filePath,
+          originPath: sourceEntries[entry],
+        });
+      }
+    }
+
+    const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
+      (
+        await Promise.all(
+          assets!.map(async (asset) => {
+            const sourceMapPath = asset?.info.related?.sourceMap?.[0];
+
+            const assetFilePath = path.join(outputPath!, asset.name);
+            if (sourceMapPath) {
+              const filePath = path.join(outputPath!, sourceMapPath);
+              const sourceMap = await readFile(filePath);
+              return [assetFilePath, JSON.parse(sourceMap)];
+            }
+            return [assetFilePath, null];
+          }),
+        )
+      ).filter((asset) => asset[1] !== null),
     );
 
-    if (setupFiles[entry]) {
-      setupEntries.push({
-        filePath,
-        originPath: setupFiles[entry],
-      });
-    } else if (sourceEntries[entry]) {
-      entries.push({
-        filePath,
-        originPath: sourceEntries[entry],
-      });
-    }
-  }
-
-  const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
-    (
-      await Promise.all(
-        assets!.map(async (asset) => {
-          const sourceMapPath = asset?.info.related?.sourceMap?.[0];
-
-          const assetFilePath = path.join(outputPath!, asset.name);
-          if (sourceMapPath) {
-            const filePath = path.join(outputPath!, sourceMapPath);
-            const sourceMap = await readFile(filePath);
-            return [assetFilePath, JSON.parse(sourceMap)];
-          }
-          return [assetFilePath, null];
-        }),
-      )
-    ).filter((asset) => asset[1] !== null),
-  );
-
-  return {
-    entries,
-    setupEntries,
-    // Resources need to be obtained synchronously when the test is loaded, so files need to be read in advance
-    assetFiles: Object.fromEntries(
-      await Promise.all(
-        assets!.map(async (a) => {
-          const filePath = path.join(outputPath!, a.name);
-          return [filePath, await readFile(filePath)];
-        }),
+    return {
+      entries,
+      setupEntries,
+      buildTime: buildTime!,
+      // Resources need to be obtained synchronously when the test is loaded, so files need to be read in advance
+      assetFiles: Object.fromEntries(
+        await Promise.all(
+          assets!.map(async (a) => {
+            const filePath = path.join(outputPath!, a.name);
+            return [filePath, await readFile(filePath)];
+          }),
+        ),
       ),
-    ),
-    sourceMaps,
-    getSourcemap: (sourcePath: string): SourceMapInput | null => {
-      return sourceMaps[sourcePath] || null;
-    },
-    close: devServer.close,
+      sourceMaps,
+      getSourcemap: (sourcePath: string): SourceMapInput | null => {
+        return sourceMaps[sourcePath] || null;
+      },
+      close: devServer.close,
+    };
   };
+
+  return getRsbuildStats;
 };

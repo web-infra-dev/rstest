@@ -36,12 +36,8 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     },
     runner: {
       runTest: async (testFilePath: string, hooks: RunnerHooks) => {
-        return testRunner.runTests(
-          runtimeAPI.getTests(),
-          testFilePath,
-          workerState,
-          hooks,
-        );
+        const tests = await runtimeAPI.getTests();
+        return testRunner.runTests(tests, testFilePath, workerState, hooks);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
     },

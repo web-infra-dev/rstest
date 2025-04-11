@@ -1,4 +1,4 @@
-import path from 'node:path';
+import path from 'pathe';
 import { glob } from 'tinyglobby';
 import { castArray, getAbsolutePath } from '../utils';
 

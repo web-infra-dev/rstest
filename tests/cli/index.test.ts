@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test exit code', () => {
   it('should return code 0 when test succeed', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'success.test.ts'],
       options: {
@@ -18,11 +18,12 @@ describe('test exit code', () => {
       },
     });
 
-    expect(process.exitCode).toBe(0);
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
   });
 
   it('should return code 1 when test failed', async () => {
-    const process = await runRstestCli({
+    const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fail.test.ts'],
       options: {
@@ -31,6 +32,7 @@ describe('test exit code', () => {
         },
       },
     });
-    expect(process.exitCode).toBe(1);
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
   });
 });

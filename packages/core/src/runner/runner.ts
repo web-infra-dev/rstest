@@ -5,12 +5,13 @@ import type {
   RunnerHooks,
   Test,
   TestCase,
-  TestError,
   TestFileResult,
   TestResult,
   TestResultStatus,
   WorkerState,
 } from '../types';
+import { ROOT_SUITE_NAME } from '../utils';
+import { formatTestError } from '../utils/runtime';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {
   if (results.length === 0) {
@@ -23,21 +24,6 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
       : results.every((result) => result.status === 'skip')
         ? 'skip'
         : 'pass';
-};
-
-const formatTestError = (err: any): TestError[] => {
-  const errors = Array.isArray(err) ? err : [err];
-
-  return errors.map((error) => {
-    const errObj: TestError = {
-      ...error,
-      // Some error attributes cannot be enumerated
-      message: error.message,
-      name: err.name,
-      stack: err.stack,
-    };
-    return errObj;
-  });
 };
 
 export class TestRunner {
@@ -78,24 +64,27 @@ export class TestRunner {
 
     await snapshotClient.setup(testPath, snapshotOptions);
 
-    const runTest = async (test: Test, prefix = '') => {
+    const runTest = async (test: Test, prefixes: string[] = []) => {
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
           if (passWithNoTests) {
-            console.warn(`   No test found in suite: ${test.description}\n`);
+            console.warn(`   No test found in suite: ${test.name}\n`);
             return;
           }
           const result = {
             status: 'fail' as const,
-            prefix,
-            name: test.description,
+            prefixes,
+            name: test.name,
             testPath,
           };
           hooks.onTestCaseResult?.(result);
         }
 
         for (const suite of test.tests) {
-          await runTest(suite, `${prefix}${test.description} > `);
+          await runTest(
+            suite,
+            test.name === ROOT_SUITE_NAME ? prefixes : [...prefixes, test.name],
+          );
         }
 
         if (test.afterAllListeners) {
@@ -110,8 +99,8 @@ export class TestRunner {
         if (test.skipped) {
           const result = {
             status: 'skip' as const,
-            prefix,
-            name: test.description,
+            prefixes,
+            name: test.name,
             testPath,
           };
           hooks.onTestCaseResult?.(result);
@@ -121,8 +110,8 @@ export class TestRunner {
         if (test.todo) {
           const result = {
             status: 'todo' as const,
-            prefix,
-            name: test.description,
+            prefixes,
+            name: test.name,
             testPath,
           };
           hooks.onTestCaseResult?.(result);
@@ -131,7 +120,7 @@ export class TestRunner {
         }
 
         let result: TestResult;
-        this.setCurrentTest(test);
+        this.setCurrentTest(test, prefixes);
 
         if (test.fails) {
           try {
@@ -144,8 +133,8 @@ export class TestRunner {
 
             result = {
               status: 'fail' as const,
-              prefix,
-              name: test.description,
+              prefixes,
+              name: test.name,
               duration: Date.now() - start,
               testPath,
               errors: [
@@ -157,8 +146,8 @@ export class TestRunner {
           } catch (error) {
             result = {
               status: 'pass' as const,
-              prefix,
-              name: test.description,
+              prefixes,
+              name: test.name,
               testPath,
               duration: Date.now() - start,
             };
@@ -173,16 +162,16 @@ export class TestRunner {
             this.afterRunTest();
             result = {
               status: 'pass' as const,
-              prefix,
-              name: test.description,
+              prefixes,
+              name: test.name,
               duration: Date.now() - start,
               testPath,
             };
           } catch (error) {
             result = {
               status: 'fail' as const,
-              prefix,
-              name: test.description,
+              prefixes,
+              name: test.name,
               duration: Date.now() - start,
               errors: formatTestError(error),
               testPath,
@@ -221,8 +210,11 @@ export class TestRunner {
     this._test = undefined;
   }
 
-  private setCurrentTest(test: TestCase): void {
-    this._test = test;
+  private setCurrentTest(test: TestCase, prefixes: string[]): void {
+    this._test = {
+      ...test,
+      prefixes,
+    };
   }
 
   getCurrentTest(): TestCase | undefined {

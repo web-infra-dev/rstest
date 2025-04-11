@@ -1,4 +1,4 @@
-import { relative } from 'node:path';
+import { relative } from 'pathe';
 import type {
   Duration,
   GetSourcemap,
@@ -8,7 +8,13 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { color, parsePosix, prettyTime } from '../utils';
+import {
+  TEST_DELIMITER,
+  color,
+  getTaskNameWithPrefix,
+  parsePosix,
+  prettyTime,
+} from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
@@ -24,7 +30,9 @@ export class DefaultReporter implements Reporter {
     const { dir, base } = parsePosix(relativePath);
 
     console.log('');
-    console.log(`${color.gray(`> ${dir ? `${dir}/` : ''}`)}${base}`);
+    console.log(
+      `${color.gray(`${TEST_DELIMITER} ${dir ? `${dir}/` : ''}`)}${base}`,
+    );
     console.log('');
   }
 
@@ -42,10 +50,9 @@ export class DefaultReporter implements Reporter {
         : '';
 
     const icon = statusColorfulStr[result.status];
+    const nameStr = getTaskNameWithPrefix(result);
 
-    console.log(
-      `  ${icon} ${result.prefix}${result.name}${color.gray(duration)}`,
-    );
+    console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
 
     if (result.errors) {
       for (const error of result.errors) {
@@ -69,6 +76,7 @@ export class DefaultReporter implements Reporter {
   }): Promise<void> {
     await printSummaryErrorLogs({
       testResults,
+      results,
       rootPath: this.rootPath,
       getSourcemap,
     });

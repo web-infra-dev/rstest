@@ -5,7 +5,7 @@ import type { MaybePromise } from './utils';
 
 export type TestCase = {
   filePath: string;
-  description: string;
+  name: string;
   fn: () => void | Promise<void>;
   skipped?: boolean;
   todo?: boolean;
@@ -15,6 +15,7 @@ export type TestCase = {
   // TODO
   onFinished?: any[];
   type: 'case';
+  prefixes?: string[];
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -24,7 +25,7 @@ export type TestCase = {
 export type AfterAllListener = () => MaybePromise<void>;
 
 export type TestSuite = {
-  description: string;
+  name: string;
   // TODO
   filepath?: string;
   /** nested cases and suite could in a suite */
@@ -53,16 +54,12 @@ export type TestResult = {
   status: TestResultStatus;
   name: string;
   testPath: string;
-  prefix?: string;
+  prefixes?: string[];
   duration?: number;
   errors?: TestError[];
 };
 
-export type TestFileResult = {
-  status: TestResultStatus;
-  name: string;
+export type TestFileResult = TestResult & {
   results: TestResult[];
-  duration?: number;
-  testPath: string;
   snapshotResult?: SnapshotResult;
 };
