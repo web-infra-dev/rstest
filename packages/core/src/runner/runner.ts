@@ -83,7 +83,9 @@ export class TestRunner {
           for (const fn of test.beforeAllListeners) {
             try {
               await fn();
-            } catch (error) {}
+            } catch (error) {
+              // TODO handle error
+            }
           }
         }
 
@@ -98,7 +100,9 @@ export class TestRunner {
           for (const fn of test.afterAllListeners) {
             try {
               await fn();
-            } catch (error) {}
+            } catch (error) {
+              // TODO handle error
+            }
           }
         }
       } else {
