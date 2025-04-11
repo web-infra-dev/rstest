@@ -1,7 +1,13 @@
 import { beforeAll, describe, expect, it } from '@rstest/core';
+import { sleep } from '../../scripts';
 
 beforeAll(() => {
   console.log('[beforeAll] root');
+});
+
+beforeAll(async () => {
+  await sleep(100);
+  console.log('[beforeAll] root async');
 });
 
 describe('level A', () => {

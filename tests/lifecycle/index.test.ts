@@ -55,6 +55,7 @@ describe('beforeAll', () => {
 
     expect(logs.filter((log) => log.startsWith('[beforeAll]'))).toEqual([
       '[beforeAll] root',
+      '[beforeAll] root async',
       '[beforeAll] in level A',
       '[beforeAll] in level B-A',
       '[beforeAll] in level B-B',
