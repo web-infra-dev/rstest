@@ -61,7 +61,7 @@ const runInPool = async ({
     for (const { filePath, originPath } of setupEntries) {
       const setupCodeContent = assetFiles[filePath]!;
 
-      loadModule({
+      await loadModule({
         codeContent: setupCodeContent,
         distPath: filePath,
         originPath: originPath,
@@ -70,7 +70,7 @@ const runInPool = async ({
       });
     }
 
-    loadModule({
+    await loadModule({
       codeContent,
       distPath: filePath,
       originPath,

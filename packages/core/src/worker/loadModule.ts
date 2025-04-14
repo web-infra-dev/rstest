@@ -87,6 +87,7 @@ export const loadModule = ({
     filename: distPath,
     lineOffset: 0,
     columnOffset: -codeDefinition.length,
+    importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
   });
   fn(...Object.values(context));
 

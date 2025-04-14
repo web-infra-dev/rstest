@@ -78,7 +78,12 @@ export const runInPool = async ({
     isolate,
     maxWorkers,
     minWorkers,
-    execArgv: [...(poolOptions?.execArgv ?? []), ...execArgv],
+    execArgv: [
+      ...(poolOptions?.execArgv ?? []),
+      ...execArgv,
+      '--experimental-vm-modules',
+      '--disable-warning=ExperimentalWarning',
+    ],
     env: {
       NODE_ENV: 'test',
       ...process.env,

@@ -66,14 +66,56 @@ export const prepareRsbuild = async (
             sourceMap: {
               js: 'source-map',
             },
-            externals: {
-              '@rstest/core': 'global @rstest/core',
-            },
+            externals: [
+              {
+                '@rstest/core': 'global @rstest/core',
+              },
+              ({ context, request, dependencyType, getResolve }, callback) => {
+                if (!request || request.startsWith('node:')) {
+                  callback();
+                  return;
+                }
+                if (/node_modules/.test(request)) {
+                  callback(
+                    undefined,
+                    `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
+                  );
+                  return;
+                }
+
+                const resolver = getResolve?.();
+
+                resolver?.(context!, request!, (err, resolvePath) => {
+                  if (err) {
+                    callback();
+                    return;
+                  }
+
+                  if (resolvePath && /node_modules/.test(resolvePath!)) {
+                    // external modules
+                    callback(
+                      undefined,
+                      `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
+                    );
+                    return;
+                  }
+                  callback();
+                  return;
+                });
+                callback();
+                return;
+              },
+            ],
             target: 'node',
           },
           tools: {
             rspack: (config) => {
               config.output ??= {};
+              config.output.iife = false;
+              config.output.libraryTarget = 'commonjs';
+              config.experiments ??= {};
+              config.experiments.topLevelAwait = true;
+              config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
