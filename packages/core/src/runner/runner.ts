@@ -10,7 +10,7 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../types';
-import { ROOT_SUITE_NAME } from '../utils';
+import { ROOT_SUITE_NAME, getTaskNameWithPrefix } from '../utils';
 import { formatTestError } from '../utils/runtime';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {
@@ -124,10 +124,7 @@ export class TestRunner {
 
         if (test.fails) {
           try {
-            this.beforeRunTest(
-              testPath,
-              snapshotClient.getSnapshotState(testPath),
-            );
+            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
             await test.fn();
             this.afterRunTest();
 
@@ -154,10 +151,7 @@ export class TestRunner {
           }
         } else {
           try {
-            this.beforeRunTest(
-              testPath,
-              snapshotClient.getSnapshotState(testPath),
-            );
+            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
             await test.fn();
             this.afterRunTest();
             result = {
@@ -221,7 +215,7 @@ export class TestRunner {
     return this._test;
   }
 
-  private beforeRunTest(testPath: string, snapshotState: SnapshotState): void {
+  private beforeRunTest(test: TestCase, snapshotState: SnapshotState): void {
     setState(
       {
         assertionCalls: 0,
@@ -229,8 +223,9 @@ export class TestRunner {
         isExpectingAssertionsError: null,
         expectedAssertionsNumber: null,
         expectedAssertionsNumberErrorGen: null,
-        testPath,
+        testPath: test.filePath,
         snapshotState,
+        currentTestName: getTaskNameWithPrefix(test),
       },
       (globalThis as any)[GLOBAL_EXPECT],
     );

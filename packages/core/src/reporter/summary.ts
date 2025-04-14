@@ -253,6 +253,7 @@ const stackIgnores: (RegExp | string)[] = [
   /rstest\/packages\/core\/dist/,
   /node_modules\/tinypool/,
   /node_modules\/chai/,
+  /node:\w+/,
 ];
 
 function parseErrorStacktrace({
