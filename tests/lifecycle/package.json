@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@rstest/tests-after-all",
+  "name": "@rstest/tests-life-cycle",
   "version": "1.0.0",
   "devDependencies": {
     "@rstest/core": "workspace:*"

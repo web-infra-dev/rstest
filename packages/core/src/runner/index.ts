@@ -33,6 +33,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       it,
       test: it,
       afterAll: runtimeAPI.afterAll.bind(runtimeAPI),
+      beforeAll: runtimeAPI.beforeAll.bind(runtimeAPI),
     },
     runner: {
       runTest: async (testFilePath: string, hooks: RunnerHooks) => {
