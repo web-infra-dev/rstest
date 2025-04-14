@@ -1,3 +1,0 @@
-// Snapshot v1
-
-exports[`should failed when snapshot unmatched 1`] = `"hello world"`;
