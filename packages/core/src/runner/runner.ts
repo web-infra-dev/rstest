@@ -26,7 +26,13 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
         : 'pass';
 };
 
-const traverseUpdateTestRunMode = (testSuite: TestSuite) => {
+/**
+ * sets the runMode of the test suite based on the runMode of its tests
+ * - if some tests are 'run', set the suite to 'run'
+ * - if all tests are 'todo', set the suite to 'todo'
+ * - if all tests are 'skip', set the suite to 'skip'
+ */
+export const traverseUpdateTestRunMode = (testSuite: TestSuite): void => {
   if (testSuite.tests.length === 0) {
     testSuite.runMode = 'skip';
     return;
@@ -40,9 +46,7 @@ const traverseUpdateTestRunMode = (testSuite: TestSuite) => {
     return test;
   });
 
-  const hasRunTest = tests.some((test) => {
-    return test.runMode === 'run';
-  });
+  const hasRunTest = tests.some((test) => test.runMode === 'run');
 
   if (hasRunTest) {
     testSuite.runMode = 'run';
@@ -51,13 +55,7 @@ const traverseUpdateTestRunMode = (testSuite: TestSuite) => {
 
   const allTodoTest = tests.every((test) => test.runMode === 'todo');
 
-  if (allTodoTest) {
-    testSuite.runMode = 'todo';
-    return;
-  }
-
-  testSuite.runMode = 'skip';
-  return;
+  testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
 export class TestRunner {
