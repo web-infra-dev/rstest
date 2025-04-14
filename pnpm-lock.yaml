@@ -80,6 +80,9 @@ importers:
       chai:
         specifier: ^5.2.0
         version: 5.2.0
+      jest-diff:
+        specifier: ^29.7.0
+        version: 29.7.0
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
