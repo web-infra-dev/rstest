@@ -53,6 +53,7 @@ export type TestError = {
   message: string;
   name?: string;
   stack?: string;
+  diff?: string;
 };
 
 export type TestResult = {

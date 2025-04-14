@@ -114,6 +114,9 @@ importers:
       cac:
         specifier: ^6.7.14
         version: 6.7.14
+      jest-diff:
+        specifier: ^29.7.0
+        version: 29.7.0
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1

@@ -1,3 +1,4 @@
+import { diff } from 'jest-diff';
 import type { TestError } from '../types';
 
 export const formatTestError = (err: any): TestError[] => {
@@ -11,6 +12,15 @@ export const formatTestError = (err: any): TestError[] => {
       name: err.name,
       stack: err.stack,
     };
+
+    if (
+      error.showDiff ||
+      (error.showDiff === undefined &&
+        error.expected !== undefined &&
+        error.actual !== undefined)
+    ) {
+      errObj.diff = diff(err.actual, err.expected)!;
+    }
     return errObj;
   });
 };
