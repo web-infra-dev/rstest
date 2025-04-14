@@ -80,6 +80,16 @@ export class TestRunner {
           hooks.onTestCaseResult?.(result);
         }
 
+        if (test.beforeAllListeners) {
+          for (const fn of test.beforeAllListeners) {
+            try {
+              await fn();
+            } catch (error) {
+              // TODO handle error
+            }
+          }
+        }
+
         for (const suite of test.tests) {
           await runTest(
             suite,
@@ -91,7 +101,9 @@ export class TestRunner {
           for (const fn of test.afterAllListeners) {
             try {
               await fn();
-            } catch (error) {}
+            } catch (error) {
+              // TODO handle error
+            }
           }
         }
       } else {

@@ -1,8 +1,8 @@
 import type { ExpectStatic } from '@vitest/expect';
-import type { AfterAllListener } from './testSuite';
+import type { AfterAllListener, BeforeAllListener } from './testSuite';
 import type { MaybePromise } from './utils';
 
-type TestFn = (description: string, fn: () => void | Promise<void>) => void;
+type TestFn = (description: string, fn: () => MaybePromise<void>) => void;
 
 export type TestAPI = TestFn & {
   fails: TestFn;
@@ -10,13 +10,13 @@ export type TestAPI = TestFn & {
   skip: TestFn;
 };
 
-type AfterAllAPI = (fn: AfterAllListener) => MaybePromise<void>;
-
 export type RunnerAPI = {
   describe: (description: string, fn: () => void) => void;
   it: TestAPI;
   test: TestAPI;
-  afterAll: AfterAllAPI;
+  // TODO: support timeout、cleanup
+  beforeAll: (fn: BeforeAllListener) => MaybePromise<void>;
+  afterAll: (fn: AfterAllListener) => MaybePromise<void>;
 };
 
 export type RstestExpect = ExpectStatic;
