@@ -19,6 +19,44 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+const autoExternalNodeModules: (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void = ({ context, request, dependencyType, getResolve }, callback) => {
+  if (!request || request.startsWith('node:')) {
+    return callback();
+  }
+
+  const doExternal = () => {
+    callback(
+      undefined,
+      `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
+    );
+  };
+  if (/node_modules/.test(request)) {
+    return doExternal();
+  }
+
+  const resolver = getResolve?.();
+
+  resolver?.(context!, request!, (err, resolvePath) => {
+    if (err) {
+      // ignore resolve error
+      return callback();
+    }
+
+    if (resolvePath && /node_modules/.test(resolvePath!)) {
+      return doExternal();
+    }
+    return callback();
+  });
+  callback();
+};
+
 class TestFileWatchPlugin {
   private contextToWatch: string | null = null;
 
@@ -49,6 +87,8 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
+  // TODO: find a better way to test output
+  const writeToDisk = process.env.DEBUG_RSTEST_OUTPUTS === 'true';
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
@@ -60,7 +100,7 @@ export const prepareRsbuild = async (
       environments: {
         [name]: {
           dev: {
-            writeToDisk: false,
+            writeToDisk,
           },
           output: {
             sourceMap: {
@@ -70,41 +110,7 @@ export const prepareRsbuild = async (
               {
                 '@rstest/core': 'global @rstest/core',
               },
-              ({ context, request, dependencyType, getResolve }, callback) => {
-                if (!request || request.startsWith('node:')) {
-                  callback();
-                  return;
-                }
-                if (/node_modules/.test(request)) {
-                  callback(
-                    undefined,
-                    `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
-                  );
-                  return;
-                }
-
-                const resolver = getResolve?.();
-
-                resolver?.(context!, request!, (err, resolvePath) => {
-                  if (err) {
-                    callback();
-                    return;
-                  }
-
-                  if (resolvePath && /node_modules/.test(resolvePath!)) {
-                    // external modules
-                    callback(
-                      undefined,
-                      `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
-                    );
-                    return;
-                  }
-                  callback();
-                  return;
-                });
-                callback();
-                return;
-              },
+              autoExternalNodeModules,
             ],
             target: 'node',
           },
@@ -112,8 +118,6 @@ export const prepareRsbuild = async (
             rspack: (config) => {
               config.output ??= {};
               config.output.iife = false;
-              config.experiments ??= {};
-              config.experiments.topLevelAwait = true;
               config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
