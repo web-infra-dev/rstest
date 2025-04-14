@@ -43,7 +43,11 @@ const autoExternalNodeModules: (
 
   const resolver = getResolve?.();
 
-  resolver?.(context!, request!, (err, resolvePath) => {
+  if (!resolver) {
+    return callback();
+  }
+
+  resolver(context!, request!, (err, resolvePath) => {
     if (err) {
       // ignore resolve error
       return callback();
@@ -54,7 +58,6 @@ const autoExternalNodeModules: (
     }
     return callback();
   });
-  callback();
 };
 
 class TestFileWatchPlugin {
