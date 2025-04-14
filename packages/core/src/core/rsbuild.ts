@@ -112,7 +112,6 @@ export const prepareRsbuild = async (
             rspack: (config) => {
               config.output ??= {};
               config.output.iife = false;
-              config.output.libraryTarget = 'commonjs';
               config.experiments ??= {};
               config.experiments.topLevelAwait = true;
               config.externalsPresets = { node: true };
