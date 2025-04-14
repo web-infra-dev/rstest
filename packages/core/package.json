@@ -46,7 +46,6 @@
     "@rsbuild/core": "^1.3.4",
     "birpc": "2.3.0",
     "chai": "^5.2.0",
-    "jest-diff": "^29.7.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
     "tinypool": "^1.0.2"
@@ -61,6 +60,7 @@
     "@vitest/snapshot": "^3.1.1",
     "cac": "^6.7.14",
     "picocolors": "^1.1.1",
+    "jest-diff": "^29.7.0",
     "rslog": "^1.2.3",
     "stacktrace-parser": "0.1.11",
     "tinyglobby": "^0.2.12"
