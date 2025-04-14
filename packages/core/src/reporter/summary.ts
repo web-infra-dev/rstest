@@ -199,6 +199,12 @@ export const printSummaryErrorLogs = async ({
         logger.log(
           `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
         );
+
+        if (error.diff) {
+          logger.log(error.diff);
+          logger.log();
+        }
+
         if (error.stack) {
           const stackFrames = await parseErrorStacktrace({
             stack: error.stack,

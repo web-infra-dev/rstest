@@ -23,6 +23,7 @@ export type TestCase = {
 };
 
 export type AfterAllListener = () => MaybePromise<void>;
+export type BeforeAllListener = () => MaybePromise<void>;
 
 export type TestSuite = {
   name: string;
@@ -32,9 +33,13 @@ export type TestSuite = {
   tests: Array<TestSuite | TestCase>;
   type: 'suite';
   afterAllListeners?: AfterAllListener[];
+  beforeAllListeners?: BeforeAllListener[];
 };
 
-export type TestSuiteListeners = keyof Pick<TestSuite, 'afterAllListeners'>;
+export type TestSuiteListeners = keyof Pick<
+  TestSuite,
+  'afterAllListeners' | 'beforeAllListeners'
+>;
 
 export type TestFileInfo = {
   filePath: string;
@@ -48,6 +53,7 @@ export type TestError = {
   message: string;
   name?: string;
   stack?: string;
+  diff?: string;
 };
 
 export type TestResult = {
