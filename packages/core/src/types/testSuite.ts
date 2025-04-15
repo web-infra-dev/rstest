@@ -27,6 +27,8 @@ export type TestCase = {
 
 export type AfterAllListener = () => MaybePromise<void>;
 export type BeforeAllListener = () => MaybePromise<void | AfterAllListener>;
+export type AfterEachListener = () => MaybePromise<void>;
+export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {
   name: string;
@@ -38,11 +40,16 @@ export type TestSuite = {
   type: 'suite';
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];
+  afterEachListeners?: AfterEachListener[];
+  beforeEachListeners?: BeforeEachListener[];
 };
 
 export type TestSuiteListeners = keyof Pick<
   TestSuite,
-  'afterAllListeners' | 'beforeAllListeners'
+  | 'afterAllListeners'
+  | 'beforeAllListeners'
+  | 'afterEachListeners'
+  | 'beforeEachListeners'
 >;
 
 export type TestFileInfo = {

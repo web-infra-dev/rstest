@@ -1,6 +1,8 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import type {
+  AfterEachListener,
+  BeforeEachListener,
   RunnerHooks,
   Test,
   TestCase,
@@ -81,7 +83,14 @@ export class TestRunner {
 
     await snapshotClient.setup(testPath, snapshotOptions);
 
-    const runTest = async (test: Test, prefixes: string[] = []) => {
+    const runTest = async (
+      test: Test,
+      prefixes: string[],
+      parentHooks: {
+        beforeEachListeners: BeforeEachListener[];
+        afterEachListeners: AfterEachListener[];
+      },
+    ) => {
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
           if (passWithNoTests) {
@@ -121,6 +130,14 @@ export class TestRunner {
           await runTest(
             suite,
             test.name === ROOT_SUITE_NAME ? prefixes : [...prefixes, test.name],
+            {
+              beforeEachListeners: parentHooks.beforeEachListeners.concat(
+                test.beforeEachListeners || [],
+              ),
+              afterEachListeners: parentHooks.afterEachListeners.concat(
+                test.afterEachListeners || [],
+              ),
+            },
           );
         }
 
@@ -158,6 +175,17 @@ export class TestRunner {
           hooks.onTestCaseResult?.(result);
           results.push(result);
           return;
+        }
+
+        const cleanups: AfterEachListener[] = [];
+
+        for (const fn of parentHooks.beforeEachListeners) {
+          try {
+            const cleanupFn = await fn();
+            cleanupFn && cleanups.push(cleanupFn);
+          } catch (error) {
+            // TODO handle error
+          }
         }
 
         let result: TestResult;
@@ -214,6 +242,18 @@ export class TestRunner {
           }
         }
 
+        const afterEachFns = [...(parentHooks.afterEachListeners || [])]
+          .reverse()
+          .concat(cleanups);
+
+        for (const fn of afterEachFns) {
+          try {
+            await fn();
+          } catch (error) {
+            // TODO handle error
+          }
+        }
+
         this.resetCurrentTest();
 
         hooks.onTestCaseResult?.(result);
@@ -251,7 +291,10 @@ export class TestRunner {
     this.updateTaskModes(tests);
 
     for (const test of tests) {
-      await runTest(test);
+      await runTest(test, [], {
+        beforeEachListeners: [],
+        afterEachListeners: [],
+      });
     }
 
     // saves files and returns SnapshotResult

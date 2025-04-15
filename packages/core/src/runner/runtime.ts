@@ -1,7 +1,9 @@
 import type { MaybePromise } from 'src/types/utils';
 import type {
   AfterAllListener,
+  AfterEachListener,
   BeforeAllListener,
+  BeforeEachListener,
   Test,
   TestCase,
   TestSuite,
@@ -52,6 +54,16 @@ export class RunnerRuntime {
   beforeAll(fn: BeforeAllListener): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(currentSuite!, 'beforeAll', fn);
+  }
+
+  afterEach(fn: AfterEachListener): MaybePromise<void> {
+    const currentSuite = this.getCurrentSuite();
+    registerTestSuiteListener(currentSuite!, 'afterEach', fn);
+  }
+
+  beforeEach(fn: BeforeEachListener): MaybePromise<void> {
+    const currentSuite = this.getCurrentSuite();
+    registerTestSuiteListener(currentSuite!, 'beforeEach', fn);
   }
 
   getDefaultRootSuite(): TestSuite {
