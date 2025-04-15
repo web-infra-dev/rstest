@@ -4,6 +4,7 @@ import type {
   RunnerHooks,
   Test,
   TestCase,
+  TestError,
   TestFileResult,
   TestResult,
   TestResultStatus,
@@ -73,23 +74,7 @@ export class TestRunner {
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
-    if (tests.length === 0) {
-      if (passWithNoTests) {
-        return {
-          testPath,
-          name: 'test',
-          status: 'pass',
-          results,
-        };
-      }
-      console.error(`No test suites found in file: ${testPath}\n`);
-      return {
-        testPath,
-        name: 'test',
-        status: 'fail',
-        results,
-      };
-    }
+    const errors: TestError[] = [];
 
     hooks.onTestFileStart?.({ filePath: testPath });
     const snapshotClient = getSnapshotClient();
@@ -100,14 +85,20 @@ export class TestRunner {
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
           if (passWithNoTests) {
-            console.warn(`   No test found in suite: ${test.name}\n`);
             return;
           }
+          const noTestError = {
+            message: `No test found in suite: ${test.name}`,
+            name: 'No tests',
+          };
+
+          errors.push(noTestError);
           const result = {
             status: 'fail' as const,
             prefixes,
             name: test.name,
             testPath,
+            errors: [noTestError],
           };
           hooks.onTestCaseResult?.(result);
         }
@@ -233,7 +224,32 @@ export class TestRunner {
 
     const start = Date.now();
 
+    if (tests.length === 0) {
+      if (passWithNoTests) {
+        return {
+          testPath,
+          name: '',
+          status: 'pass',
+          results,
+        };
+      }
+
+      return {
+        testPath,
+        name: '',
+        status: 'fail',
+        results,
+        errors: [
+          {
+            message: `No test suites found in file: ${testPath}`,
+            name: 'No tests',
+          },
+        ],
+      };
+    }
+
     this.updateTaskModes(tests);
+
     for (const test of tests) {
       await runTest(test);
     }
@@ -243,10 +259,11 @@ export class TestRunner {
 
     return {
       testPath,
-      name: 'test',
-      status: getTestStatus(results),
+      name: '',
+      status: errors.length ? 'fail' : getTestStatus(results),
       results,
       snapshotResult,
+      errors,
       duration: Date.now() - start,
     };
   }
