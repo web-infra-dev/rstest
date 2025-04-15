@@ -61,6 +61,34 @@ describe('beforeAll', () => {
       '[beforeAll] in level B-B',
     ]);
   });
+
+  it('cleanup function should be invoked in the correct order', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'cleanup'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(
+      logs.filter(
+        (log) => log.startsWith('[beforeAll]') || log.startsWith('[afterAll]'),
+      ),
+    ).toEqual([
+      '[beforeAll] cleanup in level B-A',
+      '[beforeAll] cleanup in level B-B',
+      '[beforeAll] cleanup in level A',
+      '[afterAll] root',
+      '[beforeAll] cleanup root',
+      '[beforeAll] cleanup root1',
+    ]);
+  });
 });
 
 describe('skipped', () => {
