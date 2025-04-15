@@ -7,6 +7,7 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
+  TestSuite,
   WorkerState,
 } from '../types';
 import { ROOT_SUITE_NAME } from '../utils';
@@ -23,6 +24,38 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
       : results.every((result) => result.status === 'skip')
         ? 'skip'
         : 'pass';
+};
+
+/**
+ * sets the runMode of the test suite based on the runMode of its tests
+ * - if some tests are 'run', set the suite to 'run'
+ * - if all tests are 'todo', set the suite to 'todo'
+ * - if all tests are 'skip', set the suite to 'skip'
+ */
+export const traverseUpdateTestRunMode = (testSuite: TestSuite): void => {
+  if (testSuite.tests.length === 0) {
+    testSuite.runMode = 'skip';
+    return;
+  }
+
+  const tests = testSuite.tests.map((test) => {
+    if (test.type === 'case') {
+      return test;
+    }
+    traverseUpdateTestRunMode(test);
+    return test;
+  });
+
+  const hasRunTest = tests.some((test) => test.runMode === 'run');
+
+  if (hasRunTest) {
+    testSuite.runMode = 'run';
+    return;
+  }
+
+  const allTodoTest = tests.every((test) => test.runMode === 'todo');
+
+  testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
 export class TestRunner {
@@ -79,7 +112,7 @@ export class TestRunner {
           hooks.onTestCaseResult?.(result);
         }
 
-        if (test.beforeAllListeners) {
+        if (test.runMode === 'run' && test.beforeAllListeners) {
           for (const fn of test.beforeAllListeners) {
             try {
               await fn();
@@ -96,7 +129,7 @@ export class TestRunner {
           );
         }
 
-        if (test.afterAllListeners) {
+        if (test.runMode === 'run' && test.afterAllListeners) {
           for (const fn of test.afterAllListeners) {
             try {
               await fn();
@@ -107,7 +140,7 @@ export class TestRunner {
         }
       } else {
         const start = Date.now();
-        if (test.skipped) {
+        if (test.runMode === 'skip') {
           const result = {
             status: 'skip' as const,
             prefixes,
@@ -118,7 +151,7 @@ export class TestRunner {
           results.push(result);
           return;
         }
-        if (test.todo) {
+        if (test.runMode === 'todo') {
           const result = {
             status: 'todo' as const,
             prefixes,
@@ -194,6 +227,7 @@ export class TestRunner {
 
     const start = Date.now();
 
+    this.updateTaskModes(tests);
     for (const test of tests) {
       await runTest(test);
     }
@@ -209,6 +243,14 @@ export class TestRunner {
       snapshotResult,
       duration: Date.now() - start,
     };
+  }
+
+  private updateTaskModes(tests: Test[]) {
+    for (const test of tests) {
+      if (test.type === 'suite') {
+        traverseUpdateTestRunMode(test);
+      }
+    }
   }
 
   private resetCurrentTest(): void {

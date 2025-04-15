@@ -56,6 +56,7 @@ export class RunnerRuntime {
 
   getDefaultRootSuite(): TestSuite {
     return {
+      runMode: 'run',
       name: ROOT_SUITE_NAME,
       tests: [],
       type: 'suite',
@@ -65,6 +66,7 @@ export class RunnerRuntime {
   describe(name: string, fn: () => MaybePromise<void>): void {
     const currentSuite: TestSuite = {
       name,
+      runMode: 'run',
       tests: [],
       type: 'suite',
     };
@@ -152,7 +154,7 @@ export class RunnerRuntime {
   }
 
   it(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, type: 'case' });
+    this.addTestCase({ name, fn, runMode: 'run', type: 'case' });
   }
 
   getCurrentSuite(): TestSuite {
@@ -169,14 +171,20 @@ export class RunnerRuntime {
   }
 
   skip(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, skipped: true, type: 'case' });
+    this.addTestCase({
+      name,
+      fn,
+      skipped: true,
+      runMode: 'skip',
+      type: 'case',
+    });
   }
 
   todo(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, todo: true, type: 'case' });
+    this.addTestCase({ name, fn, todo: true, runMode: 'todo', type: 'case' });
   }
 
   fails(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, fails: true, type: 'case' });
+    this.addTestCase({ name, fn, fails: true, runMode: 'run', type: 'case' });
   }
 }
