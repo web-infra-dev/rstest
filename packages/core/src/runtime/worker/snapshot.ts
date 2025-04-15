@@ -1,6 +1,6 @@
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
-import type { SourceMapInput } from '../types';
+import type { SourceMapInput } from '../../types';
 
 interface ParsedStack {
   method: string;

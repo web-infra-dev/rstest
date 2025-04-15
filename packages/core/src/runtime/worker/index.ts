@@ -3,9 +3,9 @@ import type {
   RunWorkerOptions,
   TestFileResult,
   WorkerState,
-} from '../types';
-import { globalApis } from '../utils/constants';
-import { formatTestError } from '../utils/runtime';
+} from '../../types';
+import { globalApis } from '../../utils/constants';
+import { formatTestError } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -46,7 +46,7 @@ const runInPool = async ({
     environment: 'node',
   };
 
-  const { createRstestRuntime } = await import('../api');
+  const { createRstestRuntime } = await import('../../api');
   const { api, runner } = createRstestRuntime(workerState);
 
   const rstestContext = {

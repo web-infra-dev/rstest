@@ -1,7 +1,7 @@
 import v8 from 'node:v8';
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
-import type { RuntimeRPC, ServerRPC } from '../types';
+import type { RuntimeRPC, ServerRPC } from '../../types';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 

@@ -8,8 +8,8 @@ import type {
   TestCase,
   TestSuite,
   TestSuiteListeners,
-} from '../types';
-import { ROOT_SUITE_NAME } from '../utils';
+} from '../../types';
+import { ROOT_SUITE_NAME } from '../../utils';
 
 type ListenersKey<T extends TestSuiteListeners> =
   T extends `${infer U}Listeners` ? U : never;

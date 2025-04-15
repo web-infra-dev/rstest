@@ -1,4 +1,4 @@
-import { traverseUpdateTestRunMode } from '../../src/runner/runner';
+import { traverseUpdateTestRunMode } from '../../src/runtime/runner/runner';
 import type { TestSuite } from '../../src/types';
 
 describe('traverseUpdateTestRunMode', () => {
