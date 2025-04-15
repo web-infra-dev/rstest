@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from '@rstest/core';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from '@rstest/core';
 import { sleep } from '../../scripts';
 
 beforeAll(() => {
@@ -18,6 +25,12 @@ beforeAll(() => {
   };
 });
 
+beforeEach(() => {
+  return () => {
+    console.log('[beforeEach] cleanup root');
+  };
+});
+
 describe('level A', () => {
   it('it in level A', () => {
     expect(1 + 1).toBe(2);
@@ -26,6 +39,12 @@ describe('level A', () => {
   beforeAll(() => {
     return () => {
       console.log('[beforeAll] cleanup in level A');
+    };
+  });
+
+  beforeEach(() => {
+    return () => {
+      console.log('[beforeEach] cleanup in level A');
     };
   });
 

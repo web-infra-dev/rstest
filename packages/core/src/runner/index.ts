@@ -34,6 +34,8 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       test: it,
       afterAll: runtimeAPI.afterAll.bind(runtimeAPI),
       beforeAll: runtimeAPI.beforeAll.bind(runtimeAPI),
+      afterEach: runtimeAPI.afterEach.bind(runtimeAPI),
+      beforeEach: runtimeAPI.beforeEach.bind(runtimeAPI),
     },
     runner: {
       runTest: async (testFilePath: string, hooks: RunnerHooks) => {
