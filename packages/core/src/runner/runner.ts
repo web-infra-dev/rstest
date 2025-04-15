@@ -112,10 +112,14 @@ export class TestRunner {
           hooks.onTestCaseResult?.(result);
         }
 
+        // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
+        const cleanups: Array<() => void> = [];
+
         if (test.runMode === 'run' && test.beforeAllListeners) {
           for (const fn of test.beforeAllListeners) {
             try {
-              await fn();
+              const cleanupFn = await fn();
+              cleanupFn && cleanups.push(cleanupFn);
             } catch (error) {
               // TODO handle error
             }
@@ -129,8 +133,10 @@ export class TestRunner {
           );
         }
 
-        if (test.runMode === 'run' && test.afterAllListeners) {
-          for (const fn of test.afterAllListeners) {
+        const afterAllFns = (test.afterAllListeners || []).concat(cleanups);
+
+        if (test.runMode === 'run' && afterAllFns.length) {
+          for (const fn of afterAllFns) {
             try {
               await fn();
             } catch (error) {

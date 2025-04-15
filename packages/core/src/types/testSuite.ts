@@ -26,7 +26,7 @@ export type TestCase = {
 };
 
 export type AfterAllListener = () => MaybePromise<void>;
-export type BeforeAllListener = () => MaybePromise<void>;
+export type BeforeAllListener = () => MaybePromise<void | AfterAllListener>;
 
 export type TestSuite = {
   name: string;
