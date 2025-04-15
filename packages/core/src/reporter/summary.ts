@@ -171,7 +171,7 @@ export const printSummaryErrorLogs = async ({
   getSourcemap: GetSourcemap;
 }): Promise<void> => {
   const failedTests: TestResult[] = [
-    ...results.filter((i) => i.status === 'fail' && i.errors),
+    ...results.filter((i) => i.status === 'fail' && i.errors?.length),
     ...testResults.filter((i) => i.status === 'fail'),
   ];
 
@@ -259,6 +259,7 @@ const stackIgnores: (RegExp | string)[] = [
   /rstest\/packages\/core\/dist/,
   /node_modules\/tinypool/,
   /node_modules\/chai/,
+  /node:\w+/,
 ];
 
 function parseErrorStacktrace({

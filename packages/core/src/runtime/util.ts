@@ -9,8 +9,8 @@ export const formatTestError = (err: any): TestError[] => {
       ...error,
       // Some error attributes cannot be enumerated
       message: error.message,
-      name: err.name,
-      stack: err.stack,
+      name: error.name,
+      stack: error.stack,
     };
 
     if (

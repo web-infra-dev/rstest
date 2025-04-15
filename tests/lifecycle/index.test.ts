@@ -10,7 +10,7 @@ describe('afterAll', () => {
   it('afterAll should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'afterAll'],
+      args: ['run', 'afterAll.test'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -42,7 +42,7 @@ describe('beforeAll', () => {
   it('beforeAll should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'beforeAll'],
+      args: ['run', 'beforeAll.test'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -67,7 +67,7 @@ describe('beforeEach', () => {
   it('beforeEach should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'beforeEach'],
+      args: ['run', 'beforeEach.test'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -100,7 +100,7 @@ describe('afterEach', () => {
   it('afterEach should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'afterEach'],
+      args: ['run', 'afterEach.test'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -129,7 +129,7 @@ describe('afterEach', () => {
 it('cleanup function should be invoked in the correct order', async () => {
   const { cli } = await runRstestCli({
     command: 'rstest',
-    args: ['run', 'cleanup'],
+    args: ['run', 'cleanup.test'],
     options: {
       nodeOptions: {
         cwd: __dirname,
@@ -166,7 +166,7 @@ describe('skipped', () => {
   it('should not run hooks when no test case execution', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'skip'],
+      args: ['run', 'skip.test'],
       options: {
         nodeOptions: {
           cwd: __dirname,
