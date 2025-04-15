@@ -19,8 +19,8 @@
   },
   "exports": {
     ".": {
-      "types": "./dist-types/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist-types/public.d.ts",
+      "default": "./dist/public.js"
     },
     "./node": {
       "types": "./dist-types/node.d.ts",

@@ -4,7 +4,7 @@ import type {
   TestAPI,
   TestFileResult,
   WorkerState,
-} from '../types';
+} from '../../types';
 
 import { TestRunner } from './runner';
 import { RunnerRuntime } from './runtime';

@@ -1,4 +1,4 @@
-import { RunnerRuntime } from '../../src/runner/runtime';
+import { RunnerRuntime } from '../../src/runtime/runner/runtime';
 import type { TestSuite } from '../../src/types';
 
 describe('RunnerRuntime', () => {

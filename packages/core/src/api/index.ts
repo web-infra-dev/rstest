@@ -1,4 +1,4 @@
-import { createRunner } from '../runner';
+import { createRunner } from '../runtime/runner';
 import type {
   Rstest,
   RstestExpect,
