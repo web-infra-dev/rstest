@@ -3,10 +3,13 @@ import type { SnapshotResult } from '@vitest/snapshot';
 // TODO: Unify filePath、testPath、originPath、sourcePath
 import type { MaybePromise } from './utils';
 
+export type TestRunMode = 'run' | 'skip' | 'todo';
+
 export type TestCase = {
   filePath: string;
   name: string;
   fn: () => void | Promise<void>;
+  runMode: TestRunMode;
   skipped?: boolean;
   todo?: boolean;
   fails?: boolean;
@@ -27,6 +30,7 @@ export type BeforeAllListener = () => MaybePromise<void>;
 
 export type TestSuite = {
   name: string;
+  runMode: TestRunMode;
   // TODO
   filepath?: string;
   /** nested cases and suite could in a suite */

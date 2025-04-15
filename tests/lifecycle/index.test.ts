@@ -62,3 +62,23 @@ describe('beforeAll', () => {
     ]);
   });
 });
+
+describe('skipped', () => {
+  it('should not run hooks when no test case execution', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'skip'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.find((log) => log.includes('[afterAll]'))).toBeFalsy();
+    expect(logs.find((log) => log.includes('[beforeAll]'))).toBeFalsy();
+  });
+});
