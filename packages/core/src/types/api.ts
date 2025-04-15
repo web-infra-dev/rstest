@@ -14,7 +14,7 @@ export type RunnerAPI = {
   describe: (description: string, fn: () => void) => void;
   it: TestAPI;
   test: TestAPI;
-  // TODO: support timeout、cleanup
+  // TODO: support timeout
   beforeAll: (fn: BeforeAllListener) => MaybePromise<void>;
   afterAll: (fn: AfterAllListener) => MaybePromise<void>;
 };
