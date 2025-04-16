@@ -14,12 +14,12 @@ describe('test afterEach error', () => {
     console.log('[afterEach - 2] should not run');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: <explanation>
+  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   afterEach(() => {
     throw new Error('afterEach error');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: <explanation>
+  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   afterEach(() => {
     console.log('[afterEach - 0] should run');
   });
