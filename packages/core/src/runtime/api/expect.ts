@@ -17,7 +17,7 @@ import {
   getState,
   setState,
 } from '@vitest/expect';
-import type { RstestExpect, TestCase, WorkerState } from '../types';
+import type { RstestExpect, TestCase, WorkerState } from '../../types';
 import { createExpectPoll } from './poll';
 import { SnapshotPlugin } from './snapshot';
 

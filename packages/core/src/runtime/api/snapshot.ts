@@ -9,8 +9,8 @@ import {
   addSerializer,
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
-import type { TestCase } from '../types';
-import { getTaskNameWithPrefix } from '../utils';
+import type { TestCase } from '../../types';
+import { getTaskNameWithPrefix } from '../../utils';
 
 let _client: SnapshotClient;
 

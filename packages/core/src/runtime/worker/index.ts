@@ -46,7 +46,7 @@ const runInPool = async ({
     environment: 'node',
   };
 
-  const { createRstestRuntime } = await import('../../api');
+  const { createRstestRuntime } = await import('../api');
   const { api, runner } = createRstestRuntime(workerState);
 
   const rstestContext = {

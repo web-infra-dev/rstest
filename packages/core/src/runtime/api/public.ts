@@ -1,5 +1,5 @@
-import '../types/global';
-import type { Rstest } from '../types';
+import '../../types/global';
+import type { Rstest } from '../../types';
 
 export declare const expect: Rstest['expect'];
 export declare const it: Rstest['it'];
