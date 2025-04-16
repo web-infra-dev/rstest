@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test timeout', () => {
-  it('should throw timeout error when hooks timeout', async () => {
+  it('should throw timeout error when hook timeout', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'timeout.test'],
@@ -34,7 +34,7 @@ describe('test timeout', () => {
       ),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('/fixtures/timeout.test.ts:4:10')),
+      logs.find((log) => log.includes('timeout.test.ts:4:10')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),
