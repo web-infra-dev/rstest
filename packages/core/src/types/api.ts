@@ -19,11 +19,10 @@ export type RunnerAPI = {
   describe: (description: string, fn: () => void) => void;
   it: TestAPI;
   test: TestAPI;
-  // TODO: support timeout
-  beforeAll: (fn: BeforeAllListener) => MaybePromise<void>;
-  afterAll: (fn: AfterAllListener) => MaybePromise<void>;
-  beforeEach: (fn: BeforeEachListener) => MaybePromise<void>;
-  afterEach: (fn: AfterEachListener) => MaybePromise<void>;
+  beforeAll: (fn: BeforeAllListener, timeout?: number) => MaybePromise<void>;
+  afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
+  beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
+  afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
 };
 
 export type RstestExpect = ExpectStatic;
