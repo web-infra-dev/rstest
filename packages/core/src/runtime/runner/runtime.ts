@@ -25,6 +25,58 @@ function registerTestSuiteListener(
 
 type CollectStatus = 'lazy' | 'running';
 
+function makeError(message: string, stackTraceError?: Error) {
+  const error = new Error(message);
+  if (stackTraceError?.stack) {
+    error.stack = stackTraceError.stack.replace(
+      error.message,
+      stackTraceError.message,
+    );
+  }
+  return error;
+}
+
+function wrapTimeout<T extends (...args: any[]) => any>({
+  name,
+  fn,
+  timeout,
+  stackTraceError,
+}: {
+  name: string;
+  fn: T;
+  timeout: number;
+  stackTraceError?: Error;
+}): T {
+  if (!timeout) {
+    return fn;
+  }
+
+  return (async (...args: Parameters<T>) => {
+    let timeoutId: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () =>
+          reject(
+            makeError(
+              `${name} hook timed out in ${timeout}ms`,
+              stackTraceError,
+            ),
+          ),
+        timeout,
+      );
+    });
+
+    try {
+      const result = await Promise.race([fn(...args), timeoutPromise]);
+      timeoutId && clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      timeoutId && clearTimeout(timeoutId);
+      throw error;
+    }
+  }) as T;
+}
+
 export class RunnerRuntime {
   /** all test cases */
   private tests: Test[] = [];
@@ -41,29 +93,78 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
+  private defaultHookTimeout = 5000;
 
   constructor(sourcePath: string) {
     this.sourcePath = sourcePath;
   }
 
-  afterAll(fn: AfterAllListener): MaybePromise<void> {
+  afterAll(
+    fn: AfterAllListener,
+    timeout: number = this.defaultHookTimeout,
+  ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(currentSuite!, 'afterAll', fn);
+    registerTestSuiteListener(
+      currentSuite!,
+      'afterAll',
+      wrapTimeout({
+        name: 'afterAll',
+        fn,
+        timeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
-  beforeAll(fn: BeforeAllListener): MaybePromise<void> {
+  beforeAll(
+    fn: BeforeAllListener,
+    timeout: number = this.defaultHookTimeout,
+  ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(currentSuite!, 'beforeAll', fn);
+    registerTestSuiteListener(
+      currentSuite!,
+      'beforeAll',
+      wrapTimeout({
+        name: 'beforeAll',
+        fn,
+        timeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
-  afterEach(fn: AfterEachListener): MaybePromise<void> {
+  afterEach(
+    fn: AfterEachListener,
+    timeout: number = this.defaultHookTimeout,
+  ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(currentSuite!, 'afterEach', fn);
+    registerTestSuiteListener(
+      currentSuite!,
+      'afterEach',
+      wrapTimeout({
+        name: 'afterEach',
+        fn,
+        timeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
-  beforeEach(fn: BeforeEachListener): MaybePromise<void> {
+  beforeEach(
+    fn: BeforeEachListener,
+    timeout: number = this.defaultHookTimeout,
+  ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(currentSuite!, 'beforeEach', fn);
+    registerTestSuiteListener(
+      currentSuite!,
+      'beforeEach',
+      wrapTimeout({
+        name: 'beforeEach',
+        fn,
+        timeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
   getDefaultRootSuite(): TestSuite {
