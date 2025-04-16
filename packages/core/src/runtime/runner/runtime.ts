@@ -6,6 +6,7 @@ import type {
   BeforeEachListener,
   Test,
   TestCase,
+  TestRunMode,
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
@@ -176,10 +177,14 @@ export class RunnerRuntime {
     };
   }
 
-  describe(name: string, fn: () => MaybePromise<void>): void {
+  describe(
+    name: string,
+    fn: () => MaybePromise<void>,
+    runMode: TestRunMode = 'run',
+  ): void {
     const currentSuite: TestSuite = {
       name,
-      runMode: 'run',
+      runMode,
       tests: [],
       type: 'suite',
     };
@@ -266,8 +271,12 @@ export class RunnerRuntime {
     }
   }
 
-  it(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, runMode: 'run', type: 'case' });
+  it(
+    name: string,
+    fn: () => void | Promise<void>,
+    runMode: TestRunMode = 'run',
+  ): void {
+    this.addTestCase({ name, fn, runMode, type: 'case' });
   }
 
   getCurrentSuite(): TestSuite {
@@ -281,20 +290,6 @@ export class RunnerRuntime {
     }
 
     throw new Error('Expect to find a suite, but got undefined');
-  }
-
-  skip(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({
-      name,
-      fn,
-      skipped: true,
-      runMode: 'skip',
-      type: 'case',
-    });
-  }
-
-  todo(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, todo: true, runMode: 'todo', type: 'case' });
   }
 
   fails(name: string, fn: () => void | Promise<void>): void {
