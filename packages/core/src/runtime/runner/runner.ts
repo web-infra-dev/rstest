@@ -61,6 +61,15 @@ export const traverseUpdateTestRunMode = (testSuite: TestSuite): void => {
   testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
+const markAllTestAsSkipped = (test: Test[]): void => {
+  for (const t of test) {
+    t.runMode = 'skip';
+    if (t.type === 'suite') {
+      markAllTestAsSkipped(t.tests);
+    }
+  }
+};
+
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
@@ -129,12 +138,12 @@ export class TestRunner {
           }
         }
 
-        for (const suite of test.tests) {
-          if (hasBeforeAllError) {
-            // when has beforeAll error, all test cases should skipped
-            suite.runMode = 'skip';
-          }
+        if (hasBeforeAllError) {
+          // when has beforeAll error, all test cases should skipped
+          markAllTestAsSkipped(test.tests);
+        }
 
+        for (const suite of test.tests) {
           await runTest(
             suite,
             test.name === ROOT_SUITE_NAME ? prefixes : [...prefixes, test.name],
