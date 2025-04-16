@@ -61,6 +61,15 @@ export const traverseUpdateTestRunMode = (testSuite: TestSuite): void => {
   testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
+const markAllTestAsSkipped = (test: Test[]): void => {
+  for (const t of test) {
+    t.runMode = 'skip';
+    if (t.type === 'suite') {
+      markAllTestAsSkipped(t.tests);
+    }
+  }
+};
+
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
@@ -114,16 +123,24 @@ export class TestRunner {
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
         const cleanups: Array<() => void> = [];
+        let hasBeforeAllError = false;
 
         if (test.runMode === 'run' && test.beforeAllListeners) {
-          for (const fn of test.beforeAllListeners) {
-            try {
+          try {
+            for (const fn of test.beforeAllListeners) {
               const cleanupFn = await fn();
               cleanupFn && cleanups.push(cleanupFn);
-            } catch (error) {
-              // TODO handle error
             }
+          } catch (error) {
+            hasBeforeAllError = true;
+
+            errors.push(...formatTestError(error));
           }
+        }
+
+        if (hasBeforeAllError) {
+          // when has beforeAll error, all test cases should skipped
+          markAllTestAsSkipped(test.tests);
         }
 
         for (const suite of test.tests) {
@@ -141,15 +158,18 @@ export class TestRunner {
           );
         }
 
-        const afterAllFns = (test.afterAllListeners || []).concat(cleanups);
+        const afterAllFns = [...(test.afterAllListeners || [])]
+          .reverse()
+          .concat(cleanups);
 
         if (test.runMode === 'run' && afterAllFns.length) {
-          for (const fn of afterAllFns) {
-            try {
+          try {
+            for (const fn of afterAllFns) {
               await fn();
-            } catch (error) {
-              // TODO handle error
             }
+          } catch (error) {
+            // AfterAll failed does not affect test case results
+            errors.push(...formatTestError(error));
           }
         }
       } else {
@@ -177,85 +197,92 @@ export class TestRunner {
           return;
         }
 
-        const cleanups: AfterEachListener[] = [];
-
-        for (const fn of parentHooks.beforeEachListeners) {
-          try {
-            const cleanupFn = await fn();
-            cleanupFn && cleanups.push(cleanupFn);
-          } catch (error) {
-            // TODO handle error
-          }
-        }
-
-        let result: TestResult;
+        let result: TestResult | undefined = undefined;
         this.setCurrentTest(test, prefixes);
 
-        if (test.fails) {
-          try {
-            this.beforeRunTest(testPath);
-            await test.fn();
-            this.afterRunTest();
+        const cleanups: AfterEachListener[] = [];
 
-            result = {
-              status: 'fail' as const,
-              prefixes,
-              name: test.name,
-              duration: Date.now() - start,
-              testPath,
-              errors: [
-                {
-                  message: 'Expect test to fail',
-                },
-              ],
-            };
-          } catch (error) {
-            result = {
-              status: 'pass' as const,
-              prefixes,
-              name: test.name,
-              testPath,
-              duration: Date.now() - start,
-            };
+        try {
+          for (const fn of parentHooks.beforeEachListeners) {
+            const cleanupFn = await fn();
+            cleanupFn && cleanups.push(cleanupFn);
           }
-        } else {
-          try {
-            this.beforeRunTest(testPath);
-            await test.fn();
-            this.afterRunTest();
-            result = {
-              status: 'pass' as const,
-              prefixes,
-              name: test.name,
-              duration: Date.now() - start,
-              testPath,
-            };
-          } catch (error) {
-            result = {
-              status: 'fail' as const,
-              prefixes,
-              name: test.name,
-              duration: Date.now() - start,
-              errors: formatTestError(error),
-              testPath,
-            };
+        } catch (error) {
+          result = {
+            status: 'fail' as const,
+            prefixes,
+            name: test.name,
+            errors: formatTestError(error),
+            testPath,
+            duration: Date.now() - start,
+          };
+        }
+
+        if (result?.status !== 'fail') {
+          if (test.fails) {
+            try {
+              this.beforeRunTest(testPath);
+              await test.fn();
+              this.afterRunTest();
+
+              result = {
+                status: 'fail' as const,
+                prefixes,
+                name: test.name,
+                testPath,
+                errors: [
+                  {
+                    message: 'Expect test to fail',
+                  },
+                ],
+              };
+            } catch (error) {
+              result = {
+                status: 'pass' as const,
+                prefixes,
+                name: test.name,
+                testPath,
+              };
+            }
+          } else {
+            try {
+              this.beforeRunTest(testPath);
+              await test.fn();
+              this.afterRunTest();
+              result = {
+                status: 'pass' as const,
+                prefixes,
+                name: test.name,
+                testPath,
+              };
+            } catch (error) {
+              result = {
+                status: 'fail' as const,
+                prefixes,
+                name: test.name,
+                errors: formatTestError(error),
+                testPath,
+              };
+            }
           }
         }
 
         const afterEachFns = [...(parentHooks.afterEachListeners || [])]
           .reverse()
           .concat(cleanups);
-
-        for (const fn of afterEachFns) {
-          try {
+        try {
+          for (const fn of afterEachFns) {
             await fn();
-          } catch (error) {
-            // TODO handle error
           }
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...formatTestError(error));
         }
 
         this.resetCurrentTest();
 
+        result.duration = Date.now() - start;
         hooks.onTestCaseResult?.(result);
 
         results.push(result);
