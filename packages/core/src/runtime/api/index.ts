@@ -1,4 +1,3 @@
-import { createRunner } from '../runtime/runner';
 import type {
   Rstest,
   RstestExpect,
@@ -6,7 +5,8 @@ import type {
   TestCase,
   TestFileResult,
   WorkerState,
-} from '../types';
+} from '../../types';
+import { createRunner } from '../runner';
 import { GLOBAL_EXPECT, createExpect } from './expect';
 
 export const createRstestRuntime = (

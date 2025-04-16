@@ -5,7 +5,7 @@
  */
 import type { Assertion } from '@vitest/expect';
 import * as chai from 'chai';
-import type { RstestExpect, TestCase } from '../types';
+import type { RstestExpect, TestCase } from '../../types';
 
 // these matchers are not supported because they don't make sense with poll
 const unsupported = [

@@ -1,5 +1,4 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import { getSnapshotClient } from '../../api/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
@@ -14,6 +13,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { ROOT_SUITE_NAME } from '../../utils';
+import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 
 const getTestStatus = (results: TestResult[]): TestResultStatus => {

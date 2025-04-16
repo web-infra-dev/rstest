@@ -1,6 +1,6 @@
 import type { RstestConfig } from './types';
 
-export * from './api/public';
+export * from './runtime/api/public';
 
 export type { RstestConfig };
 
