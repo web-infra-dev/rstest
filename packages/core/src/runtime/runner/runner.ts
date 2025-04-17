@@ -9,6 +9,7 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
+  TestRunMode,
   TestSuite,
   WorkerState,
 } from '../../types';
@@ -35,19 +36,33 @@ const getTestStatus = (results: TestResult[]): TestResultStatus => {
  * - if all tests are 'todo', set the suite to 'todo'
  * - if all tests are 'skip', set the suite to 'skip'
  */
-export const traverseUpdateTestRunMode = (testSuite: TestSuite): void => {
+export const traverseUpdateTestRunMode = (
+  testSuite: TestSuite,
+  parentRunMode: TestRunMode = 'run',
+): void => {
   if (testSuite.tests.length === 0) {
     testSuite.runMode = 'skip';
     return;
   }
 
+  if (['skip', 'todo'].includes(parentRunMode)) {
+    testSuite.runMode = parentRunMode;
+  }
+
   const tests = testSuite.tests.map((test) => {
     if (test.type === 'case') {
+      if (['skip', 'todo'].includes(testSuite.runMode)) {
+        test.runMode = testSuite.runMode;
+      }
       return test;
     }
-    traverseUpdateTestRunMode(test);
+    traverseUpdateTestRunMode(test, testSuite.runMode);
     return test;
   });
+
+  if (testSuite.runMode !== 'run') {
+    return;
+  }
 
   const hasRunTest = tests.some((test) => test.runMode === 'run');
 

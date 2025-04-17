@@ -1,4 +1,5 @@
 import type {
+  DescribeAPI,
   RunnerAPI,
   RunnerHooks,
   TestAPI,
@@ -22,14 +23,18 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
   const testRunner: TestRunner = new TestRunner();
 
-  const it = runtimeAPI.it.bind(runtimeAPI) as TestAPI;
+  const it = ((name, fn) => runtimeAPI.it(name, fn)) as TestAPI;
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
-  it.todo = runtimeAPI.todo.bind(runtimeAPI);
-  it.skip = runtimeAPI.skip.bind(runtimeAPI);
+  it.todo = (name, fn) => runtimeAPI.it(name, fn, 'todo');
+  it.skip = (name, fn) => runtimeAPI.it(name, fn, 'todo');
+
+  const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
+  describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
+  describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
 
   return {
     api: {
-      describe: runtimeAPI.describe.bind(runtimeAPI),
+      describe,
       it,
       test: it,
       afterAll: runtimeAPI.afterAll.bind(runtimeAPI),

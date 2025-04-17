@@ -15,8 +15,15 @@ export type TestAPI = TestFn & {
   skip: TestFn;
 };
 
+type DescribeFn = (description: string, fn: () => void) => void;
+
+export type DescribeAPI = DescribeFn & {
+  todo: DescribeFn;
+  skip: DescribeFn;
+};
+
 export type RunnerAPI = {
-  describe: (description: string, fn: () => void) => void;
+  describe: DescribeAPI;
   it: TestAPI;
   test: TestAPI;
   beforeAll: (fn: BeforeAllListener, timeout?: number) => MaybePromise<void>;

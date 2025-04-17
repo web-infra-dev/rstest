@@ -10,8 +10,6 @@ export type TestCase = {
   name: string;
   fn: () => void | Promise<void>;
   runMode: TestRunMode;
-  skipped?: boolean;
-  todo?: boolean;
   fails?: boolean;
   // TODO
   only?: boolean;
