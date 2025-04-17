@@ -17,9 +17,12 @@ import { ROOT_SUITE_NAME } from '../../utils';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 
-const getTestStatus = (results: TestResult[]): TestResultStatus => {
+const getTestStatus = (
+  results: TestResult[],
+  defaultStatus: TestResultStatus,
+): TestResultStatus => {
   if (results.length === 0) {
-    return 'pass';
+    return defaultStatus;
   }
   return results.some((result) => result.status === 'fail')
     ? 'fail'
@@ -41,7 +44,6 @@ export const traverseUpdateTestRunMode = (
   parentRunMode: TestRunMode = 'run',
 ): void => {
   if (testSuite.tests.length === 0) {
-    testSuite.runMode = 'skip';
     return;
   }
 
@@ -101,6 +103,7 @@ export class TestRunner {
     } = state;
     const results: TestResult[] = [];
     const errors: TestError[] = [];
+    let defaultStatus: TestResultStatus = 'pass';
 
     hooks.onTestFileStart?.({ filePath: testPath });
     const snapshotClient = getSnapshotClient();
@@ -117,6 +120,10 @@ export class TestRunner {
     ) => {
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
+          if (['todo', 'skip'].includes(test.runMode)) {
+            defaultStatus = 'skip';
+            return;
+          }
           if (passWithNoTests) {
             return;
           }
@@ -345,7 +352,7 @@ export class TestRunner {
     return {
       testPath,
       name: '',
-      status: errors.length ? 'fail' : getTestStatus(results),
+      status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
       results,
       snapshotResult,
       errors,

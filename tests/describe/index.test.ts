@@ -50,4 +50,27 @@ describe('test describe API', () => {
     expect(logs.find((log) => log.includes('Test Files 1 todo'))).toBeTruthy();
     expect(logs.find((log) => log.includes('Tests 2 todo'))).toBeTruthy();
   });
+
+  it('should allow skip / todo function undefined', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'undefined.test'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.filter((log) => log.startsWith('['))).toEqual([]);
+
+    // test log print
+    expect(
+      logs.find((log) => log.includes('Test Files 1 skipped')),
+    ).toBeTruthy();
+    expect(logs.find((log) => log.includes('Tests no tests'))).toBeTruthy();
+  });
 });

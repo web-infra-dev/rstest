@@ -25,7 +25,7 @@ describe('no tests', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(
-      logs.find((log) => log.includes('Test Files 2 failed')),
+      logs.find((log) => log.includes('Test Files 3 failed')),
     ).toBeDefined();
     expect(logs.find((log) => log.includes('Tests no tests'))).toBeDefined();
   });
@@ -48,7 +48,7 @@ describe('no tests', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(
-      logs.find((log) => log.includes('Test Files 2 passed')),
+      logs.find((log) => log.includes('Test Files 3 passed')),
     ).toBeDefined();
     expect(logs.find((log) => log.includes('Tests no tests'))).toBeDefined();
   });
