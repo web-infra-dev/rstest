@@ -76,7 +76,7 @@ export class TestRunner {
         const cleanups: Array<() => void> = [];
         let hasBeforeAllError = false;
 
-        if (test.runMode === 'run' && test.beforeAllListeners) {
+        if (['run', 'only'].includes(test.runMode) && test.beforeAllListeners) {
           try {
             for (const fn of test.beforeAllListeners) {
               const cleanupFn = await fn();
@@ -113,7 +113,7 @@ export class TestRunner {
           .reverse()
           .concat(cleanups);
 
-        if (test.runMode === 'run' && afterAllFns.length) {
+        if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
           try {
             for (const fn of afterAllFns) {
               await fn();

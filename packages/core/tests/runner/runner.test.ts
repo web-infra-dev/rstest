@@ -153,4 +153,79 @@ describe('updateTestModes', () => {
     expect(tests[0].tests[3]?.runMode).toBe('skip');
     expect(tests[1].runMode).toBe('skip');
   });
+
+  it('should update test run mode correctly when has only test suite', () => {
+    const tests: [TestSuite, TestCase] = [
+      {
+        name: 'testA',
+        runMode: 'only',
+        type: 'suite',
+        tests: [
+          {
+            name: 'test-0',
+            type: 'case',
+            runMode: 'run',
+          },
+          {
+            name: 'test-1',
+            type: 'suite',
+            runMode: 'run',
+            tests: [
+              {
+                name: 'test-1-1',
+                type: 'case',
+                runMode: 'run',
+              },
+            ],
+          },
+          {
+            name: 'test-2',
+            type: 'suite',
+            runMode: 'only',
+            tests: [
+              {
+                name: 'test-2-1',
+                type: 'case',
+                runMode: 'run',
+              },
+              {
+                name: 'test-2-2',
+                type: 'case',
+                runMode: 'skip',
+              },
+              {
+                name: 'test-2-3',
+                type: 'suite',
+                runMode: 'run',
+                tests: [
+                  {
+                    name: 'test-2-3-1',
+                    type: 'case',
+                    runMode: 'run',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as TestSuite,
+      {
+        name: 'testB',
+        runMode: 'run',
+        type: 'case',
+      } as TestCase,
+    ];
+
+    updateTestModes(tests);
+
+    expect(tests[0].runMode).toBe('only');
+    expect(tests[0].tests[0]?.runMode).toBe('skip');
+    expect(tests[0].tests[1]?.runMode).toBe('skip');
+    expect((tests[0].tests[1] as TestSuite).tests[0]?.runMode).toBe('skip');
+    expect(tests[0].tests[2]?.runMode).toBe('only');
+    expect((tests[0].tests[2] as TestSuite).tests[0]?.runMode).toBe('run');
+    expect((tests[0].tests[2] as TestSuite).tests[1]?.runMode).toBe('skip');
+    expect((tests[0].tests[2] as TestSuite).tests[2]?.runMode).toBe('run');
+    expect(tests[1].runMode).toBe('skip');
+  });
 });

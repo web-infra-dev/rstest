@@ -48,16 +48,21 @@ export const traverseUpdateTestRunMode = (
   }
 
   const tests = testSuite.tests.map((test) => {
+    const runSubOnly =
+      runOnly && testSuite.runMode !== 'only'
+        ? runOnly
+        : hasOnlyTest(testSuite.tests);
+
     if (test.type === 'case') {
       if (['skip', 'todo'].includes(testSuite.runMode)) {
         test.runMode = testSuite.runMode;
       }
-      if (runOnly && test.runMode !== 'only') {
+      if (runSubOnly && test.runMode !== 'only') {
         test.runMode = 'skip';
       }
       return test;
     }
-    traverseUpdateTestRunMode(test, testSuite.runMode, runOnly);
+    traverseUpdateTestRunMode(test, testSuite.runMode, runSubOnly);
     return test;
   });
 
