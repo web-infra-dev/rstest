@@ -11,6 +11,7 @@ type TestFn = (description: string, fn?: () => MaybePromise<void>) => void;
 
 export type TestAPI = TestFn & {
   fails: TestFn;
+  only: TestFn;
   todo: TestFn;
   skip: TestFn;
 };
@@ -18,6 +19,7 @@ export type TestAPI = TestFn & {
 type DescribeFn = (description: string, fn?: () => void) => void;
 
 export type DescribeAPI = DescribeFn & {
+  only: DescribeFn;
   todo: DescribeFn;
   skip: DescribeFn;
 };

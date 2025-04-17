@@ -27,8 +27,10 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
   it.todo = (name, fn) => runtimeAPI.it(name, fn, 'todo');
   it.skip = (name, fn) => runtimeAPI.it(name, fn, 'skip');
+  it.only = (name, fn) => runtimeAPI.it(name, fn, 'only');
 
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
+  describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
   describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
   describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
 
