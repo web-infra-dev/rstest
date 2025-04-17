@@ -244,7 +244,7 @@ export class TestRunner {
           if (test.fails) {
             try {
               this.beforeRunTest(testPath);
-              await test.fn();
+              await test.fn?.();
               this.afterRunTest();
 
               result = {
@@ -269,7 +269,7 @@ export class TestRunner {
           } else {
             try {
               this.beforeRunTest(testPath);
-              await test.fn();
+              await test.fn?.();
               this.afterRunTest();
               result = {
                 status: 'pass' as const,

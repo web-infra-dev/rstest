@@ -279,10 +279,14 @@ export class RunnerRuntime {
 
   it(
     name: string,
-    fn: () => void | Promise<void>,
+    fn?: () => void | Promise<void>,
     runMode: TestRunMode = 'run',
   ): void {
     this.addTestCase({ name, fn, runMode, type: 'case' });
+  }
+
+  fails(name: string, fn?: () => void | Promise<void>): void {
+    this.addTestCase({ name, fn, fails: true, runMode: 'run', type: 'case' });
   }
 
   getCurrentSuite(): TestSuite {
@@ -296,9 +300,5 @@ export class RunnerRuntime {
     }
 
     throw new Error('Expect to find a suite, but got undefined');
-  }
-
-  fails(name: string, fn: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, fails: true, runMode: 'run', type: 'case' });
   }
 }

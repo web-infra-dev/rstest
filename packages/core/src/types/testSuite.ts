@@ -8,7 +8,7 @@ export type TestRunMode = 'run' | 'skip' | 'todo';
 export type TestCase = {
   filePath: string;
   name: string;
-  fn: () => void | Promise<void>;
+  fn?: () => void | Promise<void>;
   runMode: TestRunMode;
   fails?: boolean;
   // TODO
