@@ -179,7 +179,7 @@ export class RunnerRuntime {
 
   describe(
     name: string,
-    fn: () => MaybePromise<void>,
+    fn?: () => MaybePromise<void>,
     runMode: TestRunMode = 'run',
   ): void {
     const currentSuite: TestSuite = {
@@ -188,6 +188,12 @@ export class RunnerRuntime {
       tests: [],
       type: 'suite',
     };
+
+    if (!fn) {
+      this.addTest(currentSuite);
+      this.resetCurrentTest();
+      return;
+    }
 
     // describe may be async, so we need to collect it later
     this.collectStatus = 'lazy';

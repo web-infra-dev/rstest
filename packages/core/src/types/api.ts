@@ -15,7 +15,7 @@ export type TestAPI = TestFn & {
   skip: TestFn;
 };
 
-type DescribeFn = (description: string, fn: () => void) => void;
+type DescribeFn = (description: string, fn?: () => void) => void;
 
 export type DescribeAPI = DescribeFn & {
   todo: DescribeFn;
