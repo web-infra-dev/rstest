@@ -82,7 +82,7 @@ export function setupCommands(): void {
   applyCommonOptions(cli);
 
   cli
-    .command('[...filters]', 'run tests in watch mode')
+    .command('[...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -102,7 +102,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('run [...filters]', 'run tests')
+    .command('run [...filters]', 'run tests in CI mode')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -117,7 +117,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('watch [...filters]', 'run Rstest in watch mode')
+    .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       const { config } = await initCli(options);
       const { createRstest } = await import('../core');
