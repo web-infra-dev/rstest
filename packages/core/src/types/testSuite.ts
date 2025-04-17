@@ -3,7 +3,7 @@ import type { SnapshotResult } from '@vitest/snapshot';
 // TODO: Unify filePath、testPath、originPath、sourcePath
 import type { MaybePromise } from './utils';
 
-export type TestRunMode = 'run' | 'skip' | 'todo';
+export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
 export type TestCase = {
   filePath: string;

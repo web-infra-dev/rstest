@@ -9,83 +9,12 @@ import type {
   TestFileResult,
   TestResult,
   TestResultStatus,
-  TestRunMode,
-  TestSuite,
   WorkerState,
 } from '../../types';
 import { ROOT_SUITE_NAME } from '../../utils';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
-
-const getTestStatus = (
-  results: TestResult[],
-  defaultStatus: TestResultStatus,
-): TestResultStatus => {
-  if (results.length === 0) {
-    return defaultStatus;
-  }
-  return results.some((result) => result.status === 'fail')
-    ? 'fail'
-    : results.every((result) => result.status === 'todo')
-      ? 'todo'
-      : results.every((result) => result.status === 'skip')
-        ? 'skip'
-        : 'pass';
-};
-
-/**
- * sets the runMode of the test suite based on the runMode of its tests
- * - if some tests are 'run', set the suite to 'run'
- * - if all tests are 'todo', set the suite to 'todo'
- * - if all tests are 'skip', set the suite to 'skip'
- */
-export const traverseUpdateTestRunMode = (
-  testSuite: TestSuite,
-  parentRunMode: TestRunMode = 'run',
-): void => {
-  if (testSuite.tests.length === 0) {
-    return;
-  }
-
-  if (['skip', 'todo'].includes(parentRunMode)) {
-    testSuite.runMode = parentRunMode;
-  }
-
-  const tests = testSuite.tests.map((test) => {
-    if (test.type === 'case') {
-      if (['skip', 'todo'].includes(testSuite.runMode)) {
-        test.runMode = testSuite.runMode;
-      }
-      return test;
-    }
-    traverseUpdateTestRunMode(test, testSuite.runMode);
-    return test;
-  });
-
-  if (testSuite.runMode !== 'run') {
-    return;
-  }
-
-  const hasRunTest = tests.some((test) => test.runMode === 'run');
-
-  if (hasRunTest) {
-    testSuite.runMode = 'run';
-    return;
-  }
-
-  const allTodoTest = tests.every((test) => test.runMode === 'todo');
-
-  testSuite.runMode = allTodoTest ? 'todo' : 'skip';
-};
-
-const markAllTestAsSkipped = (test: Test[]): void => {
-  for (const t of test) {
-    t.runMode = 'skip';
-    if (t.type === 'suite') {
-      markAllTestAsSkipped(t.tests);
-    }
-  }
-};
+import { getTestStatus, markAllTestAsSkipped, updateTestModes } from './task';
 
 export class TestRunner {
   /** current test case */
@@ -337,7 +266,7 @@ export class TestRunner {
       };
     }
 
-    this.updateTaskModes(tests);
+    updateTestModes(tests);
 
     for (const test of tests) {
       await runTest(test, [], {
@@ -358,14 +287,6 @@ export class TestRunner {
       errors,
       duration: Date.now() - start,
     };
-  }
-
-  private updateTaskModes(tests: Test[]) {
-    for (const test of tests) {
-      if (test.type === 'suite') {
-        traverseUpdateTestRunMode(test);
-      }
-    }
   }
 
   private resetCurrentTest(): void {
