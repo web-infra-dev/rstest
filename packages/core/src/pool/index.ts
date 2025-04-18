@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { serializableConfig } from '../utils';
+import { serializeConfig } from '../utils';
 import { createForksPool } from './forks';
 
 const getNumCpus = (): number => {
@@ -98,7 +98,7 @@ export const runInPool = async ({
           assetFiles,
           context: {
             ...context,
-            normalizedConfig: serializableConfig(context.normalizedConfig),
+            normalizedConfig: serializeConfig(context.normalizedConfig),
           },
           sourceMaps,
           setupEntries,

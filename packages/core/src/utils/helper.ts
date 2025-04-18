@@ -84,14 +84,14 @@ export const getTaskNameWithPrefix = (
 
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
-const wrapRegexp = (value: RegExp): string =>
+const wrapRegex = (value: RegExp): string =>
   `${REGEXP_FLAG_PREFIX}${value.toString()}`;
 
-const unwrapRegexp = (value: string): RegExp | string => {
+const unwrapRegex = (value: string): RegExp | string => {
   if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const regexpStr = value.slice(REGEXP_FLAG_PREFIX.length);
+    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
 
-    const matches = regexpStr.match(/^\/(.+)\/([gimuy]*)$/);
+    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
     if (matches) {
       const [, pattern, flags] = matches;
       return new RegExp(pattern!, flags);
@@ -104,7 +104,7 @@ const unwrapRegexp = (value: string): RegExp | string => {
  * Serialize configuration for special types that do not support passing into the pool
  * eg. RegExp
  */
-export const serializableConfig = (
+export const serializeConfig = (
   normalizedConfig: NormalizedConfig,
 ): NormalizedConfig => {
   const { testNamePattern } = normalizedConfig;
@@ -112,7 +112,7 @@ export const serializableConfig = (
     ...normalizedConfig,
     testNamePattern:
       testNamePattern && typeof testNamePattern !== 'string'
-        ? wrapRegexp(testNamePattern)
+        ? wrapRegex(testNamePattern)
         : testNamePattern,
   };
 };
@@ -125,7 +125,7 @@ export const deserializeConfig = (
     ...normalizedConfig,
     testNamePattern:
       testNamePattern && typeof testNamePattern === 'string'
-        ? unwrapRegexp(testNamePattern)
+        ? unwrapRegex(testNamePattern)
         : testNamePattern,
   };
 };
