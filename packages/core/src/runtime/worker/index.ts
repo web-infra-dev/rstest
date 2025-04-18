@@ -3,9 +3,10 @@ import type {
   RunWorkerOptions,
   TestFileResult,
   WorkerState,
-} from '../types';
-import { globalApis } from '../utils/constants';
-import { formatTestError } from '../utils/runtime';
+} from '../../types';
+import { globalApis } from '../../utils/constants';
+import { undoSerializableConfig } from '../../utils/helper';
+import { formatTestError } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -27,6 +28,8 @@ const runInPool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']): Promise<TestFileResult> => {
+  context.normalizedConfig = undoSerializableConfig(context.normalizedConfig);
+
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {

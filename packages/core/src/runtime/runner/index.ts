@@ -1,10 +1,11 @@
 import type {
+  DescribeAPI,
   RunnerAPI,
   RunnerHooks,
   TestAPI,
   TestFileResult,
   WorkerState,
-} from '../types';
+} from '../../types';
 
 import { TestRunner } from './runner';
 import { RunnerRuntime } from './runtime';
@@ -22,18 +23,26 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
   const testRunner: TestRunner = new TestRunner();
 
-  const it = runtimeAPI.it.bind(runtimeAPI) as TestAPI;
+  const it = ((name, fn) => runtimeAPI.it(name, fn)) as TestAPI;
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
-  it.todo = runtimeAPI.todo.bind(runtimeAPI);
-  it.skip = runtimeAPI.skip.bind(runtimeAPI);
+  it.todo = (name, fn) => runtimeAPI.it(name, fn, 'todo');
+  it.skip = (name, fn) => runtimeAPI.it(name, fn, 'skip');
+  it.only = (name, fn) => runtimeAPI.it(name, fn, 'only');
+
+  const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
+  describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
+  describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
+  describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
 
   return {
     api: {
-      describe: runtimeAPI.describe.bind(runtimeAPI),
+      describe,
       it,
       test: it,
       afterAll: runtimeAPI.afterAll.bind(runtimeAPI),
       beforeAll: runtimeAPI.beforeAll.bind(runtimeAPI),
+      afterEach: runtimeAPI.afterEach.bind(runtimeAPI),
+      beforeEach: runtimeAPI.beforeEach.bind(runtimeAPI),
     },
     runner: {
       runTest: async (testFilePath: string, hooks: RunnerHooks) => {

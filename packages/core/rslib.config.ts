@@ -34,10 +34,10 @@ export default defineConfig({
       },
       source: {
         entry: {
-          index: './src/index.ts',
+          public: './src/public.ts',
           node: './src/node.ts',
-          cli: './src/cli.ts',
-          worker: './src/worker/index.ts',
+          cli: './src/cli/index.ts',
+          worker: './src/runtime/worker/index.ts',
         },
         define: {
           RSTEST_VERSION: JSON.stringify(require('./package.json').version),

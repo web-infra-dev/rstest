@@ -14,6 +14,7 @@ type CommonOptions = {
   globals?: boolean;
   passWithNoTests?: boolean;
   update?: boolean;
+  testNamePattern?: RegExp | string;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -38,6 +39,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found.',
+    )
+    .option(
+      '-t, --testNamePattern <testNamePattern>',
+      'Run only tests with a name that matches the regex.',
     );
 };
 
@@ -59,6 +64,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'globals',
     'passWithNoTests',
     'update',
+    'testNamePattern',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -82,7 +88,7 @@ export function setupCommands(): void {
   applyCommonOptions(cli);
 
   cli
-    .command('[...filters]', 'run tests in watch mode')
+    .command('[...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -102,7 +108,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('run [...filters]', 'run tests')
+    .command('run [...filters]', 'run tests in CI mode')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -117,7 +123,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('watch [...filters]', 'run Rstest in watch mode')
+    .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       const { config } = await initCli(options);
       const { createRstest } = await import('../core');
