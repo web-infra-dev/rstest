@@ -5,6 +5,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { globalApis } from '../../utils/constants';
+import { deserializeConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
@@ -27,6 +28,8 @@ const runInPool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']): Promise<TestFileResult> => {
+  context.normalizedConfig = deserializeConfig(context.normalizedConfig);
+
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {
