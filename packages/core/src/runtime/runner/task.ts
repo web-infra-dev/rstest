@@ -1,10 +1,12 @@
 import type {
   Test,
+  TestCase,
   TestResult,
   TestResultStatus,
   TestRunMode,
   TestSuite,
 } from '../../types';
+import { ROOT_SUITE_NAME, getTaskNameWithPrefix } from '../../utils';
 
 export const getTestStatus = (
   results: TestResult[],
@@ -28,10 +30,29 @@ export function hasOnlyTest(test: Test[]): boolean {
   });
 }
 
+const shouldTestSkip = (
+  test: TestCase,
+  runOnly: boolean,
+  testNamePattern?: RegExp | string,
+) => {
+  if (runOnly && test.runMode !== 'only') {
+    return true;
+  }
+  if (
+    testNamePattern &&
+    !getTaskNameWithPrefix(test, '').match(testNamePattern)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 export const traverseUpdateTestRunMode = (
   testSuite: TestSuite,
   parentRunMode: TestRunMode,
   runOnly: boolean,
+  testNamePattern?: RegExp | string,
 ): void => {
   if (testSuite.tests.length === 0) {
     return;
@@ -57,12 +78,17 @@ export const traverseUpdateTestRunMode = (
       if (['skip', 'todo'].includes(testSuite.runMode)) {
         test.runMode = testSuite.runMode;
       }
-      if (runSubOnly && test.runMode !== 'only') {
+      if (shouldTestSkip(test, runSubOnly, testNamePattern)) {
         test.runMode = 'skip';
       }
       return test;
     }
-    traverseUpdateTestRunMode(test, testSuite.runMode, runSubOnly);
+    traverseUpdateTestRunMode(
+      test,
+      testSuite.runMode,
+      runSubOnly,
+      testNamePattern,
+    );
     return test;
   });
 
@@ -95,17 +121,44 @@ export const traverseUpdateTestRunMode = (
  * - if all tests are 'skip', set the suite to 'skip'
  *
  * If any tasks been marked as `only`, mark all other tasks as `skip`.
+ *
+ * If `testNamePattern` defined, run only tests with a name that matches the regex. (The above rules still take effect)
  */
-export const updateTestModes = (tests: Test[]): void => {
+export const updateTestModes = (
+  tests: Test[],
+  testNamePattern?: RegExp | string,
+): void => {
   const hasOnly = hasOnlyTest(tests);
 
   for (const test of tests) {
     if (test.type === 'suite') {
-      traverseUpdateTestRunMode(test, 'run', hasOnly);
-    } else if (hasOnly && test.runMode !== 'only') {
+      traverseUpdateTestRunMode(test, 'run', hasOnly, testNamePattern);
+    } else if (shouldTestSkip(test, hasOnly, testNamePattern)) {
       test.runMode = 'skip';
     }
   }
+};
+
+const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
+  for (const test of tests) {
+    if (test.type === 'suite') {
+      const names =
+        test.name === ROOT_SUITE_NAME
+          ? parentNames
+          : parentNames.concat(test.name);
+      updateTestParents(test.tests, names);
+    } else {
+      test.parentNames = parentNames;
+    }
+  }
+};
+
+export const traverseUpdateTest = (
+  tests: Test[],
+  testNamePattern?: RegExp | string,
+): void => {
+  updateTestParents(tests);
+  updateTestModes(tests, testNamePattern);
 };
 
 export const markAllTestAsSkipped = (test: Test[]): void => {

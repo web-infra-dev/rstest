@@ -11,10 +11,13 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
-import { ROOT_SUITE_NAME } from '../../utils';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
-import { getTestStatus, markAllTestAsSkipped, updateTestModes } from './task';
+import {
+  getTestStatus,
+  markAllTestAsSkipped,
+  traverseUpdateTest,
+} from './task';
 
 export class TestRunner {
   /** current test case */
@@ -27,7 +30,7 @@ export class TestRunner {
     hooks: RunnerHooks,
   ): Promise<TestFileResult> {
     const {
-      normalizedConfig: { passWithNoTests },
+      normalizedConfig: { passWithNoTests, testNamePattern },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -41,7 +44,6 @@ export class TestRunner {
 
     const runTest = async (
       test: Test,
-      prefixes: string[],
       parentHooks: {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
@@ -64,7 +66,7 @@ export class TestRunner {
           errors.push(noTestError);
           const result = {
             status: 'fail' as const,
-            prefixes,
+            parentNames: test.parentNames,
             name: test.name,
             testPath,
             errors: [noTestError],
@@ -95,18 +97,14 @@ export class TestRunner {
         }
 
         for (const suite of test.tests) {
-          await runTest(
-            suite,
-            test.name === ROOT_SUITE_NAME ? prefixes : [...prefixes, test.name],
-            {
-              beforeEachListeners: parentHooks.beforeEachListeners.concat(
-                test.beforeEachListeners || [],
-              ),
-              afterEachListeners: parentHooks.afterEachListeners.concat(
-                test.afterEachListeners || [],
-              ),
-            },
-          );
+          await runTest(suite, {
+            beforeEachListeners: parentHooks.beforeEachListeners.concat(
+              test.beforeEachListeners || [],
+            ),
+            afterEachListeners: parentHooks.afterEachListeners.concat(
+              test.afterEachListeners || [],
+            ),
+          });
         }
 
         const afterAllFns = [...(test.afterAllListeners || [])]
@@ -128,7 +126,7 @@ export class TestRunner {
         if (test.runMode === 'skip') {
           const result = {
             status: 'skip' as const,
-            prefixes,
+            parentNames: test.parentNames,
             name: test.name,
             testPath,
           };
@@ -139,7 +137,7 @@ export class TestRunner {
         if (test.runMode === 'todo') {
           const result = {
             status: 'todo' as const,
-            prefixes,
+            parentNames: test.parentNames,
             name: test.name,
             testPath,
           };
@@ -149,7 +147,7 @@ export class TestRunner {
         }
 
         let result: TestResult | undefined = undefined;
-        this.setCurrentTest(test, prefixes);
+        this.setCurrentTest(test);
 
         const cleanups: AfterEachListener[] = [];
 
@@ -161,7 +159,7 @@ export class TestRunner {
         } catch (error) {
           result = {
             status: 'fail' as const,
-            prefixes,
+            parentNames: test.parentNames,
             name: test.name,
             errors: formatTestError(error),
             testPath,
@@ -178,7 +176,7 @@ export class TestRunner {
 
               result = {
                 status: 'fail' as const,
-                prefixes,
+                parentNames: test.parentNames,
                 name: test.name,
                 testPath,
                 errors: [
@@ -190,7 +188,7 @@ export class TestRunner {
             } catch (error) {
               result = {
                 status: 'pass' as const,
-                prefixes,
+                parentNames: test.parentNames,
                 name: test.name,
                 testPath,
               };
@@ -201,15 +199,15 @@ export class TestRunner {
               await test.fn?.();
               this.afterRunTest();
               result = {
-                status: 'pass' as const,
-                prefixes,
+                parentNames: test.parentNames,
                 name: test.name,
+                status: 'pass' as const,
                 testPath,
               };
             } catch (error) {
               result = {
                 status: 'fail' as const,
-                prefixes,
+                parentNames: test.parentNames,
                 name: test.name,
                 errors: formatTestError(error),
                 testPath,
@@ -266,10 +264,10 @@ export class TestRunner {
       };
     }
 
-    updateTestModes(tests);
+    traverseUpdateTest(tests, testNamePattern);
 
     for (const test of tests) {
-      await runTest(test, [], {
+      await runTest(test, {
         beforeEachListeners: [],
         afterEachListeners: [],
       });
@@ -293,11 +291,8 @@ export class TestRunner {
     this._test = undefined;
   }
 
-  private setCurrentTest(test: TestCase, prefixes: string[]): void {
-    this._test = {
-      ...test,
-      prefixes,
-    };
+  private setCurrentTest(test: TestCase): void {
+    this._test = test;
   }
 
   getCurrentTest(): TestCase | undefined {
