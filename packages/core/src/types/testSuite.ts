@@ -16,7 +16,7 @@ export type TestCase = {
   // TODO
   onFinished?: any[];
   type: 'case';
-  prefixes?: string[];
+  parentNames?: string[];
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -30,6 +30,7 @@ export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {
   name: string;
+  parentNames?: string[];
   runMode: TestRunMode;
   // TODO
   filepath?: string;
@@ -69,7 +70,7 @@ export type TestResult = {
   status: TestResultStatus;
   name: string;
   testPath: string;
-  prefixes?: string[];
+  parentNames?: string[];
   duration?: number;
   errors?: TestError[];
 };

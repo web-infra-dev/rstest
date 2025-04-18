@@ -73,11 +73,13 @@ export const prettyTime = (milliseconds: number): string => {
   return `${format(minutes.toFixed(2))} m`;
 };
 
-const getTaskNames = (test: Pick<TestResult, 'name' | 'prefixes'>): string[] =>
-  (test.prefixes || []).concat(test.name).filter(Boolean);
+const getTaskNames = (
+  test: Pick<TestResult, 'name' | 'parentNames'>,
+): string[] => (test.parentNames || []).concat(test.name).filter(Boolean);
 
 export const getTaskNameWithPrefix = (
-  test: Pick<TestResult, 'name' | 'prefixes'>,
-): string => getTaskNames(test).join(` ${TEST_DELIMITER} `);
+  test: Pick<TestResult, 'name' | 'parentNames'>,
+  delimiter: string = TEST_DELIMITER,
+): string => getTaskNames(test).join(` ${delimiter} `);
 
 export { color };

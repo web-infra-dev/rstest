@@ -78,11 +78,16 @@ export interface RstestConfig {
     | Reporter
     | BuiltInReporterNames
     | (Reporter | BuiltInReporterNames)[];
+  /**
+   * Run only tests with a name that matches the regex.
+   */
+  testNamePattern?: string | RegExp;
 }
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, 'pool' | 'setupFiles'>
+  Omit<RstestConfig, 'pool' | 'setupFiles' | 'testNamePattern'>
 > & {
   pool: RstestPoolOptions;
   setupFiles?: string[] | string;
+  testNamePattern?: RstestConfig['testNamePattern'];
 };
