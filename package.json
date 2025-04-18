@@ -30,7 +30,7 @@
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@biomejs/biome": "^1.9.4",
-    "@changesets/cli": "^2.28.1",
+    "@changesets/cli": "^2.29.2",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.13.8",
     "check-dependency-version-consistency": "^5.0.0",
