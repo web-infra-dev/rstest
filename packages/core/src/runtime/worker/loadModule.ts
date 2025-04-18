@@ -1,4 +1,5 @@
 import { createRequire as createNativeRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
@@ -87,7 +88,20 @@ export const loadModule = ({
     filename: distPath,
     lineOffset: 0,
     columnOffset: -codeDefinition.length,
-    importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
+    importModuleDynamically: async (
+      specifier,
+      _referencer,
+      importAttributes,
+    ) => {
+      const dependencyAsset = import.meta.resolve(
+        specifier,
+        pathToFileURL(originPath),
+      );
+
+      // @ts-expect-error
+      const res = await import(dependencyAsset, importAttributes);
+      return res;
+    },
   });
   fn(...Object.values(context));
 

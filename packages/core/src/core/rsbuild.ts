@@ -90,7 +90,7 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
-  // TODO: find a better way to test output
+  // TODO: find a better way to test outputs
   const writeToDisk = process.env.DEBUG_RSTEST_OUTPUTS === 'true';
 
   const rsbuildInstance = await createRsbuild({

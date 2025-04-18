@@ -83,6 +83,7 @@ export const runInPool = async ({
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
       '--experimental-vm-modules',
+      '--experimental-import-meta-resolve',
       '--disable-warning=ExperimentalWarning',
     ],
     env: {
