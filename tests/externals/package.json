@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "@rstest/tests-externals",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "picocolors": "^1.1.1",
+    "strip-ansi": "^7.1.0"
+  }
+}

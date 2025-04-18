@@ -156,6 +156,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  tests/externals:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+      strip-ansi:
+        specifier: ^7.1.0
+        version: 7.1.0
+
   tests/lifecycle:
     devDependencies:
       '@rstest/core':
