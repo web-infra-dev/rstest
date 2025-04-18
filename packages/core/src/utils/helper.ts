@@ -1,6 +1,6 @@
 import { isAbsolute, join, parse, sep } from 'pathe';
 import color from 'picocolors';
-import type { TestResult } from '../types';
+import type { NormalizedConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export function getAbsolutePath(base: string, filepath: string): string {
@@ -81,5 +81,53 @@ export const getTaskNameWithPrefix = (
   test: Pick<TestResult, 'name' | 'parentNames'>,
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(` ${delimiter} `);
+
+const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
+
+const wrapRegex = (value: RegExp): string =>
+  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
+
+const unwrapRegex = (value: string): RegExp | string => {
+  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
+    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
+
+    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
+    if (matches) {
+      const [, pattern, flags] = matches;
+      return new RegExp(pattern!, flags);
+    }
+  }
+  return value;
+};
+
+/**
+ * Serialize configuration for special types that do not support passing into the pool
+ * eg. RegExp
+ */
+export const serializeConfig = (
+  normalizedConfig: NormalizedConfig,
+): NormalizedConfig => {
+  const { testNamePattern } = normalizedConfig;
+  return {
+    ...normalizedConfig,
+    testNamePattern:
+      testNamePattern && typeof testNamePattern !== 'string'
+        ? wrapRegex(testNamePattern)
+        : testNamePattern,
+  };
+};
+
+export const deserializeConfig = (
+  normalizedConfig: NormalizedConfig,
+): NormalizedConfig => {
+  const { testNamePattern } = normalizedConfig;
+  return {
+    ...normalizedConfig,
+    testNamePattern:
+      testNamePattern && typeof testNamePattern === 'string'
+        ? unwrapRegex(testNamePattern)
+        : testNamePattern,
+  };
+};
 
 export { color };
