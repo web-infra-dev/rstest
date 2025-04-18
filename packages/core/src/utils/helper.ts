@@ -101,10 +101,10 @@ const unwrapRegex = (value: string): RegExp | string => {
 };
 
 /**
- * Serialize configuration for special types that do not support passing into the pool
+ * Makes some special types that are not supported for passing into the pool serializable.
  * eg. RegExp
  */
-export const serializeConfig = (
+export const serializableConfig = (
   normalizedConfig: NormalizedConfig,
 ): NormalizedConfig => {
   const { testNamePattern } = normalizedConfig;
@@ -117,7 +117,7 @@ export const serializeConfig = (
   };
 };
 
-export const deserializeConfig = (
+export const undoSerializableConfig = (
   normalizedConfig: NormalizedConfig,
 ): NormalizedConfig => {
   const { testNamePattern } = normalizedConfig;
