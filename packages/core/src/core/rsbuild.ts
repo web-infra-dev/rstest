@@ -31,10 +31,11 @@ const autoExternalNodeModules: (
     return callback();
   }
 
-  const doExternal = () => {
+  const doExternal = (externalPath: string = request) => {
     callback(
       undefined,
-      `${dependencyType === 'commonjs' ? 'commonjs' : 'module-import'} ${request}`,
+      externalPath,
+      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
     );
   };
   if (/node_modules/.test(request)) {
@@ -47,14 +48,14 @@ const autoExternalNodeModules: (
     return callback();
   }
 
-  resolver(context!, request!, (err, resolvePath) => {
+  resolver(context!, request, (err, resolvePath) => {
     if (err) {
       // ignore resolve error
       return callback();
     }
 
-    if (resolvePath && /node_modules/.test(resolvePath!)) {
-      return doExternal();
+    if (resolvePath && /node_modules/.test(resolvePath)) {
+      return doExternal(resolvePath);
     }
     return callback();
   });
@@ -108,6 +109,9 @@ export const prepareRsbuild = async (
           output: {
             sourceMap: {
               js: 'source-map',
+            },
+            distPath: {
+              root: 'dist/.test',
             },
             externals: [
               {

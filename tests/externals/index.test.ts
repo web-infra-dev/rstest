@@ -23,12 +23,13 @@ describe('test externals', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(0);
 
-    const outputPath = join(__dirname, 'dist/fixtures/index.test.ts.js');
+    const outputPath = join(__dirname, 'dist/.test/fixtures/index.test.ts.js');
 
     expect(fs.existsSync(outputPath)).toBeTruthy();
     const content = fs.readFileSync(outputPath, 'utf-8');
 
-    expect(content).toContain('require("picocolors")');
-    expect(content).toContain('import("strip-ansi")');
+    expect(content).toEqual(expect.stringMatching(/require\S+picocolors/));
+    expect(content).toEqual(expect.stringMatching(/import\S+strip\-ansi/));
+    expect(content).toEqual(expect.stringMatching(/import\S+pathe/));
   });
 });

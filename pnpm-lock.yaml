@@ -168,6 +168,12 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
 
+  tests/externals/fixtures/test-pkg:
+    devDependencies:
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+
   tests/lifecycle:
     devDependencies:
       '@rstest/core':

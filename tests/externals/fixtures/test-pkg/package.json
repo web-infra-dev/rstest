@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "name": "@rstest/tests-externals-fixtures",
+  "version": "1.0.0",
+  "devDependencies": {
+    "pathe": "^2.0.3"
+  }
+}

@@ -14,3 +14,8 @@ it('should load cjs with require correctly', () => {
   const picocolors = require('picocolors');
   expect(picocolors.green).toBeDefined();
 });
+
+it('should load pkg from some other pkgs correctly', async () => {
+  const { pathe } = await import('./test-pkg/index');
+  expect(pathe.basename('test-pkg/index.ts')).toBe('index.ts');
+});
