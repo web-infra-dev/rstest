@@ -24,8 +24,14 @@ export type TestCase = {
   promises?: Promise<any>[];
 };
 
-export type AfterAllListener = () => MaybePromise<void>;
-export type BeforeAllListener = () => MaybePromise<void | AfterAllListener>;
+export type SuiteContext = {
+  filepath: string;
+};
+
+export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
+export type BeforeAllListener = (
+  ctx: SuiteContext,
+) => MaybePromise<void | AfterAllListener>;
 export type AfterEachListener = () => MaybePromise<void>;
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 

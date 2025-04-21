@@ -3,6 +3,7 @@ import type {
   AfterEachListener,
   BeforeEachListener,
   RunnerHooks,
+  SuiteContext,
   Test,
   TestCase,
   TestError,
@@ -75,13 +76,15 @@ export class TestRunner {
         }
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
-        const cleanups: Array<() => void> = [];
+        const cleanups: Array<(ctx: SuiteContext) => void> = [];
         let hasBeforeAllError = false;
 
         if (['run', 'only'].includes(test.runMode) && test.beforeAllListeners) {
           try {
             for (const fn of test.beforeAllListeners) {
-              const cleanupFn = await fn();
+              const cleanupFn = await fn({
+                filepath: testPath,
+              });
               cleanupFn && cleanups.push(cleanupFn);
             }
           } catch (error) {
@@ -114,7 +117,9 @@ export class TestRunner {
         if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
           try {
             for (const fn of afterAllFns) {
-              await fn();
+              await fn({
+                filepath: testPath,
+              });
             }
           } catch (error) {
             // AfterAll failed does not affect test case results
