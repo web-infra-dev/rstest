@@ -15,27 +15,28 @@ type CommonOptions = {
   passWithNoTests?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
+  testTimeout?: number;
 };
 
 const applyCommonOptions = (cli: CAC) => {
   cli
     .option(
       '-c, --config <config>',
-      'specify the configuration file, can be a relative or absolute path',
+      'Specify the configuration file, can be a relative or absolute path',
     )
     .option(
       '--config-loader <loader>',
-      'specify the loader to load the config file, can be `jiti` or `native`',
+      'Specify the loader to load the config file, can be `jiti` or `native`',
       {
         default: 'jiti',
       },
     )
     .option(
       '-r, --root <root>',
-      'specify the project root directory, can be an absolute path or a path relative to cwd',
+      'Specify the project root directory, can be an absolute path or a path relative to cwd',
     )
-    .option('--globals', 'provide global APIs')
-    .option('-u, --update', 'update snapshot files')
+    .option('--globals', 'Provide global APIs')
+    .option('-u, --update', 'Update snapshot files')
     .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found.',
@@ -43,7 +44,8 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '-t, --testNamePattern <testNamePattern>',
       'Run only tests with a name that matches the regex.',
-    );
+    )
+    .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds');
 };
 
 export async function initCli(options: CommonOptions): Promise<{
@@ -65,6 +67,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'passWithNoTests',
     'update',
     'testNamePattern',
+    'testTimeout',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

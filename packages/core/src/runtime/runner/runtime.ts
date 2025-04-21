@@ -94,10 +94,18 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
-  private defaultHookTimeout = 5000;
+  private defaultHookTimeout = 5_000;
+  private defaultTestTimeout;
 
-  constructor(sourcePath: string) {
+  constructor({
+    sourcePath,
+    testTimeout,
+  }: {
+    testTimeout: number;
+    sourcePath: string;
+  }) {
     this.sourcePath = sourcePath;
+    this.defaultTestTimeout = testTimeout;
   }
 
   afterAll(
@@ -280,13 +288,44 @@ export class RunnerRuntime {
   it(
     name: string,
     fn?: () => void | Promise<void>,
+    timeout: number = this.defaultTestTimeout,
     runMode: TestRunMode = 'run',
   ): void {
-    this.addTestCase({ name, fn, runMode, type: 'case' });
+    this.addTestCase({
+      name,
+      fn: fn
+        ? wrapTimeout({
+            name: 'test',
+            fn,
+            timeout,
+            stackTraceError: new Error('STACK_TRACE_ERROR'),
+          })
+        : fn,
+      runMode,
+      type: 'case',
+      timeout,
+    });
   }
 
-  fails(name: string, fn?: () => void | Promise<void>): void {
-    this.addTestCase({ name, fn, fails: true, runMode: 'run', type: 'case' });
+  fails(
+    name: string,
+    fn?: () => void | Promise<void>,
+    timeout: number = this.defaultTestTimeout,
+  ): void {
+    this.addTestCase({
+      name,
+      fn: fn
+        ? wrapTimeout({
+            name: 'test',
+            fn,
+            timeout,
+            stackTraceError: new Error('STACK_TRACE_ERROR'),
+          })
+        : fn,
+      fails: true,
+      runMode: 'run',
+      type: 'case',
+    });
   }
 
   getCurrentSuite(): TestSuite {

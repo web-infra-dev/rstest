@@ -10,6 +10,7 @@ export type TestCase = {
   name: string;
   fn?: () => void | Promise<void>;
   runMode: TestRunMode;
+  timeout?: number;
   fails?: boolean;
   // TODO
   only?: boolean;
