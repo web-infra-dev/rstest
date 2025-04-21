@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, it } from '@rstest/core';
 import { sleep } from '../../scripts';
 
-beforeAll(() => {
+beforeAll((ctx) => {
   console.log('[beforeAll] root');
+  expect(ctx.filepath).toBe(__filename);
 });
 
 beforeAll(async () => {

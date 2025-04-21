@@ -1,8 +1,13 @@
 import path from 'node:path';
-import { afterAll, expect } from '@rstest/core';
+import { afterAll, beforeAll, expect } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 
 process.env.RETEST_SETUP_FLAG = '1';
+
+beforeAll((ctx) => {
+  console.log('[beforeAll] root');
+  expect(ctx.filepath).toContain('index.test.ts');
+});
 
 expect.addSnapshotSerializer(
   createSnapshotSerializer({
