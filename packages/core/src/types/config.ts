@@ -82,6 +82,12 @@ export interface RstestConfig {
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
+
+  /**
+   * Timeout of a test in milliseconds.
+   * @default 5000
+   */
+  testTimeout?: number;
 }
 
 export type NormalizedConfig = Required<

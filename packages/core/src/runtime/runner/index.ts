@@ -20,7 +20,14 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     getCurrentTest: TestRunner['getCurrentTest'];
   };
 } {
-  const runtimeAPI: RunnerRuntime = new RunnerRuntime(workerState.sourcePath);
+  const {
+    sourcePath,
+    normalizedConfig: { testTimeout },
+  } = workerState;
+  const runtimeAPI: RunnerRuntime = new RunnerRuntime({
+    sourcePath,
+    testTimeout,
+  });
   const testRunner: TestRunner = new TestRunner();
 
   const it = ((name, fn, timeout) =>
