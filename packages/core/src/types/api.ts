@@ -7,7 +7,11 @@ import type {
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
-type TestFn = (description: string, fn?: () => MaybePromise<void>) => void;
+type TestFn = (
+  description: string,
+  fn?: () => MaybePromise<void>,
+  timeout?: number,
+) => void;
 
 export type TestAPI = TestFn & {
   fails: TestFn;
