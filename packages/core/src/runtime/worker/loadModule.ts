@@ -1,4 +1,5 @@
 import { createRequire as createNativeRequire } from 'node:module';
+import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
@@ -93,7 +94,11 @@ export const loadModule = ({
       _referencer,
       importAttributes,
     ) => {
-      const dependencyAsset = import.meta.resolve(
+      if (isAbsolute(specifier)) {
+        // @ts-expect-error
+        return import(pathToFileURL(specifier), importAttributes);
+      }
+      const dependencyAsset = await import.meta.resolve(
         specifier,
         pathToFileURL(originPath),
       );
