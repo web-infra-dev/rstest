@@ -25,6 +25,7 @@ export type TestCase = {
 };
 
 export type SuiteContext = {
+  /** The test file path */
   filepath: string;
 };
 
