@@ -95,10 +95,17 @@ export class RunnerRuntime {
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
   private defaultHookTimeout = 5_000;
-  private defaultTestTimeout = 5_000;
+  private defaultTestTimeout;
 
-  constructor(sourcePath: string) {
+  constructor({
+    sourcePath,
+    testTimeout,
+  }: {
+    testTimeout: number;
+    sourcePath: string;
+  }) {
     this.sourcePath = sourcePath;
+    this.defaultTestTimeout = testTimeout;
   }
 
   afterAll(

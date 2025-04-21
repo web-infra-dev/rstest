@@ -89,6 +89,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   update: false,
+  testTimeout: 5_000,
   reporters: ['default'],
 });
 
