@@ -9,6 +9,7 @@ import {
 import path from 'pathe';
 import type { EntryInfo, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
+import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -93,6 +94,7 @@ export const prepareRsbuild = async (
               };
             },
           },
+          plugins: [pluginIgnoreResolveError],
         },
       },
     },
