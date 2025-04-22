@@ -20,6 +20,48 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+const autoExternalNodeModules: (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void = ({ context, request, dependencyType, getResolve }, callback) => {
+  if (!request || request.startsWith('node:')) {
+    return callback();
+  }
+
+  const doExternal = (externalPath: string = request) => {
+    callback(
+      undefined,
+      externalPath,
+      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+    );
+  };
+  if (/node_modules/.test(request)) {
+    return doExternal();
+  }
+
+  const resolver = getResolve?.();
+
+  if (!resolver) {
+    return callback();
+  }
+
+  resolver(context!, request, (err, resolvePath) => {
+    if (err) {
+      // ignore resolve error
+      return callback();
+    }
+
+    if (resolvePath && /node_modules/.test(resolvePath)) {
+      return doExternal(resolvePath);
+    }
+    return callback();
+  });
+};
+
 class TestFileWatchPlugin {
   private contextToWatch: string | null = null;
 
@@ -50,6 +92,8 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
+  // TODO: find a better way to test outputs
+  const writeToDisk = process.env.DEBUG_RSTEST_OUTPUTS === 'true';
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
@@ -61,20 +105,28 @@ export const prepareRsbuild = async (
       environments: {
         [name]: {
           dev: {
-            writeToDisk: false,
+            writeToDisk,
           },
           output: {
             sourceMap: {
               js: 'source-map',
             },
-            externals: {
-              '@rstest/core': 'global @rstest/core',
+            distPath: {
+              root: 'dist/.test',
             },
+            externals: [
+              {
+                '@rstest/core': 'global @rstest/core',
+              },
+              autoExternalNodeModules,
+            ],
             target: 'node',
           },
           tools: {
             rspack: (config) => {
               config.output ??= {};
+              config.output.iife = false;
+              config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 

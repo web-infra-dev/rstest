@@ -1,4 +1,6 @@
 import { createRequire as createNativeRequire } from 'node:module';
+import { isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
@@ -87,6 +89,24 @@ export const loadModule = ({
     filename: distPath,
     lineOffset: 0,
     columnOffset: -codeDefinition.length,
+    importModuleDynamically: async (
+      specifier,
+      _referencer,
+      importAttributes,
+    ) => {
+      if (isAbsolute(specifier)) {
+        // @ts-expect-error
+        return import(pathToFileURL(specifier), importAttributes);
+      }
+      const dependencyAsset = await import.meta.resolve(
+        specifier,
+        pathToFileURL(originPath),
+      );
+
+      // @ts-expect-error
+      const res = await import(dependencyAsset, importAttributes);
+      return res;
+    },
   });
   fn(...Object.values(context));
 

@@ -79,7 +79,12 @@ export const runInPool = async ({
     isolate,
     maxWorkers,
     minWorkers,
-    execArgv: [...(poolOptions?.execArgv ?? []), ...execArgv],
+    execArgv: [
+      ...(poolOptions?.execArgv ?? []),
+      ...execArgv,
+      '--experimental-vm-modules',
+      '--experimental-import-meta-resolve',
+    ],
     env: {
       NODE_ENV: 'test',
       // enable diff color by default
