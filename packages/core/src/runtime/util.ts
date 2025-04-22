@@ -21,6 +21,17 @@ export const formatTestError = (err: any): TestError[] => {
     ) {
       errObj.diff = diff(err.actual, err.expected)!;
     }
+
+    for (const key of ['actual', 'expected'] as const) {
+      if (typeof err[key] !== 'string') {
+        (errObj as Record<string, any>)[key] = JSON.stringify(
+          err[key],
+          null,
+          10,
+        );
+      }
+    }
+
     return errObj;
   });
 };
