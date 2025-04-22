@@ -36,6 +36,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   it.todo = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'todo');
   it.skip = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'skip');
   it.only = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'only');
+  it.each = runtimeAPI.each.bind(runtimeAPI);
 
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
   describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
