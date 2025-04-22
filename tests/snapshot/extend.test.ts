@@ -14,6 +14,5 @@ it('test toMatchImageSnapshot correctly', async () => {
   expect.extend({ toMatchImageSnapshot });
   const testFilePath = join(__dirname, '../assets/icon.png');
 
-  // TODO: fixed by external jest-image-snapshot or get __dirname correctly in jest-image-snapshot
   expect(fs.readFileSync(testFilePath)).toMatchImageSnapshot();
 });
