@@ -1,4 +1,5 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
+import type { SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
@@ -12,6 +13,7 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
+import { getTaskNameWithPrefix } from '../../utils';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import {
@@ -175,7 +177,10 @@ export class TestRunner {
         if (result?.status !== 'fail') {
           if (test.fails) {
             try {
-              this.beforeRunTest(testPath);
+              this.beforeRunTest(
+                test,
+                snapshotClient.getSnapshotState(testPath),
+              );
               await test.fn?.();
               this.afterRunTest();
 
@@ -200,7 +205,10 @@ export class TestRunner {
             }
           } else {
             try {
-              this.beforeRunTest(testPath);
+              this.beforeRunTest(
+                test,
+                snapshotClient.getSnapshotState(testPath),
+              );
               await test.fn?.();
               this.afterRunTest();
               result = {
@@ -304,7 +312,7 @@ export class TestRunner {
     return this._test;
   }
 
-  private beforeRunTest(testPath: string): void {
+  private beforeRunTest(test: TestCase, snapshotState: SnapshotState): void {
     setState(
       {
         assertionCalls: 0,
@@ -312,7 +320,9 @@ export class TestRunner {
         isExpectingAssertionsError: null,
         expectedAssertionsNumber: null,
         expectedAssertionsNumberErrorGen: null,
-        testPath,
+        testPath: test.filePath,
+        snapshotState,
+        currentTestName: getTaskNameWithPrefix(test),
       },
       (globalThis as any)[GLOBAL_EXPECT],
     );
