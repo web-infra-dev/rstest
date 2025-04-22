@@ -171,7 +171,7 @@ export const printSummaryErrorLogs = async ({
   getSourcemap: GetSourcemap;
 }): Promise<void> => {
   const failedTests: TestResult[] = [
-    ...results.filter((i) => i.status === 'fail' && i.errors),
+    ...results.filter((i) => i.status === 'fail' && i.errors?.length),
     ...testResults.filter((i) => i.status === 'fail'),
   ];
 

@@ -1,3 +1,7 @@
+<picture>
+  <img alt="Rstest Banner" src="https://assets.rspack.dev/rstest/rstest-banner.png">
+</picture>
+
 # Rstest
 
 <p>

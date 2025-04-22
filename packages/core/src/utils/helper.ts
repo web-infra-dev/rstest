@@ -1,6 +1,6 @@
 import { isAbsolute, join, parse, sep } from 'pathe';
 import color from 'picocolors';
-import type { TestResult } from '../types';
+import type { NormalizedConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export function getAbsolutePath(base: string, filepath: string): string {
@@ -73,11 +73,61 @@ export const prettyTime = (milliseconds: number): string => {
   return `${format(minutes.toFixed(2))} m`;
 };
 
-const getTaskNames = (test: Pick<TestResult, 'name' | 'prefixes'>): string[] =>
-  (test.prefixes || []).concat(test.name).filter(Boolean);
+const getTaskNames = (
+  test: Pick<TestResult, 'name' | 'parentNames'>,
+): string[] => (test.parentNames || []).concat(test.name).filter(Boolean);
 
 export const getTaskNameWithPrefix = (
-  test: Pick<TestResult, 'name' | 'prefixes'>,
-): string => getTaskNames(test).join(` ${TEST_DELIMITER} `);
+  test: Pick<TestResult, 'name' | 'parentNames'>,
+  delimiter: string = TEST_DELIMITER,
+): string => getTaskNames(test).join(` ${delimiter} `);
+
+const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
+
+const wrapRegex = (value: RegExp): string =>
+  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
+
+const unwrapRegex = (value: string): RegExp | string => {
+  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
+    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
+
+    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
+    if (matches) {
+      const [, pattern, flags] = matches;
+      return new RegExp(pattern!, flags);
+    }
+  }
+  return value;
+};
+
+/**
+ * Makes some special types that are not supported for passing into the pool serializable.
+ * eg. RegExp
+ */
+export const serializableConfig = (
+  normalizedConfig: NormalizedConfig,
+): NormalizedConfig => {
+  const { testNamePattern } = normalizedConfig;
+  return {
+    ...normalizedConfig,
+    testNamePattern:
+      testNamePattern && typeof testNamePattern !== 'string'
+        ? wrapRegex(testNamePattern)
+        : testNamePattern,
+  };
+};
+
+export const undoSerializableConfig = (
+  normalizedConfig: NormalizedConfig,
+): NormalizedConfig => {
+  const { testNamePattern } = normalizedConfig;
+  return {
+    ...normalizedConfig,
+    testNamePattern:
+      testNamePattern && typeof testNamePattern === 'string'
+        ? unwrapRegex(testNamePattern)
+        : testNamePattern,
+  };
+};
 
 export { color };

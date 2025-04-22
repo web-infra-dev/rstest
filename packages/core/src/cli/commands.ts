@@ -14,31 +14,38 @@ type CommonOptions = {
   globals?: boolean;
   passWithNoTests?: boolean;
   update?: boolean;
+  testNamePattern?: RegExp | string;
+  testTimeout?: number;
 };
 
 const applyCommonOptions = (cli: CAC) => {
   cli
     .option(
       '-c, --config <config>',
-      'specify the configuration file, can be a relative or absolute path',
+      'Specify the configuration file, can be a relative or absolute path',
     )
     .option(
       '--config-loader <loader>',
-      'specify the loader to load the config file, can be `jiti` or `native`',
+      'Specify the loader to load the config file, can be `jiti` or `native`',
       {
         default: 'jiti',
       },
     )
     .option(
       '-r, --root <root>',
-      'specify the project root directory, can be an absolute path or a path relative to cwd',
+      'Specify the project root directory, can be an absolute path or a path relative to cwd',
     )
-    .option('--globals', 'provide global APIs')
-    .option('-u, --update', 'update snapshot files')
+    .option('--globals', 'Provide global APIs')
+    .option('-u, --update', 'Update snapshot files')
     .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found.',
-    );
+    )
+    .option(
+      '-t, --testNamePattern <testNamePattern>',
+      'Run only tests with a name that matches the regex.',
+    )
+    .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds');
 };
 
 export async function initCli(options: CommonOptions): Promise<{
@@ -59,6 +66,8 @@ export async function initCli(options: CommonOptions): Promise<{
     'globals',
     'passWithNoTests',
     'update',
+    'testNamePattern',
+    'testTimeout',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -82,7 +91,7 @@ export function setupCommands(): void {
   applyCommonOptions(cli);
 
   cli
-    .command('[...filters]', 'run tests in watch mode')
+    .command('[...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -102,7 +111,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('run [...filters]', 'run tests')
+    .command('run [...filters]', 'run tests in CI mode')
     .action(async (filters: string[], options: CommonOptions) => {
       try {
         const { config } = await initCli(options);
@@ -117,7 +126,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('watch [...filters]', 'run Rstest in watch mode')
+    .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       const { config } = await initCli(options);
       const { createRstest } = await import('../core');
