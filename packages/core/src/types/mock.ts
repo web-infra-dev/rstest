@@ -80,15 +80,15 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
 
 export interface MockInstance<T extends FunctionLike = FunctionLike> {
   _isMockFunction: true;
-  // getMockImplementation(): T | undefined;
   getMockName(): string;
   mockName(name: string): this;
   mock: MockContext<T>;
   // mockClear(): this;
   // mockReset(): this;
   // mockRestore(): void;
-  // mockImplementation(fn: T): this;
-  // mockImplementationOnce(fn: T): this;
+  getMockImplementation(): T | undefined;
+  mockImplementation(fn: T): this;
+  mockImplementationOnce(fn: T): this;
   // withImplementation<T2>(
   //   fn: T,
   //   callback: () => T2,

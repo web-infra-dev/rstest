@@ -33,4 +33,28 @@ describe('test spy', () => {
     expect(sayHi).toHaveBeenLastCalledWith('Tom');
     expect(sayHi).toHaveBeenCalledTimes(2);
   });
+
+  it('rstest.fn -> mockImplementation', () => {
+    const sayHi = rstest.fn();
+
+    expect(sayHi.getMockImplementation()).toBeUndefined();
+
+    const res = sayHi('bob');
+
+    expect(res).toBeUndefined();
+
+    const sayHiImpl = (name: string) => `hi ${name}`;
+
+    sayHi.mockImplementation(sayHiImpl).mockImplementationOnce(() => 'hi');
+
+    expect(sayHi('bob')).toBe('hi');
+
+    expect(sayHi('bob')).toBe('hi bob');
+
+    expect(sayHi.getMockImplementation()).toEqual(sayHiImpl);
+
+    expect(sayHi('tom')).toBe('hi tom');
+
+    expect(sayHi).toHaveBeenCalledTimes(4);
+  });
 });
