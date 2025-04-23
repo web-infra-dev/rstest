@@ -8,7 +8,7 @@
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "jest-image-snapshot": "^6.0.0",
-    "path-serializer": "0.3.4",
+    "path-serializer": "0.4.0",
     "strip-ansi": "^7.1.0",
     "tinyexec": "^1.0.1",
     "typescript": "^5.8.3"
