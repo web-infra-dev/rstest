@@ -6,6 +6,7 @@ import type {
   BeforeEachListener,
   Test,
   TestCase,
+  TestEachFn,
   TestRunMode,
   TestSuite,
   TestSuiteListeners,
@@ -305,6 +306,22 @@ export class RunnerRuntime {
       type: 'case',
       timeout,
     });
+  }
+
+  each<T>(cases: T[]): TestEachFn<T> {
+    return (
+      name: string,
+      fn?: (param: T) => void | Promise<void>,
+      timeout: number = this.defaultTestTimeout,
+    ) => {
+      for (let i = 0; i < cases.length; i++) {
+        // TODO: template string table.
+        const param = cases[i]!;
+        // TODO: support test name template
+        // TODO: support param array ([[a, b, expected, actual]])
+        this.it(name, () => fn?.(param), timeout, 'run');
+      }
+    };
   }
 
   fails(

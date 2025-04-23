@@ -13,11 +13,18 @@ type TestFn = (
   timeout?: number,
 ) => void;
 
+export type TestEachFn<T> = (
+  description: string,
+  fn?: (param: T) => MaybePromise<void>,
+  timeout?: number,
+) => void;
+
 export type TestAPI = TestFn & {
   fails: TestFn;
   only: TestFn;
   todo: TestFn;
   skip: TestFn;
+  each: <T>(cases: T[]) => TestEachFn<T>;
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
