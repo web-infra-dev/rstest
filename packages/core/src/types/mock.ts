@@ -89,10 +89,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   getMockImplementation(): T | undefined;
   mockImplementation(fn: T): this;
   mockImplementationOnce(fn: T): this;
-  // withImplementation<T2>(
-  //   fn: T,
-  //   callback: () => T2,
-  // ): T2 extends Promise<unknown> ? Promise<void> : void;
+  withImplementation<T2>(
+    fn: T,
+    callback: () => T2,
+  ): T2 extends Promise<unknown> ? Promise<void> : void;
   // mockReturnThis(): this;
   // mockReturnValue(value: ReturnType<T>): this;
   // mockReturnValueOnce(value: ReturnType<T>): this;

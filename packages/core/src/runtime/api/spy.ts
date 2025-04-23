@@ -35,6 +35,34 @@ const wrapSpy = <T extends FunctionLike>(
       : implementation;
   };
 
+  function withImplementation(fn: T, cb: () => void): void;
+  function withImplementation(fn: T, cb: () => Promise<void>): Promise<void>;
+  function withImplementation(
+    fn: T,
+    cb: () => void | Promise<void>,
+  ): void | Promise<void> {
+    const originalImplementation = implementation;
+
+    implementation = fn;
+    spyState.willCall(willCall);
+
+    const reset = () => {
+      implementation = originalImplementation;
+    };
+
+    const result = cb();
+
+    if (result instanceof Promise) {
+      return result.then(() => {
+        reset();
+      });
+    }
+
+    reset();
+  }
+
+  spyFn.withImplementation = withImplementation;
+
   spyFn.mockImplementation = (fn) => {
     implementation = fn;
     return spyFn;
