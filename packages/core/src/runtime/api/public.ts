@@ -1,5 +1,5 @@
 import '../../types/global';
-import type { Rstest } from '../../types';
+import type { Rstest, RstestUtilities } from '../../types';
 
 export declare const expect: Rstest['expect'];
 export declare const it: Rstest['it'];
@@ -9,3 +9,4 @@ export declare const beforeAll: Rstest['beforeAll'];
 export declare const afterAll: Rstest['afterAll'];
 export declare const beforeEach: Rstest['beforeEach'];
 export declare const afterEach: Rstest['afterEach'];
+export declare const rstest: RstestUtilities;

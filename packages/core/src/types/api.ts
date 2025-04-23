@@ -1,4 +1,5 @@
 import type { ExpectStatic } from '@vitest/expect';
+import type { RstestUtilities } from './mock';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -42,4 +43,5 @@ export type RstestExpect = ExpectStatic;
 
 export type Rstest = RunnerAPI & {
   expect: RstestExpect;
+  rstest: RstestUtilities;
 };
