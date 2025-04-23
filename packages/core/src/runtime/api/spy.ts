@@ -10,12 +10,14 @@ const wrapSpy = <T extends FunctionLike>(
 
   const spyFn = spyImpl as unknown as Mock<T>;
 
-  const mockImplementationOnce: T[] = [];
+  let mockImplementationOnce: T[] = [];
   let implementation = mockFn;
 
-  const mockState = {
+  const initMockState = () => ({
     mockName: mockFn?.name,
-  };
+  });
+
+  let mockState = initMockState();
 
   const spyState = getInternalState(spyImpl);
 
@@ -60,6 +62,26 @@ const wrapSpy = <T extends FunctionLike>(
       },
     }),
   });
+
+  spyFn.mockClear = () => {
+    spyState.reset();
+
+    return spyFn;
+  };
+
+  spyFn.mockReset = () => {
+    spyFn.mockClear();
+    implementation = mockFn;
+    mockImplementationOnce = [];
+
+    return spyFn;
+  };
+
+  spyFn.mockRestore = () => {
+    spyFn.mockReset();
+    spyState.restore();
+    mockState = initMockState();
+  };
 
   return spyFn;
 };

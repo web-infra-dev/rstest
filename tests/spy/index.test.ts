@@ -57,4 +57,51 @@ describe('test spy', () => {
 
     expect(sayHi).toHaveBeenCalledTimes(4);
   });
+
+  it('rstest.fn -> mock clear / reset / restore', () => {
+    const sayHi = rstest.fn(function sayHiFn(name: string) {
+      return `hi ${name}`;
+    });
+    const sayHello = rstest.fn();
+
+    expect(sayHi.getMockName()).toBe('sayHiFn');
+    sayHi.mockImplementation(() => 'hi');
+    sayHello.mockImplementation(() => 'hello');
+
+    expect(sayHi('bob')).toBe('hi');
+    expect(sayHello('bob')).toBe('hello');
+
+    sayHi.mockName('sayHi');
+    expect(sayHi.getMockName()).toBe('sayHi');
+
+    expect(sayHi.mock.calls).toEqual([['bob']]);
+
+    sayHi.mockClear();
+    sayHello.mockClear();
+
+    expect(sayHi.getMockName()).toBe('sayHi');
+
+    expect(sayHi.mock.calls).toEqual([]);
+
+    expect(sayHi).toHaveBeenCalledTimes(0);
+
+    expect(sayHi('bob')).toBe('hi');
+    expect(sayHello()).toBe('hello');
+
+    sayHi.mockReset();
+    sayHello.mockReset();
+
+    expect(sayHi.getMockName()).toBe('sayHi');
+
+    expect(sayHi.mock.calls).toEqual([]);
+
+    expect(sayHi('bob')).toBe('hi bob');
+    expect(sayHello()).toBeUndefined();
+
+    sayHi.mockRestore();
+    sayHello.mockRestore();
+
+    expect(sayHi.getMockName()).toBe('sayHiFn');
+    expect(sayHello.getMockName()).toBe('rstest.fn()');
+  });
 });

@@ -83,9 +83,9 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   getMockName(): string;
   mockName(name: string): this;
   mock: MockContext<T>;
-  // mockClear(): this;
-  // mockReset(): this;
-  // mockRestore(): void;
+  mockClear(): this;
+  mockReset(): this;
+  mockRestore(): void;
   getMockImplementation(): T | undefined;
   mockImplementation(fn: T): this;
   mockImplementationOnce(fn: T): this;
