@@ -10,6 +10,9 @@ const wrapSpy = <T extends FunctionLike>(
 
   const spyFn = spyImpl as unknown as Mock<T>;
 
+  const mockImplementationOnce: T[] = [];
+  let implementation = mockFn;
+
   const mockState = {
     mockName: mockFn?.name,
   };
@@ -23,6 +26,32 @@ const wrapSpy = <T extends FunctionLike>(
 
     return spyFn;
   };
+
+  spyFn.getMockImplementation = () => {
+    return mockImplementationOnce.length
+      ? mockImplementationOnce[mockImplementationOnce.length - 1]
+      : implementation;
+  };
+
+  spyFn.mockImplementation = (fn) => {
+    implementation = fn;
+    return spyFn;
+  };
+
+  spyFn.mockImplementationOnce = (fn) => {
+    mockImplementationOnce.push(fn);
+    return spyFn;
+  };
+
+  function willCall(this: unknown, ...args: any) {
+    let impl = implementation;
+    if (mockImplementationOnce.length) {
+      impl = mockImplementationOnce.shift();
+    }
+    return impl?.apply(this, args);
+  }
+
+  spyState.willCall(willCall);
 
   Object.defineProperty(spyFn, 'mock', {
     get: () => ({
