@@ -17,9 +17,7 @@ describe('test spy', () => {
 
   it('rstest.fn -> mock context', () => {
     const sayHi = rstest.fn((name: string) => `hi ${name}`);
-    const sayHello = rstest.fn((name: string) => {
-      return `hello ${name}`;
-    });
+    const sayHello = rstest.fn((name: string) => `hello ${name}`);
 
     const res = sayHi('bob');
 
