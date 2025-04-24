@@ -1,9 +1,9 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../../scripts';
+import { runRstestCli } from '../scripts';
 
-describe('Expect Edge Cases', () => {
+describe('Test Edge Cases', () => {
   it('no unexpected rpc error about result.expected', async () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
