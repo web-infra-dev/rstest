@@ -15,7 +15,7 @@ describe('test spy', () => {
     expect(sayHi.getMockName()).toBe('sayHi');
   });
 
-  it('rstest.fn -> mock context', () => {
+  it('rstest.fn -> mock properties', () => {
     const sayHi = rstest.fn((name: string) => `hi ${name}`);
     const sayHello = rstest.fn((name: string) => `hello ${name}`);
 
@@ -24,6 +24,8 @@ describe('test spy', () => {
     expect(res).toBe('hi bob');
 
     expect(sayHi.mock.calls).toEqual([['bob']]);
+    expect(sayHi.mock.lastCall).toEqual(['bob']);
+
     expect(sayHi.mock.results).toEqual([
       {
         type: 'return',
@@ -38,6 +40,30 @@ describe('test spy', () => {
     sayHi('Tom');
     expect(sayHi).toHaveBeenLastCalledWith('Tom');
     expect(sayHi).toHaveBeenCalledTimes(2);
+  });
+
+  it('rstest.fn -> mock.instance', () => {
+    const MyClass = rstest.fn();
+    const a = new MyClass();
+    const b = new MyClass();
+    expect(MyClass.mock.instances).toEqual([a, b]);
+  });
+
+  it('rstest.fn -> mock.contexts', () => {
+    const sayHi = rstest.fn(function mockFn(this: any) {
+      return `hi ${this?.name || ''}`;
+    });
+
+    expect(sayHi()).toBe('hi ');
+    expect(sayHi.call({ name: 'bob' })).toBe('hi bob');
+
+    expect(sayHi.call({ name: 'tom' })).toBe('hi tom');
+
+    expect(sayHi.mock.contexts).toEqual([
+      undefined,
+      { name: 'bob' },
+      { name: 'tom' },
+    ]);
   });
 
   it('rstest.fn -> mockImplementation', () => {

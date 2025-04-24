@@ -1,6 +1,8 @@
 import { type SpyInternalImpl, getInternalState, internalSpyOn } from 'tinyspy';
 import type { FunctionLike, Mock, MockContext, MockFn } from '../../types';
 
+let callOrder = 0;
+
 const wrapSpy = <T extends FunctionLike>(
   obj: Record<string, any>,
   methodName: string,
@@ -15,19 +17,22 @@ const wrapSpy = <T extends FunctionLike>(
 
   let mockImplementationOnce: T[] = [];
   let implementation = mockFn;
+  let mockName = mockFn?.name;
 
   const initMockState = () => ({
-    mockName: mockFn?.name,
+    instances: [] as ReturnType<T>[],
+    contexts: [] as ThisParameterType<T>[],
+    invocationCallOrder: [] as number[],
   });
 
   let mockState = initMockState();
 
   const spyState = getInternalState(spyImpl);
 
-  spyFn.getMockName = () => mockState.mockName || methodName;
+  spyFn.getMockName = () => mockName || methodName;
 
   spyFn.mockName = (name: string) => {
-    mockState.mockName = name;
+    mockName = name;
 
     return spyFn;
   };
@@ -111,6 +116,9 @@ const wrapSpy = <T extends FunctionLike>(
 
   function willCall(this: unknown, ...args: any) {
     let impl = implementation;
+    mockState.instances.push(this as ReturnType<T>);
+    mockState.contexts.push(this as ThisParameterType<T>);
+    mockState.invocationCallOrder.push(++callOrder);
     if (mockImplementationOnce.length) {
       impl = mockImplementationOnce.shift();
     }
@@ -124,6 +132,18 @@ const wrapSpy = <T extends FunctionLike>(
       get calls() {
         return spyState.calls;
       },
+      get lastCall() {
+        return spyState.calls[spyState.callCount - 1];
+      },
+      get instances() {
+        return mockState.instances;
+      },
+      get contexts() {
+        return mockState.contexts;
+      },
+      get invocationCallOrder() {
+        return mockState.invocationCallOrder;
+      },
       get results() {
         return spyState.results.map(([resultType, value]) => {
           const type =
@@ -131,10 +151,20 @@ const wrapSpy = <T extends FunctionLike>(
           return { type: type, value };
         });
       },
+      get settledResults() {
+        return spyState.resolves.map(([resultType, value]) => {
+          const type =
+            resultType === 'error'
+              ? ('rejected' as const)
+              : ('fulfilled' as const);
+          return { type, value };
+        });
+      },
     }),
   });
 
   spyFn.mockClear = () => {
+    mockState = initMockState();
     spyState.reset();
 
     return spyFn;
@@ -151,7 +181,7 @@ const wrapSpy = <T extends FunctionLike>(
   spyFn.mockRestore = () => {
     spyFn.mockReset();
     spyState.restore();
-    mockState = initMockState();
+    mockName = mockFn?.name;
   };
 
   return spyFn;
