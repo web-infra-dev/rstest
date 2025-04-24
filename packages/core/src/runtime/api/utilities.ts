@@ -1,6 +1,7 @@
 import type { RstestUtilities } from '../../types';
-import { fn } from './spy';
+import { fn, spyOn } from './spy';
 
 export const rstest: RstestUtilities = {
   fn,
+  spyOn,
 };

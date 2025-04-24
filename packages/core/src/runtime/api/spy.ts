@@ -1,5 +1,11 @@
 import { type SpyInternalImpl, getInternalState, internalSpyOn } from 'tinyspy';
-import type { FunctionLike, Mock, MockContext, MockFn } from '../../types';
+import type {
+  FunctionLike,
+  Mock,
+  MockContext,
+  MockFn,
+  MockInstance,
+} from '../../types';
 
 let callOrder = 0;
 
@@ -115,12 +121,12 @@ const wrapSpy = <T extends FunctionLike>(
   };
 
   function willCall(this: unknown, ...args: any) {
-    let impl = implementation;
+    let impl = implementation || (spyState.getOriginal() as T);
     mockState.instances.push(this as ReturnType<T>);
     mockState.contexts.push(this as ThisParameterType<T>);
     mockState.invocationCallOrder.push(++callOrder);
     if (mockImplementationOnce.length) {
-      impl = mockImplementationOnce.shift();
+      impl = mockImplementationOnce.shift()!;
     }
     return impl?.apply(this, args);
   }
@@ -197,4 +203,21 @@ export const fn: MockFn = <T extends FunctionLike>(mockFn?: T) => {
     defaultName,
     mockFn,
   );
+};
+
+export const spyOn = <T extends Record<string, any>, K extends keyof T>(
+  obj: T,
+  methodName: K,
+  accessType?: 'get' | 'set',
+): MockInstance<T[K]> => {
+  const accessTypeMap = {
+    get: 'getter',
+    set: 'setter',
+  };
+
+  const method = accessType
+    ? { [accessTypeMap[accessType]]: methodName }
+    : methodName;
+
+  return wrapSpy(obj, method as string);
 };
