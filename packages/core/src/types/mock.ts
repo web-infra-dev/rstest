@@ -95,10 +95,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   // mockReturnThis(): this;
   mockReturnValue(value: ReturnType<T>): this;
   mockReturnValueOnce(value: ReturnType<T>): this;
-  // mockResolvedValue(value: Awaited<ReturnType<T>>): this;
-  // mockResolvedValueOnce(value: Awaited<ReturnType<T>>): this;
-  // mockRejectedValue(error: unknown): this;
-  // mockRejectedValueOnce(error: unknown): this;
+  mockResolvedValue(value: Awaited<ReturnType<T>>): this;
+  mockResolvedValueOnce(value: Awaited<ReturnType<T>>): this;
+  mockRejectedValue(error: unknown): this;
+  mockRejectedValueOnce(error: unknown): this;
 }
 
 export interface Mock<T extends FunctionLike = FunctionLike>

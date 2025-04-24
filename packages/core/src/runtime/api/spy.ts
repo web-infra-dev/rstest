@@ -87,6 +87,22 @@ const wrapSpy = <T extends FunctionLike>(
     return spyFn.mockImplementationOnce((() => value) as T);
   };
 
+  spyFn.mockResolvedValue = (value) => {
+    return spyFn.mockImplementation((() => Promise.resolve(value)) as T);
+  };
+
+  spyFn.mockResolvedValueOnce = (value) => {
+    return spyFn.mockImplementationOnce((() => Promise.resolve(value)) as T);
+  };
+
+  spyFn.mockRejectedValue = (value) => {
+    return spyFn.mockImplementation((() => Promise.reject(value)) as T);
+  };
+
+  spyFn.mockRejectedValueOnce = (value) => {
+    return spyFn.mockImplementationOnce((() => Promise.reject(value)) as T);
+  };
+
   function willCall(this: unknown, ...args: any) {
     let impl = implementation;
     if (mockImplementationOnce.length) {

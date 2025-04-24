@@ -138,4 +138,23 @@ describe('test spy', () => {
 
     expect(sayHi()).toBeUndefined();
   });
+
+  it('rstest.fn -> mock async returns', async () => {
+    const sayHi = rstest.fn(() => Promise.resolve(''));
+
+    await expect(sayHi()).resolves.toBe('');
+
+    sayHi.mockResolvedValue('hi').mockResolvedValueOnce('hello');
+
+    await expect(sayHi()).resolves.toBe('hello');
+
+    await expect(sayHi()).resolves.toBe('hi');
+
+    sayHi
+      .mockRejectedValue(new Error('hi'))
+      .mockRejectedValueOnce(new Error('hello'));
+
+    await expect(sayHi()).rejects.toThrowError('hello');
+    await expect(sayHi()).rejects.toThrowError('hi');
+  });
 });
