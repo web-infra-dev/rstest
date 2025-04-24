@@ -103,6 +103,12 @@ const wrapSpy = <T extends FunctionLike>(
     return spyFn.mockImplementationOnce((() => Promise.reject(value)) as T);
   };
 
+  spyFn.mockReturnThis = () => {
+    return spyFn.mockImplementation(function (this: ReturnType<T>) {
+      return this;
+    } as T);
+  };
+
   function willCall(this: unknown, ...args: any) {
     let impl = implementation;
     if (mockImplementationOnce.length) {

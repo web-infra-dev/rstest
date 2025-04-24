@@ -157,4 +157,15 @@ describe('test spy', () => {
     await expect(sayHi()).rejects.toThrowError('hello');
     await expect(sayHi()).rejects.toThrowError('hi');
   });
+
+  it('rstest.fn -> mock return this', () => {
+    const sayHi = rstest.fn(function mockFn(this: any) {
+      return `hi ${this?.name}`;
+    });
+
+    expect(sayHi.call({ name: 'bob' })).toBe('hi bob');
+
+    sayHi.mockReturnThis();
+    expect(sayHi.call({ name: 'bob' })).toEqual({ name: 'bob' });
+  });
 });
