@@ -18,30 +18,33 @@ interface MockResultThrow {
    */
   value: any;
 }
-// interface MockSettledResultFulfilled<T> {
-//   type: 'fulfilled';
-//   value: T;
-// }
-// interface MockSettledResultRejected {
-//   type: 'rejected';
-//   value: any;
-// }
 
-// interface MockSettledResultFulfilled<T> {
-//   type: 'fulfilled';
-//   value: T;
-// }
-// interface MockSettledResultRejected {
-//   type: 'rejected';
-//   value: any;
-// }
 type MockResult<T> =
   | MockResultReturn<T>
   | MockResultThrow
   | MockResultIncomplete;
-// type MockSettledResult<T> =
-//   | MockSettledResultFulfilled<T>
-//   | MockSettledResultRejected;
+
+interface MockSettledResultFulfilled<T> {
+  type: 'fulfilled';
+  value: T;
+}
+interface MockSettledResultRejected {
+  type: 'rejected';
+  value: any;
+}
+
+interface MockSettledResultFulfilled<T> {
+  type: 'fulfilled';
+  value: T;
+}
+interface MockSettledResultRejected {
+  type: 'rejected';
+  value: any;
+}
+
+type MockSettledResult<T> =
+  | MockSettledResultFulfilled<T>
+  | MockSettledResultRejected;
 
 export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
@@ -51,21 +54,22 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of all the object instances that have been instantiated from the mock.
    */
-  // instances: Array<ReturnType<T>>;
+  instances: Array<ReturnType<T>>;
   /**
    * List of all the function contexts that have been applied to calls to the mock.
    */
-  // contexts: Array<ThisParameterType<T>>;
+  contexts: Array<ThisParameterType<T>>;
   /**
-   * List of the call order indexes of the mock. Jest is indexing the order of
-   * invocations of all mocks in a test file. The index is starting with `1`.
+   * The order of mock's execution.
+   * This returns an array of numbers which are shared between all defined mocks.
+   * The index is starting with `1`.
    */
-  // invocationCallOrder: Array<number>;
+  invocationCallOrder: Array<number>;
   /**
    * List of the call arguments of the last call that was made to the mock.
    * If the function was not called, it will return `undefined`.
    */
-  // lastCall?: Parameters<T>;
+  lastCall: Parameters<T> | undefined;
   /**
    * List of the results of all calls that have been made to the mock.
    */
@@ -74,7 +78,7 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of the results of all values that were `resolved` or `rejected` from the function.
    */
-  // settledResults: MockSettledResult<Awaited<ReturnType<T>>>[];
+  settledResults: MockSettledResult<Awaited<ReturnType<T>>>[];
 };
 
 export interface MockInstance<T extends FunctionLike = FunctionLike> {

@@ -27,13 +27,13 @@ describe('diff', () => {
       .filter(Boolean);
 
     // should diff object correctly
-    expect(logs.find((log) => log.includes('-"b":2,'))).toBeDefined();
-    expect(logs.find((log) => log.includes('+"b":3,'))).toBeDefined();
-    expect(logs.find((log) => log.includes('-"cA":1,'))).toBeDefined();
-    expect(logs.find((log) => log.includes('+"cA":3,'))).toBeDefined();
+    expect(logs.find((log) => log.includes('-"b":3,'))).toBeDefined();
+    expect(logs.find((log) => log.includes('+"b":2,'))).toBeDefined();
+    expect(logs.find((log) => log.includes('-"cA":3,'))).toBeDefined();
+    expect(logs.find((log) => log.includes('+"cA":1,'))).toBeDefined();
 
     // should diff string correctly
-    expect(logs.find((log) => log.includes('-hi'))).toBeDefined();
-    expect(logs.find((log) => log.includes('+hii'))).toBeDefined();
+    expect(logs.find((log) => log.includes('-hii'))).toBeDefined();
+    expect(logs.find((log) => log.includes('+hi'))).toBeDefined();
   });
 });
