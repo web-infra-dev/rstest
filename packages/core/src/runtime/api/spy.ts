@@ -42,12 +42,15 @@ const wrapSpy = <T extends FunctionLike>(
     cb: () => void | Promise<void>,
   ): void | Promise<void> {
     const originalImplementation = implementation;
+    const originalMockImplementationOnce = mockImplementationOnce;
 
     implementation = fn;
+    mockImplementationOnce = [];
     spyState.willCall(willCall);
 
     const reset = () => {
       implementation = originalImplementation;
+      mockImplementationOnce = originalMockImplementationOnce;
     };
 
     const result = cb();

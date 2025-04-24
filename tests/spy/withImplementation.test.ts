@@ -25,9 +25,10 @@ it('test withImplementation', async () => {
     [
       "[call callback]",
       "[call temp]",
-      "[callback res] temp",
+      "[call temp]",
+      "[callback res] temp temp",
       "[call myMockFn]",
-      "[call original]",
+      "[call original - 1]",
       "[call myMockFn - 1]",
       "[call original]",
       "[1 - call callback]",
