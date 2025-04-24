@@ -114,5 +114,16 @@ export interface Mock<T extends FunctionLike = FunctionLike>
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 
 export type RstestUtilities = {
+  /**
+   * Creates a spy on a function.
+   */
   fn: MockFn;
+  /**
+   * Creates a spy on a method of an object
+   */
+  spyOn: <T extends Record<string, any>, K extends keyof T>(
+    obj: T,
+    methodName: K,
+    accessType?: 'get' | 'set',
+  ) => MockInstance<T[K]>;
 };
