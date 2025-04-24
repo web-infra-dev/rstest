@@ -1,24 +1,23 @@
 import type { FunctionLike } from './utils';
 
-// TODO
-// interface MockResultReturn<T> {
-//   type: 'return';
-//   /**
-//    * The value that was returned from the function. If function returned a Promise, then this will be a resolved value.
-//    */
-//   value: T;
-// }
-// interface MockResultIncomplete {
-//   type: 'incomplete';
-//   value: undefined;
-// }
-// interface MockResultThrow {
-//   type: 'throw';
-//   /**
-//    * An error that was thrown during function execution.
-//    */
-//   value: any;
-// }
+interface MockResultReturn<T> {
+  type: 'return';
+  /**
+   * The value that was returned from the function. If function returned a Promise, then this will be a resolved value.
+   */
+  value: T;
+}
+interface MockResultIncomplete {
+  type: 'incomplete';
+  value: undefined;
+}
+interface MockResultThrow {
+  type: 'throw';
+  /**
+   * An error that was thrown during function execution.
+   */
+  value: any;
+}
 // interface MockSettledResultFulfilled<T> {
 //   type: 'fulfilled';
 //   value: T;
@@ -36,10 +35,10 @@ import type { FunctionLike } from './utils';
 //   type: 'rejected';
 //   value: any;
 // }
-// type MockResult<T> =
-//   | MockResultReturn<T>
-//   | MockResultThrow
-//   | MockResultIncomplete;
+type MockResult<T> =
+  | MockResultReturn<T>
+  | MockResultThrow
+  | MockResultIncomplete;
 // type MockSettledResult<T> =
 //   | MockSettledResultFulfilled<T>
 //   | MockSettledResultRejected;
@@ -70,7 +69,7 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of the results of all calls that have been made to the mock.
    */
-  // results: Array<MockResult<ReturnType<T>>>;
+  results: Array<MockResult<ReturnType<T>>>;
 
   /**
    * List of the results of all values that were `resolved` or `rejected` from the function.
@@ -94,8 +93,8 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
     callback: () => T2,
   ): T2 extends Promise<unknown> ? Promise<void> : void;
   // mockReturnThis(): this;
-  // mockReturnValue(value: ReturnType<T>): this;
-  // mockReturnValueOnce(value: ReturnType<T>): this;
+  mockReturnValue(value: ReturnType<T>): this;
+  mockReturnValueOnce(value: ReturnType<T>): this;
   // mockResolvedValue(value: Awaited<ReturnType<T>>): this;
   // mockResolvedValueOnce(value: Awaited<ReturnType<T>>): this;
   // mockRejectedValue(error: unknown): this;

@@ -24,6 +24,12 @@ describe('test spy', () => {
     expect(res).toBe('hi bob');
 
     expect(sayHi.mock.calls).toEqual([['bob']]);
+    expect(sayHi.mock.results).toEqual([
+      {
+        type: 'return',
+        value: 'hi bob',
+      },
+    ]);
 
     expect(sayHi).toHaveBeenCalledTimes(1);
     expect(sayHi).toHaveBeenCalledWith('bob');
@@ -103,5 +109,33 @@ describe('test spy', () => {
 
     expect(sayHi.getMockName()).toBe('sayHiFn');
     expect(sayHello.getMockName()).toBe('rstest.fn()');
+  });
+
+  it('rstest.fn -> mock returns', () => {
+    const sayHi = rstest.fn();
+
+    const res = sayHi('bob');
+
+    expect(res).toBeUndefined();
+
+    expect(sayHi).toHaveReturned();
+
+    expect(sayHi.getMockImplementation()).toBeUndefined();
+
+    sayHi.mockReturnValue('hi').mockReturnValueOnce('hello');
+
+    expect(sayHi.getMockImplementation()).toBeDefined();
+
+    expect(sayHi()).toBe('hello');
+
+    expect(sayHi()).toBe('hi');
+
+    expect(sayHi()).toBe('hi');
+
+    expect(sayHi).toHaveBeenCalledTimes(4);
+
+    sayHi.mockReset();
+
+    expect(sayHi()).toBeUndefined();
   });
 });

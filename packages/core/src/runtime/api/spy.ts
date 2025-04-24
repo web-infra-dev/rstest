@@ -1,12 +1,15 @@
-import { getInternalState, internalSpyOn } from 'tinyspy';
-import type { FunctionLike, Mock, MockFn } from '../../types';
+import { type SpyInternalImpl, getInternalState, internalSpyOn } from 'tinyspy';
+import type { FunctionLike, Mock, MockContext, MockFn } from '../../types';
 
 const wrapSpy = <T extends FunctionLike>(
   obj: Record<string, any>,
   methodName: string,
   mockFn?: T,
 ): Mock<T> => {
-  const spyImpl = internalSpyOn(obj, methodName, mockFn);
+  const spyImpl = internalSpyOn(obj, methodName, mockFn) as SpyInternalImpl<
+    Parameters<T>,
+    ReturnType<T>
+  >;
 
   const spyFn = spyImpl as unknown as Mock<T>;
 
@@ -76,6 +79,14 @@ const wrapSpy = <T extends FunctionLike>(
     return spyFn;
   };
 
+  spyFn.mockReturnValue = (value) => {
+    return spyFn.mockImplementation((() => value) as T);
+  };
+
+  spyFn.mockReturnValueOnce = (value) => {
+    return spyFn.mockImplementationOnce((() => value) as T);
+  };
+
   function willCall(this: unknown, ...args: any) {
     let impl = implementation;
     if (mockImplementationOnce.length) {
@@ -87,9 +98,16 @@ const wrapSpy = <T extends FunctionLike>(
   spyState.willCall(willCall);
 
   Object.defineProperty(spyFn, 'mock', {
-    get: () => ({
+    get: (): MockContext<T> => ({
       get calls() {
         return spyState.calls;
+      },
+      get results() {
+        return spyState.results.map(([resultType, value]) => {
+          const type =
+            resultType === 'error' ? ('throw' as const) : ('return' as const);
+          return { type: type, value };
+        });
       },
     }),
   });
