@@ -139,4 +139,9 @@ export type RstestUtilities = {
    * Calls `.mockRestore()` on all spies.
    */
   restoreAllMocks: () => RstestUtilities;
+
+  /**
+   * WIP: Mock a module
+   */
+  mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
 };

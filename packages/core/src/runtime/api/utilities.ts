@@ -22,4 +22,7 @@ export const rstest: RstestUtilities = {
     }
     return rstest;
   },
+  mock: () => {
+    // TODO
+  },
 };
