@@ -126,4 +126,17 @@ export type RstestUtilities = {
     methodName: K,
     accessType?: 'get' | 'set',
   ) => MockInstance<T[K]>;
+
+  /**
+   * Calls .mockClear() on all spies.
+   */
+  clearAllMocks: () => RstestUtilities;
+  /**
+   * Calls .mockReset() on all spies.
+   */
+  resetAllMocks: () => RstestUtilities;
+  /**
+   * Calls .mockReset() on all spies.
+   */
+  restoreAllMocks: () => RstestUtilities;
 };
