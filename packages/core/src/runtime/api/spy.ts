@@ -9,6 +9,8 @@ import type {
 
 let callOrder = 0;
 
+export const mocks: Set<MockInstance> = new Set();
+
 const wrapSpy = <T extends FunctionLike>(
   obj: Record<string, any>,
   methodName: string,
@@ -189,6 +191,8 @@ const wrapSpy = <T extends FunctionLike>(
     spyState.restore();
     mockName = mockFn?.name;
   };
+
+  mocks.add(spyFn);
 
   return spyFn;
 };

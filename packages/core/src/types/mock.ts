@@ -128,6 +128,19 @@ export type RstestUtilities = {
   ) => MockInstance<T[K]>;
 
   /**
+   * Calls `.mockClear()` on all spies.
+   */
+  clearAllMocks: () => RstestUtilities;
+  /**
+   * Calls `.mockReset()` on all spies.
+   */
+  resetAllMocks: () => RstestUtilities;
+  /**
+   * Calls `.mockRestore()` on all spies.
+   */
+  restoreAllMocks: () => RstestUtilities;
+
+  /**
    * WIP: Mock a module
    */
   mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
