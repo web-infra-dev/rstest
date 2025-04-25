@@ -182,7 +182,7 @@ export class TestRunner {
                 snapshotClient.getSnapshotState(testPath),
               );
               await test.fn?.();
-              this.afterRunTest();
+              this.afterRunTest(test);
 
               result = {
                 status: 'fail' as const,
@@ -210,7 +210,7 @@ export class TestRunner {
                 snapshotClient.getSnapshotState(testPath),
               );
               await test.fn?.();
-              this.afterRunTest();
+              this.afterRunTest(test);
               result = {
                 parentNames: test.parentNames,
                 name: test.name,
@@ -328,7 +328,7 @@ export class TestRunner {
     );
   }
 
-  private afterRunTest(): void {
+  private afterRunTest(test: TestCase): void {
     const {
       assertionCalls,
       expectedAssertionsNumber,
@@ -336,6 +336,11 @@ export class TestRunner {
       isExpectingAssertions,
       isExpectingAssertionsError,
     } = getState((globalThis as any)[GLOBAL_EXPECT]);
+
+    if (test.result?.state === 'fail') {
+      throw test.result!.errors;
+    }
+
     if (
       expectedAssertionsNumber !== null &&
       assertionCalls !== expectedAssertionsNumber

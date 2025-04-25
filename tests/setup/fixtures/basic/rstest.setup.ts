@@ -4,6 +4,8 @@ import { createSnapshotSerializer } from 'path-serializer';
 
 process.env.RETEST_SETUP_FLAG = '1';
 
+process.env.NODE_ENV = 'rstest:production';
+
 beforeAll((ctx) => {
   console.log('[beforeAll] root');
   expect(ctx.filepath).toContain('index.test.ts');

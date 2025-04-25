@@ -5,6 +5,23 @@ import type { MaybePromise } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
+export type TaskState = 'pass' | 'fail';
+
+export interface TaskResult {
+  /**
+   * State of the task. Inherits the `task.mode` during collection.
+   * When the task has finished, it will be changed to `pass` or `fail`.
+   * - **pass**: task ran successfully
+   * - **fail**: task failed
+   */
+  state: TaskState;
+  /**
+   * Errors that occurred during the task execution. It is possible to have several errors
+   * if `expect.soft()` failed multiple times or `retry` was triggered.
+   */
+  errors?: TestError[];
+}
+
 export type TestCase = {
   filePath: string;
   name: string;
@@ -22,6 +39,10 @@ export type TestCase = {
    * Store promises (from async expects) to wait for them before finishing the test
    */
   promises?: Promise<any>[];
+  /**
+   * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
+   */
+  result?: TaskResult;
 };
 
 export type SuiteContext = {
