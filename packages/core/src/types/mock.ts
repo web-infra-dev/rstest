@@ -136,7 +136,7 @@ export type RstestUtilities = {
    */
   resetAllMocks: () => RstestUtilities;
   /**
-   * Calls `.mockReset()` on all spies.
+   * Calls `.mockRestore()` on all spies.
    */
   restoreAllMocks: () => RstestUtilities;
 };
