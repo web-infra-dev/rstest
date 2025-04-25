@@ -128,6 +128,11 @@ export type RstestUtilities = {
   ) => MockInstance<T[K]>;
 
   /**
+   * Determines if the given function is a mocked function.
+   */
+  isMockFunction: (fn: any) => fn is MockInstance;
+
+  /**
    * Calls `.mockClear()` on all spies.
    */
   clearAllMocks: () => RstestUtilities;

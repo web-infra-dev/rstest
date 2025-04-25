@@ -1,9 +1,10 @@
 import type { RstestUtilities } from '../../types';
-import { fn, mocks, spyOn } from './spy';
+import { fn, isMockFunction, mocks, spyOn } from './spy';
 
 export const rstest: RstestUtilities = {
   fn,
   spyOn,
+  isMockFunction,
   clearAllMocks: () => {
     for (const mock of mocks) {
       mock.mockClear();

@@ -26,4 +26,17 @@ describe('test spyOn', () => {
 
     expect(hi.sayHi()).toBe('hi');
   });
+
+  it('isMockFunction', () => {
+    const hi = {
+      sayHi: () => 'hi',
+    };
+    const spy = rstest.spyOn(hi, 'sayHi');
+
+    expect(rstest.isMockFunction(spy)).toBeTruthy();
+    expect(rstest.isMockFunction(hi.sayHi)).toBeTruthy();
+
+    spy.mockRestore();
+    expect(rstest.isMockFunction(hi.sayHi)).toBeFalsy();
+  });
 });

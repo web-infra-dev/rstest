@@ -225,3 +225,6 @@ export const spyOn = <T extends Record<string, any>, K extends keyof T>(
 
   return wrapSpy(obj, method as string);
 };
+
+export const isMockFunction = (fn: any): fn is MockInstance =>
+  typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;

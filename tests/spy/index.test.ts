@@ -90,6 +90,12 @@ describe('test spy', () => {
     expect(sayHi).toHaveBeenCalledTimes(4);
   });
 
+  it('isMockFunction', () => {
+    const sayHi = rstest.fn();
+    expect(rstest.isMockFunction(sayHi)).toBeTruthy();
+    expect(rstest.isMockFunction(() => {})).toBeFalsy();
+  });
+
   it('rstest.fn -> mock clear / reset / restore', () => {
     const sayHi = rstest.fn(function sayHiFn(name: string) {
       return `hi ${name}`;
