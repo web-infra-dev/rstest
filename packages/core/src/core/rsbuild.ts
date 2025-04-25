@@ -9,6 +9,7 @@ import {
 import path from 'pathe';
 import type { EntryInfo, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
+import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
 const isMultiCompiler = <
@@ -62,30 +63,6 @@ const autoExternalNodeModules: (
   });
 };
 
-class TestFileWatchPlugin {
-  private contextToWatch: string | null = null;
-
-  constructor(contextToWatch: string) {
-    this.contextToWatch = contextToWatch;
-  }
-
-  apply(compiler: Rspack.Compiler) {
-    compiler.hooks.afterCompile.tap(
-      'Rstest:TestFileWatchPlugin',
-      (compilation) => {
-        if (this.contextToWatch === null) {
-          return;
-        }
-
-        const contextDep = compilation.contextDependencies;
-        if (!contextDep.has(this.contextToWatch)) {
-          contextDep.add(this.contextToWatch);
-        }
-      },
-    );
-  }
-}
-
 export const prepareRsbuild = async (
   name: string,
   globTestSourceEntries: () => Promise<Record<string, string>>,
@@ -135,18 +112,12 @@ export const prepareRsbuild = async (
                 moduleIds: 'named',
                 chunkIds: 'named',
               };
-
-              config.plugins!.push(new TestFileWatchPlugin(process.cwd()));
-              config.entry = async () => {
-                const sourceEntries = await globTestSourceEntries();
-                return {
-                  ...sourceEntries,
-                  ...setupFiles,
-                };
-              };
             },
           },
-          plugins: [pluginIgnoreResolveError],
+          plugins: [
+            pluginIgnoreResolveError,
+            pluginEntryWatch({ globTestSourceEntries, setupFiles }),
+          ],
         },
       },
     },
@@ -160,7 +131,6 @@ export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
-  rootPath,
 }: {
   rsbuildInstance: RsbuildInstance;
   name: string;
@@ -187,10 +157,6 @@ export const createRsbuildServer = async ({
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;
-      });
-
-      api.modifyRspackConfig((config) => {
-        config?.plugins?.push(new TestFileWatchPlugin(rootPath));
       });
     },
   };
