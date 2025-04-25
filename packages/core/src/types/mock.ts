@@ -126,4 +126,9 @@ export type RstestUtilities = {
     methodName: K,
     accessType?: 'get' | 'set',
   ) => MockInstance<T[K]>;
+
+  /**
+   * WIP: Mock a module
+   */
+  mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
 };
