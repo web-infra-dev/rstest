@@ -14,18 +14,67 @@ describe('Expect API', () => {
     expect(sayHi()).toBe('hi');
     expect(sayHi()).toBeTruthy();
 
+    expect(null).toBeNull();
+  });
+
+  it('test number expect', () => {
+    expect(0.2 + 0.1).toBeCloseTo(0.3, 5);
+
+    expect(2).toBeGreaterThan(1);
+
+    expect(2).toBeGreaterThanOrEqual(2);
+  });
+
+  it('expect toHaveLength', () => {
+    expect('red').toHaveLength(3);
+    expect(['blue', 'red']).toHaveLength(2);
+    expect({ length: 3 }).toHaveLength(3);
+  });
+
+  it('test array expect', () => {
     expect(['blue', 'red']).toContain('blue');
+
+    expect('red').toBeOneOf(['blue', 'green', 'red']);
   });
 
-  it('test expect matcher', () => {
-    expect('blue red').toMatch('red');
-    expect('blue red').toMatch(/red/);
-    expect({ type: 'color', name: 'red' }).toMatchObject({ type: 'color' });
+  it('test object expect', () => {
+    const obj = {
+      name: 'blue',
+    };
+    expect(obj).toEqual({ ...obj });
+    expect(obj).toEqual({ ...obj, type: undefined });
+    expect(obj).not.toStrictEqual({ ...obj, type: undefined });
+
+    expect({ name: 'blue', type: 'color' }).toMatchObject(obj);
   });
 
-  it('test expect modifiers', () => {
+  it('test expect type', () => {
+    expect('red').toBeTypeOf('string');
+
+    class Test {
+      constructor(public name: string) {}
+    }
+    const test = new Test('blue');
+    expect(test).toBeInstanceOf(Test);
+  });
+
+  it('test expect modifiers', async () => {
     expect(Promise.resolve('blue')).resolves.toBe('blue');
     expect(Promise.reject(new Error('red'))).rejects.toThrow('red');
+
+    await expect(
+      new Promise((resolve) => {
+        setTimeout(() => {
+          resolve('blue');
+        }, 100);
+      }),
+    ).resolves.toBe('blue');
+  });
+
+  it('test expect toSatisfy', () => {
+    const isOdd = (num: number) => num % 2 === 1;
+    expect(1).toSatisfy(isOdd);
+    expect(2).not.toSatisfy(isOdd);
   });
 
   it('test expect assertions', () => {
@@ -42,6 +91,7 @@ describe('Expect API', () => {
 
     expect(true).not.toBeFalsy();
     expect(false).not.toBeTruthy();
+    expect(undefined).not.toBeNull();
 
     expect(['blue', 'red']).not.toContain('blu');
     expect('blue red').not.toMatch('redd');

@@ -176,6 +176,11 @@ describe('test spy', () => {
 
     await expect(sayHi()).resolves.toBe('hi');
 
+    expect(sayHi).toHaveResolved();
+    expect(sayHi).toHaveResolvedTimes(3);
+    expect(sayHi).toHaveResolvedWith('hi');
+    expect(sayHi).not.toHaveResolvedWith('hi1');
+
     sayHi
       .mockRejectedValue(new Error('hi'))
       .mockRejectedValueOnce(new Error('hello'));
