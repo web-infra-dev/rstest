@@ -324,7 +324,7 @@ export class RunnerRuntime {
         const param = cases[i]!;
         // TODO: support test name template
         // TODO: support param array ([[a, b, expected, actual]])
-        this.describe(name, () => fn?.(param));
+        this.describe(name, () => fn?.(param), 'run', true);
       }
     };
   }

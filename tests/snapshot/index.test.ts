@@ -54,6 +54,6 @@ describe('test snapshot', () => {
       ),
     ).toBeTruthy();
 
-    expect(logs.find((log) => log.includes('Tests 3 failed'))).toBeTruthy();
+    expect(logs.find((log) => log.includes('Tests 6 failed'))).toBeTruthy();
   });
 });
