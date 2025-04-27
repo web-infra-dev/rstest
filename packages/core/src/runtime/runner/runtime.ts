@@ -13,6 +13,7 @@ import type {
   TestSuiteListeners,
 } from '../../types';
 import { ROOT_SUITE_NAME, castArray } from '../../utils';
+import { formatTitle } from '../util';
 
 type ListenersKey<T extends TestSuiteListeners> =
   T extends `${infer U}Listeners` ? U : never;
@@ -326,7 +327,12 @@ export class RunnerRuntime {
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
-        this.describe(name, () => fn?.(...params), 'run', true);
+        this.describe(
+          formatTitle(name, param, i),
+          () => fn?.(...params),
+          'run',
+          true,
+        );
       }
     };
   }
@@ -338,7 +344,13 @@ export class RunnerRuntime {
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
-        this.it(name, () => fn?.(...params), timeout, 'run', true);
+        this.it(
+          formatTitle(name, param, i),
+          () => fn?.(...params),
+          timeout,
+          'run',
+          true,
+        );
       }
     };
   }
