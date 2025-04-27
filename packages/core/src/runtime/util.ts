@@ -37,7 +37,7 @@ export const formatTestError = (err: any): TestError[] => {
   });
 };
 
-export const formatTitle = (
+export const formatName = (
   template: string,
   param: any[] | Record<string, any>,
   index: number,

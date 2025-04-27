@@ -13,7 +13,7 @@ import type {
   TestSuiteListeners,
 } from '../../types';
 import { ROOT_SUITE_NAME, castArray } from '../../utils';
-import { formatTitle } from '../util';
+import { formatName } from '../util';
 
 type ListenersKey<T extends TestSuiteListeners> =
   T extends `${infer U}Listeners` ? U : never;
@@ -328,7 +328,7 @@ export class RunnerRuntime {
         const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
         this.describe(
-          formatTitle(name, param, i),
+          formatName(name, param, i),
           () => fn?.(...params),
           'run',
           true,
@@ -345,7 +345,7 @@ export class RunnerRuntime {
         const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
         this.it(
-          formatTitle(name, param, i),
+          formatName(name, param, i),
           () => fn?.(...params),
           timeout,
           'run',
