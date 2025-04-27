@@ -8,3 +8,5 @@
   - '/^breaking change/'
 'change: docs':
   - '/^docs/'
+'release':
+  - '/^release/'
