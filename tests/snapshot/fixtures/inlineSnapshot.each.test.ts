@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 
-describe('test ineSnapshot in each', () => {
+describe('test inlineSnapshot in each', () => {
   it.each([
     { a: 1, b: 1 },
     { a: 1, b: 2 },
