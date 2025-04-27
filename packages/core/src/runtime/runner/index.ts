@@ -1,8 +1,10 @@
 import type {
   DescribeAPI,
+  DescribeEachFn,
   RunnerAPI,
   RunnerHooks,
   TestAPI,
+  TestEachFn,
   TestFileResult,
   WorkerState,
 } from '../../types';
@@ -36,13 +38,13 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   it.todo = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'todo');
   it.skip = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'skip');
   it.only = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'only');
-  it.each = runtimeAPI.each.bind(runtimeAPI);
+  it.each = runtimeAPI.each.bind(runtimeAPI) as TestEachFn;
 
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
   describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
   describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
   describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
-  describe.each = runtimeAPI.describeEach.bind(runtimeAPI);
+  describe.each = runtimeAPI.describeEach.bind(runtimeAPI) as DescribeEachFn;
 
   return {
     api: {

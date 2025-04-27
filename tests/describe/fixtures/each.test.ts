@@ -9,3 +9,13 @@ describe.each([
     expect(a + b).toBe(expected);
   });
 });
+
+describe.each([
+  [2, 1, 3],
+  [2, 2, 4],
+  [3, 1, 4],
+])('add two numbers correctly', (a, b, expected) => {
+  it(`should return ${expected}`, () => {
+    expect(a + b).toBe(expected);
+  });
+});

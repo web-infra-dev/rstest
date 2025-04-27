@@ -21,5 +21,5 @@ it('Describe Each API', async () => {
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 
-  expect(logs.find((log) => log.includes('Tests 3 passed'))).toBeTruthy();
+  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
 });
