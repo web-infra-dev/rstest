@@ -29,6 +29,8 @@ export type TestCase = {
   runMode: TestRunMode;
   timeout?: number;
   fails?: boolean;
+  each?: boolean;
+  inTestEach?: boolean;
   // TODO
   only?: boolean;
   // TODO
@@ -61,6 +63,8 @@ export type TestSuite = {
   name: string;
   parentNames?: string[];
   runMode: TestRunMode;
+  each?: boolean;
+  inTestEach?: boolean;
   // TODO
   filepath?: string;
   /** nested cases and suite could in a suite */

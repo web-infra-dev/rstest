@@ -190,12 +190,14 @@ export class RunnerRuntime {
     name: string,
     fn?: () => MaybePromise<void>,
     runMode: TestRunMode = 'run',
+    each = false,
   ): void {
     const currentSuite: TestSuite = {
       name,
       runMode,
       tests: [],
       type: 'suite',
+      each,
     };
 
     if (!fn) {
@@ -228,6 +230,10 @@ export class RunnerRuntime {
       this.tests.push(test);
     } else {
       const current = this._currentTest[this._currentTest.length - 1]!;
+
+      if (current.each || current.inTestEach) {
+        test.inTestEach = true;
+      }
 
       if (current.type === 'case') {
         throw new Error(
@@ -291,6 +297,7 @@ export class RunnerRuntime {
     fn?: () => void | Promise<void>,
     timeout: number = this.defaultTestTimeout,
     runMode: TestRunMode = 'run',
+    each = false,
   ): void {
     this.addTestCase({
       name,
@@ -305,6 +312,7 @@ export class RunnerRuntime {
       runMode,
       type: 'case',
       timeout,
+      each,
     });
   }
 
@@ -319,7 +327,7 @@ export class RunnerRuntime {
         const param = cases[i]!;
         // TODO: support test name template
         // TODO: support param array ([[a, b, expected, actual]])
-        this.it(name, () => fn?.(param), timeout, 'run');
+        this.it(name, () => fn?.(param), timeout, 'run', true);
       }
     };
   }
