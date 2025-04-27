@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli, waitFile } from '../scripts';
+import { expectFile, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,7 +28,7 @@ describe('test snapshot', () => {
       },
     });
 
-    await waitFile(snapshotFilePath, 3000);
+    await expectFile(snapshotFilePath, 3000);
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
     const content = fs.readFileSync(snapshotFilePath, 'utf-8');
