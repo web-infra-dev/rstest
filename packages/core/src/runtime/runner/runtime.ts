@@ -326,7 +326,7 @@ export class RunnerRuntime {
         // TODO: template string table.
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
-        // TODO: support test name template
+
         this.describe(
           formatName(name, param, i),
           () => fn?.(...params),
@@ -343,7 +343,7 @@ export class RunnerRuntime {
         // TODO: template string table.
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
-        // TODO: support test name template
+
         this.it(
           formatName(name, param, i),
           () => fn?.(...params),

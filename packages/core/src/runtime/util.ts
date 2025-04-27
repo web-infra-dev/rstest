@@ -58,9 +58,27 @@ export const formatName = (
   if (Array.isArray(param)) {
     // format printf-like string
     // https://nodejs.org/api/util.html#util_util_format_format_args
-    return format(templateStr, ...param);
+    // Need a more standard check for valid format specifiers
+    return templateStr.includes('%')
+      ? format(templateStr, ...param)
+      : templateStr;
   }
 
-  // TODO: support object param
-  return templateStr;
+  return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
+    const value = getValue(param, key);
+    return value?.toString();
+  });
 };
+
+function getValue(source: any, path: string, defaultValue = undefined): any {
+  // a[3].b -> a.3.b
+  const paths = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+  let result = source;
+  for (const p of paths) {
+    result = result[p];
+    if (result === undefined) {
+      return defaultValue;
+    }
+  }
+  return result;
+}

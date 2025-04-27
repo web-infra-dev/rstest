@@ -3,7 +3,10 @@ import type { TestSuite } from '../../src/types';
 
 describe('RunnerRuntime', () => {
   it('should add test correctly', async () => {
-    const runtime = new RunnerRuntime(__filename);
+    const runtime = new RunnerRuntime({
+      sourcePath: __filename,
+      testTimeout: 100,
+    });
 
     runtime.describe('suite - 0', () => {
       runtime.it('test - 0', () => {});
@@ -41,7 +44,10 @@ describe('RunnerRuntime', () => {
   });
 
   it('should add test correctly when describe fn undefined', async () => {
-    const runtime = new RunnerRuntime(__filename);
+    const runtime = new RunnerRuntime({
+      sourcePath: __filename,
+      testTimeout: 100,
+    });
 
     runtime.describe('suite - 0');
 
