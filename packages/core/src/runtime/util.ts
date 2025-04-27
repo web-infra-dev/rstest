@@ -1,3 +1,4 @@
+import { format } from 'node:util';
 import { diff } from 'jest-diff';
 import type { TestError } from '../types';
 
@@ -34,4 +35,32 @@ export const formatTestError = (err: any): TestError[] => {
 
     return errObj;
   });
+};
+
+export const formatName = (
+  template: string,
+  param: any[] | Record<string, any>,
+  index: number,
+): string => {
+  let templateStr = template;
+
+  if (['%%', '%#', '%$'].some((flag) => templateStr.includes(flag))) {
+    // '%%' single percent sign ('%')
+    // '%#' match index (0 based) of the test case
+    // '%$' match index (1 based) of the test case
+    templateStr = templateStr
+      .replace(/%%/g, '__rstest_escaped_%__')
+      .replace(/%#/g, `${index}`)
+      .replace(/%\$/g, `${index + 1}`)
+      .replace(/__rstest_escaped_%__/g, '%%');
+  }
+
+  if (Array.isArray(param)) {
+    // format printf-like string
+    // https://nodejs.org/api/util.html#util_util_format_format_args
+    return format(templateStr, ...param);
+  }
+
+  // TODO: support object param
+  return templateStr;
 };

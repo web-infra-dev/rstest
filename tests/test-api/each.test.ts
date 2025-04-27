@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { getTestName, runRstestCli } from '../scripts';
 
 it('Test Each API', async () => {
   const __filename = fileURLToPath(import.meta.url);
@@ -21,13 +21,20 @@ it('Test Each API', async () => {
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 
-  expect(logs.filter((log) => log.startsWith('['))).toMatchInlineSnapshot(`
+  expect(
+    logs
+      .filter((log) => log.includes('add'))
+      .map((log) => getTestName(log, '✓')),
+  ).toMatchInlineSnapshot(`
     [
-      "[beforeEach] root",
-      "[beforeEach] root",
-      "[beforeEach] root",
+      "add($a, $b) -> $expected",
+      "add($a, $b) -> $expected",
+      "add($a, $b) -> $expected",
+      "case-0 add(2, 1) -> 3",
+      "case-1 add(2, 2) -> 4",
+      "case-2 add(3, 1) -> 4",
     ]
   `);
 
-  expect(logs.find((log) => log.includes('Tests 3 passed'))).toBeTruthy();
+  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
 });

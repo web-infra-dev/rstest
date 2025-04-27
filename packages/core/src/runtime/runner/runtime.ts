@@ -12,7 +12,8 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
-import { ROOT_SUITE_NAME } from '../../utils';
+import { ROOT_SUITE_NAME, castArray } from '../../utils';
+import { formatName } from '../util';
 
 type ListenersKey<T extends TestSuiteListeners> =
   T extends `${infer U}Listeners` ? U : never;
@@ -317,30 +318,39 @@ export class RunnerRuntime {
     });
   }
 
-  describeEach<T>(cases: T[]): DescribeEachFn<T> {
-    return (name: string, fn?: (param: T) => void | Promise<void>) => {
+  describeEach(
+    cases: Parameters<DescribeEachFn>[0],
+  ): ReturnType<DescribeEachFn> {
+    return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
         const param = cases[i]!;
+        const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
-        // TODO: support param array ([[a, b, expected, actual]])
-        this.describe(name, () => fn?.(param), 'run', true);
+        this.describe(
+          formatName(name, param, i),
+          () => fn?.(...params),
+          'run',
+          true,
+        );
       }
     };
   }
 
-  each<T>(cases: T[]): TestEachFn<T> {
-    return (
-      name: string,
-      fn?: (param: T) => void | Promise<void>,
-      timeout: number = this.defaultTestTimeout,
-    ) => {
+  each(cases: Parameters<TestEachFn>[0]): ReturnType<TestEachFn> {
+    return (name, fn, timeout = this.defaultTestTimeout) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
         const param = cases[i]!;
+        const params = castArray(param) as Parameters<typeof fn>;
         // TODO: support test name template
-        // TODO: support param array ([[a, b, expected, actual]])
-        this.it(name, () => fn?.(param), timeout, 'run', true);
+        this.it(
+          formatName(name, param, i),
+          () => fn?.(...params),
+          timeout,
+          'run',
+          true,
+        );
       }
     };
   }
