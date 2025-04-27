@@ -4,6 +4,7 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  DescribeEachFn,
   Test,
   TestCase,
   TestEachFn,
@@ -314,6 +315,18 @@ export class RunnerRuntime {
       timeout,
       each,
     });
+  }
+
+  describeEach<T>(cases: T[]): DescribeEachFn<T> {
+    return (name: string, fn?: (param: T) => void | Promise<void>) => {
+      for (let i = 0; i < cases.length; i++) {
+        // TODO: template string table.
+        const param = cases[i]!;
+        // TODO: support test name template
+        // TODO: support param array ([[a, b, expected, actual]])
+        this.describe(name, () => fn?.(param), 'run', true);
+      }
+    };
   }
 
   each<T>(cases: T[]): TestEachFn<T> {

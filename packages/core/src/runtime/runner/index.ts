@@ -42,6 +42,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
   describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
   describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
+  describe.each = runtimeAPI.describeEach.bind(runtimeAPI);
 
   return {
     api: {

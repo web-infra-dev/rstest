@@ -29,11 +29,16 @@ export type TestAPI = TestFn & {
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
+export type DescribeEachFn<T> = (
+  description: string,
+  fn?: (param: T) => void,
+) => void;
 
 export type DescribeAPI = DescribeFn & {
   only: DescribeFn;
   todo: DescribeFn;
   skip: DescribeFn;
+  each: <T>(cases: T[]) => DescribeEachFn<T>;
 };
 
 export type RunnerAPI = {
