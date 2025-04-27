@@ -61,7 +61,6 @@ export const formatName = (
     return format(templateStr, ...param);
   }
 
+  // TODO: support object param
   return templateStr;
-
-  // return template.replace(/%s/g, () => String(param[Object.keys(param)[index]] ?? ''));
 };
