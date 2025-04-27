@@ -83,25 +83,73 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
 
 export interface MockInstance<T extends FunctionLike = FunctionLike> {
   _isMockFunction: true;
+  /**
+   * Returns the mock name string set by calling `.mockName()`
+   */
   getMockName(): string;
+  /**
+   * Sets the mock name for this mock.
+   */
   mockName(name: string): this;
   mock: MockContext<T>;
+  /**
+   * Clears all information about every call.
+   */
   mockClear(): this;
+  /**
+   * Does what `mockClear` does and resets inner implementation to the original function.
+   */
   mockReset(): this;
+  /**
+   * Does what `mockReset` does and restores original descriptors of spied-on objects.
+   */
   mockRestore(): void;
+  /**
+   * Returns current mock implementation if there is one.
+   */
   getMockImplementation(): T | undefined;
+  /**
+   * Accepts a function that should be used as the implementation of the mock.
+   */
   mockImplementation(fn: T): this;
+  /**
+   * Accepts a function that will be used as an implementation of the mock for one call to the mocked function.
+   */
   mockImplementationOnce(fn: T): this;
+  /**
+   * Accepts a function which should be temporarily used as the implementation of the mock while the callback is being executed.
+   */
   withImplementation<T2>(
     fn: T,
     callback: () => T2,
   ): T2 extends Promise<unknown> ? Promise<void> : void;
+  /**
+   * Return the `this` context from the method without invoking the actual implementation.
+   */
   mockReturnThis(): this;
+  /**
+   * Accepts a value that will be returned whenever the mock function is called.
+   */
   mockReturnValue(value: ReturnType<T>): this;
+  /**
+   * Accepts a value that will be returned for one call to the mock function.
+   */
   mockReturnValueOnce(value: ReturnType<T>): this;
+  /**
+   * Accepts a value that will be resolved when the async function is called.
+   */
   mockResolvedValue(value: Awaited<ReturnType<T>>): this;
+  /**
+   * Accepts a value that will be resolved during the next function call.
+   */
   mockResolvedValueOnce(value: Awaited<ReturnType<T>>): this;
+  /**
+   * Accepts an error that will be rejected when async function is called.
+   */
   mockRejectedValue(error: unknown): this;
+  /**
+   * Accepts a value that will be rejected during the next function call.
+   */
   mockRejectedValueOnce(error: unknown): this;
 }
 
