@@ -36,6 +36,8 @@ export const formatTestError = (err: any): TestError[] => {
     return errObj;
   });
 };
+// cspell:ignore sdjifo
+const formatRegExp = /%[sdjifoOc%]/;
 
 export const formatName = (
   template: string,
@@ -58,10 +60,13 @@ export const formatName = (
   if (Array.isArray(param)) {
     // format printf-like string
     // https://nodejs.org/api/util.html#util_util_format_format_args
-    // Need a more standard check for valid format specifiers
-    return templateStr.includes('%')
+    return formatRegExp.test(templateStr)
       ? format(templateStr, ...param)
       : templateStr;
+  }
+
+  if (formatRegExp.test(templateStr)) {
+    templateStr = format(templateStr, param);
   }
 
   return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
