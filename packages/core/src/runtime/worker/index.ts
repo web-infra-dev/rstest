@@ -81,14 +81,18 @@ const runInPool = async ({
       assetFiles,
     });
 
-    const results = await runner.runTest(originPath, {
-      onTestFileStart: async (test) => {
-        await rpc.onTestFileStart(test);
+    const results = await runner.runTest(
+      originPath,
+      {
+        onTestFileStart: async (test) => {
+          await rpc.onTestFileStart(test);
+        },
+        onTestCaseResult: async (result) => {
+          await rpc.onTestCaseResult(result);
+        },
       },
-      onTestCaseResult: async (result) => {
-        await rpc.onTestCaseResult(result);
-      },
-    });
+      api,
+    );
 
     return results;
   } catch (err) {

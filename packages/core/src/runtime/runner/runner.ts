@@ -3,6 +3,7 @@ import type { SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
+  Rstest,
   RunnerHooks,
   SuiteContext,
   Test,
@@ -26,12 +27,19 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
 
-  async runTests(
-    tests: Test[],
-    testPath: string,
-    state: WorkerState,
-    hooks: RunnerHooks,
-  ): Promise<TestFileResult> {
+  async runTests({
+    tests,
+    testPath,
+    state,
+    hooks,
+    api,
+  }: {
+    tests: Test[];
+    testPath: string;
+    state: WorkerState;
+    hooks: RunnerHooks;
+    api: Rstest;
+  }): Promise<TestFileResult> {
     const {
       normalizedConfig: { passWithNoTests, testNamePattern },
       snapshotOptions,
@@ -154,7 +162,8 @@ export class TestRunner {
         }
 
         let result: TestResult | undefined = undefined;
-        this.setCurrentTest(test);
+
+        this.beforeEach(test, state, api);
 
         const cleanups: AfterEachListener[] = [];
 
@@ -310,6 +319,24 @@ export class TestRunner {
 
   getCurrentTest(): TestCase | undefined {
     return this._test;
+  }
+
+  private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
+    const {
+      normalizedConfig: { clearMocks, resetMocks, restoreMocks },
+    } = state;
+
+    this.setCurrentTest(test);
+
+    if (clearMocks) {
+      api.rstest.clearAllMocks();
+    }
+    if (resetMocks) {
+      api.rstest.resetAllMocks();
+    }
+    if (restoreMocks) {
+      api.rstest.restoreAllMocks();
+    }
   }
 
   private beforeRunTest(test: TestCase, snapshotState: SnapshotState): void {

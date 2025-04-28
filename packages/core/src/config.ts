@@ -91,6 +91,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: 5_000,
   reporters: ['default'],
+  clearMocks: false,
+  resetMocks: false,
+  restoreMocks: false,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

@@ -88,6 +88,22 @@ export interface RstestConfig {
    * @default 5000
    */
   testTimeout?: number;
+
+  /**
+   * Automatically clear mock calls, instances, contexts and results before every test.
+   * @default false
+   */
+  clearMocks?: boolean;
+  /**
+   * Automatically reset mock state before every test.
+   * @default false
+   */
+  resetMocks?: boolean;
+  /**
+   * Automatically restore mock state and implementation before every test.
+   * @default false
+   */
+  restoreMocks?: boolean;
 }
 
 export type NormalizedConfig = Required<
