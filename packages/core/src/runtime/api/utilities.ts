@@ -3,6 +3,10 @@ import { fn, isMockFunction, mocks, spyOn } from './spy';
 
 export const createRstestUtilities: () => RstestUtilities = () => {
   const originalEnvValues = new Map<string, string | undefined>();
+  const originalGlobalValues = new Map<
+    string | symbol | number,
+    PropertyDescriptor | undefined
+  >();
 
   const rstest: RstestUtilities = {
     fn,
@@ -55,6 +59,32 @@ export const createRstestUtilities: () => RstestUtilities = () => {
 
       originalEnvValues.clear();
 
+      return rstest;
+    },
+    stubGlobal: (name: string | symbol | number, value: any) => {
+      if (!originalGlobalValues.has(name)) {
+        originalGlobalValues.set(
+          name,
+          Object.getOwnPropertyDescriptor(globalThis, name),
+        );
+      }
+      Object.defineProperty(globalThis, name, {
+        value,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+      return rstest;
+    },
+    unstubAllGlobals: () => {
+      originalGlobalValues.forEach((original, name) => {
+        if (!original) {
+          Reflect.deleteProperty(globalThis, name);
+        } else {
+          Object.defineProperty(globalThis, name, original);
+        }
+      });
+      originalGlobalValues.clear();
       return rstest;
     },
   };

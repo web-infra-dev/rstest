@@ -207,4 +207,17 @@ export type RstestUtilities = {
    * Restores all `process.env` values that were changed with `rstest.stubEnv`.
    */
   unstubAllEnvs: () => RstestUtilities;
+
+  /**
+   * Changes the value of global variable.
+   */
+  stubGlobal: (
+    name: string | number | symbol,
+    value: unknown,
+  ) => RstestUtilities;
+
+  /**
+   * Restores all global variables that were changed with `rstest.stubGlobal`.
+   */
+  unstubAllGlobals: () => RstestUtilities;
 };
