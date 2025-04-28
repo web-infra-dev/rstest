@@ -27,9 +27,9 @@ it('Test Each API', async () => {
       .map((log) => getTestName(log, '✓')),
   ).toMatchInlineSnapshot(`
     [
-      "add($a, $b) -> $expected",
-      "add($a, $b) -> $expected",
-      "add($a, $b) -> $expected",
+      "add(1, 1) -> 2",
+      "add(1, 2) -> 3",
+      "add(2, 1) -> 3",
       "case-0 add(2, 1) -> 3",
       "case-1 add(2, 2) -> 4",
       "case-2 add(3, 1) -> 4",
