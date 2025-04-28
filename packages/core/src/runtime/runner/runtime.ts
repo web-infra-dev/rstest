@@ -61,10 +61,7 @@ function wrapTimeout<T extends (...args: any[]) => any>({
       timeoutId = setTimeout(
         () =>
           reject(
-            makeError(
-              `${name} hook timed out in ${timeout}ms`,
-              stackTraceError,
-            ),
+            makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
           ),
         timeout,
       );
@@ -120,7 +117,7 @@ export class RunnerRuntime {
       currentSuite!,
       'afterAll',
       wrapTimeout({
-        name: 'afterAll',
+        name: 'afterAll hook',
         fn,
         timeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),
@@ -137,7 +134,7 @@ export class RunnerRuntime {
       currentSuite!,
       'beforeAll',
       wrapTimeout({
-        name: 'beforeAll',
+        name: 'beforeAll hook',
         fn,
         timeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),
@@ -154,7 +151,7 @@ export class RunnerRuntime {
       currentSuite!,
       'afterEach',
       wrapTimeout({
-        name: 'afterEach',
+        name: 'afterEach hook',
         fn,
         timeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),
@@ -171,7 +168,7 @@ export class RunnerRuntime {
       currentSuite!,
       'beforeEach',
       wrapTimeout({
-        name: 'beforeEach',
+        name: 'beforeEach hook',
         fn,
         timeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),

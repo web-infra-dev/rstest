@@ -85,13 +85,13 @@ describe('Test API', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(
-      logs.find((log) => log.includes('Error: test hook timed out in 50ms')),
+      logs.find((log) => log.includes('Error: test timed out in 50ms')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('timeout.test.ts:5:5')),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('Error: test hook timed out in 5000ms')),
+      logs.find((log) => log.includes('Error: test timed out in 5000ms')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('timeout.test.ts:10:5')),
@@ -116,14 +116,14 @@ describe('Test API', () => {
 
     // The timeout set by the API is higher than the global configuration item
     expect(
-      logs.find((log) => log.includes('Error: test hook timed out in 50ms')),
+      logs.find((log) => log.includes('Error: test timed out in 50ms')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('timeout.test.ts:5:5')),
     ).toBeTruthy();
 
     expect(
-      logs.find((log) => log.includes('Error: test hook timed out in 5000ms')),
+      logs.find((log) => log.includes('Error: test timed out in 5000ms')),
     ).toBeFalsy();
     expect(
       logs.find((log) => log.includes('Tests 1 failed | 1 passed')),
