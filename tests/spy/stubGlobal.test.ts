@@ -13,8 +13,6 @@ it('test stubGlobal & unstubAllGlobals', () => {
 
   checkGlobalThis();
 
-  globalThis.AbortController;
-
   expect(globalThis[testFlag]).toBeTruthy();
 
   rstest.unstubAllGlobals();
