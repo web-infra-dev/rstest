@@ -36,7 +36,7 @@ export const formatTestError = (err: any): TestError[] => {
     return errObj;
   });
 };
-
+// cspell:ignore sdjifo
 const formatRegExp = /%[sdjifoOc%]/;
 
 export const formatName = (
