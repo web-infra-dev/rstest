@@ -14,7 +14,11 @@ export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
   runner: {
-    runTest: (testPath: string, hooks: RunnerHooks) => Promise<TestFileResult>;
+    runTest: (
+      testPath: string,
+      hooks: RunnerHooks,
+      api: Rstest,
+    ) => Promise<TestFileResult>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;

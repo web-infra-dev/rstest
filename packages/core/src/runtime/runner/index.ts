@@ -1,6 +1,7 @@
 import type {
   DescribeAPI,
   DescribeEachFn,
+  Rstest,
   RunnerAPI,
   RunnerHooks,
   TestAPI,
@@ -18,6 +19,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     runTest: (
       testFilePath: string,
       hooks: RunnerHooks,
+      api: Rstest,
     ) => Promise<TestFileResult>;
     getCurrentTest: TestRunner['getCurrentTest'];
   };
@@ -57,9 +59,15 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       beforeEach: runtimeAPI.beforeEach.bind(runtimeAPI),
     },
     runner: {
-      runTest: async (testFilePath: string, hooks: RunnerHooks) => {
+      runTest: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtimeAPI.getTests();
-        return testRunner.runTests(tests, testFilePath, workerState, hooks);
+        return testRunner.runTests({
+          tests,
+          testPath,
+          state: workerState,
+          hooks,
+          api,
+        });
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
     },

@@ -16,6 +16,9 @@ type CommonOptions = {
   update?: boolean;
   testNamePattern?: RegExp | string;
   testTimeout?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -45,7 +48,16 @@ const applyCommonOptions = (cli: CAC) => {
       '-t, --testNamePattern <testNamePattern>',
       'Run only tests with a name that matches the regex.',
     )
-    .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds');
+    .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds')
+    .option(
+      '--clearMocks',
+      'Automatically clear mock calls, instances, contexts and results before every test.',
+    )
+    .option('--resetMocks', 'Automatically reset mock state before every test.')
+    .option(
+      '--restoreMocks',
+      'Automatically restore mock state and implementation before every test.',
+    );
 };
 
 export async function initCli(options: CommonOptions): Promise<{
@@ -68,6 +80,9 @@ export async function initCli(options: CommonOptions): Promise<{
     'update',
     'testNamePattern',
     'testTimeout',
+    'clearMocks',
+    'resetMocks',
+    'restoreMocks',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
