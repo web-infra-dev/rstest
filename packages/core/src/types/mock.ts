@@ -197,4 +197,14 @@ export type RstestUtilities = {
    * WIP: Mock a module
    */
   mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+
+  /**
+   * Changes the value of environmental variable on `process.env`.
+   */
+  stubEnv: (name: string, value: string | undefined) => RstestUtilities;
+
+  /**
+   * Restores all `process.env` values that were changed with `rstest.stubEnv`.
+   */
+  unstubAllEnvs: () => RstestUtilities;
 };
