@@ -7,7 +7,7 @@ export default defineConfig({
     {
       name: 'plugin',
       setup(api) {
-        api.transform({ test: /.\/a.ts$/ }, ({ code }) => {
+        api.transform({ test: /a.ts$/ }, ({ code }) => {
           return code.replace('count = 1', 'count = 2');
         });
       },
