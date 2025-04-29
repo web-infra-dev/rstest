@@ -323,19 +323,31 @@ export class TestRunner {
 
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
     const {
-      runtimeConfig: { clearMocks, resetMocks, restoreMocks },
+      runtimeConfig: {
+        clearMocks,
+        resetMocks,
+        restoreMocks,
+        unstubEnvs,
+        unstubGlobals,
+      },
     } = state;
 
     this.setCurrentTest(test);
 
-    if (clearMocks) {
-      api.rstest.clearAllMocks();
-    }
-    if (resetMocks) {
-      api.rstest.resetAllMocks();
-    }
     if (restoreMocks) {
       api.rstest.restoreAllMocks();
+    } else if (resetMocks) {
+      api.rstest.resetAllMocks();
+    } else if (clearMocks) {
+      api.rstest.clearAllMocks();
+    }
+
+    if (unstubEnvs) {
+      api.rstest.unstubAllEnvs();
+    }
+
+    if (unstubGlobals) {
+      api.rstest.unstubAllGlobals();
     }
   }
 

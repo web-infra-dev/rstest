@@ -106,6 +106,17 @@ export interface RstestConfig {
    */
   restoreMocks?: boolean;
 
+  /**
+   * Restores all global variables that were changed with `rstest.stubGlobal` before every test.
+   * @default false
+   */
+  unstubGlobals?: boolean;
+  /**
+   * Restores all `process.env` values that were changed with `rstest.stubEnv` before every test.
+   * @default false
+   */
+  unstubEnvs?: boolean;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
