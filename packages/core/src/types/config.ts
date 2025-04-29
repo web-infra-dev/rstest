@@ -1,3 +1,4 @@
+import type { RsbuildConfig } from '@rsbuild/core';
 import type { BuiltInReporterNames, Reporter } from './reporter';
 
 export type RstestPoolType = 'forks';
@@ -104,12 +105,29 @@ export interface RstestConfig {
    * @default false
    */
   restoreMocks?: boolean;
+
+  // Rsbuild configs
+
+  plugins?: RsbuildConfig['plugins'];
+
+  source?: Pick<
+    NonNullable<RsbuildConfig['source']>,
+    'define' | 'tsconfigPath'
+  >;
+
+  resolve?: RsbuildConfig['resolve'];
 }
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, 'pool' | 'setupFiles' | 'testNamePattern'>
+  Omit<
+    RstestConfig,
+    'pool' | 'setupFiles' | 'testNamePattern' | 'plugins' | 'source' | 'resolve'
+  >
 > & {
   pool: RstestPoolOptions;
   setupFiles?: string[] | string;
   testNamePattern?: RstestConfig['testNamePattern'];
+  plugins?: RstestConfig['plugins'];
+  source?: RstestConfig['source'];
+  resolve?: RstestConfig['resolve'];
 };

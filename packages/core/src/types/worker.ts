@@ -19,10 +19,13 @@ export type RuntimeRPC = {
   onTestCaseResult: (result: TestResult) => Promise<void>;
 };
 
-export type WorkerContext = Pick<
-  RstestContext,
-  'normalizedConfig' | 'rootPath'
->;
+export type WorkerContext = {
+  rootPath: RstestContext['rootPath'];
+  runtimeConfig: Omit<
+    RstestContext['normalizedConfig'],
+    'plugins' | 'source' | 'resolve'
+  >;
+};
 
 export type RunWorkerOptions = {
   options: {

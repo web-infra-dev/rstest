@@ -94,6 +94,8 @@ export const runInPool = async ({
   });
 
   const { updateSnapshot } = context.snapshotManager.options;
+  const { plugins, resolve, source, ...runtimeConfig } =
+    context.normalizedConfig;
 
   const results = await Promise.all(
     entries.map((entryInfo) =>
@@ -102,8 +104,8 @@ export const runInPool = async ({
           entryInfo,
           assetFiles,
           context: {
-            ...context,
-            normalizedConfig: serializableConfig(context.normalizedConfig),
+            rootPath: context.rootPath,
+            runtimeConfig: serializableConfig(runtimeConfig),
           },
           sourceMaps,
           setupEntries,

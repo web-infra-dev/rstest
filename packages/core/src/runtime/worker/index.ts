@@ -28,12 +28,12 @@ const runInPool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']): Promise<TestFileResult> => {
-  context.normalizedConfig = undoSerializableConfig(context.normalizedConfig);
+  context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {
-    normalizedConfig: { globals },
+    runtimeConfig: { globals },
   } = context;
 
   const workerState: WorkerState = {

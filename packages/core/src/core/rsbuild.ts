@@ -7,7 +7,7 @@ import {
   createRsbuild,
 } from '@rsbuild/core';
 import path from 'pathe';
-import type { EntryInfo, SourceMapInput } from '../types';
+import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
@@ -64,16 +64,23 @@ const autoExternalNodeModules: (
 };
 
 export const prepareRsbuild = async (
-  name: string,
+  context: RstestContext,
   globTestSourceEntries: () => Promise<Record<string, string>>,
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
+  const {
+    normalizedConfig: { name, plugins, resolve, source },
+  } = context;
+
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
   // TODO: find a better way to test outputs
   const writeToDisk = process.env.DEBUG_RSTEST_OUTPUTS === 'true';
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
+      plugins,
+      resolve,
+      source,
       server: {
         printUrls: false,
         strictPort: false,

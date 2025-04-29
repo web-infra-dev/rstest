@@ -41,7 +41,7 @@ export class TestRunner {
     api: Rstest;
   }): Promise<TestFileResult> {
     const {
-      normalizedConfig: { passWithNoTests, testNamePattern },
+      runtimeConfig: { passWithNoTests, testNamePattern },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -323,7 +323,7 @@ export class TestRunner {
 
   private beforeEach(test: TestCase, state: WorkerState, api: Rstest) {
     const {
-      normalizedConfig: { clearMocks, resetMocks, restoreMocks },
+      runtimeConfig: { clearMocks, resetMocks, restoreMocks },
     } = state;
 
     this.setCurrentTest(test);
