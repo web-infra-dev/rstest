@@ -94,6 +94,8 @@ const createDefaultConfig = (): NormalizedConfig => ({
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
+  unstubGlobals: false,
+  unstubEnvs: false,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

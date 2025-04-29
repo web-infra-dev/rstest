@@ -19,6 +19,8 @@ type CommonOptions = {
   clearMocks?: boolean;
   resetMocks?: boolean;
   restoreMocks?: boolean;
+  unstubGlobals?: boolean;
+  unstubEnvs?: boolean;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -57,6 +59,14 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '--restoreMocks',
       'Automatically restore mock state and implementation before every test.',
+    )
+    .option(
+      '--unstubGlobals',
+      'Restores all global variables that were changed with `rstest.stubGlobal` before every test.',
+    )
+    .option(
+      '--unstubEnvs',
+      'Restores all `process.env` values that were changed with `rstest.stubEnv` before every test.',
     );
 };
 
@@ -83,6 +93,8 @@ export async function initCli(options: CommonOptions): Promise<{
     'clearMocks',
     'resetMocks',
     'restoreMocks',
+    'unstubEnvs',
+    'unstubGlobals',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
