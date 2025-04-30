@@ -41,7 +41,7 @@ export class TestRunner {
     api: Rstest;
   }): Promise<TestFileResult> {
     const {
-      runtimeConfig:{ passWithNoTests, testNamePattern, retry },
+      runtimeConfig: { passWithNoTests, testNamePattern, retry },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
