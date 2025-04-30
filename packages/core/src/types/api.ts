@@ -48,6 +48,8 @@ export type TestBaseAPI = TestFn & {
 export type TestAPI = TestBaseAPI & {
   only: TestBaseAPI;
   skip: TestBaseAPI;
+  runIf: (condition: boolean) => TestBaseAPI;
+  skipIf: (condition: boolean) => TestBaseAPI;
   todo: TestFn;
 };
 
@@ -60,6 +62,8 @@ export type DescribeBaseAPI = DescribeFn & {
 export type DescribeAPI = DescribeBaseAPI & {
   only: DescribeBaseAPI;
   skip: DescribeBaseAPI;
+  runIf: (condition: boolean) => DescribeBaseAPI;
+  skipIf: (condition: boolean) => DescribeBaseAPI;
   todo: DescribeFn;
 };
 

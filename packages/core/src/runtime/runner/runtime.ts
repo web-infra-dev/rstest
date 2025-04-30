@@ -10,79 +10,16 @@ import type {
   TestEachFn,
   TestRunMode,
   TestSuite,
-  TestSuiteListeners,
 } from '../../types';
 import { ROOT_SUITE_NAME, castArray } from '../../utils';
 import { formatName } from '../util';
-
-type ListenersKey<T extends TestSuiteListeners> =
-  T extends `${infer U}Listeners` ? U : never;
-function registerTestSuiteListener(
-  suite: TestSuite,
-  key: ListenersKey<TestSuiteListeners>,
-  fn: (...args: any[]) => any,
-): void {
-  const listenersKey = `${key}Listeners` as TestSuiteListeners;
-  suite[listenersKey] ??= [];
-  suite[listenersKey].push(fn);
-}
+import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
-
-function makeError(message: string, stackTraceError?: Error) {
-  const error = new Error(message);
-  if (stackTraceError?.stack) {
-    error.stack = stackTraceError.stack.replace(
-      error.message,
-      stackTraceError.message,
-    );
-  }
-  return error;
-}
-
-function wrapTimeout<T extends (...args: any[]) => any>({
-  name,
-  fn,
-  timeout,
-  stackTraceError,
-}: {
-  name: string;
-  fn: T;
-  timeout: number;
-  stackTraceError?: Error;
-}): T {
-  if (!timeout) {
-    return fn;
-  }
-
-  return (async (...args: Parameters<T>) => {
-    let timeoutId: NodeJS.Timeout | undefined;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(
-        () =>
-          reject(
-            makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
-          ),
-        timeout,
-      );
-    });
-
-    try {
-      const result = await Promise.race([fn(...args), timeoutPromise]);
-      timeoutId && clearTimeout(timeoutId);
-      return result;
-    } catch (error) {
-      timeoutId && clearTimeout(timeoutId);
-      throw error;
-    }
-  }) as T;
-}
 
 export class RunnerRuntime {
   /** all test cases */
   private tests: Test[] = [];
-  /** current test suite, could be undefined if no explicit suite declared */
-  // private _suite: TestSuite | undefined;
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
   private sourcePath: string;
@@ -176,7 +113,7 @@ export class RunnerRuntime {
     );
   }
 
-  getDefaultRootSuite(): TestSuite {
+  private getDefaultRootSuite(): TestSuite {
     return {
       runMode: 'run',
       name: ROOT_SUITE_NAME,
@@ -220,7 +157,7 @@ export class RunnerRuntime {
     });
   }
 
-  resetCurrentTest(): void {
+  private resetCurrentTest(): void {
     this._currentTest.pop();
   }
 
@@ -285,7 +222,7 @@ export class RunnerRuntime {
    * Ensure that the current test suite is not empty and is used
    * for `beforeAll` or `afterAll` at the file scope.
    */
-  ensureRootSuite(): void {
+  private ensureRootSuite(): void {
     if (this._currentTest.length === 0) {
       this.addTest(this.getDefaultRootSuite());
     }
@@ -378,7 +315,7 @@ export class RunnerRuntime {
     });
   }
 
-  getCurrentSuite(): TestSuite {
+  private getCurrentSuite(): TestSuite {
     this.ensureRootSuite();
 
     for (let i = this._currentTest.length - 1; i >= 0; i--) {

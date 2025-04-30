@@ -36,6 +36,8 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   });
   const testRunner: TestRunner = new TestRunner();
 
+  // TODO: optimize chainable API
+
   const it = ((name, fn, timeout) =>
     runtimeAPI.it(name, fn, timeout)) as TestAPI;
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
@@ -54,6 +56,9 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     runtimeAPI.fails(name, fn, timeout, 'only');
   it.only.each = ((cases: any) => runtimeAPI.each(cases, 'only')) as TestEachFn;
 
+  it.runIf = (condition: boolean) => (condition ? it : it.skip) as TestBaseAPI;
+  it.skipIf = (condition: boolean) => (condition ? it.skip : it) as TestBaseAPI;
+
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
 
   describe.only = ((name, fn) =>
@@ -65,6 +70,11 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     runtimeAPI.describe(name, fn, 'skip')) as DescribeBaseAPI;
   describe.skip.each = ((cases: any) =>
     runtimeAPI.describeEach(cases, 'skip')) as DescribeEachFn;
+
+  describe.skipIf = (condition: boolean) =>
+    (condition ? describe.skip : describe) as DescribeBaseAPI;
+  describe.runIf = (condition: boolean) =>
+    (condition ? describe : describe.skip) as DescribeBaseAPI;
 
   describe.each = runtimeAPI.describeEach.bind(runtimeAPI) as DescribeEachFn;
 
