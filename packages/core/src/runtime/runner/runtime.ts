@@ -334,7 +334,10 @@ export class RunnerRuntime {
     };
   }
 
-  each(cases: Parameters<TestEachFn>[0]): ReturnType<TestEachFn> {
+  each(
+    cases: Parameters<TestEachFn>[0],
+    runMode: TestRunMode = 'run',
+  ): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.defaultTestTimeout) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
@@ -345,7 +348,7 @@ export class RunnerRuntime {
           formatName(name, param, i),
           () => fn?.(...params),
           timeout,
-          'run',
+          runMode,
           true,
         );
       }
@@ -356,6 +359,7 @@ export class RunnerRuntime {
     name: string,
     fn?: () => void | Promise<void>,
     timeout: number = this.defaultTestTimeout,
+    runMode: TestRunMode = 'run',
   ): void {
     this.addTestCase({
       name,
@@ -368,7 +372,7 @@ export class RunnerRuntime {
           })
         : fn,
       fails: true,
-      runMode: 'run',
+      runMode,
       type: 'case',
     });
   }
