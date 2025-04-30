@@ -5,6 +5,7 @@ import type {
   RunnerAPI,
   RunnerHooks,
   TestAPI,
+  TestBaseAPI,
   TestEachFn,
   TestFileResult,
   WorkerState,
@@ -37,10 +38,20 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const it = ((name, fn, timeout) =>
     runtimeAPI.it(name, fn, timeout)) as TestAPI;
   it.fails = runtimeAPI.fails.bind(runtimeAPI);
-  it.todo = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'todo');
-  it.skip = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'skip');
-  it.only = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'only');
   it.each = runtimeAPI.each.bind(runtimeAPI) as TestEachFn;
+  it.todo = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'todo');
+
+  it.skip = ((name, fn, timeout) =>
+    runtimeAPI.it(name, fn, timeout, 'skip')) as TestBaseAPI;
+  it.skip.fails = (name, fn, timeout) =>
+    runtimeAPI.fails(name, fn, timeout, 'skip');
+  it.skip.each = ((cases: any) => runtimeAPI.each(cases, 'skip')) as TestEachFn;
+
+  it.only = ((name, fn, timeout) =>
+    runtimeAPI.it(name, fn, timeout, 'only')) as TestBaseAPI;
+  it.only.fails = (name, fn, timeout) =>
+    runtimeAPI.fails(name, fn, timeout, 'only');
+  it.only.each = ((cases: any) => runtimeAPI.each(cases, 'only')) as TestEachFn;
 
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
   describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');

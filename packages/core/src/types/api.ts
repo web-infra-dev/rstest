@@ -40,12 +40,15 @@ export interface DescribeEachFn {
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
-export type TestAPI = TestFn & {
-  fails: TestFn;
-  only: TestFn;
-  todo: TestFn;
-  skip: TestFn;
+export type TestBaseAPI = TestFn & {
   each: TestEachFn;
+  fails: TestFn;
+};
+
+export type TestAPI = TestBaseAPI & {
+  only: TestBaseAPI;
+  skip: TestBaseAPI;
+  todo: TestFn;
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
