@@ -317,6 +317,7 @@ export class RunnerRuntime {
 
   describeEach(
     cases: Parameters<DescribeEachFn>[0],
+    runMode: TestRunMode = 'run',
   ): ReturnType<DescribeEachFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
@@ -327,7 +328,7 @@ export class RunnerRuntime {
         this.describe(
           formatName(name, param, i),
           () => fn?.(...params),
-          'run',
+          runMode,
           true,
         );
       }
