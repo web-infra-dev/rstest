@@ -41,7 +41,7 @@ export class TestRunner {
     api: Rstest;
   }): Promise<TestFileResult> {
     const {
-      runtimeConfig: { passWithNoTests, testNamePattern },
+      runtimeConfig:{ passWithNoTests, testNamePattern, retry },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -52,6 +52,120 @@ export class TestRunner {
     const snapshotClient = getSnapshotClient();
 
     await snapshotClient.setup(testPath, snapshotOptions);
+
+    const runTestsCase = async (
+      test: TestCase,
+      parentHooks: {
+        beforeEachListeners: BeforeEachListener[];
+        afterEachListeners: AfterEachListener[];
+      },
+    ): Promise<TestResult> => {
+      if (test.runMode === 'skip') {
+        const result = {
+          status: 'skip' as const,
+          parentNames: test.parentNames,
+          name: test.name,
+          testPath,
+        };
+        return result;
+      }
+      if (test.runMode === 'todo') {
+        const result = {
+          status: 'todo' as const,
+          parentNames: test.parentNames,
+          name: test.name,
+          testPath,
+        };
+        return result;
+      }
+
+      let result: TestResult | undefined = undefined;
+
+      this.beforeEach(test, state, api);
+
+      const cleanups: AfterEachListener[] = [];
+
+      try {
+        for (const fn of parentHooks.beforeEachListeners) {
+          const cleanupFn = await fn();
+          cleanupFn && cleanups.push(cleanupFn);
+        }
+      } catch (error) {
+        result = {
+          status: 'fail' as const,
+          parentNames: test.parentNames,
+          name: test.name,
+          errors: formatTestError(error),
+          testPath,
+        };
+      }
+
+      if (result?.status !== 'fail') {
+        if (test.fails) {
+          try {
+            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
+            await test.fn?.();
+            this.afterRunTest(test);
+
+            result = {
+              status: 'fail' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              testPath,
+              errors: [
+                {
+                  message: 'Expect test to fail',
+                },
+              ],
+            };
+          } catch (error) {
+            result = {
+              status: 'pass' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              testPath,
+            };
+          }
+        } else {
+          try {
+            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
+            await test.fn?.();
+            this.afterRunTest(test);
+            result = {
+              parentNames: test.parentNames,
+              name: test.name,
+              status: 'pass' as const,
+              testPath,
+            };
+          } catch (error) {
+            result = {
+              status: 'fail' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              errors: formatTestError(error),
+              testPath,
+            };
+          }
+        }
+      }
+
+      const afterEachFns = [...(parentHooks.afterEachListeners || [])]
+        .reverse()
+        .concat(cleanups);
+      try {
+        for (const fn of afterEachFns) {
+          await fn();
+        }
+      } catch (error) {
+        result.status = 'fail';
+        result.errors ??= [];
+        result.errors.push(...formatTestError(error));
+      }
+
+      this.resetCurrentTest();
+
+      return result;
+    };
 
     const runTest = async (
       test: Test,
@@ -138,124 +252,25 @@ export class TestRunner {
         }
       } else {
         const start = Date.now();
-        if (test.runMode === 'skip') {
-          const result = {
-            status: 'skip' as const,
-            parentNames: test.parentNames,
-            name: test.name,
-            testPath,
-          };
-          hooks.onTestCaseResult?.(result);
-          results.push(result);
-          return;
-        }
-        if (test.runMode === 'todo') {
-          const result = {
-            status: 'todo' as const,
-            parentNames: test.parentNames,
-            name: test.name,
-            testPath,
-          };
-          hooks.onTestCaseResult?.(result);
-          results.push(result);
-          return;
-        }
-
         let result: TestResult | undefined = undefined;
+        let retryCount = 0;
 
-        this.beforeEach(test, state, api);
+        do {
+          const currentResult = await runTestsCase(test, parentHooks);
 
-        const cleanups: AfterEachListener[] = [];
-
-        try {
-          for (const fn of parentHooks.beforeEachListeners) {
-            const cleanupFn = await fn();
-            cleanupFn && cleanups.push(cleanupFn);
-          }
-        } catch (error) {
           result = {
-            status: 'fail' as const,
-            parentNames: test.parentNames,
-            name: test.name,
-            errors: formatTestError(error),
-            testPath,
-            duration: Date.now() - start,
+            ...currentResult,
+            errors:
+              currentResult.status === 'fail' && result && result!.errors
+                ? result.errors.concat(...(currentResult.errors || []))
+                : currentResult.errors,
           };
-        }
 
-        if (result?.status !== 'fail') {
-          if (test.fails) {
-            try {
-              this.beforeRunTest(
-                test,
-                snapshotClient.getSnapshotState(testPath),
-              );
-              await test.fn?.();
-              this.afterRunTest(test);
-
-              result = {
-                status: 'fail' as const,
-                parentNames: test.parentNames,
-                name: test.name,
-                testPath,
-                errors: [
-                  {
-                    message: 'Expect test to fail',
-                  },
-                ],
-              };
-            } catch (error) {
-              result = {
-                status: 'pass' as const,
-                parentNames: test.parentNames,
-                name: test.name,
-                testPath,
-              };
-            }
-          } else {
-            try {
-              this.beforeRunTest(
-                test,
-                snapshotClient.getSnapshotState(testPath),
-              );
-              await test.fn?.();
-              this.afterRunTest(test);
-              result = {
-                parentNames: test.parentNames,
-                name: test.name,
-                status: 'pass' as const,
-                testPath,
-              };
-            } catch (error) {
-              result = {
-                status: 'fail' as const,
-                parentNames: test.parentNames,
-                name: test.name,
-                errors: formatTestError(error),
-                testPath,
-              };
-            }
-          }
-        }
-
-        const afterEachFns = [...(parentHooks.afterEachListeners || [])]
-          .reverse()
-          .concat(cleanups);
-        try {
-          for (const fn of afterEachFns) {
-            await fn();
-          }
-        } catch (error) {
-          result.status = 'fail';
-          result.errors ??= [];
-          result.errors.push(...formatTestError(error));
-        }
-
-        this.resetCurrentTest();
+          retryCount++;
+        } while (retryCount <= retry && result.status === 'fail');
 
         result.duration = Date.now() - start;
         hooks.onTestCaseResult?.(result);
-
         results.push(result);
       }
     };

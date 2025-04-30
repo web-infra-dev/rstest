@@ -21,6 +21,7 @@ type CommonOptions = {
   restoreMocks?: boolean;
   unstubGlobals?: boolean;
   unstubEnvs?: boolean;
+  retry?: number;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -51,6 +52,7 @@ const applyCommonOptions = (cli: CAC) => {
       'Run only tests with a name that matches the regex.',
     )
     .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds')
+    .option('--retry <retry>', 'Number of times to retry a test if it fails.')
     .option(
       '--clearMocks',
       'Automatically clear mock calls, instances, contexts and results before every test.',
@@ -95,6 +97,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'restoreMocks',
     'unstubEnvs',
     'unstubGlobals',
+    'retry',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

@@ -5,6 +5,7 @@ import type {
   TestResultStatus,
   TestRunMode,
   TestSuite,
+  TestSuiteListeners,
 } from '../../types';
 import { ROOT_SUITE_NAME, getTaskNameWithPrefix } from '../../utils';
 
@@ -169,3 +170,64 @@ export const markAllTestAsSkipped = (test: Test[]): void => {
     }
   }
 };
+
+type ListenersKey<T extends TestSuiteListeners> =
+  T extends `${infer U}Listeners` ? U : never;
+export function registerTestSuiteListener(
+  suite: TestSuite,
+  key: ListenersKey<TestSuiteListeners>,
+  fn: (...args: any[]) => any,
+): void {
+  const listenersKey = `${key}Listeners` as TestSuiteListeners;
+  suite[listenersKey] ??= [];
+  suite[listenersKey].push(fn);
+}
+
+export function makeError(message: string, stackTraceError?: Error): Error {
+  const error = new Error(message);
+  if (stackTraceError?.stack) {
+    error.stack = stackTraceError.stack.replace(
+      error.message,
+      stackTraceError.message,
+    );
+  }
+  return error;
+}
+
+export function wrapTimeout<T extends (...args: any[]) => any>({
+  name,
+  fn,
+  timeout,
+  stackTraceError,
+}: {
+  name: string;
+  fn: T;
+  timeout: number;
+  stackTraceError?: Error;
+}): T {
+  if (!timeout) {
+    return fn;
+  }
+
+  return (async (...args: Parameters<T>) => {
+    let timeoutId: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () =>
+          reject(
+            makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
+          ),
+        timeout,
+      );
+    });
+
+    try {
+      const result = await Promise.race([fn(...args), timeoutPromise]);
+      timeoutId && clearTimeout(timeoutId);
+      return result;
+    } catch (error) {
+      timeoutId && clearTimeout(timeoutId);
+      throw error;
+    }
+  }) as T;
+}

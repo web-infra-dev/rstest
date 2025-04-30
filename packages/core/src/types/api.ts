@@ -40,21 +40,31 @@ export interface DescribeEachFn {
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
-export type TestAPI = TestFn & {
-  fails: TestFn;
-  only: TestFn;
-  todo: TestFn;
-  skip: TestFn;
+export type TestBaseAPI = TestFn & {
   each: TestEachFn;
+  fails: TestFn;
+};
+
+export type TestAPI = TestBaseAPI & {
+  only: TestBaseAPI;
+  skip: TestBaseAPI;
+  runIf: (condition: boolean) => TestBaseAPI;
+  skipIf: (condition: boolean) => TestBaseAPI;
+  todo: TestFn;
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
 
-export type DescribeAPI = DescribeFn & {
-  only: DescribeFn;
-  todo: DescribeFn;
-  skip: DescribeFn;
+export type DescribeBaseAPI = DescribeFn & {
   each: DescribeEachFn;
+};
+
+export type DescribeAPI = DescribeBaseAPI & {
+  only: DescribeBaseAPI;
+  skip: DescribeBaseAPI;
+  runIf: (condition: boolean) => DescribeBaseAPI;
+  skipIf: (condition: boolean) => DescribeBaseAPI;
+  todo: DescribeFn;
 };
 
 export type RunnerAPI = {

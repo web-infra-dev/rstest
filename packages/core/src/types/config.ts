@@ -43,6 +43,12 @@ export interface RstestConfig {
    * Path to setup files. They will be run before each test file.
    */
   setupFiles?: string[] | string;
+
+  /**
+   * Retry the test specific number of times if it fails.
+   * @default 0
+   */
+  retry?: number;
   /**
    * Allows the test suite to pass when no files are found.
    *
