@@ -53,11 +53,14 @@ export type TestAPI = TestBaseAPI & {
 
 type DescribeFn = (description: string, fn?: () => void) => void;
 
-export type DescribeAPI = DescribeFn & {
-  only: DescribeFn;
-  todo: DescribeFn;
-  skip: DescribeFn;
+export type DescribeBaseAPI = DescribeFn & {
   each: DescribeEachFn;
+};
+
+export type DescribeAPI = DescribeBaseAPI & {
+  only: DescribeBaseAPI;
+  skip: DescribeBaseAPI;
+  todo: DescribeFn;
 };
 
 export type RunnerAPI = {

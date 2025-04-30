@@ -1,5 +1,6 @@
 import type {
   DescribeAPI,
+  DescribeBaseAPI,
   DescribeEachFn,
   Rstest,
   RunnerAPI,
@@ -54,9 +55,17 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   it.only.each = ((cases: any) => runtimeAPI.each(cases, 'only')) as TestEachFn;
 
   const describe = ((name, fn) => runtimeAPI.describe(name, fn)) as DescribeAPI;
-  describe.only = (name, fn) => runtimeAPI.describe(name, fn, 'only');
+
+  describe.only = ((name, fn) =>
+    runtimeAPI.describe(name, fn, 'only')) as DescribeBaseAPI;
+  describe.only.each = ((cases: any) =>
+    runtimeAPI.describeEach(cases, 'only')) as DescribeEachFn;
   describe.todo = (name, fn) => runtimeAPI.describe(name, fn, 'todo');
-  describe.skip = (name, fn) => runtimeAPI.describe(name, fn, 'skip');
+  describe.skip = ((name, fn) =>
+    runtimeAPI.describe(name, fn, 'skip')) as DescribeBaseAPI;
+  describe.skip.each = ((cases: any) =>
+    runtimeAPI.describeEach(cases, 'skip')) as DescribeEachFn;
+
   describe.each = runtimeAPI.describeEach.bind(runtimeAPI) as DescribeEachFn;
 
   return {
