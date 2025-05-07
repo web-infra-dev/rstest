@@ -51,7 +51,7 @@
     "tinypool": "^1.0.2"
   },
   "devDependencies": {
-    "@babel/code-frame": "^7.26.2",
+    "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.25",
     "@rslib/core": "0.6.8",
     "@rstest/tsconfig": "workspace:*",
