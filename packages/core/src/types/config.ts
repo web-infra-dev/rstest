@@ -132,13 +132,21 @@ export interface RstestConfig {
     'define' | 'tsconfigPath'
   >;
 
+  output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
+
   resolve?: RsbuildConfig['resolve'];
 }
 
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    'pool' | 'setupFiles' | 'testNamePattern' | 'plugins' | 'source' | 'resolve'
+    | 'pool'
+    | 'setupFiles'
+    | 'testNamePattern'
+    | 'plugins'
+    | 'source'
+    | 'resolve'
+    | 'output'
   >
 > & {
   pool: RstestPoolOptions;
@@ -147,4 +155,5 @@ export type NormalizedConfig = Required<
   plugins?: RstestConfig['plugins'];
   source?: RstestConfig['source'];
   resolve?: RstestConfig['resolve'];
+  output?: RstestConfig['output'];
 };

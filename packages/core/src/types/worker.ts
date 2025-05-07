@@ -23,7 +23,7 @@ export type WorkerContext = {
   rootPath: RstestContext['rootPath'];
   runtimeConfig: Omit<
     RstestContext['normalizedConfig'],
-    'plugins' | 'source' | 'resolve'
+    'plugins' | 'source' | 'resolve' | 'output'
   >;
 };
 
