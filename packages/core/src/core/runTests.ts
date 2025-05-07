@@ -102,7 +102,8 @@ export async function runTests(
     const close = await run();
     await close();
   } else if (command === 'watch') {
-    rsbuildInstance.onDevCompileDone(async () => {
+    rsbuildInstance.onDevCompileDone(async (...args) => {
+      // console.log('👔', args[0].stats.toJson(true));
       await run();
     });
   }

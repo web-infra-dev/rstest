@@ -8,6 +8,18 @@ class TestFileWatchPlugin {
   }
 
   apply(compiler: Rspack.Compiler) {
+    compiler.hooks.watchRun.tap('WatchRunPlugin', (comp) => {
+      const changedTimes = comp.watchFileSystem.watcher.mtimes;
+      console.log('👨‍🦳', comp.watchFileSystem.watcher);
+      if (!changedTimes) {
+        return;
+      }
+      const changedFiles = Object.keys(changedTimes);
+      if (changedFiles.length > 0) {
+        console.log('Files changed:', changedFiles.join(', '));
+      }
+    });
+
     compiler.hooks.afterCompile.tap(
       'Rstest:TestFileWatchPlugin',
       (compilation) => {
