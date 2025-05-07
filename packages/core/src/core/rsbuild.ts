@@ -69,7 +69,7 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   const {
-    normalizedConfig: { name, plugins, resolve, source, output },
+    normalizedConfig: { name, plugins, resolve, source, output, tools },
   } = context;
 
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
@@ -78,6 +78,7 @@ export const prepareRsbuild = async (
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
+      tools,
       plugins,
       resolve,
       source,

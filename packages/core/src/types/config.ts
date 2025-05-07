@@ -135,6 +135,11 @@ export interface RstestConfig {
   output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
 
   resolve?: RsbuildConfig['resolve'];
+
+  tools?: Pick<
+    NonNullable<RsbuildConfig['tools']>,
+    'rspack' | 'swc' | 'bundlerChain'
+  >;
 }
 
 export type NormalizedConfig = Required<
@@ -147,6 +152,7 @@ export type NormalizedConfig = Required<
     | 'source'
     | 'resolve'
     | 'output'
+    | 'tools'
   >
 > & {
   pool: RstestPoolOptions;
@@ -156,4 +162,5 @@ export type NormalizedConfig = Required<
   source?: RstestConfig['source'];
   resolve?: RstestConfig['resolve'];
   output?: RstestConfig['output'];
+  tools?: RstestConfig['tools'];
 };

@@ -1,6 +1,6 @@
 import { isAbsolute, join, parse, sep } from 'pathe';
 import color from 'picocolors';
-import type { NormalizedConfig, TestResult } from '../types';
+import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export function getAbsolutePath(base: string, filepath: string): string {
@@ -105,8 +105,8 @@ const unwrapRegex = (value: string): RegExp | string => {
  * eg. RegExp
  */
 export const serializableConfig = (
-  normalizedConfig: NormalizedConfig,
-): NormalizedConfig => {
+  normalizedConfig: RuntimeConfig,
+): RuntimeConfig => {
   const { testNamePattern } = normalizedConfig;
   return {
     ...normalizedConfig,
@@ -118,8 +118,8 @@ export const serializableConfig = (
 };
 
 export const undoSerializableConfig = (
-  normalizedConfig: NormalizedConfig,
-): NormalizedConfig => {
+  normalizedConfig: RuntimeConfig,
+): RuntimeConfig => {
   const { testNamePattern } = normalizedConfig;
   return {
     ...normalizedConfig,

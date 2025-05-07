@@ -94,8 +94,31 @@ export const runInPool = async ({
   });
 
   const { updateSnapshot } = context.snapshotManager.options;
-  const { plugins, resolve, source, output, ...runtimeConfig } =
-    context.normalizedConfig;
+  const {
+    testNamePattern,
+    testTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+  } = context.normalizedConfig;
+
+  const runtimeConfig = {
+    testNamePattern,
+    testTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+  };
 
   const results = await Promise.all(
     entries.map((entryInfo) =>
