@@ -33,6 +33,28 @@ export const createRstestUtilities: () => RstestUtilities = () => {
     mock: () => {
       // TODO
     },
+    doMock: () => {
+      // TODO
+    },
+    unMock: () => {
+      // TODO
+    },
+    doUnMock: () => {
+      // TODO
+    },
+    importMock: async () => {
+      // TODO
+      return {} as any;
+    },
+    importActual: async () => {
+      // TODO
+      return {} as any;
+    },
+    resetModules: () => {
+      // TODO
+      return rstest;
+    },
+
     stubEnv: (name: string, value: string | undefined): RstestUtilities => {
       if (!originalEnvValues.has(name)) {
         originalEnvValues.set(name, process.env[name]);

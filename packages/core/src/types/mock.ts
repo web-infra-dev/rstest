@@ -194,9 +194,46 @@ export type RstestUtilities = {
   restoreAllMocks: () => RstestUtilities;
 
   /**
-   * WIP: Mock a module
+   * @todo
+   * Mock a module
    */
   mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+
+  /**
+   * @todo
+   * Mock a module, not hoisted.
+   */
+  doMock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+
+  /**
+   * @todo
+   * Removes module from the mocked registry.
+   */
+  unMock: (path: string) => void;
+
+  /**
+   * @todo
+   * Removes module from the mocked registry, not hoisted.
+   */
+  doUnMock: (path: string) => void;
+
+  /**
+   * @todo
+   * Imports a module with all of its properties (including nested properties) mocked.
+   */
+  importMock: <T = Record<string, unknown>>(path: string) => Promise<T>;
+
+  /**
+   * @todo
+   * Returns the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
+   */
+  importActual: <T = Record<string, unknown>>(path: string) => Promise<T>;
+
+  /**
+   * @todo
+   * Resets modules registry by clearing the cache of all modules.
+   */
+  resetModules: () => RstestUtilities;
 
   /**
    * Changes the value of environmental variable on `process.env`.
