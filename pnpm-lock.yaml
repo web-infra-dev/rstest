@@ -216,7 +216,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
-  tests/ssr:
+  tests/ssr/fixtures:
     dependencies:
       react:
         specifier: ^19.1.0
