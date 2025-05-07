@@ -69,7 +69,7 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   const {
-    normalizedConfig: { name, plugins, resolve, source },
+    normalizedConfig: { name, plugins, resolve, source, output },
   } = context;
 
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
@@ -81,6 +81,7 @@ export const prepareRsbuild = async (
       plugins,
       resolve,
       source,
+      output,
       server: {
         printUrls: false,
         strictPort: false,

@@ -94,7 +94,7 @@ export const runInPool = async ({
   });
 
   const { updateSnapshot } = context.snapshotManager.options;
-  const { plugins, resolve, source, ...runtimeConfig } =
+  const { plugins, resolve, source, output, ...runtimeConfig } =
     context.normalizedConfig;
 
   const results = await Promise.all(
