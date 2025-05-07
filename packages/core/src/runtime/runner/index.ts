@@ -28,7 +28,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
 } {
   const {
     sourcePath,
-    normalizedConfig: { testTimeout },
+    runtimeConfig: { testTimeout },
   } = workerState;
   const runtimeAPI: RunnerRuntime = new RunnerRuntime({
     sourcePath,

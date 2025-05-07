@@ -40,7 +40,7 @@ export async function runTests(
   const setupFiles = getSetupFiles(setups, rootPath);
 
   const rsbuildInstance = await prepareRsbuild(
-    name,
+    context,
     globTestSourceEntries,
     setupFiles,
   );
