@@ -12,6 +12,7 @@ describe('test build config', () => {
     { name: 'alias' },
     { name: 'plugin' },
     { name: 'tools/rspack' },
+    { name: 'decorators' },
   ])('$name config should work correctly', async ({ name }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

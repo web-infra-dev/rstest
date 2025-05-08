@@ -33,6 +33,11 @@ const autoExternalNodeModules: (
     return callback();
   }
 
+  if (request.startsWith('@swc/helpers/')) {
+    // @swc/helper is a special case (Load by require but resolve to esm)
+    return callback();
+  }
+
   const doExternal = (externalPath: string = request) => {
     callback(
       undefined,

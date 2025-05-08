@@ -129,7 +129,7 @@ export interface RstestConfig {
 
   source?: Pick<
     NonNullable<RsbuildConfig['source']>,
-    'define' | 'tsconfigPath'
+    'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
   >;
 
   output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
