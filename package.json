@@ -28,6 +28,7 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
+    "@rsdoctor/rspack-plugin": "^1.0.0",
     "@rstest/core": "workspace:*",
     "@biomejs/biome": "^1.9.4",
     "@changesets/cli": "^2.29.3",
@@ -40,6 +41,7 @@
     "heading-case": "^0.1.6",
     "nano-staged": "^0.8.0",
     "nx": "^21.0.0",
+    "path-serializer": "0.4.0",
     "prettier": "^3.5.3",
     "prettier-plugin-packagejson": "^2.5.11",
     "simple-git-hooks": "^2.13.0",

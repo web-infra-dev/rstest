@@ -1,0 +1,458 @@
+// Snapshot v1
+
+exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
+{
+  "context": "<WORKSPACE>",
+  "devtool": "source-map",
+  "entry": [Function],
+  "experiments": {
+    "asyncWebAssembly": true,
+    "incremental": true,
+  },
+  "externals": [
+    {
+      "@rstest/core": "global @rstest/core",
+    },
+    [Function],
+  ],
+  "externalsPresets": {
+    "node": true,
+  },
+  "infrastructureLogging": {
+    "level": "error",
+  },
+  "mode": "none",
+  "module": {
+    "parser": {
+      "javascript": {
+        "exportsPresence": "error",
+      },
+    },
+    "rules": [
+      {
+        "resolve": {
+          "fullySpecified": false,
+        },
+        "test": /\\\\\\.m\\?js/,
+      },
+      {
+        "dependency": {
+          "not": "url",
+        },
+        "resolve": {
+          "preferRelative": true,
+        },
+        "resourceQuery": {
+          "not": /raw\\|inline/,
+        },
+        "sideEffects": true,
+        "test": /\\\\\\.css\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+          },
+          {
+            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "importLoaders": 0,
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+              "sourceMap": false,
+            },
+          },
+        ],
+      },
+      {
+        "resolve": {
+          "preferRelative": true,
+        },
+        "resourceQuery": /inline/,
+        "sideEffects": true,
+        "test": /\\\\\\.css\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 0,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+        ],
+      },
+      {
+        "resourceQuery": /raw/,
+        "test": /\\\\\\.css\\$/,
+        "type": "asset/source",
+      },
+      {
+        "dependency": {
+          "not": "url",
+        },
+        "include": [
+          {
+            "and": [
+              "<WORKSPACE>",
+              {
+                "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
+              },
+            ],
+          },
+          /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
+        ],
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "builtin:swc-loader",
+            "options": {
+              "env": {
+                "targets": [
+                  "node >= 16",
+                ],
+              },
+              "isModule": "unknown",
+              "jsc": {
+                "experimental": {
+                  "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+                  "keepImportAttributes": true,
+                },
+                "externalHelpers": true,
+                "parser": {
+                  "decorators": true,
+                  "syntax": "typescript",
+                  "tsx": false,
+                },
+                "transform": {
+                  "decoratorVersion": "2022-03",
+                  "legacyDecorator": false,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "mimetype": {
+          "or": [
+            "text/javascript",
+            "application/javascript",
+          ],
+        },
+        "resolve": {
+          "fullySpecified": false,
+        },
+        "use": [
+          {
+            "loader": "builtin:swc-loader",
+            "options": {
+              "env": {
+                "targets": [
+                  "node >= 16",
+                ],
+              },
+              "isModule": "unknown",
+              "jsc": {
+                "experimental": {
+                  "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+                  "keepImportAttributes": true,
+                },
+                "externalHelpers": true,
+                "parser": {
+                  "decorators": true,
+                  "syntax": "typescript",
+                  "tsx": false,
+                },
+                "transform": {
+                  "decoratorVersion": "2022-03",
+                  "legacyDecorator": false,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/image/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /inline/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /raw/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/image/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/svg/[name].[contenthash:8].svg",
+            },
+            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /inline/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /raw/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/svg/[name].[contenthash:8].svg",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.svg\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/media/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /inline/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /raw/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/media/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/font/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /inline/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /raw/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/font/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "dependency": "url",
+        "generator": {
+          "filename": "static/wasm/[hash].module.wasm",
+        },
+        "test": /\\\\\\.wasm\\$/,
+        "type": "asset/resource",
+      },
+      {
+        "test": /\\\\\\.node\\$/,
+        "use": [
+          {
+            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  "name": "test",
+  "optimization": {
+    "chunkIds": "named",
+    "emitOnErrors": true,
+    "minimize": false,
+    "moduleIds": "named",
+    "splitChunks": false,
+  },
+  "output": {
+    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "chunkFilename": "[name].js",
+    "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
+    "filename": "[name].js",
+    "hashFunction": "xxhash64",
+    "iife": false,
+    "library": {
+      "type": "commonjs2",
+    },
+    "path": "<WORKSPACE>/dist/.test",
+    "pathinfo": false,
+    "publicPath": "/",
+    "webassemblyModuleFilename": "static/wasm/[hash].module.wasm",
+  },
+  "performance": {
+    "hints": false,
+  },
+  "plugins": [
+    {
+      "name": "RsbuildCorePlugin",
+    },
+    DefinePlugin {
+      "_args": [
+        {
+          "import.meta.env.ASSET_PREFIX": "\\"\\"",
+          "import.meta.env.BASE_URL": "\\"/\\"",
+          "import.meta.env.DEV": false,
+          "import.meta.env.MODE": "\\"none\\"",
+          "import.meta.env.PROD": false,
+          "process.env.ASSET_PREFIX": "\\"\\"",
+          "process.env.BASE_URL": "\\"/\\"",
+        },
+      ],
+      "affectedHooks": "compilation",
+      "name": "DefinePlugin",
+    },
+    IgnoreModuleNotFoundErrorPlugin {},
+    TestFileWatchPlugin {
+      "contextToWatch": "<WORKSPACE>",
+    },
+  ],
+  "resolve": {
+    "alias": {
+      "@swc/helpers": "<WORKSPACE>/node_modules/<PNPM_INNER>/@swc/helpers",
+    },
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".mjs",
+      ".js",
+      ".jsx",
+      ".json",
+    ],
+  },
+  "target": "node",
+  "watchOptions": {
+    "aggregateTimeout": 0,
+  },
+}
+`;
+
+exports[`prepareRsbuild > should generate swc config correctly with user customize 1`] = `
+[
+  {
+    "resolve": {
+      "fullySpecified": false,
+    },
+    "test": /\\\\\\.m\\?js/,
+  },
+  {
+    "dependency": {
+      "not": "url",
+    },
+    "include": [
+      {
+        "and": [
+          "<WORKSPACE>",
+          {
+            "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
+          },
+        ],
+      },
+      /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
+      /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
+    ],
+    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+    "type": "javascript/auto",
+    "use": [
+      {
+        "loader": "builtin:swc-loader",
+        "options": {
+          "env": {
+            "targets": [
+              "node >= 16",
+            ],
+          },
+          "isModule": "unknown",
+          "jsc": {
+            "experimental": {
+              "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+              "keepImportAttributes": true,
+            },
+            "externalHelpers": true,
+            "parser": {
+              "decorators": true,
+              "syntax": "typescript",
+              "tsx": false,
+            },
+            "transform": {
+              "decoratorMetadata": true,
+              "legacyDecorator": true,
+              "useDefineForClassFields": false,
+            },
+          },
+        },
+      },
+    ],
+  },
+]
+`;
