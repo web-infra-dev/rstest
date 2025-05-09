@@ -115,7 +115,7 @@ describe('Test Concurrent', () => {
 
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/concurrentLimit.test.ts'],
+      args: ['run', 'fixtures/concurrentLimit.test.ts', '--maxConcurrency=4'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -133,14 +133,14 @@ describe('Test Concurrent', () => {
         "[log] concurrent test 2",
         "[log] concurrent test 3",
         "[log] concurrent test 4",
-        "[log] concurrent test 5",
         "[log] concurrent test 2 - 1",
-        "[log] concurrent test 6",
+        "[log] concurrent test 5",
         "[log] concurrent test 3 - 1",
-        "[log] concurrent test 7",
+        "[log] concurrent test 6",
         "[log] concurrent test 4 - 1",
-        "[log] concurrent test 5 - 1",
+        "[log] concurrent test 7",
         "[log] concurrent test 1 - 1",
+        "[log] concurrent test 5 - 1",
         "[log] concurrent test 6 - 1",
         "[log] concurrent test 7 - 1",
       ]

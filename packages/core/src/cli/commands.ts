@@ -22,6 +22,7 @@ type CommonOptions = {
   unstubGlobals?: boolean;
   unstubEnvs?: boolean;
   retry?: number;
+  maxConcurrency?: number;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -53,6 +54,10 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds')
     .option('--retry <retry>', 'Number of times to retry a test if it fails.')
+    .option(
+      '--maxConcurrency <maxConcurrency>',
+      'Maximum number of concurrent tests.',
+    )
     .option(
       '--clearMocks',
       'Automatically clear mock calls, instances, contexts and results before every test.',
@@ -98,6 +103,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'unstubEnvs',
     'unstubGlobals',
     'retry',
+    'maxConcurrency',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

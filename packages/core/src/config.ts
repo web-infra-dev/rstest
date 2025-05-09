@@ -97,6 +97,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   restoreMocks: false,
   unstubGlobals: false,
   unstubEnvs: false,
+  maxConcurrency: 5,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

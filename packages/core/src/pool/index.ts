@@ -105,6 +105,7 @@ export const runInPool = async ({
     restoreMocks,
     unstubEnvs,
     unstubGlobals,
+    maxConcurrency,
   } = context.normalizedConfig;
 
   const runtimeConfig = {
@@ -118,6 +119,7 @@ export const runInPool = async ({
     restoreMocks,
     unstubEnvs,
     unstubGlobals,
+    maxConcurrency,
   };
 
   const results = await Promise.all(
