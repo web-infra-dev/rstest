@@ -127,18 +127,26 @@ export class RunnerRuntime {
     };
   }
 
-  describe(
-    name: string,
-    fn?: () => MaybePromise<void>,
-    runMode: TestRunMode = 'run',
+  describe({
+    name,
+    fn,
+    runMode = 'run',
     each = false,
-  ): void {
+    concurrent = false,
+  }: {
+    name: string;
+    fn?: () => MaybePromise<void>;
+    runMode?: TestRunMode;
+    each?: boolean;
+    concurrent?: boolean;
+  }): void {
     const currentSuite: TestSuite = {
       name,
       runMode,
       tests: [],
       type: 'suite',
       each,
+      concurrent,
     };
 
     if (!fn) {
@@ -174,6 +182,10 @@ export class RunnerRuntime {
 
       if (current.each || current.inTestEach) {
         test.inTestEach = true;
+      }
+
+      if (current.concurrent) {
+        test.concurrent = true;
       }
 
       if (current.type === 'case') {
@@ -269,22 +281,28 @@ export class RunnerRuntime {
     });
   }
 
-  describeEach(
-    cases: Parameters<DescribeEachFn>[0],
-    runMode: TestRunMode = 'run',
-  ): ReturnType<DescribeEachFn> {
+  describeEach({
+    cases,
+    runMode = 'run',
+    concurrent = false,
+  }: {
+    cases: Parameters<DescribeEachFn>[0];
+    runMode?: TestRunMode;
+    concurrent?: boolean;
+  }): ReturnType<DescribeEachFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
 
-        this.describe(
-          formatName(name, param, i),
-          () => fn?.(...params),
+        this.describe({
+          name: formatName(name, param, i),
+          fn: () => fn?.(...params),
           runMode,
-          true,
-        );
+          each: true,
+          concurrent,
+        });
       }
     };
   }
@@ -383,26 +401,39 @@ export const createRuntimeAPI = ({
   it.skipIf = (condition: boolean) => (condition ? it.skip : it) as TestBaseAPI;
 
   const describe = ((name, fn) =>
-    runtimeInstance.describe(name, fn)) as DescribeAPI;
+    runtimeInstance.describe({ name, fn })) as DescribeAPI;
 
   describe.only = ((name, fn) =>
-    runtimeInstance.describe(name, fn, 'only')) as DescribeBaseAPI;
+    runtimeInstance.describe({ name, fn, runMode: 'only' })) as DescribeBaseAPI;
   describe.only.each = ((cases: any) =>
-    runtimeInstance.describeEach(cases, 'only')) as DescribeEachFn;
-  describe.todo = (name, fn) => runtimeInstance.describe(name, fn, 'todo');
+    runtimeInstance.describeEach({ cases, runMode: 'only' })) as DescribeEachFn;
+  describe.todo = (name, fn) =>
+    runtimeInstance.describe({ name, fn, runMode: 'todo' });
   describe.skip = ((name, fn) =>
-    runtimeInstance.describe(name, fn, 'skip')) as DescribeBaseAPI;
+    runtimeInstance.describe({ name, fn, runMode: 'skip' })) as DescribeBaseAPI;
   describe.skip.each = ((cases: any) =>
-    runtimeInstance.describeEach(cases, 'skip')) as DescribeEachFn;
+    runtimeInstance.describeEach({ cases, runMode: 'skip' })) as DescribeEachFn;
+
+  describe.concurrent = ((name, fn) =>
+    runtimeInstance.describe({
+      name,
+      fn,
+      concurrent: true,
+    })) as DescribeBaseAPI;
+
+  describe.concurrent.each = ((cases: any) =>
+    runtimeInstance.describeEach({
+      cases,
+      concurrent: true,
+    })) as DescribeEachFn;
 
   describe.skipIf = (condition: boolean) =>
     (condition ? describe.skip : describe) as DescribeBaseAPI;
   describe.runIf = (condition: boolean) =>
     (condition ? describe : describe.skip) as DescribeBaseAPI;
 
-  describe.each = runtimeInstance.describeEach.bind(
-    runtimeInstance,
-  ) as DescribeEachFn;
+  describe.each = ((cases: any) =>
+    runtimeInstance.describeEach({ cases })) as DescribeEachFn;
 
   return {
     api: {
