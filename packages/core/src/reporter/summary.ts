@@ -223,7 +223,14 @@ export const printSummaryErrorLogs = async ({
 };
 
 async function printCodeFrame(frame: StackFrame) {
-  const source = fs.readFileSync(frame.file!, 'utf-8');
+  const filePath = frame.file?.startsWith('file')
+    ? new URL(frame.file!)
+    : frame.file;
+
+  if (!filePath) {
+    return;
+  }
+  const source = fs.readFileSync(filePath!, 'utf-8');
   const { codeFrameColumns } = await import('@babel/code-frame');
   const result = codeFrameColumns(
     source,

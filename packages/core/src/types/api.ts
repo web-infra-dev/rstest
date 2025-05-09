@@ -51,6 +51,7 @@ export type TestAPI = TestBaseAPI & {
   runIf: (condition: boolean) => TestBaseAPI;
   skipIf: (condition: boolean) => TestBaseAPI;
   todo: TestFn;
+  concurrent: TestBaseAPI;
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
