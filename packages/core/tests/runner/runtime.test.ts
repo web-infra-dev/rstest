@@ -1,9 +1,9 @@
-import { RunnerRuntime } from '../../src/runtime/runner/runtime';
+import { createRuntimeAPI } from '../../src/runtime/runner/runtime';
 import type { TestSuite } from '../../src/types';
 
 describe('RunnerRuntime', () => {
   it('should add test correctly', async () => {
-    const runtime = new RunnerRuntime({
+    const { api: runtime, instance } = createRuntimeAPI({
       sourcePath: __filename,
       testTimeout: 100,
     });
@@ -23,7 +23,7 @@ describe('RunnerRuntime', () => {
     runtime.describe('suite - 1', () => {});
     runtime.it('test - 2', () => {});
 
-    const tests = await runtime.getTests();
+    const tests = await instance.getTests();
 
     expect(tests.map((test) => test.name)).toEqual([
       'suite - 0',
@@ -44,7 +44,7 @@ describe('RunnerRuntime', () => {
   });
 
   it('should add test correctly when describe fn undefined', async () => {
-    const runtime = new RunnerRuntime({
+    const { api: runtime, instance } = createRuntimeAPI({
       sourcePath: __filename,
       testTimeout: 100,
     });
@@ -64,7 +64,7 @@ describe('RunnerRuntime', () => {
     });
     runtime.it('test - 2', () => {});
 
-    const tests = await runtime.getTests();
+    const tests = await instance.getTests();
 
     expect(tests.map((test) => test.name)).toEqual([
       'suite - 0',
