@@ -39,21 +39,23 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   // TODO: optimize chainable API
 
   const it = ((name, fn, timeout) =>
-    runtimeAPI.it(name, fn, timeout)) as TestAPI;
-  it.fails = runtimeAPI.fails.bind(runtimeAPI);
+    runtimeAPI.it({ name, fn, timeout })) as TestAPI;
+  it.fails = (name, fn, timeout) =>
+    runtimeAPI.it({ name, fn, timeout, fails: true });
   it.each = runtimeAPI.each.bind(runtimeAPI) as TestEachFn;
-  it.todo = (name, fn, timeout) => runtimeAPI.it(name, fn, timeout, 'todo');
+  it.todo = (name, fn, timeout) =>
+    runtimeAPI.it({ name, fn, timeout, runMode: 'todo' });
 
   it.skip = ((name, fn, timeout) =>
-    runtimeAPI.it(name, fn, timeout, 'skip')) as TestBaseAPI;
+    runtimeAPI.it({ name, fn, timeout, runMode: 'skip' })) as TestBaseAPI;
   it.skip.fails = (name, fn, timeout) =>
-    runtimeAPI.fails(name, fn, timeout, 'skip');
+    runtimeAPI.it({ name, fn, timeout, runMode: 'skip', fails: true });
   it.skip.each = ((cases: any) => runtimeAPI.each(cases, 'skip')) as TestEachFn;
 
   it.only = ((name, fn, timeout) =>
-    runtimeAPI.it(name, fn, timeout, 'only')) as TestBaseAPI;
+    runtimeAPI.it({ name, fn, timeout, runMode: 'only' })) as TestBaseAPI;
   it.only.fails = (name, fn, timeout) =>
-    runtimeAPI.fails(name, fn, timeout, 'only');
+    runtimeAPI.it({ name, fn, timeout, runMode: 'only', fails: true });
   it.only.each = ((cases: any) => runtimeAPI.each(cases, 'only')) as TestEachFn;
 
   it.runIf = (condition: boolean) => (condition ? it : it.skip) as TestBaseAPI;
