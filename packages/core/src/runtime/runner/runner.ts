@@ -42,7 +42,12 @@ export class TestRunner {
     api: Rstest;
   }): Promise<TestFileResult> {
     const {
-      runtimeConfig: { passWithNoTests, testNamePattern, retry },
+      runtimeConfig: {
+        passWithNoTests,
+        testNamePattern,
+        retry,
+        maxConcurrency,
+      },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -168,7 +173,7 @@ export class TestRunner {
       return result;
     };
 
-    const limitMaxConcurrency = limitConcurrency(5);
+    const limitMaxConcurrency = limitConcurrency(maxConcurrency);
 
     const runTests = async (
       allTest: Test[],

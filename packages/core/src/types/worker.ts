@@ -31,6 +31,7 @@ export type RuntimeConfig = Pick<
   | 'restoreMocks'
   | 'unstubEnvs'
   | 'unstubGlobals'
+  | 'maxConcurrency'
 >;
 
 export type WorkerContext = {

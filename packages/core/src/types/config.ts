@@ -123,6 +123,12 @@ export interface RstestConfig {
    */
   unstubEnvs?: boolean;
 
+  /**
+   * Maximum number of concurrent tests
+   * @default 5
+   */
+  maxConcurrency?: number;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
