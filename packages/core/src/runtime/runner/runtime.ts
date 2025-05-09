@@ -228,13 +228,21 @@ export class RunnerRuntime {
     }
   }
 
-  it(
-    name: string,
-    fn?: () => void | Promise<void>,
-    timeout: number = this.defaultTestTimeout,
-    runMode: TestRunMode = 'run',
+  it({
+    name,
+    fn,
+    timeout = this.defaultTestTimeout,
+    runMode = 'run',
+    fails = false,
     each = false,
-  ): void {
+  }: {
+    name: string;
+    fn?: () => void | Promise<void>;
+    timeout?: number;
+    runMode?: TestRunMode;
+    each?: boolean;
+    fails?: boolean;
+  }): void {
     this.addTestCase({
       name,
       fn: fn
@@ -249,6 +257,7 @@ export class RunnerRuntime {
       type: 'case',
       timeout,
       each,
+      fails,
     });
   }
 
@@ -282,37 +291,15 @@ export class RunnerRuntime {
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
 
-        this.it(
-          formatName(name, param, i),
-          () => fn?.(...params),
+        this.it({
+          name: formatName(name, param, i),
+          fn: () => fn?.(...params),
           timeout,
           runMode,
-          true,
-        );
+          each: true,
+        });
       }
     };
-  }
-
-  fails(
-    name: string,
-    fn?: () => void | Promise<void>,
-    timeout: number = this.defaultTestTimeout,
-    runMode: TestRunMode = 'run',
-  ): void {
-    this.addTestCase({
-      name,
-      fn: fn
-        ? wrapTimeout({
-            name: 'test',
-            fn,
-            timeout,
-            stackTraceError: new Error('STACK_TRACE_ERROR'),
-          })
-        : fn,
-      fails: true,
-      runMode,
-      type: 'case',
-    });
   }
 
   private getCurrentSuite(): TestSuite {
