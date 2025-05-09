@@ -240,6 +240,7 @@ export class RunnerRuntime {
     runMode = 'run',
     fails = false,
     each = false,
+    concurrent = false,
   }: {
     name: string;
     fn?: () => void | Promise<void>;
@@ -247,6 +248,7 @@ export class RunnerRuntime {
     runMode?: TestRunMode;
     each?: boolean;
     fails?: boolean;
+    concurrent?: boolean;
   }): void {
     this.addTestCase({
       name,
@@ -261,6 +263,7 @@ export class RunnerRuntime {
       runMode,
       type: 'case',
       timeout,
+      concurrent,
       each,
       fails,
     });
@@ -286,10 +289,15 @@ export class RunnerRuntime {
     };
   }
 
-  each(
-    cases: Parameters<TestEachFn>[0],
-    runMode: TestRunMode = 'run',
-  ): ReturnType<TestEachFn> {
+  each({
+    cases,
+    runMode = 'run',
+    concurrent = false,
+  }: {
+    cases: Parameters<TestEachFn>[0];
+    runMode?: TestRunMode;
+    concurrent?: boolean;
+  }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.defaultTestTimeout) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
@@ -302,6 +310,7 @@ export class RunnerRuntime {
           timeout,
           runMode,
           each: true,
+          concurrent,
         });
       }
     };
@@ -339,23 +348,36 @@ export const createRuntimeAPI = ({
     runtimeInstance.it({ name, fn, timeout })) as TestAPI;
   it.fails = (name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, fails: true });
-  it.each = runtimeInstance.each.bind(runtimeInstance) as TestEachFn;
+  it.each = ((cases: any) => runtimeInstance.each({ cases })) as TestEachFn;
   it.todo = (name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, runMode: 'todo' });
+
+  it.concurrent = ((name, fn, timeout) =>
+    runtimeInstance.it({ name, fn, timeout, concurrent: true })) as TestBaseAPI;
+  it.concurrent.fails = ((name, fn, timeout) =>
+    runtimeInstance.it({
+      name,
+      fn,
+      timeout,
+      concurrent: true,
+      fails: true,
+    })) as TestBaseAPI;
+  it.concurrent.each = ((cases: any) =>
+    runtimeInstance.each({ cases, concurrent: true })) as TestEachFn;
 
   it.skip = ((name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, runMode: 'skip' })) as TestBaseAPI;
   it.skip.fails = (name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, runMode: 'skip', fails: true });
   it.skip.each = ((cases: any) =>
-    runtimeInstance.each(cases, 'skip')) as TestEachFn;
+    runtimeInstance.each({ cases, runMode: 'skip' })) as TestEachFn;
 
   it.only = ((name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, runMode: 'only' })) as TestBaseAPI;
   it.only.fails = (name, fn, timeout) =>
     runtimeInstance.it({ name, fn, timeout, runMode: 'only', fails: true });
   it.only.each = ((cases: any) =>
-    runtimeInstance.each(cases, 'only')) as TestEachFn;
+    runtimeInstance.each({ cases, runMode: 'only' })) as TestEachFn;
 
   it.runIf = (condition: boolean) => (condition ? it : it.skip) as TestBaseAPI;
   it.skipIf = (condition: boolean) => (condition ? it.skip : it) as TestBaseAPI;

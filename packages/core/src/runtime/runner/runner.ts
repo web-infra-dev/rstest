@@ -19,6 +19,7 @@ import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import {
   getTestStatus,
+  limitConcurrency,
   markAllTestAsSkipped,
   traverseUpdateTest,
 } from './task';
@@ -167,6 +168,42 @@ export class TestRunner {
       return result;
     };
 
+    const limitMaxConcurrency = limitConcurrency(5);
+
+    const runTests = async (
+      allTest: Test[],
+      parentHooks: {
+        beforeEachListeners: BeforeEachListener[];
+        afterEachListeners: AfterEachListener[];
+      },
+    ) => {
+      const tests = [...allTest];
+
+      while (tests.length) {
+        const suite = tests.shift()!;
+
+        if (suite.concurrent) {
+          const cases = [suite];
+          while (tests[0]?.concurrent) {
+            cases.push(tests.shift()!);
+          }
+
+          await Promise.all(
+            cases.map((test) => {
+              if (test.type === 'suite') {
+                return runTest(test, parentHooks);
+              }
+              return limitMaxConcurrency(() => runTest(test, parentHooks));
+            }),
+          );
+
+          continue;
+        }
+
+        await runTest(suite, parentHooks);
+      }
+    };
+
     const runTest = async (
       test: Test,
       parentHooks: {
@@ -223,16 +260,14 @@ export class TestRunner {
           markAllTestAsSkipped(test.tests);
         }
 
-        for (const suite of test.tests) {
-          await runTest(suite, {
-            beforeEachListeners: parentHooks.beforeEachListeners.concat(
-              test.beforeEachListeners || [],
-            ),
-            afterEachListeners: parentHooks.afterEachListeners.concat(
-              test.afterEachListeners || [],
-            ),
-          });
-        }
+        await runTests(test.tests, {
+          beforeEachListeners: parentHooks.beforeEachListeners.concat(
+            test.beforeEachListeners || [],
+          ),
+          afterEachListeners: parentHooks.afterEachListeners.concat(
+            test.afterEachListeners || [],
+          ),
+        });
 
         const afterAllFns = [...(test.afterAllListeners || [])]
           .reverse()
@@ -303,12 +338,10 @@ export class TestRunner {
 
     traverseUpdateTest(tests, testNamePattern);
 
-    for (const test of tests) {
-      await runTest(test, {
-        beforeEachListeners: [],
-        afterEachListeners: [],
-      });
-    }
+    await runTests(tests, {
+      beforeEachListeners: [],
+      afterEachListeners: [],
+    });
 
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);

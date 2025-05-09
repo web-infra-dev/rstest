@@ -231,3 +231,42 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
     }
   }) as T;
 }
+
+export function limitConcurrency(
+  concurrency: number = Number.POSITIVE_INFINITY,
+): <Args extends unknown[], T>(
+  func: (...args: Args) => PromiseLike<T> | T,
+  ...args: Args
+) => Promise<T> {
+  let running = 0;
+  const queue: Array<() => void> = [];
+
+  const runNext = () => {
+    if (queue.length > 0 && running < concurrency) {
+      running++;
+      const next = queue.shift()!;
+      next();
+    }
+  };
+
+  return (func, ...args) => {
+    return new Promise((resolve, reject) => {
+      const task = () => {
+        Promise.resolve(func(...args))
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            running--;
+            runNext();
+          });
+      };
+
+      if (running < concurrency) {
+        running++;
+        task();
+      } else {
+        queue.push(task);
+      }
+    });
+  };
+}
