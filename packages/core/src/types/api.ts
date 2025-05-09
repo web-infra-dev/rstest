@@ -66,6 +66,7 @@ export type DescribeAPI = DescribeBaseAPI & {
   runIf: (condition: boolean) => DescribeBaseAPI;
   skipIf: (condition: boolean) => DescribeBaseAPI;
   todo: DescribeFn;
+  concurrent: DescribeBaseAPI;
 };
 
 export type RunnerAPI = {
