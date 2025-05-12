@@ -68,5 +68,5 @@ export interface Reporter {
   /**
    * Called when console log is calling.
    */
-  onConsoleLog?: (log: UserConsoleLog) => void;
+  onUserConsoleLog?: (log: UserConsoleLog) => void;
 }

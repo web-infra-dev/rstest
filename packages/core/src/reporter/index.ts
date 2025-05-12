@@ -75,7 +75,7 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onConsoleLog(log: { content: string }): void {
+  onUserConsoleLog(log: { content: string }): void {
     const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
 
     if (!shouldLog) {
