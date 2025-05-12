@@ -1,7 +1,12 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { BuiltInReporterNames } from '../core/context';
-import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
+import type {
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  UserConsoleLog,
+} from './testSuite';
 import type { MaybePromise } from './utils';
 
 export type Duration = {
@@ -59,4 +64,9 @@ export interface Reporter {
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
   }) => MaybePromise<void>;
+
+  /**
+   * Called when console log is calling.
+   */
+  onConsoleLog?: (log: UserConsoleLog) => void;
 }

@@ -116,3 +116,7 @@ export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
 };
+
+export interface UserConsoleLog {
+  content: string;
+}

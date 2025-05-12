@@ -50,12 +50,15 @@ const runInPool = async ({
   };
 
   const { createRstestRuntime } = await import('../api');
+  const { createCustomConsole } = await import('./console');
+
   const { api, runner } = createRstestRuntime(workerState);
 
   const rstestContext = {
     global: {
       '@rstest/core': api,
     },
+    console: createCustomConsole(rpc),
     ...(globals ? getGlobalApi(api) : {}),
   };
 

@@ -138,6 +138,11 @@ export interface RstestConfig {
    */
   maxConcurrency?: number;
 
+  /**
+   * Custom handler for console log in tests
+   */
+  onConsoleLog?: (content: string) => boolean | void;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
@@ -168,11 +173,13 @@ export type NormalizedConfig = Required<
     | 'resolve'
     | 'output'
     | 'tools'
+    | 'onConsoleLog'
   >
 > & {
   pool: RstestPoolOptions;
   setupFiles?: string[] | string;
   testNamePattern?: RstestConfig['testNamePattern'];
+  onConsoleLog?: RstestConfig['onConsoleLog'];
   plugins?: RstestConfig['plugins'];
   source?: RstestConfig['source'];
   resolve?: RstestConfig['resolve'];
