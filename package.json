@@ -40,10 +40,10 @@
     "fs-extra": "^11.3.0",
     "heading-case": "^0.1.6",
     "nano-staged": "^0.8.0",
-    "nx": "^21.0.2",
+    "nx": "^21.0.3",
     "path-serializer": "0.4.0",
     "prettier": "^3.5.3",
-    "prettier-plugin-packagejson": "^2.5.11",
+    "prettier-plugin-packagejson": "^2.5.12",
     "simple-git-hooks": "^2.13.0",
     "typescript": "^5.8.3"
   },
