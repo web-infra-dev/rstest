@@ -2,27 +2,32 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
-import type {
-  Reporter,
-  RstestCommand,
-  RstestConfig,
-  RstestContext,
-} from '../types';
+import type { RstestCommand, RstestConfig, RstestContext } from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
-const reportersMap: Record<string, new (...options: any[]) => Reporter> = {
-  default: DefaultReporter,
+const reportersMap = {
+  default: DefaultReporter as typeof DefaultReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
 
-function createReporters(reporters: RstestConfig['reporters'], options: any) {
+function createReporters(
+  reporters: RstestConfig['reporters'],
+  initOptions: any = {},
+) {
   const result = castArray(reporters).map((reporter) => {
-    if (typeof reporter === 'string') {
+    if (typeof reporter === 'string' || Array.isArray(reporter)) {
+      const [name, options = {}] = castArray(reporter) as [
+        BuiltInReporterNames,
+        Record<string, any>,
+      ];
       // built-in reporters
-      if (reporter in reportersMap) {
-        const Reporter = reportersMap[reporter]!;
-        return new Reporter(options);
+      if (name in reportersMap) {
+        const Reporter = reportersMap[name]!;
+        return new Reporter({
+          ...initOptions,
+          options,
+        });
       }
 
       // TODO: load third-party reporters

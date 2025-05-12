@@ -1,5 +1,9 @@
 import type { RsbuildConfig } from '@rsbuild/core';
-import type { BuiltInReporterNames, Reporter } from './reporter';
+import type {
+  BuiltInReporterNames,
+  Reporter,
+  ReporterWithOptions,
+} from './reporter';
 
 export type RstestPoolType = 'forks';
 
@@ -84,7 +88,12 @@ export interface RstestConfig {
   reporters?:
     | Reporter
     | BuiltInReporterNames
-    | (Reporter | BuiltInReporterNames)[];
+    | (
+        | Reporter
+        | BuiltInReporterNames
+        | [BuiltInReporterNames]
+        | ReporterWithOptions
+      )[];
   /**
    * Run only tests with a name that matches the regex.
    */

@@ -1,5 +1,6 @@
 import { relative } from 'pathe';
 import type {
+  DefaultReporterOptions,
   Duration,
   GetSourcemap,
   Reporter,
@@ -19,9 +20,14 @@ import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
   private rootPath: string;
+  private options: DefaultReporterOptions = {};
 
-  constructor({ rootPath }: { rootPath: string }) {
+  constructor({
+    rootPath,
+    options,
+  }: { rootPath: string; options: DefaultReporterOptions }) {
     this.rootPath = rootPath;
+    this.options = options;
   }
 
   onTestFileStart(test: TestFileInfo): void {
@@ -74,6 +80,9 @@ export class DefaultReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
   }): Promise<void> {
+    if (this.options.summary === false) {
+      return;
+    }
     await printSummaryErrorLogs({
       testResults,
       results,
