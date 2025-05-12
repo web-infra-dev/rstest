@@ -4,10 +4,12 @@ import type {
   AfterEachListener,
   BeforeEachListener,
   Rstest,
+  RstestExpect,
   RunnerHooks,
   SuiteContext,
   Test,
   TestCase,
+  TestContext,
   TestError,
   TestFileResult,
   TestResult,
@@ -15,6 +17,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils';
+import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import {
@@ -27,6 +30,7 @@ import {
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
+  private workerState: WorkerState | undefined;
 
   async runTests({
     tests,
@@ -41,6 +45,7 @@ export class TestRunner {
     hooks: RunnerHooks;
     api: Rstest;
   }): Promise<TestFileResult> {
+    this.workerState = state;
     const {
       runtimeConfig: {
         passWithNoTests,
@@ -110,7 +115,7 @@ export class TestRunner {
         if (test.fails) {
           try {
             this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
-            await test.fn?.();
+            await test.fn?.(test.context);
             this.afterRunTest(test);
 
             result = {
@@ -135,7 +140,7 @@ export class TestRunner {
         } else {
           try {
             this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
-            await test.fn?.();
+            await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
               parentNames: test.parentNames,
@@ -404,6 +409,36 @@ export class TestRunner {
     }
   }
 
+  private createTestContext(): TestContext {
+    const context = (() => {
+      throw new Error('done() callback is deprecated, use promise instead');
+    }) as unknown as TestContext;
+
+    let _expect: RstestExpect | undefined;
+
+    const current = this._test;
+
+    Object.defineProperty(context, 'expect', {
+      get: () => {
+        if (!_expect) {
+          _expect = createExpect({
+            workerState: this.workerState!,
+            getCurrentTest: () => current,
+          });
+        }
+        return _expect;
+      },
+    });
+
+    Object.defineProperty(context, '_useLocalExpect', {
+      get() {
+        return _expect != null;
+      },
+    });
+
+    return context;
+  }
+
   private beforeRunTest(test: TestCase, snapshotState: SnapshotState): void {
     setState(
       {
@@ -418,16 +453,29 @@ export class TestRunner {
       },
       (globalThis as any)[GLOBAL_EXPECT],
     );
+
+    const context = this.createTestContext();
+
+    // create test context
+    Object.defineProperty(test, 'context', {
+      value: context,
+      enumerable: false,
+    });
   }
 
   private afterRunTest(test: TestCase): void {
+    // @ts-expect-error
+    const expect = test.context._useLocalExpect
+      ? test.context.expect
+      : (globalThis as any)[GLOBAL_EXPECT];
+
     const {
       assertionCalls,
       expectedAssertionsNumber,
       expectedAssertionsNumberErrorGen,
       isExpectingAssertions,
       isExpectingAssertionsError,
-    } = getState((globalThis as any)[GLOBAL_EXPECT]);
+    } = getState(expect);
 
     if (test.result?.state === 'fail') {
       throw test.result!.errors;

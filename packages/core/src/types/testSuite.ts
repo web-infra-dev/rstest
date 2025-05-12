@@ -1,4 +1,5 @@
 import type { SnapshotResult } from '@vitest/snapshot';
+import type { TestContext } from './api';
 
 // TODO: Unify filePath、testPath、originPath、sourcePath
 import type { MaybePromise } from './utils';
@@ -25,13 +26,14 @@ export interface TaskResult {
 export type TestCase = {
   filePath: string;
   name: string;
-  fn?: () => void | Promise<void>;
+  fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;
   timeout?: number;
   fails?: boolean;
   each?: boolean;
   concurrent?: boolean;
   inTestEach?: boolean;
+  context: TestContext;
   // TODO
   only?: boolean;
   // TODO

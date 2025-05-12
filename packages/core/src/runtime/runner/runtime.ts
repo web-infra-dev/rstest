@@ -11,6 +11,7 @@ import type {
   Test,
   TestAPI,
   TestBaseAPI,
+  TestCallbackFn,
   TestCase,
   TestEachFn,
   TestRunMode,
@@ -217,12 +218,13 @@ export class RunnerRuntime {
     return this.tests;
   }
 
-  addTestCase(test: Omit<TestCase, 'filePath'>): void {
+  addTestCase(test: Omit<TestCase, 'filePath' | 'context'>): void {
     if (this.collectStatus === 'lazy') {
       this.currentCollectList.push(() => {
         this.addTest({
           ...test,
           filePath: this.sourcePath,
+          context: undefined!,
         });
         this.resetCurrentTest();
       });
@@ -230,6 +232,7 @@ export class RunnerRuntime {
       this.addTest({
         ...test,
         filePath: this.sourcePath,
+        context: undefined!,
       });
       this.resetCurrentTest();
     }
@@ -255,7 +258,7 @@ export class RunnerRuntime {
     concurrent = false,
   }: {
     name: string;
-    fn?: () => void | Promise<void>;
+    fn?: TestCallbackFn;
     timeout?: number;
     runMode?: TestRunMode;
     each?: boolean;
