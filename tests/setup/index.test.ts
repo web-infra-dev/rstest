@@ -44,7 +44,7 @@ describe('test setup file', async () => {
     expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
     expect(
       logs.find((log) =>
-        log.includes(['error', 'rstest.setup.ts:1:6'].join(sep)),
+        log.includes(['error', 'rstest.setup.ts:1:7'].join(sep)),
       ),
     ).toBeTruthy();
   });

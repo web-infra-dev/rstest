@@ -23,4 +23,21 @@ describe('console log', () => {
 
     expect(logs.filter((log) => log.startsWith('I'))).toEqual([]);
   });
+
+  it('should console trace correctly', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace.test'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stderr.split('\n').filter(Boolean);
+
+    expect(logs.some((log) => log.includes('trace.test.ts:4:11'))).toBeTruthy();
+  });
 });

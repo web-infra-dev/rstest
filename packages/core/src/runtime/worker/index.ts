@@ -40,9 +40,7 @@ const runInPool = async ({
     ...context,
     snapshotOptions: {
       updateSnapshot,
-      snapshotEnvironment: new RstestSnapshotEnvironment({
-        sourceMaps,
-      }),
+      snapshotEnvironment: new RstestSnapshotEnvironment(),
     },
     filePath,
     sourcePath: originPath,
@@ -50,6 +48,22 @@ const runInPool = async ({
   };
 
   const { createRstestRuntime } = await import('../api');
+  // provides source map support for stack traces
+  const { install } = await import('source-map-support');
+
+  install({
+    // @ts-expect-error map type
+    retrieveSourceMap: (source) => {
+      if (sourceMaps[source]) {
+        return {
+          url: source,
+          map: sourceMaps[source],
+        };
+      }
+      return null;
+    },
+  });
+
   const { createCustomConsole } = await import('./console');
 
   const { api, runner } = createRstestRuntime(workerState);
@@ -59,6 +73,7 @@ const runInPool = async ({
       '@rstest/core': api,
     },
     console: createCustomConsole(rpc),
+    Error,
     ...(globals ? getGlobalApi(api) : {}),
   };
 
