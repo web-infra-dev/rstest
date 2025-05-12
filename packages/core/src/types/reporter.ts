@@ -16,6 +16,24 @@ export type GetSourcemap = (sourcePath: string) => SourceMapInput | null;
 
 export type { BuiltInReporterNames };
 
+export type DefaultReporterOptions = {
+  /**
+   * prints out summary of all tests
+   * @default true
+   */
+  summary?: boolean;
+};
+
+type BuiltinReporterOptions = {
+  default: DefaultReporterOptions;
+};
+
+export type ReporterWithOptions<
+  Name extends BuiltInReporterNames = BuiltInReporterNames,
+> = Name extends keyof BuiltinReporterOptions
+  ? [Name, Partial<BuiltinReporterOptions[Name]>]
+  : [Name, Record<string, unknown>];
+
 export interface Reporter {
   /**
    * Called before test file run.
