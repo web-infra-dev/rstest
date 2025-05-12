@@ -142,6 +142,11 @@ export const runInPool = async ({
               reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
             );
           },
+          onConsoleLog: async (log) => {
+            await Promise.all(
+              reporters.map((reporter) => reporter.onConsoleLog?.(log)),
+            );
+          },
           onTestFileStart: async (test) => {
             await Promise.all(
               reporters.map((reporter) => reporter.onTestFileStart?.(test)),

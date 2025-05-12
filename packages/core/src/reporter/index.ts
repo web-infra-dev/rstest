@@ -4,6 +4,7 @@ import type {
   Duration,
   GetSourcemap,
   Reporter,
+  RstestConfig,
   SnapshotSummary,
   TestFileInfo,
   TestFileResult,
@@ -20,13 +21,20 @@ import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 export class DefaultReporter implements Reporter {
   private rootPath: string;
+  private config: RstestConfig;
   private options: DefaultReporterOptions = {};
 
   constructor({
     rootPath,
     options,
-  }: { rootPath: string; options: DefaultReporterOptions }) {
+    config,
+  }: {
+    rootPath: string;
+    config: RstestConfig;
+    options: DefaultReporterOptions;
+  }) {
     this.rootPath = rootPath;
+    this.config = config;
     this.options = options;
   }
 
@@ -65,6 +73,16 @@ export class DefaultReporter implements Reporter {
         console.error(color.red(`    ${error.message}`));
       }
     }
+  }
+
+  onConsoleLog(log: { content: string }): void {
+    const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
+
+    if (!shouldLog) {
+      return;
+    }
+
+    console.log(log.content);
   }
 
   async onTestRunEnd({
