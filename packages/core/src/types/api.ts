@@ -8,9 +8,15 @@ import type {
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
+export type TestContext = {
+  expect: RstestExpect;
+};
+
+export type TestCallbackFn = (context: TestContext) => MaybePromise<void>;
+
 type TestFn = (
   description: string,
-  fn?: () => MaybePromise<void>,
+  fn?: TestCallbackFn,
   timeout?: number,
 ) => void;
 
