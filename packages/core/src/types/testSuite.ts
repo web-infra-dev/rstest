@@ -122,4 +122,5 @@ export interface UserConsoleLog {
   name: string;
   trace?: string;
   testPath: string;
+  type: 'stdout' | 'stderr';
 }

@@ -38,7 +38,14 @@ describe('console log', () => {
     await cli.exec;
     const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expect(logs.filter((log) => log.startsWith('I'))).toEqual(["I'm log"]);
+    expect(logs.filter((log) => log.startsWith('I'))).toMatchInlineSnapshot(`
+      [
+        "I'm log",
+        "I'm warn",
+        "I'm error",
+        "I'm info",
+      ]
+    `);
     expect(logs.some((log) => log.includes('log.test.ts:4:11'))).toBeTruthy;
   });
 
@@ -54,7 +61,7 @@ describe('console log', () => {
     });
 
     await cli.exec;
-    const logs = cli.stderr.split('\n').filter(Boolean);
+    const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(logs.some((log) => log.includes('trace.test.ts:4:11'))).toBeTruthy();
   });
