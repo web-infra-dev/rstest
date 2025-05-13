@@ -62,7 +62,7 @@ export function createExpect({
       expectedAssertionsNumber: null,
       expectedAssertionsNumberErrorGen: null,
       get testPath() {
-        return workerState.filePath;
+        return workerState.testPath;
       },
     },
     expect,

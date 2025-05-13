@@ -43,7 +43,7 @@ export class DefaultReporter implements Reporter {
 
   onTestFileStart(test: TestFileInfo): void {
     const { rootPath } = this;
-    const relativePath = relative(rootPath, test.filePath);
+    const relativePath = relative(rootPath, test.testPath);
     const { dir, base } = parsePosix(relativePath);
 
     console.log('');

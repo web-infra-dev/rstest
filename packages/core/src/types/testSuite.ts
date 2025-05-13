@@ -1,7 +1,7 @@
 import type { SnapshotResult } from '@vitest/snapshot';
 import type { TestContext } from './api';
+import type { TestPath } from './utils';
 
-// TODO: Unify filePath、testPath、originPath、sourcePath
 import type { MaybePromise } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -24,7 +24,7 @@ export interface TaskResult {
 }
 
 export type TestCase = {
-  filePath: string;
+  testPath: TestPath;
   name: string;
   fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;
@@ -34,7 +34,6 @@ export type TestCase = {
   concurrent?: boolean;
   inTestEach?: boolean;
   context: TestContext;
-  // TODO
   only?: boolean;
   // TODO
   onFinished?: any[];
@@ -51,8 +50,7 @@ export type TestCase = {
 };
 
 export type SuiteContext = {
-  /** The test file path */
-  filepath: string;
+  filepath: TestPath;
 };
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
@@ -69,8 +67,7 @@ export type TestSuite = {
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
-  // TODO
-  filepath?: string;
+  testPath: TestPath;
   /** nested cases and suite could in a suite */
   tests: Array<TestSuite | TestCase>;
   type: 'suite';
@@ -89,7 +86,7 @@ export type TestSuiteListeners = keyof Pick<
 >;
 
 export type TestFileInfo = {
-  filePath: string;
+  testPath: TestPath;
 };
 
 export type Test = TestSuite | TestCase;
@@ -106,7 +103,7 @@ export type TestError = {
 export type TestResult = {
   status: TestResultStatus;
   name: string;
-  testPath: string;
+  testPath: TestPath;
   parentNames?: string[];
   duration?: number;
   errors?: TestError[];
@@ -121,6 +118,6 @@ export interface UserConsoleLog {
   content: string;
   name: string;
   trace?: string;
-  testPath: string;
+  testPath: TestPath;
   type: 'stdout' | 'stderr';
 }
