@@ -10,11 +10,13 @@ import type {
   TestFileInfo,
   TestFileResult,
   TestResult,
+  UserConsoleLog,
 } from '../types';
 import {
   TEST_DELIMITER,
   color,
   getTaskNameWithPrefix,
+  logger,
   parsePosix,
   prettyTime,
 } from '../utils';
@@ -76,12 +78,7 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onUserConsoleLog(log: {
-    content: string;
-    trace?: string;
-    name: string;
-    testPath: string;
-  }): void {
+  onUserConsoleLog(log: UserConsoleLog): void {
     const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
 
     if (!shouldLog) {
@@ -107,9 +104,11 @@ export class DefaultReporter implements Reporter {
       titles.push(color.gray(testPath));
     }
 
-    console.log(titles.join(color.gray(' | ')));
+    // TODO: output to stdout or stderr
+    logger.log(titles.join(color.gray(' | ')));
 
-    console.log(log.content);
+    logger.log(log.content);
+    logger.log('');
   }
 
   async onTestRunEnd({
