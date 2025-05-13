@@ -82,6 +82,14 @@ export interface RstestConfig {
    * @default false
    */
   printConsoleTrace?: boolean;
+
+  /**
+   * Disable console intercept. `onConsoleLog` & `printConsoleTrace` configuration will not take effect.
+   *
+   * @default false
+   */
+  disableConsoleIntercept?: boolean;
+
   /**
    * Update snapshot files. Will update all changed snapshots and delete obsolete ones.
    *

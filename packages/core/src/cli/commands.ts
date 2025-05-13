@@ -14,6 +14,7 @@ type CommonOptions = {
   globals?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
+  disableConsoleIntercept?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
   testTimeout?: number;
@@ -53,6 +54,7 @@ const applyCommonOptions = (cli: CAC) => {
       '--printConsoleTrace',
       'Print console traces when calling any console method.',
     )
+    .option('--disableConsoleIntercept', 'Disable console intercept.')
     .option(
       '-t, --testNamePattern <testNamePattern>',
       'Run only tests with a name that matches the regex.',
@@ -110,6 +112,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'retry',
     'maxConcurrency',
     'printConsoleTrace',
+    'disableConsoleIntercept',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
