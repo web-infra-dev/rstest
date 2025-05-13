@@ -59,6 +59,7 @@ it('Describe chain API enumerable', async () => {
       "skipIf",
       "runIf",
       "each",
+      "for",
     ]
   `);
   expect(Object.keys(describe.only)).toMatchInlineSnapshot(`
@@ -70,6 +71,7 @@ it('Describe chain API enumerable', async () => {
       "skipIf",
       "runIf",
       "each",
+      "for",
     ]
   `);
 });
