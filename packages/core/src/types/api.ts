@@ -46,33 +46,27 @@ export interface DescribeEachFn {
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
-export type TestBaseAPI = TestFn & {
+export type TestAPI = TestFn & {
   each: TestEachFn;
-  fails: TestFn;
-};
-
-export type TestAPI = TestBaseAPI & {
-  only: TestBaseAPI;
-  skip: TestBaseAPI;
-  runIf: (condition: boolean) => TestBaseAPI;
-  skipIf: (condition: boolean) => TestBaseAPI;
-  todo: TestFn;
-  concurrent: TestBaseAPI;
+  fails: TestAPI;
+  concurrent: TestAPI;
+  only: TestAPI;
+  skip: TestAPI;
+  todo: TestAPI;
+  runIf: (condition: boolean) => TestAPI;
+  skipIf: (condition: boolean) => TestAPI;
 };
 
 type DescribeFn = (description: string, fn?: () => void) => void;
 
-export type DescribeBaseAPI = DescribeFn & {
+export type DescribeAPI = DescribeFn & {
   each: DescribeEachFn;
-};
-
-export type DescribeAPI = DescribeBaseAPI & {
-  only: DescribeBaseAPI;
-  skip: DescribeBaseAPI;
-  runIf: (condition: boolean) => DescribeBaseAPI;
-  skipIf: (condition: boolean) => DescribeBaseAPI;
+  only: DescribeAPI;
+  skip: DescribeAPI;
+  runIf: (condition: boolean) => DescribeAPI;
+  skipIf: (condition: boolean) => DescribeAPI;
   todo: DescribeFn;
-  concurrent: DescribeBaseAPI;
+  concurrent: DescribeAPI;
 };
 
 export type RunnerAPI = {

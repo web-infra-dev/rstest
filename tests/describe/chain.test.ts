@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
 it('Describe only.each API', async () => {
@@ -47,4 +47,29 @@ it('Describe skip.each API', async () => {
   expect(
     logs.find((log) => log.includes('Tests 2 passed | 3 skipped')),
   ).toBeTruthy();
+});
+
+it('Describe chain API enumerable', async () => {
+  expect(Object.keys(describe)).toMatchInlineSnapshot(`
+    [
+      "only",
+      "todo",
+      "skip",
+      "concurrent",
+      "skipIf",
+      "runIf",
+      "each",
+    ]
+  `);
+  expect(Object.keys(describe.only)).toMatchInlineSnapshot(`
+    [
+      "only",
+      "todo",
+      "skip",
+      "concurrent",
+      "skipIf",
+      "runIf",
+      "each",
+    ]
+  `);
 });
