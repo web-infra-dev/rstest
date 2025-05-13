@@ -1,4 +1,5 @@
 import { relative } from 'pathe';
+import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   DefaultReporterOptions,
   Duration,
@@ -75,12 +76,38 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onUserConsoleLog(log: { content: string }): void {
+  onUserConsoleLog(log: {
+    content: string;
+    trace?: string;
+    name: string;
+    testPath: string;
+  }): void {
     const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
 
     if (!shouldLog) {
       return;
     }
+
+    const titles = [log.name];
+
+    const testPath = relative(this.rootPath, log.testPath);
+
+    if (log.trace) {
+      const [frame] = stackTraceParse(log.trace);
+      const path = relative(this.rootPath, frame!.file || '');
+
+      if (path !== testPath) {
+        titles.push(color.gray(testPath));
+      } else {
+        titles.push(
+          color.gray(`${path}:${frame!.lineNumber}:${frame!.column}`),
+        );
+      }
+    } else {
+      titles.push(color.gray(testPath));
+    }
+
+    console.log(titles.join(color.gray(' | ')));
 
     console.log(log.content);
   }

@@ -119,4 +119,7 @@ export type TestFileResult = TestResult & {
 
 export interface UserConsoleLog {
   content: string;
+  name: string;
+  trace?: string;
+  testPath: string;
 }

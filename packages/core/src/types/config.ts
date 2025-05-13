@@ -75,6 +75,13 @@ export interface RstestConfig {
    * @default false
    */
   globals?: boolean;
+
+  /**
+   * print console traces when calling any console method.
+   *
+   * @default false
+   */
+  printConsoleTrace?: boolean;
   /**
    * Update snapshot files. Will update all changed snapshots and delete obsolete ones.
    *
@@ -162,27 +169,20 @@ export interface RstestConfig {
   >;
 }
 
+type OptionalKeys =
+  | 'setupFiles'
+  | 'testNamePattern'
+  | 'plugins'
+  | 'source'
+  | 'resolve'
+  | 'output'
+  | 'tools'
+  | 'onConsoleLog';
+
 export type NormalizedConfig = Required<
-  Omit<
-    RstestConfig,
-    | 'pool'
-    | 'setupFiles'
-    | 'testNamePattern'
-    | 'plugins'
-    | 'source'
-    | 'resolve'
-    | 'output'
-    | 'tools'
-    | 'onConsoleLog'
-  >
+  Omit<RstestConfig, OptionalKeys | 'pool'>
 > & {
+  [key in OptionalKeys]?: RstestConfig[key];
+} & {
   pool: RstestPoolOptions;
-  setupFiles?: string[] | string;
-  testNamePattern?: RstestConfig['testNamePattern'];
-  onConsoleLog?: RstestConfig['onConsoleLog'];
-  plugins?: RstestConfig['plugins'];
-  source?: RstestConfig['source'];
-  resolve?: RstestConfig['resolve'];
-  output?: RstestConfig['output'];
-  tools?: RstestConfig['tools'];
 };
