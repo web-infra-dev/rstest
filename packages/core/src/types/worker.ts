@@ -34,6 +34,7 @@ export type RuntimeConfig = Pick<
   | 'unstubGlobals'
   | 'maxConcurrency'
   | 'printConsoleTrace'
+  | 'disableConsoleIntercept'
 >;
 
 export type WorkerContext = {
