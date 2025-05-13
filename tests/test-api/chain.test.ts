@@ -7,6 +7,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('Test Chain', () => {
+  it('chain API enumerable', async () => {
+    expect(Object.keys(it)).toMatchInlineSnapshot(`
+      [
+        "fails",
+        "concurrent",
+        "skip",
+        "todo",
+        "only",
+        "runIf",
+        "skipIf",
+        "each",
+      ]
+    `);
+    expect(Object.keys(it.only)).toMatchInlineSnapshot(`
+      [
+        "fails",
+        "concurrent",
+        "skip",
+        "todo",
+        "only",
+        "runIf",
+        "skipIf",
+        "each",
+      ]
+    `);
+  });
+
   it('Support only.each', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

@@ -5,12 +5,10 @@ import type {
   BeforeAllListener,
   BeforeEachListener,
   DescribeAPI,
-  DescribeBaseAPI,
   DescribeEachFn,
   RunnerAPI,
   Test,
   TestAPI,
-  TestBaseAPI,
   TestCallbackFn,
   TestCase,
   TestEachFn,
@@ -363,80 +361,127 @@ export const createRuntimeAPI = ({
     testTimeout,
   });
 
-  // TODO: optimize chainable API
+  const createTestAPI = (
+    options: {
+      concurrent?: boolean;
+      fails?: boolean;
+      runMode?: 'skip' | 'only' | 'todo';
+    } = {},
+  ): TestAPI => {
+    const testFn = ((name, fn, timeout) =>
+      runtimeInstance.it({
+        name,
+        fn,
+        timeout,
+        ...options,
+      })) as TestAPI;
 
-  const it = ((name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout })) as TestAPI;
-  it.fails = (name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, fails: true });
-  it.each = ((cases: any) => runtimeInstance.each({ cases })) as TestEachFn;
-  it.todo = (name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, runMode: 'todo' });
+    Object.defineProperty(testFn, 'fails', {
+      get: () => {
+        return createTestAPI({ ...options, fails: true });
+      },
+      enumerable: true,
+    });
 
-  it.concurrent = ((name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, concurrent: true })) as TestBaseAPI;
-  it.concurrent.fails = ((name, fn, timeout) =>
-    runtimeInstance.it({
-      name,
-      fn,
-      timeout,
-      concurrent: true,
-      fails: true,
-    })) as TestBaseAPI;
-  it.concurrent.each = ((cases: any) =>
-    runtimeInstance.each({ cases, concurrent: true })) as TestEachFn;
+    Object.defineProperty(testFn, 'concurrent', {
+      get: () => {
+        return createTestAPI({ ...options, concurrent: true });
+      },
+      enumerable: true,
+    });
 
-  it.skip = ((name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, runMode: 'skip' })) as TestBaseAPI;
-  it.skip.fails = (name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, runMode: 'skip', fails: true });
-  it.skip.each = ((cases: any) =>
-    runtimeInstance.each({ cases, runMode: 'skip' })) as TestEachFn;
+    Object.defineProperty(testFn, 'skip', {
+      get: () => {
+        return createTestAPI({ ...options, runMode: 'skip' });
+      },
+      enumerable: true,
+    });
 
-  it.only = ((name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, runMode: 'only' })) as TestBaseAPI;
-  it.only.fails = (name, fn, timeout) =>
-    runtimeInstance.it({ name, fn, timeout, runMode: 'only', fails: true });
-  it.only.each = ((cases: any) =>
-    runtimeInstance.each({ cases, runMode: 'only' })) as TestEachFn;
+    Object.defineProperty(testFn, 'todo', {
+      get: () => {
+        return createTestAPI({ ...options, runMode: 'todo' });
+      },
+      enumerable: true,
+    });
 
-  it.runIf = (condition: boolean) => (condition ? it : it.skip) as TestBaseAPI;
-  it.skipIf = (condition: boolean) => (condition ? it.skip : it) as TestBaseAPI;
+    Object.defineProperty(testFn, 'only', {
+      get: () => {
+        return createTestAPI({ ...options, runMode: 'only' });
+      },
+      enumerable: true,
+    });
 
-  const describe = ((name, fn) =>
-    runtimeInstance.describe({ name, fn })) as DescribeAPI;
+    testFn.runIf = (condition: boolean) => (condition ? testFn : testFn.skip);
 
-  describe.only = ((name, fn) =>
-    runtimeInstance.describe({ name, fn, runMode: 'only' })) as DescribeBaseAPI;
-  describe.only.each = ((cases: any) =>
-    runtimeInstance.describeEach({ cases, runMode: 'only' })) as DescribeEachFn;
-  describe.todo = (name, fn) =>
-    runtimeInstance.describe({ name, fn, runMode: 'todo' });
-  describe.skip = ((name, fn) =>
-    runtimeInstance.describe({ name, fn, runMode: 'skip' })) as DescribeBaseAPI;
-  describe.skip.each = ((cases: any) =>
-    runtimeInstance.describeEach({ cases, runMode: 'skip' })) as DescribeEachFn;
+    testFn.skipIf = (condition: boolean) => (condition ? testFn.skip : testFn);
 
-  describe.concurrent = ((name, fn) =>
-    runtimeInstance.describe({
-      name,
-      fn,
-      concurrent: true,
-    })) as DescribeBaseAPI;
+    testFn.each = ((cases: any) =>
+      runtimeInstance.each({
+        cases,
+        ...options,
+      })) as TestEachFn;
 
-  describe.concurrent.each = ((cases: any) =>
-    runtimeInstance.describeEach({
-      cases,
-      concurrent: true,
-    })) as DescribeEachFn;
+    return testFn;
+  };
 
-  describe.skipIf = (condition: boolean) =>
-    (condition ? describe.skip : describe) as DescribeBaseAPI;
-  describe.runIf = (condition: boolean) =>
-    (condition ? describe : describe.skip) as DescribeBaseAPI;
+  const it = createTestAPI() as TestAPI;
 
-  describe.each = ((cases: any) =>
-    runtimeInstance.describeEach({ cases })) as DescribeEachFn;
+  const createDescribeAPI = (
+    options: {
+      concurrent?: boolean;
+      runMode?: 'skip' | 'only' | 'todo';
+    } = {},
+  ): DescribeAPI => {
+    const describeFn = ((name, fn) =>
+      runtimeInstance.describe({
+        name,
+        fn,
+        ...options,
+      })) as DescribeAPI;
+
+    Object.defineProperty(describeFn, 'only', {
+      get: () => {
+        return createDescribeAPI({ ...options, runMode: 'only' });
+      },
+      enumerable: true,
+    });
+
+    Object.defineProperty(describeFn, 'todo', {
+      get: () => {
+        return createDescribeAPI({ ...options, runMode: 'todo' });
+      },
+      enumerable: true,
+    });
+
+    Object.defineProperty(describeFn, 'skip', {
+      get: () => {
+        return createDescribeAPI({ ...options, runMode: 'skip' });
+      },
+      enumerable: true,
+    });
+
+    Object.defineProperty(describeFn, 'concurrent', {
+      get: () => {
+        return createDescribeAPI({ ...options, concurrent: true });
+      },
+      enumerable: true,
+    });
+
+    describeFn.skipIf = (condition: boolean) =>
+      condition ? describeFn.skip : describeFn;
+    describeFn.runIf = (condition: boolean) =>
+      condition ? describeFn : describeFn.skip;
+
+    describeFn.each = ((cases: any) =>
+      runtimeInstance.describeEach({
+        cases,
+        ...options,
+      })) as DescribeEachFn;
+
+    return describeFn;
+  };
+
+  const describe = createDescribeAPI() as DescribeAPI;
 
   return {
     api: {
