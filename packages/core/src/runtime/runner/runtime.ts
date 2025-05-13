@@ -26,7 +26,7 @@ export class RunnerRuntime {
   private tests: Test[] = [];
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
-  private sourcePath: string;
+  private testPath: string;
 
   /**
    * Collect test status:
@@ -39,13 +39,13 @@ export class RunnerRuntime {
   private defaultTestTimeout;
 
   constructor({
-    sourcePath,
+    testPath,
     testTimeout,
   }: {
     testTimeout: number;
-    sourcePath: string;
+    testPath: string;
   }) {
-    this.sourcePath = sourcePath;
+    this.testPath = testPath;
     this.defaultTestTimeout = testTimeout;
   }
 
@@ -120,6 +120,7 @@ export class RunnerRuntime {
   private getDefaultRootSuite(): TestSuite {
     return {
       runMode: 'run',
+      testPath: this.testPath,
       name: ROOT_SUITE_NAME,
       tests: [],
       type: 'suite',
@@ -145,6 +146,7 @@ export class RunnerRuntime {
       tests: [],
       type: 'suite',
       each,
+      testPath: this.testPath,
       concurrent,
     };
 
@@ -216,12 +218,12 @@ export class RunnerRuntime {
     return this.tests;
   }
 
-  addTestCase(test: Omit<TestCase, 'filePath' | 'context'>): void {
+  addTestCase(test: Omit<TestCase, 'testPath' | 'context'>): void {
     if (this.collectStatus === 'lazy') {
       this.currentCollectList.push(() => {
         this.addTest({
           ...test,
-          filePath: this.sourcePath,
+          testPath: this.testPath,
           context: undefined!,
         });
         this.resetCurrentTest();
@@ -229,7 +231,7 @@ export class RunnerRuntime {
     } else {
       this.addTest({
         ...test,
-        filePath: this.sourcePath,
+        testPath: this.testPath,
         context: undefined!,
       });
       this.resetCurrentTest();
@@ -350,14 +352,14 @@ export class RunnerRuntime {
 }
 
 export const createRuntimeAPI = ({
-  sourcePath,
+  testPath,
   testTimeout,
-}: { sourcePath: string; testTimeout: number }): {
+}: { testPath: string; testTimeout: number }): {
   api: RunnerAPI;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
-    sourcePath,
+    testPath,
     testTimeout,
   });
 

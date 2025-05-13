@@ -125,7 +125,7 @@ function getError(expected: () => void | Error, promise: string | undefined) {
 
 function getTestNames(test: TestCase) {
   return {
-    filepath: test.filePath,
+    filepath: test.testPath,
     name: getTaskNameWithPrefix(test),
     // testId: test.id,
   };

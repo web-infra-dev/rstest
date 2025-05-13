@@ -21,7 +21,7 @@ const getGlobalApi = (api: Rstest) => {
 };
 
 const runInPool = async ({
-  entryInfo: { filePath, originPath },
+  entryInfo: { distPath, testPath },
   setupEntries,
   assetFiles,
   sourceMaps,
@@ -31,7 +31,7 @@ const runInPool = async ({
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
-  const codeContent = assetFiles[filePath]!;
+  const codeContent = assetFiles[distPath]!;
   const {
     runtimeConfig: { globals, printConsoleTrace, disableConsoleIntercept },
   } = context;
@@ -42,8 +42,8 @@ const runInPool = async ({
       updateSnapshot,
       snapshotEnvironment: new RstestSnapshotEnvironment(),
     },
-    filePath,
-    sourcePath: originPath,
+    distPath,
+    testPath,
     environment: 'node',
   };
 
@@ -76,7 +76,7 @@ const runInPool = async ({
       ? console
       : createCustomConsole({
           rpc,
-          testPath: originPath,
+          testPath,
           printConsoleTrace,
         }),
     Error,
@@ -85,13 +85,13 @@ const runInPool = async ({
 
   try {
     // run setup files
-    for (const { filePath, originPath } of setupEntries) {
-      const setupCodeContent = assetFiles[filePath]!;
+    for (const { distPath, testPath } of setupEntries) {
+      const setupCodeContent = assetFiles[distPath]!;
 
       await loadModule({
         codeContent: setupCodeContent,
-        distPath: filePath,
-        originPath: originPath,
+        distPath,
+        testPath: testPath,
         rstestContext,
         assetFiles,
       });
@@ -99,14 +99,14 @@ const runInPool = async ({
 
     await loadModule({
       codeContent,
-      distPath: filePath,
-      originPath,
+      distPath,
+      testPath,
       rstestContext,
       assetFiles,
     });
 
     const results = await runner.runTest(
-      originPath,
+      testPath,
       {
         onTestFileStart: async (test) => {
           await rpc.onTestFileStart(test);
@@ -121,7 +121,7 @@ const runInPool = async ({
     return results;
   } catch (err) {
     return {
-      testPath: originPath,
+      testPath,
       status: 'fail',
       name: '',
       results: [],

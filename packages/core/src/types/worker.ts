@@ -3,10 +3,11 @@ import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { RstestContext } from './core';
 import type { SourceMapInput } from './reporter';
 import type { TestFileInfo, TestResult, UserConsoleLog } from './testSuite';
+import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
-  filePath: string;
-  originPath: string;
+  distPath: DistPath;
+  testPath: TestPath;
 };
 
 /** Server to Runtime */
@@ -56,10 +57,8 @@ export type RunWorkerOptions = {
 
 export type WorkerState = WorkerContext & {
   environment: string;
-  /** Test file source code path */
-  sourcePath: string;
-  /** Test file path (distPath) */
-  filePath: string;
+  testPath: TestPath;
+  distPath: DistPath;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;

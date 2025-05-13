@@ -27,7 +27,7 @@ const createRequire = (
       try {
         return loadModule({
           codeContent: content,
-          originPath: joinedPath,
+          testPath: joinedPath,
           distPath: joinedPath,
           rstestContext,
           assetFiles,
@@ -50,23 +50,23 @@ const createRequire = (
 export const loadModule = ({
   codeContent,
   distPath,
-  originPath,
+  testPath,
   rstestContext,
   assetFiles,
 }: {
   codeContent: string;
   distPath: string;
-  originPath: string;
+  testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): any => {
-  const fileDir = path.dirname(originPath);
+  const fileDir = path.dirname(testPath);
 
   const localModule = {
     children: [],
     exports: {},
-    filename: originPath,
-    id: originPath,
+    filename: testPath,
+    id: testPath,
     isPreloading: false,
     loaded: false,
     path: fileDir,
@@ -75,9 +75,9 @@ export const loadModule = ({
   const context = {
     module: localModule,
     exports: localModule.exports,
-    require: createRequire(originPath, distPath, rstestContext, assetFiles),
+    require: createRequire(testPath, distPath, rstestContext, assetFiles),
     __dirname: fileDir,
-    __filename: originPath,
+    __filename: testPath,
     ...rstestContext,
   };
 
@@ -100,7 +100,7 @@ export const loadModule = ({
       }
       const dependencyAsset = await import.meta.resolve(
         specifier,
-        pathToFileURL(originPath),
+        pathToFileURL(testPath),
       );
 
       // @ts-expect-error

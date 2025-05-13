@@ -224,20 +224,20 @@ export const createRsbuildServer = async ({
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
 
-      const filePath = path.join(
+      const distPath = path.join(
         outputPath!,
         e.assets![e.assets!.length - 1]!.name,
       );
 
       if (setupFiles[entry]) {
         setupEntries.push({
-          filePath,
-          originPath: setupFiles[entry],
+          distPath,
+          testPath: setupFiles[entry],
         });
       } else if (sourceEntries[entry]) {
         entries.push({
-          filePath,
-          originPath: sourceEntries[entry],
+          distPath,
+          testPath: sourceEntries[entry],
         });
       }
     }

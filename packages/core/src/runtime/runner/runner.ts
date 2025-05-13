@@ -59,7 +59,7 @@ export class TestRunner {
     const errors: TestError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
-    hooks.onTestFileStart?.({ filePath: testPath });
+    hooks.onTestFileStart?.({ testPath });
     const snapshotClient = getSnapshotClient();
 
     await snapshotClient.setup(testPath, snapshotOptions);
@@ -447,7 +447,7 @@ export class TestRunner {
         isExpectingAssertionsError: null,
         expectedAssertionsNumber: null,
         expectedAssertionsNumberErrorGen: null,
-        testPath: test.filePath,
+        testPath: test.testPath,
         snapshotState,
         currentTestName: getTaskNameWithPrefix(test),
       },
