@@ -6,12 +6,14 @@ import type {
   BeforeEachListener,
   DescribeAPI,
   DescribeEachFn,
+  DescribeForFn,
   RunnerAPI,
   Test,
   TestAPI,
   TestCallbackFn,
   TestCase,
   TestEachFn,
+  TestForFn,
   TestRunMode,
   TestSuite,
 } from '../../types';
@@ -308,13 +310,40 @@ export class RunnerRuntime {
     };
   }
 
+  describeFor({
+    cases,
+    runMode,
+    concurrent,
+  }: {
+    cases: Parameters<DescribeForFn>[0];
+    runMode?: TestRunMode;
+    concurrent?: boolean;
+  }): ReturnType<DescribeForFn> {
+    return (name: string, fn) => {
+      for (let i = 0; i < cases.length; i++) {
+        // TODO: template string table.
+        const param = cases[i]!;
+
+        this.describe({
+          name: formatName(name, param, i),
+          fn: () => fn?.(param),
+          runMode,
+          each: true,
+          concurrent,
+        });
+      }
+    };
+  }
+
   each({
     cases,
-    runMode = 'run',
-    concurrent = false,
+    runMode,
+    fails,
+    concurrent,
   }: {
     cases: Parameters<TestEachFn>[0];
     runMode?: TestRunMode;
+    fails?: boolean;
     concurrent?: boolean;
   }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.defaultTestTimeout) => {
@@ -328,6 +357,36 @@ export class RunnerRuntime {
           fn: () => fn?.(...params),
           timeout,
           runMode,
+          fails,
+          each: true,
+          concurrent,
+        });
+      }
+    };
+  }
+
+  for({
+    cases,
+    fails,
+    runMode,
+    concurrent,
+  }: {
+    cases: Parameters<TestForFn>[0];
+    fails?: boolean;
+    runMode?: TestRunMode;
+    concurrent?: boolean;
+  }): ReturnType<TestEachFn> {
+    return (name, fn, timeout = this.defaultTestTimeout) => {
+      for (let i = 0; i < cases.length; i++) {
+        // TODO: template string table.
+        const param = cases[i]!;
+
+        this.it({
+          name: formatName(name, param, i),
+          fn: (context) => fn?.(param, context),
+          timeout,
+          runMode,
+          fails,
           each: true,
           concurrent,
         });
@@ -421,6 +480,12 @@ export const createRuntimeAPI = ({
         ...options,
       })) as TestEachFn;
 
+    testFn.for = ((cases: any) =>
+      runtimeInstance.for({
+        cases,
+        ...options,
+      })) as TestForFn;
+
     return testFn;
   };
 
@@ -477,6 +542,12 @@ export const createRuntimeAPI = ({
         cases,
         ...options,
       })) as DescribeEachFn;
+
+    describeFn.for = ((cases: any) =>
+      runtimeInstance.describeFor({
+        cases,
+        ...options,
+      })) as DescribeForFn;
 
     return describeFn;
   };

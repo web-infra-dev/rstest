@@ -37,6 +37,14 @@ export interface TestEachFn {
   ) => void;
 }
 
+export type TestForFn = <T>(
+  cases: ReadonlyArray<T>,
+) => (
+  description: string,
+  fn?: (param: T, context: TestContext) => MaybePromise<void>,
+  timeout?: number,
+) => void;
+
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
     cases: ReadonlyArray<T>,
@@ -46,8 +54,13 @@ export interface DescribeEachFn {
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
+export type DescribeForFn = <T>(
+  cases: ReadonlyArray<T>,
+) => (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+
 export type TestAPI = TestFn & {
   each: TestEachFn;
+  for: TestForFn;
   fails: TestAPI;
   concurrent: TestAPI;
   only: TestAPI;
@@ -61,6 +74,7 @@ type DescribeFn = (description: string, fn?: () => void) => void;
 
 export type DescribeAPI = DescribeFn & {
   each: DescribeEachFn;
+  for: DescribeForFn;
   only: DescribeAPI;
   skip: DescribeAPI;
   runIf: (condition: boolean) => DescribeAPI;
