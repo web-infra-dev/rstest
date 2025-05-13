@@ -424,7 +424,7 @@ export const createRuntimeAPI = ({
     return testFn;
   };
 
-  const it = createTestAPI() as TestAPI;
+  const it = createTestAPI();
 
   const createDescribeAPI = (
     options: {
@@ -481,7 +481,7 @@ export const createRuntimeAPI = ({
     return describeFn;
   };
 
-  const describe = createDescribeAPI() as DescribeAPI;
+  const describe = createDescribeAPI();
 
   return {
     api: {
