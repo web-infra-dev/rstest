@@ -24,6 +24,24 @@ describe('console log', () => {
     expect(logs.filter((log) => log.startsWith('I'))).toEqual([]);
   });
 
+  it('should console log trace when printConsoleTrace enabled', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'log.test', '--printConsoleTrace'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.filter((log) => log.startsWith('I'))).toEqual(["I'm log"]);
+    expect(logs.some((log) => log.includes('log.test.ts:4:11'))).toBeTruthy;
+  });
+
   it('should console trace correctly', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

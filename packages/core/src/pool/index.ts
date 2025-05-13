@@ -106,6 +106,7 @@ export const runInPool = async ({
     unstubEnvs,
     unstubGlobals,
     maxConcurrency,
+    printConsoleTrace,
   } = context.normalizedConfig;
 
   const runtimeConfig = {
@@ -120,6 +121,7 @@ export const runInPool = async ({
     unstubEnvs,
     unstubGlobals,
     maxConcurrency,
+    printConsoleTrace,
   };
 
   const results = await Promise.all(

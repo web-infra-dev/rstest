@@ -98,6 +98,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   unstubGlobals: false,
   unstubEnvs: false,
   maxConcurrency: 5,
+  printConsoleTrace: false,
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {

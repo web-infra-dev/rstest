@@ -13,6 +13,7 @@ type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
   passWithNoTests?: boolean;
+  printConsoleTrace?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
   testTimeout?: number;
@@ -47,6 +48,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found.',
+    )
+    .option(
+      '--printConsoleTrace',
+      'Print console traces when calling any console method.',
     )
     .option(
       '-t, --testNamePattern <testNamePattern>',
@@ -104,6 +109,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'unstubGlobals',
     'retry',
     'maxConcurrency',
+    'printConsoleTrace',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

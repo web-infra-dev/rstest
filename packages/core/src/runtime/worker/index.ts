@@ -33,7 +33,7 @@ const runInPool = async ({
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const codeContent = assetFiles[filePath]!;
   const {
-    runtimeConfig: { globals },
+    runtimeConfig: { globals, printConsoleTrace },
   } = context;
 
   const workerState: WorkerState = {
@@ -72,7 +72,11 @@ const runInPool = async ({
     global: {
       '@rstest/core': api,
     },
-    console: createCustomConsole(rpc),
+    console: createCustomConsole({
+      rpc,
+      testPath: originPath,
+      printConsoleTrace,
+    }),
     Error,
     ...(globals ? getGlobalApi(api) : {}),
   };
