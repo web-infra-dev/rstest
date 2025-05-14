@@ -29,7 +29,7 @@ const parseWorkers = (maxWorkers: string | number): number => {
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/main/packages/vitest/src/node/pool.ts
  */
-export const runInPool = async ({
+export const createPool = async ({
   entries,
   context,
   assetFiles,
@@ -42,8 +42,11 @@ export const runInPool = async ({
   sourceMaps: Record<string, SourceMapInput>;
   context: RstestContext;
 }): Promise<{
-  results: TestFileResult[];
-  testResults: TestResult[];
+  runTests: () => Promise<{
+    results: TestFileResult[];
+    testResults: TestResult[];
+  }>;
+  close: () => Promise<void>;
 }> => {
   // Some options may crash worker, e.g. --prof, --title.
   // https://github.com/nodejs/node/issues/41103
@@ -126,48 +129,55 @@ export const runInPool = async ({
     disableConsoleIntercept,
   };
 
-  const results = await Promise.all(
-    entries.map((entryInfo) =>
-      pool.runTest({
-        options: {
-          entryInfo,
-          assetFiles,
-          context: {
-            rootPath: context.rootPath,
-            runtimeConfig: serializableConfig(runtimeConfig),
-          },
-          sourceMaps,
-          setupEntries,
-          updateSnapshot,
-        },
-        rpcMethods: {
-          onTestCaseResult: async (result) => {
-            await Promise.all(
-              reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
-            );
-          },
-          onConsoleLog: async (log) => {
-            await Promise.all(
-              reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-            );
-          },
-          onTestFileStart: async (test) => {
-            await Promise.all(
-              reporters.map((reporter) => reporter.onTestFileStart?.(test)),
-            );
-          },
-        },
-      }),
-    ),
-  );
+  return {
+    runTests: async () => {
+      const results = await Promise.all(
+        entries.map((entryInfo) =>
+          pool.runTest({
+            options: {
+              entryInfo,
+              assetFiles,
+              context: {
+                rootPath: context.rootPath,
+                runtimeConfig: serializableConfig(runtimeConfig),
+              },
+              sourceMaps,
+              setupEntries,
+              updateSnapshot,
+            },
+            rpcMethods: {
+              onTestCaseResult: async (result) => {
+                await Promise.all(
+                  reporters.map((reporter) =>
+                    reporter.onTestCaseResult?.(result),
+                  ),
+                );
+              },
+              onConsoleLog: async (log) => {
+                await Promise.all(
+                  reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+                );
+              },
+              onTestFileStart: async (test) => {
+                await Promise.all(
+                  reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+                );
+              },
+            },
+          }),
+        ),
+      );
 
-  for (const result of results) {
-    if (result.snapshotResult) {
-      context.snapshotManager.add(result.snapshotResult);
-    }
-  }
+      for (const result of results) {
+        if (result.snapshotResult) {
+          context.snapshotManager.add(result.snapshotResult);
+        }
+      }
 
-  const testResults = results.flatMap((r) => r.results!);
+      const testResults = results.flatMap((r) => r.results!);
 
-  return { results, testResults };
+      return { results, testResults };
+    },
+    close: () => pool.close(),
+  };
 };

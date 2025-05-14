@@ -6,6 +6,7 @@ import { loadConfig } from '../config';
 import type { RstestConfig } from '../types';
 import { formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
+import { logRstest } from './prepare';
 
 type CommonOptions = {
   root?: string;
@@ -138,6 +139,7 @@ export function setupCommands(): void {
   cli
     .command('[...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
+      logRstest();
       try {
         const { config } = await initCli(options);
         const { createRstest } = await import('../core');
@@ -158,6 +160,7 @@ export function setupCommands(): void {
   cli
     .command('run [...filters]', 'run tests in CI mode')
     .action(async (filters: string[], options: CommonOptions) => {
+      logRstest();
       try {
         const { config } = await initCli(options);
         const { createRstest } = await import('../core');
@@ -173,9 +176,22 @@ export function setupCommands(): void {
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
+      logRstest();
       const { config } = await initCli(options);
       const { createRstest } = await import('../core');
       const rstest = createRstest(config, 'watch', filters.map(normalize));
+      await rstest.runTests();
+    });
+
+  cli
+    .command(
+      'list [...filters]',
+      'Lists all test files that Rstest will run given the arguments',
+    )
+    .action(async (filters: string[], options: CommonOptions) => {
+      const { config } = await initCli(options);
+      const { createRstest } = await import('../core');
+      const rstest = createRstest(config, 'list', filters.map(normalize));
       await rstest.runTests();
     });
 

@@ -2,7 +2,7 @@ import type { SnapshotManager } from '@vitest/snapshot/manager';
 import type { NormalizedConfig, RstestConfig } from './config';
 import type { Reporter } from './reporter';
 
-export type RstestCommand = 'watch' | 'run';
+export type RstestCommand = 'watch' | 'run' | 'list';
 
 export type RstestContext = {
   /** The Rstest core version. */
