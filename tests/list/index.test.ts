@@ -32,4 +32,52 @@ describe('test list command', () => {
       ]
     `);
   });
+
+  it('should list tests correctly with file filter', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', 'a.test'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+      ]
+    `);
+  });
+
+  it('should list tests correctly with test name filter', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '-t', 'a'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+      ]
+    `);
+  });
 });

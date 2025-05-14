@@ -59,6 +59,10 @@ export async function listTests(
   const list = await pool.collectTests();
 
   const printTest = (test: Test) => {
+    if (['skip', 'todo'].includes(test.runMode)) {
+      return;
+    }
+
     if (test.type === 'case') {
       logger.log(
         relative(rootPath, test.testPath),
