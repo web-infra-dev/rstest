@@ -31,7 +31,7 @@
     "@rsdoctor/rspack-plugin": "^1.1.2",
     "@rstest/core": "workspace:*",
     "@biomejs/biome": "^1.9.4",
-    "@changesets/cli": "^2.29.3",
+    "@changesets/cli": "^2.29.4",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.13.8",
     "check-dependency-version-consistency": "^5.0.0",
