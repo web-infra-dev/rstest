@@ -19,7 +19,9 @@ export function prepareCli(): void {
   ) {
     console.log();
   }
+}
 
+export function showRstest(): void {
   logger.greet(`  ${`Rstest v${RSTEST_VERSION}`}`);
   logger.log('');
 }

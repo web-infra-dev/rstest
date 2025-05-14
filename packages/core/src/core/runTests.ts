@@ -1,4 +1,4 @@
-import { runInPool } from '../pool';
+import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -66,13 +66,16 @@ export async function runTests(
     } = await getRsbuildStats();
     const testStart = Date.now();
 
-    const { results, testResults } = await runInPool({
+    const pool = await createPool({
       entries,
       sourceMaps,
       setupEntries,
       assetFiles,
       context,
     });
+
+    const { results, testResults } = await pool.runTests();
+
     const testTime = Date.now() - testStart;
 
     const duration = {
@@ -95,15 +98,27 @@ export async function runTests(
       });
     }
 
-    return close;
+    return async () => {
+      await close();
+      await pool.close();
+    };
   };
 
   if (command === 'run') {
     const close = await run();
     await close();
-  } else if (command === 'watch') {
+    return;
+  }
+
+  if (command === 'watch') {
     rsbuildInstance.onDevCompileDone(async () => {
       await run();
     });
+    return;
+  }
+
+  if (command === 'list') {
+    console.log('TODO');
+    process.exit();
   }
 }
