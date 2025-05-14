@@ -134,13 +134,15 @@ export class RunnerRuntime {
     fn,
     runMode = 'run',
     each = false,
-    concurrent = false,
+    concurrent,
+    sequential,
   }: {
     name: string;
     fn?: () => MaybePromise<void>;
     runMode?: TestRunMode;
     each?: boolean;
     concurrent?: boolean;
+    sequential?: boolean;
   }): void {
     const currentSuite: TestSuite = {
       name,
@@ -150,6 +152,7 @@ export class RunnerRuntime {
       each,
       testPath: this.testPath,
       concurrent,
+      sequential,
     };
 
     if (!fn) {
@@ -187,8 +190,12 @@ export class RunnerRuntime {
         test.inTestEach = true;
       }
 
-      if (current.concurrent) {
+      if (current.concurrent && test.sequential !== true) {
         test.concurrent = true;
+      }
+
+      if (current.sequential && test.concurrent !== true) {
+        test.sequential = true;
       }
 
       if (current.type === 'case') {
@@ -257,7 +264,8 @@ export class RunnerRuntime {
     runMode = 'run',
     fails = false,
     each = false,
-    concurrent = false,
+    concurrent,
+    sequential,
   }: {
     name: string;
     fn?: TestCallbackFn;
@@ -266,6 +274,7 @@ export class RunnerRuntime {
     each?: boolean;
     fails?: boolean;
     concurrent?: boolean;
+    sequential?: boolean;
   }): void {
     this.addTestCase({
       name,
@@ -281,6 +290,7 @@ export class RunnerRuntime {
       type: 'case',
       timeout,
       concurrent,
+      sequential,
       each,
       fails,
     });
@@ -288,12 +298,12 @@ export class RunnerRuntime {
 
   describeEach({
     cases,
-    runMode = 'run',
-    concurrent = false,
+    ...options
   }: {
     cases: Parameters<DescribeEachFn>[0];
     runMode?: TestRunMode;
     concurrent?: boolean;
+    sequential?: boolean;
   }): ReturnType<DescribeEachFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
@@ -304,9 +314,8 @@ export class RunnerRuntime {
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(...params),
-          runMode,
+          ...options,
           each: true,
-          concurrent,
         });
       }
     };
@@ -314,12 +323,12 @@ export class RunnerRuntime {
 
   describeFor({
     cases,
-    runMode,
-    concurrent,
+    ...options
   }: {
     cases: Parameters<DescribeForFn>[0];
     runMode?: TestRunMode;
     concurrent?: boolean;
+    sequential?: boolean;
   }): ReturnType<DescribeForFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
@@ -329,9 +338,8 @@ export class RunnerRuntime {
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(param),
-          runMode,
+          ...options,
           each: true,
-          concurrent,
         });
       }
     };
@@ -339,14 +347,13 @@ export class RunnerRuntime {
 
   each({
     cases,
-    runMode,
-    fails,
-    concurrent,
+    ...options
   }: {
     cases: Parameters<TestEachFn>[0];
     runMode?: TestRunMode;
     fails?: boolean;
     concurrent?: boolean;
+    sequential?: boolean;
   }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.defaultTestTimeout) => {
       for (let i = 0; i < cases.length; i++) {
@@ -358,10 +365,8 @@ export class RunnerRuntime {
           name: formatName(name, param, i),
           fn: () => fn?.(...params),
           timeout,
-          runMode,
-          fails,
+          ...options,
           each: true,
-          concurrent,
         });
       }
     };
@@ -369,14 +374,13 @@ export class RunnerRuntime {
 
   for({
     cases,
-    fails,
-    runMode,
-    concurrent,
+    ...options
   }: {
     cases: Parameters<TestForFn>[0];
     fails?: boolean;
     runMode?: TestRunMode;
     concurrent?: boolean;
+    sequential?: boolean;
   }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.defaultTestTimeout) => {
       for (let i = 0; i < cases.length; i++) {
@@ -387,10 +391,8 @@ export class RunnerRuntime {
           name: formatName(name, param, i),
           fn: (context) => fn?.(param, context),
           timeout,
-          runMode,
-          fails,
+          ...options,
           each: true,
-          concurrent,
         });
       }
     };
@@ -425,6 +427,7 @@ export const createRuntimeAPI = ({
   const createTestAPI = (
     options: {
       concurrent?: boolean;
+      sequential?: boolean;
       fails?: boolean;
       runMode?: 'skip' | 'only' | 'todo';
     } = {},
@@ -447,6 +450,13 @@ export const createRuntimeAPI = ({
     Object.defineProperty(testFn, 'concurrent', {
       get: () => {
         return createTestAPI({ ...options, concurrent: true });
+      },
+      enumerable: true,
+    });
+
+    Object.defineProperty(testFn, 'sequential', {
+      get: () => {
+        return createTestAPI({ ...options, sequential: true });
       },
       enumerable: true,
     });
@@ -495,6 +505,7 @@ export const createRuntimeAPI = ({
 
   const createDescribeAPI = (
     options: {
+      sequential?: boolean;
       concurrent?: boolean;
       runMode?: 'skip' | 'only' | 'todo';
     } = {},
@@ -530,6 +541,13 @@ export const createRuntimeAPI = ({
     Object.defineProperty(describeFn, 'concurrent', {
       get: () => {
         return createDescribeAPI({ ...options, concurrent: true });
+      },
+      enumerable: true,
+    });
+
+    Object.defineProperty(describeFn, 'sequential', {
+      get: () => {
+        return createDescribeAPI({ ...options, sequential: true });
       },
       enumerable: true,
     });

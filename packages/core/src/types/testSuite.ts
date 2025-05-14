@@ -32,6 +32,7 @@ export type TestCase = {
   fails?: boolean;
   each?: boolean;
   concurrent?: boolean;
+  sequential?: boolean;
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
@@ -67,6 +68,7 @@ export type TestSuite = {
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
+  sequential?: boolean;
   testPath: TestPath;
   /** nested cases and suite could in a suite */
   tests: Array<TestSuite | TestCase>;

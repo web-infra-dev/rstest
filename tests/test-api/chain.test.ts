@@ -12,6 +12,7 @@ describe('Test Chain', () => {
       [
         "fails",
         "concurrent",
+        "sequential",
         "skip",
         "todo",
         "only",
@@ -25,6 +26,7 @@ describe('Test Chain', () => {
       [
         "fails",
         "concurrent",
+        "sequential",
         "skip",
         "todo",
         "only",
