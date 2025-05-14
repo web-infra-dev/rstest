@@ -1,6 +1,7 @@
 import type {
   Rstest,
   RunWorkerOptions,
+  Test,
   TestFileResult,
   WorkerState,
 } from '../../types';
@@ -20,18 +21,15 @@ const getGlobalApi = (api: Rstest) => {
   }, {});
 };
 
-const runInPool = async ({
+const preparePool = async ({
   entryInfo: { distPath, testPath },
-  setupEntries,
-  assetFiles,
   sourceMaps,
   updateSnapshot,
   context,
-}: RunWorkerOptions['options']): Promise<TestFileResult> => {
+}: RunWorkerOptions['options']) => {
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
-  const codeContent = assetFiles[distPath]!;
   const {
     runtimeConfig: { globals, printConsoleTrace, disableConsoleIntercept },
   } = context;
@@ -83,7 +81,27 @@ const runInPool = async ({
     ...(globals ? getGlobalApi(api) : {}),
   };
 
-  try {
+  return {
+    rstestContext,
+    runner,
+    rpc,
+    api,
+  };
+};
+
+const runInPool = async (
+  options: RunWorkerOptions['options'],
+): Promise<Test[] | TestFileResult> => {
+  const {
+    entryInfo: { distPath, testPath },
+    setupEntries,
+    assetFiles,
+    type,
+  } = options;
+
+  const { rstestContext, runner, rpc, api } = await preparePool(options);
+
+  const loadFiles = async () => {
     // run setup files
     for (const { distPath, testPath } of setupEntries) {
       const setupCodeContent = assetFiles[distPath]!;
@@ -91,21 +109,34 @@ const runInPool = async ({
       await loadModule({
         codeContent: setupCodeContent,
         distPath,
-        testPath: testPath,
+        testPath,
         rstestContext,
         assetFiles,
       });
     }
 
     await loadModule({
-      codeContent,
+      codeContent: assetFiles[distPath]!,
       distPath,
       testPath,
       rstestContext,
       assetFiles,
     });
+  };
 
-    const results = await runner.runTest(
+  if (type === 'collect') {
+    try {
+      await loadFiles();
+      return runner.collectTests();
+    } catch (err) {
+      // TODO: log error
+      return [];
+    }
+  }
+
+  try {
+    await loadFiles();
+    const results = await runner.runTests(
       testPath,
       {
         onTestFileStart: async (test) => {

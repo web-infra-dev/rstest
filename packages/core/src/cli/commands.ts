@@ -192,7 +192,7 @@ export function setupCommands(): void {
       const { config } = await initCli(options);
       const { createRstest } = await import('../core');
       const rstest = createRstest(config, 'list', filters.map(normalize));
-      await rstest.runTests();
+      await rstest.listTests();
     });
 
   cli.parse();

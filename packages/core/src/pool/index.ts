@@ -3,8 +3,11 @@ import type {
   EntryInfo,
   RstestContext,
   SourceMapInput,
+  Test,
+  TestFileInfo,
   TestFileResult,
   TestResult,
+  UserConsoleLog,
 } from '../types';
 import { serializableConfig } from '../utils';
 import { createForksPool } from './forks';
@@ -46,6 +49,7 @@ export const createPool = async ({
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
+  collectTests: () => Promise<Test[][]>;
   close: () => Promise<void>;
 }> => {
   // Some options may crash worker, e.g. --prof, --title.
@@ -129,6 +133,24 @@ export const createPool = async ({
     disableConsoleIntercept,
   };
 
+  const rpcMethods = {
+    onTestCaseResult: async (result: TestResult) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
+      );
+    },
+    onConsoleLog: async (log: UserConsoleLog) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+      );
+    },
+    onTestFileStart: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+  };
+
   return {
     runTests: async () => {
       const results = await Promise.all(
@@ -141,29 +163,12 @@ export const createPool = async ({
                 rootPath: context.rootPath,
                 runtimeConfig: serializableConfig(runtimeConfig),
               },
+              type: 'run',
               sourceMaps,
               setupEntries,
               updateSnapshot,
             },
-            rpcMethods: {
-              onTestCaseResult: async (result) => {
-                await Promise.all(
-                  reporters.map((reporter) =>
-                    reporter.onTestCaseResult?.(result),
-                  ),
-                );
-              },
-              onConsoleLog: async (log) => {
-                await Promise.all(
-                  reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-                );
-              },
-              onTestFileStart: async (test) => {
-                await Promise.all(
-                  reporters.map((reporter) => reporter.onTestFileStart?.(test)),
-                );
-              },
-            },
+            rpcMethods,
           }),
         ),
       );
@@ -177,6 +182,27 @@ export const createPool = async ({
       const testResults = results.flatMap((r) => r.results!);
 
       return { results, testResults };
+    },
+    collectTests: async () => {
+      return Promise.all(
+        entries.map((entryInfo) =>
+          pool.collectTests({
+            options: {
+              entryInfo,
+              assetFiles,
+              context: {
+                rootPath: context.rootPath,
+                runtimeConfig: serializableConfig(runtimeConfig),
+              },
+              type: 'collect',
+              sourceMaps,
+              setupEntries,
+              updateSnapshot,
+            },
+            rpcMethods,
+          }),
+        ),
+      );
     },
     close: () => pool.close(),
   };

@@ -20,12 +20,7 @@ import { getTaskNameWithPrefix } from '../../utils';
 import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
-import {
-  getTestStatus,
-  limitConcurrency,
-  markAllTestAsSkipped,
-  traverseUpdateTest,
-} from './task';
+import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
 
 export class TestRunner {
   /** current test case */
@@ -47,12 +42,7 @@ export class TestRunner {
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: {
-        passWithNoTests,
-        testNamePattern,
-        retry,
-        maxConcurrency,
-      },
+      runtimeConfig: { passWithNoTests, retry, maxConcurrency },
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -345,8 +335,6 @@ export class TestRunner {
         ],
       };
     }
-
-    traverseUpdateTest(tests, testNamePattern);
 
     await runTests(tests, {
       beforeEachListeners: [],

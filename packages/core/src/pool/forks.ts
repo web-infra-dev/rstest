@@ -8,6 +8,7 @@ import type {
   RunWorkerOptions,
   RuntimeRPC,
   ServerRPC,
+  Test,
   TestFileResult,
 } from '../types';
 
@@ -51,6 +52,7 @@ export const createForksPool = (poolOptions: {
 }): {
   name: string;
   runTest: (options: RunWorkerOptions) => Promise<TestFileResult>;
+  collectTests: (options: RunWorkerOptions) => Promise<Test[]>;
   close: () => Promise<void>;
 } => {
   const {
@@ -77,6 +79,14 @@ export const createForksPool = (poolOptions: {
   return {
     name: 'forks',
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
+      const { channel, cleanup } = createChannel(rpcMethods);
+      try {
+        return await pool.run(options, { channel });
+      } finally {
+        cleanup();
+      }
+    },
+    collectTests: async ({ options, rpcMethods }: RunWorkerOptions) => {
       const { channel, cleanup } = createChannel(rpcMethods);
       try {
         return await pool.run(options, { channel });

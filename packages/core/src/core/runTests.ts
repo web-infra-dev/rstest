@@ -104,21 +104,12 @@ export async function runTests(
     };
   };
 
-  if (command === 'run') {
-    const close = await run();
-    await close();
-    return;
-  }
-
   if (command === 'watch') {
     rsbuildInstance.onDevCompileDone(async () => {
       await run();
     });
-    return;
-  }
-
-  if (command === 'list') {
-    console.log('TODO');
-    process.exit();
+  } else {
+    const close = await run();
+    await close();
   }
 }
