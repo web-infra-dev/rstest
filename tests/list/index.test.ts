@@ -21,8 +21,15 @@ describe('test list command', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(0);
 
-    // const logs = cli.stdout?.split('\n').filter(Boolean);
+    const logs = cli.stdout?.split('\n').filter(Boolean);
 
-    // expect(logs).toMatchInlineSnapshot();
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+        "b.test.ts > test b > test b-1",
+        "b.test.ts > test b-2",
+      ]
+    `);
   });
 });

@@ -2,6 +2,7 @@ import type {
   Rstest,
   RstestExpect,
   RunnerHooks,
+  Test,
   TestCase,
   TestFileResult,
   WorkerState,
@@ -14,11 +15,12 @@ export const createRstestRuntime = (
   workerState: WorkerState,
 ): {
   runner: {
-    runTest: (
+    runTests: (
       testPath: string,
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
+    collectTests: () => Promise<Test[]>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;

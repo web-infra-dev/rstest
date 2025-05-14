@@ -13,7 +13,13 @@ export function createRstest(
     await runTests(context, fileFilters);
   };
 
+  const listTests = async (): Promise<void> => {
+    const { listTests } = await import('./listTests');
+    await listTests(context, fileFilters);
+  };
+
   return {
     runTests,
+    listTests,
   };
 }

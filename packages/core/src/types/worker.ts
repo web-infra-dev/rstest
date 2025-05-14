@@ -51,6 +51,7 @@ export type RunWorkerOptions = {
     sourceMaps: Record<string, SourceMapInput>;
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
+    type: 'run' | 'collect';
   };
   rpcMethods: RuntimeRPC;
 };

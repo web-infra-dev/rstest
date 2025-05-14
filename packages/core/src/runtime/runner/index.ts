@@ -2,27 +2,30 @@ import type {
   Rstest,
   RunnerAPI,
   RunnerHooks,
+  Test,
   TestFileResult,
   WorkerState,
 } from '../../types';
 
 import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
+import { traverseUpdateTest } from './task';
 
 export function createRunner({ workerState }: { workerState: WorkerState }): {
   api: RunnerAPI;
   runner: {
-    runTest: (
+    runTests: (
       testFilePath: string,
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
+    collectTests: () => Promise<Test[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
   };
 } {
   const {
     testPath,
-    runtimeConfig: { testTimeout },
+    runtimeConfig: { testTimeout, testNamePattern },
   } = workerState;
   const runtime = createRuntimeAPI({
     testPath,
@@ -33,8 +36,10 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   return {
     api: runtime.api,
     runner: {
-      runTest: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
+      runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtime.instance.getTests();
+        traverseUpdateTest(tests, testNamePattern);
+
         return testRunner.runTests({
           tests,
           testPath,
@@ -42,6 +47,12 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
           hooks,
           api,
         });
+      },
+      collectTests: async () => {
+        const tests = await runtime.instance.getTests();
+        traverseUpdateTest(tests, testNamePattern);
+
+        return tests;
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
     },

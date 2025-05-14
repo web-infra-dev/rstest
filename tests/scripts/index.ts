@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { RstestCommand, RstestConfig } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
 import type { Options, Result } from 'tinyexec';
 import { x } from 'tinyexec';
@@ -8,8 +7,8 @@ import { x } from 'tinyexec';
 type IoType = 'stdout' | 'stderr';
 class Cli {
   public exec: Result;
-  public stdout: '';
-  public stderr: '';
+  public stdout = '';
+  public stderr = '';
   private stdoutListeners: Array<() => void> = [];
   private stderrListeners: Array<() => void> = [];
 
@@ -143,11 +142,5 @@ export async function prepareFixtures({
     },
   };
 }
-
-// TODO: make API calling Rstest available in test utils
-export async function runRstest({
-  options,
-  command,
-}: { options: RstestConfig; command: RstestCommand }) {}
 
 export * from './utils';

@@ -26,4 +26,5 @@ export type RstestContext = {
 
 export type RstestInstance = {
   runTests: () => Promise<void>;
+  listTests: () => Promise<void>;
 };
