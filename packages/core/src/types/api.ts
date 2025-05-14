@@ -63,6 +63,7 @@ export type TestAPI = TestFn & {
   for: TestForFn;
   fails: TestAPI;
   concurrent: TestAPI;
+  sequential: TestAPI;
   only: TestAPI;
   skip: TestAPI;
   todo: TestAPI;
@@ -79,8 +80,9 @@ export type DescribeAPI = DescribeFn & {
   skip: DescribeAPI;
   runIf: (condition: boolean) => DescribeAPI;
   skipIf: (condition: boolean) => DescribeAPI;
-  todo: DescribeFn;
+  todo: DescribeAPI;
   concurrent: DescribeAPI;
+  sequential: DescribeAPI;
 };
 
 export type RunnerAPI = {
