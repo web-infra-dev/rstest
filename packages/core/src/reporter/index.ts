@@ -46,9 +46,18 @@ export class DefaultReporter implements Reporter {
   onTestFileResult(test: TestFileResult): void {
     const relativePath = relative(this.rootPath, test.testPath);
 
-    console.log(
-      `${color.bold(statusColorfulStr[test.status])} ${relativePath} ${color.gray(`(${test.results.length} ${test.results.length > 1 ? 'tests' : 'test'})`)}`,
-    );
+    let title = `${color.bold(statusColorfulStr[test.status])} ${relativePath}`;
+
+    title +=
+      test.results.length > 1
+        ? ` ${color.gray(`(${test.results.length} tests)`)}`
+        : ` ${color.gray(`(${test.results.length} test)`)}`;
+
+    if (test.duration) {
+      title += ` ${color[test.duration > 300 ? 'yellow' : 'green'](`${prettyTime(test.duration, false)}`)}`;
+    }
+
+    logger.log(title);
 
     if (test.status !== 'fail') {
       return;
@@ -122,6 +131,7 @@ export class DefaultReporter implements Reporter {
     if (this.options.summary === false) {
       return;
     }
+    logger.log('');
     await printSummaryErrorLogs({
       testResults,
       results,
