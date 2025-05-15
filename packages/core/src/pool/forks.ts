@@ -52,7 +52,10 @@ export const createForksPool = (poolOptions: {
 }): {
   name: string;
   runTest: (options: RunWorkerOptions) => Promise<TestFileResult>;
-  collectTests: (options: RunWorkerOptions) => Promise<Test[]>;
+  collectTests: (options: RunWorkerOptions) => Promise<{
+    tests: Test[];
+    testPath: string;
+  }>;
   close: () => Promise<void>;
 } => {
   const {

@@ -1,4 +1,9 @@
-import type { RstestCommand, RstestConfig, RstestInstance } from '../types';
+import type {
+  ListCommandOptions,
+  RstestCommand,
+  RstestConfig,
+  RstestInstance,
+} from '../types';
 import { createContext } from './context';
 
 export function createRstest(
@@ -13,9 +18,9 @@ export function createRstest(
     await runTests(context, fileFilters);
   };
 
-  const listTests = async (): Promise<void> => {
+  const listTests = async (options: ListCommandOptions): Promise<void> => {
     const { listTests } = await import('./listTests');
-    await listTests(context, fileFilters);
+    await listTests(context, fileFilters, options);
   };
 
   return {

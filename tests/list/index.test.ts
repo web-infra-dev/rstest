@@ -80,4 +80,28 @@ describe('test list command', () => {
       ]
     `);
   });
+
+  it('should list test files correctly with --filesOnly', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts",
+        "b.test.ts",
+      ]
+    `);
+  });
 });

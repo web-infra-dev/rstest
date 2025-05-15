@@ -1,6 +1,6 @@
 import { relative } from 'node:path';
 import { createPool } from '../pool';
-import type { RstestContext, Test } from '../types';
+import type { ListCommandOptions, RstestContext, Test } from '../types';
 import {
   getSetupFiles,
   getTaskNameWithPrefix,
@@ -12,6 +12,7 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 export async function listTests(
   context: RstestContext,
   fileFilters: string[],
+  { filesOnly }: ListCommandOptions,
 ): Promise<void> {
   const {
     normalizedConfig: { include, exclude, root, name, setupFiles: setups },
@@ -76,8 +77,12 @@ export async function listTests(
     }
   };
 
-  for (const files of list) {
-    for (const test of files) {
+  for (const file of list) {
+    if (filesOnly) {
+      logger.log(relative(rootPath, file.testPath));
+      continue;
+    }
+    for (const test of file.tests) {
       printTest(test);
     }
   }
