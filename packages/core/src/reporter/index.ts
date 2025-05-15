@@ -4,8 +4,8 @@ import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
+  NormalizedConfig,
   Reporter,
-  RstestConfig,
   SnapshotSummary,
   TestFileInfo,
   TestFileResult,
@@ -24,7 +24,7 @@ const statusColorfulStr = {
 
 export class DefaultReporter implements Reporter {
   private rootPath: string;
-  private config: RstestConfig;
+  private config: NormalizedConfig;
   private options: DefaultReporterOptions = {};
 
   constructor({
@@ -33,7 +33,7 @@ export class DefaultReporter implements Reporter {
     config,
   }: {
     rootPath: string;
-    config: RstestConfig;
+    config: NormalizedConfig;
     options: DefaultReporterOptions;
   }) {
     this.rootPath = rootPath;
@@ -45,8 +45,15 @@ export class DefaultReporter implements Reporter {
 
   onTestFileResult(test: TestFileResult): void {
     const relativePath = relative(this.rootPath, test.testPath);
+    const { slowTestThreshold } = this.config;
 
     let title = `${color.bold(statusColorfulStr[test.status])} ${relativePath}`;
+
+    const formatDuration = (duration: number) => {
+      return color[duration > slowTestThreshold ? 'yellow' : 'green'](
+        `${prettyTime(duration, false)}`,
+      );
+    };
 
     title +=
       test.results.length > 1
@@ -54,7 +61,7 @@ export class DefaultReporter implements Reporter {
         : ` ${color.gray(`(${test.results.length} test)`)}`;
 
     if (test.duration) {
-      title += ` ${color[test.duration > 300 ? 'yellow' : 'green'](`${prettyTime(test.duration, false)}`)}`;
+      title += ` ${formatDuration(test.duration)}`;
     }
 
     logger.log(title);
@@ -67,7 +74,7 @@ export class DefaultReporter implements Reporter {
       const nameStr = getTaskNameWithPrefix(result);
       const duration =
         typeof result.duration !== 'undefined'
-          ? ` (${prettyTime(result.duration)})`
+          ? ` (${prettyTime(result.duration, false)})`
           : '';
 
       console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
@@ -131,7 +138,7 @@ export class DefaultReporter implements Reporter {
     if (this.options.summary === false) {
       return;
     }
-    logger.log('');
+
     await printSummaryErrorLogs({
       testResults,
       results,

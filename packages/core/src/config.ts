@@ -95,6 +95,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
+  slowTestThreshold: 300,
   unstubGlobals: false,
   unstubEnvs: false,
   maxConcurrency: 5,
