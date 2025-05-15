@@ -104,4 +104,74 @@ describe('test list command', () => {
       ]
     `);
   });
+
+  it('should list tests json correctly', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "[",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/a.test.ts\\",",
+        "    \\"name\\": \\"test a > test a-1\\"",
+        "  },",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/a.test.ts\\",",
+        "    \\"name\\": \\"test a-2\\"",
+        "  },",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/b.test.ts\\",",
+        "    \\"name\\": \\"test b > test b-1\\"",
+        "  },",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/b.test.ts\\",",
+        "    \\"name\\": \\"test b-2\\"",
+        "  }",
+        "]",
+      ]
+    `);
+  });
+
+  it('should list test files json correctly', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--json'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "[",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/a.test.ts\\"",
+        "  },",
+        "  {",
+        "    \\"file\\": \\"<WORKSPACE>/tests/list/fixtures/b.test.ts\\"",
+        "  }",
+        "]",
+      ]
+    `);
+  });
 });

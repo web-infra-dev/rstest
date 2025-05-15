@@ -12,7 +12,7 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 export async function listTests(
   context: RstestContext,
   fileFilters: string[],
-  { filesOnly }: ListCommandOptions,
+  { filesOnly, json }: ListCommandOptions,
 ): Promise<void> {
   const {
     normalizedConfig: { include, exclude, root, name, setupFiles: setups },
@@ -58,32 +58,46 @@ export async function listTests(
   });
 
   const list = await pool.collectTests();
+  const collectTests: Array<{
+    file: string;
+    name?: string;
+  }> = [];
 
-  const printTest = (test: Test) => {
+  const traverseTests = (test: Test) => {
     if (['skip', 'todo'].includes(test.runMode)) {
       return;
     }
 
     if (test.type === 'case') {
-      logger.log(
-        relative(rootPath, test.testPath),
-        '>',
-        getTaskNameWithPrefix(test),
-      );
+      collectTests.push({
+        file: test.testPath,
+        name: getTaskNameWithPrefix(test),
+      });
     } else {
       for (const child of test.tests) {
-        printTest(child);
+        traverseTests(child);
       }
     }
   };
 
   for (const file of list) {
     if (filesOnly) {
-      logger.log(relative(rootPath, file.testPath));
+      collectTests.push({
+        file: file.testPath,
+      });
       continue;
     }
     for (const test of file.tests) {
-      printTest(test);
+      traverseTests(test);
+    }
+  }
+
+  if (json) {
+    logger.log(JSON.stringify(collectTests, null, 2));
+  } else {
+    for (const test of collectTests) {
+      const shortPath = relative(rootPath, test.file);
+      logger.log(test.name ? `${shortPath} > ${test.name}` : shortPath);
     }
   }
 
