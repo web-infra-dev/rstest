@@ -189,7 +189,7 @@ export function setupCommands(): void {
       'lists all test files that Rstest will run given the arguments',
     )
     .option('--filesOnly', 'only list the test files')
-    .option('--json', 'print tests as JSON')
+    .option('--json [boolean/path]', 'print tests as JSON or write to a file')
     .action(
       async (
         filters: string[],

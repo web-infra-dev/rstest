@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -173,5 +174,28 @@ describe('test list command', () => {
         "]",
       ]
     `);
+  });
+
+  it('should output test json file correctly', async () => {
+    const outputPath = join(__dirname, 'fixtures', 'output.json');
+
+    fs.rmSync(outputPath, { force: true });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', 'output.json'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    expect(fs.existsSync(outputPath)).toBeTruthy();
+
+    fs.rmSync(outputPath, { force: true });
   });
 });
