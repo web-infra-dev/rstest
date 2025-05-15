@@ -26,6 +26,7 @@ type CommonOptions = {
   unstubEnvs?: boolean;
   retry?: number;
   maxConcurrency?: number;
+  slowTestThreshold?: number;
 };
 
 const applyCommonOptions = (cli: CAC) => {
@@ -56,6 +57,10 @@ const applyCommonOptions = (cli: CAC) => {
       'Print console traces when calling any console method.',
     )
     .option('--disableConsoleIntercept', 'Disable console intercept.')
+    .option(
+      '--slowTestThreshold <slowTestThreshold>',
+      'The number of milliseconds after which a test or suite is considered slow',
+    )
     .option(
       '-t, --testNamePattern <testNamePattern>',
       'Run only tests with a name that matches the regex.',
@@ -111,6 +116,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'unstubEnvs',
     'unstubGlobals',
     'retry',
+    'slowTestThreshold',
     'maxConcurrency',
     'printConsoleTrace',
     'disableConsoleIntercept',

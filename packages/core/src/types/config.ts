@@ -137,6 +137,12 @@ export interface RstestConfig {
   restoreMocks?: boolean;
 
   /**
+   * The number of milliseconds after which a test or suite is considered slow and reported as such in the results.
+   * @default 300
+   */
+  slowTestThreshold?: number;
+
+  /**
    * Restores all global variables that were changed with `rstest.stubGlobal` before every test.
    * @default false
    */
