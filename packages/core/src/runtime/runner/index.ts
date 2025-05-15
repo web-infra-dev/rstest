@@ -40,13 +40,17 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
 
-        return testRunner.runTests({
+        const results = await testRunner.runTests({
           tests,
           testPath,
           state: workerState,
           hooks,
           api,
         });
+
+        hooks.onTestFileResult?.(results);
+
+        return results;
       },
       collectTests: async () => {
         const tests = await runtime.instance.getTests();

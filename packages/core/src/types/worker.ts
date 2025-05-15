@@ -2,7 +2,12 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { RstestContext } from './core';
 import type { SourceMapInput } from './reporter';
-import type { TestFileInfo, TestResult, UserConsoleLog } from './testSuite';
+import type {
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  UserConsoleLog,
+} from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
@@ -17,6 +22,7 @@ export type ServerRPC = {};
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
+  onTestFileResult: (test: TestFileResult) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   onConsoleLog: (log: UserConsoleLog) => void;
 };

@@ -36,25 +36,5 @@ describe('Test Async Suite', () => {
         "run 3-0",
       ]
     `);
-
-    // test suite reference
-    expect(
-      logs
-        .filter((log) => log.includes('Test Async Suite'))
-        // slice `✓ Test Async Suite > 2 > 2-0 > 2-0-0 (0 ms)` to `> 2 > 2-0 > 2-0-0`
-        .map((log) => getTestName(log, 'Test Async Suite')),
-    ).toMatchInlineSnapshot(`
-      [
-        "> 0 > 0-0",
-        "> 0 > 0-1 > 0-1-0",
-        "> 0 > 0-1 > 0-1-1 > 0-1-1-0",
-        "> 0 > 0-2 > 0-2-0",
-        "> 0 > 0-3",
-        "> 1",
-        "> 2 > 2-0 > 2-0-0",
-        "> 2 > 2-1",
-        "> 3",
-      ]
-    `);
   });
 });

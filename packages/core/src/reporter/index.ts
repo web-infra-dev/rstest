@@ -12,15 +12,15 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import {
-  TEST_DELIMITER,
-  color,
-  getTaskNameWithPrefix,
-  logger,
-  parsePosix,
-  prettyTime,
-} from '../utils';
+import { color, getTaskNameWithPrefix, logger, prettyTime } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
+
+const statusColorfulStr = {
+  fail: color.red('✗'),
+  pass: color.green('✓'),
+  todo: color.gray('-'),
+  skip: color.gray('-'),
+};
 
 export class DefaultReporter implements Reporter {
   private rootPath: string;
@@ -41,42 +41,37 @@ export class DefaultReporter implements Reporter {
     this.options = options;
   }
 
-  onTestFileStart(test: TestFileInfo): void {
-    const { rootPath } = this;
-    const relativePath = relative(rootPath, test.testPath);
-    const { dir, base } = parsePosix(relativePath);
+  onTestFileStart(_test: TestFileInfo): void {}
 
-    console.log('');
+  onTestFileResult(test: TestFileResult): void {
+    const relativePath = relative(this.rootPath, test.testPath);
+
     console.log(
-      `${color.gray(`${TEST_DELIMITER} ${dir ? `${dir}/` : ''}`)}${base}`,
+      `${color.bold(statusColorfulStr[test.status])} ${relativePath} ${color.gray(`(${test.results.length} ${test.results.length > 1 ? 'tests' : 'test'})`)}`,
     );
-    console.log('');
-  }
 
-  onTestCaseResult(result: TestResult): void {
-    const statusColorfulStr = {
-      fail: color.red('✗'),
-      pass: color.green('✓'),
-      todo: color.gray('-'),
-      skip: color.gray('-'),
-    };
+    if (test.status !== 'fail') {
+      return;
+    }
+    for (const result of test.results) {
+      const icon = statusColorfulStr[result.status];
+      const nameStr = getTaskNameWithPrefix(result);
+      const duration =
+        typeof result.duration !== 'undefined'
+          ? ` (${prettyTime(result.duration)})`
+          : '';
 
-    const duration =
-      typeof result.duration !== 'undefined'
-        ? ` (${prettyTime(result.duration)})`
-        : '';
+      console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
 
-    const icon = statusColorfulStr[result.status];
-    const nameStr = getTaskNameWithPrefix(result);
-
-    console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
-
-    if (result.errors) {
-      for (const error of result.errors) {
-        console.error(color.red(`    ${error.message}`));
+      if (result.errors) {
+        for (const error of result.errors) {
+          console.error(color.red(`    ${error.message}`));
+        }
       }
     }
   }
+
+  onTestCaseResult(_result: TestResult): void {}
 
   onUserConsoleLog(log: UserConsoleLog): void {
     const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;

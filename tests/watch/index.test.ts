@@ -25,7 +25,6 @@ describe('watch', () => {
     // initial
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
-    expect(cli.stdout).toMatch('index > should test source code correctly');
 
     // create
     cli.resetStd();
@@ -41,8 +40,6 @@ describe('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
-    expect(cli.stdout).toMatch('bar > bar should be to bar');
-    expect(cli.stdout).toMatch('index > should test source code correctly');
 
     // update
     cli.resetStd();
@@ -52,7 +49,6 @@ describe('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 1 failed | 1 passed');
-    expect(cli.stdout).toMatch('✓ index > should test source code correctly');
     expect(cli.stdout).toMatch('✗ bar > bar should be to bar');
 
     // delete
@@ -60,7 +56,6 @@ describe('watch', () => {
     fs.delete('./fixtures-test/bar.test.ts');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 1 passed');
-    expect(cli.stdout).toMatch('✓ index > should test source code correctly');
 
     cli.exec.kill();
   });
