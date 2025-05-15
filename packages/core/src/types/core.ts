@@ -26,7 +26,7 @@ export type RstestContext = {
 
 export type ListCommandOptions = {
   filesOnly?: boolean;
-  json?: boolean;
+  json?: boolean | string;
 };
 
 export type RstestInstance = {

@@ -1,4 +1,5 @@
-import { relative } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
 import type { ListCommandOptions, RstestContext, Test } from '../types';
 import {
@@ -58,7 +59,7 @@ export async function listTests(
   });
 
   const list = await pool.collectTests();
-  const collectTests: Array<{
+  const tests: Array<{
     file: string;
     name?: string;
   }> = [];
@@ -69,7 +70,7 @@ export async function listTests(
     }
 
     if (test.type === 'case') {
-      collectTests.push({
+      tests.push({
         file: test.testPath,
         name: getTaskNameWithPrefix(test),
       });
@@ -82,7 +83,7 @@ export async function listTests(
 
   for (const file of list) {
     if (filesOnly) {
-      collectTests.push({
+      tests.push({
         file: file.testPath,
       });
       continue;
@@ -92,10 +93,17 @@ export async function listTests(
     }
   }
 
-  if (json) {
-    logger.log(JSON.stringify(collectTests, null, 2));
+  if (json && json !== 'false') {
+    const content = JSON.stringify(tests, null, 2);
+    if (json !== true && json !== 'true') {
+      const jsonPath = isAbsolute(json) ? json : join(rootPath, json);
+      mkdirSync(dirname(jsonPath), { recursive: true });
+      writeFileSync(jsonPath, content);
+    } else {
+      logger.log(content);
+    }
   } else {
-    for (const test of collectTests) {
+    for (const test of tests) {
       const shortPath = relative(rootPath, test.file);
       logger.log(test.name ? `${shortPath} > ${test.name}` : shortPath);
     }
