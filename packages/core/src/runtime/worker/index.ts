@@ -91,7 +91,13 @@ const preparePool = async ({
 
 const runInPool = async (
   options: RunWorkerOptions['options'],
-): Promise<Test[] | TestFileResult> => {
+): Promise<
+  | {
+      tests: Test[];
+      testPath: string;
+    }
+  | TestFileResult
+> => {
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
@@ -127,10 +133,17 @@ const runInPool = async (
   if (type === 'collect') {
     try {
       await loadFiles();
-      return runner.collectTests();
+      const tests = await runner.collectTests();
+      return {
+        testPath,
+        tests,
+      };
     } catch (err) {
       // TODO: log error
-      return [];
+      return {
+        testPath,
+        tests: [],
+      };
     }
   }
 

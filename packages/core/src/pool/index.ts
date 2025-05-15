@@ -49,7 +49,12 @@ export const createPool = async ({
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
-  collectTests: () => Promise<Test[][]>;
+  collectTests: () => Promise<
+    Array<{
+      tests: Test[];
+      testPath: string;
+    }>
+  >;
   close: () => Promise<void>;
 }> => {
   // Some options may crash worker, e.g. --prof, --title.

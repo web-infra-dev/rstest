@@ -188,12 +188,20 @@ export function setupCommands(): void {
       'list [...filters]',
       'lists all test files that Rstest will run given the arguments',
     )
-    .action(async (filters: string[], options: CommonOptions) => {
-      const { config } = await initCli(options);
-      const { createRstest } = await import('../core');
-      const rstest = createRstest(config, 'list', filters.map(normalize));
-      await rstest.listTests();
-    });
+    .option('--filesOnly', 'only list the test files')
+    .action(
+      async (
+        filters: string[],
+        options: CommonOptions & {
+          filesOnly?: boolean;
+        },
+      ) => {
+        const { config } = await initCli(options);
+        const { createRstest } = await import('../core');
+        const rstest = createRstest(config, 'list', filters.map(normalize));
+        await rstest.listTests({ filesOnly: options.filesOnly });
+      },
+    );
 
   cli.parse();
 }

@@ -24,7 +24,11 @@ export type RstestContext = {
   snapshotManager: SnapshotManager;
 };
 
+export type ListCommandOptions = {
+  filesOnly?: boolean;
+};
+
 export type RstestInstance = {
   runTests: () => Promise<void>;
-  listTests: () => Promise<void>;
+  listTests: (options: ListCommandOptions) => Promise<void>;
 };
