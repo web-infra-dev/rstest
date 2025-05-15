@@ -155,6 +155,9 @@ const runInPool = async (
         onTestFileStart: async (test) => {
           await rpc.onTestFileStart(test);
         },
+        onTestFileResult: async (test) => {
+          await rpc.onTestFileResult(test);
+        },
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
         },

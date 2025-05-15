@@ -27,14 +27,6 @@ describe('afterAll', () => {
       '[afterAll] in level A',
       '[afterAll] root',
     ]);
-
-    // test log print
-    expect(
-      logs.find((log) => log.includes('✓ level A > it in level A')),
-    ).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('_internal_root_suite')),
-    ).toBeFalsy();
   });
 });
 

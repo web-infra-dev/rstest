@@ -51,26 +51,30 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
-export const prettyTime = (milliseconds: number): string => {
-  const format = (time: string) => color.bold(time);
+export const prettyTime = (
+  milliseconds: number,
+  shouldFormat = true,
+): string => {
+  const format = (time: string) => (shouldFormat ? color.bold(time) : time);
+  const indent = shouldFormat ? ' ' : '';
 
   if (milliseconds < 1000) {
-    return `${Math.round(milliseconds)} ms`;
+    return `${Math.round(milliseconds)}${indent}ms`;
   }
 
   const seconds = milliseconds / 1000;
 
   if (seconds < 10) {
     const digits = seconds >= 0.01 ? 2 : 3;
-    return `${format(seconds.toFixed(digits))} s`;
+    return `${format(seconds.toFixed(digits))}${indent}s`;
   }
 
   if (seconds < 60) {
-    return `${format(seconds.toFixed(1))} s`;
+    return `${format(seconds.toFixed(1))}${indent}s`;
   }
 
   const minutes = seconds / 60;
-  return `${format(minutes.toFixed(2))} m`;
+  return `${format(minutes.toFixed(2))}${indent}m`;
 };
 
 const getTaskNames = (

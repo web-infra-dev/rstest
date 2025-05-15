@@ -269,7 +269,7 @@ const stackIgnores: (RegExp | string)[] = [
   /node:\w+/,
 ];
 
-function parseErrorStacktrace({
+async function parseErrorStacktrace({
   stack,
   getSourcemap,
 }: {
