@@ -3,7 +3,7 @@ import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
-import type { RstestConfig } from '../types';
+import type { ListCommandOptions, RstestConfig } from '../types';
 import { formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { showRstest } from './prepare';
@@ -189,17 +189,19 @@ export function setupCommands(): void {
       'lists all test files that Rstest will run given the arguments',
     )
     .option('--filesOnly', 'only list the test files')
+    .option('--json', 'print tests as JSON')
     .action(
       async (
         filters: string[],
-        options: CommonOptions & {
-          filesOnly?: boolean;
-        },
+        options: CommonOptions & ListCommandOptions,
       ) => {
         const { config } = await initCli(options);
         const { createRstest } = await import('../core');
         const rstest = createRstest(config, 'list', filters.map(normalize));
-        await rstest.listTests({ filesOnly: options.filesOnly });
+        await rstest.listTests({
+          filesOnly: options.filesOnly,
+          json: options.json,
+        });
       },
     );
 
