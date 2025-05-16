@@ -52,10 +52,13 @@ export function createContext(
     : cwd;
 
   const rstestConfig = withDefaultConfig(userConfig);
-  const reporters = createReporters(rstestConfig.reporters, {
-    rootPath,
-    config: rstestConfig,
-  });
+  const reporters =
+    command !== 'list'
+      ? createReporters(rstestConfig.reporters, {
+          rootPath,
+          config: rstestConfig,
+        })
+      : [];
   const snapshotManager = new SnapshotManager({
     updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
   });
