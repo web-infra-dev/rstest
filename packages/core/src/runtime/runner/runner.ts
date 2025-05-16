@@ -62,6 +62,7 @@ export class TestRunner {
       },
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
+        snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
         const result = {
           status: 'skip' as const,
           parentNames: test.parentNames,
