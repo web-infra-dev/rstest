@@ -6,7 +6,7 @@ import { runRstestCli } from '../scripts/';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('test exit code', () => {
+describe.concurrent('test exit code', () => {
   it('should return code 0 when test succeed', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

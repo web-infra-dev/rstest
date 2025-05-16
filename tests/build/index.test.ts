@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test build config', () => {
-  it.each([
+  it.concurrent.each([
     { name: 'define' },
     { name: 'alias' },
     { name: 'plugin' },
