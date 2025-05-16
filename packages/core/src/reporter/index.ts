@@ -119,11 +119,8 @@ export class DefaultReporter implements Reporter {
 
       if (path !== testPath) {
         titles.push(color.gray(testPath));
-      } else {
-        titles.push(
-          color.gray(`${path}:${frame!.lineNumber}:${frame!.column}`),
-        );
       }
+      titles.push(color.gray(`${path}:${frame!.lineNumber}:${frame!.column}`));
     } else {
       titles.push(color.gray(testPath));
     }
