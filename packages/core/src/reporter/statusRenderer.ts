@@ -41,7 +41,7 @@ export class StatusRenderer {
     this.renderer?.schedule();
   }
 
-  clearRunningModules(): void {
+  clear(): void {
     this.runningModules.clear();
     this.renderer?.finish();
   }
