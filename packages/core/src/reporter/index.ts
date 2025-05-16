@@ -1,5 +1,6 @@
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
+import { isCI } from 'std-env';
 import type {
   DefaultReporterOptions,
   Duration,
@@ -13,6 +14,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { color, getTaskNameWithPrefix, logger, prettyTime } from '../utils';
+import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
 const statusColorfulStr = {
@@ -26,6 +28,7 @@ export class DefaultReporter implements Reporter {
   private rootPath: string;
   private config: NormalizedConfig;
   private options: DefaultReporterOptions = {};
+  private statusRenderer: StatusRenderer | undefined;
 
   constructor({
     rootPath,
@@ -39,11 +42,18 @@ export class DefaultReporter implements Reporter {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
+    if (!isCI) {
+      this.statusRenderer = new StatusRenderer(rootPath);
+    }
   }
 
-  onTestFileStart(_test: TestFileInfo): void {}
+  onTestFileStart(test: TestFileInfo): void {
+    this.statusRenderer?.addRunningModule(test.testPath);
+  }
 
   onTestFileResult(test: TestFileResult): void {
+    this.statusRenderer?.removeRunningModule(test.testPath);
+
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
@@ -87,7 +97,10 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onTestCaseResult(_result: TestResult): void {}
+  onTestCaseResult(_result: TestResult): void {
+    // TODO
+    // this.statusRenderer?.updateRunningModule({ result.testPath, status: result.status });
+  }
 
   onUserConsoleLog(log: UserConsoleLog): void {
     const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
@@ -135,6 +148,8 @@ export class DefaultReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
   }): Promise<void> {
+    this.statusRenderer?.clear();
+
     if (this.options.summary === false) {
       return;
     }
@@ -145,6 +160,7 @@ export class DefaultReporter implements Reporter {
       rootPath: this.rootPath,
       getSourcemap,
     });
+
     printSummaryLog({
       results,
       testResults,
