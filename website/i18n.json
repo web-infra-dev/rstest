@@ -1,0 +1,18 @@
+{
+  "introduction": {
+    "en": "Introduction",
+    "zh": "介绍"
+  },
+  "quickStart": {
+    "en": "Quick Start",
+    "zh": "快速上手"
+  },
+  "subtitle": {
+    "en": "Rspack-based Testing Framework",
+    "zh": "由 Rspack 驱动的测试框架"
+  },
+  "slogan": {
+    "en": "Provide first-class support for Rspack ecosystem",
+    "zh": "为 Rspack 生态提供全面、一流的支持"
+  }
+}
