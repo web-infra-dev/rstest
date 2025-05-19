@@ -28,6 +28,9 @@
     },
     "./globals": {
       "types": "./globals.d.ts"
+    },
+    "./importMeta": {
+      "types": "./importMeta.d.ts"
     }
   },
   "files": [

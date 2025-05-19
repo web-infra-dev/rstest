@@ -82,6 +82,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   exclude: ['**/node_modules/**', '**/dist/**'],
+  includeSource: [],
   pool: {
     type: 'forks',
   },

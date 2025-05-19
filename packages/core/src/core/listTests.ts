@@ -16,7 +16,14 @@ export async function listTests(
   { filesOnly, json }: ListCommandOptions,
 ): Promise<void> {
   const {
-    normalizedConfig: { include, exclude, root, name, setupFiles: setups },
+    normalizedConfig: {
+      include,
+      exclude,
+      root,
+      name,
+      setupFiles: setups,
+      includeSource,
+    },
     rootPath,
   } = context;
 
@@ -25,6 +32,7 @@ export async function listTests(
     exclude,
     root,
     fileFilters,
+    includeSource,
   });
 
   const globTestSourceEntries = async (): Promise<Record<string, string>> => {

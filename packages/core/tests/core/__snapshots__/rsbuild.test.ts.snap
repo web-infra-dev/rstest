@@ -365,6 +365,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
           "import.meta.env.DEV": false,
           "import.meta.env.MODE": "\\"none\\"",
           "import.meta.env.PROD": false,
+          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": "\\"\\"",
           "process.env.BASE_URL": "\\"/\\"",
         },

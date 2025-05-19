@@ -98,6 +98,11 @@ export const prepareRsbuild = async (
           dev: {
             writeToDisk,
           },
+          source: {
+            define: {
+              'import.meta.rstest': "global['@rstest/core']",
+            },
+          },
           output: {
             sourceMap: {
               js: 'source-map',
