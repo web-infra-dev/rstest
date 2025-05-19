@@ -44,6 +44,12 @@ export interface RstestConfig {
    */
   exclude?: string[];
   /**
+   * A list of glob patterns that match your in-source test files
+   *
+   * @default []
+   */
+  includeSource?: string[];
+  /**
    * Path to setup files. They will be run before each test file.
    */
   setupFiles?: string[] | string;

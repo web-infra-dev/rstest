@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'pathe';
 import { glob } from 'tinyglobby';
 import { castArray, getAbsolutePath } from '../utils';
@@ -35,14 +36,19 @@ export const filterFiles = (
   });
 };
 
+const hasInSourceTestCode = (code: string): boolean =>
+  code.includes('import.meta.rstest');
+
 export const getTestEntries = async ({
   include,
   exclude,
   root,
   fileFilters,
+  includeSource,
 }: {
   include: string[];
   exclude: string[];
+  includeSource: string[];
   fileFilters: string[];
   root: string;
 }): Promise<{
@@ -55,6 +61,29 @@ export const getTestEntries = async ({
     dot: true,
     expandDirectories: false,
   });
+
+  if (includeSource?.length) {
+    const sourceFiles = await glob(includeSource, {
+      cwd: root,
+      absolute: true,
+      ignore: exclude,
+      dot: true,
+      expandDirectories: false,
+    });
+
+    await Promise.all<void>(
+      sourceFiles.map(async (file) => {
+        try {
+          const code = await fs.readFile(file, 'utf-8');
+          if (hasInSourceTestCode(code)) {
+            testFiles.push(file);
+          }
+        } catch {
+          return;
+        }
+      }),
+    );
+  }
 
   return Object.fromEntries(
     filterFiles(testFiles, fileFilters, root).map((entry) => {

@@ -8,7 +8,14 @@ export async function runTests(
   fileFilters: string[],
 ): Promise<void> {
   const {
-    normalizedConfig: { include, exclude, root, name, setupFiles: setups },
+    normalizedConfig: {
+      include,
+      exclude,
+      root,
+      name,
+      setupFiles: setups,
+      includeSource,
+    },
     rootPath,
     reporters,
     snapshotManager,
@@ -19,6 +26,7 @@ export async function runTests(
     const entries = await getTestEntries({
       include,
       exclude,
+      includeSource,
       root,
       fileFilters,
     });
