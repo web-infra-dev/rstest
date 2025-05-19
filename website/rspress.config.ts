@@ -25,7 +25,7 @@ export default defineConfig({
       {
         icon: 'github',
         mode: 'link',
-        content: 'https://github.com/web-infra-dev/rslib',
+        content: 'https://github.com/web-infra-dev/rstest',
       },
       {
         icon: 'x',
