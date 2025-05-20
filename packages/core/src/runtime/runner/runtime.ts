@@ -11,10 +11,10 @@ import type {
   RunnerAPI,
   Test,
   TestAPI,
+  TestAPIs,
   TestCallbackFn,
   TestCase,
   TestEachFn,
-  TestExtend,
   TestForFn,
   TestRunMode,
   TestSuite,
@@ -507,13 +507,18 @@ export const createRuntimeAPI = ({
     return testFn;
   };
 
-  const it = createTestAPI() as TestAPI & {
-    extend: TestExtend;
-  };
+  const it = createTestAPI() as TestAPIs;
 
-  it.extend = ((fixtures: Fixtures): TestAPI => {
-    return createTestAPI({ fixtures });
-  }) as TestExtend;
+  it.extend = ((fixtures: Fixtures): TestAPIs => {
+    const api = createTestAPI({ fixtures }) as TestAPIs;
+    api.extend = (subFixtures: Fixtures) => {
+      return it.extend({
+        ...fixtures,
+        ...subFixtures,
+      } as any);
+    };
+    return api;
+  }) as TestAPIs['extend'];
 
   const createDescribeAPI = (
     options: {

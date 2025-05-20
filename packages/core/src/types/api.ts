@@ -125,27 +125,22 @@ export type Fixtures<
   // | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
 };
 
-export type TestExtend = <
-  T extends Record<string, any> = object,
-  ExtraContext = object,
->(
-  fixtures: Fixtures<T, ExtraContext>,
-) => TestAPI<{
-  [K in keyof T | keyof ExtraContext]: K extends keyof T
-    ? T[K]
-    : K extends keyof ExtraContext
-      ? ExtraContext[K]
-      : never;
-}>;
+export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
+  extend: <T extends Record<string, any> = object>(
+    fixtures: Fixtures<T, ExtraContext>,
+  ) => TestAPIs<{
+    [K in keyof T | keyof ExtraContext]: K extends keyof T
+      ? T[K]
+      : K extends keyof ExtraContext
+        ? ExtraContext[K]
+        : never;
+  }>;
+};
 
 export type RunnerAPI = {
   describe: DescribeAPI;
-  it: TestAPI & {
-    extend: TestExtend;
-  };
-  test: TestAPI & {
-    extend: TestExtend;
-  };
+  it: TestAPIs;
+  test: TestAPIs;
   beforeAll: (fn: BeforeAllListener, timeout?: number) => MaybePromise<void>;
   afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
   beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
