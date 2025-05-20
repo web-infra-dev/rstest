@@ -20,6 +20,7 @@ describe('Test Chain', () => {
         "skipIf",
         "each",
         "for",
+        "extend",
       ]
     `);
     expect(Object.keys(it.only)).toMatchInlineSnapshot(`
@@ -34,6 +35,7 @@ describe('Test Chain', () => {
         "skipIf",
         "each",
         "for",
+        "extend",
       ]
     `);
   });
