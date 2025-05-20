@@ -43,7 +43,7 @@
     "nx": "^21.0.3",
     "path-serializer": "0.4.0",
     "prettier": "^3.5.3",
-    "prettier-plugin-packagejson": "^2.5.13",
+    "prettier-plugin-packagejson": "^2.5.14",
     "simple-git-hooks": "^2.13.0",
     "typescript": "^5.8.3"
   },

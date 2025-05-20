@@ -9,7 +9,7 @@
     "preview": "rspress preview"
   },
   "dependencies": {
-    "rspress": "^2.0.0-beta.5"
+    "rspress": "^2.0.0-beta.6"
   },
   "devDependencies": {
     "@rsbuild/plugin-sass": "^1.3.1",
