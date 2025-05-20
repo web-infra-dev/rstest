@@ -35,7 +35,6 @@ describe('Test Chain', () => {
         "skipIf",
         "each",
         "for",
-        "extend",
       ]
     `);
   });
