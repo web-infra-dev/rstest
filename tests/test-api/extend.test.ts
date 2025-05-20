@@ -6,7 +6,7 @@ const myTest = test.extend<{
   todos: number[];
 }>({
   todos: async (_, use) => {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     todos.push(1, 2, 3);
     await use(todos);
     // cleanup after each test function
