@@ -15,7 +15,6 @@ const myTest = test.extend<{
 });
 
 myTest('add todo 1', ({ todos }) => {
-  console.log('run');
   expect(todos.length).toBe(3);
 
   todos.push(4);
