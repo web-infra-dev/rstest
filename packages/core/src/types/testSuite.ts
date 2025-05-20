@@ -1,5 +1,5 @@
 import type { SnapshotResult } from '@vitest/snapshot';
-import type { TestContext } from './api';
+import type { Fixtures, TestContext } from './api';
 import type { TestPath } from './utils';
 
 import type { MaybePromise } from './utils';
@@ -31,6 +31,7 @@ export type TestCase = {
   timeout?: number;
   fails?: boolean;
   each?: boolean;
+  fixtures?: Fixtures;
   concurrent?: boolean;
   sequential?: boolean;
   inTestEach?: boolean;

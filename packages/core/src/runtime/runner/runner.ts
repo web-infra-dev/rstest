@@ -105,7 +105,11 @@ export class TestRunner {
       if (result?.status !== 'fail') {
         if (test.fails) {
           try {
-            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
+            const fixtureCleanups = await this.beforeRunTest(
+              test,
+              snapshotClient.getSnapshotState(testPath),
+            );
+            cleanups.push(...fixtureCleanups);
             await test.fn?.(test.context);
             this.afterRunTest(test);
 
@@ -130,7 +134,11 @@ export class TestRunner {
           }
         } else {
           try {
-            this.beforeRunTest(test, snapshotClient.getSnapshotState(testPath));
+            const fixtureCleanups = await this.beforeRunTest(
+              test,
+              snapshotClient.getSnapshotState(testPath),
+            );
+            cleanups.push(...fixtureCleanups);
             await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
@@ -428,7 +436,10 @@ export class TestRunner {
     return context;
   }
 
-  private beforeRunTest(test: TestCase, snapshotState: SnapshotState): void {
+  private async beforeRunTest(
+    test: TestCase,
+    snapshotState: SnapshotState,
+  ): Promise<Array<() => Promise<void>>> {
     setState(
       {
         assertionCalls: 0,
@@ -444,12 +455,40 @@ export class TestRunner {
     );
 
     const context = this.createTestContext();
+    const cleanups: Array<() => Promise<void>> = [];
+
+    if (test.fixtures) {
+      for (const [key, fn] of Object.entries(test.fixtures)) {
+        // This API behavior follows vitest & playwright
+        // but why not return cleanup function?
+        await new Promise<void>((fixtureResolve) => {
+          let useDone: (() => void) | undefined;
+          // TODO: call fixture on demand
+          const block = fn(context, async (value: any) => {
+            // @ts-expect-error extra context
+            context[key] = value;
+
+            fixtureResolve();
+            return new Promise<void>((useFnResolve) => {
+              useDone = useFnResolve;
+            });
+          });
+
+          cleanups.push(() => {
+            useDone?.();
+            return block;
+          });
+        });
+      }
+    }
 
     // create test context
     Object.defineProperty(test, 'context', {
       value: context,
       enumerable: false,
     });
+
+    return cleanups;
   }
 
   private afterRunTest(test: TestCase): void {

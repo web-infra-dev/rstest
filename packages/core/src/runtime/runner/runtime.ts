@@ -7,12 +7,14 @@ import type {
   DescribeAPI,
   DescribeEachFn,
   DescribeForFn,
+  Fixtures,
   RunnerAPI,
   Test,
   TestAPI,
   TestCallbackFn,
   TestCase,
   TestEachFn,
+  TestExtend,
   TestForFn,
   TestRunMode,
   TestSuite,
@@ -260,6 +262,7 @@ export class RunnerRuntime {
   it({
     name,
     fn,
+    fixtures,
     timeout = this.defaultTestTimeout,
     runMode = 'run',
     fails = false,
@@ -268,6 +271,7 @@ export class RunnerRuntime {
     sequential,
   }: {
     name: string;
+    fixtures?: Fixtures;
     fn?: TestCallbackFn;
     timeout?: number;
     runMode?: TestRunMode;
@@ -289,6 +293,7 @@ export class RunnerRuntime {
       runMode,
       type: 'case',
       timeout,
+      fixtures,
       concurrent,
       sequential,
       each,
@@ -429,6 +434,7 @@ export const createRuntimeAPI = ({
       concurrent?: boolean;
       sequential?: boolean;
       fails?: boolean;
+      fixtures?: Fixtures;
       runMode?: 'skip' | 'only' | 'todo';
     } = {},
   ): TestAPI => {
@@ -501,7 +507,13 @@ export const createRuntimeAPI = ({
     return testFn;
   };
 
-  const it = createTestAPI();
+  const it = createTestAPI() as TestAPI & {
+    extend: TestExtend;
+  };
+
+  it.extend = ((fixtures: Fixtures): TestAPI => {
+    return createTestAPI({ fixtures });
+  }) as TestExtend;
 
   const createDescribeAPI = (
     options: {
