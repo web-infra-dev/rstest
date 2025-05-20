@@ -474,7 +474,7 @@ export class TestRunner {
             });
           });
 
-          cleanups.push(() => {
+          cleanups.unshift(() => {
             useDone?.();
             return block;
           });
