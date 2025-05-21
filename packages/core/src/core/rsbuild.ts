@@ -74,6 +74,7 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, string>,
 ): Promise<RsbuildInstance> => {
   const {
+    command,
     normalizedConfig: { name, plugins, resolve, source, output, tools },
   } = context;
 
@@ -135,7 +136,11 @@ export const prepareRsbuild = async (
           },
           plugins: [
             pluginIgnoreResolveError,
-            pluginEntryWatch({ globTestSourceEntries, setupFiles }),
+            pluginEntryWatch({
+              globTestSourceEntries,
+              setupFiles,
+              isWatch: command === 'watch',
+            }),
           ],
         },
       },
