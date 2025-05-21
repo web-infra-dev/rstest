@@ -23,6 +23,9 @@ export const pluginIgnoreResolveError: RsbuildPlugin = {
       config.plugins!.push(new IgnoreModuleNotFoundErrorPlugin());
       config.optimization ??= {};
       config.optimization.emitOnErrors = true;
+
+      config.ignoreWarnings ??= [];
+      config.ignoreWarnings.push(/Module not found/);
     });
   },
 };

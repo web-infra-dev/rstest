@@ -4,7 +4,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
 {
   "context": "<WORKSPACE>",
   "devtool": "source-map",
-  "entry": [Function],
+  "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
     "incremental": true,
@@ -18,6 +18,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
   "externalsPresets": {
     "node": true,
   },
+  "ignoreWarnings": [
+    /Module not found/,
+  ],
   "infrastructureLogging": {
     "level": "error",
   },
@@ -374,9 +377,6 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       "name": "DefinePlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    TestFileWatchPlugin {
-      "contextToWatch": "<WORKSPACE>",
-    },
   ],
   "resolve": {
     "alias": {
