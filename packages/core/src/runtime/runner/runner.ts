@@ -458,13 +458,19 @@ export class TestRunner {
     const cleanups: Array<() => Promise<void>> = [];
 
     if (test.fixtures) {
-      for (const [key, fn] of Object.entries(test.fixtures)) {
+      for (const [key, fixtureValue] of Object.entries(test.fixtures)) {
+        if (typeof fixtureValue !== 'function') {
+          // @ts-expect-error extra context
+          context[key] = fixtureValue;
+          continue;
+        }
+
         // This API behavior follows vitest & playwright
         // but why not return cleanup function?
         await new Promise<void>((fixtureResolve) => {
           let useDone: (() => void) | undefined;
           // TODO: call fixture on demand
-          const block = fn(context, async (value: any) => {
+          const block = fixtureValue(context, async (value: any) => {
             // @ts-expect-error extra context
             context[key] = value;
 
