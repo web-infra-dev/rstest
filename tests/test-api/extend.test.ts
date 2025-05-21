@@ -4,6 +4,7 @@ const todos: number[] = [];
 
 const myTest = test.extend<{
   todos: number[];
+  archive: number[];
 }>({
   todos: async (_, use) => {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -12,6 +13,7 @@ const myTest = test.extend<{
     // cleanup after each test function
     todos.length = 0;
   },
+  archive: [],
 });
 
 myTest('add todo 1', ({ todos }) => {
@@ -33,4 +35,11 @@ myTest.fails('add todo 3 - failed', ({ todos }) => {
 
   todos.push(4, 5);
   expect(todos.length).toBe(6);
+});
+
+myTest('add archive', ({ archive }) => {
+  expect(archive.length).toBe(0);
+
+  archive.push(1, 2);
+  expect(archive.length).toBe(2);
 });

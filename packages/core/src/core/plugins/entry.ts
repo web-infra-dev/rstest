@@ -27,18 +27,27 @@ class TestFileWatchPlugin {
 export const pluginEntryWatch: (params: {
   globTestSourceEntries: () => Promise<Record<string, string>>;
   setupFiles: Record<string, string>;
-}) => RsbuildPlugin = ({ globTestSourceEntries, setupFiles }) => ({
+  isWatch: boolean;
+}) => RsbuildPlugin = ({ isWatch, globTestSourceEntries, setupFiles }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new TestFileWatchPlugin(api.context.rootPath));
-      config.entry = async () => {
+      if (isWatch) {
+        config.plugins!.push(new TestFileWatchPlugin(api.context.rootPath));
+        config.entry = async () => {
+          const sourceEntries = await globTestSourceEntries();
+          return {
+            ...sourceEntries,
+            ...setupFiles,
+          };
+        };
+      } else {
         const sourceEntries = await globTestSourceEntries();
-        return {
+        config.entry = {
           ...sourceEntries,
           ...setupFiles,
         };
-      };
+      }
     });
   },
 });
