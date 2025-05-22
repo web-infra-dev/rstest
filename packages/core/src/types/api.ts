@@ -87,7 +87,6 @@ export type DescribeAPI = DescribeFn & {
   sequential: DescribeAPI;
 };
 
-// TODO: support fixture options
 interface FixtureOptions {
   /**
    * Whether to automatically set up current fixture, even though it's not being used in tests.
