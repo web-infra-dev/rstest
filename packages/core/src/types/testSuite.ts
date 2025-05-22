@@ -1,5 +1,5 @@
 import type { SnapshotResult } from '@vitest/snapshot';
-import type { Fixtures, TestContext } from './api';
+import type { NormalizedFixtures, TestContext } from './api';
 import type { TestPath } from './utils';
 
 import type { MaybePromise } from './utils';
@@ -26,12 +26,13 @@ export interface TaskResult {
 export type TestCase = {
   testPath: TestPath;
   name: string;
+  originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;
   timeout?: number;
   fails?: boolean;
   each?: boolean;
-  fixtures?: Fixtures;
+  fixtures?: NormalizedFixtures;
   concurrent?: boolean;
   sequential?: boolean;
   inTestEach?: boolean;

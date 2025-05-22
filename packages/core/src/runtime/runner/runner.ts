@@ -20,6 +20,7 @@ import { getTaskNameWithPrefix } from '../../utils';
 import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
+import { handleFixtures } from './fixtures';
 import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
 
 export class TestRunner {
@@ -455,38 +456,8 @@ export class TestRunner {
     );
 
     const context = this.createTestContext();
-    const cleanups: Array<() => Promise<void>> = [];
 
-    if (test.fixtures) {
-      for (const [key, fixtureValue] of Object.entries(test.fixtures)) {
-        if (typeof fixtureValue !== 'function') {
-          // @ts-expect-error extra context
-          context[key] = fixtureValue;
-          continue;
-        }
-
-        // This API behavior follows vitest & playwright
-        // but why not return cleanup function?
-        await new Promise<void>((fixtureResolve) => {
-          let useDone: (() => void) | undefined;
-          // TODO: call fixture on demand
-          const block = fixtureValue(context, async (value: any) => {
-            // @ts-expect-error extra context
-            context[key] = value;
-
-            fixtureResolve();
-            return new Promise<void>((useFnResolve) => {
-              useDone = useFnResolve;
-            });
-          });
-
-          cleanups.unshift(() => {
-            useDone?.();
-            return block;
-          });
-        });
-      }
-    }
+    const { cleanups } = await handleFixtures(test, context);
 
     // create test context
     Object.defineProperty(test, 'context', {

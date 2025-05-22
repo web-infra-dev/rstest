@@ -20,6 +20,9 @@ export function slash(path: string): string {
   return path.replace(/\\/g, '/');
 }
 
+export const isObject = (obj: unknown): obj is Record<string, any> =>
+  Object.prototype.toString.call(obj) === '[object Object]';
+
 export const castArray = <T>(arr?: T | T[]): T[] => {
   if (arr === undefined) {
     return [];

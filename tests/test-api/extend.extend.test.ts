@@ -33,7 +33,7 @@ myTest1('add todo', ({ todos }) => {
   expect(todos.length).toBe(4);
 });
 
-myTest1('add archive', ({ todos }) => {
+myTest1('add archive', ({ archive }) => {
   expect(archive.length).toBe(3);
 
   archive.push(4, 5);
