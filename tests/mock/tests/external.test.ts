@@ -6,6 +6,7 @@ rstest.mock('picocolors', () => {
   };
 });
 
+// TODO
 it.todo('should mock external module correctly', async () => {
   // @ts-expect-error
   const { sayHi } = await import('picocolors');

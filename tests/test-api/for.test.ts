@@ -1,4 +1,10 @@
-import { it } from '@rstest/core';
+import { afterAll, expect, it } from '@rstest/core';
+
+const logs: string[] = [];
+
+afterAll(() => {
+  expect(logs.length).toBe(6);
+});
 
 it.for([
   { a: 1, b: 1, expected: 2 },
@@ -6,6 +12,7 @@ it.for([
   { a: 2, b: 1, expected: 3 },
 ])('add($a, $b) -> $expected', ({ a, b, expected }, { expect }) => {
   expect(a + b).toBe(expected);
+  logs.push('executed');
 });
 
 it.for([
@@ -14,4 +21,5 @@ it.for([
   [3, 1, 4],
 ])('case-%# add(%i, %i) -> %i', ([a, b, expected], { expect }) => {
   expect(a + b).toBe(expected);
+  logs.push('executed');
 });

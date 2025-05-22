@@ -1,28 +1,23 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { afterAll, describe, expect, it } from '@rstest/core';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+describe('Test Condition (runIf & skipIf)', () => {
+  const logs: string[] = [];
 
-describe('Test Condition', () => {
-  it('Support runIf & skipIf', async () => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/condition.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+  afterAll(() => {
+    expect(logs.length).toBe(1);
+  });
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-    expect(
-      logs.find((log) => log.includes('Tests 1 passed | 3 skipped')),
-    ).toBeTruthy();
+  it.skipIf(1 + 1 === 2).each([
+    { a: 1, b: 1, expected: 2 },
+    { a: 1, b: 2, expected: 3 },
+    { a: 2, b: 1, expected: 3 },
+  ])('add($a, $b) -> $expected', ({ a, b, expected }) => {
+    logs.push('executed');
+    expect(a + b).toBe(expected);
+  });
+
+  it.runIf(1 + 1 === 2)('add two numbers correctly', () => {
+    logs.push('executed');
+    expect(1 + 1).toBe(2);
   });
 });

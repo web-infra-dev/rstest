@@ -25,7 +25,7 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Error: Symbol('))).toBeFalsy();
   });
 
-  // should be fixed in rspack next version (1.3.12)
+  // TODO: should be fixed in rspack next version (1.3.12)
   it.todo('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli } = await runRstestCli({

@@ -1,46 +1,25 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { expect, it } from '@rstest/core';
-import { getTestName, runRstestCli } from '../scripts';
+import { afterAll, expect, it } from '@rstest/core';
 
-it('Test Each API', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
+const logs: string[] = [];
 
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/each.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
-  });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
-
-  const logs = cli.stdout.split('\n').filter(Boolean);
-
-  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
+afterAll(() => {
+  expect(logs.length).toBe(6);
 });
 
-it('Test For API', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
+it.each([
+  { a: 1, b: 1, expected: 2 },
+  { a: 1, b: 2, expected: 3 },
+  { a: 2, b: 1, expected: 3 },
+])('add($a, $b) -> $expected', ({ a, b, expected }) => {
+  expect(a + b).toBe(expected);
+  logs.push('executed');
+});
 
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/for.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
-  });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
-
-  const logs = cli.stdout.split('\n').filter(Boolean);
-
-  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
+it.each([
+  [2, 1, 3],
+  [2, 2, 4],
+  [3, 1, 4],
+])('case-%# add(%i, %i) -> %i', (a, b, expected) => {
+  expect(a + b).toBe(expected);
+  logs.push('executed');
 });
