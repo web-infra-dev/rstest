@@ -1,12 +1,19 @@
-import { describe, expect, it } from '@rstest/core';
+import { afterAll, describe, expect, it } from '@rstest/core';
 
-describe.skip.each([
+const logs: string[] = [];
+
+afterAll(() => {
+  expect(logs.length).toBe(3);
+});
+
+describe.only.each([
   { a: 1, b: 1, expected: 2 },
   { a: 1, b: 2, expected: 3 },
   { a: 2, b: 1, expected: 3 },
 ])('add two numbers correctly', ({ a, b, expected }) => {
   it(`should return ${expected}`, () => {
     expect(a + b).toBe(expected);
+    logs.push('executed');
   });
 });
 
@@ -16,5 +23,6 @@ describe.each([
 ])('add two numbers correctly', (a, b, expected) => {
   it(`should return ${expected}`, () => {
     expect(a + b).toBe(expected);
+    logs.push('executed');
   });
 });

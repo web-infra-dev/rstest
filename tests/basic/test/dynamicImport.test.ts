@@ -6,6 +6,7 @@ describe('Dynamic import', () => {
     expect(sayHi()).toBe('hi');
   });
 
+  // TODO
   it.todo(
     'should get source file meta correctly with dynamic import',
     async () => {

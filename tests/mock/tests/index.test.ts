@@ -6,6 +6,7 @@ rstest.mock('../src/b', () => {
   };
 });
 
+// TODO
 it.todo('should mock relative path module correctly', async () => {
   const { b } = await import('../src/index');
   expect(b).toBe(3);

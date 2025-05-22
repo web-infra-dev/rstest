@@ -1,27 +1,27 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { afterAll, describe, expect, it } from '@rstest/core';
 
-it('Describe skipIf & runIf API', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
+describe('Describe skipIf & runIf API', async () => {
+  const logs: string[] = [];
 
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/condition.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
+  afterAll(() => {
+    expect(logs.length).toBe(1);
   });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
 
-  const logs = cli.stdout.split('\n').filter(Boolean);
+  describe.skipIf(1 + 1 === 2).each([
+    { a: 1, b: 1, expected: 2 },
+    { a: 1, b: 2, expected: 3 },
+    { a: 2, b: 1, expected: 3 },
+  ])('add two numbers correctly', ({ a, b, expected }) => {
+    it(`should return ${expected}`, () => {
+      logs.push('executed');
+      expect(a + b).toBe(expected);
+    });
+  });
 
-  expect(
-    logs.find((log) => log.includes('Tests 1 passed | 3 skipped')),
-  ).toBeTruthy();
+  describe.runIf(1 + 1 === 2)('add two numbers correctly', () => {
+    it('add two numbers correctly', () => {
+      logs.push('executed');
+      expect(1 + 1).toBe(2);
+    });
+  });
 });

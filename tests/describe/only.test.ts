@@ -1,42 +1,65 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { afterAll, beforeEach, describe, expect, it } from '@rstest/core';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const logs: string[] = [];
 
-it('test only', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
+beforeEach(() => {
+  logs.push('[beforeEach] root');
+});
 
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/only.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
+afterAll(() => {
+  expect(logs).toEqual([
+    '[beforeEach] root',
+    '[test] in level B-A',
+    '[beforeEach] root',
+    '[test] in level B-C-A',
+    '[beforeEach] root',
+    '[test] in level E-A',
+  ]);
+});
+
+describe('level A', () => {
+  it('it in level A', () => {
+    logs.push('[test] in level A');
+    expect(1 + 1).toBe(2);
   });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
 
-  const logs = cli.stdout.split('\n').filter(Boolean);
+  // biome-ignore lint/suspicious/noFocusedTests: <explanation>
+  describe.only('level B', () => {
+    it('it in level B-A', () => {
+      logs.push('[test] in level B-A');
+      expect(2 + 1).toBe(3);
+    });
 
-  expect(logs.filter((log) => log.startsWith('['))).toMatchInlineSnapshot(`
-    [
-      "[beforeEach] root",
-      "[test] in level B-A",
-      "[beforeEach] root",
-      "[test] in level B-C-A",
-      "[beforeEach] root",
-      "[test] in level E-A",
-    ]
-  `);
+    it.skip('it in level B-B', () => {
+      logs.push('[test] in level B-B');
+      expect(2 + 1).toBe(3);
+    });
 
-  expect(logs.find((log) => log.includes('Test Files 1 passed'))).toBeTruthy();
-  expect(
-    logs.find((log) => log.includes('Tests 3 passed | 4 skipped')),
-  ).toBeTruthy();
+    describe('level B-C', () => {
+      it('it in level B-C-A', () => {
+        logs.push('[test] in level B-C-A');
+        expect(2 + 1).toBe(3);
+      });
+    });
+  });
+
+  it('it in level C', () => {
+    logs.push('[test] in level C');
+    expect(2 + 2).toBe(4);
+  });
+
+  describe('level D', () => {
+    it('it in level D-A', () => {
+      logs.push('[test] in level D-A');
+      expect(2 + 1).toBe(3);
+    });
+  });
+});
+
+// biome-ignore lint/suspicious/noFocusedTests: <explanation>
+describe.only('level E', () => {
+  it('it in level E-A', () => {
+    logs.push('[test] in level E-A');
+    expect(2 + 1).toBe(3);
+  });
 });

@@ -1,46 +1,29 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { afterAll, describe, expect, it } from '@rstest/core';
 
-it('Describe Each API', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
+const logs: string[] = [];
 
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/each.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
-  });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
-
-  const logs = cli.stdout.split('\n').filter(Boolean);
-
-  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
+afterAll(() => {
+  expect(logs.length).toBe(6);
 });
 
-it('Describe For API', async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-
-  const { cli } = await runRstestCli({
-    command: 'rstest',
-    args: ['run', 'fixtures/for.test.ts'],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
+describe.each([
+  { a: 1, b: 1, expected: 2 },
+  { a: 1, b: 2, expected: 3 },
+  { a: 2, b: 1, expected: 3 },
+])('add two numbers correctly', ({ a, b, expected }) => {
+  it(`should return ${expected}`, () => {
+    expect(a + b).toBe(expected);
+    logs.push('executed');
   });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+});
 
-  const logs = cli.stdout.split('\n').filter(Boolean);
-
-  expect(logs.find((log) => log.includes('Tests 6 passed'))).toBeTruthy();
+describe.each([
+  [2, 1, 3],
+  [2, 2, 4],
+  [3, 1, 4],
+])('add two numbers correctly', (a, b, expected) => {
+  it(`should return ${expected}`, () => {
+    expect(a + b).toBe(expected);
+    logs.push('executed');
+  });
 });

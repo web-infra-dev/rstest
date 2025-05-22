@@ -6,7 +6,7 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('reporters', () => {
+describe.concurrent('reporters', () => {
   it('default', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
