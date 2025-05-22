@@ -267,6 +267,7 @@ const stackIgnores: (RegExp | string)[] = [
   /node_modules\/tinypool/,
   /node_modules\/chai/,
   /node:\w+/,
+  '<anonymous>',
 ];
 
 async function parseErrorStacktrace({

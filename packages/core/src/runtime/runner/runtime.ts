@@ -8,6 +8,7 @@ import type {
   DescribeEachFn,
   DescribeForFn,
   Fixtures,
+  NormalizedFixtures,
   RunnerAPI,
   Test,
   TestAPI,
@@ -21,6 +22,7 @@ import type {
 } from '../../types';
 import { ROOT_SUITE_NAME, castArray } from '../../utils';
 import { formatName } from '../util';
+import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
@@ -262,6 +264,7 @@ export class RunnerRuntime {
   it({
     name,
     fn,
+    originalFn = fn,
     fixtures,
     timeout = this.defaultTestTimeout,
     runMode = 'run',
@@ -271,7 +274,8 @@ export class RunnerRuntime {
     sequential,
   }: {
     name: string;
-    fixtures?: Fixtures;
+    fixtures?: NormalizedFixtures;
+    originalFn?: TestCallbackFn;
     fn?: TestCallbackFn;
     timeout?: number;
     runMode?: TestRunMode;
@@ -282,6 +286,7 @@ export class RunnerRuntime {
   }): void {
     this.addTestCase({
       name,
+      originalFn,
       fn: fn
         ? wrapTimeout({
             name: 'test',
@@ -368,6 +373,7 @@ export class RunnerRuntime {
 
         this.it({
           name: formatName(name, param, i),
+          originalFn: fn,
           fn: () => fn?.(...params),
           timeout,
           ...options,
@@ -394,6 +400,7 @@ export class RunnerRuntime {
 
         this.it({
           name: formatName(name, param, i),
+          originalFn: fn,
           fn: (context) => fn?.(param, context),
           timeout,
           ...options,
@@ -434,7 +441,7 @@ export const createRuntimeAPI = ({
       concurrent?: boolean;
       sequential?: boolean;
       fails?: boolean;
-      fixtures?: Fixtures;
+      fixtures?: NormalizedFixtures;
       runMode?: 'skip' | 'only' | 'todo';
     } = {},
   ): TestAPI => {
@@ -510,14 +517,19 @@ export const createRuntimeAPI = ({
   const it = createTestAPI() as TestAPIs;
 
   it.extend = ((fixtures: Fixtures): TestAPIs => {
-    const api = createTestAPI({ fixtures }) as TestAPIs;
-    api.extend = (subFixtures: Fixtures) => {
-      return it.extend({
-        ...fixtures,
-        ...subFixtures,
-      } as any);
+    const extend = (
+      fixtures: Fixtures,
+      extendFixtures?: NormalizedFixtures,
+    ) => {
+      const normalizedFixtures = normalizeFixtures(fixtures, extendFixtures);
+      const api = createTestAPI({ fixtures: normalizedFixtures }) as TestAPIs;
+      api.extend = ((subFixtures: Fixtures) => {
+        return extend(subFixtures, normalizedFixtures);
+      }) as TestAPIs['extend'];
+      return api;
     };
-    return api;
+
+    return extend(fixtures);
   }) as TestAPIs['extend'];
 
   const createDescribeAPI = (

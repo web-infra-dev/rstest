@@ -88,16 +88,16 @@ export type DescribeAPI = DescribeFn & {
 };
 
 // TODO: support fixture options
-// interface FixtureOptions {
-//   /**
-//    * Whether to automatically set up current fixture, even though it's not being used in tests.
-//    */
-//   auto?: boolean;
-//   /**
-//    * Indicated if the injected value from the config should be preferred over the fixture value
-//    */
-//   injected?: boolean;
-// }
+interface FixtureOptions {
+  /**
+   * Whether to automatically set up current fixture, even though it's not being used in tests.
+   */
+  auto?: boolean;
+  //   /**
+  //    * Indicated if the injected value from the config should be preferred over the fixture value
+  //    */
+  //   injected?: boolean;
+}
 
 type Use<T> = (value: T) => Promise<void>;
 
@@ -117,13 +117,24 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
       | (T[K] extends any
           ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
           : never);
+
 export type Fixtures<
   T extends Record<string, any> = object,
   ExtraContext = object,
 > = {
-  [K in keyof T]: Fixture<T, K, ExtraContext & TestContext>;
-  // | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
+  [K in keyof T]:
+    | Fixture<T, K, ExtraContext & TestContext>
+    | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
 };
+
+export type NormalizedFixture = {
+  isFn: boolean;
+  deps?: string[];
+  value: FixtureFn<any, any, any> | any;
+  options?: FixtureOptions;
+};
+
+export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
 export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   extend: <T extends Record<string, any> = object>(

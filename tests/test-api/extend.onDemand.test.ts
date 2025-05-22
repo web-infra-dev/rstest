@@ -1,4 +1,11 @@
-import { expect, test } from '@rstest/core';
+import { afterAll, expect, test } from '@rstest/core';
+
+const logs: string[] = [];
+
+afterAll(() => {
+  // should init on demand
+  expect(logs.length).toBe(3);
+});
 
 const todos: number[] = [];
 
@@ -7,6 +14,7 @@ const myTest = test.extend<{
   archive: number[];
 }>({
   todos: async (_, use) => {
+    logs.push('init todos');
     await new Promise((resolve) => setTimeout(resolve, 10));
     todos.push(1, 2, 3);
     await use(todos);
