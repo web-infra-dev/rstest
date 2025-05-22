@@ -1,0 +1,94 @@
+# CLI
+
+Rstest comes with a lightweight CLI that includes commands such as [rstest watch](#rstest-watch) and [rstest run](#rstest-run).
+
+## rstest -h
+
+`rstest -h` can help you view all available CLI commands and options:
+
+```bash
+npx rstest -h
+```
+
+The output is shown below:
+
+```bash
+Usage:
+  $ rstest [...filters]
+
+Commands:
+  [...filters]        run tests
+  run [...filters]    run tests without watch mode
+  watch [...filters]  run tests in watch mode
+  list [...filters]   lists all test files that Rstest will run
+
+Options:
+  -h, --help                               Display this message
+  -v, --version                            Display version number
+  -c, --config <config>
+  ...
+```
+
+## rstest [...filters]
+
+Running `rstest` directly will enable the Rstest test in the current directory. Listening mode is automatically entered in the development environment (equivalent to `rstest watch`), while a single test is performed in the CI environment or non-terminal interactive mode (equivalent to `rstest run`).
+
+```bash
+$ npx rstest
+
+✓ test/index.test.ts (2 tests) 1ms
+
+  Test Files 1 passed (1)
+       Tests 2 passed (2)
+    Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+## rstest run
+
+`rstest run` will perform a single run, and the command is suitable for CI environments or scenarios where tests are not required to be performed while modifying.
+
+## rstest watch
+
+`rstest watch` will start listening mode and execute tests, and when the test or dependent file modifications, the associated test file will be re-execute.
+
+## rstest list
+
+`rstest list` will print a test list of all matching conditions. By default, it prints the test names of all matching tests.
+
+```bash
+$ rstest list
+
+# the output is shown below:
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+```
+
+The `rstest list` command inherits all `rstest` filtering options, you can filter files directly or use `-t` to filter the specified test name.
+
+```bash
+$ rstest list -t='test a'
+
+# the output is shown below:
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+```
+
+You can use `--filesOnly` to make it print the test files only:
+
+```bash
+$ rstest list --filesOnly
+
+# the output is shown below:
+a.test.ts
+b.test.ts
+```
+
+You can use `--json` to make it print tests in JSON format in terminal or save the results to a separate file:
+
+```bash
+$ rstest list --json
+
+$ rstest list --json=./output.json
+```
