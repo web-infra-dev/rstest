@@ -1,1 +1,7 @@
-[]
+[
+  {
+    "text": "Guide",
+    "link": "/guide/start/",
+    "activeMatch": "/guide/"
+  }
+]
