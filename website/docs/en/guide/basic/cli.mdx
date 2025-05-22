@@ -56,7 +56,7 @@ $ npx rstest
 `rstest list` will print a test list of all matching conditions. By default, it prints the test names of all matching tests.
 
 ```bash
-$ rstest list
+$ npx rstest list
 
 # the output is shown below:
 a.test.ts > test a > test a-1
@@ -68,7 +68,7 @@ b.test.ts > test b-2
 The `rstest list` command inherits all `rstest` filtering options, you can filter files directly or use `-t` to filter the specified test name.
 
 ```bash
-$ rstest list -t='test a'
+$ npx rstest list -t='test a'
 
 # the output is shown below:
 a.test.ts > test a > test a-1
@@ -78,7 +78,7 @@ a.test.ts > test a-2
 You can use `--filesOnly` to make it print the test files only:
 
 ```bash
-$ rstest list --filesOnly
+$ npx rstest list --filesOnly
 
 # the output is shown below:
 a.test.ts
@@ -88,7 +88,7 @@ b.test.ts
 You can use `--json` to make it print tests in JSON format in terminal or save the results to a separate file:
 
 ```bash
-$ rstest list --json
+$ npx rstest list --json
 
-$ rstest list --json=./output.json
+$ npx rstest list --json=./output.json
 ```

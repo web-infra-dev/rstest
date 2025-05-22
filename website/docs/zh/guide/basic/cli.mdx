@@ -56,7 +56,7 @@ $ npx rstest
 `rstest list` 将会打印所有匹配条件的测试列表。默认情况下，它将打印所有匹配条件的测试名称。
 
 ```bash
-$ rstest list
+$ npx rstest list
 
 # 输出如下：
 a.test.ts > test a > test a-1
@@ -68,7 +68,7 @@ b.test.ts > test b-2
 `rstest list` 命令继承所有 `rstest` 过滤选项，你可以直接过滤文件或使用 `-t` 过滤指定的测试名称。
 
 ```bash
-$ rstest list -t='test a'
+$ npx rstest list -t='test a'
 
 # 输出如下：
 a.test.ts > test a > test a-1
@@ -78,7 +78,7 @@ a.test.ts > test a-2
 你可以使用 `--filesOnly` 使其仅打印测试文件：
 
 ```bash
-$ rstest list --filesOnly
+$ npx rstest list --filesOnly
 
 # 输出如下：
 a.test.ts
@@ -88,7 +88,7 @@ b.test.ts
 你可以使用 `--json` 使其以 JSON 格式打印测试或将结果保存到单独的文件中：
 
 ```bash
-$ rstest list --json
+$ npx rstest list --json
 
-$ rstest list --json=./output.json
+$ npx rstest list --json=./output.json
 ```
