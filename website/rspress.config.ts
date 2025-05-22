@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
+import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
 import { defineConfig } from 'rspress/config';
 
 export default defineConfig({
@@ -64,6 +65,7 @@ export default defineConfig({
       },
     ],
   },
+  plugins: [pluginFontOpenSans()],
   builderConfig: {
     plugins: [pluginSass()],
   },
