@@ -164,7 +164,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command('run [...filters]', 'run tests in CI mode')
+    .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
       try {
@@ -190,10 +190,7 @@ export function setupCommands(): void {
     });
 
   cli
-    .command(
-      'list [...filters]',
-      'lists all test files that Rstest will run given the arguments',
-    )
+    .command('list [...filters]', 'lists all test files that Rstest will run')
     .option('--filesOnly', 'only list the test files')
     .option('--json [boolean/path]', 'print tests as JSON or write to a file')
     .action(
