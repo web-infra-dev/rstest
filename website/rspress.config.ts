@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
+import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
 import { defineConfig } from 'rspress/config';
 
@@ -67,6 +68,12 @@ export default defineConfig({
   },
   plugins: [pluginFontOpenSans()],
   builderConfig: {
-    plugins: [pluginSass()],
+    plugins: [
+      pluginSass(),
+      pluginGoogleAnalytics({
+        // cspell:disable-next-line
+        id: 'G-9WKFF5YJXQ',
+      }),
+    ],
   },
 });
