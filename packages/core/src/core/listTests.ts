@@ -7,7 +7,6 @@ import {
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
-  printError,
 } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -93,6 +92,7 @@ export async function listTests(
   const hasError = list.some((file) => file.errors?.length);
 
   if (hasError) {
+    const { printError } = await import('../utils/error');
     process.exitCode = 1;
     for (const file of list) {
       if (file.errors?.length) {
