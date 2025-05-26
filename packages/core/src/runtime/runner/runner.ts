@@ -3,6 +3,7 @@ import type { SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
+  MatcherState,
   Rstest,
   RstestExpect,
   RunnerHooks,
@@ -441,7 +442,7 @@ export class TestRunner {
     test: TestCase,
     snapshotState: SnapshotState,
   ): Promise<Array<() => Promise<void>>> {
-    setState(
+    setState<MatcherState>(
       {
         assertionCalls: 0,
         isExpectingAssertions: false,

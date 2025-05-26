@@ -1,4 +1,4 @@
-import type { ExpectStatic } from '@vitest/expect';
+import type { ExpectStatic } from './expect';
 import type { RstestUtilities } from './mock';
 import type {
   AfterAllListener,

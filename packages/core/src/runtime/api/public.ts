@@ -1,6 +1,5 @@
-import '../../types/global';
 import type { Rstest, RstestUtilities } from '../../types';
-export type { Assertion } from '@vitest/expect';
+export type { Assertion } from '../../types/expect';
 
 export declare const expect: Rstest['expect'];
 export declare const it: Rstest['it'];
