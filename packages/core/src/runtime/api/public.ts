@@ -3,6 +3,7 @@ import type { Rstest, RstestUtilities } from '../../types';
 export type { Assertion } from '@vitest/expect';
 
 export declare const expect: Rstest['expect'];
+export declare const assert: Rstest['assert'];
 export declare const it: Rstest['it'];
 export declare const test: Rstest['test'];
 export declare const describe: Rstest['describe'];
