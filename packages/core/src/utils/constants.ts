@@ -25,4 +25,5 @@ export const globalApis: (keyof Rstest)[] = [
   'beforeAll',
   'beforeEach',
   'rstest',
+  'assert',
 ];

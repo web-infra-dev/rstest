@@ -126,3 +126,5 @@ export function createExpect({
 
   return expect;
 }
+
+export { assert } from 'chai';

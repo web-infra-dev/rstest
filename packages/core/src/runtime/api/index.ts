@@ -8,7 +8,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
-import { GLOBAL_EXPECT, createExpect } from './expect';
+import { assert, GLOBAL_EXPECT, createExpect } from './expect';
 import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = (
@@ -43,6 +43,7 @@ export const createRstestRuntime = (
     api: {
       ...runnerAPI,
       expect,
+      assert,
       rstest: createRstestUtilities(),
     },
   };
