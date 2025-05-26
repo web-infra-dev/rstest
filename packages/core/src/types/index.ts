@@ -3,6 +3,7 @@ export type * from './core';
 export type * from './worker';
 export type * from './testSuite';
 export type * from './api';
+export type * from './expect';
 export type * from './mock';
 export type * from './runner';
 export type * from './reporter';

@@ -6,18 +6,22 @@ import * as chai from 'chai';
 
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
-  type Assertion,
   GLOBAL_EXPECT,
   JestAsymmetricMatchers,
   JestChaiExpect,
   JestExtend,
-  type MatcherState,
   addCustomEqualityTesters,
   customMatchers,
   getState,
   setState,
 } from '@vitest/expect';
-import type { RstestExpect, TestCase, WorkerState } from '../../types';
+import type {
+  Assertion,
+  MatcherState,
+  RstestExpect,
+  TestCase,
+  WorkerState,
+} from '../../types';
 import { createExpectPoll } from './poll';
 import { SnapshotPlugin } from './snapshot';
 
