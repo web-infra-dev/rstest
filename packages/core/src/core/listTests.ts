@@ -90,18 +90,29 @@ export async function listTests(
     }
   };
 
+  const hasError = list.some((file) => file.errors?.length);
+
+  if (hasError) {
+    process.exitCode = 1;
+    for (const file of list) {
+      if (file.errors?.length) {
+        for (const error of file.errors) {
+          await printError(error, getSourcemap);
+        }
+      }
+    }
+
+    await close();
+
+    await pool.close();
+    return;
+  }
+
   for (const file of list) {
     if (filesOnly) {
       tests.push({
         file: file.testPath,
       });
-      continue;
-    }
-    if (file.errors?.length) {
-      for (const error of file.errors) {
-        await printError(error, getSourcemap);
-        process.exitCode = 1;
-      }
       continue;
     }
     for (const test of file.tests) {
