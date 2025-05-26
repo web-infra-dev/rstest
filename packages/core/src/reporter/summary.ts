@@ -1,8 +1,5 @@
-import fs from 'node:fs';
-import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import path from 'pathe';
-import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   Duration,
   GetSourcemap,
@@ -15,6 +12,7 @@ import {
   getTaskNameWithPrefix,
   logger,
   prettyTime,
+  printError,
   slash,
 } from '../utils';
 
@@ -194,120 +192,8 @@ export const printSummaryErrorLogs = async ({
 
     if (test.errors) {
       for (const error of test.errors) {
-        const errorName = error.name || 'Unknown Error';
-
-        logger.log(
-          `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
-        );
-
-        if (error.diff) {
-          logger.log(error.diff);
-          logger.log();
-        }
-
-        if (error.stack) {
-          const stackFrames = await parseErrorStacktrace({
-            stack: error.stack,
-            getSourcemap,
-          });
-
-          if (stackFrames[0]) {
-            await printCodeFrame(stackFrames[0]);
-          }
-
-          printStack(stackFrames);
-        }
+        await printError(error, getSourcemap);
       }
     }
   }
 };
-
-async function printCodeFrame(frame: StackFrame) {
-  const filePath = frame.file?.startsWith('file')
-    ? new URL(frame.file!)
-    : frame.file;
-
-  if (!filePath) {
-    return;
-  }
-  const source = fs.readFileSync(filePath!, 'utf-8');
-  const { codeFrameColumns } = await import('@babel/code-frame');
-  const result = codeFrameColumns(
-    source,
-    {
-      start: {
-        line: frame!.lineNumber!,
-        column: frame!.column!,
-      },
-    },
-    {
-      highlightCode: true,
-      linesBelow: 2,
-    },
-  );
-
-  logger.log(result);
-  logger.log('');
-}
-
-function printStack(stackFrames: StackFrame[]) {
-  for (const frame of stackFrames) {
-    logger.log(
-      color.gray(
-        `        at ${frame.methodName} (${frame.file}:${frame.lineNumber}:${frame.column})`,
-      ),
-    );
-  }
-  logger.log();
-}
-
-const stackIgnores: (RegExp | string)[] = [
-  /\/@rstest\/core/,
-  /rstest\/packages\/core\/dist/,
-  /node_modules\/tinypool/,
-  /node_modules\/chai/,
-  /node:\w+/,
-  '<anonymous>',
-];
-
-async function parseErrorStacktrace({
-  stack,
-  getSourcemap,
-}: {
-  stack: string;
-  getSourcemap: GetSourcemap;
-}): Promise<StackFrame[]> {
-  return Promise.all(
-    stackTraceParse(stack)
-      .filter(
-        (frame) =>
-          frame.file && !stackIgnores.some((entry) => frame.file?.match(entry)),
-      )
-      .map(async (frame) => {
-        const sourcemap = getSourcemap(frame.file!);
-        if (sourcemap) {
-          const traceMap = new TraceMap(sourcemap);
-          const { line, column, source, name } = originalPositionFor(traceMap, {
-            line: frame.lineNumber!,
-            column: frame.column!,
-          });
-
-          if (!source) {
-            // some Rspack runtime wrapper code, should filter them out
-            return null;
-          }
-
-          return {
-            ...frame,
-            file: source,
-            lineNumber: line,
-            name,
-            column,
-          };
-        }
-        return frame;
-      }),
-  ).then((frames) =>
-    frames.filter((frame): frame is StackFrame => frame !== null),
-  );
-}

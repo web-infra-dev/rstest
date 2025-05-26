@@ -5,6 +5,7 @@ import { createBirpc } from 'birpc';
 import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
 import type {
+  FormattedError,
   RunWorkerOptions,
   RuntimeRPC,
   ServerRPC,
@@ -55,6 +56,7 @@ export const createForksPool = (poolOptions: {
   collectTests: (options: RunWorkerOptions) => Promise<{
     tests: Test[];
     testPath: string;
+    errors?: FormattedError[];
   }>;
   close: () => Promise<void>;
 } => {

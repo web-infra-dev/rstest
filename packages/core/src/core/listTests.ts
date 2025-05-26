@@ -7,6 +7,7 @@ import {
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
+  printError,
 } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -55,7 +56,7 @@ export async function listTests(
     rootPath,
   });
 
-  const { entries, setupEntries, assetFiles, sourceMaps, close } =
+  const { entries, setupEntries, assetFiles, sourceMaps, close, getSourcemap } =
     await getRsbuildStats();
 
   const pool = await createPool({
@@ -94,6 +95,13 @@ export async function listTests(
       tests.push({
         file: file.testPath,
       });
+      continue;
+    }
+    if (file.errors?.length) {
+      for (const error of file.errors) {
+        await printError(error, getSourcemap);
+        process.exitCode = 1;
+      }
       continue;
     }
     for (const test of file.tests) {

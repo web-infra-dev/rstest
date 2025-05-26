@@ -20,7 +20,7 @@ export interface TaskResult {
    * Errors that occurred during the task execution. It is possible to have several errors
    * if `expect.soft()` failed multiple times or `retry` was triggered.
    */
-  errors?: TestError[];
+  errors?: FormattedError[];
 }
 
 export type TestCase = {
@@ -97,7 +97,7 @@ export type Test = TestSuite | TestCase;
 
 export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
-export type TestError = {
+export type FormattedError = {
   message: string;
   name?: string;
   stack?: string;
@@ -110,7 +110,7 @@ export type TestResult = {
   testPath: TestPath;
   parentNames?: string[];
   duration?: number;
-  errors?: TestError[];
+  errors?: FormattedError[];
 };
 
 export type TestFileResult = TestResult & {

@@ -3,6 +3,7 @@ import type { SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
+  FormattedError,
   Rstest,
   RstestExpect,
   RunnerHooks,
@@ -10,7 +11,6 @@ import type {
   Test,
   TestCase,
   TestContext,
-  TestError,
   TestFileResult,
   TestResult,
   TestResultStatus,
@@ -47,7 +47,7 @@ export class TestRunner {
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
-    const errors: TestError[] = [];
+    const errors: FormattedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
     hooks.onTestFileStart?.({ testPath });

@@ -139,10 +139,10 @@ const runInPool = async (
         tests,
       };
     } catch (err) {
-      // TODO: log error
       return {
         testPath,
         tests: [],
+        errors: formatTestError(err),
       };
     }
   }
