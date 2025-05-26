@@ -230,7 +230,14 @@ async function printCodeFrame(frame: StackFrame) {
   if (!filePath) {
     return;
   }
-  const source = fs.readFileSync(filePath!, 'utf-8');
+  const source = fs.existsSync(filePath)
+    ? fs.readFileSync(filePath!, 'utf-8')
+    : undefined;
+
+  if (!source) {
+    return;
+  }
+
   const { codeFrameColumns } = await import('@babel/code-frame');
   const result = codeFrameColumns(
     source,
