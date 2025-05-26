@@ -2,14 +2,14 @@
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/snapshot/chai.ts
  */
-import type { Assertion, ChaiPlugin } from '@vitest/expect';
+import type { ChaiPlugin } from '@vitest/expect';
 import { equals, iterableEquality, subsetEquality } from '@vitest/expect';
 import {
   SnapshotClient,
   addSerializer,
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
-import type { TestCase } from '../../types';
+import type { Assertion, TestCase } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils';
 
 let _client: SnapshotClient;

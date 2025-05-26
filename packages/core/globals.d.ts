@@ -3,6 +3,7 @@ declare global {
   const describe: typeof import('@rstest/core')['describe'];
   const it: typeof import('@rstest/core')['it'];
   const expect: typeof import('@rstest/core')['expect'];
+  const assert: typeof import('@rstest/core')['assert'];
   const beforeAll: typeof import('@rstest/core')['beforeAll'];
   const afterAll: typeof import('@rstest/core')['afterAll'];
   const beforeEach: typeof import('@rstest/core')['beforeEach'];

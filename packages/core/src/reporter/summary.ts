@@ -12,7 +12,6 @@ import {
   getTaskNameWithPrefix,
   logger,
   prettyTime,
-  printError,
   slash,
 } from '../utils';
 
@@ -191,6 +190,7 @@ export const printSummaryErrorLogs = async ({
     );
 
     if (test.errors) {
+      const { printError } = await import('../utils/error');
       for (const error of test.errors) {
         await printError(error, getSourcemap);
       }

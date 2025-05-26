@@ -1,0 +1,94 @@
+# 命令行工具
+
+Rstest 提供了一个轻量级的命令行工具，包含 [rstest watch](#rstest-watch) 和 [rstest run](#rstest-run) 等命令。
+
+## rstest -h
+
+`rstest -h` 可帮助你查看所有可用的 CLI 命令及选项：
+
+```bash
+npx rstest -h
+```
+
+输出如下：
+
+```bash
+Usage:
+  $ rstest [...filters]
+
+Commands:
+  [...filters]        run tests
+  run [...filters]    run tests without watch mode
+  watch [...filters]  run tests in watch mode
+  list [...filters]   lists all test files that Rstest will run
+
+Options:
+  -h, --help                               Display this message
+  -v, --version                            Display version number
+  -c, --config <config>
+  ...
+```
+
+## rstest [...filters]
+
+直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。在开发环境下会自动进入监听模式 (等同于 `rstest watch`)，而在 CI 环境或非终端交互模式下会执行单次测试 (等同于 `rstest run`)。
+
+```bash
+$ npx rstest
+
+✓ test/index.test.ts (2 tests) 1ms
+
+  Test Files 1 passed (1)
+       Tests 2 passed (2)
+    Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+## rstest run
+
+`rstest run` 将会执行单次测试，该命令适用于 CI 环境或不需要一边修改一边执行测试的场景。
+
+## rstest watch
+
+`rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
+
+## rstest list
+
+`rstest list` 将会打印所有匹配条件的测试列表。默认情况下，它将打印所有匹配条件的测试名称。
+
+```bash
+$ npx rstest list
+
+# 输出如下：
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+```
+
+`rstest list` 命令继承所有 `rstest` 过滤选项，你可以直接过滤文件或使用 `-t` 过滤指定的测试名称。
+
+```bash
+$ npx rstest list -t='test a'
+
+# 输出如下：
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+```
+
+你可以使用 `--filesOnly` 使其仅打印测试文件：
+
+```bash
+$ npx rstest list --filesOnly
+
+# 输出如下：
+a.test.ts
+b.test.ts
+```
+
+你可以使用 `--json` 使其以 JSON 格式打印测试或将结果保存到单独的文件中：
+
+```bash
+$ npx rstest list --json
+
+$ npx rstest list --json=./output.json
+```

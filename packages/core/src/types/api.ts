@@ -1,4 +1,5 @@
-import type { ExpectStatic } from '@vitest/expect';
+import type Chai from 'chai';
+import type { ExpectStatic } from './expect';
 import type { RstestUtilities } from './mock';
 import type {
   AfterAllListener,
@@ -157,5 +158,6 @@ export type RstestExpect = ExpectStatic;
 
 export type Rstest = RunnerAPI & {
   expect: RstestExpect;
+  assert: (typeof Chai)['assert'];
   rstest: RstestUtilities;
 };
