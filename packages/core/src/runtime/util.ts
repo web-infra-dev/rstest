@@ -1,12 +1,12 @@
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
-import type { TestError } from '../types';
+import type { FormattedError } from '../types';
 
-export const formatTestError = (err: any): TestError[] => {
+export const formatTestError = (err: any): FormattedError[] => {
   const errors = Array.isArray(err) ? err : [err];
 
   return errors.map((error) => {
-    const errObj: TestError = {
+    const errObj: FormattedError = {
       ...error,
       // Some error attributes cannot be enumerated
       message: error.message,

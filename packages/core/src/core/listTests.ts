@@ -55,7 +55,7 @@ export async function listTests(
     rootPath,
   });
 
-  const { entries, setupEntries, assetFiles, sourceMaps, close } =
+  const { entries, setupEntries, assetFiles, sourceMaps, close, getSourcemap } =
     await getRsbuildStats();
 
   const pool = await createPool({
@@ -88,6 +88,25 @@ export async function listTests(
       }
     }
   };
+
+  const hasError = list.some((file) => file.errors?.length);
+
+  if (hasError) {
+    const { printError } = await import('../utils/error');
+    process.exitCode = 1;
+    for (const file of list) {
+      if (file.errors?.length) {
+        for (const error of file.errors) {
+          await printError(error, getSourcemap);
+        }
+      }
+    }
+
+    await close();
+
+    await pool.close();
+    return;
+  }
 
   for (const file of list) {
     if (filesOnly) {

@@ -1,6 +1,7 @@
 import os from 'node:os';
 import type {
   EntryInfo,
+  FormattedError,
   RstestContext,
   SourceMapInput,
   Test,
@@ -53,6 +54,7 @@ export const createPool = async ({
     Array<{
       tests: Test[];
       testPath: string;
+      errors?: FormattedError[];
     }>
   >;
   close: () => Promise<void>;
