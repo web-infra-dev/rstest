@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import { expect } from '@rstest/core';
 
+export function slash(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
 export const getTestName = (log: string, prefix: string) =>
   log.slice(0, log.lastIndexOf('(')).split(prefix)[1].trim();
 
