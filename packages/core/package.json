@@ -38,7 +38,8 @@
     "dist",
     "dist-types",
     "compiled",
-    "types.d.ts"
+    "globals.d.ts",
+    "importMeta.d.ts"
   ],
   "scripts": {
     "build": "rslib build",
