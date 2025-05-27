@@ -379,6 +379,15 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       "name": "DefinePlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
+    RstestPlugin {
+      "_args": [
+        {
+          "injectModulePathName": true,
+        },
+      ],
+      "affectedHooks": undefined,
+      "name": "RstestPlugin",
+    },
   ],
   "resolve": {
     "alias": {
