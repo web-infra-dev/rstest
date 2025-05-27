@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import path from 'pathe';
+import pathe from 'pathe';
 import { glob } from 'tinyglobby';
 import { castArray, color, getAbsolutePath, parsePosix } from './helper';
 
@@ -14,20 +14,20 @@ export const filterFiles = (
 
   const fileFilters =
     process.platform === 'win32'
-      ? filters.map((f) => f.split(path.sep).join('/'))
+      ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
 
   return testFiles.filter((t) => {
-    const testFile = path.relative(dir, t).toLocaleLowerCase();
+    const testFile = pathe.relative(dir, t).toLocaleLowerCase();
     return fileFilters.some((f) => {
       // if filter is a full file path, we should include it if it's in the same folder
-      if (path.isAbsolute(f) && t.startsWith(f)) {
+      if (pathe.isAbsolute(f) && t.startsWith(f)) {
         return true;
       }
 
       const relativePath = f.endsWith('/')
-        ? path.join(path.relative(dir, f), '/')
-        : path.relative(dir, f);
+        ? pathe.join(pathe.relative(dir, f), '/')
+        : pathe.relative(dir, f);
       return (
         testFile.includes(f.toLocaleLowerCase()) ||
         testFile.includes(relativePath.toLocaleLowerCase())
@@ -87,7 +87,7 @@ export const getTestEntries = async ({
 
   return Object.fromEntries(
     filterFiles(testFiles, fileFilters, root).map((entry) => {
-      const name = path.relative(root, entry);
+      const name = pathe.relative(root, entry);
       return [name, entry];
     }),
   );
@@ -100,7 +100,7 @@ export const getSetupFiles = (
   return Object.fromEntries(
     castArray(setups).map((setupFile) => {
       const setupFilePath = getAbsolutePath(rootPath, setupFile);
-      const name = path.relative(rootPath, setupFilePath);
+      const name = pathe.relative(rootPath, setupFilePath);
       return [name, setupFilePath];
     }),
   );
@@ -114,8 +114,8 @@ export const prettyTestPath = (testPath: string): string => {
 
 export const formatTestPath = (root: string, testFilePath: string): string => {
   let testPath = testFilePath;
-  if (path.isAbsolute(testPath) && testPath.includes(root)) {
-    testPath = path.relative(root, testPath);
+  if (pathe.isAbsolute(testPath) && testPath.includes(root)) {
+    testPath = pathe.relative(root, testPath);
   }
 
   return prettyTestPath(testPath);
