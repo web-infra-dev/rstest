@@ -1,2 +1,0 @@
-# Redirect rstest.dev to rstest.rs
-https://rstest.dev/* https://rstest.rs/:splat 301!
