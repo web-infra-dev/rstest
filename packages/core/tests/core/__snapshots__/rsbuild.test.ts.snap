@@ -29,6 +29,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     "parser": {
       "javascript": {
         "exportsPresence": "error",
+        "importDynamic": false,
       },
     },
     "rules": [
