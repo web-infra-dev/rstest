@@ -102,6 +102,7 @@ export const prepareRsbuild = async (
           source: {
             define: {
               'import.meta.rstest': "global['@rstest/core']",
+              // TODO: should be handled in parser hook
               'import.meta.dirname': '__dirname',
               'import.meta.filename': '__filename',
             },
