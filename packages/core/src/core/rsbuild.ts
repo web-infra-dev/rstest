@@ -130,6 +130,13 @@ export const prepareRsbuild = async (
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
+              // Keep dynamic import expressions
+              config.module.parser ??= {};
+              config.module.parser.javascript = {
+                importDynamic: false,
+                ...(config.module.parser.javascript || {}),
+              };
+
               config.optimization = {
                 ...(config.optimization || {}),
                 moduleIds: 'named',

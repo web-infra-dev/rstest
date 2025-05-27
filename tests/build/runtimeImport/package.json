@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "@rstest/tests-runtime-import",
+  "type": "module",
+  "version": "1.0.0"
+}
