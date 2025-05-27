@@ -406,10 +406,14 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
+    MockRuntimeRspackPlugin {},
     RstestPlugin {
       "_args": [
         {
+          "hoistMockModule": true,
+          "importMetaPathName": true,
           "injectModulePathName": true,
+          "manualMockRoot": "<ROOT>/__mocks__",
         },
       ],
       "affectedHooks": undefined,

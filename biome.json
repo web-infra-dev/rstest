@@ -18,7 +18,8 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "ignore": [".rslib"]
   },
   "formatter": {
     "ignore": [],

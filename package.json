@@ -58,6 +58,9 @@
       "nx",
       "simple-git-hooks"
     ],
+    "overrides": {
+      "@rspack/core": "npm:@rspack-canary/core@1.4.0-canary-09c640dc-20250617101749"
+    },
     "onlyBuiltDependencies": [
       "@biomejs/biome",
       "core-js",
