@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
 import type { ListCommandOptions, RstestContext, Test } from '../types';
 import {
+  color,
   getSetupFiles,
   getTaskNameWithPrefix,
   getTestEntries,
@@ -95,6 +96,11 @@ export async function listTests(
     const { printError } = await import('../utils/error');
     process.exitCode = 1;
     for (const file of list) {
+      const relativePath = relative(rootPath, file.testPath);
+
+      //  FAIL  tests/index.test.ts
+      logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
+
       if (file.errors?.length) {
         for (const error of file.errors) {
           await printError(error, getSourcemap);
