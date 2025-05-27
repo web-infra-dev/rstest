@@ -66,8 +66,8 @@ export const pluginEntryWatch: (params: {
 
         const sourceEntries = await globTestSourceEntries();
         config.entry = {
-          ...sourceEntries,
           ...setupFiles,
+          ...sourceEntries,
         };
       }
     });

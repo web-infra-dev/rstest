@@ -68,6 +68,12 @@ const defineRstestDynamicImport =
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
 
+    if (importAttributes?.with?.rstest) {
+      if (importAttributes.with.rstest === 'importActual') {
+        delete importAttributes.with.rstest;
+      }
+    }
+
     const importedModule = await import(
       modulePath,
       importAttributes as ImportCallOptions

@@ -87,7 +87,7 @@ export async function runRstestCli({
     if (exitCode !== 0) {
       const logs = cli.stdout.split('\n').filter(Boolean);
       throw new Error(
-        `Test failed with exit code ${exitCode}. Logs: ${logs.join('\n')}`,
+        `Test failed with exit code ${exitCode}. Logs:\n\n${logs.join('\n')}`,
       );
     }
   };

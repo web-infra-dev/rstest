@@ -199,9 +199,27 @@ export type RstestUtilities = {
 
   /**
    * @todo
+   * Mock a module
+   */
+  mockRequire: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T,
+  ) => void;
+
+  /**
+   * @todo
    * Mock a module, not hoisted.
    */
   doMock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+
+  /**
+   * @todo
+   * Mock a module, not hoisted.
+   */
+  doMockRequire: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T,
+  ) => void;
 
   /**
    * @todo
@@ -213,13 +231,19 @@ export type RstestUtilities = {
    * @todo
    * Removes module from the mocked registry, not hoisted.
    */
-  doUnMock: (path: string) => void;
+  doUnmock: (path: string) => void;
 
   /**
    * @todo
    * Imports a module with all of its properties (including nested properties) mocked.
    */
   importMock: <T = Record<string, unknown>>(path: string) => Promise<T>;
+
+  /**
+   * @todo
+   * Imports a module with all of its properties (including nested properties) mocked.
+   */
+  requireMock: <T = Record<string, unknown>>(path: string) => T;
 
   /**
    * @todo
