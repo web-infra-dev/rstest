@@ -102,6 +102,8 @@ export const prepareRsbuild = async (
           source: {
             define: {
               'import.meta.rstest': "global['@rstest/core']",
+              'import.meta.dirname': '__dirname',
+              'import.meta.filename': '__filename',
             },
           },
           output: {
