@@ -453,47 +453,21 @@ export const createRuntimeAPI = ({
         ...options,
       })) as TestAPI;
 
-    Object.defineProperty(testFn, 'fails', {
-      get: () => {
-        return createTestAPI({ ...options, fails: true });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(testFn, 'concurrent', {
-      get: () => {
-        return createTestAPI({ ...options, concurrent: true });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(testFn, 'sequential', {
-      get: () => {
-        return createTestAPI({ ...options, sequential: true });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(testFn, 'skip', {
-      get: () => {
-        return createTestAPI({ ...options, runMode: 'skip' });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(testFn, 'todo', {
-      get: () => {
-        return createTestAPI({ ...options, runMode: 'todo' });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(testFn, 'only', {
-      get: () => {
-        return createTestAPI({ ...options, runMode: 'only' });
-      },
-      enumerable: true,
-    });
+    for (const { name, overrides } of [
+      { name: 'fails', overrides: { fails: true } },
+      { name: 'concurrent', overrides: { concurrent: true } },
+      { name: 'sequential', overrides: { sequential: true } },
+      { name: 'skip', overrides: { runMode: 'skip' as const } },
+      { name: 'todo', overrides: { runMode: 'todo' as const } },
+      { name: 'only', overrides: { runMode: 'only' as const } },
+    ]) {
+      Object.defineProperty(testFn, name, {
+        get: () => {
+          return createTestAPI({ ...options, ...overrides });
+        },
+        enumerable: true,
+      });
+    }
 
     testFn.runIf = (condition: boolean) => (condition ? testFn : testFn.skip);
 
@@ -546,40 +520,20 @@ export const createRuntimeAPI = ({
         ...options,
       })) as DescribeAPI;
 
-    Object.defineProperty(describeFn, 'only', {
-      get: () => {
-        return createDescribeAPI({ ...options, runMode: 'only' });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(describeFn, 'todo', {
-      get: () => {
-        return createDescribeAPI({ ...options, runMode: 'todo' });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(describeFn, 'skip', {
-      get: () => {
-        return createDescribeAPI({ ...options, runMode: 'skip' });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(describeFn, 'concurrent', {
-      get: () => {
-        return createDescribeAPI({ ...options, concurrent: true });
-      },
-      enumerable: true,
-    });
-
-    Object.defineProperty(describeFn, 'sequential', {
-      get: () => {
-        return createDescribeAPI({ ...options, sequential: true });
-      },
-      enumerable: true,
-    });
+    for (const { name, overrides } of [
+      { name: 'only', overrides: { runMode: 'only' as const } },
+      { name: 'todo', overrides: { runMode: 'todo' as const } },
+      { name: 'skip', overrides: { runMode: 'skip' as const } },
+      { name: 'concurrent', overrides: { concurrent: true } },
+      { name: 'sequential', overrides: { sequential: true } },
+    ]) {
+      Object.defineProperty(describeFn, name, {
+        get: () => {
+          return createDescribeAPI({ ...options, ...overrides });
+        },
+        enumerable: true,
+      });
+    }
 
     describeFn.skipIf = (condition: boolean) =>
       condition ? describeFn.skip : describeFn;
