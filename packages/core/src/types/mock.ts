@@ -192,49 +192,62 @@ export type RstestUtilities = {
   restoreAllMocks: () => RstestUtilities;
 
   /**
-   * @todo
    * Mock a module
    */
   mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
 
   /**
-   * @todo
+   * Mock a module
+   */
+  mockRequire: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T,
+  ) => void;
+
+  /**
    * Mock a module, not hoisted.
    */
   doMock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
 
   /**
-   * @todo
+   * Mock a module, not hoisted.
+   */
+  doMockRequire: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T,
+  ) => void;
+
+  /**
    * Removes module from the mocked registry.
    */
-  unMock: (path: string) => void;
+  unmock: (path: string) => void;
 
   /**
-   * @todo
    * Removes module from the mocked registry, not hoisted.
    */
-  doUnMock: (path: string) => void;
+  doUnmock: (path: string) => void;
 
   /**
-   * @todo
    * Imports a module with all of its properties (including nested properties) mocked.
    */
   importMock: <T = Record<string, unknown>>(path: string) => Promise<T>;
 
   /**
-   * @todo
+   * Imports a module with all of its properties (including nested properties) mocked.
+   */
+  requireMock: <T = Record<string, unknown>>(path: string) => T;
+
+  /**
    * Import and return the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
    */
   importActual: <T = Record<string, unknown>>(path: string) => Promise<T>;
 
   /**
-   * @todo
    * Require and return the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
    */
   requireActual: <T = Record<string, unknown>>(path: string) => T;
 
   /**
-   * @todo
    * Resets modules registry by clearing the cache of all modules.
    */
   resetModules: () => RstestUtilities;

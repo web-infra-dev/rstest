@@ -68,6 +68,12 @@ const defineRstestDynamicImport =
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
 
+    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
+    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
+    if (importAttributes?.with?.rstest) {
+      delete importAttributes.with.rstest;
+    }
+
     const importedModule = await import(
       modulePath,
       importAttributes as ImportCallOptions
