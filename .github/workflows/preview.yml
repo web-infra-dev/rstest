@@ -53,4 +53,4 @@ jobs:
 
       - name: Publish Preview
         if: steps.changes.outputs.changed == 'true'
-        run: pnpx pkg-pr-new publish --compact --pnpm ./packages/*
+        run: pnpx pkg-pr-new publish --pnpm ./packages/*
