@@ -6,6 +6,7 @@ import {
   type RsbuildPlugin,
   type Rspack,
   createRsbuild,
+  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
@@ -103,9 +104,6 @@ export const prepareRsbuild = async (
           source: {
             define: {
               'import.meta.rstest': "global['@rstest/core']",
-              // TODO: should be handled in parser hook
-              'import.meta.dirname': '__dirname',
-              'import.meta.filename': '__filename',
             },
           },
           output: {
@@ -132,6 +130,11 @@ export const prepareRsbuild = async (
               config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
+              config.plugins.push(
+                new rspack.RstestPlugin({
+                  injectModulePathName: true,
+                }),
+              );
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
