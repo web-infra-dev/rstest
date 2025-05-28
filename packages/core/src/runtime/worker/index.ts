@@ -5,6 +5,7 @@ import type {
   TestFileResult,
   WorkerState,
 } from '../../types';
+import './setup';
 import { globalApis } from '../../utils/constants';
 import { undoSerializableConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
