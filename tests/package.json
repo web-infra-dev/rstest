@@ -7,7 +7,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "^1.3.22",
-    "@rslib/core": "0.8.0",
+    "@rslib/core": "0.9.0",
     "@rstest/core": "workspace:*",
     "jest-image-snapshot": "^6.5.1",
     "strip-ansi": "^7.1.0",
