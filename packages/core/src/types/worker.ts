@@ -13,6 +13,7 @@ import type { DistPath, TestPath } from './utils';
 export type EntryInfo = {
   distPath: DistPath;
   testPath: TestPath;
+  files?: string[];
 };
 
 /** Server to Runtime */
