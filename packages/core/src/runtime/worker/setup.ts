@@ -1,5 +1,6 @@
 const gracefulExit: boolean = process.execArgv.some(
   (execArg) =>
+    execArg.startsWith('--perf') ||
     execArg.startsWith('--prof') ||
     execArg.startsWith('--cpu-prof') ||
     execArg.startsWith('--heap-prof') ||

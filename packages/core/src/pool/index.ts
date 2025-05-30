@@ -63,6 +63,7 @@ export const createPool = async ({
   // https://github.com/nodejs/node/issues/41103
   const execArgv = process.execArgv.filter(
     (execArg) =>
+      execArg.startsWith('--perf') ||
       execArg.startsWith('--cpu-prof') ||
       execArg.startsWith('--heap-prof') ||
       execArg.startsWith('--diagnostic-dir'),
