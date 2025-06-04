@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import {
+  type ManifestData,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
@@ -220,7 +221,8 @@ export const createRsbuildServer = async ({
   const getRsbuildStats = async () => {
     const stats = await devServer.environments[name]!.getStats();
 
-    const { manifest } = devServer.environments[name]!.context;
+    const manifest = devServer.environments[name]!.context
+      .manifest as ManifestData;
 
     const {
       entrypoints,
@@ -257,7 +259,7 @@ export const createRsbuildServer = async ({
       for (const entry of entries) {
         const data = manifest!.entries[entry];
         entryFiles[entry] = (
-          (data.initial?.js || []).concat(data.async?.js || []) || []
+          (data?.initial?.js || []).concat(data?.async?.js || []) || []
         ).map((file: string) => path.join(outputPath!, file));
       }
       return entryFiles;
