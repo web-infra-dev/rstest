@@ -7,8 +7,8 @@ import { defineConfig } from 'rspress/config';
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
   title: 'Rstest',
-  icon: 'https://assets.rspack.dev/rstest/rstest-logo.svg',
-  logo: 'https://assets.rspack.dev/rstest/rstest-logo.svg',
+  icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
+  logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
   markdown: {
     checkDeadLinks: true,
