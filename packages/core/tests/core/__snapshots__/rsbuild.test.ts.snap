@@ -104,12 +104,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
         },
         "include": [
           {
-            "and": [
-              "<WORKSPACE>",
-              {
-                "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
-              },
-            ],
+            "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
@@ -415,12 +410,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
     },
     "include": [
       {
-        "and": [
-          "<WORKSPACE>",
-          {
-            "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
-          },
-        ],
+        "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
       },
       /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
       /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
