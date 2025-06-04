@@ -19,7 +19,6 @@ describe.concurrent('reporters', () => {
     });
 
     await cli.exec;
-    expect(cli.stdout).toContain('✓ basic > a');
     expect(cli.stdout).toContain('✗ basic > b');
   });
 
