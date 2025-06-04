@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import {
+  type ManifestData,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
@@ -108,6 +109,8 @@ export const prepareRsbuild = async (
             },
           },
           output: {
+            // Pass resources to the worker on demand according to entry
+            manifest: true,
             sourceMap: {
               js: 'source-map',
             },
@@ -141,6 +144,11 @@ export const prepareRsbuild = async (
                 ...(config.optimization || {}),
                 moduleIds: 'named',
                 chunkIds: 'named',
+                splitChunks: {
+                  chunks: 'all',
+                  minSize: 0,
+                  maxInitialRequests: Number.POSITIVE_INFINITY,
+                },
               };
             },
           },
@@ -213,15 +221,21 @@ export const createRsbuildServer = async ({
   const getRsbuildStats = async () => {
     const stats = await devServer.environments[name]!.getStats();
 
+    const manifest = devServer.environments[name]!.context
+      .manifest as ManifestData;
+
     const {
       entrypoints,
       outputPath,
       assets,
       time: buildTime,
     } = stats.toJson({
+      all: false,
       entrypoints: true,
       outputPath: true,
       assets: true,
+      relatedAssets: true,
+      cachedAssets: true,
       // get the compilation time
       timings: true,
     });
@@ -237,6 +251,21 @@ export const createRsbuildServer = async ({
       });
     };
 
+    const getEntryFiles = async () => {
+      const entryFiles: Record<string, string[]> = {};
+
+      const entries = Object.keys(manifest!.entries!);
+
+      for (const entry of entries) {
+        const data = manifest!.entries[entry];
+        entryFiles[entry] = (
+          (data?.initial?.js || []).concat(data?.async?.js || []) || []
+        ).map((file: string) => path.join(outputPath!, file));
+      }
+      return entryFiles;
+    };
+
+    const entryFiles = await getEntryFiles();
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries();
@@ -253,11 +282,13 @@ export const createRsbuildServer = async ({
         setupEntries.push({
           distPath,
           testPath: setupFiles[entry],
+          files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
+          files: entryFiles[entry],
         });
       }
     }

@@ -164,11 +164,34 @@ export const createPool = async ({
     },
   };
 
+  const setupAssets = setupEntries.flatMap((entry) => entry.files);
+
+  const filterAssetsByEntry = (entryInfo: EntryInfo) => {
+    const neededFiles = entryInfo.files
+      ? Object.fromEntries(
+          Object.entries(assetFiles).filter(
+            ([key]) =>
+              entryInfo.files!.includes(key) || setupAssets.includes(key),
+          ),
+        )
+      : assetFiles;
+
+    const neededSourceMaps =
+      Object.keys(entries).length > 1
+        ? Object.fromEntries(
+            Object.entries(sourceMaps).filter(([key]) => neededFiles[key]),
+          )
+        : sourceMaps;
+
+    return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+  };
   return {
     runTests: async () => {
       const results = await Promise.all(
-        entries.map((entryInfo) =>
-          pool.runTest({
+        entries.map((entryInfo) => {
+          const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
+
+          return pool.runTest({
             options: {
               entryInfo,
               assetFiles,
@@ -182,8 +205,8 @@ export const createPool = async ({
               updateSnapshot,
             },
             rpcMethods,
-          }),
-        ),
+          });
+        }),
       );
 
       for (const result of results) {
@@ -198,8 +221,10 @@ export const createPool = async ({
     },
     collectTests: async () => {
       return Promise.all(
-        entries.map((entryInfo) =>
-          pool.collectTests({
+        entries.map((entryInfo) => {
+          const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
+
+          return pool.collectTests({
             options: {
               entryInfo,
               assetFiles,
@@ -213,8 +238,8 @@ export const createPool = async ({
               updateSnapshot,
             },
             rpcMethods,
-          }),
-        ),
+          });
+        }),
       );
     },
     close: () => pool.close(),
