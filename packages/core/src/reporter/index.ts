@@ -132,6 +132,10 @@ export class DefaultReporter implements Reporter {
     logger.log('');
   }
 
+  async onExit(): Promise<void> {
+    this.statusRenderer?.clear();
+  }
+
   async onTestRunEnd({
     results,
     testResults,

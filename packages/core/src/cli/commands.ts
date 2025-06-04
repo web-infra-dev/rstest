@@ -167,12 +167,15 @@ export function setupCommands(): void {
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
+      const { config } = await initCli(options);
+      const { createRstest } = await import('../core');
+      const rstest = createRstest(config, 'run', filters.map(normalize));
       try {
-        const { config } = await initCli(options);
-        const { createRstest } = await import('../core');
-        const rstest = createRstest(config, 'run', filters.map(normalize));
         await rstest.runTests();
       } catch (err) {
+        for (const reporter of rstest.context.reporters) {
+          reporter.onExit?.();
+        }
         logger.error('Failed to run Rstest.');
         logger.error(formatError(err));
         process.exit(1);
@@ -198,13 +201,19 @@ export function setupCommands(): void {
         filters: string[],
         options: CommonOptions & ListCommandOptions,
       ) => {
-        const { config } = await initCli(options);
-        const { createRstest } = await import('../core');
-        const rstest = createRstest(config, 'list', filters.map(normalize));
-        await rstest.listTests({
-          filesOnly: options.filesOnly,
-          json: options.json,
-        });
+        try {
+          const { config } = await initCli(options);
+          const { createRstest } = await import('../core');
+          const rstest = createRstest(config, 'list', filters.map(normalize));
+          await rstest.listTests({
+            filesOnly: options.filesOnly,
+            json: options.json,
+          });
+        } catch (err) {
+          logger.error('Failed to run Rstest list.');
+          logger.error(formatError(err));
+          process.exit(1);
+        }
       },
     );
 

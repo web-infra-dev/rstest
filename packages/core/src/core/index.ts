@@ -24,6 +24,7 @@ export function createRstest(
   };
 
   return {
+    context,
     runTests,
     listTests,
   };

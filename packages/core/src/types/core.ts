@@ -30,6 +30,7 @@ export type ListCommandOptions = {
 };
 
 export type RstestInstance = {
+  context: RstestContext;
   runTests: () => Promise<void>;
   listTests: (options: ListCommandOptions) => Promise<void>;
 };

@@ -73,4 +73,9 @@ export interface Reporter {
    * Called when console log is calling.
    */
   onUserConsoleLog?: (log: UserConsoleLog) => void;
+
+  /**
+   * Called when rstest exit abnormally
+   */
+  onExit?: () => void;
 }
