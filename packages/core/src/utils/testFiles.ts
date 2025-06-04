@@ -113,11 +113,11 @@ export const prettyTestPath = (
   const { dir, base } = parsePosix(testPath);
 
   if (!highlightFileName) {
-    return `${dir !== '.' ? color.dim(`${dir}/`) : ''}${base}`;
+    return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${base}`;
   }
   const ext = base.match(/(\.(spec|test)\.[cm]?[tj]sx?)$/)?.[0] || '';
   const name = base.replace(ext, '');
-  return `${dir !== '.' ? color.dim(`${dir}/`) : ''}${name}${ext ? color.dim(ext) : ''}`;
+  return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${name}${ext ? color.gray(ext) : ''}`;
 };
 
 export const formatTestPath = (root: string, testFilePath: string): string => {

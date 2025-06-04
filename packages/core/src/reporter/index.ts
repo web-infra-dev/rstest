@@ -118,13 +118,13 @@ export class DefaultReporter implements Reporter {
 
     if (log.trace) {
       const [frame] = stackTraceParse(log.trace);
-      const path = relative(this.rootPath, frame!.file || '');
+      const filePath = relative(this.rootPath, frame!.file || '');
 
-      if (path !== testPath) {
+      if (filePath !== testPath) {
         titles.push(prettyTestPath(testPath));
       }
       titles.push(
-        prettyTestPath(testPath) +
+        prettyTestPath(filePath) +
           color.gray(`:${frame!.lineNumber}:${frame!.column}`),
       );
     } else {
