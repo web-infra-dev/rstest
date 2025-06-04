@@ -48,8 +48,9 @@
   },
   "dependencies": {
     "@rsbuild/core": "^1.4.0-beta.0",
-    "@vitest/expect": "^3.1.4",
-    "@vitest/snapshot": "^3.1.4",
+    "@vitest/expect": "^3.2.1",
+    "@vitest/snapshot": "^3.2.1",
+    "@types/chai": "^5.2.2",
     "birpc": "2.3.0",
     "chai": "^5.2.0",
     "pathe": "^2.0.3",

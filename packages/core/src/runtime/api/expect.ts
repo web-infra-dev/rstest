@@ -72,7 +72,7 @@ export function createExpect({
     expect,
   );
 
-  // @ts-expect-error untyped
+  // @ts-expect-error chai.expect.extend untyped
   expect.extend = (matchers) => chai.expect.extend(expect, matchers);
   expect.addEqualityTesters = (customTesters) =>
     addCustomEqualityTesters(customTesters);
