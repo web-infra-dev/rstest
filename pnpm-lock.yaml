@@ -80,6 +80,9 @@ importers:
       '@rsbuild/core':
         specifier: ^1.4.0-beta.0
         version: 1.4.0-beta.0
+      '@types/chai':
+        specifier: ^5.2.2
+        version: 5.2.2
       '@vitest/expect':
         specifier: ^3.2.1
         version: 3.2.1
