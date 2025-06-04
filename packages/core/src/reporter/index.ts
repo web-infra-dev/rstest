@@ -23,11 +23,18 @@ import {
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
+const statusStr = {
+  fail: '✗',
+  pass: '✓',
+  todo: '-',
+  skip: '-',
+};
+
 const statusColorfulStr = {
-  fail: color.red('✗'),
-  pass: color.green('✓'),
-  todo: color.gray('-'),
-  skip: color.gray('-'),
+  fail: color.red(statusStr.fail),
+  pass: color.green(statusStr.pass),
+  todo: color.gray(statusStr.todo),
+  skip: color.gray(statusStr.skip),
 };
 
 export class DefaultReporter implements Reporter {
@@ -73,17 +80,32 @@ export class DefaultReporter implements Reporter {
 
     title += ` ${color.gray(`(${test.results.length})`)}`;
 
-    if (test.duration && test.duration > slowTestThreshold) {
-      title += ` ${formatDuration(test.duration)}`;
+    const isTooSlow = test.duration && test.duration > slowTestThreshold;
+
+    if (isTooSlow) {
+      title += ` ${formatDuration(test.duration!)}`;
     }
 
     logger.log(title);
 
-    if (test.status !== 'fail') {
+    if (test.status !== 'fail' && !isTooSlow) {
       return;
     }
+
+    const showAllCases =
+      isTooSlow &&
+      !test.results.some(
+        (result) => (result.duration || 0) > slowTestThreshold,
+      );
+
     for (const result of test.results) {
-      const icon = statusColorfulStr[result.status];
+      const isSlowCase = (result.duration || 0) > slowTestThreshold;
+      if (!showAllCases && result.status !== 'fail' && !isSlowCase) {
+        continue;
+      }
+      const icon = isSlowCase
+        ? color.yellow(statusStr[result.status])
+        : statusColorfulStr[result.status];
       const nameStr = getTaskNameWithPrefix(result);
       const duration =
         typeof result.duration !== 'undefined'
