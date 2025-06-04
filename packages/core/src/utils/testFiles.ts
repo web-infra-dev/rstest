@@ -106,18 +106,10 @@ export const getSetupFiles = (
   );
 };
 
-export const prettyTestPath = (
-  testPath: string,
-  highlightFileName = true,
-): string => {
+export const prettyTestPath = (testPath: string): string => {
   const { dir, base } = parsePosix(testPath);
 
-  if (!highlightFileName) {
-    return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${base}`;
-  }
-  const ext = base.match(/(\.(spec|test)\.[cm]?[tj]sx?)$/)?.[0] || '';
-  const name = base.replace(ext, '');
-  return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${name}${ext ? color.gray(ext) : ''}`;
+  return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${color.cyan(base)}`;
 };
 
 export const formatTestPath = (root: string, testFilePath: string): string => {
