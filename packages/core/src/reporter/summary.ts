@@ -12,6 +12,7 @@ import {
   formatTestPath,
   getTaskNameWithPrefix,
   logger,
+  prettyTestPath,
   prettyTime,
 } from '../utils';
 
@@ -169,7 +170,7 @@ export const printSummaryErrorLogs = async ({
 
     //  FAIL  tests/index.test.ts > suite name > test case name
     logger.log(
-      `${color.bgRed(' FAIL ')} ${relativePath} ${nameStr.length ? `${TEST_DELIMITER} ${nameStr}` : ''}`,
+      `${color.bgRed(' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {

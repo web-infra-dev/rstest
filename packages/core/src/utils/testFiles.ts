@@ -106,7 +106,7 @@ export const getSetupFiles = (
   );
 };
 
-export const prettierTestPath = (
+export const prettyTestPath = (
   testPath: string,
   highlightFileName = true,
 ): string => {
@@ -126,5 +126,5 @@ export const formatTestPath = (root: string, testFilePath: string): string => {
     testPath = path.relative(root, testPath);
   }
 
-  return prettierTestPath(testPath);
+  return prettyTestPath(testPath);
 };

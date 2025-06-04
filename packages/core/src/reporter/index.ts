@@ -17,7 +17,7 @@ import {
   color,
   getTaskNameWithPrefix,
   logger,
-  prettierTestPath,
+  prettyTestPath,
   prettyTime,
 } from '../utils';
 import { StatusRenderer } from './statusRenderer';
@@ -63,7 +63,7 @@ export class DefaultReporter implements Reporter {
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettierTestPath(relativePath)}`;
+    let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettyTestPath(relativePath)}`;
 
     const formatDuration = (duration: number) => {
       return color[duration > slowTestThreshold ? 'yellow' : 'green'](
@@ -121,11 +121,14 @@ export class DefaultReporter implements Reporter {
       const path = relative(this.rootPath, frame!.file || '');
 
       if (path !== testPath) {
-        titles.push(color.gray(testPath));
+        titles.push(prettyTestPath(testPath));
       }
-      titles.push(color.gray(`${path}:${frame!.lineNumber}:${frame!.column}`));
+      titles.push(
+        prettyTestPath(testPath) +
+          color.gray(`:${frame!.lineNumber}:${frame!.column}`),
+      );
     } else {
-      titles.push(color.gray(testPath));
+      titles.push(prettyTestPath(testPath));
     }
 
     // TODO: output to stdout or stderr
