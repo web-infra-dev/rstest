@@ -54,7 +54,7 @@
     "chai": "^5.2.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
-    "tinypool": "^1.0.2"
+    "tinypool": "^1.1.0"
   },
   "devDependencies": {
     "@babel/code-frame": "^7.27.1",
