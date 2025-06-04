@@ -142,7 +142,7 @@ export async function listTests(
       logger.log(
         test.name
           ? `${color.dim(`${shortPath} > `)}${test.name}`
-          : prettyTestPath(shortPath, false),
+          : prettyTestPath(shortPath),
       );
     }
   }
