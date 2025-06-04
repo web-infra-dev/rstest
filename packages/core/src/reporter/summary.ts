@@ -9,10 +9,10 @@ import type {
 import {
   TEST_DELIMITER,
   color,
+  formatTestPath,
   getTaskNameWithPrefix,
   logger,
   prettyTime,
-  slash,
 } from '../utils';
 
 export const getSummaryStatusString = (
@@ -29,34 +29,17 @@ export const getSummaryStatusString = (
   const skipped = tasks.filter((result) => result.status === 'skip');
   const todo = tasks.filter((result) => result.status === 'todo');
 
+  const status = [
+    failed.length ? color.bold(color.red(`${failed.length} failed`)) : null,
+    passed.length ? color.bold(color.green(`${passed.length} passed`)) : null,
+    skipped.length ? color.yellow(`${skipped.length} skipped`) : null,
+    todo.length ? color.gray(`${todo.length} todo`) : null,
+  ].filter(Boolean);
+
   return (
-    [
-      failed.length ? color.bold(color.red(`${failed.length} failed`)) : null,
-      passed.length ? color.bold(color.green(`${passed.length} passed`)) : null,
-      skipped.length ? color.yellow(`${skipped.length} skipped`) : null,
-      todo.length ? color.gray(`${todo.length} todo`) : null,
-    ]
-      .filter(Boolean)
-      .join(color.dim(' | ')) +
-    (showTotal ? color.gray(` (${tasks.length})`) : '')
+    status.join(color.dim(' | ')) +
+    (showTotal && status.length > 1 ? color.gray(` (${tasks.length})`) : '')
   );
-};
-
-/**
- * This method is modified based on source found in
- * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L52
- */
-export const formatTestPath = (root: string, testFilePath: string): string => {
-  let testPath = testFilePath;
-  if (path.isAbsolute(testPath)) {
-    testPath = path.relative(root, testPath);
-  }
-
-  const dir = path.dirname(testPath);
-  const ext = testPath.match(/(\.(spec|test)\.[cm]?[tj]sx?)$/)?.[0] || '';
-  const base = path.basename(testPath, ext);
-
-  return slash(color.dim(`${dir}/`) + color.bold(base)) + color.dim(ext);
 };
 
 /**
@@ -144,14 +127,14 @@ export const printSummaryLog = ({
   logger.log('');
   printSnapshotSummaryLog(snapshotSummary, rootPath);
   logger.log(
-    `${color.gray('Test Files'.padStart(12))} ${getSummaryStatusString(results)}`,
+    `${color.gray('Test Files'.padStart(11))} ${getSummaryStatusString(results)}`,
   );
   logger.log(
-    `${color.gray('Tests'.padStart(12))} ${getSummaryStatusString(testResults)}`,
+    `${color.gray('Tests'.padStart(11))} ${getSummaryStatusString(testResults)}`,
   );
 
   logger.log(
-    `${color.gray('Duration'.padStart(12))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
+    `${color.gray('Duration'.padStart(11))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
   logger.log('');
 };

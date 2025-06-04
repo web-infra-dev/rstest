@@ -13,7 +13,13 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, getTaskNameWithPrefix, logger, prettyTime } from '../utils';
+import {
+  color,
+  getTaskNameWithPrefix,
+  logger,
+  prettierTestPath,
+  prettyTime,
+} from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 
@@ -57,7 +63,7 @@ export class DefaultReporter implements Reporter {
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    let title = `${color.bold(statusColorfulStr[test.status])} ${relativePath}`;
+    let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettierTestPath(relativePath)}`;
 
     const formatDuration = (duration: number) => {
       return color[duration > slowTestThreshold ? 'yellow' : 'green'](
@@ -65,12 +71,9 @@ export class DefaultReporter implements Reporter {
       );
     };
 
-    title +=
-      test.results.length > 1
-        ? ` ${color.gray(`(${test.results.length} tests)`)}`
-        : ` ${color.gray(`(${test.results.length} test)`)}`;
+    title += ` ${color.gray(`(${test.results.length})`)}`;
 
-    if (test.duration) {
+    if (test.duration && test.duration > slowTestThreshold) {
       title += ` ${formatDuration(test.duration)}`;
     }
 
