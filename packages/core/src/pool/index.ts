@@ -87,7 +87,13 @@ export const createPool = async ({
 
   const minWorkers = poolOptions.minWorkers
     ? parseWorkers(poolOptions.minWorkers)
-    : threadsCount;
+    : maxWorkers < threadsCount
+      ? maxWorkers
+      : threadsCount;
+
+  if (maxWorkers < minWorkers) {
+    throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
+  }
 
   const pool = createForksPool({
     ...poolOptions,
@@ -166,18 +172,21 @@ export const createPool = async ({
 
   const setupAssets = setupEntries.flatMap((entry) => entry.files);
 
+  const entryLength = Object.keys(entries).length;
+
   const filterAssetsByEntry = (entryInfo: EntryInfo) => {
-    const neededFiles = entryInfo.files
-      ? Object.fromEntries(
-          Object.entries(assetFiles).filter(
-            ([key]) =>
-              entryInfo.files!.includes(key) || setupAssets.includes(key),
-          ),
-        )
-      : assetFiles;
+    const neededFiles =
+      entryLength > 1 && entryInfo.files
+        ? Object.fromEntries(
+            Object.entries(assetFiles).filter(
+              ([key]) =>
+                entryInfo.files!.includes(key) || setupAssets.includes(key),
+            ),
+          )
+        : assetFiles;
 
     const neededSourceMaps =
-      Object.keys(entries).length > 1
+      entryLength > 1
         ? Object.fromEntries(
             Object.entries(sourceMaps).filter(([key]) => neededFiles[key]),
           )
@@ -185,6 +194,7 @@ export const createPool = async ({
 
     return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
   };
+
   return {
     runTests: async () => {
       const results = await Promise.all(
