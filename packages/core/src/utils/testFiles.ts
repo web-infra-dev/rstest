@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'pathe';
 import { glob } from 'tinyglobby';
-import { castArray, getAbsolutePath } from '../utils';
+import { castArray, color, getAbsolutePath, parsePosix } from './helper';
 
 export const filterFiles = (
   testFiles: string[],
@@ -104,4 +104,27 @@ export const getSetupFiles = (
       return [name, setupFilePath];
     }),
   );
+};
+
+export const prettyTestPath = (
+  testPath: string,
+  highlightFileName = true,
+): string => {
+  const { dir, base } = parsePosix(testPath);
+
+  if (!highlightFileName) {
+    return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${base}`;
+  }
+  const ext = base.match(/(\.(spec|test)\.[cm]?[tj]sx?)$/)?.[0] || '';
+  const name = base.replace(ext, '');
+  return `${dir !== '.' ? color.gray(`${dir}/`) : ''}${name}${ext ? color.gray(ext) : ''}`;
+};
+
+export const formatTestPath = (root: string, testFilePath: string): string => {
+  let testPath = testFilePath;
+  if (path.isAbsolute(testPath)) {
+    testPath = path.relative(root, testPath);
+  }
+
+  return prettyTestPath(testPath);
 };

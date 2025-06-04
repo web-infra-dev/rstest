@@ -1,7 +1,6 @@
 import { relative } from 'pathe';
-import { color } from '../utils';
+import { color, prettyTestPath } from '../utils';
 import { WindowRenderer } from './windowedRenderer';
-
 export class StatusRenderer {
   private rootPath: string;
   private renderer: WindowRenderer;
@@ -25,7 +24,9 @@ export class StatusRenderer {
     const summary = [];
     for (const module of this.runningModules) {
       const relativePath = relative(this.rootPath, module);
-      summary.push(`${color.bgYellow(color.bold(' RUNS '))} ${relativePath}`);
+      summary.push(
+        `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
+      );
     }
     summary.push('');
     return summary;

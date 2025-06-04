@@ -8,6 +8,7 @@ import {
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
+  prettyTestPath,
 } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -138,7 +139,11 @@ export async function listTests(
   } else {
     for (const test of tests) {
       const shortPath = relative(rootPath, test.file);
-      logger.log(test.name ? `${shortPath} > ${test.name}` : shortPath);
+      logger.log(
+        test.name
+          ? `${color.dim(`${shortPath} > `)}${test.name}`
+          : prettyTestPath(shortPath, false),
+      );
     }
   }
 
