@@ -11,6 +11,17 @@ export async function printError(
 ): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
+  if (error.message.includes('Vitest failed to access its internal state')) {
+    const tips = [
+      'Error: not support import `vitest` in Rstest test environment.\n',
+      'Solution:',
+      `  - Update your code to use imports from "${color.yellow('@rstest/core')}" instead of "${color.yellow('vitest')}".`,
+      '  - Enable `globals` configuration and use global API.',
+    ];
+
+    logger.log(`${color.red(tips.join('\n'))}\n`);
+    return;
+  }
   logger.log(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
@@ -77,7 +88,7 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
         : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
     logger.log(color.gray(`        ${msg}`));
   }
-  logger.log();
+  stackFrames.length && logger.log();
 }
 
 const stackIgnores: (RegExp | string)[] = [
