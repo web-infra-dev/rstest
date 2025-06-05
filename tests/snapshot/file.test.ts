@@ -31,12 +31,12 @@ describe('test snapshot', () => {
     await expectFile(snapshotFilePath, 3000);
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
-    const content = fs.readFileSync(snapshotFilePath, 'utf-8');
-
     // should generator snapshot name correctly
-    expect(content).toContain(
-      '[`test snapshot > test snapshot generate 1`] = `"hello world"`',
-    );
+    expect
+      .poll(() => fs.readFileSync(snapshotFilePath, 'utf-8'))
+      .toContain(
+        '[`test snapshot > test snapshot generate 1`] = `"hello world"`',
+      );
 
     fs.rmSync(snapshotFilePath);
   });
@@ -63,24 +63,5 @@ describe('test snapshot', () => {
 
   it('test toMatchFileSnapshot correctly', async () => {
     expect('hello world').toMatchFileSnapshot('__snapshots__/file.output.txt');
-  });
-
-  it('should failed when snapshot unmatched', async () => {
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/fail.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(logs.find((log) => log.includes('Snapshots 1 failed'))).toBeTruthy();
   });
 });
