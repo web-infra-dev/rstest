@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, logger } from '../utils';
+import { color, formatTestPath, logger } from '../utils';
 
 export async function printError(
   error: FormattedError,
   getSourcemap: GetSourcemap,
+  rootPath: string,
 ): Promise<void> {
   const errorName = error.name || 'Unknown Error';
 
@@ -29,7 +30,7 @@ export async function printError(
       await printCodeFrame(stackFrames[0]);
     }
 
-    printStack(stackFrames);
+    printStack(stackFrames, rootPath);
   }
 }
 
@@ -68,13 +69,13 @@ async function printCodeFrame(frame: StackFrame) {
   logger.log('');
 }
 
-function printStack(stackFrames: StackFrame[]) {
+function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    logger.log(
-      color.gray(
-        `        at ${frame.methodName} (${frame.file}:${frame.lineNumber}:${frame.column})`,
-      ),
-    );
+    const msg =
+      frame.methodName !== '<unknown>'
+        ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
+        : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
+    logger.log(color.gray(`        ${msg}`));
   }
   logger.log();
 }
@@ -84,6 +85,8 @@ const stackIgnores: (RegExp | string)[] = [
   /rstest\/packages\/core\/dist/,
   /node_modules\/tinypool/,
   /node_modules\/chai/,
+  /node_modules\/@vitest\/expect/,
+  /node_modules\/@vitest\/snapshot/,
   /node:\w+/,
   '<anonymous>',
 ];

@@ -43,9 +43,7 @@ describe('test setup file', async () => {
     // test error log
     expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
     expect(
-      logs.find((log) =>
-        log.includes(['error', 'rstest.setup.ts:1:7'].join(sep)),
-      ),
+      logs.find((log) => log.includes('rstest.setup.ts:1:7')),
     ).toBeTruthy();
   });
 });

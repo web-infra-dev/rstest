@@ -103,9 +103,10 @@ export class DefaultReporter implements Reporter {
       if (!showAllCases && result.status !== 'fail' && !isSlowCase) {
         continue;
       }
-      const icon = isSlowCase
-        ? color.yellow(statusStr[result.status])
-        : statusColorfulStr[result.status];
+      const icon =
+        isSlowCase && result.status === 'pass'
+          ? color.yellow(statusStr[result.status])
+          : statusColorfulStr[result.status];
       const nameStr = getTaskNameWithPrefix(result);
       const duration =
         typeof result.duration !== 'undefined'
