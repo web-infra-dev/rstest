@@ -91,6 +91,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   passWithNoTests: false,
   update: false,
   testTimeout: 5_000,
+  testEnvironment: 'node',
   retry: 0,
   reporters: ['default'],
   clearMocks: false,

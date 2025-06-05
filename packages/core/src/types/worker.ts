@@ -43,6 +43,7 @@ export type RuntimeConfig = Pick<
   | 'maxConcurrency'
   | 'printConsoleTrace'
   | 'disableConsoleIntercept'
+  | 'testEnvironment'
 >;
 
 export type WorkerContext = {
