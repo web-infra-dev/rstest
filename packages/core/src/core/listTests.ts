@@ -104,7 +104,7 @@ export async function listTests(
 
       if (file.errors?.length) {
         for (const error of file.errors) {
-          await printError(error, getSourcemap);
+          await printError(error, getSourcemap, rootPath);
         }
       }
     }
