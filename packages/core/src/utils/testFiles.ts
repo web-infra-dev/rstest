@@ -114,7 +114,7 @@ export const prettyTestPath = (testPath: string): string => {
 
 export const formatTestPath = (root: string, testFilePath: string): string => {
   let testPath = testFilePath;
-  if (path.isAbsolute(testPath)) {
+  if (path.isAbsolute(testPath) && testPath.includes(root)) {
     testPath = path.relative(root, testPath);
   }
 

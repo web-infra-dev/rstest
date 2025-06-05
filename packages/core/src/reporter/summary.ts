@@ -74,18 +74,14 @@ export const printSnapshotSummaryLog = (
       );
     }
   }
-  const F_DOWN_RIGHT = '↳';
+  const POINTER = '➜';
 
   if (snapshots.filesRemovedList?.length) {
     const [head, ...tail] = snapshots.filesRemovedList;
-    summary.push(
-      `${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, head!)}`,
-    );
+    summary.push(`${color.gray(POINTER)} ${formatTestPath(rootDir, head!)}`);
 
     for (const key of tail) {
-      summary.push(
-        `  ${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, key)}`,
-      );
+      summary.push(`  ${formatTestPath(rootDir, key)}`);
     }
   }
 
@@ -98,10 +94,10 @@ export const printSnapshotSummaryLog = (
 
     for (const uncheckedFile of snapshots.uncheckedKeysByFile) {
       summary.push(
-        `${color.gray(F_DOWN_RIGHT)} ${formatTestPath(rootDir, uncheckedFile.filePath)}`,
+        `${color.gray(POINTER)} ${formatTestPath(rootDir, uncheckedFile.filePath)}`,
       );
       for (const key of uncheckedFile.keys) {
-        summary.push(`  ${color.gray(F_DOWN_RIGHT)} ${key}`);
+        summary.push(`  ${key}`);
       }
     }
   }
@@ -176,7 +172,7 @@ export const printSummaryErrorLogs = async ({
     if (test.errors) {
       const { printError } = await import('../utils/error');
       for (const error of test.errors) {
-        await printError(error, getSourcemap);
+        await printError(error, getSourcemap, rootPath);
       }
     }
   }
