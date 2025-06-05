@@ -108,6 +108,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
+        "resourceQuery": {
+          "not": /raw\\|inline/,
+        },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "type": "javascript/auto",
         "use": [
@@ -139,6 +142,11 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
             },
           },
         ],
+      },
+      {
+        "resourceQuery": /raw/,
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -438,6 +446,9 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
       /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
     ],
+    "resourceQuery": {
+      "not": /raw\\|inline/,
+    },
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
     "type": "javascript/auto",
     "use": [
@@ -470,6 +481,11 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
         },
       },
     ],
+  },
+  {
+    "resourceQuery": /raw/,
+    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+    "type": "asset/source",
   },
 ]
 `;
