@@ -19,6 +19,7 @@ type CommonOptions = {
   update?: boolean;
   testNamePattern?: RegExp | string;
   testTimeout?: number;
+  testEnvironment?: string;
   clearMocks?: boolean;
   resetMocks?: boolean;
   restoreMocks?: boolean;
@@ -50,43 +51,47 @@ const applyCommonOptions = (cli: CAC) => {
     .option('-u, --update', 'Update snapshot files')
     .option(
       '--passWithNoTests',
-      'Allows the test suite to pass when no files are found.',
+      'Allows the test suite to pass when no files are found',
     )
     .option(
       '--printConsoleTrace',
-      'Print console traces when calling any console method.',
+      'Print console traces when calling any console method',
     )
-    .option('--disableConsoleIntercept', 'Disable console intercept.')
+    .option('--disableConsoleIntercept', 'Disable console intercept')
     .option(
       '--slowTestThreshold <slowTestThreshold>',
       'The number of milliseconds after which a test or suite is considered slow',
     )
     .option(
       '-t, --testNamePattern <testNamePattern>',
-      'Run only tests with a name that matches the regex.',
+      'Run only tests with a name that matches the regex',
+    )
+    .option(
+      '--testEnvironment <testEnvironment>',
+      'The environment that will be used for testing',
     )
     .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds')
-    .option('--retry <retry>', 'Number of times to retry a test if it fails.')
+    .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option(
       '--maxConcurrency <maxConcurrency>',
-      'Maximum number of concurrent tests.',
+      'Maximum number of concurrent tests',
     )
     .option(
       '--clearMocks',
-      'Automatically clear mock calls, instances, contexts and results before every test.',
+      'Automatically clear mock calls, instances, contexts and results before every test',
     )
-    .option('--resetMocks', 'Automatically reset mock state before every test.')
+    .option('--resetMocks', 'Automatically reset mock state before every test')
     .option(
       '--restoreMocks',
-      'Automatically restore mock state and implementation before every test.',
+      'Automatically restore mock state and implementation before every test',
     )
     .option(
       '--unstubGlobals',
-      'Restores all global variables that were changed with `rstest.stubGlobal` before every test.',
+      'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
     )
     .option(
       '--unstubEnvs',
-      'Restores all `process.env` values that were changed with `rstest.stubEnv` before every test.',
+      'Restores all `process.env` values that were changed with `rstest.stubEnv` before every test',
     );
 };
 
@@ -120,6 +125,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'maxConcurrency',
     'printConsoleTrace',
     'disableConsoleIntercept',
+    'testEnvironment',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

@@ -83,6 +83,14 @@ export interface RstestConfig {
   globals?: boolean;
 
   /**
+   * The environment that will be used for testing
+   *
+   * TODO: support more test environments
+   * @default 'node'
+   */
+  testEnvironment?: 'node';
+
+  /**
    * print console traces when calling any console method.
    *
    * @default false

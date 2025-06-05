@@ -129,6 +129,7 @@ export const createPool = async ({
     maxConcurrency,
     printConsoleTrace,
     disableConsoleIntercept,
+    testEnvironment,
   } = context.normalizedConfig;
 
   const runtimeConfig = {
@@ -145,6 +146,7 @@ export const createPool = async ({
     maxConcurrency,
     printConsoleTrace,
     disableConsoleIntercept,
+    testEnvironment,
   };
 
   const rpcMethods = {
