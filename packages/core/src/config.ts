@@ -9,6 +9,7 @@ import type { NormalizedConfig, RstestConfig } from './types';
 import {
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  TEMP_RSTEST_OUTPUT_DIR_GLOB,
   color,
   logger,
 } from './utils';
@@ -110,7 +111,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
 
   // The following configurations need overrides
   merged.include = config.include || merged.include;
-  merged.exclude = config.exclude || merged.exclude;
+  merged.exclude = (config.exclude || merged.exclude || []).concat([
+    TEMP_RSTEST_OUTPUT_DIR_GLOB,
+  ]);
   merged.reporters = config.reporters ?? merged.reporters;
   merged.pool =
     typeof config.pool === 'string'

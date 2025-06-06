@@ -356,7 +356,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     "library": {
       "type": "commonjs2",
     },
-    "path": "<WORKSPACE>/dist/.test",
+    "path": "<WORKSPACE>/dist/.rstest-temp",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[hash].module.wasm",

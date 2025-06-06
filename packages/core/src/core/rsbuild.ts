@@ -9,7 +9,7 @@ import {
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import { isDebug } from '../utils';
+import { TEMP_RSTEST_OUTPUT_DIR, isDebug } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
@@ -115,7 +115,7 @@ export const prepareRsbuild = async (
               js: 'source-map',
             },
             distPath: {
-              root: 'dist/.test',
+              root: TEMP_RSTEST_OUTPUT_DIR,
             },
             externals: [
               {
