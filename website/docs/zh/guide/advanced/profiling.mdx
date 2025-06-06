@@ -40,3 +40,25 @@ import { PackageManagerTabs } from '@theme';
 ```
 
 在项目内执行上述命令后，Rstest 会自动注册 Rsdoctor 的插件，并在构建完成后打开本次构建的分析页面，请参考 [Rsdoctor 文档](https://rsdoctor.rs/) 来了解完整功能。
+
+![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
+
+## CPU profiling
+
+### Samply
+
+> 注意：为了能在 macOS 中对 Node.js 侧代码进行 profiling 需要 22.16+ 版本。
+
+[Samply](https://github.com/mstange/samply) 支持同时对 Rstest 主进程和测试进程进行性能分析，可通过如下步骤进行完整的性能分析:
+
+运行以下命令启动性能分析：
+
+```bash
+samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack {your_node_modules_folder}/@rstest/core/bin/rstest.js
+```
+
+命令执行完毕后会自动打开分析结果。
+
+Rstest 的 JavaScript 代码通常执行在 Node.js 线程里，选择 Node.js 线程查看 Node.js 侧的耗时分布。
+
+![rstest-samply-profiling](https://assets.rspack.rs/rstest/assets/rstest-samply-profiling.png)

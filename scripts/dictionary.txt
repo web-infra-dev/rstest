@@ -110,6 +110,7 @@ rspack
 rspress
 rstack
 rstest
+Samply
 selfsign
 selfsigned
 sirv
