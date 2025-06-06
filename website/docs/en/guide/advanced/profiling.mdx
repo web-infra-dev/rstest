@@ -40,3 +40,25 @@ As Windows does not support the above usage, you can also use [cross-env](https:
 ```
 
 After running the above commands, Rstest will automatically register the Rsdoctor plugin, and after the build is completed, it will open the build analysis page. For complete features, please refer to [Rsdoctor document](https://rsdoctor.rs/).
+
+![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
+
+## CPU profiling
+
+### Samply
+
+> Note: In order to be able to profiling the node.js side code in macos, node 22.16+ is required.
+
+[Samply](https://github.com/mstange/samply) supports performance analysis for both Rstest main process and test process simultaneously. You can perform a complete performance analysis through the following steps:
+
+Run the following command to start performance analysis:：
+
+```bash
+samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack {your_node_modules_folder}/@rstest/core/bin/rstest.js
+```
+
+After the command execution, the analysis results will automatically open in the [Firefox Profiler](https://profiler.firefox.com/).
+
+Rstest’s JavaScript typically runs in the Node.js thread. Select the Node.js thread to view the time distribution on the Node.js side.
+
+![rstest-samply-profiling](https://assets.rspack.rs/rstest/assets/rstest-samply-profiling.png)
