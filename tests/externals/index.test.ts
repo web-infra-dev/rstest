@@ -23,7 +23,10 @@ describe('test externals', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(0);
 
-    const outputPath = join(__dirname, 'dist/.test/fixtures/index.test.ts.js');
+    const outputPath = join(
+      __dirname,
+      'dist/.rstest-temp/fixtures/index.test.ts.js',
+    );
 
     expect(fs.existsSync(outputPath)).toBeTruthy();
     const content = fs.readFileSync(outputPath, 'utf-8');
