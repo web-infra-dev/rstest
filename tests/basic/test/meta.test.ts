@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { aDirName, aFileName } from '../src/meta';
 
-describe('Meta', () => {
+describe('import.meta', () => {
   it('should get test file meta correctly', async () => {
     expect(__dirname.endsWith('/rstest/tests/basic/test')).toBeTruthy();
     expect(__filename.endsWith('/basic/test/meta.test.ts')).toBeTruthy();
