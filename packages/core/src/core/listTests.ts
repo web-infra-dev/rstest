@@ -99,10 +99,10 @@ export async function listTests(
     for (const file of list) {
       const relativePath = relative(rootPath, file.testPath);
 
-      //  FAIL  tests/index.test.ts
-      logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
-
       if (file.errors?.length) {
+        //  FAIL  tests/index.test.ts
+        logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
+
         for (const error of file.errors) {
           await printError(error, getSourcemap, rootPath);
         }
