@@ -20,3 +20,52 @@ nvm install --lts
 # 切换 Node.js LTS
 nvm use --lts
 ```
+
+## 使用 Rstest
+
+你可以通过如下命令安装 Rstest：
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+下一步，你需要在 package.json 的 npm scripts 中添加 Rstest 命令：
+
+```json title=package.json
+{
+  "scripts": {
+    "test": "rstest"
+  }
+}
+```
+
+完成以上步骤后，你即可通过 `npm run test`、`yarn test` 或 `pnpm test` 来运行 Rstest 测试。当然，你也可以直接使用 `npx rstest` 来运行 Rstest 测试。
+
+Rstest 内置了 `watch`、`run` 等命令，请参考 [CLI 工具](/guide/basic/cli) 来了解所有可用命令以及选项。
+
+## 编写测试
+
+作为一个简单的例子，我们有一个 `sayHi` 方法。为了对它进行测试，你可以创建一个名为 `index.test.ts` 的测试文件或使用与 [Rust 测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest) 类似的 In-Source 测试。
+
+```ts file=index.ts
+export const sayHi = () => 'hi';
+```
+
+```ts file=index.test.ts
+import { expect, test } from '@rstest/core';
+import { sayHi } from '../src/index';
+
+test('should sayHi correctly', () => {
+  expect(sayHi()).toBe('hi');
+});
+```
+
+接下来，你可以通过 [使用 Rstest](#使用-rstest) 中配置好的命令执行测试。Rstest 会打印如下内容：
+
+```bash
+ ✓ test/index.test.ts (1)
+
+ Test Files 1 passed
+      Tests 1 passed
+   Duration 140 ms (build 17 ms, tests 123 ms)
+```

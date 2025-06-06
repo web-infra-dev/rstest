@@ -20,3 +20,52 @@ nvm install --lts
 # Switch to Node.js LTS
 nvm use --lts
 ```
+
+## Using Rstest
+
+You can install Rstest using the following command:
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+Next, you need to update the npm scripts in your package.json to use Rstest's CLI commands.
+
+```json title=package.json
+{
+  "scripts": {
+    "test": "rstest"
+  }
+}
+```
+
+After completing the above steps, you can run the Rstest tests using `npm run test`, `yarn test`, or `pnpm test`. Alternatively, you can directly use `npx rstest` to execute the Rstest tests.
+
+Rstest has built-in commands such as `watch` and `run`, please refer to [CLI Tools](/guide/basic/cli) to learn about all available commands and options.
+
+## Writing tests
+
+As a simple example, we have a `sayHi` method. To test it, you can create a test file called `index.test.ts` or use In-Source test similar to [Rust Test](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest).
+
+```ts file=index.ts
+export const sayHi = () => 'hi';
+```
+
+```ts file=index.test.ts
+import { expect, test } from '@rstest/core';
+import { sayHi } from '../src/index';
+
+test('should sayHi correctly', () => {
+  expect(sayHi()).toBe('hi');
+});
+```
+
+Next, you can execute the test by using the command configured in [Using Rstest](#using-rstest). Rstest will print the following message:
+
+```bash
+ ✓ test/index.test.ts (1)
+
+ Test Files 1 passed
+      Tests 1 passed
+   Duration 140 ms (build 17 ms, tests 123 ms)
+```
