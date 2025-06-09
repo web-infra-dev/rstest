@@ -59,23 +59,20 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option('--disableConsoleIntercept', 'Disable console intercept')
     .option(
-      '--slowTestThreshold <slowTestThreshold>',
+      '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',
     )
     .option(
-      '-t, --testNamePattern <testNamePattern>',
+      '-t, --testNamePattern <value>',
       'Run only tests with a name that matches the regex',
     )
     .option(
-      '--testEnvironment <testEnvironment>',
+      '--testEnvironment <name>',
       'The environment that will be used for testing',
     )
-    .option('--testTimeout <testTimeout>', 'Timeout of a test in milliseconds')
+    .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
-    .option(
-      '--maxConcurrency <maxConcurrency>',
-      'Maximum number of concurrent tests',
-    )
+    .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(
       '--clearMocks',
       'Automatically clear mock calls, instances, contexts and results before every test',
