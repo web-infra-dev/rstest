@@ -1,0 +1,42 @@
+# Configure Rstest
+
+## Configuration file
+
+When you use the CLI of Rstest, Rstest will automatically read the configuration file in the root directory of the current project and resolve it in the following order:
+
+- `rstest.config.mjs`
+- `rstest.config.ts`
+- `rstest.config.js`
+- `rstest.config.cjs`
+- `rstest.config.mts`
+- `rstest.config.cts`
+
+We recommend using the `.mjs` or `.ts` format for the configuration file and importing the `defineConfig` utility function from `@rstest/core`. It provides friendly TypeScript type hints and autocompletion, which can help you avoid errors in the configuration.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'node',
+});
+```
+
+If you are developing a non-TypeScript project, you can use the `.mjs` format for the configuration file.
+
+### Specify config file
+
+Rstest CLI uses the `--config` option to specify the config file, which can be set to a relative path or an absolute path.
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest --config scripts/rstest.config.mjs"
+  }
+}
+```
+
+You can also abbreviate the `--config` option to `-c`:
+
+```bash
+rstest -c scripts/rstest.config.mjs
+```
