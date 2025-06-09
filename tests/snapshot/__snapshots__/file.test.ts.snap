@@ -1,4 +1,4 @@
-// Snapshot v1
+// Rstest Snapshot v1
 
 exports[`test snapshot > test snapshot file state > test toMatchSnapshot API - 1 1`] = `"hello world - 1"`;
 
