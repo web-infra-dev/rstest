@@ -90,6 +90,7 @@ export default defineConfig({
         title: 'Rstest',
         type: 'website',
         url: siteUrl,
+        image: 'https://assets.rspack.rs/rstest/rstest-og-image.png',
         description,
         twitter: {
           site: '@rspack_dev',
