@@ -10,6 +10,12 @@
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/core"
   },
+  "keywords": [
+    "rstest",
+    "test",
+    "rstack",
+    "rspack"
+  ],
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
