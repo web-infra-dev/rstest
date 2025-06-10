@@ -179,6 +179,8 @@ importers:
 
   tests/build/runtimeImport: {}
 
+  tests/build/runtimeRequire: {}
+
   tests/cli:
     devDependencies:
       '@rstest/core':
