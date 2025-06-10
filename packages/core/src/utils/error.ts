@@ -128,7 +128,6 @@ async function parseErrorStacktrace({
             // some Rspack runtime wrapper code, should filter them out
             return null;
           }
-
           return {
             ...frame,
             file: source,
