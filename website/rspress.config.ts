@@ -1,8 +1,14 @@
 import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
+import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
+import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
+import pluginSitemap from 'rspress-plugin-sitemap';
 import { defineConfig } from 'rspress/config';
+
+const siteUrl = 'https://rstest.rs';
+const description = 'The Rspack-based testing framework';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -44,7 +50,7 @@ export default defineConfig({
       {
         lang: 'en',
         label: 'English',
-        description: 'The Rspack-based testing framework',
+        description,
         editLink: {
           docRepoBaseUrl:
             'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
@@ -66,13 +72,30 @@ export default defineConfig({
       },
     ],
   },
-  plugins: [pluginFontOpenSans()],
+  plugins: [
+    pluginFontOpenSans(),
+    pluginSitemap({
+      domain: siteUrl,
+    }),
+    pluginLlms(),
+  ],
   builderConfig: {
     plugins: [
       pluginSass(),
       pluginGoogleAnalytics({
         // cspell:disable-next-line
         id: 'G-9WKFF5YJXQ',
+      }),
+      pluginOpenGraph({
+        title: 'Rstest',
+        type: 'website',
+        url: siteUrl,
+        image: 'https://assets.rspack.rs/rstest/rstest-og-image.png',
+        description,
+        twitter: {
+          site: '@rspack_dev',
+          card: 'summary_large_image',
+        },
       }),
     ],
   },
