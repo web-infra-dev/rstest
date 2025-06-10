@@ -114,8 +114,11 @@ async function parseErrorStacktrace({
       .filter(
         (frame) =>
           frame.file && !stackIgnores.some((entry) => frame.file?.match(entry)),
+        // &&
+        // frame.methodName !== 'webpackEmptyContext',
       )
       .map(async (frame) => {
+        // console.log('frame', frame);
         const sourcemap = getSourcemap(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
@@ -128,7 +131,7 @@ async function parseErrorStacktrace({
             // some Rspack runtime wrapper code, should filter them out
             return null;
           }
-
+          console.log('frame', source);
           return {
             ...frame,
             file: source,

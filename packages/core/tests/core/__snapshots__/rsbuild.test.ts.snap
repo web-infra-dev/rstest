@@ -1,4 +1,4 @@
-// Snapshot v1
+// Rstest Snapshot v1
 
 exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
 {
@@ -30,6 +30,8 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "requireAsExpression": false,
+        "requireDynamic": false,
       },
     },
     "rules": [
