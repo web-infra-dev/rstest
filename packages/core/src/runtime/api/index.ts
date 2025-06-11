@@ -38,13 +38,16 @@ export const createRstestRuntime = (
     configurable: true,
   });
 
+  const rstest = createRstestUtilities();
+
   return {
     runner,
     api: {
       ...runnerAPI,
       expect,
       assert,
-      rstest: createRstestUtilities(),
+      rstest,
+      rs: rstest,
     },
   };
 };

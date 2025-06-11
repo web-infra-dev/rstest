@@ -13,6 +13,7 @@ import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import { TEMP_RSTEST_OUTPUT_DIR, isDebug } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginMockRuntime } from './plugins/mockRuntime';
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -133,6 +134,9 @@ export const prepareRsbuild = async (
               config.plugins.push(
                 new rspack.RstestPlugin({
                   injectModulePathName: true,
+                  importMetaPathName: true,
+                  hoistMockModule: true,
+                  manualMockRoot: path.resolve(process.cwd(), '__mocks__'),
                 }),
               );
 
@@ -162,6 +166,7 @@ export const prepareRsbuild = async (
           },
           plugins: [
             pluginIgnoreResolveError,
+            pluginMockRuntime,
             pluginEntryWatch({
               globTestSourceEntries,
               setupFiles,
