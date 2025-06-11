@@ -1,4 +1,5 @@
 import type {
+  MaybePromise,
   Rstest,
   RunWorkerOptions,
   Test,
@@ -30,9 +31,16 @@ const preparePool = async ({
 }: RunWorkerOptions['options']) => {
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
+  const cleanupFns: (() => MaybePromise<void>)[] = [];
+
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const {
-    runtimeConfig: { globals, printConsoleTrace, disableConsoleIntercept },
+    runtimeConfig: {
+      globals,
+      printConsoleTrace,
+      disableConsoleIntercept,
+      testEnvironment,
+    },
   } = context;
 
   const workerState: WorkerState = {
@@ -67,6 +75,12 @@ const preparePool = async ({
 
   const { api, runner } = createRstestRuntime(workerState);
 
+  if (testEnvironment === 'jsdom') {
+    const { default: JSDOMEnvironment } = await import('./jsdom');
+    const { teardown } = await JSDOMEnvironment.setup(global, {});
+    cleanupFns.push(() => teardown(global));
+  }
+
   const rstestContext = {
     global: {
       '@rstest/core': api,
@@ -87,6 +101,9 @@ const preparePool = async ({
     runner,
     rpc,
     api,
+    cleanup: async () => {
+      await Promise.all(cleanupFns.map((fn) => fn()));
+    },
   };
 };
 
@@ -106,7 +123,8 @@ const runInPool = async (
     type,
   } = options;
 
-  const { rstestContext, runner, rpc, api } = await preparePool(options);
+  const { rstestContext, runner, rpc, api, cleanup } =
+    await preparePool(options);
 
   const loadFiles = async () => {
     // run setup files
@@ -145,6 +163,8 @@ const runInPool = async (
         tests: [],
         errors: formatTestError(err),
       };
+    } finally {
+      await cleanup();
     }
   }
 
@@ -175,6 +195,8 @@ const runInPool = async (
       results: [],
       errors: formatTestError(err),
     };
+  } finally {
+    await cleanup();
   }
 };
 

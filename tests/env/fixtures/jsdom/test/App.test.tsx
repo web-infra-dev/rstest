@@ -8,4 +8,6 @@ test('should render App correctly', async () => {
   const element = screen.getByText('Rsbuild with React');
 
   expect(element.tagName).toBe('H1');
+
+  expect(element.constructor).toBe(document.defaultView?.HTMLHeadingElement);
 });

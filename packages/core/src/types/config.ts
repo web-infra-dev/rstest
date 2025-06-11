@@ -85,10 +85,9 @@ export interface RstestConfig {
   /**
    * The environment that will be used for testing
    *
-   * TODO: support more test environments
    * @default 'node'
    */
-  testEnvironment?: 'node';
+  testEnvironment?: 'node' | 'jsdom';
 
   /**
    * print console traces when calling any console method.
