@@ -6,12 +6,14 @@ import {
   type RsbuildPlugin,
   type Rspack,
   createRsbuild,
+  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import { TEMP_RSTEST_OUTPUT_DIR, isDebug } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginMockRuntime } from './plugins/mockRuntime';
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -103,9 +105,6 @@ export const prepareRsbuild = async (
           source: {
             define: {
               'import.meta.rstest': "global['@rstest/core']",
-              // TODO: should be handled in parser hook
-              'import.meta.dirname': '__dirname',
-              'import.meta.filename': '__filename',
             },
           },
           output: {
@@ -132,6 +131,14 @@ export const prepareRsbuild = async (
               config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
+              config.plugins.push(
+                new rspack.RstestPlugin({
+                  injectModulePathName: true,
+                  importMetaPathName: true,
+                  hoistMockModule: true,
+                  manualMockRoot: path.resolve(process.cwd(), '__mocks__'),
+                }),
+              );
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
@@ -159,6 +166,7 @@ export const prepareRsbuild = async (
           },
           plugins: [
             pluginIgnoreResolveError,
+            pluginMockRuntime,
             pluginEntryWatch({
               globTestSourceEntries,
               setupFiles,
