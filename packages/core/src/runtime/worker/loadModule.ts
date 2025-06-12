@@ -81,8 +81,8 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{{`;
-  const code = `${codeDefinition}${codeContent}\n}}`;
+  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
+  const code = `${codeDefinition}${codeContent}\n}`;
 
   const fn = vm.runInThisContext(code, {
     // Used in stack traces produced by this script.
