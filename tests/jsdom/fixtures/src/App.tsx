@@ -8,6 +8,9 @@ const App = () => {
         onClick={() => {
           throw new Error('click error');
         }}
+        style={{
+          fontSize: '16px',
+        }}
       >
         Rsbuild with React
       </h1>

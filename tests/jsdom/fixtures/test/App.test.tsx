@@ -9,6 +9,7 @@ test('should render App correctly', async () => {
 
   expect(element.tagName).toBe('H1');
 
+  expect(element.style.fontSize).toBe('16px');
   expect(element.constructor).toBe(document.defaultView?.HTMLHeadingElement);
 });
 
