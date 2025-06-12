@@ -19,7 +19,7 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist-types/index.d.ts",
+  "types": "./dist-types/public.d.ts",
   "bin": {
     "rstest": "./bin/rstest.js"
   },
