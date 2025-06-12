@@ -227,7 +227,34 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
-  tests/env/fixtures/jsdom:
+  tests/externals:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+      strip-ansi:
+        specifier: ^7.1.0
+        version: 7.1.0
+
+  tests/externals/fixtures/test-pkg:
+    devDependencies:
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+
+  tests/globals/fixtures:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../../scripts/tsconfig
+
+  tests/jsdom/fixtures:
     dependencies:
       react:
         specifier: ^19.1.0
@@ -260,33 +287,6 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
-
-  tests/externals:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      picocolors:
-        specifier: ^1.1.1
-        version: 1.1.1
-      strip-ansi:
-        specifier: ^7.1.0
-        version: 7.1.0
-
-  tests/externals/fixtures/test-pkg:
-    devDependencies:
-      pathe:
-        specifier: ^2.0.3
-        version: 2.0.3
-
-  tests/globals/fixtures:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../packages/core
-      '@rstest/tsconfig':
-        specifier: workspace:*
-        version: link:../../../scripts/tsconfig
 
   tests/lifecycle:
     devDependencies:

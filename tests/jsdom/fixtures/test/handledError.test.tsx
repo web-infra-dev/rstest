@@ -2,12 +2,15 @@ import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import App from '../src/App';
 
-test('should render App correctly', async () => {
+test('should handle click error', async () => {
+  expect.assertions(1);
   render(<App />);
 
   const element = screen.getByText('Rsbuild with React');
 
-  expect(element.tagName).toBe('H1');
+  window.addEventListener('error', (event) => {
+    expect(event.message).toBe('click error');
+  });
 
-  expect(element.constructor).toBe(document.defaultView?.HTMLHeadingElement);
+  element.click();
 });
