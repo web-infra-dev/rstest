@@ -109,13 +109,14 @@ const preparePool = async ({
   }
 
   const rstestContext = {
-    global: {
-      '@rstest/core': api,
-    },
+    global,
     console: global.console,
     Error,
     ...(globals ? getGlobalApi(api) : {}),
   };
+
+  // @ts-expect-error
+  rstestContext.global['@rstest/core'] = api;
 
   return {
     rstestContext,

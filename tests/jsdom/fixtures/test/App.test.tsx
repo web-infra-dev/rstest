@@ -15,3 +15,7 @@ test('should render App correctly', async () => {
 test('should get window property correctly', async () => {
   expect(window.NodeList).toBeDefined();
 });
+
+test('should get global property correctly', async () => {
+  expect(global.URL).toBeDefined();
+});
