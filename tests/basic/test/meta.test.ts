@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import pathe from 'pathe';
-import { aDirName, aFileName } from '../src/meta';
+import { aDirName, aFileName, aMetaDirname, aMetaFileName } from '../src/meta';
 
 describe('import.meta', () => {
   it('should get test file meta correctly', async () => {
@@ -23,11 +23,13 @@ describe('import.meta', () => {
     ).toBeTruthy();
   });
 
-  // TODO
-  it.todo('should get source file meta correctly', async () => {
+  it('should get source file meta correctly', async () => {
     expect(pathe.normalize(aDirName).endsWith('/basic/src')).toBeTruthy();
     expect(
       pathe.normalize(aFileName).endsWith('/basic/src/meta.ts'),
     ).toBeTruthy();
+
+    expect(aMetaDirname).toBe(aDirName);
+    expect(aMetaFileName).toBe(aFileName);
   });
 });
