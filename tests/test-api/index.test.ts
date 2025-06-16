@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs, rstest } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
 describe('Test API', () => {
@@ -30,5 +30,9 @@ describe('Test API', () => {
         log.includes('Tests 1 failed | 1 passed | 1 skipped | 1 todo'),
       ),
     ).toBeTruthy();
+  });
+
+  it('`rs` should be identical to `rstest`', () => {
+    expect(rs).toBe(rstest);
   });
 });

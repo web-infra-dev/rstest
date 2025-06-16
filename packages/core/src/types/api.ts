@@ -160,4 +160,5 @@ export type Rstest = RunnerAPI & {
   expect: RstestExpect;
   assert: typeof assert;
   rstest: RstestUtilities;
+  rs: RstestUtilities;
 };
