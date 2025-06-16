@@ -11,3 +11,4 @@ export declare const afterAll: Rstest['afterAll'];
 export declare const beforeEach: Rstest['beforeEach'];
 export declare const afterEach: Rstest['afterEach'];
 export declare const rstest: RstestUtilities;
+export declare const rs: RstestUtilities;
