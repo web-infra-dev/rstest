@@ -53,11 +53,11 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "^1.4.0-beta.2",
+    "@rsbuild/core": "^1.4.0-beta.3",
     "@vitest/expect": "^3.2.3",
     "@vitest/snapshot": "^3.2.3",
     "@types/chai": "^5.2.2",
-    "birpc": "2.3.0",
+    "birpc": "2.4.0",
     "chai": "^5.2.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",

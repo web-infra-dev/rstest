@@ -4,6 +4,10 @@ import { createSnapshotSerializer } from 'path-serializer';
 
 expect.addSnapshotSerializer(
   createSnapshotSerializer({
-    workspace: path.join(__dirname, '..'),
+    root: path.resolve(__dirname, '..'),
+    features: {
+      replaceWorkspace: false,
+      escapeDoubleQuotes: false,
+    },
   }),
 );

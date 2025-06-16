@@ -1,5 +1,5 @@
-import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
+import pathe from 'pathe';
 import { sayHi } from '../src/index';
 
 describe('Index', () => {
@@ -13,7 +13,7 @@ describe('Index', () => {
 
   it('should use node API correctly', async () => {
     expect(
-      path.posix
+      pathe
         .resolve(__dirname, '../src/index.ts')
         .endsWith('/basic/src/index.ts'),
     ).toBeTruthy();
