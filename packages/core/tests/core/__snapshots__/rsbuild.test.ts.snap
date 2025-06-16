@@ -2,7 +2,7 @@
 
 exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
 {
-  "context": "<WORKSPACE>",
+  "context": "<ROOT>",
   "devtool": "source-map",
   "entry": {},
   "experiments": {
@@ -56,10 +56,10 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -85,7 +85,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 0,
@@ -127,7 +127,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -172,7 +172,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -326,7 +326,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<WORKSPACE>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -358,7 +358,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     "library": {
       "type": "commonjs2",
     },
-    "path": "<WORKSPACE>/dist/.rstest-temp",
+    "path": "<ROOT>/dist/.rstest-temp",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[hash].module.wasm",
@@ -373,16 +373,14 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     DefinePlugin {
       "_args": [
         {
-          "import.meta.dirname": "__dirname",
-          "import.meta.env.ASSET_PREFIX": "\\"\\"",
-          "import.meta.env.BASE_URL": "\\"/\\"",
+          "import.meta.env.ASSET_PREFIX": """",
+          "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
-          "import.meta.env.MODE": "\\"none\\"",
+          "import.meta.env.MODE": ""none"",
           "import.meta.env.PROD": false,
-          "import.meta.filename": "__filename",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": "\\"\\"",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.ASSET_PREFIX": """",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -408,10 +406,19 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
+    RstestPlugin {
+      "_args": [
+        {
+          "injectModulePathName": true,
+        },
+      ],
+      "affectedHooks": undefined,
+      "name": "RstestPlugin",
+    },
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<WORKSPACE>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
     },
     "extensions": [
       ".ts",
@@ -465,7 +472,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
           "isModule": "unknown",
           "jsc": {
             "experimental": {
-              "cacheRoot": "<WORKSPACE>/node_modules/.cache/.swc",
+              "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
               "keepImportAttributes": true,
             },
             "externalHelpers": true,
