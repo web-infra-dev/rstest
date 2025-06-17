@@ -1,3 +1,4 @@
+import { setTimeout } from 'node:timers';
 import type {
   Test,
   TestCase,

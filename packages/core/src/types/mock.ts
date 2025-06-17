@@ -1,3 +1,4 @@
+import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
 import type { FunctionLike } from './utils';
 
 interface MockResultReturn<T> {
@@ -257,4 +258,37 @@ export type RstestUtilities = {
    * Restores all global variables that were changed with `rstest.stubGlobal`.
    */
   unstubAllGlobals: () => RstestUtilities;
+
+  /**
+   * Mocks timers using `@sinonjs/fake-timers`.
+   */
+  useFakeTimers: (config?: FakeTimerInstallOpts) => RstestUtilities;
+  useRealTimers: () => RstestUtilities;
+  isFakeTimers: () => boolean;
+  /**
+   * Set the current system time used by fake timers.
+   */
+  setSystemTime: (now?: number | Date) => RstestUtilities;
+  getRealSystemTime: () => number;
+
+  runAllTicks: () => RstestUtilities;
+  runAllTimers: () => RstestUtilities;
+  runAllTimersAsync: () => Promise<RstestUtilities>;
+  runOnlyPendingTimers: () => RstestUtilities;
+  runOnlyPendingTimersAsync: () => Promise<RstestUtilities>;
+
+  advanceTimersByTime: (ms: number) => RstestUtilities;
+  advanceTimersByTimeAsync: (ms: number) => Promise<RstestUtilities>;
+  advanceTimersToNextTimer: (steps?: number) => RstestUtilities;
+  advanceTimersToNextTimerAsync: (steps?: number) => Promise<RstestUtilities>;
+  advanceTimersToNextFrame: () => RstestUtilities;
+
+  /**
+   * Returns the number of fake timers still left to run.
+   */
+  getTimerCount: () => number;
+  /**
+   * Removes all timers that are scheduled to run.
+   */
+  clearAllTimers: () => RstestUtilities;
 };

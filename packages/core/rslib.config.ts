@@ -10,6 +10,11 @@ export default defineConfig({
         distPath: './dist-types',
       },
       output: {
+        externals: {
+          // Temporary fix: `import * as timers from 'timers'` reassign error
+          timers: 'commonjs timers',
+          'timers/promises': 'commonjs timers/promises',
+        },
         minify: {
           jsOptions: {
             minimizerOptions: {

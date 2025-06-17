@@ -1,4 +1,5 @@
 import type { RstestUtilities } from '../../types';
+import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
 import { fn, isMockFunction, mocks, spyOn } from './spy';
 
 export const createRstestUtilities: () => RstestUtilities = () => {
@@ -7,6 +8,17 @@ export const createRstestUtilities: () => RstestUtilities = () => {
     string | symbol | number,
     PropertyDescriptor | undefined
   >();
+
+  let _timers: FakeTimers;
+
+  const timers = () => {
+    if (!_timers) {
+      _timers = new FakeTimers({
+        global: globalThis,
+      });
+    }
+    return _timers;
+  };
 
   const rstest: RstestUtilities = {
     fn,
@@ -107,6 +119,71 @@ export const createRstestUtilities: () => RstestUtilities = () => {
         }
       });
       originalGlobalValues.clear();
+      return rstest;
+    },
+    useFakeTimers: (opts?: FakeTimerInstallOpts) => {
+      timers().useFakeTimers(opts);
+      return rstest;
+    },
+    useRealTimers: () => {
+      timers().useRealTimers();
+      return rstest;
+    },
+    setSystemTime: (now?: number | Date) => {
+      timers().setSystemTime(now);
+      return rstest;
+    },
+    getRealSystemTime: () => {
+      return _timers ? timers().getRealSystemTime() : Date.now();
+    },
+    isFakeTimers: () => {
+      return _timers ? timers().isFakeTimers() : false;
+    },
+    runAllTimers: () => {
+      timers().runAllTimers();
+      return rstest;
+    },
+    runAllTimersAsync: async () => {
+      await timers().runAllTimersAsync();
+      return rstest;
+    },
+    runAllTicks: () => {
+      timers().runAllTicks();
+      return rstest;
+    },
+    runOnlyPendingTimers: () => {
+      timers().runOnlyPendingTimers();
+      return rstest;
+    },
+    runOnlyPendingTimersAsync: async () => {
+      await timers().runOnlyPendingTimersAsync();
+      return rstest;
+    },
+    advanceTimersByTime: (ms: number) => {
+      timers().advanceTimersByTime(ms);
+      return rstest;
+    },
+    advanceTimersByTimeAsync: async (ms: number) => {
+      await timers().advanceTimersByTimeAsync(ms);
+      return rstest;
+    },
+    advanceTimersToNextTimer: (steps?: number) => {
+      timers().advanceTimersToNextTimer(steps);
+      return rstest;
+    },
+    advanceTimersToNextTimerAsync: async (steps?: number) => {
+      await timers().advanceTimersToNextTimerAsync(steps);
+      return rstest;
+    },
+    advanceTimersToNextFrame: () => {
+      timers().advanceTimersToNextFrame();
+      return rstest;
+    },
+    getTimerCount: () => {
+      return timers().getTimerCount();
+    },
+    clearAllTimers: () => {
+      timers().clearAllTimers();
       return rstest;
     },
   };
