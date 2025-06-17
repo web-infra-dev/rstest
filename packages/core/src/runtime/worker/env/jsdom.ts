@@ -108,9 +108,9 @@ function addDefaultErrorHandler(window: Window) {
   };
 }
 
-export default (<TestEnvironment>{
+export const environment = <TestEnvironment<typeof globalThis>>{
   name: 'jsdom',
-  async setup(global: any, { jsdom = {} }) {
+  async setup(global, { jsdom = {} }) {
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = await import(
       'jsdom'
     );
@@ -147,17 +147,14 @@ export default (<TestEnvironment>{
 
     const cleanupGlobal = installGlobal(global, dom.window);
 
-    const cleanupHandler = addDefaultErrorHandler(global);
-
-    global.jsdom = dom;
+    const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 
     return {
       teardown() {
         cleanupHandler();
         dom.window.close();
-        delete global.jsdom;
         cleanupGlobal();
       },
     };
   },
-});
+};

@@ -103,8 +103,8 @@ const preparePool = async ({
   const { api, runner } = createRstestRuntime(workerState);
 
   if (testEnvironment === 'jsdom') {
-    const { default: JSDOMEnvironment } = await import('./env/jsdom');
-    const { teardown } = await JSDOMEnvironment.setup(global, {});
+    const { environment } = await import('./env/jsdom');
+    const { teardown } = await environment.setup(global, {});
     cleanupFns.push(() => teardown(global));
   }
 

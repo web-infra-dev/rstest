@@ -4,10 +4,10 @@ export interface TestEnvironmentReturn {
   teardown: (global: any) => MaybePromise<void>;
 }
 
-export interface TestEnvironment {
+export interface TestEnvironment<Global = any> {
   name: string;
   setup: (
-    global: any,
+    global: Global,
     options: Record<string, any>,
   ) => MaybePromise<TestEnvironmentReturn>;
 }
