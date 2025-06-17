@@ -1,4 +1,5 @@
 import type {
+  MaybePromise,
   Rstest,
   RunWorkerOptions,
   Test,
@@ -30,10 +31,27 @@ const preparePool = async ({
 }: RunWorkerOptions['options']) => {
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
+  const cleanupFns: (() => MaybePromise<void>)[] = [];
+
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
   const {
-    runtimeConfig: { globals, printConsoleTrace, disableConsoleIntercept },
+    runtimeConfig: {
+      globals,
+      printConsoleTrace,
+      disableConsoleIntercept,
+      testEnvironment,
+    },
   } = context;
+
+  if (!disableConsoleIntercept) {
+    const { createCustomConsole } = await import('./console');
+
+    global.console = createCustomConsole({
+      rpc,
+      testPath,
+      printConsoleTrace,
+    });
+  }
 
   const workerState: WorkerState = {
     ...context,
@@ -63,31 +81,88 @@ const preparePool = async ({
     },
   });
 
-  const { createCustomConsole } = await import('./console');
+  const unhandledErrors: Error[] = [];
+
+  const handleError = (e: Error, type: string) => {
+    e.name = type;
+    console.error(e);
+    unhandledErrors.push(e);
+  };
+
+  const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
+  const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
+
+  process.on('uncaughtException', uncaughtException);
+  process.on('unhandledRejection', unhandledRejection);
+
+  cleanupFns.push(() => {
+    process.off('uncaughtException', uncaughtException);
+    process.off('unhandledRejection', unhandledRejection);
+  });
 
   const { api, runner } = createRstestRuntime(workerState);
 
+  if (testEnvironment === 'jsdom') {
+    const { environment } = await import('./env/jsdom');
+    const { teardown } = await environment.setup(global, {});
+    cleanupFns.push(() => teardown(global));
+  }
+
   const rstestContext = {
-    global: {
-      '@rstest/core': api,
-    },
-    console: disableConsoleIntercept
-      ? console
-      : createCustomConsole({
-          rpc,
-          testPath,
-          printConsoleTrace,
-        }),
+    global,
+    console: global.console,
     Error,
     ...(globals ? getGlobalApi(api) : {}),
   };
+
+  // @ts-expect-error
+  rstestContext.global['@rstest/core'] = api;
 
   return {
     rstestContext,
     runner,
     rpc,
     api,
+    unhandledErrors,
+    cleanup: async () => {
+      await Promise.all(cleanupFns.map((fn) => fn()));
+    },
   };
+};
+
+const loadFiles = async ({
+  setupEntries,
+  assetFiles,
+  rstestContext,
+  distPath,
+  testPath,
+}: {
+  setupEntries: RunWorkerOptions['options']['setupEntries'];
+  assetFiles: RunWorkerOptions['options']['assetFiles'];
+  rstestContext: Record<string, any>;
+  distPath: string;
+  testPath: string;
+}): Promise<void> => {
+  // run setup files
+  for (const { distPath, testPath } of setupEntries) {
+    const setupCodeContent = assetFiles[distPath]!;
+
+    await loadModule({
+      codeContent: setupCodeContent,
+      distPath,
+      testPath,
+      rstestContext,
+      assetFiles,
+    });
+  }
+
+  await loadModule({
+    codeContent: assetFiles[distPath]!,
+    distPath,
+    testPath,
+    rstestContext,
+    assetFiles,
+  });
 };
 
 const runInPool = async (
@@ -106,38 +181,27 @@ const runInPool = async (
     type,
   } = options;
 
-  const { rstestContext, runner, rpc, api } = await preparePool(options);
-
-  const loadFiles = async () => {
-    // run setup files
-    for (const { distPath, testPath } of setupEntries) {
-      const setupCodeContent = assetFiles[distPath]!;
-
-      await loadModule({
-        codeContent: setupCodeContent,
-        distPath,
-        testPath,
-        rstestContext,
-        assetFiles,
-      });
-    }
-
-    await loadModule({
-      codeContent: assetFiles[distPath]!,
-      distPath,
-      testPath,
-      rstestContext,
-      assetFiles,
-    });
-  };
+  const cleanups: (() => MaybePromise<void>)[] = [];
 
   if (type === 'collect') {
     try {
-      await loadFiles();
+      const { rstestContext, runner, cleanup, unhandledErrors } =
+        await preparePool(options);
+
+      cleanups.push(cleanup);
+
+      await loadFiles({
+        rstestContext,
+        distPath,
+        testPath,
+        assetFiles,
+        setupEntries,
+      });
       const tests = await runner.collectTests();
       return {
         testPath,
         tests,
+        errors: formatTestError(unhandledErrors),
       };
     } catch (err) {
       return {
@@ -145,11 +209,24 @@ const runInPool = async (
         tests: [],
         errors: formatTestError(err),
       };
+    } finally {
+      await Promise.all(cleanups.map((fn) => fn()));
     }
   }
 
   try {
-    await loadFiles();
+    const { rstestContext, runner, rpc, api, cleanup, unhandledErrors } =
+      await preparePool(options);
+
+    cleanups.push(cleanup);
+
+    await loadFiles({
+      rstestContext,
+      distPath,
+      testPath,
+      assetFiles,
+      setupEntries,
+    });
     const results = await runner.runTests(
       testPath,
       {
@@ -166,6 +243,13 @@ const runInPool = async (
       api,
     );
 
+    if (unhandledErrors.length > 0) {
+      results.status = 'fail';
+      results.errors = (results.errors || []).concat(
+        ...formatTestError(unhandledErrors),
+      );
+    }
+
     return results;
   } catch (err) {
     return {
@@ -175,6 +259,8 @@ const runInPool = async (
       results: [],
       errors: formatTestError(err),
     };
+  } finally {
+    await Promise.all(cleanups.map((fn) => fn()));
   }
 };
 
