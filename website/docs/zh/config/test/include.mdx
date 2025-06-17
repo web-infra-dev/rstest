@@ -1,0 +1,14 @@
+# include
+
+- **类型：** `string[]`
+- **默认值：** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
+
+匹配 glob 规则的文件将被视为测试文件。
+
+```ts
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+});
+```

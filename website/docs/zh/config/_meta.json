@@ -3,5 +3,10 @@
     "type": "file",
     "name": "index",
     "label": "Overview"
+  },
+  {
+    "type": "dir",
+    "name": "test",
+    "label": "Test Configurations"
   }
 ]

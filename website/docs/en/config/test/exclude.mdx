@@ -1,0 +1,14 @@
+# exclude
+
+- **Type:** `string[]`
+- **Default:** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
+
+A list of glob patterns that should be excluded from your test files.
+
+```ts
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  exclude: ['**/node_modules/**'],
+});
+```

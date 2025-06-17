@@ -82,7 +82,11 @@ const createDefaultConfig = (): NormalizedConfig => ({
   root: process.cwd(),
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: ['**/node_modules/**', '**/dist/**'],
+  exclude: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.{idea,git,cache,output,temp}/**',
+  ],
   includeSource: [],
   pool: {
     type: 'forks',
