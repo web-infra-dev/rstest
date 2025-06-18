@@ -43,11 +43,14 @@ export const createRstestUtilities: () => RstestUtilities = () => {
       // TODO
     },
     importMock: async () => {
-      // TODO
       return {} as any;
     },
     importActual: async () => {
-      // TODO
+      // The real implementation is handled by Rstest built-in plugin.
+      return {} as any;
+    },
+    requireActual: () => {
+      // The real implementation is handled by Rstest built-in plugin.
       return {} as any;
     },
     resetModules: () => {
