@@ -225,9 +225,15 @@ export type RstestUtilities = {
 
   /**
    * @todo
-   * Returns the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
+   * Import and return the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
    */
   importActual: <T = Record<string, unknown>>(path: string) => Promise<T>;
+
+  /**
+   * @todo
+   * Require and return the actual module instead of a mock, bypassing all checks on whether the module should receive a mock implementation or not.
+   */
+  requireActual: <T = Record<string, unknown>>(path: string) => T;
 
   /**
    * @todo
