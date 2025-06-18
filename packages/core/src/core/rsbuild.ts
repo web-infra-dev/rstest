@@ -47,9 +47,6 @@ const autoExternalNodeModules: (
       dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
     );
   };
-  if (/node_modules/.test(request)) {
-    return doExternal();
-  }
 
   const resolver = getResolve?.();
 
