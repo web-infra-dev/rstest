@@ -59,7 +59,7 @@
       "simple-git-hooks"
     ],
     "overrides": {
-      "@rspack/core": "npm:@rspack-canary/core@1.4.0-canary-09c640dc-20250617101749"
+      "@rspack/core": "link:../rspack/packages/rspack"
     },
     "onlyBuiltDependencies": [
       "@biomejs/biome",

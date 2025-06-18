@@ -29,23 +29,23 @@ const unifyNodeProtocol = (id) => {
 
 __webpack_require__.set_mock = (id, modFactory) => {
   if (typeof modFactory === 'string') {
-    const mockFromId = modFactory;
-    const mockToId = id;
-    __webpack_require__.c[mockFromId] = { exports: __webpack_require__(mockToId) };
-    __webpack_require__.mocked_modules[mockFromId] = mockToId;
-  }
-
-  if(typeof modFactory === 'function') {
-    // TODO:
-  }
-
+    __webpack_require__.c[modFactory] = { exports: __webpack_require__(id) };
+    }
+    
+    if(typeof modFactory === 'function') {
+      __webpack_require__.c[id] = { exports: modFactory() };
+    }
+    
+    __webpack_require__.mocked_modules[id] = __webpack_require__.c[id];
 };
+
 __webpack_require__.get_mock = (id) => {
   let currentMock = __webpack_require__.mocked_modules[id];
   if (currentMock) {
     return currentMock;
   }
 };
+
 __webpack_require__.rstest_require = (...args) => {
   let currentMock = __webpack_require__.mocked_modules[args[0]];
   if (currentMock) {
