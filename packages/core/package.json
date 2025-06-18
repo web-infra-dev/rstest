@@ -77,6 +77,7 @@
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
     "jest-diff": "^30.0.0",
+    "license-webpack-plugin": "^4.0.2",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.3",
     "source-map-support": "^0.5.21",
