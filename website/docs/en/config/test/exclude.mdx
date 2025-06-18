@@ -1,3 +1,7 @@
+---
+overviewHeaders: []
+---
+
 # exclude
 
 - **Type:** `string[]`
@@ -5,10 +9,15 @@
 
 A list of glob patterns that should be excluded from your test files.
 
+## Example
+
+Exclude the test files under `node_modules`:
+
 ```ts
 import { defineConfig } from 'rstest';
 
 export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   exclude: ['**/node_modules/**'],
 });
 ```
