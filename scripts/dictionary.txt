@@ -9,6 +9,7 @@ Birpc
 brotli
 browserslistrc
 bundleless
+bytedance
 caniuse
 CEHQ
 chunkhash
