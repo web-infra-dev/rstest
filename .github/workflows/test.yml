@@ -48,11 +48,11 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ matrix.node_version }}
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Dependencies
@@ -95,11 +95,11 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ matrix.node-version }}
         if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node_version }}
           cache: 'pnpm'
 
       - name: Install Dependencies
