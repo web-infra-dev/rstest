@@ -24,6 +24,8 @@ import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
 import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
 
+const RealDate = Date;
+
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
@@ -297,7 +299,7 @@ export class TestRunner {
           }
         }
       } else {
-        const start = Date.now();
+        const start = RealDate.now();
         let result: TestResult | undefined = undefined;
         let retryCount = 0;
 
@@ -315,13 +317,13 @@ export class TestRunner {
           retryCount++;
         } while (retryCount <= retry && result.status === 'fail');
 
-        result.duration = Date.now() - start;
+        result.duration = RealDate.now() - start;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
     };
 
-    const start = Date.now();
+    const start = RealDate.now();
 
     if (tests.length === 0) {
       if (passWithNoTests) {
@@ -362,7 +364,7 @@ export class TestRunner {
       results,
       snapshotResult,
       errors,
-      duration: Date.now() - start,
+      duration: RealDate.now() - start,
     };
   }
 

@@ -9,6 +9,8 @@ import {
 import { color, prettyTime } from '../../utils';
 import type { WorkerRPC } from './rpc';
 
+const RealDate = Date;
+
 export type LogCounters = {
   [label: string]: number;
 };
@@ -150,14 +152,14 @@ export function createCustomConsole({
         return;
       }
 
-      this._timers[label] = new Date();
+      this._timers[label] = new RealDate();
     }
 
     override timeEnd(label = 'default'): void {
       const startTime = this._timers[label];
 
       if (startTime != null) {
-        const endTime = Date.now();
+        const endTime = RealDate.now();
         const time = endTime - startTime.getTime();
         this._log('time', format(`${label}: ${prettyTime(time)}`));
         delete this._timers[label];
@@ -168,7 +170,7 @@ export function createCustomConsole({
       const startTime = this._timers[label];
 
       if (startTime != null) {
-        const endTime = new Date();
+        const endTime = new RealDate();
         const time = endTime.getTime() - startTime.getTime();
         this._log('time', format(`${label}: ${prettyTime(time)}`, ...data));
       }
