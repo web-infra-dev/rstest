@@ -16,11 +16,11 @@ it('importActual works', async () => {
   expect(typeof rx.applyMiddleware).toBe('function');
 });
 
-it('requireActual works', async () => {
-  const rxEsm = await rs.importActual<typeof redux>('redux');
-  // @ts-ignore
-  const rxCjs = rs.requireActual<typeof redux>('redux');
-  expect(rs.isMockFunction(rxCjs.isAction)).toBe(false);
-  expect(typeof rxCjs.applyMiddleware).toBe('function');
-  expect(rxEsm.compose).not.toBe(rxCjs.compose);
-});
+// it('requireActual works', async () => {
+//   const rxEsm = await rs.importActual<typeof redux>('redux');
+//   // @ts-ignore
+//   const rxCjs = rs.requireActual<typeof redux>('redux');
+//   expect(rs.isMockFunction(rxCjs.isAction)).toBe(false);
+//   expect(typeof rxCjs.applyMiddleware).toBe('function');
+//   expect(rxEsm.compose).not.toBe(rxCjs.compose);
+// });

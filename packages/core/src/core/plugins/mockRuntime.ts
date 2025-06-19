@@ -18,29 +18,29 @@ if (typeof __webpack_module_cache__ !== 'undefined') {
   __webpack_require__.c = __webpack_module_cache__;
 }
 
-__webpack_require__.mocked_modules = {};
+__webpack_require__.before_mocked_modules = {};
 
 __webpack_require__.reset_modules = () => {
   __webpack_module_cache__ = {};
 }
 
-const unifyNodeProtocol = (id) => {
-  if (id.startsWith('node:')) {
-    return id.slice(5);
-  }
-  return id;
-};
+__webpack_require__.do_unmock = (id) => {
+  delete __webpack_module_cache__[id]
+}
+
+__webpack_require__.import_actual = (id) => {
+  const beforeMock = __webpack_require__.before_mocked_modules[id];
+  return beforeMock;
+}
 
 __webpack_require__.set_mock = (id, modFactory) => {
+// TODO: order is reverted in string and function.
   if (typeof modFactory === 'string') {
-    __webpack_require__.c[modFactory] = { exports: __webpack_require__(id) };
-    }
-    
-    if(typeof modFactory === 'function') {
-      __webpack_require__.c[id] = { exports: modFactory() };
-    }
-    
-    __webpack_require__.mocked_modules[id] = __webpack_require__.c[id];
+    __webpack_require__.before_mocked_modules[id] = __webpack_require__(id);
+    __webpack_require__.c[id] = { exports: __webpack_require__(modFactory) };
+  } else if (typeof modFactory === 'function') {
+    __webpack_require__.c[id] = { exports: modFactory() };
+  }
 };
 
 __webpack_require__.get_mock = (id) => {

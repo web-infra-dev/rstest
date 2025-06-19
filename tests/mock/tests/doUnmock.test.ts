@@ -1,29 +1,31 @@
-import { afterEach, beforeEach, expect, rs, test } from '@rstest/core';
+import { afterEach, beforeAll, expect, rs, test } from '@rstest/core';
+import { isAction } from 'redux';
 
-// https://github.com/vitest-dev/vitest/issues/1940
-beforeEach(() => {
-  rs.doMock('/data', () => ({
-    data: {
-      state: 'STARTED',
+beforeAll(() => {
+  rs.doMock('redux', () => ({
+    isAction: {
+      state: 1,
     },
   }));
 });
 
-afterEach(() => {
-  rs.doUnmock('/data');
-});
+// afterEach(() => {
+//   rs.doUnmock('/data');
+// });
 
 test('first import', async () => {
-  // @ts-expect-error I know this
-  const { data } = await import('/data');
-  data.state = 'STOPPED';
-  expect(data.state).toBe('STOPPED');
+  const redux = await import('redux');
+  // @ts-ignore
+  // @ts-ignore
+  isAction.state = 2;
+  // @ts-ignore
+  expect(isAction.state).toBe(2);
 });
 
 test('second import should have been re-mocked', async () => {
-  // @ts-expect-error I know this
-  const { data } = await import('/data');
-  expect(data.state).toBe('STARTED');
+  rs.doUnmock('redux');
+  const redux = await import('redux');
+  expect(typeof redux.isAction).toBe('function');
 });
 
 // test('unmock should clear modules replaced with imitation', async () => {

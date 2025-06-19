@@ -45,7 +45,7 @@ const autoExternalNodeModules: (
     callback(
       undefined,
       externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+      dependencyType === 'commonjs' ? 'commonjs' : 'import',
     );
   };
 
