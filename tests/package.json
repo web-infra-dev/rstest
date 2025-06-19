@@ -18,6 +18,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "memfs": "^4.17.2"
+    "memfs": "^4.17.2",
+    "react": "^19.1.0"
   }
 }
