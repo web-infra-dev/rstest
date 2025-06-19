@@ -1,0 +1,23 @@
+---
+overviewHeaders: []
+---
+
+# exclude
+
+- **类型：** `string[]`
+- **默认值：** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
+
+匹配 glob 规则的文件将不会被视为测试文件。
+
+## 示例
+
+排除 `node_modules` 下的测试文件：
+
+```ts
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: ['**/node_modules/**'],
+});
+```

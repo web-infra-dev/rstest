@@ -1,0 +1,14 @@
+# include
+
+- **Type:** `string[]`
+- **Default:** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
+
+A list of glob patterns that match your test files.
+
+```ts
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+});
+```
