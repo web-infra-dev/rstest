@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 describe('test externals', () => {
   it('should external node_modules by default', async () => {
     process.env.DEBUG_RSTEST_OUTPUTS = 'true';
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', './fixtures/index.test.ts'],
       options: {
@@ -20,8 +20,7 @@ describe('test externals', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const outputPath = join(
       __dirname,

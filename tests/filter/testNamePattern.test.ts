@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test testNamePattern', () => {
   it('should filter test case name success', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/testNamePattern.test.ts', '-t=level-B-A'],
       options: {
@@ -18,8 +18,7 @@ describe('test testNamePattern', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
@@ -31,7 +30,7 @@ describe('test testNamePattern', () => {
   });
 
   it('should filter test suite name success', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/testNamePattern.test.ts', '-t=level-B'],
       options: {
@@ -41,8 +40,7 @@ describe('test testNamePattern', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
@@ -55,7 +53,7 @@ describe('test testNamePattern', () => {
   });
 
   it('should not run tests when filter test skipped', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/testNamePattern.test.ts', '-t=level-B-B'],
       options: {
@@ -65,8 +63,7 @@ describe('test testNamePattern', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 

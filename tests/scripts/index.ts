@@ -76,7 +76,19 @@ export async function runRstestCli({
 }: { command: string; options?: Partial<Options>; args?: string[] }) {
   const process = x(command, args, options as Options);
   const cli = new Cli(process);
-  return { cli };
+
+  const expectExecSuccess = async () => {
+    await cli.exec;
+    const exitCode = cli.exec.process?.exitCode;
+    if (exitCode !== 0) {
+      const logs = cli.stdout.split('\n').filter(Boolean);
+      throw new Error(
+        `Test failed with exit code ${exitCode}. Logs: ${logs.join('\n')}`,
+      );
+    }
+  };
+
+  return { cli, expectExecSuccess };
 }
 
 export async function prepareFixtures({

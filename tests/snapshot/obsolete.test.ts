@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 
 describe('test snapshot', () => {
   it('should mark snapshot obsolete ', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/obsolete.test.ts'],
       options: {
@@ -20,8 +20,7 @@ describe('test snapshot', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
@@ -29,7 +28,7 @@ describe('test snapshot', () => {
   });
 
   it('should not mark snapshot obsolete when case skipped', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/skip.test.ts'],
       options: {
@@ -39,8 +38,7 @@ describe('test snapshot', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
