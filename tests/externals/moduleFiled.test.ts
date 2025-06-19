@@ -17,7 +17,7 @@ describe('test module filed', () => {
   });
 
   it('should load module correctly with module filed', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', './fixtures/moduleFiled'],
       options: {
@@ -27,7 +27,6 @@ describe('test module filed', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 });
