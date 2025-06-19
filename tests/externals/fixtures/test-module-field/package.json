@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@rstest/tests-module-filed",
+  "name": "@rstest/tests-module-field",
   "main": "index.js",
   "module": "index.es.js",
   "version": "1.0.0"

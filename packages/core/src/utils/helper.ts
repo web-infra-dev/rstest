@@ -137,4 +137,10 @@ export const undoSerializableConfig = (
   };
 };
 
+export const getNodeVersion = (): number[] => {
+  return typeof process.versions?.node === 'string'
+    ? process.versions.node.split('.').map(Number)
+    : [0, 0, 0];
+};
+
 export { color };

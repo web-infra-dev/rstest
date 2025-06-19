@@ -1,3 +1,3 @@
-import { a } from 'test-module-filed';
+import { a } from 'test-module-field';
 
 export { a };

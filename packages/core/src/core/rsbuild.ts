@@ -10,7 +10,7 @@ import {
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import { TEMP_RSTEST_OUTPUT_DIR, isDebug } from '../utils';
+import { TEMP_RSTEST_OUTPUT_DIR, getNodeVersion, isDebug } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
@@ -74,7 +74,15 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { name, plugins, resolve, source, output, tools },
+    normalizedConfig: {
+      name,
+      plugins,
+      resolve,
+      source,
+      output,
+      tools,
+      testEnvironment,
+    },
   } = context;
 
   RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
@@ -116,7 +124,7 @@ export const prepareRsbuild = async (
               {
                 '@rstest/core': 'global @rstest/core',
               },
-              autoExternalNodeModules,
+              testEnvironment === 'node' ? autoExternalNodeModules : {},
             ],
             target: 'node',
           },
@@ -145,11 +153,17 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
-              config.resolve ??= {};
-              // skip `module` field. ESM module resolved by module field is not always a native ESM module
-              config.resolve.mainFields = config.resolve.mainFields?.filter(
-                (filed) => filed !== 'module',
-              ) || ['main'];
+              if (
+                testEnvironment === 'node' &&
+                (getNodeVersion()[0] || 0) < 20
+              ) {
+                config.resolve ??= {};
+                // skip `module` field in Node.js 18 and below.
+                // ESM module resolved by module field is not always a native ESM module
+                config.resolve.mainFields = config.resolve.mainFields?.filter(
+                  (filed) => filed !== 'module',
+                ) || ['main'];
+              }
 
               config.optimization = {
                 ...(config.optimization || {}),
