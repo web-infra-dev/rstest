@@ -54,7 +54,7 @@ export const createRstestUtilities: () => RstestUtilities = () => {
     unMock: () => {
       // TODO
     },
-    doUnMock: () => {
+    doUnmock: () => {
       // TODO
     },
     importMock: async () => {
