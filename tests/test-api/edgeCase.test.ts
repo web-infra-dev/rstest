@@ -27,7 +27,7 @@ describe('Test Edge Cases', () => {
 
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/moduleNotFound.test.ts'],
       options: {
@@ -36,8 +36,7 @@ describe('Test Edge Cases', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
     expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
@@ -46,7 +45,7 @@ describe('Test Edge Cases', () => {
   });
 
   it('only in skip suite', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/onlyInSkip.test.ts'],
       options: {
@@ -56,7 +55,7 @@ describe('Test Edge Cases', () => {
       },
     });
     await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 

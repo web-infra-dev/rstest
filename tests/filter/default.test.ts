@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 it('should run success without filter', async () => {
-  const { cli } = await runRstestCli({
+  const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'fixtures/testNamePattern.test.ts'],
     options: {
@@ -17,8 +17,7 @@ it('should run success without filter', async () => {
     },
   });
 
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 

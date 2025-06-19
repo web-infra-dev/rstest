@@ -7,7 +7,7 @@ it('should run concurrent cases correctly with limit', async () => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
 
-  const { cli } = await runRstestCli({
+  const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'fixtures/concurrentLimit.test.ts', '--maxConcurrency=4'],
     options: {
@@ -16,8 +16,7 @@ it('should run concurrent cases correctly with limit', async () => {
       },
     },
   });
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 

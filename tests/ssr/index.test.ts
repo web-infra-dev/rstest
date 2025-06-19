@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test ssr', () => {
   it('should run ssr test succeed', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'test/index.test.ts'],
       options: {
@@ -18,10 +18,6 @@ describe('test ssr', () => {
       },
     });
 
-    await cli.exec;
-
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 });

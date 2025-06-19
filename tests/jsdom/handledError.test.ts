@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 it('should handle error correctly', async () => {
-  const { cli } = await runRstestCli({
+  const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'test/handledError'],
     options: {
@@ -19,5 +19,5 @@ it('should handle error correctly', async () => {
 
   await cli.exec;
 
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 });

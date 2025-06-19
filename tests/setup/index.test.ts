@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test setup file', async () => {
   it('should run setup file correctly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -22,7 +22,7 @@ describe('test setup file', async () => {
     const logs = cli.stdout
       .split('\n')
       .filter((log) => log.startsWith('[afterAll]'));
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
     expect(logs).toEqual(['[afterAll] setup']);
   });
 

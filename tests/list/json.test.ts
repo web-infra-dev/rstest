@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 
 describe('test list command with --json', () => {
   it('should list tests json correctly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '--json'],
       options: {
@@ -19,8 +19,7 @@ describe('test list command with --json', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
@@ -49,7 +48,7 @@ describe('test list command with --json', () => {
   });
 
   it('should list test files json correctly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '--filesOnly', '--json'],
       options: {
@@ -59,8 +58,7 @@ describe('test list command with --json', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
@@ -83,7 +81,7 @@ describe('test list command with --json', () => {
 
     fs.rmSync(outputPath, { force: true });
 
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '--json', 'output.json'],
       options: {
@@ -93,8 +91,7 @@ describe('test list command with --json', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     expect(fs.existsSync(outputPath)).toBeTruthy();
 
