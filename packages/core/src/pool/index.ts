@@ -105,6 +105,7 @@ export const createPool = async ({
       ...execArgv,
       '--experimental-vm-modules',
       '--experimental-import-meta-resolve',
+      '--no-warnings',
     ],
     env: {
       NODE_ENV: 'test',

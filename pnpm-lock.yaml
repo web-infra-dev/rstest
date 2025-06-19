@@ -160,12 +160,12 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
-      '@types/sinonjs__fake-timers':
-        specifier: ^8.1.5
-        version: 8.1.5
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
+      '@types/sinonjs__fake-timers':
+        specifier: ^8.1.5
+        version: 8.1.5
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
@@ -250,6 +250,8 @@ importers:
       strip-ansi:
         specifier: ^7.1.0
         version: 7.1.0
+
+  tests/externals/fixtures/test-interop: {}
 
   tests/externals/fixtures/test-pkg:
     devDependencies:
