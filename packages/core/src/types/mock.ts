@@ -208,6 +208,15 @@ export type RstestUtilities = {
 
   /**
    * @todo
+   * Mock a module, not hoisted.
+   */
+  doMockRequire: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T,
+  ) => void;
+
+  /**
+   * @todo
    * Removes module from the mocked registry.
    */
   unMock: (path: string) => void;
@@ -216,7 +225,7 @@ export type RstestUtilities = {
    * @todo
    * Removes module from the mocked registry, not hoisted.
    */
-  doUnMock: (path: string) => void;
+  doUnmock: (path: string) => void;
 
   /**
    * @todo

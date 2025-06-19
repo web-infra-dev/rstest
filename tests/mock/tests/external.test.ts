@@ -1,6 +1,6 @@
-import { expect, it, rstest } from '@rstest/core';
+import { expect, it, rs } from '@rstest/core';
 
-rstest.mock('picocolors', () => {
+rs.mock('picocolors', () => {
   return {
     sayHi: () => 'hi',
   };

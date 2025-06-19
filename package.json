@@ -58,6 +58,9 @@
       "nx",
       "simple-git-hooks"
     ],
+    "overrides": {
+      "@rspack/core": "link:../rspack/packages/rspack"
+    },
     "onlyBuiltDependencies": [
       "@biomejs/biome",
       "core-js",

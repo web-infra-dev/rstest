@@ -1,0 +1,12 @@
+import { expect, it, rs } from '@rstest/core';
+
+// @ts-ignore
+rs.mockRequire('redux');
+
+it('mocked redux', () => {
+  const redux = require('redux').default;
+  redux.isAction('string');
+  expect(redux.isAction).toHaveBeenCalledWith('string');
+  // @ts-ignore
+  expect(redux.mocked).toBe('redux_yes');
+});
