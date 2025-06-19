@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "@rstest/tests-interop",
+  "main": "index.js",
+  "version": "1.0.0"
+}
