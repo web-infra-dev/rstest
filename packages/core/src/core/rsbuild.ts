@@ -145,6 +145,12 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
+              config.resolve ??= {};
+              // skip `module` field. ESM module resolved by module field is not always a native ESM module
+              config.resolve.mainFields = config.resolve.mainFields?.filter(
+                (filed) => filed !== 'module',
+              ) || ['main'];
+
               config.optimization = {
                 ...(config.optimization || {}),
                 moduleIds: 'named',
