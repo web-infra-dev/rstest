@@ -20,6 +20,10 @@ if (typeof __webpack_module_cache__ !== 'undefined') {
 
 __webpack_require__.mocked_modules = {};
 
+__webpack_require__.reset_modules = () => {
+  __webpack_module_cache__ = {};
+}
+
 const unifyNodeProtocol = (id) => {
   if (id.startsWith('node:')) {
     return id.slice(5);
