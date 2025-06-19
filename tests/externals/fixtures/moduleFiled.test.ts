@@ -1,6 +1,6 @@
 import { expect, it } from '@rstest/core';
-import { test } from './test-pkg/importModule';
+import { a } from './test-pkg/importModule';
 
 it('should interop correctly', () => {
-  expect(test.a).toBe(1);
+  expect(a).toBe(1);
 });
