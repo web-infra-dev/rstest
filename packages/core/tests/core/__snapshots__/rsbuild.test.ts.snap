@@ -428,6 +428,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       ".jsx",
       ".json",
     ],
+    "mainFields": [
+      "main",
+    ],
   },
   "target": "node",
   "watchOptions": {
