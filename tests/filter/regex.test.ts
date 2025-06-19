@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 it('should filter test suite name success use regex', async () => {
-  const { cli } = await runRstestCli({
+  const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: [
       'run',
@@ -21,8 +21,7 @@ it('should filter test suite name success use regex', async () => {
     },
   });
 
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 

@@ -53,6 +53,8 @@ const preparePool = async ({
     });
   }
 
+  const interopDefault = testEnvironment === 'jsdom';
+
   const workerState: WorkerState = {
     ...context,
     snapshotOptions: {
@@ -119,6 +121,7 @@ const preparePool = async ({
   rstestContext.global['@rstest/core'] = api;
 
   return {
+    interopDefault,
     rstestContext,
     runner,
     rpc,
@@ -136,12 +139,14 @@ const loadFiles = async ({
   rstestContext,
   distPath,
   testPath,
+  interopDefault,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: RunWorkerOptions['options']['assetFiles'];
   rstestContext: Record<string, any>;
   distPath: string;
   testPath: string;
+  interopDefault: boolean;
 }): Promise<void> => {
   // run setup files
   for (const { distPath, testPath } of setupEntries) {
@@ -153,6 +158,7 @@ const loadFiles = async ({
       testPath,
       rstestContext,
       assetFiles,
+      interopDefault,
     });
   }
 
@@ -162,6 +168,7 @@ const loadFiles = async ({
     testPath,
     rstestContext,
     assetFiles,
+    interopDefault,
   });
 };
 
@@ -185,8 +192,13 @@ const runInPool = async (
 
   if (type === 'collect') {
     try {
-      const { rstestContext, runner, cleanup, unhandledErrors } =
-        await preparePool(options);
+      const {
+        rstestContext,
+        runner,
+        cleanup,
+        unhandledErrors,
+        interopDefault,
+      } = await preparePool(options);
 
       cleanups.push(cleanup);
 
@@ -196,6 +208,7 @@ const runInPool = async (
         testPath,
         assetFiles,
         setupEntries,
+        interopDefault,
       });
       const tests = await runner.collectTests();
       return {
@@ -215,8 +228,15 @@ const runInPool = async (
   }
 
   try {
-    const { rstestContext, runner, rpc, api, cleanup, unhandledErrors } =
-      await preparePool(options);
+    const {
+      rstestContext,
+      runner,
+      rpc,
+      api,
+      cleanup,
+      unhandledErrors,
+      interopDefault,
+    } = await preparePool(options);
 
     cleanups.push(cleanup);
 
@@ -226,6 +246,7 @@ const runInPool = async (
       testPath,
       assetFiles,
       setupEntries,
+      interopDefault,
     });
     const results = await runner.runTests(
       testPath,

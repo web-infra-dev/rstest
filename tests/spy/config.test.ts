@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 it('test clearMocks config', async () => {
-  const { cli } = await runRstestCli({
+  const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'fixtures/clearMocks.test', '--clearMocks'],
     options: {
@@ -17,12 +17,11 @@ it('test clearMocks config', async () => {
     },
   });
 
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 });
 
 it('test restoreMocks config', async () => {
-  const { cli } = await runRstestCli({
+  const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'fixtures/restoreMocks.test', '--restoreMocks'],
     options: {
@@ -32,6 +31,5 @@ it('test restoreMocks config', async () => {
     },
   });
 
-  await cli.exec;
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 });

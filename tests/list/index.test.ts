@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 
 describe('test list command', () => {
   it('should list tests correctly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list'],
       options: {
@@ -19,8 +19,7 @@ describe('test list command', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
@@ -35,7 +34,7 @@ describe('test list command', () => {
   });
 
   it('should list tests correctly with file filter', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', 'a.test'],
       options: {
@@ -46,7 +45,7 @@ describe('test list command', () => {
     });
 
     await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
@@ -59,7 +58,7 @@ describe('test list command', () => {
   });
 
   it('should list tests correctly with test name filter', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '-t', 'a'],
       options: {
@@ -69,8 +68,7 @@ describe('test list command', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
@@ -83,7 +81,7 @@ describe('test list command', () => {
   });
 
   it('should list test files correctly with --filesOnly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '--filesOnly'],
       options: {
@@ -94,7 +92,7 @@ describe('test list command', () => {
     });
 
     await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 

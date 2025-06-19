@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 it('should run jsdom test correctly', async () => {
-  const { cli } = await runRstestCli({
+  const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'test/App'],
     options: {
@@ -17,7 +17,5 @@ it('should run jsdom test correctly', async () => {
     },
   });
 
-  await cli.exec;
-
-  expect(cli.exec.process?.exitCode).toBe(0);
+  await expectExecSuccess();
 });

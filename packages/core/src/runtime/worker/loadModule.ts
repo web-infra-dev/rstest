@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
+import { asModule, interopModule, shouldInterop } from './interop';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
@@ -12,6 +13,7 @@ const createRequire = (
   distPath: string,
   rstestContext: Record<string, any>,
   assetFiles: Record<string, string>,
+  interopDefault: boolean,
 ): NodeJS.Require => {
   const _require = createNativeRequire(filename);
   const require = ((id: string) => {
@@ -31,6 +33,7 @@ const createRequire = (
           distPath: joinedPath,
           rstestContext,
           assetFiles,
+          interopDefault,
         });
       } catch (err) {
         logger.error(
@@ -53,7 +56,9 @@ export const loadModule = ({
   testPath,
   rstestContext,
   assetFiles,
+  interopDefault,
 }: {
+  interopDefault: boolean;
   codeContent: string;
   distPath: string;
   testPath: string;
@@ -75,7 +80,13 @@ export const loadModule = ({
   const context = {
     module: localModule,
     exports: localModule.exports,
-    require: createRequire(testPath, distPath, rstestContext, assetFiles),
+    require: createRequire(
+      testPath,
+      distPath,
+      rstestContext,
+      assetFiles,
+      interopDefault,
+    ),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,
@@ -94,18 +105,30 @@ export const loadModule = ({
       _referencer,
       importAttributes,
     ) => {
-      if (isAbsolute(specifier)) {
-        // @ts-expect-error
-        return import(pathToFileURL(specifier), importAttributes);
-      }
-      const dependencyAsset = await import.meta.resolve(
-        specifier,
-        pathToFileURL(testPath),
+      const resolvedPath = isAbsolute(specifier)
+        ? pathToFileURL(specifier)
+        : await import.meta.resolve(specifier, pathToFileURL(testPath));
+
+      const modulePath =
+        typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+
+      const importedModule = await import(
+        modulePath,
+        importAttributes as ImportCallOptions
       );
 
-      // @ts-expect-error
-      const res = await import(dependencyAsset, importAttributes);
-      return res;
+      if (
+        shouldInterop({
+          interopDefault,
+          modulePath,
+          mod: importedModule,
+        })
+      ) {
+        const { mod, defaultExport } = interopModule(importedModule);
+
+        return asModule(mod, defaultExport);
+      }
+      return importedModule;
     },
   });
   fn(...Object.values(context));

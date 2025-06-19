@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test global APIs', () => {
   it('should run with global API succeed', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/index.test.ts', '--globals'],
       options: {
@@ -18,7 +18,6 @@ describe('test global APIs', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 });

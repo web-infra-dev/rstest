@@ -8,7 +8,7 @@ describe('Test Retry', () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/retry.test.ts', '--retry=4'],
       options: {
@@ -17,8 +17,7 @@ describe('Test Retry', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 
   it('should error when retry times exhausted', async () => {
