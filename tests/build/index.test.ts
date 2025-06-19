@@ -14,7 +14,7 @@ describe('test build config', () => {
     { name: 'tools/rspack' },
     { name: 'decorators' },
   ])('$name config should work correctly', async ({ name }) => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: [
         'run',
@@ -29,7 +29,6 @@ describe('test build config', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 });

@@ -8,7 +8,7 @@ describe('In-Source testing', () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -17,8 +17,7 @@ describe('In-Source testing', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 

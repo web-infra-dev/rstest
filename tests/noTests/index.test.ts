@@ -31,7 +31,7 @@ describe('no tests', () => {
   });
 
   it('should passWithNoTests with passWithNoTests flag', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/', '--passWithNoTests'],
       options: {
@@ -43,7 +43,7 @@ describe('no tests', () => {
 
     await cli.exec;
 
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
