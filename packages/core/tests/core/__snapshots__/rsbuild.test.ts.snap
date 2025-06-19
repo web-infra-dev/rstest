@@ -13,7 +13,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
+    {},
   ],
   "externalsPresets": {
     "node": true,
@@ -427,9 +427,6 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
       ".js",
       ".jsx",
       ".json",
-    ],
-    "mainFields": [
-      "main",
     ],
   },
   "target": "node",
