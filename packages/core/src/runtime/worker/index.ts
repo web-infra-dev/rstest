@@ -53,7 +53,7 @@ const preparePool = async ({
     });
   }
 
-  const interopDefault = testEnvironment === 'jsdom';
+  const interopDefault = true;
 
   const workerState: WorkerState = {
     ...context,
