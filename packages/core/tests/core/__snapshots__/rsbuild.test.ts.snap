@@ -7,7 +7,6 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "incremental": true,
   },
   "externals": [
     {
@@ -131,6 +130,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
+                "output": {
+                  "charset": "utf8",
+                },
                 "parser": {
                   "decorators": true,
                   "syntax": "typescript",
@@ -176,6 +178,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
+                "output": {
+                  "charset": "utf8",
+                },
                 "parser": {
                   "decorators": true,
                   "syntax": "typescript",
@@ -476,6 +481,9 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
               "keepImportAttributes": true,
             },
             "externalHelpers": true,
+            "output": {
+              "charset": "utf8",
+            },
             "parser": {
               "decorators": true,
               "syntax": "typescript",
