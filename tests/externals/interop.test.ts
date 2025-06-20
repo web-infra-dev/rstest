@@ -17,7 +17,7 @@ describe('test interop', () => {
   });
 
   it('should interopDefault correctly in jsdom test environment', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', './fixtures/interop', '--testEnvironment=jsdom'],
       options: {
@@ -27,12 +27,11 @@ describe('test interop', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(0);
+    await expectExecSuccess();
   });
 
-  it('should not interopDefault in node test environment', async () => {
-    const { cli } = await runRstestCli({
+  it('should interopDefault correctly in node test environment', async () => {
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', './fixtures/interop', '--testEnvironment=node'],
       options: {
@@ -42,7 +41,6 @@ describe('test interop', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecSuccess();
   });
 });
