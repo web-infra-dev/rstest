@@ -3,12 +3,12 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 class IgnoreModuleNotFoundErrorPlugin {
   apply(compiler: Rspack.Compiler) {
     compiler.hooks.done.tap('Rstest:IgnoreModuleNotFoundPlugin', (stats) => {
-      stats.compilation.errors = stats.compilation.errors.filter((error) => {
-        if (/Module not found/.test(error.message)) {
-          return false;
+      for (let i = stats.compilation.errors.length - 1; i >= 0; i--) {
+        if (/Module not found/.test(stats.compilation.errors[i]!.message)) {
+          // Use `splice` instead of `filter` & `reassign` to avoid communication problems with Rust -> JS -> Rust
+          stats.compilation.errors.splice(i, 1);
         }
-        return true;
-      });
+      }
     });
   }
 }

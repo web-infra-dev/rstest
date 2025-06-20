@@ -44,6 +44,29 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();
   });
 
+  it('should log build error message correctly', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/lessError.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // no `× [object Object]`
+    expect(logs.find((log) => log.includes('[object Object]'))).toBeFalsy();
+    expect(
+      logs.find((log) => log.includes('To enable support for Less')),
+    ).toBeTruthy();
+  });
+
   it('only in skip suite', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
