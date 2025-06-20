@@ -53,15 +53,15 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "^1.4.0-beta.3",
+    "@rsbuild/core": "^1.4.0-beta.5",
     "@types/chai": "^5.2.2",
-    "@vitest/expect": "^3.2.3",
-    "@vitest/snapshot": "^3.2.3",
+    "@vitest/expect": "^3.2.4",
+    "@vitest/snapshot": "^3.2.4",
     "birpc": "2.4.0",
     "chai": "^5.2.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
-    "tinypool": "^1.1.0"
+    "tinypool": "^1.1.1"
   },
   "devDependencies": {
     "@sinonjs/fake-timers": "^14.0.0",
@@ -76,10 +76,10 @@
     "jsdom": "^26.1.0",
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
-    "jest-diff": "^30.0.0",
+    "jest-diff": "^30.0.2",
     "license-webpack-plugin": "^4.0.2",
     "picocolors": "^1.1.1",
-    "rslog": "^1.2.3",
+    "rslog": "^1.2.7",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
     "tinyglobby": "^0.2.14",
