@@ -28,7 +28,7 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.0.4",
     "@changesets/cli": "^2.29.4",
     "@rsdoctor/rspack-plugin": "^1.1.4",
     "@rstest/core": "workspace:*",
