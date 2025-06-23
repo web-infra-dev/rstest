@@ -84,10 +84,10 @@ export const prepareRsbuild = async (
       testEnvironment,
     },
   } = context;
+  const debugMode = isDebug();
 
-  RsbuildLogger.level = isDebug() ? 'verbose' : 'error';
-  // TODO: find a better way to test outputs
-  const writeToDisk = process.env.DEBUG_RSTEST_OUTPUTS === 'true';
+  RsbuildLogger.level = debugMode ? 'verbose' : 'error';
+  const writeToDisk = debugMode;
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
