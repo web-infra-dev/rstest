@@ -15,4 +15,11 @@ const fn = rstest.fn();
 fn.mockResolvedValue('foo');
 ```
 
+```ts
+import { rs } from '@rstest/core';
+
+const fn = rs.fn();
+fn.mockResolvedValue('foo');
+```
+
 Or, you can access it globally like `jest` (when [globals](/config/test/globals) configuration is enabled).
