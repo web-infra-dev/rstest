@@ -19,3 +19,17 @@ it('should run jsdom test correctly', async () => {
 
   await expectExecSuccess();
 });
+
+it('should run jsdom test correctly with jest-dom', async () => {
+  const { expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'test/jestDom'],
+    options: {
+      nodeOptions: {
+        cwd: join(__dirname, 'fixtures'),
+      },
+    },
+  });
+
+  await expectExecSuccess();
+});
