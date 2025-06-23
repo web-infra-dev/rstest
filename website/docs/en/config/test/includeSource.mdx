@@ -36,7 +36,7 @@ if (import.meta.rstest) {
 }
 ```
 
-### For Production
+### For production
 
 Put the test code inside the `if (import.meta.rstest)` block, and define `import.meta.rstest` as `undefined` in your build configuration (e.g., `rsbuild.config.ts`), which will help the bundler eliminate dead code.
 
