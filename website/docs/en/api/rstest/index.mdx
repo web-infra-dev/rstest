@@ -1,0 +1,18 @@
+---
+title: Rstest Utility
+---
+
+# Rstest Utility
+
+Rstest provides utility functions to help you out through its `rstest` helper.
+
+You can import it from `@rstest/core` directly, and you can also use its alias `rs`.
+
+```ts
+import { rstest } from '@rstest/core';
+
+const fn = rstest.fn();
+fn.mockResolvedValue('foo');
+```
+
+Or, you can access it globally like `jest` (when [globals](/config/test/globals) configuration is enabled).

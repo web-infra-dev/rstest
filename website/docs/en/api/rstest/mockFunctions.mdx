@@ -1,0 +1,52 @@
+---
+title: Mock functions
+---
+
+# Mock functions
+
+Rstest provides some utility functions to help you mock functions.
+
+## rstest.fn
+
+Creates a spy on a function.
+
+```ts
+const sayHi = rstest.fn((name: string) => `hi ${name}`);
+
+const res = sayHi('bob');
+
+expect(res).toBe('hi bob');
+```
+
+## rstest.spyOn
+
+Creates a spy on a method of an object.
+
+```ts
+const sayHi = () => 'hi';
+const hi = {
+  sayHi,
+};
+
+const spy = rstest.spyOn(hi, 'sayHi');
+
+expect(hi.sayHi()).toBe('hi');
+
+expect(spy).toHaveBeenCalled();
+```
+
+## rstest.isMockFunction
+
+Determines if the given function is a mocked function.
+
+## rstest.clearAllMocks
+
+Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
+
+## rstest.resetAllMocks
+
+Clears all mocks properties and reset each mock's implementation to its original.
+
+## rstest.restoreAllMocks
+
+Reset all mocks and restore original descriptors of spied-on objects.

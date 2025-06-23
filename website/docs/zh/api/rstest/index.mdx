@@ -1,0 +1,18 @@
+---
+title: Rstest Utility
+---
+
+# Rstest Utility
+
+Rstest 提供了一些实用函数，通过 `rstest` 工具方法可以帮助你更方便地进行测试。
+
+你可以直接从 `@rstest/core` 导入 `rstest`，也可以使用它的别名 `rs`。
+
+```ts
+import { rstest } from '@rstest/core';
+
+const fn = rstest.fn();
+fn.mockResolvedValue('foo');
+```
+
+或者，你也可以像使用 `jest` 一样全局访问它（当启用了 [globals](/config/test/globals) 配置时）。
