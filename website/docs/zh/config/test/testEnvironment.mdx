@@ -1,0 +1,46 @@
+# testEnvironment
+
+- **类型：** `'node' | 'jsdom'`
+- **默认值：** `'node'`
+
+测试时所使用的环境。
+
+Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 `jsdom`。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+});
+```
+
+### DOM 测试
+
+Rstest 支持使用 [jsdom](https://github.com/jsdom/jsdom) 来模拟 DOM 和浏览器 API。
+
+如果你想启用 DOM 测试，可以使用如下配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+});
+```
+
+你还需要安装 `jsdom`：
+
+```bash
+npm install jsdom -D
+```
+
+启用 DOM 测试后，你可以在测试用例中使用 `document` 和 `window` 等浏览器 API。
+
+```ts
+test('dom test', () => {
+  document.body.innerHTML = '<p class="content">hello world</p>';
+  const paragraph = document.querySelector('.content');
+  expect(paragraph?.innerHTML).toBe('hello world');
+});
+```

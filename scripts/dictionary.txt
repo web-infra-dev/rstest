@@ -54,6 +54,7 @@ jfif
 jiti
 jridgewell
 jscpuprofile
+jsdom
 jsesc
 jsxs
 koppers

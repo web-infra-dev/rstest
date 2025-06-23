@@ -1,1 +1,8 @@
-["include", "exclude", "includeSource", "globals", "setupFiles"]
+[
+  "include",
+  "exclude",
+  "includeSource",
+  "globals",
+  "setupFiles",
+  "testEnvironment"
+]
