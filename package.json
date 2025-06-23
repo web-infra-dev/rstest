@@ -5,6 +5,7 @@
     "build": "cross-env NX_DAEMON=false nx run-many -t build --exclude @examples/* --parallel=10",
     "e2e": "cd tests && pnpm test",
     "test": "rstest run",
+    "test:example": "pnpm --filter @examples/* test",
     "change": "changeset",
     "changeset": "changeset",
     "check-dependency-version": "pnpx check-dependency-version-consistency .",
