@@ -1,0 +1,67 @@
+# includeSource
+
+- **类型：** `string[]`
+- **默认值：** `[]`
+
+源码内联测试（In-source testing）指的是测试代码与源代码写在同一个文件中，类似于 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)。
+
+你可以通过 `includeSource` 配置，定义一组用于匹配内联测试文件的 glob 模式列表。
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  includeSource: ['src/**/*.{js,ts}'],
+});
+```
+
+:::tip
+源码内联测试通常适用于小型功能函数和工具方法，能够方便地进行快速验证和调试。对于更复杂的功能和模块，建议使用独立的测试文件。
+:::
+
+### 编写内联测试
+
+当定义了 `includeSource` 后，Rstest 会运行所有通过 glob 匹配且包含 `import.meta.rstest` 的文件。
+
+你可以通过 `import.meta.rstest` 获取 Rstest 的测试 API。
+
+```ts title=src/helper.ts
+export const sayHi = () => 'hi';
+
+if (import.meta.rstest) {
+  const { it, expect } = import.meta.rstest;
+  it('should test source code correctly', () => {
+    expect(sayHi()).toBe('hi');
+  });
+}
+```
+
+### 生产环境构建
+
+将测试代码写在 `if (import.meta.rstest)` 代码块内，并在你的构建配置（如 `rsbuild.config.ts`）中将 `import.meta.rstest` 定义为 `undefined`，这样将有助于打包工具消除无用代码。
+
+```diff title=rsbuild.config.ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  source: {
+    define: {
++      'import.meta.rstest': undefined,
+    },
+  },
+});
+```
+
+### TypeScript
+
+如需让 TypeScript 支持 `import.meta.rstest`，可在 `tsconfig.json` 中添加 `@rstest/core/importMeta`：
+
+```diff title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": [
++      "@rstest/core/importMeta"
+    ]
+  }
+}
+```

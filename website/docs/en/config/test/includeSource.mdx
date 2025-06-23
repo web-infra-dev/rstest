@@ -1,0 +1,67 @@
+# includeSource
+
+- **Type:** `string[]`
+- **Default:** `[]`
+
+In-source testing is where the test code lives within the same file as the source code, similar to [Rust's module tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest).
+
+You can define a list of glob patterns that match your in-source test files via `includeSource` configuration.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  includeSource: ['src/**/*.{js,ts}'],
+});
+```
+
+:::tip
+**In-source testing** is usually suitable for small functional functions and utilities, allowing for easy and rapid verification and debugging. For more complex functions and modules, independent test files are recommended.
+:::
+
+### Writing in-source tests
+
+When `includeSource` defined, Rstest will run all matched files with `import.meta.rstest` inside.
+
+You can get the Rstest test API via `import.meta.rstest`.
+
+```ts title=src/helper.ts
+export const sayHi = () => 'hi';
+
+if (import.meta.rstest) {
+  const { it, expect } = import.meta.rstest;
+  it('should test source code correctly', () => {
+    expect(sayHi()).toBe('hi');
+  });
+}
+```
+
+### For Production
+
+Put the test code inside the `if (import.meta.rstest)` block, and define `import.meta.rstest` as `undefined` in your build configuration (e.g., `rsbuild.config.ts`), which will help the bundler eliminate dead code.
+
+```diff title=rsbuild.config.ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  source: {
+    define: {
++      'import.meta.rstest': undefined,
+    },
+  },
+});
+```
+
+### TypeScript
+
+To get TypeScript support for `import.meta.rstest`, you should add `@rstest/core/importMeta` to your `tsconfig.json`:
+
+```diff title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": [
++      "@rstest/core/importMeta"
+    ]
+  }
+}
+```
