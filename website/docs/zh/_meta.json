@@ -8,5 +8,10 @@
     "text": "配置",
     "link": "/config/",
     "activeMatch": "/config/"
+  },
+  {
+    "text": "API",
+    "link": "/api/",
+    "activeMatch": "/api/"
   }
 ]
