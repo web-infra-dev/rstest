@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
@@ -100,6 +101,14 @@ export const getSetupFiles = (
   return Object.fromEntries(
     castArray(setups).map((setupFile) => {
       const setupFilePath = getAbsolutePath(rootPath, setupFile);
+
+      if (!existsSync(setupFilePath)) {
+        let errorMessage = `Setup file ${color.red(setupFile)} not found`;
+        if (setupFilePath !== setupFile) {
+          errorMessage += color.gray(` (resolved path: ${setupFilePath})`);
+        }
+        throw errorMessage;
+      }
       const name = pathe.relative(rootPath, setupFilePath);
       return [name, setupFilePath];
     }),

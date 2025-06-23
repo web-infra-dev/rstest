@@ -294,7 +294,7 @@ export const createRsbuildServer = async ({
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries();
-    // TODO: check compile error, such as setupFiles not found
+
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
 
