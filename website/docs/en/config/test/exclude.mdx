@@ -13,8 +13,8 @@ A list of glob patterns that should be excluded from your test files.
 
 Exclude the test files under `node_modules`:
 
-```ts
-import { defineConfig } from 'rstest';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],

@@ -13,8 +13,8 @@ overviewHeaders: []
 
 排除 `node_modules` 下的测试文件：
 
-```ts
-import { defineConfig } from 'rstest';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],

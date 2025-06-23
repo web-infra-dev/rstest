@@ -1,0 +1,46 @@
+---
+overviewHeaders: []
+---
+
+# globals
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Provide global Rstest APIs for test files, such as `expect`, `test`, `describe`, etc.
+
+By default, Rstest does not provide global APIs. If you prefer to use the APIs globally like Jest, you can add `globals: true` in the config or pass the `--globals` option to CLI.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+## Usage
+
+When you enable `globals`, you can use the global APIs directly without `import from '@rstest/core'`.
+
+```diff title="index.test.ts"
+- import { describe, expect, it } from '@rstest/core';
+
+describe('Index', () => {
+  it('should add two numbers correctly', () => {
+    expect(1 + 1).toBe(2);
+  });
+});
+```
+
+### TypeScript support
+
+To get TypeScript working with the global APIs, add `@rstest/core/globals` to the types field in your `tsconfig.json`
+
+```json title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
