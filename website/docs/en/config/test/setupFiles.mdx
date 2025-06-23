@@ -1,0 +1,14 @@
+# setupFiles
+
+- **Type:** `string[]`
+- **Default:** `[]`
+
+A list of paths to modules that run some code to configure or set up the testing environment, they will be run before each test file.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./scripts/rstest.setup.ts'],
+});
+```
