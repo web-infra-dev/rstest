@@ -82,6 +82,7 @@ export const prepareRsbuild = async (
       output,
       tools,
       testEnvironment,
+      performance,
     },
   } = context;
   const debugMode = isDebug();
@@ -101,6 +102,7 @@ export const prepareRsbuild = async (
         strictPort: false,
         middlewareMode: true,
       },
+      performance,
       environments: {
         [name]: {
           dev: {
