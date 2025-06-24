@@ -347,6 +347,9 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     "emitOnErrors": true,
     "minimize": false,
     "moduleIds": "named",
+    "runtimeChunk": {
+      "name": "runtime",
+    },
     "splitChunks": {
       "chunks": "all",
       "maxInitialRequests": Infinity,

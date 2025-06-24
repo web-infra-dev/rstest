@@ -10,7 +10,7 @@ import './setup';
 import { globalApis } from '../../utils/constants';
 import { undoSerializableConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
-import { loadModule } from './loadModule';
+import { cacheableLoadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
@@ -152,7 +152,7 @@ const loadFiles = async ({
   for (const { distPath, testPath } of setupEntries) {
     const setupCodeContent = assetFiles[distPath]!;
 
-    await loadModule({
+    await cacheableLoadModule({
       codeContent: setupCodeContent,
       distPath,
       testPath,
@@ -162,7 +162,7 @@ const loadFiles = async ({
     });
   }
 
-  await loadModule({
+  await cacheableLoadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
     testPath,
