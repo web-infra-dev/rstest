@@ -136,8 +136,11 @@ export const prepareRsbuild = async (
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
               config.plugins.push(
-                new rspack.RstestPlugin({
+                new rspack.experiments.RstestPlugin({
                   injectModulePathName: true,
+                  hoistMockModule: true,
+                  importMetaPathName: true,
+                  manualMockRoot: context.rootPath,
                 }),
               );
 
