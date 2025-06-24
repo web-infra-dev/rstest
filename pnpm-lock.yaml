@@ -85,7 +85,7 @@ importers:
         version: 19.1.0(react@19.1.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ^1.4.0-rc.0
+        specifier: 1.4.0-rc.0
         version: 1.4.0-rc.0
       '@rsbuild/plugin-react':
         specifier: ^1.3.2
@@ -205,8 +205,8 @@ importers:
   tests:
     devDependencies:
       '@rsbuild/core':
-        specifier: ^1.3.22
-        version: 1.3.22
+        specifier: 1.4.0-rc.0
+        version: 1.4.0-rc.0
       '@rslib/core':
         specifier: 0.10.2
         version: 0.10.2(@microsoft/api-extractor@7.52.8(@types/node@22.13.8))(typescript@5.8.3)
@@ -280,7 +280,7 @@ importers:
         version: 19.1.0(react@19.1.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: ^1.4.0-rc.0
+        specifier: 1.4.0-rc.0
         version: 1.4.0-rc.0
       '@rsbuild/plugin-react':
         specifier: ^1.3.2
