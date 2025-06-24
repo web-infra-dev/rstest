@@ -169,6 +169,10 @@ export const prepareRsbuild = async (
                 ...(config.optimization || {}),
                 moduleIds: 'named',
                 chunkIds: 'named',
+                // make sure setup file and test file share the runtime
+                runtimeChunk: {
+                  name: 'runtime',
+                },
                 splitChunks: {
                   chunks: 'all',
                   minSize: 0,

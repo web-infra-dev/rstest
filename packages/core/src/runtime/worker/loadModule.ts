@@ -27,7 +27,7 @@ const createRequire = (
 
     if (content) {
       try {
-        return loadModule({
+        return cacheableLoadModule({
           codeContent: content,
           testPath: joinedPath,
           distPath: joinedPath,
@@ -50,7 +50,7 @@ const createRequire = (
   return require;
 };
 
-export const loadModule = ({
+const loadModule = ({
   codeContent,
   distPath,
   testPath,
@@ -134,4 +134,36 @@ export const loadModule = ({
   fn(...Object.values(context));
 
   return localModule.exports;
+};
+
+const moduleCache = new Map<string, any>();
+
+export const cacheableLoadModule = ({
+  codeContent,
+  distPath,
+  testPath,
+  rstestContext,
+  assetFiles,
+  interopDefault,
+}: {
+  interopDefault: boolean;
+  codeContent: string;
+  distPath: string;
+  testPath: string;
+  rstestContext: Record<string, any>;
+  assetFiles: Record<string, string>;
+}): any => {
+  if (moduleCache.has(testPath)) {
+    return moduleCache.get(testPath);
+  }
+  const mod = loadModule({
+    codeContent,
+    distPath,
+    testPath,
+    rstestContext,
+    assetFiles,
+    interopDefault,
+  });
+  moduleCache.set(testPath, mod);
+  return mod;
 };
