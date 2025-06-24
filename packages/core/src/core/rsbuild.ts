@@ -83,12 +83,13 @@ export const prepareRsbuild = async (
       tools,
       testEnvironment,
       performance,
+      dev = {},
     },
   } = context;
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
-  const writeToDisk = debugMode;
+  const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {

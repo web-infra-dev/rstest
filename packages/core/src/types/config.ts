@@ -191,6 +191,8 @@ export interface RstestConfig {
     'bundleAnalyze'
   >;
 
+  dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
+
   output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
 
   resolve?: RsbuildConfig['resolve'];
@@ -210,6 +212,7 @@ type OptionalKeys =
   | 'output'
   | 'performance'
   | 'tools'
+  | 'dev'
   | 'onConsoleLog';
 
 export type NormalizedConfig = Required<
