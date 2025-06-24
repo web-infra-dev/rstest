@@ -40,6 +40,10 @@ export const filterFiles = (
 const hasInSourceTestCode = (code: string): boolean =>
   code.includes('import.meta.rstest');
 
+// format ../setup.ts to _setup~ts
+export const formatTestEntryName = (name: string): string =>
+  name.replace(/\.*[/\\]/g, '_').replace(/\./g, '~');
+
 export const getTestEntries = async ({
   include,
   exclude,
@@ -88,8 +92,8 @@ export const getTestEntries = async ({
 
   return Object.fromEntries(
     filterFiles(testFiles, fileFilters, root).map((entry) => {
-      const name = pathe.relative(root, entry);
-      return [name, entry];
+      const relativePath = pathe.relative(root, entry);
+      return [formatTestEntryName(relativePath), entry];
     }),
   );
 };
@@ -109,8 +113,8 @@ export const getSetupFiles = (
         }
         throw errorMessage;
       }
-      const name = pathe.relative(rootPath, setupFilePath);
-      return [name, setupFilePath];
+      const relativePath = pathe.relative(rootPath, setupFilePath);
+      return [formatTestEntryName(relativePath), setupFilePath];
     }),
   );
 };

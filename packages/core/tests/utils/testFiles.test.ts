@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { filterFiles } from '../../src/utils/testFiles';
+import { filterFiles, formatTestEntryName } from '../../src/utils/testFiles';
 
 describe('test filterFiles', () => {
   it('should filter files correctly', () => {
@@ -21,4 +21,11 @@ describe('test filterFiles', () => {
 
     expect(filterFiles(testFiles, ['index'], __dirname)).toEqual(testFiles);
   });
+});
+
+test('formatTestEntryName', () => {
+  expect(formatTestEntryName('../setup.ts')).toBe('_setup~ts');
+  expect(formatTestEntryName('setup.ts')).toBe('setup~ts');
+  expect(formatTestEntryName('some.setup.ts')).toBe('some~setup~ts');
+  expect(formatTestEntryName('some/setup.ts')).toBe('some_setup~ts');
 });
