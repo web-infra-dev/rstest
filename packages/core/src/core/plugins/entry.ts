@@ -42,29 +42,34 @@ export const pluginEntryWatch: (params: {
             ...setupFiles,
           };
         };
+
+        config.watchOptions ??= {};
+        // TODO: rspack should support `(string | RegExp)[]` type
+        // https://github.com/web-infra-dev/rspack/issues/10596
+        config.watchOptions.ignored = castArray(
+          config.watchOptions.ignored || [],
+        ) as string[];
+
+        if (config.watchOptions.ignored.length === 0) {
+          config.watchOptions.ignored.push(
+            // apply default ignored patterns
+            ...['**/.git', '**/node_modules'],
+          );
+        }
+
+        config.watchOptions.ignored.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
       } else {
+        // watch false seems not effect when rspack.watch()
+        config.watch = false;
+        config.watchOptions ??= {};
+        config.watchOptions.ignored = '**/**';
+
         const sourceEntries = await globTestSourceEntries();
         config.entry = {
           ...sourceEntries,
           ...setupFiles,
         };
       }
-
-      config.watchOptions ??= {};
-      // TODO: rspack should support `(string | RegExp)[]` type
-      // https://github.com/web-infra-dev/rspack/issues/10596
-      config.watchOptions.ignored = castArray(
-        config.watchOptions.ignored || [],
-      ) as string[];
-
-      if (config.watchOptions.ignored.length === 0) {
-        config.watchOptions.ignored.push(
-          // apply default ignored patterns
-          ...['**/.git', '**/node_modules'],
-        );
-      }
-
-      config.watchOptions.ignored.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
     });
   },
 });

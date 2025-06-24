@@ -441,13 +441,10 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     ],
   },
   "target": "node",
+  "watch": false,
   "watchOptions": {
     "aggregateTimeout": 0,
-    "ignored": [
-      "**/.git",
-      "**/node_modules",
-      "**/dist/.rstest-temp",
-    ],
+    "ignored": "**/**",
   },
 }
 `;
