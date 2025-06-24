@@ -112,7 +112,7 @@ importers:
   packages/core:
     dependencies:
       '@rsbuild/core':
-        specifier: ^1.4.0-rc.0
+        specifier: 1.4.0-rc.0
         version: 1.4.0-rc.0
       '@types/chai':
         specifier: ^5.2.2
