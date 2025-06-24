@@ -414,7 +414,10 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     RstestPlugin {
       "_args": [
         {
+          "hoistMockModule": true,
+          "importMetaPathName": true,
           "injectModulePathName": true,
+          "manualMockRoot": undefined,
         },
       ],
       "affectedHooks": undefined,
