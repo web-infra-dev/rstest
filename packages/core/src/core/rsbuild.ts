@@ -10,7 +10,12 @@ import {
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import { TEMP_RSTEST_OUTPUT_DIR, getNodeVersion, isDebug } from '../utils';
+import {
+  TEMP_RSTEST_OUTPUT_DIR,
+  castArray,
+  getNodeVersion,
+  isDebug,
+} from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
@@ -123,12 +128,6 @@ export const prepareRsbuild = async (
             distPath: {
               root: TEMP_RSTEST_OUTPUT_DIR,
             },
-            externals: [
-              {
-                '@rstest/core': 'global @rstest/core',
-              },
-              testEnvironment === 'node' ? autoExternalNodeModules : {},
-            ],
             target: 'node',
           },
           tools: {
@@ -146,6 +145,17 @@ export const prepareRsbuild = async (
                   manualMockRoot: context.rootPath,
                 }),
               );
+
+              // Avoid externals configuration being modified by users
+              config.externals = castArray(config.externals) || [];
+
+              config.externals.unshift({
+                '@rstest/core': 'global @rstest/core',
+              });
+
+              if (testEnvironment === 'node') {
+                config.externals.push(autoExternalNodeModules);
+              }
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
@@ -172,17 +182,12 @@ export const prepareRsbuild = async (
               }
 
               config.optimization = {
-                ...(config.optimization || {}),
                 moduleIds: 'named',
                 chunkIds: 'named',
+                ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
                   name: 'runtime',
-                },
-                splitChunks: {
-                  chunks: 'all',
-                  minSize: 0,
-                  maxInitialRequests: Number.POSITIVE_INFINITY,
                 },
               };
             },

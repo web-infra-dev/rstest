@@ -20,6 +20,20 @@ it('should run jsdom test correctly', async () => {
   await expectExecSuccess();
 });
 
+it('should run jsdom test correctly with custom externals', async () => {
+  const { expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'test/App', '--config', 'rstest.externals.config.ts'],
+    options: {
+      nodeOptions: {
+        cwd: join(__dirname, 'fixtures'),
+      },
+    },
+  });
+
+  await expectExecSuccess();
+});
+
 it('should run jsdom test correctly with jest-dom', async () => {
   const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
