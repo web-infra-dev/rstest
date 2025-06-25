@@ -318,6 +318,7 @@ export class TestRunner {
         } while (retryCount <= retry && result.status === 'fail');
 
         result.duration = RealDate.now() - start;
+        result.retryCount = retryCount - 1;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }

@@ -111,6 +111,7 @@ export type TestResult = {
   parentNames?: string[];
   duration?: number;
   errors?: FormattedError[];
+  retryCount?: number;
 };
 
 export type TestFileResult = TestResult & {

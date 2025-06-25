@@ -4,5 +4,8 @@
   "includeSource",
   "globals",
   "setupFiles",
-  "testEnvironment"
+  "testEnvironment",
+  "retry",
+  "root",
+  "passWithNoTests"
 ]
