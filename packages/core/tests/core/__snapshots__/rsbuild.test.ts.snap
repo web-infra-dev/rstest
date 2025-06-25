@@ -12,7 +12,6 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     {
       "@rstest/core": "global @rstest/core",
     },
-    {},
   ],
   "externalsPresets": {
     "node": true,
@@ -350,11 +349,7 @@ exports[`prepareRsbuild > should generate rspack config correctly 1`] = `
     "runtimeChunk": {
       "name": "runtime",
     },
-    "splitChunks": {
-      "chunks": "all",
-      "maxInitialRequests": Infinity,
-      "minSize": 0,
-    },
+    "splitChunks": false,
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
