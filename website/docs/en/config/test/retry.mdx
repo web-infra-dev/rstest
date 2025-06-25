@@ -1,0 +1,14 @@
+# retry
+
+- **Type:** `number`
+- **Default:** `0`
+
+Retry the test specific number of times if it fails.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  retry: 2,
+});
+```

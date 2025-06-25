@@ -1,0 +1,16 @@
+# passWithNoTests
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+标记测试通过当未找到测试用例时。
+
+默认情况下，当未找到测试用例时，Rstest 会将测试标记为失败。你可以将 `passWithNoTests` 设置为 `true` 来允许测试在未找到测试用例时通过。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  passWithNoTests: true,
+});
+```

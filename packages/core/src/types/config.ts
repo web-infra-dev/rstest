@@ -60,7 +60,7 @@ export interface RstestConfig {
    */
   retry?: number;
   /**
-   * Allows the test suite to pass when no files are found.
+   * Pass when no tests are found.
    *
    * @default false
    */
