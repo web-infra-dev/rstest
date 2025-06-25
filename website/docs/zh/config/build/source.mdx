@@ -1,0 +1,32 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# source
+
+与输入的源代码相关的选项。
+
+## source.decorators <RsbuildDocBadge path="/config/source/decorators" text="source.decorators" />
+
+用于配置装饰器语法。
+
+## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
+
+构建时将代码中的变量替换成其它值或者表达式，可以用于在构建时向代码注入环境变量等信息。
+
+## source.exclude <RsbuildDocBadge path="/config/source/exclude" text="source.exclude" />
+
+排除不需要被 [SWC](https://rsbuild.rs/zh/guide/configuration/swc) 转译的 JavaScript 或 TypeScript 文件。
+
+::: note
+
+在 `source.exclude` 中配置的文件不会经过 SWC 转译，但被引用的文件仍然会被打包到产物中。
+
+如果你希望某些文件不被打包到产物中，可以使用 [output.externals](/config/build/output#outputexternals) 配置项或 Rspack 的 [IgnorePlugin](https://rspack.rs/zh/plugins/webpack/ignore-plugin)。
+:::
+
+## source.include <RsbuildDocBadge path="/config/source/include" text="source.include" />
+
+指定额外需要编译的 JavaScript 文件。
+
+## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
+
+配置自定义的 `tsconfig.json` 文件路径，可以是相对路径或绝对路径。

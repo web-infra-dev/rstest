@@ -1,0 +1,33 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# source
+
+Options for input source code.
+
+## source.decorators <RsbuildDocBadge path="/config/source/decorators" text="source.decorators" />
+
+Used to configure the decorators syntax.
+
+## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
+
+Replaces variables in your code with other values or expressions at compile time. This can be useful for injecting env variables and other information to the code during build time.
+
+## source.exclude <RsbuildDocBadge path="/config/source/exclude" text="source.exclude" />
+
+Exclude JavaScript or TypeScript files that do not need to be transformed by [SWC](https://rsbuild.rs/guide/configuration/swc).
+
+::: note
+
+Files configured in `source.exclude` will not be transformed by SWC, but the referenced files will still be bundled into the outputs.
+
+If you want certain files not to be bundled into the outputs, you can use [output.externals](/config/build/output#outputexternals) or Rspack's [IgnorePlugin](https://rspack.rs/plugins/webpack/ignore-plugin).
+
+:::
+
+## source.include <RsbuildDocBadge path="/config/source/include" text="source.include" />
+
+Specify additional JavaScript files that need to be compiled.
+
+## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
+
+Configure a custom `tsconfig.json` file path to use, can be a relative or absolute path.
