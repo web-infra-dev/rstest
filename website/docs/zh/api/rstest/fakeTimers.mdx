@@ -1,0 +1,144 @@
+---
+title: Fake timers
+---
+
+# Fake timers
+
+当你的代码中设置了很长的定时器（timeout），而你又不想在测试中等待它们时，fake timers 会非常有用。
+
+Rstest 提供了一些实用函数，基于 [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers) 实现定时器的模拟。
+
+## rstest.useFakeTimers
+
+- **类型：** `(config?: FakeTimerInstallOpts) => Rstest`
+
+调用此方法可以启用定时器的模拟。底层使用 [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers)。
+
+```ts
+rstest.useFakeTimers();
+```
+
+你也可以传递配置对象以自定义 fake timers 的行为。
+
+## rstest.useRealTimers
+
+- **类型：** `() => Rstest`
+
+恢复原生的定时器函数（如 `setTimeout`、`setInterval` 等），关闭 fake timers。
+
+```ts
+rstest.useRealTimers();
+```
+
+## rstest.isFakeTimers
+
+- **类型：** `() => boolean`
+
+如果当前启用了 fake timers，则返回 `true`，否则返回 `false`。
+
+```ts
+if (rstest.isFakeTimers()) {
+  // Fake timers 已启用
+}
+```
+
+## rstest.setSystemTime
+
+- **类型：** `(now?: number | Date) => Rstest`
+
+设置 fake timers 使用的当前系统时间。适用于需要测试依赖当前日期或时间的代码。
+
+```ts
+rstest.useFakeTimers();
+rstest.setSystemTime(new Date('2020-01-01T00:00:00Z'));
+```
+
+## rstest.getRealSystemTime
+
+- **类型：** `() => number`
+
+即使在启用 fake timers 时，也可以返回真实系统时间（时间戳）。
+
+```ts
+const realTime = rstest.getRealSystemTime();
+```
+
+## rstest.runAllTicks
+
+- **类型：** `() => Rstest`
+
+运行所有已排队的微任务（如 `process.nextTick`）。
+
+## rstest.runAllTimers
+
+- **类型：** `() => Rstest`
+
+执行所有待运行的定时器（包括 timeout 和 interval）。
+
+## rstest.runAllTimersAsync
+
+- **类型：** `() => Promise<Rstest>`
+
+异步执行所有待运行的定时器。
+
+## rstest.runOnlyPendingTimers
+
+- **类型：** `() => Rstest`
+
+只运行当前待运行的定时器（不会调度新的定时器）。
+
+## rstest.runOnlyPendingTimersAsync
+
+- **类型：** `() => Promise<Rstest>`
+
+异步只运行当前待运行的定时器。
+
+## rstest.advanceTimersByTime
+
+- **类型：** `(ms: number) => Rstest`
+
+将 fake timers 快进指定的毫秒数，并执行在此期间计划的所有定时器。
+
+## rstest.advanceTimersByTimeAsync
+
+- **类型：** `(ms: number) => Promise<Rstest>`
+
+异步快进 fake timers 指定的毫秒数。
+
+## rstest.advanceTimersToNextTimer
+
+- **类型：** `(steps?: number) => Rstest`
+
+将定时器推进到下一个计划的定时器，可选地指定推进的步数。
+
+## rstest.advanceTimersToNextTimerAsync
+
+- **类型：** `(steps?: number) => Promise<Rstest>`
+
+异步将定时器推进到下一个计划的定时器。
+
+## rstest.advanceTimersToNextFrame
+
+- **类型：** `() => Rstest`
+
+将定时器推进到下一个动画帧。
+
+## rstest.getTimerCount
+
+- **类型：** `() => number`
+
+返回当前 fake timers 中还剩多少个待运行的定时器。
+
+```ts
+const count = rstest.getTimerCount();
+```
+
+## rstest.clearAllTimers
+
+- **类型：** `() => Rstest`
+
+移除所有已计划但尚未执行的定时器。
+
+```ts
+rstest.clearAllTimers();
+```
