@@ -1,0 +1,32 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# output
+
+## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
+
+Prevent some `import` dependencies from being packed into bundles in your code, and instead Rstest will `import` them at runtime.
+
+- In the Node.js test environment, all packages in `node_modules` are externalized by default.
+- In the browser-like (jsdom, etc) test environment, all packages are bundled by default.
+
+If you want a dependency to be externalized, you can configure it in `output.externals`.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: ['react'],
+  },
+});
+```
+
+## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
+
+For custom CSS Modules configuration.
+
+## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
+
+Whether to clean up all test temporary files under the output directory before the test starts.
+
+By default, rstest does not write test temporary files to disk, and this configuration item may be required when you debug rstest outputs.

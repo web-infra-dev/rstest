@@ -193,7 +193,10 @@ export interface RstestConfig {
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
 
-  output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
+  output?: Pick<
+    NonNullable<RsbuildConfig['output']>,
+    'cssModules' | 'externals' | 'cleanDistPath'
+  >;
 
   resolve?: RsbuildConfig['resolve'];
 
