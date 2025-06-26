@@ -227,7 +227,11 @@ const runInPool = async (
     }
   }
 
+  const exit = process.exit;
   try {
+    process.exit = (code = process.exitCode || 0): never => {
+      throw new Error(`process.exit unexpectedly called with "${code}"`);
+    };
     const {
       rstestContext,
       runner,
@@ -282,6 +286,7 @@ const runInPool = async (
     };
   } finally {
     await Promise.all(cleanups.map((fn) => fn()));
+    process.exit = exit;
   }
 };
 
