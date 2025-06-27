@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "@rstest/tests-lodash",
+  "main": "index.js",
+  "version": "1.0.0"
+}

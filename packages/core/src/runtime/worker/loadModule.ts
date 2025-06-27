@@ -50,6 +50,78 @@ const createRequire = (
   return require;
 };
 
+const defineRstestDynamicImport =
+  ({
+    testPath,
+    interopDefault,
+    returnModule = false,
+  }: {
+    returnModule?: boolean;
+    testPath: string;
+    interopDefault: boolean;
+  }) =>
+  async (specifier: string, importAttributes: ImportCallOptions) => {
+    const resolvedPath = isAbsolute(specifier)
+      ? pathToFileURL(specifier)
+      : await import.meta.resolve(specifier, pathToFileURL(testPath));
+
+    const modulePath =
+      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+
+    const importedModule = await import(
+      modulePath,
+      importAttributes as ImportCallOptions
+    );
+
+    if (
+      shouldInterop({
+        interopDefault,
+        modulePath,
+        mod: importedModule,
+      })
+    ) {
+      const { mod, defaultExport } = interopModule(importedModule);
+
+      if (returnModule) {
+        return asModule(mod, defaultExport);
+      }
+
+      return new Proxy(mod, {
+        get(mod, prop) {
+          if (prop === 'default') {
+            return defaultExport;
+          }
+          /**
+           * interop invalid named exports. eg:
+           * exports: module.exports = { a: 1 }
+           * import: import { a } from 'mod';
+           */
+          return mod[prop] ?? defaultExport?.[prop];
+        },
+        has(mod, prop) {
+          if (prop === 'default') {
+            return defaultExport !== undefined;
+          }
+          return prop in mod || (defaultExport && prop in defaultExport);
+        },
+        getOwnPropertyDescriptor(mod, prop): any {
+          const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
+          if (descriptor) {
+            return descriptor;
+          }
+          if (prop === 'default' && defaultExport !== undefined) {
+            return {
+              value: defaultExport,
+              enumerable: true,
+              configurable: true,
+            };
+          }
+        },
+      });
+    }
+    return importedModule;
+  };
+
 const loadModule = ({
   codeContent,
   distPath,
@@ -87,6 +159,10 @@ const loadModule = ({
       assetFiles,
       interopDefault,
     ),
+    __rstest_dynamic_import__: defineRstestDynamicImport({
+      testPath,
+      interopDefault,
+    }),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,
@@ -100,35 +176,12 @@ const loadModule = ({
     filename: distPath,
     lineOffset: 0,
     columnOffset: -codeDefinition.length,
-    importModuleDynamically: async (
-      specifier,
-      _referencer,
-      importAttributes,
-    ) => {
-      const resolvedPath = isAbsolute(specifier)
-        ? pathToFileURL(specifier)
-        : await import.meta.resolve(specifier, pathToFileURL(testPath));
-
-      const modulePath =
-        typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
-
-      const importedModule = await import(
-        modulePath,
-        importAttributes as ImportCallOptions
-      );
-
-      if (
-        shouldInterop({
-          interopDefault,
-          modulePath,
-          mod: importedModule,
-        })
-      ) {
-        const { mod, defaultExport } = interopModule(importedModule);
-
-        return asModule(mod, defaultExport);
-      }
-      return importedModule;
+    importModuleDynamically: (specifier, _referencer, importAttributes) => {
+      return defineRstestDynamicImport({
+        testPath,
+        interopDefault,
+        returnModule: true,
+      })(specifier, importAttributes as ImportCallOptions);
     },
   });
   fn(...Object.values(context));

@@ -166,6 +166,8 @@ export const prepareRsbuild = async (
             rspack: (config) => {
               config.output ??= {};
               config.output.iife = false;
+              // polyfill interop
+              config.output.importFunctionName = '__rstest_dynamic_import__';
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
               config.plugins.push(

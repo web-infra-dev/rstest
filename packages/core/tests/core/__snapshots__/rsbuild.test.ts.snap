@@ -364,6 +364,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "filename": "[name].js",
     "hashFunction": "xxhash64",
     "iife": false,
+    "importFunctionName": "__rstest_dynamic_import__",
     "library": {
       "type": "commonjs2",
     },
@@ -815,6 +816,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "filename": "[name].js",
     "hashFunction": "xxhash64",
     "iife": false,
+    "importFunctionName": "__rstest_dynamic_import__",
     "library": {
       "type": "commonjs2",
     },
