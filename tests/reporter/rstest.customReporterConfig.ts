@@ -1,18 +1,29 @@
 import { defineConfig } from '@rstest/core';
-import type { Reporter } from '@rstest/core/node';
+import type {
+  Reporter,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+} from '@rstest/core/node';
 
 export const reporterResult: string[] = [];
 
 class MyReporter implements Reporter {
-  onTestFileStart(file) {
+  onTestFileStart(_file: TestFileInfo) {
     reporterResult.push('[custom reporter] onTestFileStart');
   }
 
-  onTestCaseResult(result) {
+  onTestCaseResult(_result: TestResult) {
     reporterResult.push('[custom reporter] onTestCaseResult');
   }
 
-  onTestRunEnd({ results, testResults }) {
+  onTestRunEnd({
+    results: _results,
+    testResults: _testResults,
+  }: {
+    results: TestFileResult[];
+    testResults: TestResult[];
+  }) {
     reporterResult.push('[custom reporter] onTestRunEnd');
     console.log(reporterResult);
   }

@@ -59,6 +59,10 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm install
 
+      - name: Run Type Check
+        if: steps.changes.outputs.changed == 'true'
+        run: pnpm run typecheck
+
       - name: Run Test
         if: steps.changes.outputs.changed == 'true'
         run: pnpm run test

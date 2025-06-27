@@ -49,6 +49,7 @@
   ],
   "scripts": {
     "build": "rslib build",
+    "typecheck": "tsc --noEmit",
     "dev": "rslib build --watch",
     "test": "npx rstest run --globals"
   },

@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
+import { describe, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,7 +14,7 @@ describe('test build config', () => {
     { name: 'tools/rspack' },
     { name: 'decorators' },
   ])('$name config should work correctly', async ({ name }) => {
-    const { cli, expectExecSuccess } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: [
         'run',

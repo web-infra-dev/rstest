@@ -1,1 +1,8 @@
-export type { RstestConfig, Reporter, RstestCommand } from './types';
+export type {
+  RstestConfig,
+  Reporter,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  RstestCommand,
+} from './types';
