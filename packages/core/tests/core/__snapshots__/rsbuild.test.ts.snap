@@ -7,11 +7,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
   },
   "externals": [
     {
@@ -457,11 +452,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
   },
   "externals": [
     {
@@ -890,9 +880,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       ".js",
       ".jsx",
       ".json",
-    ],
-    "mainFields": [
-      "main",
     ],
   },
   "target": "node",
