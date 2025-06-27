@@ -1,6 +1,6 @@
 import type { ConstructorOptions } from 'jsdom';
 import type { TestEnvironment } from '../../../types';
-import { SKIP_KEYS, getWindowKeys } from './jsdomKeys';
+import { getWindowKeys, SKIP_KEYS } from './jsdomKeys';
 
 type JSDOMOptions = ConstructorOptions & {
   html?: string | ArrayBufferLike;

@@ -1,8 +1,7 @@
 import { dirname, join } from 'node:path';
-import fse from 'fs-extra';
-
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, it } from '@rstest/core';
+import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);

@@ -1,8 +1,6 @@
 import type { SnapshotResult } from '@vitest/snapshot';
 import type { NormalizedFixtures, TestContext } from './api';
-import type { TestPath } from './utils';
-
-import type { MaybePromise } from './utils';
+import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 

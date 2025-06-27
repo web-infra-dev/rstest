@@ -1,9 +1,9 @@
-import { strict as assert, AssertionError } from 'node:assert';
+import { AssertionError, strict as assert } from 'node:assert';
 import { Console } from 'node:console';
 import {
-  type InspectOptions,
   format,
   formatWithOptions,
+  type InspectOptions,
   inspect,
 } from 'node:util';
 import { color, prettyTime } from '../../utils';
@@ -23,7 +23,11 @@ export function createCustomConsole({
   rpc,
   testPath,
   printConsoleTrace,
-}: { rpc: WorkerRPC; testPath: string; printConsoleTrace: boolean }): Console {
+}: {
+  rpc: WorkerRPC;
+  testPath: string;
+  printConsoleTrace: boolean;
+}): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
     Error.stackTraceLimit = 4;

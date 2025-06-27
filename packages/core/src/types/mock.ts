@@ -34,15 +34,6 @@ interface MockSettledResultRejected {
   value: any;
 }
 
-interface MockSettledResultFulfilled<T> {
-  type: 'fulfilled';
-  value: T;
-}
-interface MockSettledResultRejected {
-  type: 'rejected';
-  value: any;
-}
-
 type MockSettledResult<T> =
   | MockSettledResultFulfilled<T>
   | MockSettledResultRejected;

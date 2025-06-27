@@ -1,11 +1,11 @@
+export type * from './api';
 export type * from './config';
 export type * from './core';
-export type * from './worker';
 export type * from './environment';
-export type * from './testSuite';
-export type * from './api';
 export type * from './expect';
 export type * from './mock';
-export type * from './runner';
 export type * from './reporter';
+export type * from './runner';
+export type * from './testSuite';
 export type * from './utils';
+export type * from './worker';

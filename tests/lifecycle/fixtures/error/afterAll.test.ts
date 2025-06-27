@@ -10,12 +10,10 @@ describe('test afterAll error', () => {
     console.log('[afterAll - 2] should not run');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   afterAll(() => {
     throw new Error('afterAll error');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   afterAll(() => {
     console.log('[afterAll - 0] should run');
   });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 
 describe.skip('level A', () => {
-  // biome-ignore lint/suspicious/noFocusedTests: <explanation>
   it.only('it in level A', () => {
     console.log('[test] in level A');
     expect(1 + 1).toBe(2);

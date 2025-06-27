@@ -1,6 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
 
-// biome-ignore lint/suspicious/noFocusedTests: <explanation>
 describe.only('level-A', () => {
   describe('level-B', () => {
     it('it in level-B-A', () => {

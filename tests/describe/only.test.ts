@@ -23,7 +23,6 @@ describe('level A', () => {
     expect(1 + 1).toBe(2);
   });
 
-  // biome-ignore lint/suspicious/noFocusedTests: <explanation>
   describe.only('level B', () => {
     it('it in level B-A', () => {
       logs.push('[test] in level B-A');
@@ -56,7 +55,6 @@ describe('level A', () => {
   });
 });
 
-// biome-ignore lint/suspicious/noFocusedTests: <explanation>
 describe.only('level E', () => {
   it('it in level E-A', () => {
     logs.push('[test] in level E-A');

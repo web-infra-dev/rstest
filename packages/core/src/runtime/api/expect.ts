@@ -2,19 +2,19 @@
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/chai/poll.ts
  */
-import * as chai from 'chai';
 
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
+  addCustomEqualityTesters,
+  customMatchers,
   GLOBAL_EXPECT,
+  getState,
   JestAsymmetricMatchers,
   JestChaiExpect,
   JestExtend,
-  addCustomEqualityTesters,
-  customMatchers,
-  getState,
   setState,
 } from '@vitest/expect';
+import * as chai from 'chai';
 import type {
   Assertion,
   MatcherState,

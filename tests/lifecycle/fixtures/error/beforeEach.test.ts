@@ -22,12 +22,10 @@ describe('test beforeEach error', () => {
     console.log('[beforeEach - 0] should run');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   beforeEach(() => {
     throw new Error('beforeEach error');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   beforeEach(() => {
     console.log('[beforeEach - 2] should not run');
   });

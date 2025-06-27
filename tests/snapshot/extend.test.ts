@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { expect, it } from '@rstest/core';
 
 declare module '@rstest/core' {
-  interface Assertion<T = any> {
+  interface Assertion {
     toMatchImageSnapshot(): void;
   }
 }

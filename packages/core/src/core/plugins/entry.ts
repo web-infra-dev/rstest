@@ -1,5 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { TEMP_RSTEST_OUTPUT_DIR_GLOB, castArray } from '../../utils';
+import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
 
 class TestFileWatchPlugin {
   private contextToWatch: string | null = null;

@@ -1,4 +1,5 @@
 import { afterAll, expect, it } from '@rstest/core';
+
 const logs: string[] = [];
 
 afterAll(() => {

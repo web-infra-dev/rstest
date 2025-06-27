@@ -1,4 +1,4 @@
-import { type RstestConfig, defineConfig } from '@rstest/core';
+import { defineConfig, type RstestConfig } from '@rstest/core';
 import rsbuildConfig from './rsbuild.config';
 
 export default defineConfig({

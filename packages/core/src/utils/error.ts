@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
 import { color, formatTestPath, logger } from '../utils';
