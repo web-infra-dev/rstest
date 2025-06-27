@@ -2,6 +2,11 @@ import { describe, expect, it } from '@rstest/core';
 import { sleep } from '../../scripts/utils';
 import { getCount, increment } from '../src/index';
 
+declare global {
+  var index: string | undefined;
+  var index1: string | undefined;
+}
+
 process.env.index1 = '1';
 globalThis.index1 = '1';
 
