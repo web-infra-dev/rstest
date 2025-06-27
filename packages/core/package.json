@@ -53,7 +53,7 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "1.4.0-rc.0",
+    "@rsbuild/core": "1.4.0",
     "@types/chai": "^5.2.2",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
@@ -68,7 +68,7 @@
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.25",
     "@microsoft/api-extractor": "^7.52.8",
-    "@rslib/core": "0.10.2",
+    "@rslib/core": "0.10.3",
     "@rstest/tsconfig": "workspace:*",
     "@types/babel__code-frame": "^7.0.6",
     "@types/sinonjs__fake-timers": "^8.1.5",
@@ -76,7 +76,7 @@
     "jsdom": "^26.1.0",
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
-    "jest-diff": "^30.0.2",
+    "jest-diff": "^30.0.3",
     "license-webpack-plugin": "^4.0.2",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.8",
