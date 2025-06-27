@@ -7,13 +7,13 @@ import type {
   TestResult,
 } from '../types';
 import {
-  TEST_DELIMITER,
   color,
   formatTestPath,
   getTaskNameWithPrefix,
   logger,
   prettyTestPath,
   prettyTime,
+  TEST_DELIMITER,
 } from '../utils';
 
 export const getSummaryStatusString = (

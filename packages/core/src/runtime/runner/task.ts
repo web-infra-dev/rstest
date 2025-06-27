@@ -8,7 +8,7 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
-import { ROOT_SUITE_NAME, getTaskNameWithPrefix } from '../../utils';
+import { getTaskNameWithPrefix, ROOT_SUITE_NAME } from '../../utils';
 
 export const getTestStatus = (
   results: TestResult[],

@@ -6,8 +6,8 @@ import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
 import type {
   FormattedError,
-  RunWorkerOptions,
   RuntimeRPC,
+  RunWorkerOptions,
   ServerRPC,
   Test,
   TestFileResult,

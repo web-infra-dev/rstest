@@ -4,7 +4,11 @@ export const shouldInterop = ({
   interopDefault = true,
   modulePath,
   mod,
-}: { interopDefault?: boolean; modulePath: string; mod: any }): boolean => {
+}: {
+  interopDefault?: boolean;
+  modulePath: string;
+  mod: any;
+}): boolean => {
   if (interopDefault === false) {
     return false;
   }

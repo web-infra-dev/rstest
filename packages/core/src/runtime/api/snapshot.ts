@@ -5,8 +5,8 @@
 import type { ChaiPlugin } from '@vitest/expect';
 import { equals, iterableEquality, subsetEquality } from '@vitest/expect';
 import {
-  SnapshotClient,
   addSerializer,
+  SnapshotClient,
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
 import type { Assertion, TestCase } from '../../types';

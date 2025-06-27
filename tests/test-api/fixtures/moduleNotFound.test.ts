@@ -5,7 +5,7 @@ const expectNotFound = async () => {
     // @ts-expect-error
     const res = await import('404');
     return res;
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 };
@@ -21,6 +21,6 @@ it('test expectNotFound error', async () => {
 
 it('test expectNotFound error', async () => {
   await expect(unexpectNotFound()).rejects.toThrowError(
-    /Cannot find module \'aaa\'/,
+    /Cannot find module 'aaa'/,
   );
 });

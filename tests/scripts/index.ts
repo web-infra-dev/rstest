@@ -73,7 +73,11 @@ export async function runRstestCli({
   command,
   options,
   args = [],
-}: { command: string; options?: Partial<Options>; args?: string[] }) {
+}: {
+  command: string;
+  options?: Partial<Options>;
+  args?: string[];
+}) {
   const process = x(command, args, options as Options);
   const cli = new Cli(process);
 
@@ -93,7 +97,9 @@ export async function runRstestCli({
 
 export async function prepareFixtures({
   fixturesPath,
-}: { fixturesPath: string }) {
+}: {
+  fixturesPath: string;
+}) {
   const root = path.dirname(fixturesPath);
   const distPath = path.resolve(`${fixturesPath}-test`);
   fs.rmSync(distPath, { recursive: true, force: true });

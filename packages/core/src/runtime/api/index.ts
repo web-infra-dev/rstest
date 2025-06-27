@@ -8,7 +8,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
-import { assert, GLOBAL_EXPECT, createExpect } from './expect';
+import { assert, createExpect, GLOBAL_EXPECT } from './expect';
 import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = (

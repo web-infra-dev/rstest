@@ -1,21 +1,21 @@
 import fs from 'node:fs';
 import {
+  createRsbuild,
   type ManifestData,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
-  createRsbuild,
   rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
-  NODE_BUILTINS,
-  TEMP_RSTEST_OUTPUT_DIR,
   castArray,
   getNodeVersion,
   isDebug,
+  NODE_BUILTINS,
+  TEMP_RSTEST_OUTPUT_DIR,
 } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';

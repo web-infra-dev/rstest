@@ -13,12 +13,10 @@ describe('test beforeAll error', () => {
     console.log('[beforeAll - 0] should run');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   beforeAll(() => {
     throw new Error('beforeAll error');
   });
 
-  // biome-ignore lint/suspicious/noDuplicateTestHooks: test
   beforeAll(() => {
     console.log('[beforeAll - 2] should not run');
   });

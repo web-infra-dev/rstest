@@ -71,7 +71,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           const promise = () =>
             new Promise<void>((resolve, reject) => {
               let intervalId: any;
-              // biome-ignore lint/style/useConst: <explanation>
+              // biome-ignore lint/style/useConst: let
               let timeoutId: any;
               let lastError: any;
               // TODO: use timeout manager
@@ -128,7 +128,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           // only .then is enough to check awaited, but we type this as `Promise<void>` in global types
           // so let's follow it
           return {
-            // biome-ignore lint/suspicious/noThenProperty: <explanation>
+            // biome-ignore lint/suspicious/noThenProperty: promise-like
             then(onFulfilled, onRejected) {
               awaited = true;
               resultPromise ||= promise();

@@ -1,4 +1,4 @@
-import { type SpyInternalImpl, getInternalState, internalSpyOn } from 'tinyspy';
+import { getInternalState, internalSpyOn, type SpyInternalImpl } from 'tinyspy';
 import type {
   FunctionLike,
   Mock,

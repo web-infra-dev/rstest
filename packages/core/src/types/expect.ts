@@ -8,7 +8,7 @@ import type {
   ExpectStatic as VitestExpectStatic,
   MatcherState as VitestMatcherState,
 } from '@vitest/expect';
-import type { SnapshotState, addSerializer } from '@vitest/snapshot';
+import type { addSerializer, SnapshotState } from '@vitest/snapshot';
 
 interface SnapshotMatcher<T> {
   <U extends { [P in keyof T]: any }>(

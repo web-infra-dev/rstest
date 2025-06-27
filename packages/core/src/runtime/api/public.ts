@@ -1,4 +1,5 @@
 import type { Rstest, RstestUtilities } from '../../types';
+
 export type { Assertion } from '../../types/expect';
 
 export declare const expect: Rstest['expect'];

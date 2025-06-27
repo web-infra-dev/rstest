@@ -7,11 +7,11 @@ import {
 import { dirname, isAbsolute, join } from 'pathe';
 import type { NormalizedConfig, RstestConfig } from './types';
 import {
+  color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
-  TEMP_RSTEST_OUTPUT_DIR_GLOB,
-  color,
   logger,
+  TEMP_RSTEST_OUTPUT_DIR_GLOB,
 } from './utils';
 
 const findConfig = (basePath: string): string | undefined => {

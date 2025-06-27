@@ -85,7 +85,7 @@ export class TestRunner {
         return result;
       }
 
-      let result: TestResult | undefined = undefined;
+      let result: TestResult | undefined;
 
       this.beforeEach(test, state, api);
 
@@ -128,7 +128,7 @@ export class TestRunner {
                 },
               ],
             };
-          } catch (error) {
+          } catch (_err) {
             result = {
               status: 'pass' as const,
               parentNames: test.parentNames,
@@ -300,7 +300,7 @@ export class TestRunner {
         }
       } else {
         const start = RealDate.now();
-        let result: TestResult | undefined = undefined;
+        let result: TestResult | undefined;
         let retryCount = 0;
 
         do {

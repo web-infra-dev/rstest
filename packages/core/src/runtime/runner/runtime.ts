@@ -20,7 +20,7 @@ import type {
   TestRunMode,
   TestSuite,
 } from '../../types';
-import { ROOT_SUITE_NAME, castArray } from '../../utils';
+import { castArray, ROOT_SUITE_NAME } from '../../utils';
 import { formatName } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
@@ -427,7 +427,10 @@ export class RunnerRuntime {
 export const createRuntimeAPI = ({
   testPath,
   testTimeout,
-}: { testPath: string; testTimeout: number }): {
+}: {
+  testPath: string;
+  testTimeout: number;
+}): {
   api: RunnerAPI;
   instance: RunnerRuntime;
 } => {
