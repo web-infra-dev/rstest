@@ -73,6 +73,12 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   settledResults: MockSettledResult<Awaited<ReturnType<T>>>[];
 };
 
+type Procedure = (...args: any[]) => any;
+// pick a single function type from function overloads, unions, etc...
+export type NormalizedProcedure<T extends Procedure> = (
+  ...args: Parameters<T>
+) => ReturnType<T>;
+
 export interface MockInstance<T extends FunctionLike = FunctionLike> {
   _isMockFunction: true;
   /**
@@ -99,20 +105,20 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   /**
    * Returns current mock implementation if there is one.
    */
-  getMockImplementation(): T | undefined;
+  getMockImplementation(): NormalizedProcedure<T> | undefined;
   /**
    * Accepts a function that should be used as the implementation of the mock.
    */
-  mockImplementation(fn: T): this;
+  mockImplementation(fn: NormalizedProcedure<T>): this;
   /**
    * Accepts a function that will be used as an implementation of the mock for one call to the mocked function.
    */
-  mockImplementationOnce(fn: T): this;
+  mockImplementationOnce(fn: NormalizedProcedure<T>): this;
   /**
    * Accepts a function which should be temporarily used as the implementation of the mock while the callback is being executed.
    */
   withImplementation<T2>(
-    fn: T,
+    fn: NormalizedProcedure<T>,
     callback: () => T2,
   ): T2 extends Promise<unknown> ? Promise<void> : void;
   /**

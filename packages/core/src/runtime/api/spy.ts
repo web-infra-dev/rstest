@@ -5,6 +5,7 @@ import type {
   MockContext,
   MockFn,
   MockInstance,
+  NormalizedProcedure,
 } from '../../types';
 
 let callOrder = 0;
@@ -14,7 +15,7 @@ export const mocks: Set<MockInstance> = new Set();
 const wrapSpy = <T extends FunctionLike>(
   obj: Record<string, any>,
   methodName: string,
-  mockFn?: T,
+  mockFn?: NormalizedProcedure<T>,
 ): Mock<T> => {
   const spyImpl = internalSpyOn(obj, methodName, mockFn) as SpyInternalImpl<
     Parameters<T>,
@@ -23,7 +24,7 @@ const wrapSpy = <T extends FunctionLike>(
 
   const spyFn = spyImpl as unknown as Mock<T>;
 
-  let mockImplementationOnce: T[] = [];
+  let mockImplementationOnce: NormalizedProcedure<T>[] = [];
   let implementation = mockFn;
   let mockName = mockFn?.name;
 
