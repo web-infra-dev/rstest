@@ -80,7 +80,7 @@ const autoExternalNodeBuiltin: (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = ({ context, request, dependencyType, getResolve }, callback) => {
+) => void = ({ request, dependencyType }, callback) => {
   if (!request) {
     return callback();
   }
