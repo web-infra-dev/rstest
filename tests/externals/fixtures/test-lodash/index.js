@@ -1,6 +1,5 @@
 // Reference lodash/lodash.js
-// biome-ignore lint/complexity/useArrowFunction: <explanation>
-(function () {
+(() => {
   /** Used as the semantic version number. */
   const VERSION = '4.17.21';
 
@@ -27,7 +26,7 @@
     !module.nodeType &&
     module;
 
-  function lodash(value) {}
+  function lodash(_value) {}
 
   lodash.VERSION = VERSION;
 
