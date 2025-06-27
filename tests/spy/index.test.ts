@@ -90,6 +90,24 @@ describe('test spy', () => {
     expect(sayHi).toHaveBeenCalledTimes(4);
   });
 
+  it('mockImplementation types', async () => {
+    // overload
+    const fs = { readFileSync() {} } as any as typeof import('node:fs');
+    rstest.spyOn(fs, 'readFileSync').mockImplementation(() => 'str');
+    rstest
+      .spyOn(fs, 'readFileSync')
+      .mockImplementation(() => Buffer.from('buf'));
+    rstest.fn(fs.readFileSync).mockImplementation(() => 'str');
+    rstest.fn(fs.readFileSync).mockImplementation(() => Buffer.from('buf'));
+
+    // union
+    interface Handler {
+      (v: number): number;
+      other: (v: number) => number;
+    }
+    rstest.fn<Handler>().mockImplementation((v) => v + 1);
+  });
+
   it('isMockFunction', () => {
     const sayHi = rstest.fn();
     expect(rstest.isMockFunction(sayHi)).toBeTruthy();
