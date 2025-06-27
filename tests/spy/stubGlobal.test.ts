@@ -1,7 +1,10 @@
 import { expect, it, rstest } from '@rstest/core';
 
+declare global {
+  var __test_flag__: boolean | undefined;
+}
+
 function checkGlobalThis() {
-  // @ts-expect-error
   expect(__test_flag__).toBeTruthy();
 }
 
