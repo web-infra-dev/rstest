@@ -4,15 +4,15 @@ title: Test
 
 # Test
 
-`test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
+`test` 用于定义一个测试用例，支持链式调用和 fixture 扩展。
 
-Alias: `it`.
+别名：`it`。
 
 ## test
 
-- **Type:** `(name: string, fn: (context) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(name: string, fn: (context) => void | Promise<void>, timeout?: number) => void`
 
-Defines a test case.
+定义一个测试用例。
 
 ```ts
 import { expect, test } from '@rstest/core';
@@ -25,9 +25,9 @@ test('should add two numbers correctly', () => {
 
 ## test.each
 
-- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
 
-Runs the same test logic for each item in the provided array.
+对提供的数组中的每一项运行相同的测试逻辑。
 
 ```ts
 test.each([
@@ -40,9 +40,9 @@ test.each([
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, context) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, context) => void | Promise<void>, timeout?: number) => void`
 
-Alternative to `test.each` to provide `TestContext`.
+`test.each` 的替代方案，提供 `TestContext`。
 
 ```ts
 test.for([
@@ -55,7 +55,7 @@ test.for([
 
 ## test.fails
 
-Marks the test as expected to fail.
+标记该测试预期会失败。
 
 ```ts
 test.fails('should fail', () => {
@@ -65,7 +65,7 @@ test.fails('should fail', () => {
 
 ## test.concurrent
 
-Runs the test concurrently with consecutive `concurrent` flag.
+并发运行连续带有 `concurrent` 标记的测试。
 
 ```ts
 describe('suite', () => {
@@ -86,7 +86,7 @@ describe('suite', () => {
 
 ## test.sequential
 
-Runs the test sequentially (default behavior).
+顺序（串行）运行测试（默认行为）。
 
 ```ts
 describe('suite', () => {
@@ -101,7 +101,7 @@ describe('suite', () => {
 
 ## test.only
 
-Only run certain tests in a test file.
+只运行测试文件中的某些测试。
 
 ```ts
 test.only('run only this test', () => {
@@ -111,7 +111,7 @@ test.only('run only this test', () => {
 
 ## test.skip
 
-Skips certain tests.
+跳过某些测试。
 
 ```ts
 test.skip('skip this test', () => {
@@ -121,7 +121,7 @@ test.skip('skip this test', () => {
 
 ## test.todo
 
-Marks certain tests as todo.
+将某些测试标记为待办。
 
 ```ts
 test.todo('should implement this test');
@@ -129,7 +129,7 @@ test.todo('should implement this test');
 
 ## test.runIf
 
-Runs the test only if the condition is true.
+仅当条件为真时才运行该测试。
 
 ```ts
 test.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
@@ -139,7 +139,7 @@ test.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
 
 ## test.skipIf
 
-Skips the test if the condition is true.
+当条件为真时跳过该测试。
 
 ```ts
 test.skipIf(process.platform === 'win32')('skip on Windows', () => {
@@ -149,9 +149,9 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures)`
+- **类型：** `test.extend(fixtures: Fixtures)`
 
-Extends the test context with custom fixtures.
+通过自定义 fixture 扩展测试上下文。
 
 ```ts
 const testWithUser = test.extend({
