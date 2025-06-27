@@ -1,0 +1,23 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# resolve
+
+Options for module resolution.
+
+## resolve.aliasStrategy <RsbuildDocBadge path="/config/resolve/alias-strategy" text="resolve.aliasStrategy" />
+
+Control the priority between the `resolve.alias` option and the `paths` option in `tsconfig.json`.
+
+## resolve.alias <RsbuildDocBadge path="/config/resolve/alias" text="resolve.alias" />
+
+Set the alias for the module path, which is used to simplify the import path or redirect the module reference, similar to the [resolve.alias](https://rspack.rs/config/resolve#resolvealias) config of Rspack.
+
+For TypeScript projects, you only need to configure [compilerOptions.paths](https://www.typescriptlang.org/tsconfig/#paths) in the `tsconfig.json` file. Rstest will automatically recognize it, so there is no need to configure the `resolve.alias` option separately.
+
+## resolve.dedupe <RsbuildDocBadge path="/config/resolve/dedupe" text="resolve.dedupe" />
+
+Force Rstest to resolve the specified packages from project root, which is useful for deduplicating packages and reducing the bundle size.
+
+## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
+
+Automatically resolve file extensions when importing modules. This means you can import files without explicitly writing their extensions.

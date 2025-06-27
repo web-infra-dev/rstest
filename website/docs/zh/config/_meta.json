@@ -8,5 +8,10 @@
     "type": "dir",
     "name": "test",
     "label": "Test Configurations"
+  },
+  {
+    "type": "dir",
+    "name": "build",
+    "label": "Build Configurations"
   }
 ]

@@ -1,0 +1,13 @@
+{
+  "extends": "@rstest/tsconfig/base",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "rootDir": "./",
+    "declarationDir": "./dist-types",
+    "composite": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["./"]
+}

@@ -20,6 +20,6 @@ it.for([
   [2, 2, 4],
   [3, 1, 4],
 ])('case-%# add(%i, %i) -> %i', ([a, b, expected], { expect }) => {
-  expect(a + b).toBe(expected);
+  expect(a! + b!).toBe(expected);
   logs.push('executed');
 });

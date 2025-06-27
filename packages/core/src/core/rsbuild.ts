@@ -10,7 +10,13 @@ import {
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import { TEMP_RSTEST_OUTPUT_DIR, getNodeVersion, isDebug } from '../utils';
+import {
+  NODE_BUILTINS,
+  TEMP_RSTEST_OUTPUT_DIR,
+  castArray,
+  getNodeVersion,
+  isDebug,
+} from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 
@@ -31,7 +37,7 @@ const autoExternalNodeModules: (
     type?: Rspack.ExternalsType,
   ) => void,
 ) => void = ({ context, request, dependencyType, getResolve }, callback) => {
-  if (!request || request.startsWith('node:')) {
+  if (!request) {
     return callback();
   }
 
@@ -67,6 +73,37 @@ const autoExternalNodeModules: (
   });
 };
 
+const autoExternalNodeBuiltin: (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void = ({ request, dependencyType }, callback) => {
+  if (!request) {
+    return callback();
+  }
+
+  const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
+    if (typeof builtin === 'string') {
+      return builtin === request;
+    }
+
+    return builtin.test(request);
+  });
+
+  if (isNodeBuiltin) {
+    callback(
+      undefined,
+      request,
+      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+    );
+  } else {
+    callback();
+  }
+};
+
 export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: () => Promise<Record<string, string>>,
@@ -82,12 +119,14 @@ export const prepareRsbuild = async (
       output,
       tools,
       testEnvironment,
+      performance,
+      dev = {},
     },
   } = context;
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
-  const writeToDisk = debugMode;
+  const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
     rsbuildConfig: {
@@ -101,6 +140,7 @@ export const prepareRsbuild = async (
         strictPort: false,
         middlewareMode: true,
       },
+      performance,
       environments: {
         [name]: {
           dev: {
@@ -120,19 +160,12 @@ export const prepareRsbuild = async (
             distPath: {
               root: TEMP_RSTEST_OUTPUT_DIR,
             },
-            externals: [
-              {
-                '@rstest/core': 'global @rstest/core',
-              },
-              testEnvironment === 'node' ? autoExternalNodeModules : {},
-            ],
             target: 'node',
           },
           tools: {
             rspack: (config) => {
               config.output ??= {};
               config.output.iife = false;
-              config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
               config.plugins.push(
@@ -143,6 +176,21 @@ export const prepareRsbuild = async (
                   manualMockRoot: context.rootPath,
                 }),
               );
+
+              // Avoid externals configuration being modified by users
+              config.externals = castArray(config.externals) || [];
+
+              config.externals.unshift({
+                '@rstest/core': 'global @rstest/core',
+              });
+
+              if (testEnvironment === 'node') {
+                config.externals.push(autoExternalNodeModules);
+              }
+
+              config.externalsPresets ??= {};
+              config.externalsPresets.node = false;
+              config.externals.push(autoExternalNodeBuiltin);
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
@@ -169,17 +217,12 @@ export const prepareRsbuild = async (
               }
 
               config.optimization = {
-                ...(config.optimization || {}),
                 moduleIds: 'named',
                 chunkIds: 'named',
+                ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
                   name: 'runtime',
-                },
-                splitChunks: {
-                  chunks: 'all',
-                  minSize: 0,
-                  maxInitialRequests: Number.POSITIVE_INFINITY,
                 },
               };
             },

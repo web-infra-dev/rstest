@@ -1,8 +1,6 @@
-import path from 'node:path';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { createSnapshotSerializer } from 'path-serializer';
 import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);

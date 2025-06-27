@@ -60,7 +60,7 @@ export interface RstestConfig {
    */
   retry?: number;
   /**
-   * Allows the test suite to pass when no files are found.
+   * Pass when no tests are found.
    *
    * @default false
    */
@@ -186,7 +186,17 @@ export interface RstestConfig {
     'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
   >;
 
-  output?: Pick<NonNullable<RsbuildConfig['output']>, 'cssModules'>;
+  performance?: Pick<
+    NonNullable<RsbuildConfig['performance']>,
+    'bundleAnalyze'
+  >;
+
+  dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
+
+  output?: Pick<
+    NonNullable<RsbuildConfig['output']>,
+    'cssModules' | 'externals' | 'cleanDistPath'
+  >;
 
   resolve?: RsbuildConfig['resolve'];
 
@@ -203,7 +213,9 @@ type OptionalKeys =
   | 'source'
   | 'resolve'
   | 'output'
+  | 'performance'
   | 'tools'
+  | 'dev'
   | 'onConsoleLog';
 
 export type NormalizedConfig = Required<

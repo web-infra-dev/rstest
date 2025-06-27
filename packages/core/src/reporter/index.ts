@@ -112,8 +112,11 @@ export class DefaultReporter implements Reporter {
         typeof result.duration !== 'undefined'
           ? ` (${prettyTime(result.duration, false)})`
           : '';
+      const retry = result.retryCount
+        ? color.yellow(` (retry x${result.retryCount})`)
+        : '';
 
-      console.log(`  ${icon} ${nameStr}${color.gray(duration)}`);
+      console.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}`);
 
       if (result.errors) {
         for (const error of result.errors) {

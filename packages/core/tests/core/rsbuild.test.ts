@@ -2,7 +2,7 @@ import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { RstestContext } from '../../src/types';
 
 describe('prepareRsbuild', () => {
-  it('should generate rspack config correctly', async () => {
+  it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
         normalizedConfig: {
@@ -12,6 +12,31 @@ describe('prepareRsbuild', () => {
           source: {},
           output: {},
           tools: {},
+          testEnvironment: 'jsdom',
+        },
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+    );
+    expect(rsbuildInstance).toBeDefined();
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]).toMatchSnapshot();
+  });
+
+  it('should generate rspack config correctly (node)', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        normalizedConfig: {
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {},
+          tools: {},
+          testEnvironment: 'node',
         },
       } as unknown as RstestContext,
       async () => ({}),

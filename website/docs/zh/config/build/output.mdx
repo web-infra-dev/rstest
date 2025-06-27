@@ -1,0 +1,32 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# output
+
+## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
+
+配置代码中的某些 `import` 的依赖不被打包，而是由 Rstest 在运行时去获取这些依赖。
+
+- 在 Node.js 测试环境中，默认将 `node_modules` 下的所有包都进行 external。
+- 在类浏览器（jsdom 等）测试环境中，默认打包所有依赖。
+
+如果你想某个依赖不被打包，可以在 `output.externals` 中进行配置。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: ['react'],
+  },
+});
+```
+
+## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
+
+用于自定义 CSS Modules 的配置。
+
+## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
+
+是否在测试开始前，清空输出目录下的所有测试临时文件。
+
+默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 Rstest 产物调试时可能需要此配置项。

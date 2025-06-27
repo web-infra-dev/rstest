@@ -23,7 +23,7 @@ describe.for([
   [3, 1, 4],
 ])('add two numbers correctly', ([a, b, expected]) => {
   it(`should return ${expected}`, () => {
-    expect(a + b).toBe(expected);
+    expect(a! + b!).toBe(expected);
     logs.push('executed');
   });
 });

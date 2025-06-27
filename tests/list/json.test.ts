@@ -81,7 +81,7 @@ describe('test list command with --json', () => {
 
     fs.rmSync(outputPath, { force: true });
 
-    const { cli, expectExecSuccess } = await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['list', '--json', 'output.json'],
       options: {

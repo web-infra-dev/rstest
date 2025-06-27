@@ -1,0 +1,23 @@
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# resolve
+
+与模块解析相关的选项。
+
+## resolve.aliasStrategy <RsbuildDocBadge path="/config/resolve/alias-strategy" text="resolve.aliasStrategy" />
+
+控制 `resolve.alias` 选项与 `tsconfig.json` 中的 `paths` 选项的优先级。
+
+## resolve.alias <RsbuildDocBadge path="/config/resolve/alias" text="resolve.alias" />
+
+设置模块路径的别名，用于简化导入路径或重定向模块引用，类似于 Rspack 的 [resolve.alias](https://rspack.rs/zh/config/resolve#resolvealias) 配置。
+
+对于 TypeScript 项目，你只需要在 `tsconfig.json` 中配置 [compilerOptions.paths](https://www.typescriptlang.org/tsconfig/#paths) 即可，Rstest 会自动识别它，不需要额外配置 `resolve.alias` 字段。
+
+## resolve.dedupe <RsbuildDocBadge path="/config/resolve/dedupe" text="resolve.dedupe" />
+
+强制 Rstest 从项目根目录解析指定的包，这可以用于移除重复包和减少包大小。
+
+## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
+
+自动添加导入文件的扩展名。这意味着你可以导入文件，而不需要显式地写它们的扩展名。
