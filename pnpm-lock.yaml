@@ -259,6 +259,8 @@ importers:
 
   tests/externals/fixtures/test-interop: {}
 
+  tests/externals/fixtures/test-lodash: {}
+
   tests/externals/fixtures/test-module-field: {}
 
   tests/externals/fixtures/test-pkg:
