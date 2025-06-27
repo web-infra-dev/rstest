@@ -11,6 +11,7 @@ import {
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
+  NODE_BUILTINS,
   TEMP_RSTEST_OUTPUT_DIR,
   castArray,
   getNodeVersion,
@@ -36,7 +37,7 @@ const autoExternalNodeModules: (
     type?: Rspack.ExternalsType,
   ) => void,
 ) => void = ({ context, request, dependencyType, getResolve }, callback) => {
-  if (!request || request.startsWith('node:')) {
+  if (!request) {
     return callback();
   }
 
@@ -70,6 +71,37 @@ const autoExternalNodeModules: (
     }
     return callback();
   });
+};
+
+const autoExternalNodeBuiltin: (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void = ({ context, request, dependencyType, getResolve }, callback) => {
+  if (!request) {
+    return callback();
+  }
+
+  const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
+    if (typeof builtin === 'string') {
+      return builtin === request;
+    }
+
+    return builtin.test(request);
+  });
+
+  if (isNodeBuiltin) {
+    callback(
+      undefined,
+      request,
+      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+    );
+  } else {
+    callback();
+  }
 };
 
 export const prepareRsbuild = async (
@@ -134,7 +166,6 @@ export const prepareRsbuild = async (
             rspack: (config) => {
               config.output ??= {};
               config.output.iife = false;
-              config.externalsPresets = { node: true };
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
               config.plugins.push(
@@ -156,6 +187,10 @@ export const prepareRsbuild = async (
               if (testEnvironment === 'node') {
                 config.externals.push(autoExternalNodeModules);
               }
+
+              config.externalsPresets ??= {};
+              config.externalsPresets.node = false;
+              config.externals.push(autoExternalNodeBuiltin);
 
               config.module.parser ??= {};
               config.module.parser.javascript = {
