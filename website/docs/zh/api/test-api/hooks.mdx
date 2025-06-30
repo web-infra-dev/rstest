@@ -1,0 +1,64 @@
+---
+title: Hooks
+---
+
+# Hooks
+
+Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
+
+## beforeAll
+
+- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的所有测试之前运行。
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async (ctx) => {
+  // 在所有测试前的初始化逻辑
+  // ctx.filepath 表示当前测试文件路径
+});
+```
+
+## afterAll
+
+- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的所有测试之后运行。
+
+```ts
+import { afterAll } from '@rstest/core';
+
+afterAll(async (ctx) => {
+  // 在所有测试后的清理逻辑
+});
+```
+
+## beforeEach
+
+- **类型：** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的每个测试之前运行。
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  // 每个测试前的初始化逻辑
+});
+```
+
+## afterEach
+
+- **类型：** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的每个测试之后运行。
+
+```ts
+import { afterEach } from '@rstest/core';
+
+afterEach(async () => {
+  // 每个测试后的清理逻辑
+});
+```

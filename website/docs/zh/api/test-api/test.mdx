@@ -23,6 +23,34 @@ test('should add two numbers correctly', () => {
 });
 ```
 
+## test.only
+
+只运行测试文件中的某些测试。
+
+```ts
+test.only('run only this test', () => {
+  // ...
+});
+```
+
+## test.skip
+
+跳过某些测试。
+
+```ts
+test.skip('skip this test', () => {
+  // ...
+});
+```
+
+## test.todo
+
+将某些测试标记为待办。
+
+```ts
+test.todo('should implement this test');
+```
+
 ## test.each
 
 - **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
@@ -97,34 +125,6 @@ describe('suite', () => {
     /* ... */
   });
 });
-```
-
-## test.only
-
-只运行测试文件中的某些测试。
-
-```ts
-test.only('run only this test', () => {
-  // ...
-});
-```
-
-## test.skip
-
-跳过某些测试。
-
-```ts
-test.skip('skip this test', () => {
-  // ...
-});
-```
-
-## test.todo
-
-将某些测试标记为待办。
-
-```ts
-test.todo('should implement this test');
 ```
 
 ## test.runIf

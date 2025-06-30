@@ -1,0 +1,64 @@
+---
+title: Hooks
+---
+
+# Hooks
+
+Hooks allow you to run setup and teardown logic before or after your tests or test suites.
+
+## beforeAll
+
+- **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+Runs once before all tests in the current suite.
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async (ctx) => {
+  // Setup logic before all tests
+  // ctx.filepath gives the current test file path
+});
+```
+
+## afterAll
+
+- **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+Runs once after all tests in the current suite.
+
+```ts
+import { afterAll } from '@rstest/core';
+
+afterAll(async (ctx) => {
+  // Cleanup logic after all tests
+});
+```
+
+## beforeEach
+
+- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+Runs before each test in the current suite.
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  // Setup logic before each test
+});
+```
+
+## afterEach
+
+- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+Runs after each test in the current suite.
+
+```ts
+import { afterEach } from '@rstest/core';
+
+afterEach(async () => {
+  // Cleanup logic after each test
+});
+```

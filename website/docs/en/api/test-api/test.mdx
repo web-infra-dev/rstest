@@ -23,6 +23,34 @@ test('should add two numbers correctly', () => {
 });
 ```
 
+## test.only
+
+Only run certain tests in a test file.
+
+```ts
+test.only('run only this test', () => {
+  // ...
+});
+```
+
+## test.skip
+
+Skips certain tests.
+
+```ts
+test.skip('skip this test', () => {
+  // ...
+});
+```
+
+## test.todo
+
+Marks certain tests as todo.
+
+```ts
+test.todo('should implement this test');
+```
+
 ## test.each
 
 - **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
@@ -97,34 +125,6 @@ describe('suite', () => {
     /* ... */
   });
 });
-```
-
-## test.only
-
-Only run certain tests in a test file.
-
-```ts
-test.only('run only this test', () => {
-  // ...
-});
-```
-
-## test.skip
-
-Skips certain tests.
-
-```ts
-test.skip('skip this test', () => {
-  // ...
-});
-```
-
-## test.todo
-
-Marks certain tests as todo.
-
-```ts
-test.todo('should implement this test');
 ```
 
 ## test.runIf

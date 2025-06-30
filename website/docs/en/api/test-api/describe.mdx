@@ -1,0 +1,138 @@
+---
+title: Describe
+---
+
+# Describe
+
+`describe` defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
+
+## describe
+
+- **Type:** `(name: string, fn: () => void | Promise<void>) => void`
+
+Defines a test suite that can contain multiple test cases or nested describe blocks.
+
+```ts
+import { describe, test } from '@rstest/core';
+
+describe('math', () => {
+  test('add', () => {
+    // ...
+  });
+  test('sub', () => {
+    // ...
+  });
+});
+```
+
+## describe.only
+
+Only run the describe block(s) marked with `only`.
+
+```ts
+describe.only('only this suite', () => {
+  // ...
+});
+```
+
+## describe.skip
+
+Skip the describe block(s) marked with `skip`.
+
+```ts
+describe.skip('skip this suite', () => {
+  // ...
+});
+```
+
+## describe.todo
+
+Mark a describe block as todo.
+
+```ts
+describe.todo('should implement this suite');
+```
+
+## describe.each
+
+- **Type:** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+
+Creates a describe block for each item in the provided array.
+
+```ts
+describe.each([
+  { a: 1, b: 2 },
+  { a: 2, b: 3 },
+])('math $a + $b', ({ a, b }) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+## describe.for
+
+- **Type:** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+
+Alternative to `describe.each` for more flexible parameter types.
+
+```ts
+describe.for([
+  [1, 2],
+  [2, 3],
+])('math $0 + $1', ([a, b]) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+## describe.runIf
+
+Run the describe block only if the condition is true.
+
+```ts
+describe.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
+  // ...
+});
+```
+
+## describe.skipIf
+
+Skip the describe block if the condition is true.
+
+```ts
+describe.skipIf(process.platform === 'win32')('skip on Windows', () => {
+  // ...
+});
+```
+
+## describe.concurrent
+
+Run the tests in the describe block concurrently.
+
+```ts
+describe.concurrent('concurrent suite', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
+
+## describe.sequential
+
+Run the tests in the describe block sequentially (default behavior).
+
+```ts
+describe.sequential('sequential suite', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
