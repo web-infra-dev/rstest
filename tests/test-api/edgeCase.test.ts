@@ -40,6 +40,7 @@ describe('Test Edge Cases', () => {
     await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
+
     expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();

@@ -416,13 +416,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
+    MockRuntimeRspackPlugin {},
     RstestPlugin {
       "_args": [
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": undefined,
+          "manualMockRoot": "<ROOT>/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -440,6 +441,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       ".js",
       ".jsx",
       ".json",
+      ".cjs",
     ],
   },
   "target": "node",
@@ -868,13 +870,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
+    MockRuntimeRspackPlugin {},
     RstestPlugin {
       "_args": [
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": undefined,
+          "manualMockRoot": "<ROOT>/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -892,6 +895,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       ".js",
       ".jsx",
       ".json",
+      ".cjs",
     ],
   },
   "target": "node",
