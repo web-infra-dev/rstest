@@ -298,13 +298,13 @@ export const SnapshotPlugin: ChaiPlugin = (chai, utils) => {
         );
       }
       const test = getTest('toThrowErrorMatchingInlineSnapshot', this);
-      // TODO
-      //   const isInsideEach = test.each || test.suite?.each;
-      //   if (isInsideEach) {
-      //     throw new Error(
-      //       'InlineSnapshot cannot be used inside of test.each or describe.each',
-      //     );
-      //   }
+
+      const isInsideEach = test.each || test.inTestEach;
+      if (isInsideEach) {
+        throw new Error(
+          'InlineSnapshot cannot be used inside of test.each or describe.each',
+        );
+      }
       const expected = utils.flag(this, 'object');
       const error = utils.flag(this, 'error');
       const promise = utils.flag(this, 'promise') as string | undefined;

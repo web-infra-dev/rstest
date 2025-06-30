@@ -1,0 +1,166 @@
+---
+title: Test
+---
+
+# Test
+
+`test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
+
+Alias: `it`.
+
+## test
+
+- **Type:** `(name: string, fn: (context) => void | Promise<void>, timeout?: number) => void`
+
+Defines a test case.
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('should add two numbers correctly', () => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+## test.each
+
+- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+
+Runs the same test logic for each item in the provided array.
+
+```ts
+test.each([
+  { a: 1, b: 2, sum: 3 },
+  { a: 2, b: 2, sum: 4 },
+])('adds $a + $b', ({ a, b, sum }) => {
+  expect(a + b).toBe(sum);
+});
+```
+
+## test.for
+
+- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, context) => void | Promise<void>, timeout?: number) => void`
+
+Alternative to `test.each` to provide `TestContext`.
+
+```ts
+test.for([
+  { a: 1, b: 2 },
+  { a: 2, b: 2 },
+])('adds $a + $b', ({ a, b }, { expect }) => {
+  expect(a + b).matchSnapshot();
+});
+```
+
+## test.fails
+
+Marks the test as expected to fail.
+
+```ts
+test.fails('should fail', () => {
+  throw new Error('This test is expected to fail');
+});
+```
+
+## test.concurrent
+
+Runs the test concurrently with consecutive `concurrent` flags.
+
+```ts
+describe('suite', () => {
+  test('serial test', async () => {
+    /* ... */
+  });
+  test.concurrent('concurrent test 1', async () => {
+    /* ... */
+  });
+  test.concurrent('concurrent test 2', async () => {
+    /* ... */
+  });
+  test('serial test 1', async () => {
+    /* ... */
+  });
+});
+```
+
+## test.sequential
+
+Runs the test sequentially (default behavior).
+
+```ts
+describe('suite', () => {
+  test('serial test', async () => {
+    /* ... */
+  });
+  test('serial test 1', async () => {
+    /* ... */
+  });
+});
+```
+
+## test.only
+
+Only run certain tests in a test file.
+
+```ts
+test.only('run only this test', () => {
+  // ...
+});
+```
+
+## test.skip
+
+Skips certain tests.
+
+```ts
+test.skip('skip this test', () => {
+  // ...
+});
+```
+
+## test.todo
+
+Marks certain tests as todo.
+
+```ts
+test.todo('should implement this test');
+```
+
+## test.runIf
+
+Runs the test only if the condition is true.
+
+```ts
+test.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
+  // ...
+});
+```
+
+## test.skipIf
+
+Skips the test if the condition is true.
+
+```ts
+test.skipIf(process.platform === 'win32')('skip on Windows', () => {
+  // ...
+});
+```
+
+## test.extend
+
+- **Type:** `test.extend(fixtures: Fixtures)`
+
+Extends the test context with custom fixtures.
+
+```ts
+const testWithUser = test.extend({
+  user: async ({}, use) => {
+    await use({ name: 'Alice' });
+  },
+});
+
+testWithUser('has user in context', ({ user, expect }) => {
+  expect(user.name).toBe('Alice');
+});
+```
