@@ -55,6 +55,7 @@ export async function runTests(
 
   const getRsbuildStats = await createRsbuildServer({
     name,
+    normalizedConfig: context.normalizedConfig,
     // TODO: Try not to call globTestSourceEntries again.
     globTestSourceEntries,
     setupFiles,
