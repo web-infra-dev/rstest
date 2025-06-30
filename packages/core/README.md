@@ -6,6 +6,14 @@
 
 Rstest is a testing framework powered by Rspack.
 
-## 📖 License
+## Documentation
+
+See [Documentation](https://rstest.rs).
+
+## Contributing
+
+Please read the [Contributing Guide](https://github.com/web-infra-dev/rstest/blob/main/CONTRIBUTING.md).
+
+## License
 
 Rstest is licensed under the [MIT License](https://github.com/web-infra-dev/rstest/blob/main/LICENSE).
