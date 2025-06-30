@@ -1,0 +1,138 @@
+---
+title: Describe
+---
+
+# Describe
+
+`describe` 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
+
+## describe
+
+- **类型：** `(name: string, fn: () => void | Promise<void>) => void`
+
+定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
+
+```ts
+import { describe, test } from '@rstest/core';
+
+describe('math', () => {
+  test('add', () => {
+    // ...
+  });
+  test('sub', () => {
+    // ...
+  });
+});
+```
+
+## describe.only
+
+只运行被 only 标记的 describe 块。
+
+```ts
+describe.only('只运行这个套件', () => {
+  // ...
+});
+```
+
+## describe.skip
+
+跳过被 skip 标记的 describe 块。
+
+```ts
+describe.skip('跳过这个套件', () => {
+  // ...
+});
+```
+
+## describe.todo
+
+标记为待办的 describe 块。
+
+```ts
+describe.todo('should implement this suite');
+```
+
+## describe.each
+
+- **类型：** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+
+为数组中的每一项生成一个 describe 块。
+
+```ts
+describe.each([
+  { a: 1, b: 2 },
+  { a: 2, b: 3 },
+])('math $a + $b', ({ a, b }) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+## describe.for
+
+- **类型：** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+
+类似 each，但参数类型更灵活。
+
+```ts
+describe.for([
+  [1, 2],
+  [2, 3],
+])('math $0 + $1', ([a, b]) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+## describe.runIf
+
+仅当条件为 true 时运行该 describe 块。
+
+```ts
+describe.runIf(process.env.RUN_EXTRA === '1')('有条件地运行', () => {
+  // ...
+});
+```
+
+## describe.skipIf
+
+当条件为 true 时跳过该 describe 块。
+
+```ts
+describe.skipIf(process.platform === 'win32')('Windows 下跳过', () => {
+  // ...
+});
+```
+
+## describe.concurrent
+
+并发运行该 describe 下的测试。
+
+```ts
+describe.concurrent('并发套件', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
+
+## describe.sequential
+
+顺序运行该 describe 下的测试（默认行为）。
+
+```ts
+describe.sequential('顺序套件', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
