@@ -139,9 +139,9 @@ Licensed under MIT license in the repository at https://github.com/jestjs/jest.g
 
 ### @jridgewell/trace-mapping
 
-Licensed under MIT license in the repository at git+https://github.com/jridgewell/trace-mapping.git.
+Licensed under MIT license in the repository at git+https://github.com/jridgewell/sourcemaps.git.
 
-> Copyright 2022 Justin Ridgewell <justin@ridgewell.name>
+> Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
 > 
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal
