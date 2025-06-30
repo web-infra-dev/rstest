@@ -54,7 +54,7 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "1.4.1",
+    "@rsbuild/core": "1.4.2",
     "@types/chai": "^5.2.2",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
@@ -67,7 +67,7 @@
   "devDependencies": {
     "@sinonjs/fake-timers": "^14.0.0",
     "@babel/code-frame": "^7.27.1",
-    "@jridgewell/trace-mapping": "0.3.25",
+    "@jridgewell/trace-mapping": "0.3.27",
     "@microsoft/api-extractor": "^7.52.8",
     "@rslib/core": "0.10.4",
     "@rstest/tsconfig": "workspace:*",
