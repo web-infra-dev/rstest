@@ -1,0 +1,46 @@
+# Debug mode
+
+Rstest provides a debug mode to troubleshoot problems, you can add the `DEBUG=rstest` environment variable when building to enable Rstest's debug mode.
+
+```bash
+DEBUG=rstest pnpm test
+```
+
+In debug mode, Rstest will write test outputs to disk, and write the Rstest config, Rsbuild config and Rspack config to the dist directory, which is convenient for developers to view and debug.
+
+## Rstest config file
+
+In debug mode, Rstest will automatically generate `dist/.rsbuild/rstest.config.mjs` file, which contains the final generated Rstest config. In this file, you can know the final result of the Rstest config you passed in after being processed by the framework and Rstest.
+
+The content of the file is as follows:
+
+```js title="rstest.config.mjs"
+export default {
+  name: 'rstest',
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.{idea,git,cache,output,temp}/**',
+    '**/dist/.rstest-temp',
+  ],
+  includeSource: [],
+  pool: {
+    type: 'forks',
+  },
+  isolate: true,
+  globals: false,
+  passWithNoTests: false,
+  update: false,
+  testTimeout: 5000,
+  testEnvironment: 'node',
+  retry: 0,
+  clearMocks: false,
+  resetMocks: false,
+  restoreMocks: false,
+  slowTestThreshold: 300,
+  // other configs...
+};
+```
+
+For a complete introduction to Rstest config, please see the [Configure Rstest](/guide/basic/configure-rstest) chapter.
