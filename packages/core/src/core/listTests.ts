@@ -52,6 +52,7 @@ export async function listTests(
   const getRsbuildStats = await createRsbuildServer({
     name,
     globTestSourceEntries,
+    normalizedConfig: context.normalizedConfig,
     setupFiles,
     rsbuildInstance,
     rootPath,

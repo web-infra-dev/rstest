@@ -1,0 +1,46 @@
+# 开启调试模式
+
+为了便于排查问题，Rstest 提供了调试模式，你可以在执行构建时添加 `DEBUG=rstest` 环境变量来开启 Rstest 的调试模式。
+
+```bash
+DEBUG=rstest pnpm test
+```
+
+在调试模式下，Rstest 会将测试中间产物输出到磁盘，并将内部最终生成的 Rstest 配置、Rsbuild 配置和 Rspack 配置写入到产物目录下，便于开发者查看和调试。
+
+## Rstest 配置文件
+
+在调试模式下，Rstest 会自动生成 `dist/.rsbuild/rstest.config.mjs` 文件，这里面包含了最终生成的 Rstest 配置。在这个文件里，你可以了解到你传入的 Rstest 配置在经过框架层和 Rstest 处理后的最终结果。
+
+该文件的大致内容如下：
+
+```js title="rstest.config.mjs"
+export default {
+  name: 'rstest',
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.{idea,git,cache,output,temp}/**',
+    '**/dist/.rstest-temp',
+  ],
+  includeSource: [],
+  pool: {
+    type: 'forks',
+  },
+  isolate: true,
+  globals: false,
+  passWithNoTests: false,
+  update: false,
+  testTimeout: 5000,
+  testEnvironment: 'node',
+  retry: 0,
+  clearMocks: false,
+  resetMocks: false,
+  restoreMocks: false,
+  slowTestThreshold: 300,
+  // other configs...
+};
+```
+
+关于 Rstest 配置项的完整介绍，请查看[配置 Rstest](/guide/basic/configure-rstest) 章节。
