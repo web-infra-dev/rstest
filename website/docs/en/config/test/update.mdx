@@ -1,0 +1,22 @@
+---
+overviewHeaders: []
+---
+
+# update
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Update snapshot.
+
+When `update` is enabled, Rstest will update all changed snapshots and delete obsolete ones.
+
+It should be noted that when you test in local, the newly added snapshot will be automatically updated regardless of whether the `update` configuration is enabled.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  update: true,
+});
+```
