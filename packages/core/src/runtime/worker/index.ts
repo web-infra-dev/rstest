@@ -153,8 +153,8 @@ const loadFiles = async ({
   // clean rstest core cache manually
   if (!isolate) {
     await loadModule({
-      codeContent: `if (global && typeof global.__clean_rstest_core_cache__ === 'function') {
-  global.__clean_rstest_core_cache__();
+      codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
+  global.__rstest_clean_core_cache__();
   }`,
       distPath,
       testPath,

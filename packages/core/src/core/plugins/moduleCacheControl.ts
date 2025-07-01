@@ -12,7 +12,7 @@ class RstestCacheControlPlugin {
         return `
 global.setupIds = [];
 
-function __clean_rstest_core_cache__() {
+function __rstest_clean_core_cache__() {
   if (typeof __webpack_require__ === 'undefined') {
     return;
   }
@@ -23,7 +23,7 @@ function __clean_rstest_core_cache__() {
   });
 }
 
-global.__clean_rstest_core_cache__ = __clean_rstest_core_cache__;
+global.__rstest_clean_core_cache__ = __rstest_clean_core_cache__;
 `;
       }
     }
