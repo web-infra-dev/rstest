@@ -1,0 +1,22 @@
+---
+overviewHeaders: []
+---
+
+# update
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+是否更新快照。
+
+当开启更新时，Rstest 将在测试过程中自动更新所有变更的快照并删除过时的快照。
+
+需要注意的是，当你在本地测试时，新增的 snapshot 会自动更新无论 `update` 配置是否开启。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  update: true,
+});
+```

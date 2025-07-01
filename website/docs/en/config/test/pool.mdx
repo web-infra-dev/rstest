@@ -1,0 +1,48 @@
+---
+overviewHeaders: []
+---
+
+# pool
+
+- **Type:**
+
+```ts
+export type RstestPoolOptions = {
+  /** Pool used to run tests in. */
+  type: 'fork';
+  /** Maximum number or percentage of workers to run tests in. */
+  maxWorkers?: number | string;
+  /** Minimum number or percentage of workers to run tests in. */
+  minWorkers?: number | string;
+  /** Pass additional arguments to node process in the child processes. */
+  execArgv?: string[];
+};
+```
+
+- **Default:**
+
+```ts
+const defaultPool = {
+  type: 'fork'
+  maxWorkers: available CPUs
+  minWorkers: available CPUs
+}
+```
+
+Options of pool used to run tests in.
+
+## Example
+
+Run all tests inside a single child process.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'forks',
+    maxWorkers: 1,
+    minWorkers: 1,
+  },
+});
+```

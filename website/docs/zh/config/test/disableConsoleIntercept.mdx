@@ -1,0 +1,8 @@
+# disableConsoleIntercept
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+禁用 console 日志的拦截。默认情况下，Rstest 会对 console 日志做拦截，这样将有助于追踪日志来源。
+
+如果你不想要 Rstest 对 console 日志做拦截，你可以将此配置设为 `true`。需要注意的是，当你禁用 console 日志的拦截时，`onConsoleLog` 和 `printConsoleTrace` 配置将不会生效。
