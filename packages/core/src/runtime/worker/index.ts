@@ -10,7 +10,7 @@ import './setup';
 import { globalApis } from '../../utils/constants';
 import { undoSerializableConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
-import { cacheableLoadModule } from './loadModule';
+import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
@@ -140,6 +140,7 @@ const loadFiles = async ({
   distPath,
   testPath,
   interopDefault,
+  isolate,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: RunWorkerOptions['options']['assetFiles'];
@@ -147,12 +148,27 @@ const loadFiles = async ({
   distPath: string;
   testPath: string;
   interopDefault: boolean;
+  isolate: boolean;
 }): Promise<void> => {
+  // clean rstest core cache manually
+  if (!isolate) {
+    await loadModule({
+      codeContent: `if (global && typeof global.__clean_rstest_core_cache__ === 'function') {
+  global.__clean_rstest_core_cache__();
+  }`,
+      distPath,
+      testPath,
+      rstestContext,
+      assetFiles,
+      interopDefault,
+    });
+  }
+
   // run setup files
   for (const { distPath, testPath } of setupEntries) {
     const setupCodeContent = assetFiles[distPath]!;
 
-    await cacheableLoadModule({
+    await loadModule({
       codeContent: setupCodeContent,
       distPath,
       testPath,
@@ -162,7 +178,7 @@ const loadFiles = async ({
     });
   }
 
-  await cacheableLoadModule({
+  await loadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
     testPath,
@@ -186,6 +202,9 @@ const runInPool = async (
     setupEntries,
     assetFiles,
     type,
+    context: {
+      runtimeConfig: { isolate },
+    },
   } = options;
 
   const cleanups: (() => MaybePromise<void>)[] = [];
@@ -209,6 +228,7 @@ const runInPool = async (
         assetFiles,
         setupEntries,
         interopDefault,
+        isolate,
       });
       const tests = await runner.collectTests();
       return {
@@ -251,6 +271,7 @@ const runInPool = async (
       assetFiles,
       setupEntries,
       interopDefault,
+      isolate,
     });
     const results = await runner.runTests(
       testPath,

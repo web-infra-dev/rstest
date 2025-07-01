@@ -19,6 +19,7 @@ import {
 } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginCacheControl } from './plugins/moduleCacheControl';
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -112,6 +113,7 @@ export const prepareRsbuild = async (
   const {
     command,
     normalizedConfig: {
+      isolate,
       name,
       plugins,
       resolve,
@@ -241,6 +243,10 @@ export const prepareRsbuild = async (
       },
     },
   });
+
+  if (!isolate) {
+    rsbuildInstance.addPlugins([pluginCacheControl(Object.values(setupFiles))]);
+  }
 
   return rsbuildInstance;
 };

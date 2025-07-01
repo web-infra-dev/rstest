@@ -148,6 +148,7 @@ export const createPool = async ({
     printConsoleTrace,
     disableConsoleIntercept,
     testEnvironment,
+    isolate,
   };
 
   const rpcMethods = {
