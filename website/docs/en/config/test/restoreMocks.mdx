@@ -1,0 +1,16 @@
+# restoreMocks
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Automatically reset mock state before every test.
+
+When `restoreMocks` enabled, rstest will call [.restoreAllMocks()](/api/rstest/mockFunctions#rstestrestoreallmocks) before each test.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  restoreMocks: true,
+});
+```
