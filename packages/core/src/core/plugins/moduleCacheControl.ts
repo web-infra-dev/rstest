@@ -1,6 +1,6 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 
-class CacheControlRspackPlugin {
+class RstestCacheControlPlugin {
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
     class RetestCacheControlModule extends RuntimeModule {
@@ -63,7 +63,7 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
       };
     });
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new CacheControlRspackPlugin());
+      config.plugins!.push(new RstestCacheControlPlugin());
     });
   },
 });
