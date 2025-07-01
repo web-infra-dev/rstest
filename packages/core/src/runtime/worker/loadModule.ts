@@ -128,7 +128,8 @@ const defineRstestDynamicImport =
     return importedModule;
   };
 
-const loadModule = ({
+// setup and rstest module should not be cached
+export const loadModule = ({
   codeContent,
   distPath,
   testPath,

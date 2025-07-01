@@ -44,6 +44,7 @@ export type RuntimeConfig = Pick<
   | 'printConsoleTrace'
   | 'disableConsoleIntercept'
   | 'testEnvironment'
+  | 'isolate'
 >;
 
 export type WorkerContext = {

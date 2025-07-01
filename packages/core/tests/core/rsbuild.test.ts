@@ -37,6 +37,7 @@ describe('prepareRsbuild', () => {
           output: {},
           tools: {},
           testEnvironment: 'node',
+          isolate: true,
         },
       } as unknown as RstestContext,
       async () => ({}),

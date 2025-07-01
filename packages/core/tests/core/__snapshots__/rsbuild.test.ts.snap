@@ -344,6 +344,17 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
         ],
       },
+      {
+        "use": [
+          {
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
     ],
   },
   "name": "test",
@@ -417,6 +428,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {},
+    RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
         {
