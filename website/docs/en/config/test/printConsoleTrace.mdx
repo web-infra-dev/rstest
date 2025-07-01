@@ -1,0 +1,14 @@
+# printConsoleTrace
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Print console traces when calling any console method, which is helpful for debugging.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  printConsoleTrace: true,
+});
+```

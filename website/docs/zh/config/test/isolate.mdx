@@ -1,0 +1,18 @@
+# isolate
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+是否运行每个测试在一个独立的环境。
+
+默认情况下, Rstest 会运行每个测试在一个独立的环境，这会使其避免受到一些模块副作用的影响，从而有助于提升测试的稳定性。
+
+如果你的代码没有副作用影响，关闭这个选项将有助于提升性能因为可以在不同的测试文件间复用模块缓存。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+});
+```

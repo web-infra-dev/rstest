@@ -1,0 +1,14 @@
+# printConsoleTrace
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+console 方法调用时始终打印调用栈，这将有助于调试。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  printConsoleTrace: true,
+});
+```

@@ -7,5 +7,11 @@
   "testEnvironment",
   "retry",
   "root",
-  "passWithNoTests"
+  "name",
+  "isolate",
+  "pool",
+  "passWithNoTests",
+  "printConsoleTrace",
+  "onConsoleLog",
+  "disableConsoleIntercept"
 ]

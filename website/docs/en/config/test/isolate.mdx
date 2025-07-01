@@ -1,0 +1,18 @@
+# isolate
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Run tests in an isolated environment.
+
+By default, Rstest runs each test in an isolated environment, which avoids the impact of some module side effects and helps improve the stability of the test.
+
+If your code has no side effects, turning off this option will help improve performance because module caches can be reused between different test files.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+});
+```
