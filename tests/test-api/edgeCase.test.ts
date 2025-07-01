@@ -25,8 +25,7 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Error: Symbol('))).toBeFalsy();
   });
 
-  // TODO: Throw user friendly error message in webpack runtime.
-  it.todo('test module not found', async () => {
+  it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -40,6 +39,7 @@ describe('Test Edge Cases', () => {
     await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
+
     expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
     expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();

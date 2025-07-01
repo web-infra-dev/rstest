@@ -4,8 +4,7 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "rootDir": "./",
-    "declarationDir": "./dist-types",
-    "composite": true,
+    "declaration": false,
     "noEmit": true,
     "allowImportingTsExtensions": true
   },

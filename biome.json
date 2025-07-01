@@ -8,10 +8,10 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": ["**", "!**/*.vue", "!**/dist/**"]
   },
   "formatter": {
-    "includes": ["**", "!**/*.vue"],
     "indentStyle": "space"
   },
   "javascript": {
@@ -32,7 +32,6 @@
   },
   "linter": {
     "enabled": true,
-    "includes": ["**", "!**/*.vue"],
     "rules": {
       "recommended": true,
       "style": {

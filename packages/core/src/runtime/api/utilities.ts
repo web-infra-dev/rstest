@@ -43,30 +43,41 @@ export const createRstestUtilities: () => RstestUtilities = () => {
       return rstest;
     },
     mock: () => {
-      // TODO
+      // The actual implementation is managed by the built-in Rstest plugin.
+    },
+    mockRequire: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
     },
     doMock: () => {
-      // TODO
+      // The actual implementation is managed by the built-in Rstest plugin.
     },
-    unMock: () => {
-      // TODO
+    doMockRequire: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
     },
-    doUnMock: () => {
-      // TODO
+    unmock: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
+    },
+    doUnmock: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
     },
     importMock: async () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
+      return {} as any;
+    },
+    requireMock: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
       return {} as any;
     },
     importActual: async () => {
-      // The real implementation is handled by Rstest built-in plugin.
+      // The actual implementation is managed by the built-in Rstest plugin.
       return {} as any;
     },
     requireActual: () => {
-      // The real implementation is handled by Rstest built-in plugin.
+      // The actual implementation is managed by the built-in Rstest plugin.
       return {} as any;
     },
     resetModules: () => {
-      // TODO
+      // The actual implementation is managed by the built-in Rstest plugin.
       return rstest;
     },
 
