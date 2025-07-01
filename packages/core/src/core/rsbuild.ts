@@ -19,6 +19,7 @@ import {
 } from '../utils';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 
 const isMultiCompiler = <
@@ -51,7 +52,7 @@ const autoExternalNodeModules: (
     callback(
       undefined,
       externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+      dependencyType === 'commonjs' ? 'commonjs' : 'import',
     );
   };
 
@@ -175,9 +176,9 @@ export const prepareRsbuild = async (
               config.plugins.push(
                 new rspack.experiments.RstestPlugin({
                   injectModulePathName: true,
-                  hoistMockModule: true,
                   importMetaPathName: true,
-                  manualMockRoot: context.rootPath,
+                  hoistMockModule: true,
+                  manualMockRoot: path.resolve(context.rootPath, '__mocks__'),
                 }),
               );
 
@@ -208,11 +209,14 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
+              config.resolve ??= {};
+              config.resolve.extensions ??= [];
+              config.resolve.extensions.push('.cjs');
+
               if (
                 testEnvironment === 'node' &&
                 (getNodeVersion()[0] || 0) < 20
               ) {
-                config.resolve ??= {};
                 // skip `module` field in Node.js 18 and below.
                 // ESM module resolved by module field is not always a native ESM module
                 config.resolve.mainFields = config.resolve.mainFields?.filter(
@@ -233,6 +237,7 @@ export const prepareRsbuild = async (
           },
           plugins: [
             pluginIgnoreResolveError,
+            pluginMockRuntime,
             pluginEntryWatch({
               globTestSourceEntries,
               setupFiles,
