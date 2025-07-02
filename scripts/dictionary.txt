@@ -136,6 +136,7 @@ templating
 tinyexec
 tinyglobby
 transpiling
+tinyspy
 treeshaking
 tsbuildinfo
 tsconfck

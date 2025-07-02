@@ -17,5 +17,7 @@
   "update",
   "clearMocks",
   "resetMocks",
-  "restoreMocks"
+  "restoreMocks",
+  "unstubEnvs",
+  "unstubGlobals"
 ]
