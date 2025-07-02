@@ -36,7 +36,12 @@ __webpack_require__.rstest_original_modules = {};
 
 // TODO: Remove "reset_modules" in next Rspack version.
 __webpack_require__.rstest_reset_modules = __webpack_require__.reset_modules = () => {
-  __webpack_module_cache__ = {};
+  Object.keys(__webpack_module_cache__).forEach(id => {
+    // Do not reset mocks registry.
+    if (!Object.keys(__webpack_require__.rstest_original_modules).includes(id)) {
+      delete __webpack_module_cache__[id];
+    }
+  });
 }
 
 // TODO: Remove "unmock" in next Rspack version.
@@ -54,10 +59,13 @@ __webpack_require__.rstest_require_actual = __webpack_require__.rstest_import_ac
 
 // TODO: Remove "set_mock" in next Rspack version.
 __webpack_require__.rstest_set_mock = __webpack_require__.set_mock = (id, modFactory) => {
+  let requiredModule = undefined
   try {
-    __webpack_require__.rstest_original_modules[id] = __webpack_require__(id);
+    requiredModule = __webpack_require__(id);
   } catch {
     // TODO: non-resolved module
+  } finally {
+    __webpack_require__.rstest_original_modules[id] = requiredModule;
   }
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
