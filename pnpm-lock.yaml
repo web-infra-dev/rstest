@@ -231,6 +231,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      react:
+        specifier: ^19.1.0
+        version: 19.1.0
       redux:
         specifier: ^5.0.1
         version: 5.0.1
