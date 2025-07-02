@@ -6,7 +6,7 @@ export const PLUGIN_CSS_FILTER = 'rstest:css-filter';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * When css is not need emit, set the css content to empty (except css modules)
+ * When CSS does not need to be emitted, pre-set the CSS content to empty (except for CSS modules) to reduce time costs in less-loader / sass-loader / css-loader.
  */
 export const pluginCSSFilter = (): RsbuildPlugin => ({
   name: PLUGIN_CSS_FILTER,
