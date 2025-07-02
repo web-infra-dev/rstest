@@ -1,0 +1,78 @@
+# Utilities
+
+一些实用的工具函数。
+
+## rstest.stubEnv
+
+**类型：** `(name: string, value: string | undefined) => Rstest`
+
+临时设置 `process.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
+
+- 如果 `value` 为 `undefined`，该变量会从 `process.env` 中移除。
+- 可多次调用以模拟多个环境变量。
+- 使用 `rstest.unstubAllEnvs()` 可恢复所有通过此方法更改的环境变量。
+
+**示例：**
+
+```ts
+rstest.stubEnv('NODE_ENV', 'test');
+expect(process.env.NODE_ENV).toBe('test');
+
+rstest.stubEnv('MY_VAR', undefined);
+expect(process.env.MY_VAR).toBeUndefined();
+```
+
+## rstest.unstubAllEnvs
+
+**类型：** `() => Rstest`
+
+恢复所有通过 `rstest.stubEnv` 更改的环境变量到原始值。
+
+- 测试后调用此方法以清理环境变量。
+- 如果配置项 `unstubEnvs` 启用，则每个测试前会自动调用。
+
+**示例：**
+
+```ts
+rstest.stubEnv('NODE_ENV', 'test');
+// ... 执行相关代码
+rstest.unstubAllEnvs();
+expect(process.env.NODE_ENV).not.toBe('test');
+```
+
+## rstest.stubGlobal
+
+**类型：** `(name: string | number | symbol, value: unknown) => Rstest`
+
+临时设置全局变量为指定值。适用于模拟全局对象或函数。
+
+- 可多次调用以模拟多个全局变量。
+- 使用 `rstest.unstubAllGlobals()` 可恢复所有通过此方法更改的全局变量。
+
+**示例：**
+
+```ts
+rstest.stubGlobal('myGlobal', 123);
+expect(globalThis.myGlobal).toBe(123);
+
+rstest.stubGlobal(Symbol.for('foo'), 'bar');
+expect(globalThis[Symbol.for('foo')]).toBe('bar');
+```
+
+## rstest.unstubAllGlobals
+
+**类型：** `() => Rstest`
+
+恢复所有通过 `rstest.stubGlobal` 更改的全局变量到原始值。
+
+- 测试后调用此方法以清理全局变量。
+- 如果配置项 `unstubGlobals` 启用，则每个测试前会自动调用。
+
+**示例：**
+
+```ts
+rstest.stubGlobal('myGlobal', 123);
+// ... 执行相关代码
+rstest.unstubAllGlobals();
+expect(globalThis.myGlobal).toBeUndefined();
+```
