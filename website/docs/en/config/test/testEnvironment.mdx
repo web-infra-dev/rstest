@@ -1,11 +1,11 @@
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom'`
+- **Type:** `'node' | 'jsdom' | 'happy-dom'`
 - **Default:** `'node'`
 
 The environment that will be used for testing.
 
-The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` instead.
+The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -17,7 +17,7 @@ export default defineConfig({
 
 ### Dom testing
 
-Rstest supports [jsdom](https://github.com/jsdom/jsdom) for mocking DOM and browser APIs.
+Rstest supports [jsdom](https://github.com/jsdom/jsdom) and [happy-dom](https://github.com/capricorn86/happy-dom) for mocking DOM and browser APIs.
 
 If you want to enable DOM testing, you can use the following configuration:
 
@@ -25,14 +25,18 @@ If you want to enable DOM testing, you can use the following configuration:
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jsdom', // or 'happy-dom'
 });
 ```
 
-You also need to install `jsdom`:
+You also need to install the corresponding package:
 
 ```bash
+# For jsdom
 npm install jsdom -D
+
+# For happy-dom
+npm install happy-dom -D
 ```
 
 After enabling DOM testing, you can write tests that use browser APIs like `document` and `window`.

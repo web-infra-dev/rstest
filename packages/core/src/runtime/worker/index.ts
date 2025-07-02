@@ -108,6 +108,10 @@ const preparePool = async ({
     const { environment } = await import('./env/jsdom');
     const { teardown } = await environment.setup(global, {});
     cleanupFns.push(() => teardown(global));
+  } else if (testEnvironment === 'happy-dom') {
+    const { environment } = await import('./env/happyDom');
+    const { teardown } = await environment.setup(global, {});
+    cleanupFns.push(async () => await teardown(global));
   }
 
   const rstestContext = {
