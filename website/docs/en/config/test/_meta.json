@@ -5,6 +5,8 @@
   "globals",
   "setupFiles",
   "testEnvironment",
+  "testNamePattern",
+  "testTimeout",
   "retry",
   "root",
   "name",
@@ -19,5 +21,7 @@
   "resetMocks",
   "restoreMocks",
   "unstubEnvs",
-  "unstubGlobals"
+  "unstubGlobals",
+  "maxConcurrency",
+  "slowTestThreshold"
 ]

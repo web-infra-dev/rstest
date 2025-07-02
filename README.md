@@ -17,6 +17,10 @@ Rstest is a testing framework powered by Rspack. It delivers comprehensive, firs
 
 Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, and more, ensuring a modern and efficient testing experience.
 
+## 📖 Documentation
+
+See [Documentation](https://rstest.rs).
+
 ## 🔥 Roadmap
 
 Rstest is currently under active development and we plan to release the first stable version in late 2025.
