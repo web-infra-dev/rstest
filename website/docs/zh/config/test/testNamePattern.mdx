@@ -1,0 +1,20 @@
+# testNamePattern
+
+- **类型：** `string | RegExp`
+- **默认值：** `undefined`
+
+仅运行测试名称中匹配正则表达式或字符串的测试。
+
+如果将 `testNamePattern` 设置为 `bar`，则测试名称中不包含 `bar` 的测试将被跳过。
+
+```ts
+// skipped
+test('test foo', () => {
+  expect(true).toBe(true);
+});
+
+// run
+test('test bar', () => {
+  expect(true).toBe(true);
+});
+```

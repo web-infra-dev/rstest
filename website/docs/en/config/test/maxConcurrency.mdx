@@ -1,0 +1,8 @@
+# maxConcurrency
+
+- **Type:** `number`
+- **Default:** `5`
+
+A number limiting the number of test cases that are allowed to run at the same time when using `test.concurrent` or wrapped in `describe.concurrent`.
+
+Any test above this limit will be queued and executed once a slot is released.
