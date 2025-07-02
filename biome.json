@@ -9,7 +9,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/*.vue", "!**/dist/**"]
+    "includes": ["**", "!**/*.vue", "!**/dist/**", "!**/dist-types/**"]
   },
   "formatter": {
     "indentStyle": "space"

@@ -3,4 +3,9 @@ import { pluginReact } from '@rsbuild/plugin-react';
 
 export default defineConfig({
   plugins: [pluginReact()],
+  output: {
+    cssModules: {
+      localIdentName: '[name]_[local]',
+    },
+  },
 });

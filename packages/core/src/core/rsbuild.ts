@@ -17,6 +17,7 @@ import {
   NODE_BUILTINS,
   TEMP_RSTEST_OUTPUT_DIR,
 } from '../utils';
+import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginMockRuntime } from './plugins/mockRuntime';
@@ -238,6 +239,7 @@ export const prepareRsbuild = async (
           plugins: [
             pluginIgnoreResolveError,
             pluginMockRuntime,
+            pluginCSSFilter(),
             pluginEntryWatch({
               globTestSourceEntries,
               setupFiles,
