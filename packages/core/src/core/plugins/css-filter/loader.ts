@@ -1,8 +1,3 @@
-/**
- * reference:
- * https://github.com/rspack-contrib/rsbuild-plugin-typed-css-modules/blob/main/src/loader.ts
- * https://github.com/web-infra-dev/rsbuild/blob/a0939d8994589819cc8ddd8982a69a0743a3227a/packages/core/src/loader/ignoreCssLoader.ts
- */
 import type { CSSModules, Rspack } from '@rsbuild/core';
 
 type CssLoaderModules =
