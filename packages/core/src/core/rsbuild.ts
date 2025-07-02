@@ -213,10 +213,7 @@ export const prepareRsbuild = async (
               config.resolve.extensions ??= [];
               config.resolve.extensions.push('.cjs');
 
-              if (
-                testEnvironment === 'node' &&
-                (getNodeVersion()[0] || 0) < 20
-              ) {
+              if (testEnvironment === 'node' && getNodeVersion().major < 20) {
                 // skip `module` field in Node.js 18 and below.
                 // ESM module resolved by module field is not always a native ESM module
                 config.resolve.mainFields = config.resolve.mainFields?.filter(

@@ -10,7 +10,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { serializableConfig } from '../utils';
+import { needFlagExperimentalDetectModule, serializableConfig } from '../utils';
 import { createForksPool } from './forks';
 
 const getNumCpus = (): number => {
@@ -106,7 +106,10 @@ export const createPool = async ({
       '--experimental-vm-modules',
       '--experimental-import-meta-resolve',
       '--no-warnings',
-    ],
+      needFlagExperimentalDetectModule()
+        ? '--experimental-detect-module'
+        : undefined,
+    ].filter(Boolean) as string[],
     env: {
       NODE_ENV: 'test',
       // enable diff color by default
