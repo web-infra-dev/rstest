@@ -1,4 +1,5 @@
 import './App.css';
+import style from './App.module.css';
 
 const App = () => {
   return (
@@ -14,7 +15,9 @@ const App = () => {
       >
         Rsbuild with React
       </h1>
-      <p>Start building amazing things with Rsbuild.</p>
+      <p className={style.contentP}>
+        Start building amazing things with Rsbuild.
+      </p>
     </div>
   );
 };

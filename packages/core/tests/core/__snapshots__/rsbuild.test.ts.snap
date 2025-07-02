@@ -77,6 +77,19 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               "sourceMap": false,
             },
           },
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
         ],
       },
       {
@@ -541,6 +554,19 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "namedExport": false,
               },
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
             },
           },
         ],

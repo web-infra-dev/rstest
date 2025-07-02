@@ -53,6 +53,21 @@ export default defineConfig({
         },
       },
     },
+    {
+      id: 'esm_loaders',
+      format: 'esm',
+      syntax: 'es2021',
+      source: {
+        entry: {
+          cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
+        },
+      },
+      output: {
+        filename: {
+          js: '[name].mjs',
+        },
+      },
+    },
   ],
   tools: {
     rspack: {
