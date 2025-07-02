@@ -8,6 +8,16 @@ Rstest provides some utility functions to help you mock functions.
 
 ## rstest.fn
 
+- **Type:**
+
+```ts
+export interface Mock<T extends Function> extends MockInstance<T> {
+  (...args: Parameters<T>): ReturnType<T>;
+}
+
+export type MockFn = <T extends Function>(fn?: T) => Mock<T>;
+```
+
 Creates a spy on a function.
 
 ```ts
@@ -16,9 +26,21 @@ const sayHi = rstest.fn((name: string) => `hi ${name}`);
 const res = sayHi('bob');
 
 expect(res).toBe('hi bob');
+
+expect(sayHi).toHaveBeenCalledTimes(1);
 ```
 
 ## rstest.spyOn
+
+- **Type:**
+
+```ts
+export type SpyFn = (
+  obj: Record<string, any>,
+  methodName: string,
+  accessType?: 'get' | 'set',
+) => MockInstance;
+```
 
 Creates a spy on a method of an object.
 
@@ -37,16 +59,24 @@ expect(spy).toHaveBeenCalled();
 
 ## rstest.isMockFunction
 
+- **Type:** `(fn: any) => fn is MockInstance`
+
 Determines if the given function is a mocked function.
 
 ## rstest.clearAllMocks
+
+- **Type:** `() => Rstest`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
 ## rstest.resetAllMocks
 
+- **Type:** `() => Rstest`
+
 Clears all mocks properties and reset each mock's implementation to its original.
 
 ## rstest.restoreAllMocks
+
+- **Type:** `() => Rstest`
 
 Reset all mocks and restore original descriptors of spied-on objects.

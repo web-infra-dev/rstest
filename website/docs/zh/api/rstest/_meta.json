@@ -1,1 +1,1 @@
-["mockFunctions", "fakeTimers"]
+["mockFunctions", "mockInstance", "fakeTimers"]

@@ -14,5 +14,8 @@
   "printConsoleTrace",
   "onConsoleLog",
   "disableConsoleIntercept",
-  "update"
+  "update",
+  "clearMocks",
+  "resetMocks",
+  "restoreMocks"
 ]
