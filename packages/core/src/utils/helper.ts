@@ -137,10 +137,27 @@ export const undoSerializableConfig = (
   };
 };
 
-export const getNodeVersion = (): number[] => {
-  return typeof process.versions?.node === 'string'
-    ? process.versions.node.split('.').map(Number)
-    : [0, 0, 0];
+export const getNodeVersion = (): {
+  major: number;
+  minor: number;
+  patch: number;
+} => {
+  if (typeof process.versions?.node === 'string') {
+    const [major = 0, minor = 0, patch = 0] = process.versions.node
+      .split('.')
+      .map(Number);
+    return { major, minor, patch };
+  }
+  return { major: 0, minor: 0, patch: 0 };
+};
+
+export const needFlagExperimentalDetectModule = (): boolean => {
+  const { major, minor } = getNodeVersion();
+  // `--experimental-detect-module` is introduced in Node.js 20.10.0.
+  if (major === 20 && minor >= 10) return true;
+  // `--experimental-detect-module` is enabled by default since Node.js 22.7.0.
+  if (major === 22 && minor < 7) return true;
+  return false;
 };
 
 // Ported from https://github.com/webpack/webpack/blob/21b28a82f7a6ec677752e1c8fb722a830a2adf69/lib/node/NodeTargetPlugin.js.
