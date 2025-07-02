@@ -7,12 +7,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.4.2",
+    "@rsbuild/core": "1.4.3",
     "@rslib/core": "0.10.4",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
-    "axios": "^1.9.0",
+    "axios": "^1.10.0",
     "jest-image-snapshot": "^6.5.1",
     "pathe": "^2.0.3",
     "redux": "^5.0.1",
