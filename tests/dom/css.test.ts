@@ -1,39 +1,18 @@
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { runCli } from './utils';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const filters = 'test/css';
 
 describe('jsdom', () => {
   it('should run css test correctly', async () => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--testEnvironment=jsdom', 'test/css'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
+    const { expectExecSuccess } = await runCli(filters, 'jsdom');
     await expectExecSuccess();
   });
 });
 
 describe('happy-dom', () => {
   it('should run css test correctly', async () => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '--testEnvironment=happy-dom', 'test/css'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
+    const { expectExecSuccess } = await runCli(filters, 'happy-dom');
     await expectExecSuccess();
   });
 });
