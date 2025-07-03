@@ -8,7 +8,7 @@ import type {
 } from '../../types';
 import './setup';
 import { globalApis } from '../../utils/constants';
-import { undoSerializableConfig } from '../../utils/helper';
+import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
@@ -22,6 +22,9 @@ const getGlobalApi = (api: Rstest) => {
     return apis;
   }, {});
 };
+
+const listeners: (() => void)[] = [];
+let isTeardown = false;
 
 const preparePool = async ({
   entryInfo: { distPath, testPath },
@@ -83,12 +86,21 @@ const preparePool = async ({
     },
   });
 
+  // Reset listeners only when preparePool is called again (running without isolation)
+  listeners.forEach((fn) => fn());
+  listeners.length = 0;
+
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: Error, type: string) => {
     e.name = type;
-    console.error(e);
-    unhandledErrors.push(e);
+    if (isTeardown) {
+      e.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${e.stack}`;
+      console.error(e);
+    } else {
+      console.error(e);
+      unhandledErrors.push(e);
+    }
   };
 
   const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
@@ -97,7 +109,7 @@ const preparePool = async ({
   process.on('uncaughtException', uncaughtException);
   process.on('unhandledRejection', unhandledRejection);
 
-  cleanupFns.push(() => {
+  listeners.push(() => {
     process.off('uncaughtException', uncaughtException);
     process.off('unhandledRejection', unhandledRejection);
   });
@@ -201,6 +213,7 @@ const runInPool = async (
     }
   | TestFileResult
 > => {
+  isTeardown = false;
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
@@ -212,6 +225,15 @@ const runInPool = async (
   } = options;
 
   const cleanups: (() => MaybePromise<void>)[] = [];
+
+  const exit = process.exit;
+  process.exit = (code = process.exitCode || 0): never => {
+    throw new Error(`process.exit unexpectedly called with "${code}"`);
+  };
+
+  cleanups.push(() => {
+    process.exit = exit;
+  });
 
   if (type === 'collect') {
     try {
@@ -248,14 +270,11 @@ const runInPool = async (
       };
     } finally {
       await Promise.all(cleanups.map((fn) => fn()));
+      isTeardown = true;
     }
   }
 
-  const exit = process.exit;
   try {
-    process.exit = (code = process.exitCode || 0): never => {
-      throw new Error(`process.exit unexpectedly called with "${code}"`);
-    };
     const {
       rstestContext,
       runner,
@@ -311,7 +330,7 @@ const runInPool = async (
     };
   } finally {
     await Promise.all(cleanups.map((fn) => fn()));
-    process.exit = exit;
+    isTeardown = true;
   }
 };
 
