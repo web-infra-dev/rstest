@@ -1,9 +1,18 @@
+---
+overviewHeaders: []
+---
+
 # retry
 
 - **Type:** `number`
 - **Default:** `0`
+- **CLI:** `--retry <times>`
 
-Retry the test specific number of times if it fails.
+Retry the test specific number of times if it fails. This is useful for some flaky or non-deterministic test failures.
+
+## Example
+
+You can get two retries by setting `retry:2` when the test fails:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -11,4 +20,33 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   retry: 2,
 });
+```
+
+When the test has retried, you may get the following logs:
+
+- success:
+
+```bash
+ ✓ retry.test.ts (1)
+  ✓ should run success with retry (6ms) (retry x2)
+
+ Test Files 1 passed
+      Tests 1 passed
+   Duration 146 ms (build 22 ms, tests 124 ms)
+```
+
+- or failure:
+
+```bash
+ ✗ retry.test.ts (1)
+  ✗ should run success with retry (6ms) (retry x2)
+    expected 1 to be 5 // Object.is equality
+    expected 2 to be 5 // Object.is equality
+    expected 3 to be 5 // Object.is equality
+
+ ...
+
+ Test Files 1 failed
+      Tests 1 failed
+   Duration 171 ms (build 23 ms, tests 148 ms)
 ```

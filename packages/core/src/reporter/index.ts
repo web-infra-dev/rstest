@@ -86,9 +86,13 @@ export class DefaultReporter implements Reporter {
       title += ` ${formatDuration(test.duration!)}`;
     }
 
+    const hasRetryCase = test.results.some(
+      (result) => (result.retryCount || 0) > 0,
+    );
+
     logger.log(title);
 
-    if (test.status !== 'fail' && !isTooSlow) {
+    if (test.status !== 'fail' && !isTooSlow && !hasRetryCase) {
       return;
     }
 
@@ -100,7 +104,13 @@ export class DefaultReporter implements Reporter {
 
     for (const result of test.results) {
       const isSlowCase = (result.duration || 0) > slowTestThreshold;
-      if (!showAllCases && result.status !== 'fail' && !isSlowCase) {
+      const retried = (result.retryCount || 0) > 0;
+      if (
+        !showAllCases &&
+        result.status !== 'fail' &&
+        !isSlowCase &&
+        !retried
+      ) {
         continue;
       }
       const icon =
