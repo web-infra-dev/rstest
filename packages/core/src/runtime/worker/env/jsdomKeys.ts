@@ -268,26 +268,3 @@ const OTHER_KEYS = [
 ];
 
 export const KEYS: string[] = LIVING_KEYS.concat(OTHER_KEYS);
-
-export const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
-
-export function getWindowKeys(
-  global: any,
-  win: any,
-  additionalKeys: string[] = [],
-): Set<string> {
-  const keysArray = [...additionalKeys, ...KEYS];
-
-  return new Set(
-    keysArray.concat(Object.getOwnPropertyNames(win)).filter((k) => {
-      if (SKIP_KEYS.includes(k)) {
-        return false;
-      }
-      if (k in global) {
-        return keysArray.includes(k);
-      }
-
-      return true;
-    }),
-  );
-}

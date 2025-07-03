@@ -87,7 +87,7 @@ export interface RstestConfig {
    *
    * @default 'node'
    */
-  testEnvironment?: 'node' | 'jsdom';
+  testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
 
   /**
    * print console traces when calling any console method.
