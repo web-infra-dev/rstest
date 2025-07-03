@@ -1,9 +1,17 @@
+---
+overviewHeaders: []
+---
+
 # retry
 
 - **类型：** `number`
 - **默认值：** `0`
 
-如果测试执行失败，则重试特定次数。
+如果测试执行失败，则重试特定次数。这对于一些会产生不稳定结果的测试用例很有帮助。
+
+## 示例
+
+你可以通过设置 `retry：2` 来获得两次重试在测试失败时：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -11,4 +19,33 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   retry: 2,
 });
+```
+
+当测试重试时，Rstest 会打印如下日志：
+
+- 当测试成功时:
+
+```bash
+ ✓ retry.test.ts (1)
+  ✓ should run success with retry (6ms) (retry x2)
+
+ Test Files 1 passed
+      Tests 1 passed
+   Duration 146 ms (build 22 ms, tests 124 ms)
+```
+
+- 失败时：
+
+```bash
+ ✗ retry.test.ts (1)
+  ✗ should run success with retry (6ms) (retry x2)
+    expected 1 to be 5 // Object.is equality
+    expected 2 to be 5 // Object.is equality
+    expected 3 to be 5 // Object.is equality
+
+ ...
+
+ Test Files 1 failed
+      Tests 1 failed
+   Duration 171 ms (build 23 ms, tests 148 ms)
 ```
