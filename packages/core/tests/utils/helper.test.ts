@@ -18,4 +18,6 @@ it('should prettyTime correctly', () => {
   expect(prettyTime(3000, false)).toBe('3s');
   expect(prettyTime(60000, false)).toBe('1m');
   expect(prettyTime(110000, false)).toBe('1m50s');
+  expect(prettyTime(111100, false)).toBe('1m51s');
+  expect(prettyTime(111900, false)).toBe('1m52s');
 });

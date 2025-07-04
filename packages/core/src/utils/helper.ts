@@ -66,16 +66,12 @@ export const prettyTime = (
 
   const seconds = milliseconds / 1000;
 
-  const getSecond = (seconds: number) => {
-    if (seconds === Math.ceil(seconds)) {
-      return `${format(String(seconds))}s`;
+  const getSecond = (seconds: number, needDigits?: boolean) => {
+    if (!needDigits || seconds === Math.ceil(seconds)) {
+      return `${format(Math.round(seconds).toString())}s`;
     }
-    if (seconds < 10) {
-      const digits = seconds >= 0.01 ? 2 : 3;
-      return `${format(seconds.toFixed(digits))}s`;
-    }
-
-    return `${format(seconds.toFixed(1))}s`;
+    const digits = seconds < 10 ? (seconds >= 0.01 ? 2 : 3) : 1;
+    return `${format(seconds.toFixed(digits))}s`;
   };
 
   const minutes = Math.floor(seconds / 60);
@@ -90,7 +86,7 @@ export const prettyTime = (
     if (minutes > 0 && shouldFormat) {
       time += ' ';
     }
-    time += getSecond(secondsRemainder);
+    time += getSecond(secondsRemainder, !minutes);
   }
   return time;
 };
