@@ -143,6 +143,12 @@ export const prepareRsbuild = async (
         printUrls: false,
         strictPort: false,
         middlewareMode: true,
+        compress: false,
+        cors: false,
+        publicDir: false,
+      },
+      dev: {
+        hmr: false,
       },
       performance,
       environments: {
