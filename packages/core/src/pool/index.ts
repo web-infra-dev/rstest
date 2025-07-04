@@ -134,11 +134,13 @@ export const createPool = async ({
     printConsoleTrace,
     disableConsoleIntercept,
     testEnvironment,
+    hookTimeout,
   } = context.normalizedConfig;
 
   const runtimeConfig = {
     testNamePattern,
     testTimeout,
+    hookTimeout,
     passWithNoTests,
     retry,
     globals,

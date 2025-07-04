@@ -45,6 +45,7 @@ export type RuntimeConfig = Pick<
   | 'disableConsoleIntercept'
   | 'testEnvironment'
   | 'isolate'
+  | 'hookTimeout'
 >;
 
 export type WorkerContext = {

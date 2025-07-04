@@ -134,6 +134,12 @@ export interface RstestConfig {
   testTimeout?: number;
 
   /**
+   * Timeout of hook in milliseconds.
+   * @default 10000
+   */
+  hookTimeout?: number;
+
+  /**
    * Automatically clear mock calls, instances, contexts and results before every test.
    * @default false
    */
