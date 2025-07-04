@@ -92,3 +92,33 @@ $ npx rstest list --json
 
 $ npx rstest list --json=./output.json
 ```
+
+## CLI 选项
+
+Rstest CLI 支持以下常用参数，所有命令均可使用：
+
+| 参数                            | 说明                                                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`         | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                          |
+| `--config-loader <loader>`      | 指定配置加载器，可选 `jiti` 或 `native`，详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`             | 指定项目根目录，详见 [root](/config/test/root)                                                                                               |
+| `--globals`                     | 提供全局 API，详见 [globals](/config/test/globals)                                                                                           |
+| `--isolate`                     | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                   |
+| `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                           |
+| `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                                                             |
+| `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/passWithNoTests)                                                         |
+| `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/printConsoleTrace)                                                      |
+| `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disableConsoleIntercept)                                                      |
+| `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slowTestThreshold)                                               |
+| `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/testNamePattern)                                                               |
+| `--testEnvironment <name>`      | 指定测试环境，详见 [testEnvironment](/config/test/testEnvironment)                                                                           |
+| `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/testTimeout)                                                                 |
+| `--retry <retry>`               | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                         |
+| `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/maxConcurrency)                                                                           |
+| `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clearMocks)                                                 |
+| `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/resetMocks)                                                                     |
+| `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restoreMocks)                                                           |
+| `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstubGlobals)                                        |
+| `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstubEnvs)                                           |
+| `-h, --help`                    | 显示帮助信息                                                                                                                                 |
+| `-v, --version`                 | 显示版本号                                                                                                                                   |

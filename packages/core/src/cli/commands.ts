@@ -4,7 +4,7 @@ import { normalize } from 'pathe';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
 import type { ListCommandOptions, RstestConfig } from '../types';
-import { formatError, getAbsolutePath } from '../utils/helper';
+import { castArray, formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { showRstest } from './prepare';
 
@@ -13,6 +13,8 @@ type CommonOptions = {
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
+  isolate?: boolean;
+  exclude?: string[];
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -48,6 +50,8 @@ const applyCommonOptions = (cli: CAC) => {
       'Specify the project root directory, can be an absolute path or a path relative to cwd',
     )
     .option('--globals', 'Provide global APIs')
+    .option('--isolate', 'Run tests in an isolated environment')
+    .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
     .option(
       '--passWithNoTests',
@@ -108,6 +112,7 @@ export async function initCli(options: CommonOptions): Promise<{
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',
+    'isolate',
     'passWithNoTests',
     'update',
     'testNamePattern',
@@ -128,6 +133,10 @@ export async function initCli(options: CommonOptions): Promise<{
     if (options[key] !== undefined) {
       (config[key] as any) = options[key];
     }
+  }
+
+  if (options.exclude) {
+    config.exclude = castArray(options.exclude);
   }
 
   return {
