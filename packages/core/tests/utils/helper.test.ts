@@ -1,5 +1,5 @@
 import { sep } from 'node:path';
-import { parsePosix } from '../../src/utils/helper';
+import { parsePosix, prettyTime } from '../../src/utils/helper';
 
 it('parsePosix correctly', () => {
   const splitPaths = ['packages', 'core', 'tests', 'index.test.ts'];
@@ -8,4 +8,14 @@ it('parsePosix correctly', () => {
     dir: 'packages/core/tests',
     base: 'index.test.ts',
   });
+});
+
+it('should prettyTime correctly', () => {
+  expect(prettyTime(100, false)).toBe('100ms');
+  expect(prettyTime(1000, false)).toBe('1s');
+  expect(prettyTime(1500, false)).toBe('1.50s');
+  expect(prettyTime(2000, false)).toBe('2s');
+  expect(prettyTime(3000, false)).toBe('3s');
+  expect(prettyTime(60000, false)).toBe('1m');
+  expect(prettyTime(110000, false)).toBe('1m50s');
 });

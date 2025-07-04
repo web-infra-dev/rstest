@@ -59,25 +59,40 @@ export const prettyTime = (
   shouldFormat = true,
 ): string => {
   const format = (time: string) => (shouldFormat ? color.bold(time) : time);
-  const indent = shouldFormat ? ' ' : '';
 
   if (milliseconds < 1000) {
-    return `${Math.round(milliseconds)}${indent}ms`;
+    return `${Math.round(milliseconds)}ms`;
   }
 
   const seconds = milliseconds / 1000;
 
-  if (seconds < 10) {
-    const digits = seconds >= 0.01 ? 2 : 3;
-    return `${format(seconds.toFixed(digits))}${indent}s`;
+  const getSecond = (seconds: number) => {
+    if (seconds === Math.ceil(seconds)) {
+      return `${format(String(seconds))}s`;
+    }
+    if (seconds < 10) {
+      const digits = seconds >= 0.01 ? 2 : 3;
+      return `${format(seconds.toFixed(digits))}s`;
+    }
+
+    return `${format(seconds.toFixed(1))}s`;
+  };
+
+  const minutes = Math.floor(seconds / 60);
+  const secondsRemainder = seconds % 60;
+  let time = '';
+
+  if (minutes > 0) {
+    time += `${format(String(minutes))}m`;
   }
 
-  if (seconds < 60) {
-    return `${format(seconds.toFixed(1))}${indent}s`;
+  if (secondsRemainder > 0) {
+    if (minutes > 0 && shouldFormat) {
+      time += ' ';
+    }
+    time += getSecond(secondsRemainder);
   }
-
-  const minutes = seconds / 60;
-  return `${format(minutes.toFixed(2))}${indent}m`;
+  return time;
 };
 
 const getTaskNames = (
