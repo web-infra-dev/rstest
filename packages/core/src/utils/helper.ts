@@ -54,12 +54,7 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
-export const prettyTime = (
-  milliseconds: number,
-  shouldFormat = true,
-): string => {
-  const format = (time: string) => (shouldFormat ? color.bold(time) : time);
-
+export const prettyTime = (milliseconds: number): string => {
   if (milliseconds < 1000) {
     return `${Math.round(milliseconds)}ms`;
   }
@@ -68,10 +63,10 @@ export const prettyTime = (
 
   const getSecond = (seconds: number, needDigits?: boolean) => {
     if (!needDigits || seconds === Math.ceil(seconds)) {
-      return `${format(Math.round(seconds).toString())}s`;
+      return `${Math.round(seconds).toString()}s`;
     }
     const digits = seconds < 10 ? (seconds >= 0.01 ? 2 : 3) : 1;
-    return `${format(seconds.toFixed(digits))}s`;
+    return `${seconds.toFixed(digits)}s`;
   };
 
   const minutes = Math.floor(seconds / 60);
@@ -79,13 +74,10 @@ export const prettyTime = (
   let time = '';
 
   if (minutes > 0) {
-    time += `${format(String(minutes))}m`;
+    time += `${minutes}m`;
   }
 
   if (secondsRemainder > 0) {
-    if (minutes > 0 && shouldFormat) {
-      time += ' ';
-    }
     time += getSecond(secondsRemainder, !minutes);
   }
   return time;

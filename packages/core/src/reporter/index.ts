@@ -74,7 +74,7 @@ export class DefaultReporter implements Reporter {
 
     const formatDuration = (duration: number) => {
       return color[duration > slowTestThreshold ? 'yellow' : 'green'](
-        `${prettyTime(duration, false)}`,
+        `${prettyTime(duration)}`,
       );
     };
 
@@ -120,7 +120,7 @@ export class DefaultReporter implements Reporter {
       const nameStr = getTaskNameWithPrefix(result);
       const duration =
         typeof result.duration !== 'undefined'
-          ? ` (${prettyTime(result.duration, false)})`
+          ? ` (${prettyTime(result.duration)})`
           : '';
       const retry = result.retryCount
         ? color.yellow(` (retry x${result.retryCount})`)
