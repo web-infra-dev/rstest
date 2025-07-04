@@ -78,6 +78,9 @@ export const prettyTime = (milliseconds: number): string => {
   }
 
   if (secondsRemainder > 0) {
+    if (minutes > 0) {
+      time += ' ';
+    }
     time += getSecond(secondsRemainder, !minutes);
   }
   return time;

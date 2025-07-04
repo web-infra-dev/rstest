@@ -17,7 +17,7 @@ it('should prettyTime correctly', () => {
   expect(prettyTime(2000)).toBe('2s');
   expect(prettyTime(3000)).toBe('3s');
   expect(prettyTime(60000)).toBe('1m');
-  expect(prettyTime(110000)).toBe('1m50s');
-  expect(prettyTime(111100)).toBe('1m51s');
-  expect(prettyTime(111900)).toBe('1m52s');
+  expect(prettyTime(110000)).toBe('1m 50s');
+  expect(prettyTime(111100)).toBe('1m 51s');
+  expect(prettyTime(111900)).toBe('1m 52s');
 });
