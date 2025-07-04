@@ -92,3 +92,33 @@ $ npx rstest list --json
 
 $ npx rstest list --json=./output.json
 ```
+
+## CLI options
+
+Rstest CLI provides several common options that can be used with all commands:
+
+| Flag                            | Description                                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`         | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                  |
+| `--config-loader <loader>`      | Specify the config loader, can be `jiti` or `native`, see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                 |
+| `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                          |
+| `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                         |
+| `--exclude <exclude>`           | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                      |
+| `-u, --update`                  | Update snapshot files, see [update](/config/test/update)                                                                                                          |
+| `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/passWithNoTests)                                                        |
+| `--printConsoleTrace`           | Print console traces when calling any console method, see [printConsoleTrace](/config/test/printConsoleTrace)                                                     |
+| `--disableConsoleIntercept`     | Disable console intercept, see [disableConsoleIntercept](/config/test/disableConsoleIntercept)                                                                    |
+| `--slowTestThreshold <value>`   | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slowTestThreshold)                                |
+| `-t, --testNamePattern <value>` | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/testNamePattern)                                                            |
+| `--testEnvironment <name>`      | The environment that will be used for testing, see [testEnvironment](/config/test/testEnvironment)                                                                |
+| `--testTimeout <value>`         | Timeout of a test in milliseconds, see [testTimeout](/config/test/testTimeout)                                                                                    |
+| `--retry <retry>`               | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                      |
+| `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/maxConcurrency)                                                                             |
+| `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clearMocks)                                      |
+| `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/resetMocks)                                                                       |
+| `--restoreMocks`                | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restoreMocks)                                              |
+| `--unstubGlobals`               | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstubGlobals)                       |
+| `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstubEnvs)                            |
+| `-h, --help`                    | Display help for command                                                                                                                                          |
+| `-v, --version`                 | Display version                                                                                                                                                   |
