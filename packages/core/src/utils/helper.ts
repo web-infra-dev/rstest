@@ -54,30 +54,36 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
-export const prettyTime = (
-  milliseconds: number,
-  shouldFormat = true,
-): string => {
-  const format = (time: string) => (shouldFormat ? color.bold(time) : time);
-  const indent = shouldFormat ? ' ' : '';
-
+export const prettyTime = (milliseconds: number): string => {
   if (milliseconds < 1000) {
-    return `${Math.round(milliseconds)}${indent}ms`;
+    return `${Math.round(milliseconds)}ms`;
   }
 
   const seconds = milliseconds / 1000;
 
-  if (seconds < 10) {
-    const digits = seconds >= 0.01 ? 2 : 3;
-    return `${format(seconds.toFixed(digits))}${indent}s`;
+  const getSecond = (seconds: number, needDigits?: boolean) => {
+    if (!needDigits || seconds === Math.ceil(seconds)) {
+      return `${Math.round(seconds).toString()}s`;
+    }
+    const digits = seconds < 10 ? (seconds >= 0.01 ? 2 : 3) : 1;
+    return `${seconds.toFixed(digits)}s`;
+  };
+
+  const minutes = Math.floor(seconds / 60);
+  const secondsRemainder = seconds % 60;
+  let time = '';
+
+  if (minutes > 0) {
+    time += `${minutes}m`;
   }
 
-  if (seconds < 60) {
-    return `${format(seconds.toFixed(1))}${indent}s`;
+  if (secondsRemainder > 0) {
+    if (minutes > 0) {
+      time += ' ';
+    }
+    time += getSecond(secondsRemainder, !minutes);
   }
-
-  const minutes = seconds / 60;
-  return `${format(minutes.toFixed(2))}${indent}m`;
+  return time;
 };
 
 const getTaskNames = (
