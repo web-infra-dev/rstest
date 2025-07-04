@@ -25,11 +25,12 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
 } {
   const {
     testPath,
-    runtimeConfig: { testTimeout, testNamePattern },
+    runtimeConfig: { testTimeout, testNamePattern, hookTimeout },
   } = workerState;
   const runtime = createRuntimeAPI({
     testPath,
     testTimeout,
+    hookTimeout,
   });
   const testRunner: TestRunner = new TestRunner();
 

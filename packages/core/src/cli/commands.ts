@@ -21,6 +21,7 @@ type CommonOptions = {
   update?: boolean;
   testNamePattern?: RegExp | string;
   testTimeout?: number;
+  hookTimeout?: number;
   testEnvironment?: string;
   clearMocks?: boolean;
   resetMocks?: boolean;
@@ -75,6 +76,7 @@ const applyCommonOptions = (cli: CAC) => {
       'The environment that will be used for testing',
     )
     .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
+    .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(
@@ -117,6 +119,7 @@ export async function initCli(options: CommonOptions): Promise<{
     'update',
     'testNamePattern',
     'testTimeout',
+    'hookTimeout',
     'clearMocks',
     'resetMocks',
     'restoreMocks',

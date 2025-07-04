@@ -41,18 +41,21 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
-  private defaultHookTimeout = 5_000;
+  private defaultHookTimeout;
   private defaultTestTimeout;
 
   constructor({
     testPath,
     testTimeout,
+    hookTimeout,
   }: {
     testTimeout: number;
+    hookTimeout: number;
     testPath: string;
   }) {
     this.testPath = testPath;
     this.defaultTestTimeout = testTimeout;
+    this.defaultHookTimeout = hookTimeout;
   }
 
   afterAll(
@@ -427,9 +430,11 @@ export class RunnerRuntime {
 export const createRuntimeAPI = ({
   testPath,
   testTimeout,
+  hookTimeout,
 }: {
   testPath: string;
   testTimeout: number;
+  hookTimeout: number;
 }): {
   api: RunnerAPI;
   instance: RunnerRuntime;
@@ -437,6 +442,7 @@ export const createRuntimeAPI = ({
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
     testPath,
     testTimeout,
+    hookTimeout,
   });
 
   const createTestAPI = (
