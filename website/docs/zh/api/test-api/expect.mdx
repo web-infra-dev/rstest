@@ -1,0 +1,317 @@
+---
+title: Expect
+overviewHeaders: [2, 3]
+---
+
+# Expect
+
+`expect` 用于在测试中创建断言。Rstest 提供了丰富的 API 及匹配器，支持轮询、快照断言等。
+
+## expect
+
+- **类型：** `<T>(actual: T, message?: string) => Assertion<T>`
+
+为给定的值创建一个断言对象。
+
+```ts
+import { expect } from '@rstest/core';
+
+expect(1 + 1).toBe(2);
+expect('hello').toBeDefined();
+expect([1, 2, 3]).toContain(2);
+```
+
+## expect.not
+
+否定该断言。
+
+```ts
+expect(1 + 1).not.toBe(3);
+expect('foo').not.toBeUndefined();
+```
+
+## expect.soft
+
+- **类型：** `<T>(actual: T, message?: string) => Assertion<T>`
+
+即使断言失败，测试也会继续执行，所有失败会在最后统一报告。
+
+```ts
+expect.soft(1 + 1).toBe(3); // 不会中断测试
+expect.soft(1 + 2).toBe(4);
+```
+
+## expect.poll
+
+- **类型：** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Assertion<T>`
+
+轮询函数返回的值，直到断言通过或超时。
+
+```ts
+await expect.poll(() => getStatus()).toBe('ready');
+```
+
+## expect.unreachable
+
+- **类型：** `(message?: string) => never`
+
+标记代码路径为不可达。如果调用会抛出异常。
+
+```ts
+if (shouldNotHappen) {
+  expect.unreachable('这里不应该被执行');
+}
+```
+
+## expect.assertions
+
+- **类型：** `(expected: number) => void`
+
+验证在测试期间调用了特定数量的断言。常用来检查异步代码是否被调用。
+
+```ts
+expect.assertions(2);
+expect(1 + 1).toBe(2);
+expect(2 + 2).toBe(4);
+```
+
+## expect.hasAssertions
+
+- **类型：** `() => void`
+
+验证在测试期间至少调用了一个断言。
+
+```ts
+expect.hasAssertions();
+expect(1 + 1).toBe(2);
+```
+
+## expect.addEqualityTesters
+
+- **类型：** `(testers: Array<Tester>) => void`
+
+自定义用来验证两个对象是否相等的测试器。
+
+```ts
+expect.addEqualityTesters([
+  (a, b) => {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return Math.abs(a - b) < 0.01;
+    }
+  },
+]);
+expect(0.1 + 0.2).toEqual(0.3); // 使用自定义测试器后为 true
+```
+
+## expect.addSnapshotSerializer
+
+- **类型：** `(serializer: SnapshotSerializer) => void`
+
+为快照测试添加自定义序列化工具。
+
+```ts
+expect.addSnapshotSerializer({
+  test: (val) => typeof val === 'string' && val.startsWith('secret:'),
+  print: (val) => '***MASKED***',
+});
+expect('secret:123').toMatchSnapshot(); // 快照输出的 secret 信息会被掩码
+```
+
+## expect.getState / expect.setState
+
+- **类型：**
+  - `getState: () => MatcherState`
+  - `setState: (state: Partial<MatcherState>) => void`
+
+获取或设置内部匹配器状态。
+
+```ts
+const state = expect.getState();
+console.log(state.currentTestName);
+expect.setState({ currentTestName: '自定义名称' });
+console.log(expect.getState().currentTestName); // 输出 '自定义名称'
+```
+
+## 匹配器（Matchers）
+
+### 常用匹配器
+
+常用匹配器用于断言基本的值比较、类型检查和结构检查，涵盖了数字、字符串、对象、数组等日常断言需求。
+
+- `toBe(value)`：使用 `Object.is` 检查严格相等。
+- `toEqual(value)`：检查深度相等（递归检查所有字段）。
+- `toStrictEqual(value)`：深度相等，包含 undefined 属性和稀疏数组。
+- `toBeTruthy()`：检查值为真。
+- `toBeFalsy()`：检查值为假。
+- `toBeNull()`：检查值为 `null`。
+- `toBeUndefined()`：检查值为 `undefined`。
+- `toBeDefined()`：检查值不是 `undefined`。
+- `toBeNaN()`：检查值为 `NaN`。
+- `toBeGreaterThan(number)`：检查值大于给定数字。
+- `toBeGreaterThanOrEqual(number)`：检查值大于等于给定数字。
+- `toBeLessThan(number)`：检查值小于给定数字。
+- `toBeLessThanOrEqual(number)`：检查值小于等于给定数字。
+- `toBeCloseTo(number, numDigits?)`：检查数字接近另一个数字，可指定精度。
+- `toContain(item)`：检查数组或字符串包含指定项。
+- `toContainEqual(item)`：检查数组包含指定项（使用深度相等）。
+- `toMatch(stringOrRegExp)`：检查字符串匹配正则或子串。
+- `toMatchObject(object)`：检查对象包含指定属性子集。
+- `toHaveLength(length)`：检查对象的 `.length` 属性等于指定值。
+- `toHaveProperty(path, value?)`：检查对象指定路径上有属性，可选断言值。
+- `toBeInstanceOf(class)`：检查值是指定类的实例。
+- `toBeTypeOf(type)`：检查值类型（如 'string'）。
+- `toSatisfy(fn)`：检查值满足给定函数。
+- `toBeOneOf(array)`：检查值在给定数组中。
+- `toThrowError(expected?)`：检查函数抛出错误，可选匹配错误信息或类型。
+
+```ts
+// 相等性
+expect(1 + 1).toBe(2);
+expect({ a: 1 }).toEqual({ a: 1 });
+expect([1, undefined]).toStrictEqual([1, undefined]);
+expect(2).toBeOneOf([1, 2, 3]);
+
+// 类型与定义
+expect(null).toBeNull();
+expect(undefined).toBeUndefined();
+expect('foo').toBeDefined();
+expect('bar').toBeTypeOf('string');
+expect(new Date()).toBeInstanceOf(Date);
+expect(NaN).toBeNaN();
+expect('hello').toBeTruthy();
+expect('').toBeFalsy();
+
+// 数字比较
+expect(5).toBeGreaterThan(3);
+expect(5).toBeGreaterThanOrEqual(5);
+expect(3).toBeLessThan(5);
+expect(3).toBeLessThanOrEqual(3);
+expect(0.1 + 0.2).toBeCloseTo(0.3, 5);
+
+// 数组/对象/字符串
+expect([1, 2, 3]).toContain(2);
+expect([{ a: 1 }]).toContainEqual({ a: 1 });
+expect('hello world').toMatch(/world/);
+expect({ a: 1, b: 2 }).toMatchObject({ a: 1 });
+expect('abc').toHaveLength(3);
+expect({ foo: { bar: 1 } }).toHaveProperty('foo.bar', 1);
+
+// 函数/异常
+expect(() => {
+  throw new Error('fail');
+}).toThrowError('fail');
+expect(3).toSatisfy((x) => x % 3 === 0 || x % 3 === 1);
+```
+
+### Mock 匹配器
+
+Mock 匹配器用于断言 mock 函数（由 `rstest.fn` 或 `rstest.spyOn` 创建）的调用情况、返回值和调用顺序，是单元测试中验证函数交互的重要工具。
+
+- `toHaveBeenCalled()`：检查 mock 函数至少被调用过一次。
+- `toHaveBeenCalledTimes(times)`：检查 mock 函数被调用指定次数。
+- `toHaveBeenCalledWith(...args)`：检查 mock 函数被指定参数调用。
+- `toHaveBeenCalledBefore(mock)`：检查 mock 在另一个 mock 之前被调用。
+- `toHaveBeenCalledAfter(mock)`：检查 mock 在另一个 mock 之后被调用。
+- `toHaveBeenCalledExactlyOnceWith(...args)`：检查 mock 仅被指定参数调用过一次。
+- `toHaveBeenLastCalledWith(...args)`：检查 mock 最后一次被指定参数调用。
+- `toHaveBeenNthCalledWith(n, ...args)`：检查 mock 第 n 次被指定参数调用。
+- `toHaveReturned()`：检查 mock 函数至少有一次返回。
+- `toHaveReturnedTimes(times)`：检查 mock 函数返回指定次数。
+- `toHaveReturnedWith(value)`：检查 mock 函数返回指定值。
+- `toHaveLastReturnedWith(value)`：检查 mock 函数最后一次返回指定值。
+- `toHaveNthReturnedWith(n, value)`：检查 mock 函数第 n 次返回指定值。
+- `toHaveResolved()`：检查 Promise 至少 resolve 过一次。
+- `toHaveResolvedTimes(times)`：检查 Promise resolve 指定次数。
+- `toHaveResolvedWith(value)`：检查 Promise resolve 指定值。
+- `toHaveLastResolvedWith(value)`：检查 Promise 最后一次 resolve 指定值。
+- `toHaveNthResolvedWith(n, value)`：检查 Promise 第 n 次 resolve 指定值。
+
+```ts
+const mockFn = rstest.fn((x) => x + 1);
+mockFn(1);
+
+expect(mockFn).toHaveBeenCalled();
+expect(mockFn).toHaveBeenCalledTimes(1);
+expect(mockFn).toHaveBeenCalledWith(1);
+```
+
+### 快照匹配器
+
+快照匹配器用于将值、错误或文件与之前记录的快照进行比较，便于追踪输出的变化。
+
+- `toMatchSnapshot()`：将值与已保存的快照进行比较。
+- `toMatchInlineSnapshot()`：将值与测试文件中的内联快照进行比较。
+- `toThrowErrorMatchingSnapshot()`：检查抛出的错误与已保存快照匹配。
+- `toThrowErrorMatchingInlineSnapshot()`：检查抛出的错误与内联快照匹配。
+- `toMatchFileSnapshot(filepath)`：将值与指定文件中的快照进行比较。
+
+```ts
+expect('hello world').toMatchSnapshot();
+
+expect(() => {
+  throw new Error('fail');
+}).toThrowErrorMatchingSnapshot();
+```
+
+### Promise 匹配器
+
+- `resolves`：对 Promise 的 resolve 结果进行断言。
+- `rejects`：对 Promise 的 reject 结果进行断言。
+
+```ts
+await expect(Promise.resolve('ok')).resolves.toBe('ok');
+await expect(Promise.reject(new Error('fail'))).rejects.toThrow('fail');
+```
+
+### 不对称匹配器
+
+不对称匹配器是一些辅助工具，允许更灵活地匹配值，如部分匹配、类型匹配或模式匹配，适合编写更具表现力且不易碎的测试。
+
+- `expect.anything()`：匹配除 null 和 undefined 之外的任意值。
+- `expect.any(constructor)`：匹配指定类型的任意值。
+- `expect.closeTo(number, precision?)`：匹配接近期望值的数字。
+- `expect.arrayContaining(array)`：匹配包含期望元素的数组。
+- `expect.objectContaining(object)`：匹配包含期望属性的对象。
+- `expect.stringContaining(string)`：匹配包含期望子串的字符串。
+- `expect.stringMatching(stringOrRegExp)`：匹配符合期望模式的字符串。
+
+```ts
+expect({ a: 1 }).toEqual({ a: expect.anything() });
+
+expect(1).toEqual(expect.any(Number));
+
+expect(0.1 + 0.2).toEqual(expect.closeTo(0.3, 5));
+
+expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 1]));
+
+expect({ a: 1, b: 2 }).toEqual(expect.objectContaining({ a: 1 }));
+
+expect('hello world').toEqual(expect.stringContaining('world'));
+
+expect('hello world').toEqual(expect.stringMatching(/^hello/));
+```
+
+### 自定义匹配器
+
+你可以通过扩展 expect 添加自定义匹配器：
+
+```ts
+expect.extend({
+  toBeDivisibleBy(received, argument) {
+    const pass = received % argument === 0;
+    if (pass) {
+      return {
+        message: () => `期望 ${received} 不能被 ${argument} 整除`,
+        pass: true,
+      };
+    } else {
+      return {
+        message: () => `期望 ${received} 能被 ${argument} 整除`,
+        pass: false,
+      };
+    }
+  },
+});
+
+expect(10).toBeDivisibleBy(2);
+```
