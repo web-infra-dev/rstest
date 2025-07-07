@@ -1,6 +1,7 @@
 import type { Rstest, RstestUtilities } from '../../types';
 
 export type { Assertion } from '../../types/expect';
+export type { Mock } from '../../types/mock';
 
 export declare const expect: Rstest['expect'];
 export declare const assert: Rstest['assert'];
