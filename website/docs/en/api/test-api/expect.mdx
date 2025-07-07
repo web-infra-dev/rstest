@@ -134,7 +134,7 @@ console.log(expect.getState().currentTestName); // will output 'custom name'
 
 ## Matchers
 
-### Common Matchers
+### Common matchers
 
 Common matchers are used to assert basic value comparisons, type checks, and structure checks. They cover most day-to-day assertions for numbers, strings, objects, arrays, and more.
 
@@ -203,7 +203,7 @@ expect(() => {
 expect(3).toSatisfy((x) => x % 3 === 0 || x % 3 === 1);
 ```
 
-### Mock Matchers
+### Mock matchers
 
 Mock matchers are used to assert how mock functions (created by `rstest.fn` or `rstest.spyOn`) are called, what they return, and their call order. They are essential for verifying function interactions in unit tests.
 
@@ -235,7 +235,7 @@ expect(mockFn).toHaveBeenCalledTimes(1);
 expect(mockFn).toHaveBeenCalledWith(1);
 ```
 
-### Snapshot Matchers
+### Snapshot matchers
 
 Snapshot matchers are used to compare values, errors, or files against previously recorded snapshots, making it easy to track changes in output over time.
 
@@ -253,7 +253,7 @@ expect(() => {
 }).toThrowErrorMatchingSnapshot();
 ```
 
-### Promise Matchers
+### Promise matchers
 
 - `resolves`. Asserts on the resolved value of a Promise.
 - `rejects`. Asserts on the rejected value of a Promise.
@@ -263,7 +263,7 @@ await expect(Promise.resolve('ok')).resolves.toBe('ok');
 await expect(Promise.reject(new Error('fail'))).rejects.toThrow('fail');
 ```
 
-### Asymmetric Matchers
+### Asymmetric matchers
 
 Asymmetric matchers are helpers that allow for flexible matching of values, such as partial matches, type matches, or pattern matches. They are useful for writing more expressive and less brittle tests.
 
@@ -291,7 +291,7 @@ expect('hello world').toEqual(expect.stringContaining('world'));
 expect('hello world').toEqual(expect.stringMatching(/^hello/));
 ```
 
-### Custom Matchers
+### Custom matchers
 
 You can extend expect with custom matchers:
 
