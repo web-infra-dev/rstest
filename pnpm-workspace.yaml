@@ -4,3 +4,7 @@ packages:
   - 'packages/**'
   - 'examples/**'
   - 'tests/**'
+
+strictPeerDependencies: false
+autoInstallPeers: false
+hoistPattern: []
