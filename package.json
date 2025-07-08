@@ -9,7 +9,7 @@
     "test:example": "pnpm --filter @examples/* test",
     "change": "changeset",
     "changeset": "changeset",
-    "check-dependency-version": "pnpx check-dependency-version-consistency .",
+    "check-dependency-version": "pnpx check-dependency-version-consistency . && echo",
     "check-spell": "pnpx cspell && heading-case",
     "format": "prettier --write . && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell",
