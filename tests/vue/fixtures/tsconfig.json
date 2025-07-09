@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "noEmit": true,
     "target": "ES2020",
     "lib": ["DOM", "ES2020"],
     "module": "ESNext",
@@ -8,6 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "useDefineForClassFields": true
   },

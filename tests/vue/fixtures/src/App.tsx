@@ -4,7 +4,7 @@ export default defineComponent({
   name: 'App',
 
   setup(_props, { emit }) {
-    const onClickApp = (event) => emit('clickApp', event);
+    const onClickApp = (event: any) => emit('clickApp', event);
 
     return () => (
       <div class="content">
