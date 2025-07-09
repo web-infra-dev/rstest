@@ -8,5 +8,6 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["./"]
+  "include": ["./"],
+  "exclude": ["vue/"]
 }

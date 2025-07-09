@@ -173,7 +173,9 @@ export const prepareRsbuild = async (
             target: 'node',
           },
           tools: {
-            rspack: (config) => {
+            rspack: (config, { isProd }) => {
+              // treat `test` as development mode
+              config.mode = isProd ? 'production' : 'development';
               config.output ??= {};
               config.output.iife = false;
               // polyfill interop
@@ -231,6 +233,7 @@ export const prepareRsbuild = async (
               config.optimization = {
                 moduleIds: 'named',
                 chunkIds: 'named',
+                nodeEnv: false,
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {

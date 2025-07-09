@@ -28,7 +28,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "infrastructureLogging": {
     "level": "error",
   },
-  "mode": "none",
+  "mode": "development",
   "module": {
     "parser": {
       "javascript": {
@@ -376,6 +376,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "emitOnErrors": true,
     "minimize": false,
     "moduleIds": "named",
+    "nodeEnv": false,
     "runtimeChunk": {
       "name": "runtime",
     },
@@ -507,7 +508,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "infrastructureLogging": {
     "level": "error",
   },
-  "mode": "none",
+  "mode": "development",
   "module": {
     "parser": {
       "javascript": {
@@ -844,6 +845,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "emitOnErrors": true,
     "minimize": false,
     "moduleIds": "named",
+    "nodeEnv": false,
     "runtimeChunk": {
       "name": "runtime",
     },
