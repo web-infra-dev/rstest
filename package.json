@@ -65,6 +65,15 @@
       "core-js",
       "nx",
       "simple-git-hooks"
-    ]
+    ],
+    "packageExtensions": {
+      "@vue/test-utils": {
+        "peerDependencies": {
+          "vue": "^3.5.17",
+          "@vue/compiler-dom": "3.5.17",
+          "@vue/server-renderer": "3.5.17"
+        }
+      }
+    }
   }
 }
