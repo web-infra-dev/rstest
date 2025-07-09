@@ -2,7 +2,7 @@
   <div class="content">
     <h1>Rsbuild with Vue</h1>
     <p>Start building amazing things with Rsbuild.</p>
-    <button class="button1" @click="onClickApp">Click me</button>
+    <button @click="onClickApp">Click me</button>
   </div>
 </template>
 
