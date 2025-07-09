@@ -8,7 +8,11 @@ export default defineConfig({
     pluginBabel({
       include: /\.(?:jsx|tsx)$/,
     }),
-    pluginVue(),
+    pluginVue({
+      vueLoaderOptions: {
+        isServerBuild: false,
+      },
+    }),
     pluginVueJsx(),
   ],
 });

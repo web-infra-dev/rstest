@@ -7,6 +7,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('vue', () => {
+  it('should run vue SFC test correctly', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'index'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should run vue test correctly with jsx syntax', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
