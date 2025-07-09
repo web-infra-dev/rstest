@@ -9,8 +9,7 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
-    "useDefineForClassFields": true,
-    "types": ["@rstest/core/importMeta"]
+    "useDefineForClassFields": true
   },
   "include": ["src"]
 }

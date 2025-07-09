@@ -14,3 +14,7 @@ export default defineConfig({
   onConsoleLog: (log) => log.includes('test'),
 });
 ```
+
+:::note
+When [disableConsoleIntercept](/config/test/disableConsoleIntercept) is set to `true`, `onConsoleLog` will be ignored.
+:::

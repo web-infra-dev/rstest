@@ -22,7 +22,7 @@ export default defineConfig({
 
 ## 使用
 
-当你启用 `globals` 后，就可以直接使用全局 API，而无需 `import from '@rstest/core'`。
+当你启用 `globals` 后，就可以直接使用全局 API，而无需 `import { ... } from '@rstest/core'`。
 
 ```diff title="index.test.ts"
 - import { describe, expect, it } from '@rstest/core';
@@ -36,12 +36,8 @@ describe('Index', () => {
 
 ### 类型支持
 
-为了让 TypeScript 支持全局 API，请在 `tsconfig.json` 的 types 字段中添加 `@rstest/core/globals`。
+为了让 TypeScript 支持全局 API，你可以创建一个 `src/rstestEnv.d.ts` 文件来引用：
 
-```json title=tsconfig.json
-{
-  "compilerOptions": {
-    "types": ["@rstest/core/globals"]
-  }
-}
+```ts title=rstestEnv.d.ts
+/// <reference types="@rstest/core/globals" />
 ```

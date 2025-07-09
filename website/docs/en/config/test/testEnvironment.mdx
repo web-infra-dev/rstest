@@ -32,18 +32,20 @@ export default defineConfig({
 
 You also need to install the corresponding package:
 
-```bash
-# For jsdom
-npm install jsdom -D
+import { PackageManagerTabs } from '@theme';
 
-# For happy-dom
-npm install happy-dom -D
-```
+For jsdom
+
+<PackageManagerTabs command="add jsdom -D" />
+
+For happy-dom
+
+<PackageManagerTabs command="add happy-dom -D" />
 
 After enabling DOM testing, you can write tests that use browser APIs like `document` and `window`.
 
 ```ts
-test('dom test', () => {
+test('DOM test', () => {
   document.body.innerHTML = '<p class="content">hello world</p>';
   const paragraph = document.querySelector('.content');
   expect(paragraph?.innerHTML).toBe('hello world');

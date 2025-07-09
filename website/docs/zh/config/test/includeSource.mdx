@@ -46,7 +46,7 @@ import { defineConfig } from '@rsbuild/core';
 export default defineConfig({
   source: {
     define: {
-+      'import.meta.rstest': undefined,
++      'import.meta.rstest': false,
     },
   },
 });
@@ -54,14 +54,8 @@ export default defineConfig({
 
 ### TypeScript
 
-如需让 TypeScript 支持 `import.meta.rstest`，可在 `tsconfig.json` 中添加 `@rstest/core/importMeta`：
+如需让 TypeScript 支持 `import.meta.rstest`，你可以创建一个 `src/rstestEnv.d.ts` 文件来引用：
 
-```diff title=tsconfig.json
-{
-  "compilerOptions": {
-    "types": [
-+      "@rstest/core/importMeta"
-    ]
-  }
-}
+```ts title=rstestEnv.d.ts
+/// <reference types="@rstest/core/importMeta" />
 ```
