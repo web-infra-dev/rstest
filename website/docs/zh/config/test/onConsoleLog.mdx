@@ -14,3 +14,7 @@ export default defineConfig({
   onConsoleLog: (log) => log.includes('test'),
 });
 ```
+
+:::note
+当 [disableConsoleIntercept](/config/test/disableConsoleIntercept) 为 `true` 时，`onConsoleLog` 将被忽略。
+:::

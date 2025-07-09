@@ -22,7 +22,7 @@ export default defineConfig({
 
 ## Usage
 
-When you enable `globals`, you can use the global APIs directly without `import from '@rstest/core'`.
+When you enable `globals`, you can use the global APIs directly without `import { ... } from '@rstest/core'`.
 
 ```diff title="index.test.ts"
 - import { describe, expect, it } from '@rstest/core';
@@ -36,12 +36,8 @@ describe('Index', () => {
 
 ### TypeScript support
 
-To get TypeScript working with the global APIs, add `@rstest/core/globals` to the types field in your `tsconfig.json`
+To get TypeScript working with the global APIs, you can create a `src/rstestEnv.d.ts` file to reference:
 
-```json title=tsconfig.json
-{
-  "compilerOptions": {
-    "types": ["@rstest/core/globals"]
-  }
-}
+```ts title=rstestEnv.d.ts
+/// <reference types="@rstest/core/globals" />
 ```

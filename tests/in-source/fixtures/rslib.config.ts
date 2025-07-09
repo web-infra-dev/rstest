@@ -9,7 +9,7 @@ export default defineConfig({
   ],
   source: {
     define: {
-      'import.meta.rstest': undefined,
+      'import.meta.rstest': false,
     },
   },
 });
