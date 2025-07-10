@@ -48,6 +48,7 @@ __webpack_require__.rstest_reset_modules = __webpack_require__.reset_modules = (
 // TODO: Remove "unmock" in next Rspack version.
 __webpack_require__.rstest_unmock = __webpack_require__.unmock = (id) => {
   delete __webpack_module_cache__[id]
+  return 1
 }
 
 // TODO: Remove "require_actual" and "import_actual" in next Rspack version.
@@ -71,9 +72,17 @@ __webpack_require__.rstest_set_mock = __webpack_require__.set_mock = (id, modFac
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
   } else if (typeof modFactory === 'function') {
-    let exports = modFactory();
-    __webpack_require__.r(exports);
-    __webpack_module_cache__[id] = { exports, id, loaded: true };
+    let isFactoryAsyncFn = modFactory.constructor.name === 'AsyncFunction';
+    if (isFactoryAsyncFn) {
+        return modFactory().then((exports) => {
+          __webpack_require__.r(exports);
+          __webpack_module_cache__[id] = { exports, id, loaded: true };
+        })
+      } else {
+        let exports = modFactory();
+        __webpack_require__.r(exports);
+        __webpack_module_cache__[id] = { exports, id, loaded: true };
+    }
   }
 };
 `;

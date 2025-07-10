@@ -1,14 +1,25 @@
 import { expect, it, rs } from '@rstest/core';
+// @ts-ignore
+import { post } from 'axios';
+import redux from 'redux';
 
-// TODO: static import with mockFactory, any other imported module in mockFactory
-// will throw an reference error as it hoisted to the top of the module.
-// import r from 'redux';
+// To test async mocking factory.
+rs.mock('axios', async () => {
+  return {
+    post: rs.fn(),
+  };
+});
+
+it('mocked axios', async () => {
+  post('string1');
+  expect(post).toHaveBeenCalledWith('string1');
+});
 
 // manual mock
 rs.mock('redux');
 
 it('mocked redux', async () => {
-  const redux = (await import('redux')).default;
+  // const redux = (await import('redux')).default;
   redux.isAction('string');
   expect(redux.isAction).toHaveBeenCalledWith('string');
   // @ts-ignore
