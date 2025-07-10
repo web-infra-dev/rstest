@@ -15,7 +15,15 @@ const createRequire = (
   assetFiles: Record<string, string>,
   interopDefault: boolean,
 ): NodeJS.Require => {
-  const _require = createNativeRequire(filename);
+  const _require = (() => {
+    try {
+      // compat with some testPath may not be an available path but the third-party package name
+      return createNativeRequire(filename);
+    } catch (_err) {
+      return createNativeRequire(distPath);
+    }
+  })();
+
   const require = ((id: string) => {
     const currentDirectory = path.dirname(distPath);
 
