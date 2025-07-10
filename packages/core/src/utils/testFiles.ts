@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
 import { castArray, color, getAbsolutePath, parsePosix } from './helper';
@@ -98,6 +99,15 @@ export const getTestEntries = async ({
   );
 };
 
+const tryResolve = (request: string, rootPath: string) => {
+  try {
+    const require = createRequire(rootPath);
+    return require.resolve(request, { paths: [rootPath] });
+  } catch (_err) {
+    return undefined;
+  }
+};
+
 export const getSetupFiles = (
   setups: string[] | string | undefined,
   rootPath: string,
@@ -105,16 +115,23 @@ export const getSetupFiles = (
   return Object.fromEntries(
     castArray(setups).map((setupFile) => {
       const setupFilePath = getAbsolutePath(rootPath, setupFile);
-
-      if (!existsSync(setupFilePath)) {
-        let errorMessage = `Setup file ${color.red(setupFile)} not found`;
-        if (setupFilePath !== setupFile) {
-          errorMessage += color.gray(` (resolved path: ${setupFilePath})`);
+      try {
+        if (!existsSync(setupFilePath)) {
+          let errorMessage = `Setup file ${color.red(setupFile)} not found`;
+          if (setupFilePath !== setupFile) {
+            errorMessage += color.gray(` (resolved path: ${setupFilePath})`);
+          }
+          throw errorMessage;
         }
-        throw errorMessage;
+        const relativePath = pathe.relative(rootPath, setupFilePath);
+        return [formatTestEntryName(relativePath), setupFilePath];
+      } catch (err) {
+        // support use package name as setupFiles value
+        if (tryResolve(setupFile, rootPath)) {
+          return [formatTestEntryName(setupFile), setupFile];
+        }
+        throw err;
       }
-      const relativePath = pathe.relative(rootPath, setupFilePath);
-      return [formatTestEntryName(relativePath), setupFilePath];
     }),
   );
 };

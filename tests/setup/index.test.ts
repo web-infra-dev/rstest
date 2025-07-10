@@ -46,4 +46,17 @@ describe('test setup file', async () => {
       logs.find((log) => log.includes('rstest.setup.ts:1:7')),
     ).toBeTruthy();
   });
+
+  it('should run setup file correctly when setupFiles value is package name', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
 });
