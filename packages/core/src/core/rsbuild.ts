@@ -311,7 +311,7 @@ export const createRsbuildServer = async ({
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
-        retest: normalizedConfig,
+        rstest: normalizedConfig,
       },
     });
   }
