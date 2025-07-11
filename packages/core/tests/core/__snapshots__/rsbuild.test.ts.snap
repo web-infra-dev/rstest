@@ -53,7 +53,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "preferRelative": true,
         },
         "resourceQuery": {
-          "not": /raw\\|inline/,
+          "not": [
+            /\\^\\\\\\?raw\\$/,
+            /\\^\\\\\\?inline\\$/,
+          ],
         },
         "sideEffects": true,
         "test": /\\\\\\.css\\$/,
@@ -96,7 +99,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "resolve": {
           "preferRelative": true,
         },
-        "resourceQuery": /inline/,
+        "resourceQuery": /\\^\\\\\\?inline\\$/,
         "sideEffects": true,
         "test": /\\\\\\.css\\$/,
         "type": "javascript/auto",
@@ -113,7 +116,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
       {
-        "resourceQuery": /raw/,
+        "resourceQuery": /\\^\\\\\\?raw\\$/,
         "test": /\\\\\\.css\\$/,
         "type": "asset/source",
       },
@@ -128,7 +131,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "resourceQuery": {
-          "not": /raw/,
+          "not": /\\^\\\\\\?raw\\$/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "type": "javascript/auto",
@@ -166,7 +169,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
       {
-        "resourceQuery": /raw/,
+        "resourceQuery": /\\^\\\\\\?raw\\$/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "type": "asset/source",
       },
@@ -219,15 +222,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/image/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -250,15 +253,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/svg/[name].[contenthash:8].svg",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -281,15 +284,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/media/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -312,15 +315,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/font/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -533,7 +536,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "preferRelative": true,
         },
         "resourceQuery": {
-          "not": /raw\\|inline/,
+          "not": [
+            /\\^\\\\\\?raw\\$/,
+            /\\^\\\\\\?inline\\$/,
+          ],
         },
         "sideEffects": true,
         "test": /\\\\\\.css\\$/,
@@ -576,7 +582,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "resolve": {
           "preferRelative": true,
         },
-        "resourceQuery": /inline/,
+        "resourceQuery": /\\^\\\\\\?inline\\$/,
         "sideEffects": true,
         "test": /\\\\\\.css\\$/,
         "type": "javascript/auto",
@@ -593,7 +599,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         ],
       },
       {
-        "resourceQuery": /raw/,
+        "resourceQuery": /\\^\\\\\\?raw\\$/,
         "test": /\\\\\\.css\\$/,
         "type": "asset/source",
       },
@@ -608,7 +614,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "resourceQuery": {
-          "not": /raw/,
+          "not": /\\^\\\\\\?raw\\$/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "type": "javascript/auto",
@@ -646,7 +652,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         ],
       },
       {
-        "resourceQuery": /raw/,
+        "resourceQuery": /\\^\\\\\\?raw\\$/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
         "type": "asset/source",
       },
@@ -699,15 +705,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/image/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -730,15 +736,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/svg/[name].[contenthash:8].svg",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -761,15 +767,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/media/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -792,15 +798,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/font/[name].[contenthash:8][ext]",
             },
-            "resourceQuery": /\\(__inline=false\\|url\\)/,
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
             "type": "asset/resource",
           },
           {
-            "resourceQuery": /inline/,
+            "resourceQuery": /\\^\\\\\\?inline\\$/,
             "type": "asset/inline",
           },
           {
-            "resourceQuery": /raw/,
+            "resourceQuery": /\\^\\\\\\?raw\\$/,
             "type": "asset/source",
           },
           {
@@ -967,7 +973,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
     ],
     "resourceQuery": {
-      "not": /raw/,
+      "not": /\\^\\\\\\?raw\\$/,
     },
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
     "type": "javascript/auto",
@@ -1006,7 +1012,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
     ],
   },
   {
-    "resourceQuery": /raw/,
+    "resourceQuery": /\\^\\\\\\?raw\\$/,
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
     "type": "asset/source",
   },
