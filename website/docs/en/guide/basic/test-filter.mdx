@@ -1,8 +1,8 @@
-# Filtering Tests
+# Filtering tests
 
 Rstest provides a variety of flexible ways to filter and select which test files and test cases to run. You can precisely control the test scope via configuration files, command-line arguments, and test APIs.
 
-## Filter by File Name
+## Filter by file name
 
 Run all tests:
 
@@ -51,7 +51,7 @@ To match test files in `test/a` or `test/b` directories:
 rstest --include test/a/*.test.ts --include test/b/*.test.ts
 ```
 
-## Filter by Test Name
+## Filter by test name
 
 If you only want to run test cases whose names contain a specific keyword, you can use [testNamePattern](/config/test/testNamePattern).
 
@@ -63,7 +63,7 @@ rstest --testNamePattern login
 rstest -t login
 ```
 
-## Combined Filtering
+## Combined filtering
 
 All filtering methods can be combined. For example:
 
@@ -73,7 +73,7 @@ rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login
 
 In this case, rstest will only run test cases whose names contain login in all `.test.ts` files under the `test` directory, while excluding the `test/legacy` directory.
 
-## Common Usage
+## Common usage
 
 - **Run a specific file only**: `rstest test/foo.test.ts`
 
@@ -85,7 +85,7 @@ In this case, rstest will only run test cases whose names contain login in all `
 
 - **Combined filtering**: `rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login`
 
-## Filter via Test API
+## Filter via test API
 
 Use the `.only` modifier to run only certain test suites or cases.
 
