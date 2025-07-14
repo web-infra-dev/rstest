@@ -12,7 +12,6 @@ import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
   castArray,
-  getNodeVersion,
   isDebug,
   NODE_BUILTINS,
   TEMP_RSTEST_OUTPUT_DIR,
@@ -222,13 +221,19 @@ export const prepareRsbuild = async (
               config.resolve.extensions ??= [];
               config.resolve.extensions.push('.cjs');
 
-              if (testEnvironment === 'node' && getNodeVersion().major < 20) {
-                // skip `module` field in Node.js 18 and below.
+              if (testEnvironment === 'node') {
+                // skip `module` field in Node.js environment.
                 // ESM module resolved by module field is not always a native ESM module
                 config.resolve.mainFields = config.resolve.mainFields?.filter(
                   (filed) => filed !== 'module',
                 ) || ['main'];
               }
+
+              config.resolve.byDependency ??= {};
+              config.resolve.byDependency.commonjs ??= {};
+              // skip `module` field when commonjs require
+              // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
+              config.resolve.byDependency.commonjs.mainFields = ['main', '...'];
 
               config.optimization = {
                 moduleIds: 'named',
