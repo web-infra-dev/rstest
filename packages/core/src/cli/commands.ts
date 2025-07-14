@@ -14,6 +14,7 @@ type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
   isolate?: boolean;
+  include?: string[];
   exclude?: string[];
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
@@ -52,6 +53,7 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option('--globals', 'Provide global APIs')
     .option('--isolate', 'Run tests in an isolated environment')
+    .option('--include <include>', 'Match test files')
     .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
     .option(
@@ -140,6 +142,10 @@ export async function initCli(options: CommonOptions): Promise<{
 
   if (options.exclude) {
     config.exclude = castArray(options.exclude);
+  }
+
+  if (options.include) {
+    config.include = castArray(options.include);
   }
 
   return {
