@@ -22,6 +22,12 @@ rstest test/foo.test.ts
 rstest test/**/*.test.ts
 ```
 
+运行名称中包含 `foo` 的测试文件，如 `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts` 等:
+
+```bash
+rstest foo
+```
+
 你也可以指定多组测试文件或通配符：
 
 ```bash
@@ -33,10 +39,10 @@ rstest test/foo.test.ts test/bar.test.ts
 当你直接通过 `rstest **/*.test.ts` 过滤文件时，Rstest 会在 [include](/config/test/include) 和 [exclude](/config/test/exclude) 配置的基础上进一步筛选文件。
 你可以通过 `include` 和 `exclude` 选项修改测试文件的范围。
 
-如，匹配 `test/a` 目录下的名为 index 的测试文件：
+如，匹配 `test/a` 目录下的名为 `index` 的测试文件：
 
 ```bash
-rstest index.test.ts --include test/a/*.test.ts
+rstest index --include test/a/*.test.ts
 ```
 
 匹配 `test/a` 和 `test/b` 目录下的测试文件：

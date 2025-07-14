@@ -22,6 +22,12 @@ Use glob patterns:
 rstest test/**/*.test.ts
 ```
 
+Run test files with `foo` in the name, such as `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts`, etc.:
+
+```bash
+rstest foo
+```
+
 You can also specify multiple test files or glob patterns:
 
 ```bash
@@ -33,13 +39,13 @@ rstest test/foo.test.ts test/bar.test.ts
 When you filter files directly with `rstest **/*.test.ts`, rstest will further filter files based on the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
 You can modify the test file scope using the `include` and `exclude` options.
 
-For example, to match test files named index in the `test/a` directory:
+For example, to match test files named `index` in the `test/a` directory:
 
 ```bash
-rstest index.test.ts --include test/a/*.test.ts
+rstest index --include test/a/*.test.ts
 ```
 
-To match test files in both `test/a` and `test/b` directories:
+To match test files in `test/a` or `test/b` directories:
 
 ```bash
 rstest --include test/a/*.test.ts --include test/b/*.test.ts
