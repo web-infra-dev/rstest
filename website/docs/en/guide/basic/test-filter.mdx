@@ -1,0 +1,116 @@
+# Filtering Tests
+
+Rstest provides a variety of flexible ways to filter and select which test files and test cases to run. You can precisely control the test scope via configuration files, command-line arguments, and test APIs.
+
+## Filter by File Name
+
+Run all tests:
+
+```bash
+rstest
+```
+
+Run a specific test file:
+
+```bash
+rstest test/foo.test.ts
+```
+
+Use glob patterns:
+
+```bash
+rstest test/**/*.test.ts
+```
+
+You can also specify multiple test files or glob patterns:
+
+```bash
+rstest test/foo.test.ts test/bar.test.ts
+```
+
+### include/exclude
+
+When you filter files directly with `rstest **/*.test.ts`, rstest will further filter files based on the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
+You can modify the test file scope using the `include` and `exclude` options.
+
+For example, to match test files named index in the `test/a` directory:
+
+```bash
+rstest index.test.ts --include test/a/*.test.ts
+```
+
+To match test files in both `test/a` and `test/b` directories:
+
+```bash
+rstest --include test/a/*.test.ts --include test/b/*.test.ts
+```
+
+## Filter by Test Name
+
+If you only want to run test cases whose names contain a specific keyword, you can use [testNamePattern](/config/test/testNamePattern).
+
+For example, to only run test cases whose names contain "login":
+
+```bash
+rstest --testNamePattern login
+# or
+rstest -t login
+```
+
+## Combined Filtering
+
+All filtering methods can be combined. For example:
+
+```bash
+rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login
+```
+
+In this case, rstest will only run test cases whose names contain login in all `.test.ts` files under the `test` directory, while excluding the `test/legacy` directory.
+
+## Common Usage
+
+- **Run a specific file only**: `rstest test/foo.test.ts`
+
+- **Run tests in a specific directory only**: `rstest test/api/*.test.ts`
+
+- **Exclude certain tests**: `rstest --exclude test/legacy/**`
+
+- **Run only tests whose names contain login**: `rstest -t login`
+
+- **Combined filtering**: `rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login`
+
+## Filter via Test API
+
+Use the `.only` modifier to run only certain test suites or cases.
+
+For example, only the test cases in `suite A` and `case A` will be run:
+
+```ts
+describe.only('suite A', () => {
+  // ...
+});
+
+describe('suite B', () => {
+  // ...
+});
+
+test.only('case A', () => {
+  // ...
+});
+
+test('case B', () => {
+  // ...
+});
+```
+
+Use `.skip` or `.todo` to skip certain test suites or cases.
+
+```ts
+describe.skip('suite A', () => {
+  // ...
+});
+
+test.todo('case A', () => {
+  // ...
+});
+```
