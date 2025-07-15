@@ -254,21 +254,30 @@ export const createPool = async ({
         entries.map((entryInfo) => {
           const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
 
-          return pool.collectTests({
-            options: {
-              entryInfo,
-              assetFiles,
-              context: {
-                rootPath: context.rootPath,
-                runtimeConfig: serializableConfig(runtimeConfig),
+          return pool
+            .collectTests({
+              options: {
+                entryInfo,
+                assetFiles,
+                context: {
+                  rootPath: context.rootPath,
+                  runtimeConfig: serializableConfig(runtimeConfig),
+                },
+                type: 'collect',
+                sourceMaps,
+                setupEntries,
+                updateSnapshot,
               },
-              type: 'collect',
-              sourceMaps,
-              setupEntries,
-              updateSnapshot,
-            },
-            rpcMethods,
-          });
+              rpcMethods,
+            })
+            .catch((err) => {
+              err.fullStack = true;
+              return {
+                testPath: entryInfo.testPath,
+                tests: [],
+                errors: [err],
+              };
+            });
         }),
       );
     },
