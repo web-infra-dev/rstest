@@ -34,6 +34,7 @@ export async function printError(
   if (error.stack) {
     const stackFrames = await parseErrorStacktrace({
       stack: error.stack,
+      fullStack: error.fullStack,
       getSourcemap,
     });
 
@@ -105,15 +106,19 @@ const stackIgnores: (RegExp | string)[] = [
 async function parseErrorStacktrace({
   stack,
   getSourcemap,
+  fullStack,
 }: {
+  fullStack?: boolean;
   stack: string;
   getSourcemap: GetSourcemap;
 }): Promise<StackFrame[]> {
   return Promise.all(
     stackTraceParse(stack)
-      .filter(
-        (frame) =>
-          frame.file && !stackIgnores.some((entry) => frame.file?.match(entry)),
+      .filter((frame) =>
+        fullStack
+          ? true
+          : frame.file &&
+            !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
         const sourcemap = getSourcemap(frame.file!);
