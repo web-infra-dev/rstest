@@ -7,8 +7,9 @@ const isBuildWatch = process.argv.includes('--watch');
 export default defineConfig({
   lib: [
     {
+      id: 'rstest',
       format: 'esm',
-      syntax: ['node 16'],
+      syntax: ['node 18'],
       dts: {
         bundle: true,
         distPath: './dist-types',
@@ -18,6 +19,11 @@ export default defineConfig({
           // Temporary fix: `import * as timers from 'timers'` reassign error
           timers: 'commonjs timers',
           'timers/promises': 'commonjs timers/promises',
+          fs: 'node:fs',
+          os: 'node:os',
+          tty: 'node:tty',
+          util: 'node:util',
+          path: 'node:path',
         },
         minify: {
           jsOptions: {
@@ -52,9 +58,15 @@ export default defineConfig({
           RSTEST_VERSION: JSON.stringify(require('./package.json').version),
         },
       },
+      tools: {
+        rspack: {
+          // fix licensePlugin watch error: ResourceData has been dropped by Rust.
+          plugins: isBuildWatch ? [] : [licensePlugin()],
+        },
+      },
     },
     {
-      id: 'esm_loaders',
+      id: 'rstest_loaders',
       format: 'esm',
       syntax: 'es2021',
       source: {
@@ -71,8 +83,6 @@ export default defineConfig({
   ],
   tools: {
     rspack: {
-      // fix licensePlugin watch error: ResourceData has been dropped by Rust.
-      plugins: isBuildWatch ? [] : [licensePlugin()],
       watchOptions: {
         ignored: /\.git/,
       },
