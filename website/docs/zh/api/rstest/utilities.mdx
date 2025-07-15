@@ -76,3 +76,37 @@ rstest.stubGlobal('myGlobal', 123);
 rstest.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
+
+## rstest.setConfig
+
+**类型：**
+
+```ts
+type RuntimeConfig = {
+  testTimeout?: number;
+  hookTimeout?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  maxConcurrency?: number;
+  retry?: number;
+};
+
+type SetConfig = (config: RuntimeConfig) => void;
+```
+
+动态更新当前测试的运行时配置。适用于需要在单个测试文件中临时覆盖某些测试设置（如超时时间、并发数、mock 行为等）的场景。
+
+**示例：**
+
+```ts
+rstest.setConfig({ testTimeout: 1000, retry: 2 });
+// ... 在新的配置下运行代码
+rstest.resetConfig(); // 恢复默认配置
+```
+
+## rstest.resetConfig
+
+**类型：** `() => void`
+
+将通过 `rstest.setConfig` 修改的运行时配置重置为默认值。

@@ -76,3 +76,37 @@ rstest.stubGlobal('myGlobal', 123);
 rstest.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
+
+## rstest.setConfig
+
+**Type:**
+
+```ts
+type RuntimeConfig = {
+  testTimeout?: number;
+  hookTimeout?: number;
+  clearMocks?: boolean;
+  resetMocks?: boolean;
+  restoreMocks?: boolean;
+  maxConcurrency?: number;
+  retry?: number;
+};
+
+type SetConfig = (config: RuntimeConfig) => void;
+```
+
+Dynamically updates the runtime configuration for the current test file. Useful for temporarily overriding test settings such as timeouts, concurrency, or mock behavior.
+
+**Example:**
+
+```ts
+rstest.setConfig({ testTimeout: 1000, retry: 2 });
+// ... run some code with the new config
+rstest.resetConfig(); // Restore to default config
+```
+
+## rstest.resetConfig
+
+**Type:** `() => void`
+
+Resets the runtime configuration that was changed using `rstest.setConfig` back to the default values.

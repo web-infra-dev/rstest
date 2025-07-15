@@ -10,6 +10,7 @@ import type {
   Fixtures,
   NormalizedFixtures,
   RunnerAPI,
+  RuntimeConfig,
   Test,
   TestAPI,
   TestAPIs,
@@ -41,26 +42,22 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
-  private defaultHookTimeout;
-  private defaultTestTimeout;
+  private runtimeConfig;
 
   constructor({
     testPath,
-    testTimeout,
-    hookTimeout,
+    runtimeConfig,
   }: {
-    testTimeout: number;
-    hookTimeout: number;
     testPath: string;
+    runtimeConfig: RuntimeConfig;
   }) {
     this.testPath = testPath;
-    this.defaultTestTimeout = testTimeout;
-    this.defaultHookTimeout = hookTimeout;
+    this.runtimeConfig = runtimeConfig;
   }
 
   afterAll(
     fn: AfterAllListener,
-    timeout: number = this.defaultHookTimeout,
+    timeout: number = this.runtimeConfig.hookTimeout,
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
@@ -77,7 +74,7 @@ export class RunnerRuntime {
 
   beforeAll(
     fn: BeforeAllListener,
-    timeout: number = this.defaultHookTimeout,
+    timeout: number = this.runtimeConfig.hookTimeout,
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
@@ -94,7 +91,7 @@ export class RunnerRuntime {
 
   afterEach(
     fn: AfterEachListener,
-    timeout: number = this.defaultHookTimeout,
+    timeout: number = this.runtimeConfig.hookTimeout,
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
@@ -111,7 +108,7 @@ export class RunnerRuntime {
 
   beforeEach(
     fn: BeforeEachListener,
-    timeout: number = this.defaultHookTimeout,
+    timeout: number = this.runtimeConfig.hookTimeout,
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
@@ -269,7 +266,7 @@ export class RunnerRuntime {
     fn,
     originalFn = fn,
     fixtures,
-    timeout = this.defaultTestTimeout,
+    timeout = this.runtimeConfig.testTimeout,
     runMode = 'run',
     fails = false,
     each = false,
@@ -368,7 +365,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): ReturnType<TestEachFn> {
-    return (name, fn, timeout = this.defaultTestTimeout) => {
+    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
         const param = cases[i]!;
@@ -396,7 +393,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): ReturnType<TestEachFn> {
-    return (name, fn, timeout = this.defaultTestTimeout) => {
+    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
         // TODO: template string table.
         const param = cases[i]!;
@@ -429,20 +426,17 @@ export class RunnerRuntime {
 
 export const createRuntimeAPI = ({
   testPath,
-  testTimeout,
-  hookTimeout,
+  runtimeConfig,
 }: {
   testPath: string;
-  testTimeout: number;
-  hookTimeout: number;
+  runtimeConfig: RuntimeConfig;
 }): {
   api: RunnerAPI;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
     testPath,
-    testTimeout,
-    hookTimeout,
+    runtimeConfig,
   });
 
   const createTestAPI = (
