@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { beforeAll, describe, it } from '@rstest/core';
 import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 
