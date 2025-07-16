@@ -47,11 +47,11 @@ Rstest has built-in commands such as `watch` and `run`, please refer to [CLI Too
 
 As a simple example, we have a `sayHi` method. To test it, you can create a test file called `index.test.ts` or use [In-Source test](/config/test/includeSource) similar to [Rust Test](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest).
 
-```ts file=index.ts
+```ts title=index.ts
 export const sayHi = () => 'hi';
 ```
 
-```ts file=index.test.ts
+```ts title=index.test.ts
 import { expect, test } from '@rstest/core';
 import { sayHi } from '../src/index';
 
