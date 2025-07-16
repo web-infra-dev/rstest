@@ -1,11 +1,11 @@
 import { createRuntimeAPI } from '../../src/runtime/runner/runtime';
-import type { TestSuite } from '../../src/types';
+import type { RuntimeConfig, TestSuite } from '../../src/types';
 
 describe('RunnerRuntime', () => {
   it('should add test correctly', async () => {
     const { api: runtime, instance } = createRuntimeAPI({
-      sourcePath: __filename,
-      testTimeout: 100,
+      testPath: __filename,
+      runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
     });
 
     runtime.describe('suite - 0', () => {
@@ -45,8 +45,8 @@ describe('RunnerRuntime', () => {
 
   it('should add test correctly when describe fn undefined', async () => {
     const { api: runtime, instance } = createRuntimeAPI({
-      sourcePath: __filename,
-      testTimeout: 100,
+      testPath: __filename,
+      runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
     });
 
     runtime.describe('suite - 0');

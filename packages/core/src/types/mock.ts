@@ -1,5 +1,6 @@
 import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
 import type { FunctionLike } from './utils';
+import type { RuntimeConfig } from './worker';
 
 interface MockResultReturn<T> {
   type: 'return';
@@ -37,6 +38,19 @@ interface MockSettledResultRejected {
 type MockSettledResult<T> =
   | MockSettledResultFulfilled<T>
   | MockSettledResultRejected;
+
+type RuntimeOptions = Partial<
+  Pick<
+    RuntimeConfig,
+    | 'testTimeout'
+    | 'hookTimeout'
+    | 'clearMocks'
+    | 'resetMocks'
+    | 'restoreMocks'
+    | 'maxConcurrency'
+    | 'retry'
+  >
+>;
 
 export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
@@ -274,6 +288,16 @@ export type RstestUtilities = {
    * Restores all global variables that were changed with `rstest.stubGlobal`.
    */
   unstubAllGlobals: () => RstestUtilities;
+
+  /**
+   * Update runtime config for the current test.
+   */
+  setConfig: (config: RuntimeOptions) => void;
+
+  /**
+   * Reset runtime config that were changed with `rstest.setConfig`.
+   */
+  resetConfig: () => void;
 
   /**
    * Mocks timers using `@sinonjs/fake-timers`.

@@ -38,7 +38,7 @@ export const createRstestRuntime = (
     configurable: true,
   });
 
-  const rstest = createRstestUtilities();
+  const rstest = createRstestUtilities(workerState);
 
   return {
     runner,
