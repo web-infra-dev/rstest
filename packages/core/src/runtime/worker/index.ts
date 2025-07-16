@@ -204,6 +204,10 @@ const loadFiles = async ({
   });
 };
 
+const onExit = () => {
+  process.exit();
+};
+
 const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
@@ -234,6 +238,15 @@ const runInPool = async (
   cleanups.push(() => {
     process.exit = exit;
   });
+
+  process.off('SIGTERM', onExit);
+
+  const teardown = async () => {
+    await Promise.all(cleanups.map((fn) => fn()));
+    isTeardown = true;
+    // should exit correctly when user's signal listener exists
+    process.once('SIGTERM', onExit);
+  };
 
   if (type === 'collect') {
     try {
@@ -269,8 +282,7 @@ const runInPool = async (
         errors: formatTestError(err),
       };
     } finally {
-      await Promise.all(cleanups.map((fn) => fn()));
-      isTeardown = true;
+      await teardown();
     }
   }
 
@@ -329,8 +341,7 @@ const runInPool = async (
       errors: formatTestError(err),
     };
   } finally {
-    await Promise.all(cleanups.map((fn) => fn()));
-    isTeardown = true;
+    await teardown();
   }
 };
 
