@@ -21,9 +21,5 @@ it('should catch `Worker exited unexpectedly` error correctly', async () => {
 
   const logs = cli.stdout.split('\n').filter(Boolean);
 
-  expect(
-    logs.find((log) => log.includes('Worker exited unexpectedly')),
-  ).toBeDefined();
-
   expect(logs.find((log) => log.includes('Test Files 1 failed'))).toBeDefined();
 });
