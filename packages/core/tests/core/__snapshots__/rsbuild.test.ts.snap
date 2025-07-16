@@ -36,6 +36,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "importDynamic": false,
         "requireAsExpression": false,
         "requireDynamic": false,
+        "requireResolve": false,
       },
     },
     "rules": [
@@ -527,6 +528,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "importDynamic": false,
         "requireAsExpression": false,
         "requireDynamic": false,
+        "requireResolve": false,
       },
     },
     "rules": [

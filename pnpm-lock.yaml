@@ -252,9 +252,9 @@ importers:
         specifier: ^5.8.3
         version: 5.8.3
 
-  tests/build/runtimeImport: {}
+  tests/build/fixtures/runtimeRequire: {}
 
-  tests/build/runtimeRequire: {}
+  tests/build/runtimeImport: {}
 
   tests/cli:
     devDependencies:

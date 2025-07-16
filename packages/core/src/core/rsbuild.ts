@@ -214,6 +214,8 @@ export const prepareRsbuild = async (
                 // eg. (modulePath) => require(modulePath)
                 requireDynamic: false,
                 requireAsExpression: false,
+                // Keep require.resolve expressions.
+                requireResolve: false,
                 ...(config.module.parser.javascript || {}),
               };
 
