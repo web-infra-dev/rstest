@@ -21,6 +21,20 @@ export default defineConfig({
 });
 ```
 
+If you want all dependencies to be bundled, you can configure it through the following configuration:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: (config) => {
+      config.externals = [];
+    },
+  },
+});
+```
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 For custom CSS Modules configuration.
