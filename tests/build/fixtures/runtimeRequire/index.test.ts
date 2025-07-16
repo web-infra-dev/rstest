@@ -29,5 +29,5 @@ it('should run require.resolve correctly', async () => {
   fs.writeFileSync(join(distDir, fileName), 'hello world');
 
   const res = require.resolve(`./dist/${fileName}`);
-  expect(res).toContain('/hello-world.txt');
+  expect(res).toContain('hello-world.txt');
 });

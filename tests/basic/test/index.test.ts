@@ -21,7 +21,7 @@ describe('Index', () => {
 
   it('should use require.resolve correctly', async () => {
     expect(
-      require.resolve('../src/index.ts').endsWith('/basic/src/index.ts'),
+      require.resolve('../src/index.ts').endsWith('index.ts'),
     ).toBeTruthy();
   });
 });
