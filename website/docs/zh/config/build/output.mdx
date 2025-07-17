@@ -21,6 +21,20 @@ export default defineConfig({
 });
 ```
 
+如果你希望所有依赖都被打包，可以通过如下配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: (config) => {
+      config.externals = [];
+    },
+  },
+});
+```
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 用于自定义 CSS Modules 的配置。

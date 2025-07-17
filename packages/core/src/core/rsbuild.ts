@@ -75,16 +75,17 @@ const autoExternalNodeModules: (
   });
 };
 
-const autoExternalNodeBuiltin: (
-  data: Rspack.ExternalItemFunctionData,
+function autoExternalNodeBuiltin(
+  { request, dependencyType }: Rspack.ExternalItemFunctionData,
   callback: (
     err?: Error,
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = ({ request, dependencyType }, callback) => {
+): void {
   if (!request) {
-    return callback();
+    callback();
+    return;
   }
 
   const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
@@ -104,7 +105,7 @@ const autoExternalNodeBuiltin: (
   } else {
     callback();
   }
-};
+}
 
 export const prepareRsbuild = async (
   context: RstestContext,
@@ -166,6 +167,10 @@ export const prepareRsbuild = async (
             sourceMap: {
               js: 'source-map',
             },
+            externals:
+              testEnvironment === 'node'
+                ? [autoExternalNodeModules]
+                : undefined,
             distPath: {
               root: TEMP_RSTEST_OUTPUT_DIR,
             },
@@ -196,10 +201,6 @@ export const prepareRsbuild = async (
               config.externals.unshift({
                 '@rstest/core': 'global @rstest/core',
               });
-
-              if (testEnvironment === 'node') {
-                config.externals.push(autoExternalNodeModules);
-              }
 
               config.externalsPresets ??= {};
               config.externalsPresets.node = false;

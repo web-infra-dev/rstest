@@ -314,6 +314,8 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
 
+  tests/externals/fixtures/test-bundle: {}
+
   tests/externals/fixtures/test-interop: {}
 
   tests/externals/fixtures/test-lodash: {}

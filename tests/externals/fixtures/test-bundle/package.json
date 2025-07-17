@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "@rstest/tests-bundle",
+  "main": "index.ts",
+  "version": "1.0.0"
+}
