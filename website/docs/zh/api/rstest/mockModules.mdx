@@ -103,7 +103,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 - **类型：**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-无视一个模块是否被 mock，导入其原始的模块。如果你想部分 mock 模块，可以使用 `rs.importActual` 来获取原始模块的实现与 mock 的实现进行合并进行部分 mock。
+无视一个模块是否被 mock，导入其原始的模块。如果你想 mock 模块的部分实现，可以使用 `rs.importActual` 来获取原始模块的实现与 mock 的实现进行合并进行部分 mock。
 
 ```ts title="src/sum.test.ts"
 rs.mock('./sum', async () => {
