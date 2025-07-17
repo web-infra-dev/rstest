@@ -4,19 +4,19 @@ title: Mock modules
 
 # Mock modules
 
-Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。Rstest 提供了 `rs` (`rstest`) 工具函数来进行模块的 mock 。你可以直接使用以下方法来 mock 模块：
+Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock 。你可以直接使用以下方法来 mock 模块：
 
 ## rs.mock
 
-- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T) => void`
+- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T | Promise<T>) => void`
 
 调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
 
-需要注意的是：`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
+**需要注意的是：**`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
 
 根据提供的第二个参数，`rs.mock` 有两种行为：
 
-1. 如果 `rs.mock` 方法的第二个参数提供了一个工厂函数，则替换为工厂函数的返回值（工厂函数可以是异步函数）作为被 mock 的模块的实现。
+1. 如果 `rs.mock` 方法的第二个参数提供了一个工厂函数，则替换为工厂函数的返回值（工厂函数可以是异步函数，取异步函数 await 后的返回值）作为被 mock 的模块的实现。
 
 <div style={{ display: 'flex', gap: '1rem' }}>
   <div>
@@ -79,7 +79,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.doMock
 
-- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T) => void`
+- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T | Promise<T>) => void`
 
 与 `rs.mock` 类似，`rs.doMock` 也会 mock 模块，但它不会被提升到模块顶部。它会在被执行到时调用，这意味着，如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
@@ -97,7 +97,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
     })
     ```
 
-{/* ## rs.mocked */}
+{/* ## TODO: rs.mocked */}
 
 ## rs.importActual
 
