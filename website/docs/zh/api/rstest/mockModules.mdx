@@ -10,7 +10,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 - **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T) => void`
 
-调用 `rs.mock` 时，Rstest 会将第一个参数传入的请求对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
+调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
 
 需要注意的是：`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
 
