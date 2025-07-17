@@ -208,7 +208,10 @@ export type RstestUtilities = {
   /**
    * Mock a module
    */
-  mock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+  mock: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T | Promise<T>,
+  ) => void;
 
   /**
    * Mock a module
@@ -221,7 +224,10 @@ export type RstestUtilities = {
   /**
    * Mock a module, not hoisted.
    */
-  doMock: <T = unknown>(moduleName: string, moduleFactory?: () => T) => void;
+  doMock: <T = unknown>(
+    moduleName: string,
+    moduleFactory?: () => T | Promise<T>,
+  ) => void;
 
   /**
    * Mock a module, not hoisted.
