@@ -9,6 +9,7 @@ import {
   rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
+import { pluginIstanbul } from 'rsbuild-plugin-istanbul';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
   castArray,
@@ -125,6 +126,7 @@ export const prepareRsbuild = async (
       testEnvironment,
       performance,
       dev = {},
+      coverage,
     },
   } = context;
   const debugMode = isDebug();
@@ -259,6 +261,9 @@ export const prepareRsbuild = async (
               setupFiles,
               isWatch: command === 'watch',
             }),
+            ...(coverage?.enabled && coverage?.provider === 'istanbul'
+              ? [pluginIstanbul()]
+              : []),
           ],
         },
       },

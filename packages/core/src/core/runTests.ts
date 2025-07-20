@@ -1,8 +1,11 @@
+import istanbulLibCoverage from 'istanbul-lib-coverage';
+import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
+const { createCoverageMap } = istanbulLibCoverage;
 export async function runTests(
   context: RstestContext,
   fileFilters: string[],
@@ -75,6 +78,11 @@ export async function runTests(
     } = await getRsbuildStats();
     const testStart = Date.now();
 
+    // Initialize coverage collector
+    const coverageProvider = createCoverageProvider(
+      context.normalizedConfig.coverage || {},
+    );
+
     const pool = await createPool({
       entries,
       sourceMaps,
@@ -92,6 +100,33 @@ export async function runTests(
       buildTime,
       testTime,
     };
+
+    // Generate coverage reports after all tests complete
+    if (coverageProvider) {
+      try {
+        // Collect coverage data from all test results
+
+        const finalCoverageMap = createCoverageMap();
+
+        // Merge coverage data from all test files
+        for (const result of results) {
+          if ((result as any).coverage) {
+            finalCoverageMap.merge((result as any).coverage);
+          }
+        }
+
+        // Generate coverage reports
+        await coverageProvider.generateReports(
+          finalCoverageMap,
+          context.normalizedConfig.coverage!,
+        );
+
+        // Cleanup
+        coverageProvider.cleanup();
+      } catch (error) {
+        logger.error('Failed to generate coverage reports:', error);
+      }
+    }
 
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
