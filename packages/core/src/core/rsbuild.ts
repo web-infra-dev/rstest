@@ -227,7 +227,7 @@ export const prepareRsbuild = async (
               if (coverage.enabled && coverage.provider === 'istanbul') {
                 config.module.rules ??= [];
                 config.module.rules.push({
-                  test: /\.ts$/,
+                  test: /\.(js|ts)$/,
                   use: [
                     {
                       loader: require.resolve('babel-loader'),
