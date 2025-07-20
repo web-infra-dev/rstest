@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   createRsbuild,
   type ManifestData,
@@ -9,7 +10,6 @@ import {
   rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import { pluginIstanbul } from 'rsbuild-plugin-istanbul';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
   castArray,
@@ -22,6 +22,8 @@ import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+const require = createRequire(import.meta.url);
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -222,6 +224,25 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
+              if (coverage.enabled && coverage.provider === 'istanbul') {
+                config.module.rules ??= [];
+                config.module.rules.push({
+                  test: /\.ts$/,
+                  use: [
+                    {
+                      loader: require.resolve('babel-loader'),
+                      options: {
+                        presets: [
+                          require.resolve('@babel/preset-env'),
+                          require.resolve('@babel/preset-typescript'),
+                        ],
+                        plugins: [require.resolve('babel-plugin-istanbul')],
+                      },
+                    },
+                  ],
+                });
+              }
+
               config.resolve ??= {};
               config.resolve.extensions ??= [];
               config.resolve.extensions.push('.cjs');
@@ -261,15 +282,11 @@ export const prepareRsbuild = async (
               setupFiles,
               isWatch: command === 'watch',
             }),
-            ...(coverage?.enabled && coverage?.provider === 'istanbul'
-              ? [pluginIstanbul()]
-              : []),
           ],
         },
       },
     },
   });
-
   if (!isolate) {
     rsbuildInstance.addPlugins([pluginCacheControl(Object.values(setupFiles))]);
   }

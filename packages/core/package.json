@@ -54,10 +54,14 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
+    "@babel/preset-env": "^7.28.0",
+    "@babel/preset-typescript": "^7.27.1",
     "@rsbuild/core": "1.4.7",
     "@types/chai": "^5.2.2",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
+    "babel-loader": "^10.0.0",
+    "babel-plugin-istanbul": "^7.0.0",
     "birpc": "2.4.0",
     "chai": "^5.2.1",
     "istanbul-lib-coverage": "^3.2.2",
@@ -66,7 +70,6 @@
     "istanbul-lib-source-maps": "^5.0.6",
     "istanbul-reports": "^3.1.7",
     "pathe": "^2.0.3",
-    "rsbuild-plugin-istanbul": "0.0.1-alpha.1",
     "std-env": "^3.9.0",
     "tinypool": "^1.1.1"
   },
