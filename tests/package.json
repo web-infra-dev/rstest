@@ -7,8 +7,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.4.7",
-    "@rslib/core": "0.10.5",
+    "@rsbuild/core": "1.4.8",
+    "@rslib/core": "0.10.6",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
