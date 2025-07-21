@@ -38,7 +38,7 @@ if (import.meta.rstest) {
 
 ### 生产环境构建
 
-将测试代码写在 `if (import.meta.rstest)` 代码块内，并在你的构建配置（如 `rsbuild.config.ts`）中将 `import.meta.rstest` 定义为 `undefined`，这样将有助于打包工具消除无用代码。
+将测试代码写在 `if (import.meta.rstest)` 代码块内，并在你的构建配置（如 `rsbuild.config.ts`）中将 `import.meta.rstest` 定义为 `false`，这样将有助于打包工具消除无用代码。
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';

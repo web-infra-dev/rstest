@@ -40,3 +40,28 @@ You can also abbreviate the `--config` option to `-c`:
 ```bash
 rstest -c scripts/rstest.config.mjs
 ```
+
+## Detect Rstest Environment
+
+You can use `process.env.RSTEST` to detect whether it is an Rstest test environment to apply different configurations/codes in your tests.
+
+```ts
+if (process.env.RSTEST) {
+  // 'true' will be returned in the rstest environment
+  // do something...
+}
+```
+
+It should be noted that if you use `process.env.RSTEST` in your source code, define `process.env.RSTEST` as `false` in your build configuration (such as `rsbuild.config.ts`) as `false` during production builds, this will help the bundler eliminate dead code.
+
+```diff title=rsbuild.config.ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  source: {
+    define: {
++      'process.env.RSTEST': false,
+    },
+  },
+});
+```
