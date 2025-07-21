@@ -3,7 +3,12 @@ import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
-import type { ListCommandOptions, RstestConfig } from '../types';
+import type {
+  ListCommandOptions,
+  RstestCommand,
+  RstestConfig,
+  RstestInstance,
+} from '../types';
 import { castArray, formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { showRstest } from './prepare';
@@ -167,50 +172,46 @@ export function setupCommands(): void {
     .command('[...filters]', 'run tests')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      try {
-        const { config } = await initCli(options);
-        const { createRstest } = await import('../core');
-        if (isCI) {
-          const rstest = createRstest(config, 'run', filters.map(normalize));
-          await rstest.runTests();
-        } else {
-          const rstest = createRstest(config, 'watch', filters.map(normalize));
-          await rstest.runTests();
-        }
-      } catch (err) {
-        logger.error('Failed to run Rstest.');
-        logger.error(err);
-        process.exit(1);
+      if (isCI) {
+        await runRest(options, filters, 'run');
+      } else {
+        await runRest(options, filters, 'watch');
       }
     });
+
+  const runRest = async (
+    options: CommonOptions,
+    filters: string[],
+    command: RstestCommand,
+  ) => {
+    let rstest: RstestInstance | undefined;
+    try {
+      const { config } = await initCli(options);
+      const { createRstest } = await import('../core');
+      rstest = createRstest(config, command, filters.map(normalize));
+      await rstest.runTests();
+    } catch (err) {
+      for (const reporter of rstest?.context.reporters || []) {
+        reporter.onExit?.();
+      }
+      logger.error('Failed to run Rstest.');
+      logger.error(formatError(err));
+      process.exit(1);
+    }
+  };
 
   cli
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      const { config } = await initCli(options);
-      const { createRstest } = await import('../core');
-      const rstest = createRstest(config, 'run', filters.map(normalize));
-      try {
-        await rstest.runTests();
-      } catch (err) {
-        for (const reporter of rstest.context.reporters) {
-          reporter.onExit?.();
-        }
-        logger.error('Failed to run Rstest.');
-        logger.error(formatError(err));
-        process.exit(1);
-      }
+      await runRest(options, filters, 'run');
     });
 
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      const { config } = await initCli(options);
-      const { createRstest } = await import('../core');
-      const rstest = createRstest(config, 'watch', filters.map(normalize));
-      await rstest.runTests();
+      await runRest(options, filters, 'watch');
     });
 
   cli
