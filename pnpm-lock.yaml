@@ -431,8 +431,8 @@ importers:
         specifier: 2.0.0-beta.21
         version: 2.0.0-beta.21(rspress@2.0.0-beta.21(@types/react@19.1.8)(acorn@8.14.1)(webpack@5.99.9))
       '@rstack-dev/doc-ui':
-        specifier: 1.10.7
-        version: 1.10.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: 1.10.8
+        version: 1.10.8(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
@@ -1289,8 +1289,8 @@ packages:
     resolution: {integrity: sha512-G+yJiAZW0oiAB7FyMFWrEI5B/Lg3z2IdxegbGo3a9q2tYo24bd35YuuXOQOIPuE/0+hWxCtB1vxDYH6WyZwMIQ==}
     engines: {node: '>=18.0.0'}
 
-  '@rstack-dev/doc-ui@1.10.7':
-    resolution: {integrity: sha512-WanOXuqt5AFUd+B04g65Dv7om+tmGcKnyZowYwRCOGMGX0i7PDxiqiHbQgw2taz2eNai3PIQyZAVNoqf20zeRA==}
+  '@rstack-dev/doc-ui@1.10.8':
+    resolution: {integrity: sha512-F/v0XzRI1ZIAzBBLx91um4TLMIUWw3LiQsPXtZe8ZAF6wQUVk47YPK/kB1VPkLLaD214JrwWq+L6P7UnD8MT7A==}
 
   '@rushstack/node-core-library@5.13.1':
     resolution: {integrity: sha512-5yXhzPFGEkVc9Fu92wsNJ9jlvdwz4RNb2bMso+/+TH0nMm1jDDDsOIf4l8GAkPxGuwPw5DH24RliWVfSPhlW/Q==}
@@ -5558,7 +5558,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@rstack-dev/doc-ui@1.10.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+  '@rstack-dev/doc-ui@1.10.8(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       framer-motion: 12.23.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
     transitivePeerDependencies:
