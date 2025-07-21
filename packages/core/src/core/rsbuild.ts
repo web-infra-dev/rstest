@@ -224,7 +224,7 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
-              if (coverage.enabled && coverage.provider === 'istanbul') {
+              if (coverage?.enabled && coverage?.provider === 'istanbul') {
                 config.module.rules ??= [];
                 config.module.rules.push({
                   test: /\.(js|ts)$/,
