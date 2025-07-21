@@ -228,18 +228,24 @@ export const prepareRsbuild = async (
                 config.module.rules ??= [];
                 config.module.rules.push({
                   test: /\.(js|ts)$/,
-                  use: [
-                    {
-                      loader: require.resolve('babel-loader'),
-                      options: {
-                        presets: [
-                          require.resolve('@babel/preset-env'),
-                          require.resolve('@babel/preset-typescript'),
+                  exclude: [/node_modules/],
+                  loader: 'builtin:swc-loader',
+                  options: {
+                    jsc: {
+                      parser: {
+                        syntax: 'typescript',
+                      },
+                      experimental: {
+                        plugins: [
+                          [
+                            require.resolve('swc-plugin-coverage-instrument'),
+                            {},
+                          ],
                         ],
-                        plugins: [require.resolve('babel-plugin-istanbul')],
                       },
                     },
-                  ],
+                  },
+                  type: 'javascript/auto',
                 });
               }
 
