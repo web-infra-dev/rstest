@@ -52,7 +52,7 @@ if (process.env.RSTEST) {
 }
 ```
 
-It should be noted that if you use `process.env.RSTEST` in your source code, define `process.env.RSTEST` as `false` in your build configuration (such as `rsbuild.config.ts`) as `false` during production builds, this will help the bundler eliminate dead code.
+It should be noted that if you use `process.env.RSTEST` in your source code, define `process.env.RSTEST` as `false` in your build configuration (such as `rsbuild.config.ts`) during production builds, this will help the bundler eliminate dead code.
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';
