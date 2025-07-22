@@ -1,9 +1,9 @@
 import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
+import { defineConfig } from '@rspress/core';
 import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
-import { defineConfig } from 'rspress/config';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
 import pluginSitemap from 'rspress-plugin-sitemap';
 
