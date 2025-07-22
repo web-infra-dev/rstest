@@ -38,7 +38,7 @@ if (import.meta.rstest) {
 
 ### For production
 
-Put the test code inside the `if (import.meta.rstest)` block, and define `import.meta.rstest` as `undefined` in your build configuration (e.g., `rsbuild.config.ts`), which will help the bundler eliminate dead code.
+Put the test code inside the `if (import.meta.rstest)` block, and define `import.meta.rstest` as `false` in your build configuration (e.g., `rsbuild.config.ts`), which will help the bundler eliminate dead code.
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';
