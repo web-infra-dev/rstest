@@ -40,3 +40,22 @@ You can also abbreviate the `--config` option to `-c`:
 ```bash
 rstest -c scripts/rstest.config.mjs
 ```
+
+## Detect Rstest environment
+
+If you are developing the Rsbuild plugin, you can use [api.context.callerName](https://rsbuild.rs/api/javascript-api/instance#contextcallername) to determine the current plugin is being called.
+
+```ts
+export const myPlugin = {
+  name: 'my-plugin',
+  setup(api) {
+    const { callerName } = api.context;
+
+    if (callerName === 'rstest') {
+      // ...
+    } else if (callerName === 'rsbuild') {
+      // ...
+    }
+  },
+};
+```

@@ -137,6 +137,7 @@ export const prepareRsbuild = async (
   const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
+    callerName: 'rstest',
     rsbuildConfig: {
       tools,
       plugins,
