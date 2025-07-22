@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import {
   createRsbuild,
   type ManifestData,
@@ -22,8 +21,6 @@ import { pluginEntryWatch } from './plugins/entry';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
-
-const require = createRequire(import.meta.url);
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -226,6 +223,7 @@ export const prepareRsbuild = async (
               };
 
               if (coverage?.enabled && coverage?.provider === 'istanbul') {
+                const swcPluginCoverageInstrument = `${process.cwd()}/node_modules/@rstest/coverage-istanbul/node_modules/swc-plugin-coverage-instrument/target/wasm32-wasip1/release/swc_plugin_coverage.wasm`;
                 config.module.rules ??= [];
                 config.module.rules.push({
                   test: /\.(js|ts)$/,
@@ -237,12 +235,7 @@ export const prepareRsbuild = async (
                         syntax: 'typescript',
                       },
                       experimental: {
-                        plugins: [
-                          [
-                            require.resolve('swc-plugin-coverage-instrument'),
-                            {},
-                          ],
-                        ],
+                        plugins: [[swcPluginCoverageInstrument, {}]],
                       },
                     },
                   },
