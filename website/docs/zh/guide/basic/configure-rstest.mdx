@@ -65,3 +65,20 @@ export default defineConfig({
   },
 });
 ```
+
+如果你正在开发 Rsbuild 插件，你可以使用 [api.context.callerName](https://rsbuild.rs/zh/api/javascript-api/instance#contextcallername) 来判断当前插件被调用的环境。
+
+```ts
+export const myPlugin = {
+  name: 'my-plugin',
+  setup(api) {
+    const { callerName } = api.context;
+
+    if (callerName === 'rstest') {
+      // ...
+    } else if (callerName === 'rsbuild') {
+      // ...
+    }
+  },
+};
+```
