@@ -36,6 +36,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "importDynamic": false,
         "requireAsExpression": false,
         "requireDynamic": false,
+        "requireResolve": false,
       },
     },
     "rules": [
@@ -463,6 +464,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "alias": {
       "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
     },
+    "byDependency": {
+      "commonjs": {
+        "mainFields": [
+          "main",
+          "...",
+        ],
+      },
+    },
     "extensions": [
       ".ts",
       ".tsx",
@@ -519,6 +528,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "importDynamic": false,
         "requireAsExpression": false,
         "requireDynamic": false,
+        "requireResolve": false,
       },
     },
     "rules": [
@@ -934,6 +944,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "alias": {
       "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
     },
+    "byDependency": {
+      "commonjs": {
+        "mainFields": [
+          "main",
+          "...",
+        ],
+      },
+    },
     "extensions": [
       ".ts",
       ".tsx",
@@ -942,6 +960,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       ".jsx",
       ".json",
       ".cjs",
+    ],
+    "mainFields": [
+      "main",
     ],
   },
   "target": "node",

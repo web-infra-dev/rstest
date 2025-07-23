@@ -55,4 +55,24 @@ describe.concurrent('test exit code', () => {
       logs.find((log) => log.includes('Invalid pool configuration')),
     ).toBeDefined();
   });
+
+  it('should get RSTEST flag correctly in config', async () => {
+    const { expectExecSuccess, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'success.test.ts', '-c', 'fixtures/flag.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(
+      logs.find((log) => log.includes('load config success')),
+    ).toBeDefined();
+  });
 });

@@ -1,5 +1,5 @@
+import { useLang } from '@rspress/core/runtime';
 import { Badge, Link } from '@theme';
-import { useLang } from 'rspress/runtime';
 
 type Props = {
   /** Rsbuild doc URL pathname, i18n prefix stripped. */

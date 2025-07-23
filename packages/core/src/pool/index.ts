@@ -81,15 +81,21 @@ export const createPool = async ({
       ? Math.max(Math.floor(numCpus / 2), 1)
       : Math.max(numCpus - 1, 1);
 
+  // Avoid creating unused workers when the number of tests is less than the default thread count.
+  const recommendCount =
+    context.command === 'watch'
+      ? threadsCount
+      : Math.min(Object.keys(entries).length, threadsCount);
+
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers)
-    : threadsCount;
+    : recommendCount;
 
   const minWorkers = poolOptions.minWorkers
     ? parseWorkers(poolOptions.minWorkers)
-    : maxWorkers < threadsCount
+    : maxWorkers < recommendCount
       ? maxWorkers
-      : threadsCount;
+      : recommendCount;
 
   if (maxWorkers < minWorkers) {
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
@@ -210,21 +216,32 @@ export const createPool = async ({
         entries.map((entryInfo) => {
           const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
 
-          return pool.runTest({
-            options: {
-              entryInfo,
-              assetFiles,
-              context: {
-                rootPath: context.rootPath,
-                runtimeConfig: serializableConfig(runtimeConfig),
+          return pool
+            .runTest({
+              options: {
+                entryInfo,
+                assetFiles,
+                context: {
+                  rootPath: context.rootPath,
+                  runtimeConfig: serializableConfig(runtimeConfig),
+                },
+                type: 'run',
+                sourceMaps,
+                setupEntries,
+                updateSnapshot,
               },
-              type: 'run',
-              sourceMaps,
-              setupEntries,
-              updateSnapshot,
-            },
-            rpcMethods,
-          });
+              rpcMethods,
+            })
+            .catch((err) => {
+              err.fullStack = true;
+              return {
+                testPath: entryInfo.testPath,
+                status: 'fail',
+                name: '',
+                results: [],
+                errors: [err],
+              } as TestFileResult;
+            });
         }),
       );
 
@@ -243,21 +260,30 @@ export const createPool = async ({
         entries.map((entryInfo) => {
           const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
 
-          return pool.collectTests({
-            options: {
-              entryInfo,
-              assetFiles,
-              context: {
-                rootPath: context.rootPath,
-                runtimeConfig: serializableConfig(runtimeConfig),
+          return pool
+            .collectTests({
+              options: {
+                entryInfo,
+                assetFiles,
+                context: {
+                  rootPath: context.rootPath,
+                  runtimeConfig: serializableConfig(runtimeConfig),
+                },
+                type: 'collect',
+                sourceMaps,
+                setupEntries,
+                updateSnapshot,
               },
-              type: 'collect',
-              sourceMaps,
-              setupEntries,
-              updateSnapshot,
-            },
-            rpcMethods,
-          });
+              rpcMethods,
+            })
+            .catch((err) => {
+              err.fullStack = true;
+              return {
+                testPath: entryInfo.testPath,
+                tests: [],
+                errors: [err],
+              };
+            });
         }),
       );
     },

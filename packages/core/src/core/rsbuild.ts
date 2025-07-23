@@ -12,7 +12,6 @@ import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import {
   castArray,
-  getNodeVersion,
   isDebug,
   NODE_BUILTINS,
   TEMP_RSTEST_OUTPUT_DIR,
@@ -76,16 +75,17 @@ const autoExternalNodeModules: (
   });
 };
 
-const autoExternalNodeBuiltin: (
-  data: Rspack.ExternalItemFunctionData,
+function autoExternalNodeBuiltin(
+  { request, dependencyType }: Rspack.ExternalItemFunctionData,
   callback: (
     err?: Error,
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = ({ request, dependencyType }, callback) => {
+): void {
   if (!request) {
-    return callback();
+    callback();
+    return;
   }
 
   const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
@@ -105,7 +105,7 @@ const autoExternalNodeBuiltin: (
   } else {
     callback();
   }
-};
+}
 
 export const prepareRsbuild = async (
   context: RstestContext,
@@ -133,6 +133,7 @@ export const prepareRsbuild = async (
   const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
+    callerName: 'rstest',
     rsbuildConfig: {
       tools,
       plugins,
@@ -167,6 +168,10 @@ export const prepareRsbuild = async (
             sourceMap: {
               js: 'source-map',
             },
+            externals:
+              testEnvironment === 'node'
+                ? [autoExternalNodeModules]
+                : undefined,
             distPath: {
               root: TEMP_RSTEST_OUTPUT_DIR,
             },
@@ -198,10 +203,6 @@ export const prepareRsbuild = async (
                 '@rstest/core': 'global @rstest/core',
               });
 
-              if (testEnvironment === 'node') {
-                config.externals.push(autoExternalNodeModules);
-              }
-
               config.externalsPresets ??= {};
               config.externalsPresets.node = false;
               config.externals.push(autoExternalNodeBuiltin);
@@ -215,6 +216,8 @@ export const prepareRsbuild = async (
                 // eg. (modulePath) => require(modulePath)
                 requireDynamic: false,
                 requireAsExpression: false,
+                // Keep require.resolve expressions.
+                requireResolve: false,
                 ...(config.module.parser.javascript || {}),
               };
 
@@ -222,13 +225,19 @@ export const prepareRsbuild = async (
               config.resolve.extensions ??= [];
               config.resolve.extensions.push('.cjs');
 
-              if (testEnvironment === 'node' && getNodeVersion().major < 20) {
-                // skip `module` field in Node.js 18 and below.
+              if (testEnvironment === 'node') {
+                // skip `module` field in Node.js environment.
                 // ESM module resolved by module field is not always a native ESM module
                 config.resolve.mainFields = config.resolve.mainFields?.filter(
                   (filed) => filed !== 'module',
                 ) || ['main'];
               }
+
+              config.resolve.byDependency ??= {};
+              config.resolve.byDependency.commonjs ??= {};
+              // skip `module` field when commonjs require
+              // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
+              config.resolve.byDependency.commonjs.mainFields = ['main', '...'];
 
               config.optimization = {
                 moduleIds: 'named',

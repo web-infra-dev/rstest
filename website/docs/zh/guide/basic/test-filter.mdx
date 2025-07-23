@@ -1,0 +1,126 @@
+# 过滤测试
+
+Rstest 提供了多种灵活的方式来过滤和选择要运行的测试文件和测试用例。你可以通过配置文件、命令行参数、测试 API 等方式精准控制测试范围。
+
+## 根据文件名过滤
+
+运行所有测试：
+
+```bash
+rstest
+```
+
+只运行某个测试文件：
+
+```bash
+rstest test/foo.test.ts
+```
+
+用通配符匹配：
+
+```bash
+rstest test/**/*.test.ts
+```
+
+运行名称中包含 `foo` 的测试文件，如 `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts` 等:
+
+```bash
+rstest foo
+```
+
+你也可以指定多组测试文件或通配符：
+
+```bash
+rstest test/foo.test.ts test/bar.test.ts
+```
+
+### include/exclude
+
+当你直接通过 `rstest **/*.test.ts` 过滤文件时，Rstest 会在 [include](/config/test/include) 和 [exclude](/config/test/exclude) 配置的基础上进一步筛选文件。
+你可以通过 `include` 和 `exclude` 选项修改测试文件的范围。
+
+如，匹配 `test/a` 目录下的名为 `index` 的测试文件：
+
+```bash
+rstest index --include test/a/*.test.ts
+```
+
+匹配 `test/a` 和 `test/b` 目录下的测试文件：
+
+```bash
+rstest --include test/a/*.test.ts --include test/b/*.test.ts
+```
+
+## 根据测试名称过滤
+
+如果你只想运行名称中包含特定关键字的测试用例，可以使用 [testNamePattern](/config/test/testNamePattern)。
+
+如，只运行名称包含 "login" 的测试用例：
+
+```bash
+rstest --testNamePattern login
+# 或
+rstest -t login
+```
+
+## 组合过滤
+
+所有过滤方式都可以组合使用。例如：
+
+```bash
+rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login
+```
+
+此时，rstest 会只运行 `test` 目录下所有 `.test.ts` 文件中名称包含 login 的测试用例，同时排除 `test/legacy` 目录。
+
+## 常见用法
+
+- **只运行某个文件**：`rstest test/foo.test.ts`
+
+- **只运行某个目录下的测试**：`rstest test/api/*.test.ts`
+
+- **排除某些测试**：`rstest --exclude test/legacy/**`
+
+- **只运行名称包含 login 的测试**：`rstest -t login`
+
+- **组合过滤**：`rstest test/**/*.test.ts --exclude test/legacy/** --testNamePattern login`
+
+## 通过测试 API 过滤
+
+使用 `.only` 标记将仅运行某些测试套件或用例。
+
+如，此时将仅运行 `suite A` 内的测试用例及 `case A`：
+
+```ts
+describe.only('suite A', () => {
+  // ...
+});
+
+describe('suite B', () => {
+  // ...
+});
+
+test.only('case A', () => {
+  // ...
+});
+
+test('case B', () => {
+  // ...
+});
+```
+
+:::note
+需要注意的是，`.only` 标记仅对当前测试文件生效。如果你希望仅执行某个特定文件内的特定用例，可使用 `根据文件名过滤` + `通过测试 API 过滤` 的组合方式。
+:::
+
+使用 `.skip` 或 `.todo` 标记将跳过某些测试套件或用例。
+
+```ts
+describe.skip('suite A', () => {
+  // ...
+});
+
+test.todo('case A', () => {
+  // ...
+});
+```

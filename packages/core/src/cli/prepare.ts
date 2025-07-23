@@ -8,6 +8,7 @@ function initNodeEnv() {
 
 export function prepareCli(): void {
   initNodeEnv();
+  process.env.RSTEST = 'true';
 
   // Print a blank line to keep the greet log nice.
   // Some package managers automatically output a blank line, some do not.

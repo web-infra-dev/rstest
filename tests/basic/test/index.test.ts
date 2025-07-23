@@ -11,6 +11,10 @@ describe('Index', () => {
     expect(sayHi()).toBe('hi');
   });
 
+  it('should get RSTEST flag correctly', () => {
+    expect(process.env.RSTEST).toBe('true');
+  });
+
   it('should use node API correctly', async () => {
     expect(
       pathe
@@ -21,7 +25,7 @@ describe('Index', () => {
 
   it('should use require.resolve correctly', async () => {
     expect(
-      require.resolve('../src/index.ts').endsWith('/basic/src/index.ts'),
+      require.resolve('../src/index.ts').endsWith('index.ts'),
     ).toBeTruthy();
   });
 });

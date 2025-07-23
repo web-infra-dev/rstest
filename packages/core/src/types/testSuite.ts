@@ -96,6 +96,7 @@ export type Test = TestSuite | TestCase;
 export type TestResultStatus = 'skip' | 'pass' | 'fail' | 'todo';
 
 export type FormattedError = {
+  fullStack?: boolean;
   message: string;
   name?: string;
   stack?: string;

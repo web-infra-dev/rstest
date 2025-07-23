@@ -1,8 +1,10 @@
-import type { RstestUtilities } from '../../types';
+import type { RstestUtilities, RuntimeConfig, WorkerState } from '../../types';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
 import { fn, isMockFunction, mocks, spyOn } from './spy';
 
-export const createRstestUtilities: () => RstestUtilities = () => {
+export const createRstestUtilities: (
+  workerState: WorkerState,
+) => RstestUtilities = (workerState) => {
   const originalEnvValues = new Map<string, string | undefined>();
   const originalGlobalValues = new Map<
     string | symbol | number,
@@ -10,6 +12,8 @@ export const createRstestUtilities: () => RstestUtilities = () => {
   >();
 
   let _timers: FakeTimers;
+
+  let originalConfig: undefined | RuntimeConfig;
 
   const timers = () => {
     if (!_timers) {
@@ -79,6 +83,19 @@ export const createRstestUtilities: () => RstestUtilities = () => {
     resetModules: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
       return rstest;
+    },
+
+    setConfig: (config) => {
+      if (!originalConfig) {
+        originalConfig = { ...workerState.runtimeConfig };
+      }
+      Object.assign(workerState.runtimeConfig, config);
+    },
+
+    resetConfig: () => {
+      if (originalConfig) {
+        Object.assign(workerState.runtimeConfig, originalConfig);
+      }
     },
 
     stubEnv: (name: string, value: string | undefined): RstestUtilities => {

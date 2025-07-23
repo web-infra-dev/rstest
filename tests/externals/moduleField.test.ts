@@ -15,10 +15,24 @@ describe('test module field', () => {
     );
   });
 
-  it('should load module correctly with module field', async () => {
+  it('should load pkg correctly with module field', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', './fixtures/moduleField'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('should load pkg correctly with module field in dom environment', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', './fixtures/moduleField', '--testEnvironment=jsdom'],
       options: {
         nodeOptions: {
           cwd: __dirname,

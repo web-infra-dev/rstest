@@ -28,8 +28,7 @@ const resolveConfigPath = (root: string, customConfig?: string) => {
     if (fs.existsSync(customConfigPath)) {
       return customConfigPath;
     }
-    logger.warn(`Cannot find config file: ${color.dim(customConfigPath)}`);
-    logger.log('');
+    throw `Cannot find config file: ${color.dim(customConfigPath)}`;
   }
 
   const configFilePath = findConfig(join(root, DEFAULT_CONFIG_NAME));
@@ -58,7 +57,7 @@ export async function loadConfig({
   const configFilePath = resolveConfigPath(cwd, path);
 
   if (!configFilePath) {
-    logger.debug('no config file found');
+    logger.debug('no rstest config file found');
     return {
       content: {},
       filePath: configFilePath,
