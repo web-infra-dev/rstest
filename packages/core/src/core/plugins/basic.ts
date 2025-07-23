@@ -1,6 +1,6 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import path from 'pathe';
-import type { RstestContext } from '../..//types';
+import type { RstestContext } from '../../types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
 export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (

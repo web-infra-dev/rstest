@@ -1,5 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { NormalizedConfig } from '../..//types';
+import type { NormalizedConfig } from '../../types';
 import { castArray, NODE_BUILTINS } from '../../utils';
 
 const autoExternalNodeModules: (
@@ -90,9 +90,8 @@ export const pluginExternal: (
             testEnvironment === 'node' ? [autoExternalNodeModules] : undefined,
         },
         tools: {
-          // Make sure that externals configuration is not modified by users
           rspack: (config) => {
-            // Avoid externals configuration being modified by users
+            // Make sure that externals configuration is not modified by users
             config.externals = castArray(config.externals) || [];
 
             config.externals.unshift({
