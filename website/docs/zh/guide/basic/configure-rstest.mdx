@@ -43,6 +43,29 @@ rstest -c scripts/rstest.config.mjs
 
 ## 检测 Rstest 环境
 
+你可以使用 `process.env.RSTEST` 来检测是否是 Rstest 测试环境以应用不同的配置 / 代码在你的测试中。
+
+```ts
+if (process.env.RSTEST) {
+  // 在 rstest 环境下将会返回 'true'
+  // do something...
+}
+```
+
+需要注意的是，如果你使用 `process.env.RSTEST` 在你的源码中，在生产环境构建时，在你的构建配置（如 `rsbuild.config.ts`）中将 `process.env.RSTEST` 定义为 `false`，这样将有助于打包工具消除无用代码。
+
+```diff title=rsbuild.config.ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  source: {
+    define: {
++      'process.env.RSTEST': false,
+    },
+  },
+});
+```
+
 如果你正在开发 Rsbuild 插件，你可以使用 [api.context.callerName](https://rsbuild.rs/zh/api/javascript-api/instance#contextcallername) 来判断当前插件被调用的环境。
 
 ```ts

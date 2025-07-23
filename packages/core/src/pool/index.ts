@@ -81,15 +81,21 @@ export const createPool = async ({
       ? Math.max(Math.floor(numCpus / 2), 1)
       : Math.max(numCpus - 1, 1);
 
+  // Avoid creating unused workers when the number of tests is less than the default thread count.
+  const recommendCount =
+    context.command === 'watch'
+      ? threadsCount
+      : Math.min(Object.keys(entries).length, threadsCount);
+
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers)
-    : threadsCount;
+    : recommendCount;
 
   const minWorkers = poolOptions.minWorkers
     ? parseWorkers(poolOptions.minWorkers)
-    : maxWorkers < threadsCount
+    : maxWorkers < recommendCount
       ? maxWorkers
-      : threadsCount;
+      : recommendCount;
 
   if (maxWorkers < minWorkers) {
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;

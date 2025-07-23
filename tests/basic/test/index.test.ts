@@ -11,6 +11,10 @@ describe('Index', () => {
     expect(sayHi()).toBe('hi');
   });
 
+  it('should get RSTEST flag correctly', () => {
+    expect(process.env.RSTEST).toBe('true');
+  });
+
   it('should use node API correctly', async () => {
     expect(
       pathe

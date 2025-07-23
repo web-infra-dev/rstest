@@ -109,6 +109,10 @@ test('case B', () => {
 });
 ```
 
+:::note
+It should be noted that the `.only` flag only applies to the current test file. If you want to execute specific test cases within a specific file, you can use a combination of "filter by file name" and "filter via test API".
+:::
+
 Use `.skip` or `.todo` to skip certain test suites or cases.
 
 ```ts
