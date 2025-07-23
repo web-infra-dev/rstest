@@ -10,7 +10,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
   setup: (api) => {
     api.modifyRsbuildConfig(async (config) => {
       config.environments = {
-        [context.normalizedConfig.name]: {},
+        [context.normalizedConfig.name]: {
+          output: {
+            target: 'node',
+          },
+        },
       };
     });
     api.modifyEnvironmentConfig(async (config, { mergeEnvironmentConfig }) => {
@@ -29,7 +33,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           distPath: {
             root: TEMP_RSTEST_OUTPUT_DIR,
           },
-          target: 'node',
         },
         tools: {
           rspack: (config, { isProd, rspack }) => {
