@@ -1,8 +1,13 @@
 import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
-import { withDefaultConfig } from '../config';
+import { mergeRstestConfig, withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
-import type { RstestCommand, RstestConfig, RstestContext } from '../types';
+import type {
+  Project,
+  RstestCommand,
+  RstestConfig,
+  RstestContext,
+} from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
 const reportersMap = {
@@ -45,6 +50,7 @@ function createReporters(
 export function createContext(
   options: { cwd: string; command: RstestCommand },
   userConfig: RstestConfig,
+  projects: Project[],
 ): RstestContext {
   const { cwd, command } = options;
   const rootPath = userConfig.root
@@ -71,5 +77,8 @@ export function createContext(
     snapshotManager,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,
+    projects: projects.map((project) =>
+      mergeRstestConfig(rstestConfig, project.config),
+    ),
   };
 }

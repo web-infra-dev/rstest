@@ -18,6 +18,8 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+type TestProject = string;
+
 export interface RstestConfig {
   /**
    * Project root
@@ -25,6 +27,10 @@ export interface RstestConfig {
    * @default process.cwd()
    */
   root?: string;
+  /**
+   * Run tests from one or more projects.
+   */
+  projects?: TestProject[];
   /**
    * Project name
    *
@@ -225,7 +231,7 @@ type OptionalKeys =
   | 'onConsoleLog';
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool'>
+  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects'>
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {

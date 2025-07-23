@@ -3,7 +3,7 @@ import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
 import { isCI } from 'std-env';
 import { loadConfig } from '../config';
-import type { ListCommandOptions, RstestConfig } from '../types';
+import type { ListCommandOptions, Project, RstestConfig } from '../types';
 import { castArray, formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { showRstest } from './prepare';
@@ -98,15 +98,14 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function initCli(options: CommonOptions): Promise<{
+export async function resolveConfig(
+  options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
+): Promise<{
   config: RstestConfig;
   configFilePath: string | null;
 }> {
-  const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
-
   const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: root,
+    cwd: options.root,
     path: options.config,
     configLoader: options.configLoader,
   });
@@ -148,6 +147,42 @@ export async function initCli(options: CommonOptions): Promise<{
   };
 }
 
+export async function initCli(options: CommonOptions): Promise<{
+  config: RstestConfig;
+  configFilePath: string | null;
+  projects: Project[];
+}> {
+  const cwd = process.cwd();
+  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
+  const projects: Project[] = [];
+
+  const { config, configFilePath } = await resolveConfig({
+    ...options,
+    root,
+  });
+
+  if (config.projects && config.projects.length > 0) {
+    for (const project of config.projects) {
+      const absolutePath = getAbsolutePath(root, project);
+      // TODO: name
+      const { config, configFilePath } = await resolveConfig({
+        ...options,
+        root: absolutePath,
+      });
+      projects.push({
+        config,
+        configFilePath,
+      });
+    }
+  }
+
+  return {
+    config,
+    configFilePath,
+    projects,
+  };
+}
+
 export function setupCommands(): void {
   const cli = cac('rstest');
 
@@ -162,13 +197,24 @@ export function setupCommands(): void {
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
       try {
-        const { config } = await initCli(options);
+        const { config, projects } = await initCli(options);
         const { createRstest } = await import('../core');
         if (isCI) {
-          const rstest = createRstest(config, 'run', filters.map(normalize));
+          const rstest = createRstest(
+            {
+              config,
+              projects,
+            },
+            'run',
+            filters.map(normalize),
+          );
           await rstest.runTests();
         } else {
-          const rstest = createRstest(config, 'watch', filters.map(normalize));
+          const rstest = createRstest(
+            { config, projects },
+            'watch',
+            filters.map(normalize),
+          );
           await rstest.runTests();
         }
       } catch (err) {
@@ -182,9 +228,13 @@ export function setupCommands(): void {
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      const { config } = await initCli(options);
+      const { config, projects } = await initCli(options);
       const { createRstest } = await import('../core');
-      const rstest = createRstest(config, 'run', filters.map(normalize));
+      const rstest = createRstest(
+        { config, projects },
+        'run',
+        filters.map(normalize),
+      );
       try {
         await rstest.runTests();
       } catch (err) {
@@ -201,9 +251,13 @@ export function setupCommands(): void {
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      const { config } = await initCli(options);
+      const { config, projects } = await initCli(options);
       const { createRstest } = await import('../core');
-      const rstest = createRstest(config, 'watch', filters.map(normalize));
+      const rstest = createRstest(
+        { config, projects },
+        'watch',
+        filters.map(normalize),
+      );
       await rstest.runTests();
     });
 
@@ -217,9 +271,13 @@ export function setupCommands(): void {
         options: CommonOptions & ListCommandOptions,
       ) => {
         try {
-          const { config } = await initCli(options);
+          const { config, projects } = await initCli(options);
           const { createRstest } = await import('../core');
-          const rstest = createRstest(config, 'list', filters.map(normalize));
+          const rstest = createRstest(
+            { config, projects },
+            'list',
+            filters.map(normalize),
+          );
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,
