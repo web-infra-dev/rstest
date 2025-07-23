@@ -46,6 +46,7 @@ export type RuntimeConfig = Pick<
   | 'testEnvironment'
   | 'isolate'
   | 'hookTimeout'
+  | 'coverage'
 >;
 
 export type WorkerContext = {

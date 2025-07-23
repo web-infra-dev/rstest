@@ -33,3 +33,5 @@ test-temp-*
 test-results/
 fixtures-test/
 .rslib/
+
+!packages/core/src/coverage

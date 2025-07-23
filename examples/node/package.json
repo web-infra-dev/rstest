@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
+    "@rstest/coverage-istanbul": "workspace:*",
     "@types/node": "^22.13.8",
     "typescript": "^5.8.3"
   }

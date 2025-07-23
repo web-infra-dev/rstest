@@ -141,6 +141,7 @@ export const createPool = async ({
     disableConsoleIntercept,
     testEnvironment,
     hookTimeout,
+    coverage,
   } = context.normalizedConfig;
 
   const runtimeConfig = {
@@ -160,6 +161,7 @@ export const createPool = async ({
     disableConsoleIntercept,
     testEnvironment,
     isolate,
+    coverage,
   };
 
   const rpcMethods = {

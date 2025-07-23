@@ -1,4 +1,5 @@
 import type { RsbuildConfig } from '@rsbuild/core';
+import type { CoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
@@ -182,6 +183,11 @@ export interface RstestConfig {
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;
+
+  /**
+   * Coverage options
+   */
+  coverage?: CoverageOptions;
 
   // Rsbuild configs
 
