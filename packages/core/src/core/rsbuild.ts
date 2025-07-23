@@ -6,18 +6,14 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
-  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import {
-  castArray,
-  isDebug,
-  NODE_BUILTINS,
-  TEMP_RSTEST_OUTPUT_DIR,
-} from '../utils';
+import { isDebug } from '../utils';
+import { pluginBasic } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
+import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
@@ -31,82 +27,6 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
-const autoExternalNodeModules: (
-  data: Rspack.ExternalItemFunctionData,
-  callback: (
-    err?: Error,
-    result?: Rspack.ExternalItemValue,
-    type?: Rspack.ExternalsType,
-  ) => void,
-) => void = ({ context, request, dependencyType, getResolve }, callback) => {
-  if (!request) {
-    return callback();
-  }
-
-  if (request.startsWith('@swc/helpers/')) {
-    // @swc/helper is a special case (Load by require but resolve to esm)
-    return callback();
-  }
-
-  const doExternal = (externalPath: string = request) => {
-    callback(
-      undefined,
-      externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'import',
-    );
-  };
-
-  const resolver = getResolve?.();
-
-  if (!resolver) {
-    return callback();
-  }
-
-  resolver(context!, request, (err, resolvePath) => {
-    if (err) {
-      // ignore resolve error
-      return callback();
-    }
-
-    if (resolvePath && /node_modules/.test(resolvePath)) {
-      return doExternal(resolvePath);
-    }
-    return callback();
-  });
-};
-
-function autoExternalNodeBuiltin(
-  { request, dependencyType }: Rspack.ExternalItemFunctionData,
-  callback: (
-    err?: Error,
-    result?: Rspack.ExternalItemValue,
-    type?: Rspack.ExternalsType,
-  ) => void,
-): void {
-  if (!request) {
-    callback();
-    return;
-  }
-
-  const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
-    if (typeof builtin === 'string') {
-      return builtin === request;
-    }
-
-    return builtin.test(request);
-  });
-
-  if (isNodeBuiltin) {
-    callback(
-      undefined,
-      request,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
-    );
-  } else {
-    callback();
-  }
-}
-
 export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: () => Promise<Record<string, string>>,
@@ -116,7 +36,6 @@ export const prepareRsbuild = async (
     command,
     normalizedConfig: {
       isolate,
-      name,
       plugins,
       resolve,
       source,
@@ -136,7 +55,6 @@ export const prepareRsbuild = async (
     callerName: 'rstest',
     rsbuildConfig: {
       tools,
-      plugins,
       resolve,
       source,
       output,
@@ -150,125 +68,25 @@ export const prepareRsbuild = async (
       },
       dev: {
         hmr: false,
+        writeToDisk,
       },
       performance,
-      environments: {
-        [name]: {
-          dev: {
-            writeToDisk,
-          },
-          source: {
-            define: {
-              'import.meta.rstest': "global['@rstest/core']",
-            },
-          },
-          output: {
-            // Pass resources to the worker on demand according to entry
-            manifest: true,
-            sourceMap: {
-              js: 'source-map',
-            },
-            externals:
-              testEnvironment === 'node'
-                ? [autoExternalNodeModules]
-                : undefined,
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
-            },
-            target: 'node',
-          },
-          tools: {
-            rspack: (config, { isProd }) => {
-              // treat `test` as development mode
-              config.mode = isProd ? 'production' : 'development';
-              config.output ??= {};
-              config.output.iife = false;
-              // polyfill interop
-              config.output.importFunctionName = '__rstest_dynamic_import__';
-              config.output.devtoolModuleFilenameTemplate =
-                '[absolute-resource-path]';
-              config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: path.resolve(context.rootPath, '__mocks__'),
-                }),
-              );
-
-              // Avoid externals configuration being modified by users
-              config.externals = castArray(config.externals) || [];
-
-              config.externals.unshift({
-                '@rstest/core': 'global @rstest/core',
-              });
-
-              config.externalsPresets ??= {};
-              config.externalsPresets.node = false;
-              config.externals.push(autoExternalNodeBuiltin);
-
-              config.module.parser ??= {};
-              config.module.parser.javascript = {
-                // Keep dynamic import expressions.
-                // eg. (modulePath) => import(modulePath)
-                importDynamic: false,
-                // Keep dynamic require expressions.
-                // eg. (modulePath) => require(modulePath)
-                requireDynamic: false,
-                requireAsExpression: false,
-                // Keep require.resolve expressions.
-                requireResolve: false,
-                ...(config.module.parser.javascript || {}),
-              };
-
-              config.resolve ??= {};
-              config.resolve.extensions ??= [];
-              config.resolve.extensions.push('.cjs');
-
-              if (testEnvironment === 'node') {
-                // skip `module` field in Node.js environment.
-                // ESM module resolved by module field is not always a native ESM module
-                config.resolve.mainFields = config.resolve.mainFields?.filter(
-                  (filed) => filed !== 'module',
-                ) || ['main'];
-              }
-
-              config.resolve.byDependency ??= {};
-              config.resolve.byDependency.commonjs ??= {};
-              // skip `module` field when commonjs require
-              // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
-              config.resolve.byDependency.commonjs.mainFields = ['main', '...'];
-
-              config.optimization = {
-                moduleIds: 'named',
-                chunkIds: 'named',
-                nodeEnv: false,
-                ...(config.optimization || {}),
-                // make sure setup file and test file share the runtime
-                runtimeChunk: {
-                  name: 'runtime',
-                },
-              };
-            },
-          },
-          plugins: [
-            pluginIgnoreResolveError,
-            pluginMockRuntime,
-            pluginCSSFilter(),
-            pluginEntryWatch({
-              globTestSourceEntries,
-              setupFiles,
-              isWatch: command === 'watch',
-            }),
-          ],
-        },
-      },
+      plugins: [
+        ...(plugins || []),
+        pluginBasic(context),
+        pluginIgnoreResolveError,
+        pluginMockRuntime,
+        pluginCSSFilter(),
+        pluginEntryWatch({
+          globTestSourceEntries,
+          setupFiles,
+          isWatch: command === 'watch',
+        }),
+        pluginExternal(testEnvironment),
+        !isolate ? pluginCacheControl(Object.values(setupFiles)) : null,
+      ].filter(Boolean) as RsbuildPlugin[],
     },
   });
-
-  if (!isolate) {
-    rsbuildInstance.addPlugins([pluginCacheControl(Object.values(setupFiles))]);
-  }
 
   return rsbuildInstance;
 };
