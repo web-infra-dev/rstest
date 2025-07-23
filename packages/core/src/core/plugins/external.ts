@@ -1,5 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { NormalizedConfig } from '../..//types';
+import type { NormalizedConfig } from '../../types';
 import { castArray, NODE_BUILTINS } from '../../utils';
 
 const autoExternalNodeModules: (
