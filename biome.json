@@ -9,7 +9,13 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/*.vue", "!**/dist/**", "!**/dist-types/**"]
+    "includes": [
+      "**",
+      "!**/*.vue",
+      "!**/dist/**",
+      "!**/dist-types/**",
+      "!tests/mock/tests/mockHoist.test.ts"
+    ]
   },
   "formatter": {
     "indentStyle": "space"

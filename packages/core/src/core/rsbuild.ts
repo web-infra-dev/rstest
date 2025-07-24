@@ -6,6 +6,7 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
+  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
@@ -121,6 +122,28 @@ export const createRsbuildServer = async ({
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
     setup: (api) => {
+      api.modifyRspackConfig((rspackConfig) => {
+        rspackConfig.output!.asyncChunks = false;
+        // TODO: remove this line after https://github.com/web-infra-dev/rspack/issues/11247 is resolved.
+        rspackConfig.experiments!.incremental = false;
+      });
+
+      api.modifyBundlerChain((chain, utils) => {
+        chain
+          .plugin('RemoveDuplicateModulesPlugin')
+          .use(rspack.experiments.RemoveDuplicateModulesPlugin);
+
+        // add mock-loader to this rule
+        chain.module
+          .rule(utils.CHAIN_ID.RULE.JS)
+          .use('mock-loader')
+          .loader(
+            '/Users/bytedance/Projects/rstest/packages/core/src/core/plugins/mockLoader.mjs',
+          )
+          .before(utils.CHAIN_ID.USE.SWC)
+          .end();
+      });
+
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;

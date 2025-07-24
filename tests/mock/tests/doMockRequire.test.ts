@@ -8,9 +8,9 @@ test('doMockRequire works', () => {
     increment: (num: number) => num + 10,
   }));
 
-  const { increment: incrementWith10 } = require('../src/increment');
+  const increment = require('../src/increment');
 
-  expect(incrementWith10(1)).toBe(11);
+  expect(increment.increment(1)).toBe(11);
 });
 
 test('the second doMockRequire can override the first doMockRequire', () => {

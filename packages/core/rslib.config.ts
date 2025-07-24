@@ -1,10 +1,10 @@
-import { defineConfig } from '@rslib/core';
+import { defineConfig, RslibConfig, rspack } from '@rslib/core';
 import { LicenseWebpackPlugin } from 'license-webpack-plugin';
 import type { LicenseIdentifiedModule } from 'license-webpack-plugin/dist/LicenseIdentifiedModule';
 
 const isBuildWatch = process.argv.includes('--watch');
 
-export default defineConfig({
+const config: RslibConfig = defineConfig({
   lib: [
     {
       id: 'rstest',
@@ -62,7 +62,17 @@ export default defineConfig({
       tools: {
         rspack: {
           // fix licensePlugin watch error: ResourceData has been dropped by Rust.
-          plugins: isBuildWatch ? [] : [licensePlugin()],
+          plugins: [
+            new rspack.CopyRspackPlugin({
+              patterns: [
+                {
+                  from: 'src/core/plugins/mockRuntimeCode.js',
+                  to: 'mockRuntimeCode.js',
+                },
+              ],
+            }),
+            isBuildWatch ? null : licensePlugin(),
+          ].filter(Boolean),
         },
       },
     },
@@ -90,6 +100,8 @@ export default defineConfig({
     },
   },
 });
+
+export default config;
 
 function licensePlugin() {
   const formatLicenseTitle = (module: LicenseIdentifiedModule) => {
