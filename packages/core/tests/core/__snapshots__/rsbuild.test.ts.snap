@@ -472,6 +472,17 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
     },
+    "extensionAlias": {
+      ".js": [
+        ".js",
+        ".ts",
+        ".tsx",
+      ],
+      ".jsx": [
+        ".jsx",
+        ".tsx",
+      ],
+    },
     "extensions": [
       ".ts",
       ".tsx",
@@ -951,6 +962,17 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "...",
         ],
       },
+    },
+    "extensionAlias": {
+      ".js": [
+        ".js",
+        ".ts",
+        ".tsx",
+      ],
+      ".jsx": [
+        ".jsx",
+        ".tsx",
+      ],
     },
     "extensions": [
       ".ts",
