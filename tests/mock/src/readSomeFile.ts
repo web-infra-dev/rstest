@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 
 export function readSomeFile(path: string) {
-  return readFileSync(path, 'utf-8');
+  return fs?.readFileSync?.(path, 'utf-8');
 }

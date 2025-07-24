@@ -18,11 +18,13 @@ if (typeof __webpack_require__ === 'undefined') {
 const originalRequire = __webpack_require__;
 __webpack_require__ = function(...args) {
   try {
+    console.log('👎1', ...args)
     return originalRequire(...args);
   } catch (e) {
     const errMsg = e.message ?? e.toString();
+    console.log('👎2', errMsg)
     if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
-      throw new Error(\`Cannot find module '\${args[0]}'\`)
+      throw new Error(\`[Rstest] Cannot find module! '\${args[0]}'\`)
     }
     throw e;
   }
@@ -56,6 +58,7 @@ __webpack_require__.rstest_require_actual = __webpack_require__.rstest_import_ac
 }
 
 __webpack_require__.rstest_exec = async (id, modFactory) => {
+console.log('👮‍♀️ exec')
   if (__webpack_module_cache__) {
     let asyncFactory = __webpack_module_cache__[id];
     if (asyncFactory && asyncFactory.constructor.name === 'AsyncFunction') {
@@ -65,6 +68,7 @@ __webpack_require__.rstest_exec = async (id, modFactory) => {
 };
 
 __webpack_require__.rstest_mock = (id, modFactory) => {
+console.log('😩 rstest_mock', id)
   let requiredModule = undefined
   try {
     requiredModule = __webpack_require__(id);
