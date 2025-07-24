@@ -251,6 +251,10 @@ expect('hello world').toMatchSnapshot();
 expect(() => {
   throw new Error('fail');
 }).toThrowErrorMatchingSnapshot();
+
+await expect('hello world').toMatchFileSnapshot(
+  '__snapshots__/file.output.txt',
+);
 ```
 
 ### Promise 匹配器

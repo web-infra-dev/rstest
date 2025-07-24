@@ -62,6 +62,8 @@ describe('test snapshot', () => {
   });
 
   it('test toMatchFileSnapshot correctly', async () => {
-    expect('hello world').toMatchFileSnapshot('__snapshots__/file.output.txt');
+    await expect('hello world').toMatchFileSnapshot(
+      '__snapshots__/file.output.txt',
+    );
   });
 });
