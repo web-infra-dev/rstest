@@ -1,8 +1,8 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, test } from '@rstest/core';
 import { sleep } from '../../scripts';
 
 describe('level A', () => {
-  it('it in level A', async () => {
+  test('it in level A', async () => {
     await sleep(100);
     expect(1 + 1).toBe(2);
   }, 50);

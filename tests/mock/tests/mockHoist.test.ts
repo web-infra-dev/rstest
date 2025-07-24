@@ -1,17 +1,18 @@
 import { expect, it, rs } from '@rstest/core';
-import { c } from '../src/c';
 import { d } from '../src/d';
+import { c, dd } from '../src/c';
 
-rs.mock('../src/c', () => {
+rs.mock('../src/c',  () => {
   return {
     c: rs.fn(),
-    d,
+    dd: d,
   };
 });
 
 it('mocked c', async () => {
+  // console.log('🧝', c, dd)
   // @ts-expect-error: It has been mocked.
   c('c');
   expect(c).toHaveBeenCalledWith('c');
-  expect(d).toBe(4);
+  expect(dd).toBe(4);
 });

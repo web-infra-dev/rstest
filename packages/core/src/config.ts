@@ -91,7 +91,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     type: 'forks',
   },
   isolate: true,
-  globals: false,
+  globals: true,
   passWithNoTests: false,
   update: false,
   testTimeout: 5_000,

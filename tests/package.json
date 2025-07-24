@@ -13,6 +13,8 @@
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
     "axios": "^1.11.0",
+    "is-url": "^1.2.4",
+    "@types/is-url": "^1.2.32",
     "jest-image-snapshot": "^6.5.1",
     "memfs": "^4.17.2",
     "pathe": "^2.0.3",
@@ -21,5 +23,8 @@
     "strip-ansi": "^7.1.0",
     "tinyexec": "^1.0.1",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@types/is-url": "^1.2.32"
   }
 }

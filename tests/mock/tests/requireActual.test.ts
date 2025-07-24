@@ -1,19 +1,19 @@
 import { expect, it, rs } from '@rstest/core';
 
-const axios = require('axios').default;
+const isUrl: typeof import('is-url') = require('is-url');
 
-rs.mockRequire('axios');
+rs.mockRequire('is-url');
 
-it('mocked axios (axios is externalized)', async () => {
-  await axios.get('string');
-  expect(axios.get).toHaveBeenCalledWith('string');
-  expect(axios.mocked).toBe('axios_mocked');
-  expect(axios.post).toBeUndefined();
+it('mocked is-url (is-url is externalized)', async () => {
+  expect(isUrl('https://github.com')).toBe('is-url mock');
+  // @ts-expect-error is-url has been mocked.
+  isUrl.fn(1);
+  // @ts-expect-error is-url has been mocked.
+  expect(isUrl.fn).toBeCalledWith(1);
 });
 
-it('use `requireActual` to require actual axios', async () => {
-  const originalAxios = await rs.requireActual<typeof axios>('axios');
-  expect(rs.isMockFunction(originalAxios.get)).toBe(false);
-  expect(originalAxios.mocked).toBeUndefined();
-  expect(typeof originalAxios.AxiosHeaders).toBe('function');
+it('use `requireActual` to require actual is-url', async () => {
+  const isUrl = await rs.requireActual<typeof import('is-url')>('is-url');
+  expect(isUrl('https://github.com')).toBe(true);
+  expect(isUrl('http://')).toBe(false);
 });

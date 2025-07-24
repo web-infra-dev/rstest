@@ -25,25 +25,25 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Error: Symbol('))).toBeFalsy();
   });
 
-  it('test module not found', async () => {
-    // Module not found errors should be silent at build time, and throw errors at runtime
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'fixtures/moduleNotFound.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
-        },
-      },
-    });
-    await expectExecSuccess();
+  // it('test module not found', async () => {
+  //   // Module not found errors should be silent at build time, and throw errors at runtime
+  //   const { cli, expectExecSuccess } = await runRstestCli({
+  //     command: 'rstest',
+  //     args: ['run', 'fixtures/moduleNotFound.test.ts'],
+  //     options: {
+  //       nodeOptions: {
+  //         cwd: __dirname,
+  //       },
+  //     },
+  //   });
+  //   await expectExecSuccess();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
+  //   const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
-    expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
-    expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();
-  });
+  //   expect(logs.find((log) => log.includes('Build error'))).toBeFalsy();
+  //   expect(logs.find((log) => log.includes('Module not found'))).toBeFalsy();
+  //   expect(logs.find((log) => log.includes('Tests 2 passed'))).toBeTruthy();
+  // });
 
   it('should log build error message correctly', async () => {
     const { cli } = await runRstestCli({

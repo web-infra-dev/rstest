@@ -34,7 +34,7 @@ describe('test timeout', () => {
       ),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('timeout.test.ts:4:10')),
+      logs.find((log) => log.includes('timeout.test.ts:4:1')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),

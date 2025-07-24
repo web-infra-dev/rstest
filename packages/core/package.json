@@ -60,6 +60,8 @@
     "@vitest/snapshot": "^3.2.4",
     "birpc": "2.5.0",
     "chai": "^5.2.1",
+    "es-module-lexer": "^1.7.0",
+    "magic-string": "^0.30.17",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
     "tinypool": "^1.1.1"
