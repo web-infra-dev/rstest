@@ -77,7 +77,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
    lodash.random(multiple(1, 2), multiple(3, 4));
    ```
 
-   `rs.mock` 和 `rs.doMock` 也支持第一个参数传入一个 `Promise<T>`，并将这个 `T` 的类型作为第二个工厂函数 await 后的返回值（`Promise<T>`），这能够让 IDE 获得更好的类型提示，并对工厂函数的返回值做类型校验。传入 `Promise<T>` 除对对类型提示有增强外，对 mock 模块能力没有任何影响。
+   `rs.mock` 和 `rs.doMock` 也支持第一个参数传入一个 `Promise<T>`，并将这个 `T` 的类型作为第二个工厂函数 await 后的返回值（`Promise<T>`），这能够让 IDE 获得更好的类型提示，并对工厂函数的返回值做类型校验。传入 `Promise<T>` 除对类型提示有增强外，对 mock 模块能力没有任何影响。
 
    ```ts
    // Compared to rs.mock('../src/b', ...) the type is enhanced.
