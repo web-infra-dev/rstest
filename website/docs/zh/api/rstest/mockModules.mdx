@@ -8,7 +8,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.mock
 
-- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T | Promise<T>) => void`
+- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
 
 调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
 
@@ -77,9 +77,20 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
    lodash.random(multiple(1, 2), multiple(3, 4));
    ```
 
+   `rs.mock` 和 `rs.doMock` 也支持第一个参数传入一个 `Promise<T>`，并将这个 `T` 的类型作为第二个工厂函数 await 后的返回值（`Promise<T>`），这能够让 IDE 获得更好的类型提示，并对工厂函数的返回值做类型校验。传入 `Promise<T>` 除对对类型提示有增强外，对 mock 模块能力没有任何影响。
+
+   ```ts
+   // Compared to rs.mock('../src/b', ...) the type is enhanced.
+   rs.mock(import('../src/b'), async () => {
+     return {
+       b: 222,
+     };
+   });
+   ```
+
 ## rs.doMock
 
-- **类型：**: `<T = unknown>(moduleName: string, moduleFactory?: () => T | Promise<T>) => void`
+- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
 
 与 `rs.mock` 类似，`rs.doMock` 也会 mock 模块，但它不会被提升到模块顶部。它会在被执行到时调用，这意味着，如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 

@@ -8,7 +8,7 @@ Rstest supports mocking modules, which allows you to replace the implementation 
 
 ## rs.mock
 
-- **Type**: `<T = unknown>(moduleName: string, moduleFactory?: () => T) => void`
+- **Type**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
 
 When calling `rs.mock`, Rstest will mock and replace the module specified in the first parameter. `rs.mock` will determine how to handle the mocked module based on whether a second mock factory function is provided, as explained in detail below.
 
@@ -77,9 +77,20 @@ Based on the second parameter provided, `rs.mock` has two behaviors:
    lodash.random(multiple(1, 2), multiple(3, 4));
    ```
 
+   `rs.mock` and `rs.doMock` also support passing a `Promise<T>` as the first parameter, and use the type `T` as the return value type of the second factory function after awaiting (`Promise<T>`). This provides better type hints in IDEs and type validation for the factory function's return value. Passing `Promise<T>` only enhances type hints and has no impact on the module mocking capabilities.
+
+   ```ts
+   // Compared to rs.mock('../src/b', ...) the type is enhanced.
+   rs.mock(import('../src/b'), async () => {
+     return {
+       b: 222,
+     };
+   });
+   ```
+
 ## rs.doMock
 
-- **Type**: `<T = unknown>(moduleName: string, moduleFactory?: () => T | Promise<T>) => void`
+- **Type**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
 
 Similar to `rs.mock`, `rs.doMock` also mocks modules, but it is not hoisted to the top of the module. It is called when it's executed, which means that if a module has already been imported before calling `rs.doMock`, that module will not be mocked, while modules imported after calling `rs.doMock` will be mocked.
 
