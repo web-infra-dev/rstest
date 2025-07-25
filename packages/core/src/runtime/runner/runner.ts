@@ -47,6 +47,7 @@ export class TestRunner {
     this.workerState = state;
     const {
       runtimeConfig: { passWithNoTests, retry, maxConcurrency },
+      project,
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -72,6 +73,7 @@ export class TestRunner {
           parentNames: test.parentNames,
           name: test.name,
           testPath,
+          project,
         };
         return result;
       }
@@ -81,6 +83,7 @@ export class TestRunner {
           parentNames: test.parentNames,
           name: test.name,
           testPath,
+          project,
         };
         return result;
       }
@@ -103,6 +106,7 @@ export class TestRunner {
           name: test.name,
           errors: formatTestError(error),
           testPath,
+          project,
         };
       }
 
@@ -122,6 +126,7 @@ export class TestRunner {
               parentNames: test.parentNames,
               name: test.name,
               testPath,
+              project,
               errors: [
                 {
                   message: 'Expect test to fail',
@@ -130,6 +135,7 @@ export class TestRunner {
             };
           } catch (_err) {
             result = {
+              project,
               status: 'pass' as const,
               parentNames: test.parentNames,
               name: test.name,
@@ -146,6 +152,7 @@ export class TestRunner {
             await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
+              project,
               parentNames: test.parentNames,
               name: test.name,
               status: 'pass' as const,
@@ -153,6 +160,7 @@ export class TestRunner {
             };
           } catch (error) {
             result = {
+              project,
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
@@ -245,6 +253,7 @@ export class TestRunner {
             name: test.name,
             testPath,
             errors: [noTestError],
+            project,
           };
           hooks.onTestCaseResult?.(result);
         }
@@ -329,6 +338,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
+          project,
           testPath,
           name: '',
           status: 'pass',
@@ -337,6 +347,7 @@ export class TestRunner {
       }
 
       return {
+        project,
         testPath,
         name: '',
         status: 'fail',
@@ -359,6 +370,7 @@ export class TestRunner {
     const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
+      project,
       testPath,
       name: '',
       status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),

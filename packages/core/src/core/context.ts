@@ -3,6 +3,7 @@ import { isCI } from 'std-env';
 import { mergeRstestConfig, withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import type {
+  NormalizedConfig,
   Project,
   RstestCommand,
   RstestConfig,
@@ -65,6 +66,8 @@ export function createContext(
           config: rstestConfig,
         })
       : [];
+
+  // TODO: project.snapshotManager ?
   const snapshotManager = new SnapshotManager({
     updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
   });
@@ -77,8 +80,24 @@ export function createContext(
     snapshotManager,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,
-    projects: projects.map((project) =>
-      mergeRstestConfig(rstestConfig, project.config),
-    ),
+    projects: projects.length
+      ? projects.map((project) => {
+          const config = mergeRstestConfig(
+            rstestConfig,
+            project.config,
+          ) as NormalizedConfig;
+          return {
+            rootPath: config.root,
+            name: config.name,
+            normalizedConfig: config,
+          };
+        })
+      : [
+          {
+            rootPath,
+            name: rstestConfig.name,
+            normalizedConfig: rstestConfig,
+          },
+        ],
   };
 }

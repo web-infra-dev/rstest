@@ -54,6 +54,7 @@ export const createPool = async ({
     Array<{
       tests: Test[];
       testPath: string;
+      project: string;
       errors?: FormattedError[];
     }>
   >;
@@ -212,6 +213,7 @@ export const createPool = async ({
 
   return {
     runTests: async () => {
+      const project = context.normalizedConfig.name;
       const results = await Promise.all(
         entries.map((entryInfo) => {
           const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
@@ -222,6 +224,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles,
                 context: {
+                  project,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -235,6 +238,7 @@ export const createPool = async ({
             .catch((err) => {
               err.fullStack = true;
               return {
+                project,
                 testPath: entryInfo.testPath,
                 status: 'fail',
                 name: '',
@@ -258,6 +262,7 @@ export const createPool = async ({
     collectTests: async () => {
       return Promise.all(
         entries.map((entryInfo) => {
+          const project = context.normalizedConfig.name;
           const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
 
           return pool
@@ -266,6 +271,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles,
                 context: {
+                  project,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -279,6 +285,7 @@ export const createPool = async ({
             .catch((err) => {
               err.fullStack = true;
               return {
+                project,
                 testPath: entryInfo.testPath,
                 tests: [],
                 errors: [err],

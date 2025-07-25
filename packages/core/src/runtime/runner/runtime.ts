@@ -43,14 +43,18 @@ export class RunnerRuntime {
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: Array<() => MaybePromise<void>> = [];
   private runtimeConfig;
+  private project: string;
 
   constructor({
     testPath,
     runtimeConfig,
+    project,
   }: {
     testPath: string;
     runtimeConfig: RuntimeConfig;
+    project: string;
   }) {
+    this.project = project;
     this.testPath = testPath;
     this.runtimeConfig = runtimeConfig;
   }
@@ -125,6 +129,7 @@ export class RunnerRuntime {
 
   private getDefaultRootSuite(): TestSuite {
     return {
+      project: this.project,
       runMode: 'run',
       testPath: this.testPath,
       name: ROOT_SUITE_NAME,
@@ -149,6 +154,7 @@ export class RunnerRuntime {
     sequential?: boolean;
   }): void {
     const currentSuite: TestSuite = {
+      project: this.project,
       name,
       runMode,
       tests: [],
@@ -285,6 +291,7 @@ export class RunnerRuntime {
     sequential?: boolean;
   }): void {
     this.addTestCase({
+      project: this.project,
       name,
       originalFn,
       fn: fn
@@ -427,14 +434,17 @@ export class RunnerRuntime {
 export const createRuntimeAPI = ({
   testPath,
   runtimeConfig,
+  project,
 }: {
   testPath: string;
   runtimeConfig: RuntimeConfig;
+  project: string;
 }): {
   api: RunnerAPI;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
+    project,
     testPath,
     runtimeConfig,
   });

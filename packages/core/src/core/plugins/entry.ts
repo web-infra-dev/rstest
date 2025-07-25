@@ -26,20 +26,20 @@ class TestFileWatchPlugin {
 }
 
 export const pluginEntryWatch: (params: {
-  globTestSourceEntries: () => Promise<Record<string, string>>;
-  setupFiles: Record<string, string>;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
 }) => RsbuildPlugin = ({ isWatch, globTestSourceEntries, setupFiles }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
-    api.modifyRspackConfig(async (config) => {
+    api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
         config.plugins!.push(new TestFileWatchPlugin(api.context.rootPath));
         config.entry = async () => {
-          const sourceEntries = await globTestSourceEntries();
+          const sourceEntries = await globTestSourceEntries(environment.name);
           return {
             ...sourceEntries,
-            ...setupFiles,
+            ...setupFiles[environment.name],
           };
         };
 
@@ -64,9 +64,9 @@ export const pluginEntryWatch: (params: {
         config.watchOptions ??= {};
         config.watchOptions.ignored = '**/**';
 
-        const sourceEntries = await globTestSourceEntries();
+        const sourceEntries = await globTestSourceEntries(environment.name);
         config.entry = {
-          ...setupFiles,
+          ...setupFiles[environment.name],
           ...sourceEntries,
         };
       }

@@ -50,6 +50,7 @@ export type RuntimeConfig = Pick<
 
 export type WorkerContext = {
   rootPath: RstestContext['rootPath'];
+  project: string;
   runtimeConfig: RuntimeConfig;
 };
 

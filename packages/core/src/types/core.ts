@@ -6,6 +6,12 @@ export type RstestCommand = 'watch' | 'run' | 'list';
 
 export type Project = { config: RstestConfig; configFilePath: string | null };
 
+type ProjectContext = {
+  name: string;
+  rootPath: string;
+  normalizedConfig: NormalizedConfig;
+};
+
 export type RstestContext = {
   /** The Rstest core version. */
   version: string;
@@ -18,7 +24,7 @@ export type RstestContext = {
   /**
    * Run tests from one or more projects.
    */
-  projects: RstestConfig[];
+  projects: ProjectContext[];
   /**
    * The command type.
    *
