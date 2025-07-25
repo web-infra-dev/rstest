@@ -224,6 +224,7 @@ const runInPool = async (
     assetFiles,
     type,
     context: {
+      project,
       runtimeConfig: { isolate },
     },
   } = options;
@@ -271,12 +272,14 @@ const runInPool = async (
       });
       const tests = await runner.collectTests();
       return {
+        project,
         testPath,
         tests,
         errors: formatTestError(unhandledErrors),
       };
     } catch (err) {
       return {
+        project,
         testPath,
         tests: [],
         errors: formatTestError(err),
@@ -334,6 +337,7 @@ const runInPool = async (
     return results;
   } catch (err) {
     return {
+      project,
       testPath,
       status: 'fail',
       name: '',
