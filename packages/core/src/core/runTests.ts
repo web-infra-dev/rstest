@@ -116,6 +116,7 @@ export async function runTests(
   if (command === 'watch') {
     rsbuildInstance.onDevCompileDone(async () => {
       await run();
+      logger.log(color.green('  Waiting for file changes...'));
     });
   } else {
     const close = await run();
