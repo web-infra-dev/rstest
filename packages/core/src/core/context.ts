@@ -83,7 +83,10 @@ export function createContext(
     projects: projects.length
       ? projects.map((project) => {
           const config = mergeRstestConfig(
-            rstestConfig,
+            {
+              ...rstestConfig,
+              setupFiles: undefined,
+            },
             project.config,
           ) as NormalizedConfig;
           return {
@@ -96,7 +99,10 @@ export function createContext(
           {
             rootPath,
             name: rstestConfig.name,
-            normalizedConfig: rstestConfig,
+            normalizedConfig: {
+              ...rstestConfig,
+              setupFiles: undefined,
+            },
           },
         ],
   };
