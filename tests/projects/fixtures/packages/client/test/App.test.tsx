@@ -15,3 +15,7 @@ test('should render App correctly', async () => {
 test('should get document correctly', () => {
   expect(global.document).toBeDefined();
 });
+
+it('should load root setup file correctly', () => {
+  expect(process.env.TEST_ROOT).toBe('1');
+});

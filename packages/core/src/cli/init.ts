@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, resolve } from 'pathe';
-import { isDynamicPattern } from 'tinyglobby';
+import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig } from '../config';
 import type { Project, RstestConfig } from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
@@ -96,6 +96,10 @@ export async function resolveProjects({
 }): Promise<Project[]> {
   const projects: Project[] = [];
 
+  if (!config.projects || !config.projects.length) {
+    return projects;
+  }
+
   const getDefaultProjectName = (dir: string) => {
     const pkgJsonPath = resolve(dir, 'package.json');
     const name = existsSync(pkgJsonPath)
@@ -108,17 +112,42 @@ export async function resolveProjects({
     return name;
   };
 
+  const globProjects = async (patterns: string[]) => {
+    const globOptions: GlobOptions = {
+      absolute: true,
+      dot: true,
+      onlyFiles: false,
+      cwd: root,
+      expandDirectories: false,
+      ignore: ['**/node_modules/**', '**/.DS_Store'],
+    };
+
+    return glob(patterns, globOptions);
+  };
+
+  const { projectPaths, projectPatterns } = (config.projects || []).reduce(
+    (total, p) => {
+      const projectStr = p.replace('<rootDir>', root);
+
+      if (isDynamicPattern(projectStr)) {
+        total.projectPatterns.push(projectStr);
+      } else {
+        total.projectPaths.push(projectStr);
+      }
+      return total;
+    },
+    {
+      projectPaths: [] as string[],
+      projectPatterns: [] as string[],
+    },
+  );
+
+  projectPaths.push(...(await globProjects(projectPatterns)));
+
   const names = new Set<string>();
 
-  for (const project of config.projects || []) {
-    const projectStr = project.replace('<rootDir>', root);
-
-    if (isDynamicPattern(projectStr)) {
-      // TODO
-      throw `Dynamic project pattern (${project}) is not supported. Please use static paths.`;
-    }
-
-    const absolutePath = getAbsolutePath(root, projectStr);
+  for (const project of projectPaths || []) {
+    const absolutePath = getAbsolutePath(root, project);
 
     const { config, configFilePath } = await resolveConfig({
       ...options,

@@ -1,4 +1,3 @@
-import { expect, it } from '@rstest/core';
 import { sayHi } from '../src/index';
 
 it('should test source code correctly', () => {
@@ -7,4 +6,8 @@ it('should test source code correctly', () => {
 
 it('should can not get document', () => {
   expect(global.document).toBeUndefined();
+});
+
+it('should load root setup file correctly', () => {
+  expect(process.env.TEST_ROOT).toBe('1');
 });
