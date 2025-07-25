@@ -1,5 +1,5 @@
 import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
-import type { FunctionLike } from './utils';
+import type { FunctionLike, MaybePromise } from './utils';
 import type { RuntimeConfig } from './worker';
 
 interface MockResultReturn<T> {
@@ -172,8 +172,9 @@ export interface Mock<T extends FunctionLike = FunctionLike>
 }
 
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
+type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
-export type RstestUtilities = {
+export interface RstestUtilities {
   /**
    * Creates a spy on a function.
    */
@@ -208,10 +209,10 @@ export type RstestUtilities = {
   /**
    * Mock a module
    */
-  mock: <T = unknown>(
-    moduleName: string,
-    moduleFactory?: () => T | Promise<T>,
-  ) => void;
+  mock<T = unknown>(
+    moduleName: string | Promise<T>,
+    moduleFactory?: MockFactory<T>,
+  ): void;
 
   /**
    * Mock a module
@@ -224,10 +225,10 @@ export type RstestUtilities = {
   /**
    * Mock a module, not hoisted.
    */
-  doMock: <T = unknown>(
-    moduleName: string,
-    moduleFactory?: () => T | Promise<T>,
-  ) => void;
+  doMock<T = unknown>(
+    moduleName: string | Promise<T>,
+    moduleFactory?: MockFactory<T>,
+  ): void;
 
   /**
    * Mock a module, not hoisted.
@@ -337,4 +338,4 @@ export type RstestUtilities = {
    * Removes all timers that are scheduled to run.
    */
   clearAllTimers: () => RstestUtilities;
-};
+}

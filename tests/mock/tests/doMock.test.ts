@@ -1,4 +1,5 @@
 import { expect, rs, test } from '@rstest/core';
+import { sleep } from '../../scripts/utils';
 
 test('doMock works', async () => {
   const { increment: incrementWith1 } = await import('../src/increment');
@@ -31,9 +32,6 @@ test('the second doMock can override the first doMock', async () => {
 });
 
 test('the third doMock can override the second doMock', async () => {
-  const sleep = (ms: number) =>
-    new Promise((resolve) => setTimeout(resolve, ms));
-
   rs.doMock('../src/increment', async () => {
     await sleep(500);
     return {

@@ -24,7 +24,7 @@ export async function runTests(
       fileFilters,
     });
 
-    // TODO：No test files found.
+    // TODO:No test files found.
     if (!Object.keys(entries).length && !silent) {
       logger.log(color.red(`No test files found in ${name}.`));
       logger.log('');

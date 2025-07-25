@@ -83,6 +83,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.resolve.extensions ??= [];
                 config.resolve.extensions.push('.cjs');
 
+                // TypeScript allows importing TS files with `.js` extension
+                config.resolve.extensionAlias ??= {};
+                config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
+                config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
+
                 if (context.normalizedConfig.testEnvironment === 'node') {
                   // skip `module` field in Node.js environment.
                   // ESM module resolved by module field is not always a native ESM module
