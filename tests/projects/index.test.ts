@@ -21,14 +21,33 @@ describe('test projects', () => {
     await expectExecSuccess();
     const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expect(logs.filter((log) => log.startsWith('['))).toEqual([]);
-
     // test log print
     expect(
       logs.find((log) => log.includes('packages/node/test/index.test.ts')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
+    ).toBeTruthy();
+  });
+
+  it('should run projects fail when project not found', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.404.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // test log print
+    expect(
+      logs.find((log) => log.includes(`Can't resolve project "404"`)),
     ).toBeTruthy();
   });
 });

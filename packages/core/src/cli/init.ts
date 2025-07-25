@@ -132,7 +132,12 @@ export async function resolveProjects({
       if (isDynamicPattern(projectStr)) {
         total.projectPatterns.push(projectStr);
       } else {
-        total.projectPaths.push(projectStr);
+        const absolutePath = getAbsolutePath(root, projectStr);
+
+        if (!existsSync(absolutePath)) {
+          throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
+        }
+        total.projectPaths.push(absolutePath);
       }
       return total;
     },
@@ -147,14 +152,12 @@ export async function resolveProjects({
   const names = new Set<string>();
 
   for (const project of projectPaths || []) {
-    const absolutePath = getAbsolutePath(root, project);
-
     const { config, configFilePath } = await resolveConfig({
       ...options,
-      root: absolutePath,
+      root: project,
     });
 
-    config.name ??= getDefaultProjectName(absolutePath);
+    config.name ??= getDefaultProjectName(project);
 
     projects.push({
       config,
