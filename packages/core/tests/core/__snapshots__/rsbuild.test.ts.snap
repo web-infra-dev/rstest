@@ -12,6 +12,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "force": false,
       },
     },
+    "typeReexportsPresence": true,
   },
   "externals": [
     {
@@ -37,6 +38,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
+        "typeReexportsPresence": "tolerant",
       },
     },
     "rules": [
@@ -165,6 +167,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                   "legacyDecorator": false,
                 },
               },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": false,
+                  "typeExports": true,
+                },
+              },
             },
           },
         ],
@@ -211,6 +219,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
+                },
+              },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": false,
+                  "typeExports": true,
                 },
               },
             },
@@ -514,6 +528,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "force": false,
       },
     },
+    "typeReexportsPresence": true,
   },
   "externals": [
     {
@@ -540,6 +555,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
+        "typeReexportsPresence": "tolerant",
       },
     },
     "rules": [
@@ -668,6 +684,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                   "legacyDecorator": false,
                 },
               },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": false,
+                  "typeExports": true,
+                },
+              },
             },
           },
         ],
@@ -714,6 +736,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
+                },
+              },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": false,
+                  "typeExports": true,
                 },
               },
             },
@@ -1048,6 +1076,12 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
               "decoratorMetadata": true,
               "legacyDecorator": true,
               "useDefineForClassFields": false,
+            },
+          },
+          "rspackExperiments": {
+            "collectTypeScriptInfo": {
+              "exportedEnum": false,
+              "typeExports": true,
             },
           },
         },
