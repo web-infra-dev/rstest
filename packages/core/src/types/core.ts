@@ -6,7 +6,7 @@ export type RstestCommand = 'watch' | 'run' | 'list';
 
 export type Project = { config: RstestConfig; configFilePath: string | null };
 
-type ProjectContext = {
+export type ProjectContext = {
   name: string;
   rootPath: string;
   normalizedConfig: NormalizedConfig;

@@ -9,6 +9,8 @@ export async function runTests(
 ): Promise<void> {
   const { rootPath, reporters, projects, snapshotManager, command } = context;
 
+  const entriesCache = new Map<string, Record<string, string>>();
+
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
@@ -22,6 +24,8 @@ export async function runTests(
       root,
       fileFilters,
     });
+
+    entriesCache.set(name, entries);
 
     return entries;
   };
@@ -57,8 +61,15 @@ export async function runTests(
 
   const { close, getRsbuildStats } = await createRsbuildServer({
     normalizedConfig: context.normalizedConfig,
-    // TODO: Try not to call globTestSourceEntries again.
-    globTestSourceEntries,
+    globTestSourceEntries:
+      command === 'watch'
+        ? globTestSourceEntries
+        : async (name) => {
+            if (entriesCache.has(name)) {
+              return entriesCache.get(name)!;
+            }
+            return globTestSourceEntries(name);
+          },
     setupFiles,
     rsbuildInstance,
     rootPath,
@@ -67,6 +78,19 @@ export async function runTests(
   const run = async () => {
     let testStart: number;
     const buildStart = Date.now();
+
+    const recommendWorkerCount =
+      command === 'watch'
+        ? Number.POSITIVE_INFINITY
+        : entriesCache
+            .values()
+            .reduce((acc, entries) => acc + Object.keys(entries).length, 0);
+
+    const pool = await createPool({
+      context,
+      recommendWorkerCount,
+    });
+
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const { entries, setupEntries, assetFiles, sourceMaps } =
@@ -74,20 +98,13 @@ export async function runTests(
 
         testStart ??= Date.now();
 
-        const pool = await createPool({
+        const { results, testResults } = await pool.runTests({
           entries,
           sourceMaps,
           setupEntries,
           assetFiles,
-          context: {
-            ...context,
-            ...p,
-          },
+          project: p,
         });
-
-        const { results, testResults } = await pool.runTests();
-
-        await pool.close();
 
         return {
           results,
@@ -144,6 +161,7 @@ export async function runTests(
 
     return async () => {
       await close();
+      await pool.close();
     };
   };
 

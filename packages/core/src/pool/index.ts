@@ -2,7 +2,9 @@ import os from 'node:os';
 import type {
   EntryInfo,
   FormattedError,
+  ProjectContext,
   RstestContext,
+  RuntimeConfig,
   SourceMapInput,
   Test,
   TestFileInfo,
@@ -29,28 +31,74 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
+const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
+  const {
+    testNamePattern,
+    testTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+    maxConcurrency,
+    printConsoleTrace,
+    disableConsoleIntercept,
+    testEnvironment,
+    hookTimeout,
+    isolate,
+  } = context.normalizedConfig;
+
+  return {
+    testNamePattern,
+    testTimeout,
+    hookTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+    maxConcurrency,
+    printConsoleTrace,
+    disableConsoleIntercept,
+    testEnvironment,
+    isolate,
+  };
+};
+
 /**
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/main/packages/vitest/src/node/pool.ts
  */
 export const createPool = async ({
-  entries,
   context,
-  assetFiles,
-  setupEntries,
-  sourceMaps,
+  recommendWorkerCount = Number.POSITIVE_INFINITY,
 }: {
-  entries: EntryInfo[];
-  setupEntries: EntryInfo[];
-  assetFiles: Record<string, string>;
-  sourceMaps: Record<string, SourceMapInput>;
   context: RstestContext;
+  recommendWorkerCount?: number;
 }): Promise<{
-  runTests: () => Promise<{
+  runTests: (params: {
+    entries: EntryInfo[];
+    assetFiles: Record<string, string>;
+    setupEntries: EntryInfo[];
+    sourceMaps: Record<string, SourceMapInput>;
+    project: ProjectContext;
+  }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
-  collectTests: () => Promise<
+  collectTests: (params: {
+    entries: EntryInfo[];
+    assetFiles: Record<string, string>;
+    setupEntries: EntryInfo[];
+    sourceMaps: Record<string, SourceMapInput>;
+    project: ProjectContext;
+  }) => Promise<
     Array<{
       tests: Test[];
       testPath: string;
@@ -86,7 +134,7 @@ export const createPool = async ({
   const recommendCount =
     context.command === 'watch'
       ? threadsCount
-      : Math.min(Object.keys(entries).length, threadsCount);
+      : Math.min(recommendWorkerCount, threadsCount);
 
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers)
@@ -126,42 +174,6 @@ export const createPool = async ({
   });
 
   const { updateSnapshot } = context.snapshotManager.options;
-  const {
-    testNamePattern,
-    testTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    hookTimeout,
-  } = context.normalizedConfig;
-
-  const runtimeConfig = {
-    testNamePattern,
-    testTimeout,
-    hookTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    isolate,
-  };
 
   const rpcMethods = {
     onTestCaseResult: async (result: TestResult) => {
@@ -186,11 +198,13 @@ export const createPool = async ({
     },
   };
 
-  const setupAssets = setupEntries.flatMap((entry) => entry.files);
-
-  const entryLength = Object.keys(entries).length;
-
-  const filterAssetsByEntry = (entryInfo: EntryInfo) => {
+  const filterAssetsByEntry = (
+    entryInfo: EntryInfo,
+    assetFiles: Record<string, string>,
+    setupAssets: string[],
+    sourceMaps: Record<string, SourceMapInput>,
+    entryLength: number,
+  ) => {
     const neededFiles =
       entryLength > 1 && entryInfo.files
         ? Object.fromEntries(
@@ -212,24 +226,41 @@ export const createPool = async ({
   };
 
   return {
-    runTests: async () => {
-      const project = context.normalizedConfig.name;
+    runTests: async ({
+      entries,
+      assetFiles,
+      setupEntries,
+      sourceMaps,
+      project,
+    }) => {
+      const projectName = context.normalizedConfig.name;
+      const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const entryLength = Object.keys(entries).length;
+      const runtimeConfig = getRuntimeConfig(project);
+
       const results = await Promise.all(
         entries.map((entryInfo) => {
-          const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
+          const { assetFiles: neededFiles, sourceMaps: neededSourceMaps } =
+            filterAssetsByEntry(
+              entryInfo,
+              assetFiles,
+              setupAssets,
+              sourceMaps,
+              entryLength,
+            );
 
           return pool
             .runTest({
               options: {
                 entryInfo,
-                assetFiles,
+                assetFiles: neededFiles,
                 context: {
-                  project,
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
                 type: 'run',
-                sourceMaps,
+                sourceMaps: neededSourceMaps,
                 setupEntries,
                 updateSnapshot,
               },
@@ -238,7 +269,7 @@ export const createPool = async ({
             .catch((err) => {
               err.fullStack = true;
               return {
-                project,
+                project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',
                 name: '',
@@ -259,24 +290,40 @@ export const createPool = async ({
 
       return { results, testResults };
     },
-    collectTests: async () => {
+    collectTests: async ({
+      entries,
+      assetFiles,
+      setupEntries,
+      sourceMaps,
+      project,
+    }) => {
+      const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const entryLength = Object.keys(entries).length;
+      const runtimeConfig = getRuntimeConfig(project);
+      const projectName = project.normalizedConfig.name;
       return Promise.all(
         entries.map((entryInfo) => {
-          const project = context.normalizedConfig.name;
-          const { assetFiles, sourceMaps } = filterAssetsByEntry(entryInfo);
+          const { assetFiles: neededFiles, sourceMaps: neededSourceMaps } =
+            filterAssetsByEntry(
+              entryInfo,
+              assetFiles,
+              setupAssets,
+              sourceMaps,
+              entryLength,
+            );
 
           return pool
             .collectTests({
               options: {
                 entryInfo,
-                assetFiles,
+                assetFiles: neededFiles,
                 context: {
-                  project,
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
                 type: 'collect',
-                sourceMaps,
+                sourceMaps: neededSourceMaps,
                 setupEntries,
                 updateSnapshot,
               },
@@ -285,7 +332,7 @@ export const createPool = async ({
             .catch((err) => {
               err.fullStack = true;
               return {
-                project,
+                project: projectName,
                 testPath: entryInfo.testPath,
                 tests: [],
                 errors: [err],

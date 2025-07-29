@@ -81,25 +81,22 @@ export async function listTests(
     rootPath,
   });
 
+  const pool = await createPool({
+    context,
+  });
+
   const returns = await Promise.all(
     context.projects.map(async (project) => {
       const { entries, setupEntries, assetFiles, sourceMaps } =
         await getRsbuildStats(project.name);
 
-      const pool = await createPool({
+      const list = await pool.collectTests({
         entries,
         sourceMaps,
         setupEntries,
         assetFiles,
-        context: {
-          ...context,
-          ...project,
-        },
+        project,
       });
-
-      const list = await pool.collectTests();
-
-      await pool.close();
 
       return {
         list,
@@ -107,6 +104,8 @@ export async function listTests(
       };
     }),
   );
+
+  await pool.close();
 
   const list = returns.flatMap((r) => r.list);
   const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
