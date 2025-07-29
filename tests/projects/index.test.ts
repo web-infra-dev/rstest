@@ -50,4 +50,45 @@ describe('test projects', () => {
       logs.find((log) => log.includes(`Can't resolve project "404"`)),
     ).toBeTruthy();
   });
+
+  it('should run test failed when test file not found', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '404-file'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // test log print
+    expect(
+      logs.find((log) => log.includes('No test files found')),
+    ).toBeTruthy();
+  });
+
+  it('should run test success when test file not found with passWithNoTests flag', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '404-file', '--passWithNoTests'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // test log print
+    expect(
+      logs.find((log) => log.includes('No test files found')),
+    ).toBeTruthy();
+  });
 });

@@ -11,7 +11,6 @@ export async function runTests(
 
   const globTestSourceEntries = async (
     name: string,
-    silent = true,
   ): Promise<Record<string, string>> => {
     const { include, exclude, includeSource, root } = projects.find(
       (p) => p.name === name,
@@ -23,18 +22,6 @@ export async function runTests(
       root,
       fileFilters,
     });
-
-    // TODO:No test files found.
-    if (!Object.keys(entries).length && !silent) {
-      logger.log(color.red(`No test files found in ${name}.`));
-      logger.log('');
-      if (fileFilters.length) {
-        logger.log(color.gray('filter: '), fileFilters.join(color.gray(', ')));
-      }
-      logger.log(color.gray('include:'), include.join(color.gray(', ')));
-      logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
-      logger.log('');
-    }
 
     return entries;
   };
@@ -123,6 +110,23 @@ export async function runTests(
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
     const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
+
+    if (results.length === 0) {
+      if (command === 'watch') {
+        logger.log(color.yellow('No test files found\n'));
+      } else {
+        const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+        logger.log(
+          color[code ? 'red' : 'yellow'](
+            `No test files found, exiting with code ${code}\n`,
+          ),
+        );
+        process.exitCode = code;
+      }
+      if (fileFilters.length) {
+        logger.log(color.gray('filter: '), fileFilters.join(color.gray(', ')));
+      }
+    }
 
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
