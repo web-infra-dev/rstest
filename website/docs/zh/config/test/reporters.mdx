@@ -1,0 +1,65 @@
+# reporters
+
+- **类型：**
+
+```ts
+type Reporter = ReporterName | [ReporterName, ReporterOptions];
+
+type Reporters = Reporter | Reporter[];
+```
+
+- **默认值：** `'default'`
+- **CLI：** `--reporter=<name> --reporter=<name1>`
+
+自定义输出报告器的类型。如果没有指定报告器，Rstest 会使用内置的默认报告器。
+
+## 内置报告器
+
+### 默认报告器
+
+默认情况下，Rstest 会在终端显示测试运行状态、结果以及汇总信息。
+
+输出如下：
+
+```bash
+ ✓ test/index.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```
+
+### Verbose 报告器
+
+默认报告器仅在测试运行失败或耗时缓慢时输出相关的测试用例信息，Verbose 报告器会在测试完成后输出所有的测试用例信息。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --reporter=verbose 
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+  ```ts
+  import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+    reporters: 'verbose'
+});
+```
+  </Tab>
+</Tabs>
+
+此时，Rstest 输出如下：
+
+```bash
+ ✓ test/index.test.ts (2) 2ms
+  ✓ Index > should add two numbers correctly (1ms)
+  ✓ Index > should test source code correctly (1ms)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```
