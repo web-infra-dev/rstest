@@ -25,9 +25,11 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
 } {
   const {
     testPath,
+    project,
     runtimeConfig: { testNamePattern },
   } = workerState;
   const runtime = createRuntimeAPI({
+    project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });

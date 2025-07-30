@@ -29,22 +29,12 @@ const isMultiCompiler = <
 
 export const prepareRsbuild = async (
   context: RstestContext,
-  globTestSourceEntries: () => Promise<Record<string, string>>,
-  setupFiles: Record<string, string>,
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
+  setupFiles: Record<string, Record<string, string>>,
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: {
-      isolate,
-      plugins,
-      resolve,
-      source,
-      output,
-      tools,
-      testEnvironment,
-      performance,
-      dev = {},
-    },
+    normalizedConfig: { isolate, dev = {} },
   } = context;
   const debugMode = isDebug();
 
@@ -54,10 +44,6 @@ export const prepareRsbuild = async (
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     rsbuildConfig: {
-      tools,
-      resolve,
-      source,
-      output,
       server: {
         printUrls: false,
         strictPort: false,
@@ -70,9 +56,18 @@ export const prepareRsbuild = async (
         hmr: false,
         writeToDisk,
       },
-      performance,
+      environments: Object.fromEntries(
+        context.projects.map((project) => [
+          project.name,
+          {
+            plugins: project.normalizedConfig.plugins,
+            output: {
+              target: 'node',
+            },
+          },
+        ]),
+      ),
       plugins: [
-        ...(plugins || []),
         pluginBasic(context),
         pluginIgnoreResolveError,
         pluginMockRuntime,
@@ -82,8 +77,14 @@ export const prepareRsbuild = async (
           setupFiles,
           isWatch: command === 'watch',
         }),
-        pluginExternal(testEnvironment),
-        !isolate ? pluginCacheControl(Object.values(setupFiles)) : null,
+        pluginExternal(context),
+        !isolate
+          ? pluginCacheControl(
+              Object.values(setupFiles).flatMap((files) =>
+                Object.values(files),
+              ),
+            )
+          : null,
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
@@ -92,29 +93,26 @@ export const prepareRsbuild = async (
 };
 
 export const createRsbuildServer = async ({
-  name,
   globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
   normalizedConfig,
 }: {
   rsbuildInstance: RsbuildInstance;
-  name: string;
   normalizedConfig: RstestContext['normalizedConfig'];
-  globTestSourceEntries: () => Promise<Record<string, string>>;
-  setupFiles: Record<string, string>;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
-}): Promise<
-  () => Promise<{
+}): Promise<{
+  close: () => Promise<void>;
+  getRsbuildStats: (name: string) => Promise<{
     buildTime: number;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
-    getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    close: () => Promise<void>;
-  }>
-> => {
+  }>;
+}> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler;
 
@@ -148,7 +146,32 @@ export const createRsbuildServer = async ({
       ? rspackCompiler.compilers[0]!.outputFileSystem
       : rspackCompiler!.outputFileSystem) || fs;
 
-  const getRsbuildStats = async () => {
+  const readFile = async (fileName: string) => {
+    return new Promise<string>((resolve, reject) => {
+      outputFileSystem.readFile(fileName, (err, data) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(typeof data === 'string' ? data : data!.toString());
+      });
+    });
+  };
+
+  const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
+    const entryFiles: Record<string, string[]> = {};
+
+    const entries = Object.keys(manifest!.entries!);
+
+    for (const entry of entries) {
+      const data = manifest!.entries[entry];
+      entryFiles[entry] = (
+        (data?.initial?.js || []).concat(data?.async?.js || []) || []
+      ).map((file: string) => path.join(outputPath!, file));
+    }
+    return entryFiles;
+  };
+
+  const getRsbuildStats = async (name: string) => {
     const stats = await devServer.environments[name]!.getStats();
 
     const manifest = devServer.environments[name]!.context
@@ -170,35 +193,10 @@ export const createRsbuildServer = async ({
       timings: true,
     });
 
-    const readFile = async (fileName: string) => {
-      return new Promise<string>((resolve, reject) => {
-        outputFileSystem.readFile(fileName, (err, data) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(typeof data === 'string' ? data : data!.toString());
-        });
-      });
-    };
-
-    const getEntryFiles = async () => {
-      const entryFiles: Record<string, string[]> = {};
-
-      const entries = Object.keys(manifest!.entries!);
-
-      for (const entry of entries) {
-        const data = manifest!.entries[entry];
-        entryFiles[entry] = (
-          (data?.initial?.js || []).concat(data?.async?.js || []) || []
-        ).map((file: string) => path.join(outputPath!, file));
-      }
-      return entryFiles;
-    };
-
-    const entryFiles = await getEntryFiles();
+    const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
-    const sourceEntries = await globTestSourceEntries();
+    const sourceEntries = await globTestSourceEntries(name);
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
@@ -208,10 +206,10 @@ export const createRsbuildServer = async ({
         e.assets![e.assets!.length - 1]!.name,
       );
 
-      if (setupFiles[entry]) {
+      if (setupFiles[name]![entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[entry],
+          testPath: setupFiles[name]![entry]!,
           files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {
@@ -255,12 +253,11 @@ export const createRsbuildServer = async ({
         ),
       ),
       sourceMaps,
-      getSourcemap: (sourcePath: string): SourceMapInput | null => {
-        return sourceMaps[sourcePath] || null;
-      },
-      close: devServer.close,
     };
   };
 
-  return getRsbuildStats;
+  return {
+    getRsbuildStats,
+    close: devServer.close,
+  };
 };

@@ -56,6 +56,7 @@ export const createForksPool = (poolOptions: {
   collectTests: (options: RunWorkerOptions) => Promise<{
     tests: Test[];
     testPath: string;
+    project: string;
     errors?: FormattedError[];
   }>;
   close: () => Promise<void>;
