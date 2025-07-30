@@ -8,6 +8,25 @@ Run only tests with a name that matches the regex / string.
 
 If you set `testNamePattern` to `bar`, tests not containing the word `bar` in the test name will be skipped.
 
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest -t=bar
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testNamePattern: 'bar',
+});
+```
+  </Tab>
+</Tabs>
+
 ```ts
 // skipped
 test('test foo', () => {

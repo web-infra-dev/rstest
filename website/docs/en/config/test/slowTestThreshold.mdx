@@ -5,3 +5,22 @@
 - **CLI:** `--slowTestThreshold=300`
 
 The number of milliseconds after which a test or suite is considered slow and reported as such in the results.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --slowTestThreshold=300
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  slowTestThreshold: 300,
+});
+```
+  </Tab>
+</Tabs>

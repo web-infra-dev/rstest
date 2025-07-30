@@ -6,13 +6,24 @@
 
 Print console traces when calling any console method, which is helpful for debugging.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --printConsoleTrace
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   printConsoleTrace: true,
 });
 ```
+  </Tab>
+</Tabs>
 
 :::note
 When [disableConsoleIntercept](/config/test/disableConsoleIntercept) is set to `true`, `printConsoleTrace` will be ignored.

@@ -12,13 +12,24 @@ Provide global Rstest APIs for test files, such as `expect`, `test`, `describe`,
 
 By default, Rstest does not provide global APIs. If you prefer to use the APIs globally like Jest, you can add `globals: true` in the config or pass the `--globals` option to CLI.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --globals 
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globals: true,
 });
 ```
+  </Tab>
+</Tabs>
 
 ## Usage
 

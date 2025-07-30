@@ -8,13 +8,24 @@ The environment that will be used for testing.
 
 The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --testEnvironment=jsdom
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   testEnvironment: 'jsdom',
 });
 ```
+  </Tab>
+</Tabs>
 
 ### Dom testing
 

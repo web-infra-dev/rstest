@@ -8,10 +8,21 @@ Automatically clear mock calls, instances, contexts and results before every tes
 
 When `clearMocks` enabled, rstest will call [.clearAllMocks()](/api/rstest/mockFunctions#rstestclearallmocks) before each test.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --clearMocks 
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   clearMocks: true,
 });
 ```
+  </Tab>
+</Tabs>

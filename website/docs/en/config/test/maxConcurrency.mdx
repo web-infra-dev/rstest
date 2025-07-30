@@ -7,3 +7,22 @@
 A number limiting the number of test cases that are allowed to run at the same time when using `test.concurrent` or wrapped in `describe.concurrent`.
 
 Any test above this limit will be queued and executed once a slot is released.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --maxConcurrency=10
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  maxConcurrency: 10,
+});
+```
+  </Tab>
+</Tabs>

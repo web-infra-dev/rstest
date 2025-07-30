@@ -7,3 +7,22 @@
 使用 `test.concurrent` 或 `describe.concurrent` 时允许同时运行的最大测试用例数量。
 
 超过此限制数量的测试将在前序测试完成后排队运行。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --maxConcurrency=10
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  maxConcurrency: 10,
+});
+```
+  </Tab>
+</Tabs>

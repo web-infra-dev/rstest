@@ -8,6 +8,25 @@
 
 如果将 `testNamePattern` 设置为 `bar`，则测试名称中不包含 `bar` 的测试将被跳过。
 
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest -t=bar
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testNamePattern: 'bar',
+});
+```
+  </Tab>
+</Tabs>
+
 ```ts
 // skipped
 test('test foo', () => {

@@ -5,3 +5,22 @@
 - **CLI：** `--testTimeout=5000`
 
 测试的默认超时时间（以毫秒为单位）。设置为 `0` 禁用超时。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --testTimeout=5000
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 5000,
+});
+```
+  </Tab>
+</Tabs>

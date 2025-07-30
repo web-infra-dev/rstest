@@ -5,3 +5,22 @@
 - **CLI：** `--hookTimeout=10000`
 
 单个测试 [hook](/api/test-api/hooks) 的超时时间（毫秒）。设置为 `0` 禁用超时。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --hookTimeout=10000 
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  hookTimeout: 10000,
+});
+```
+  </Tab>
+</Tabs>
