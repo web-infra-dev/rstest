@@ -8,13 +8,24 @@
 
 Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 `jsdom` 或 `happy-dom`。
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --testEnvironment=jsdom
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   testEnvironment: 'jsdom',
 });
 ```
+  </Tab>
+</Tabs>
 
 ### DOM 测试
 
