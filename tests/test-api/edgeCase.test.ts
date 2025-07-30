@@ -46,7 +46,7 @@ describe('Test Edge Cases', () => {
   });
 
   it('test module not found codeFrame', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/moduleNotFound.codeFrame.test.ts'],
       options: {
@@ -62,8 +62,8 @@ describe('Test Edge Cases', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     // Module not found error should throw and show code frame correctly
-    expect(logs.find((log) => log.includes('Cannot find module'))).toBeTruthy();
-    expect(logs.find((log) => log.includes("import('aaa')"))).toBeTruthy();
+    expectLog('Cannot find module', logs);
+    expectLog("import('aaa')", logs);
   });
 
   it('should log build error message correctly', async () => {
