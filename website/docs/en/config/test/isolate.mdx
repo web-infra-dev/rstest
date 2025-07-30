@@ -10,10 +10,21 @@ By default, Rstest runs each test in an isolated environment, which avoids the i
 
 If your code has no side effects, turning off this option will help improve performance because module caches can be reused between different test files.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --isolate=false
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   isolate: false,
 });
 ```
+  </Tab>
+</Tabs>

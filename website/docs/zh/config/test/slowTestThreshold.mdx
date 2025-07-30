@@ -5,3 +5,22 @@
 - **CLI：** `--slowTestThreshold=300`
 
 测试运行时间超过指定毫秒数时，被认为是缓慢的并在报告结果中显示。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --slowTestThreshold=300
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  slowTestThreshold: 300,
+});
+```
+  </Tab>
+</Tabs>

@@ -8,10 +8,21 @@ Automatically reset mock state before every test.
 
 When `resetMocks` enabled, rstest will call [.resetAllMocks()](/api/rstest/mockFunctions#rstestresetallmocks) before each test.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --resetMocks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   resetMocks: true,
 });
 ```
+  </Tab>
+</Tabs>

@@ -14,7 +14,16 @@ A list of glob patterns that should be excluded from your test files.
 
 Exclude the test files under `node_modules`:
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --exclude "**/node_modules/**"
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -22,3 +31,5 @@ export default defineConfig({
   exclude: ['**/node_modules/**'],
 });
 ```
+  </Tab>
+</Tabs>
