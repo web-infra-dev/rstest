@@ -10,7 +10,7 @@ describe.concurrent('reporters', () => {
   it('default', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run'],
+      args: ['run', 'index'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -25,7 +25,7 @@ describe.concurrent('reporters', () => {
   it('verbose', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--reporter=verbose'],
+      args: ['run', 'index', '--reporter=verbose'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -40,7 +40,7 @@ describe.concurrent('reporters', () => {
   it('custom', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', './rstest.customReporterConfig.ts'],
+      args: ['run', 'index', '-c', './rstest.customReporterConfig.ts'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -59,7 +59,7 @@ describe.concurrent('reporters', () => {
   it('empty', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', './rstest.emptyReporterConfig.ts'],
+      args: ['run', 'index', '-c', './rstest.emptyReporterConfig.ts'],
       options: {
         nodeOptions: {
           cwd: __dirname,

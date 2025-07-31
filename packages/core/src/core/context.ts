@@ -2,6 +2,7 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
+import { GithubActionsReporter } from '../reporter/githubActions';
 import { VerboseReporter } from '../reporter/verbose';
 import type { RstestCommand, RstestConfig, RstestContext } from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
@@ -9,6 +10,7 @@ import { castArray, getAbsolutePath } from '../utils/helper';
 const reportersMap = {
   default: DefaultReporter as typeof DefaultReporter,
   verbose: VerboseReporter as typeof VerboseReporter,
+  'github-actions': GithubActionsReporter as typeof GithubActionsReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
