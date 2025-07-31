@@ -9,7 +9,25 @@ export default defineConfig({
       react: 'commonjs react',
     },
   },
-  reporters: ['default', 'github-actions'],
+  reporters: [
+    'default',
+    [
+      'github-actions',
+      {
+        onWritePath(path: string) {
+          if (process.env.GITHUB_WORKSPACE) {
+            const githubPath = path.replace(
+              new RegExp(`^${__dirname}\/`),
+              `${process.env.GITHUB_WORKSPACE}/tests/`,
+            );
+            console.log('onWritePath', githubPath);
+            return githubPath;
+          }
+          return path;
+        },
+      },
+    ],
+  ],
   exclude: [
     '**/node_modules/**',
     '**/dist/**',

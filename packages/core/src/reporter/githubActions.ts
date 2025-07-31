@@ -8,6 +8,14 @@ import type {
 import { getTaskNameWithPrefix, logger } from '../utils';
 
 export class GithubActionsReporter {
+  private onWritePath: (path: string) => string;
+
+  constructor({
+    options,
+  }: { options: { onWritePath: (path: string) => string } }) {
+    this.onWritePath = options.onWritePath;
+  }
+
   async onTestRunEnd({
     results,
     testResults,
@@ -55,7 +63,7 @@ export class GithubActionsReporter {
         }
 
         logger.log(
-          `::${type} file=${file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
+          `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
         );
       }
     }
