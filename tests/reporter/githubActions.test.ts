@@ -5,5 +5,5 @@ it('should add two numbers correctly', () => {
 });
 
 it('test snapshot', () => {
-  expect('hello').toMatchInlineSnapshot('hello world');
+  expect('hello').toMatchInlineSnapshot(`"hello world"`);
 });
