@@ -6,12 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import {
-  getTaskNameWithPrefix,
-  logger,
-  prettyTestPath,
-  TEST_DELIMITER,
-} from '../utils';
+import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
@@ -54,7 +49,7 @@ export class GithubActionsReporter {
       const { testPath } = test;
       const nameStr = getTaskNameWithPrefix(test);
       const shortPath = relative(this.rootPath, testPath);
-      const title = `${prettyTestPath(shortPath)} ${TEST_DELIMITER} ${nameStr}`;
+      const title = `${shortPath} ${TEST_DELIMITER} ${nameStr}`;
 
       for (const error of test.errors || []) {
         let file = testPath;
