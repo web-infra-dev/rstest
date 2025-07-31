@@ -100,6 +100,9 @@ const stackIgnores: (RegExp | string)[] = [
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
   /node:\w+/,
+  /webpack\/runtime/,
+  // windows path
+  /webpack\\runtime/,
   '<anonymous>',
 ];
 

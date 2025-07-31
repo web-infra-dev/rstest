@@ -92,7 +92,18 @@ export async function runRstestCli({
     }
   };
 
-  return { cli, expectExecSuccess };
+  const expectLog = async (
+    msg: string,
+    logs: string[] = cli.stdout.split('\n').filter(Boolean),
+  ) => {
+    const matchedLog = logs.find((log) => log.includes(msg));
+
+    if (!matchedLog) {
+      throw new Error(`Can't find log(${msg}) in:\n${logs.join('\n')}`);
+    }
+  };
+
+  return { cli, expectExecSuccess, expectLog };
 }
 
 export async function prepareFixtures({
