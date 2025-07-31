@@ -92,7 +92,7 @@ export async function runRstestCli({
     }
   };
 
-  const expectLog = async (
+  const expectLog = (
     msg: string,
     logs: string[] = cli.stdout.split('\n').filter(Boolean),
   ) => {
