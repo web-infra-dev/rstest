@@ -9,7 +9,6 @@ export default defineConfig({
       react: 'commonjs react',
     },
   },
-  reporters: ['default', 'github-actions'],
   exclude: [
     '**/node_modules/**',
     '**/dist/**',

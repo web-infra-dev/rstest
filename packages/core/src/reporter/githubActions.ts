@@ -1,3 +1,4 @@
+import { relative } from 'pathe';
 import type {
   Duration,
   GetSourcemap,
@@ -5,15 +6,26 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix, logger } from '../utils';
+import {
+  getTaskNameWithPrefix,
+  logger,
+  prettyTestPath,
+  TEST_DELIMITER,
+} from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
+  private rootPath: string;
 
   constructor({
     options,
-  }: { options: { onWritePath: (path: string) => string } }) {
+    rootPath,
+  }: {
+    rootPath: string;
+    options: { onWritePath: (path: string) => string };
+  }) {
     this.onWritePath = options.onWritePath;
+    this.rootPath = rootPath;
   }
 
   async onTestRunEnd({
@@ -39,13 +51,16 @@ export class GithubActionsReporter {
     const { parseErrorStacktrace } = await import('../utils/error');
 
     for (const test of failedTests) {
+      const { testPath } = test;
       const nameStr = getTaskNameWithPrefix(test);
-      const title = nameStr.length ? nameStr : test.name;
+      const shortPath = relative(this.rootPath, testPath);
+      const title = `${prettyTestPath(shortPath)} ${TEST_DELIMITER} ${nameStr}`;
 
       for (const error of test.errors || []) {
-        let file = test.testPath;
+        let file = testPath;
         let line = 1;
         let column = 1;
+
         const message = `${error.message}${error.diff ? `\n${error.diff}` : ''}`;
         const type = 'error';
 
