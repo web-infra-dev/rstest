@@ -1,0 +1,69 @@
+---
+overviewHeaders: []
+---
+
+# reporters
+
+- **Type:**
+
+```ts
+type Reporter = ReporterName | [ReporterName, ReporterOptions];
+
+type Reporters = Reporter | Reporter[];
+```
+
+- **Default:** `'default'`
+- **CLI:** `--reporter=<name> --reporter=<name1>`
+
+Customize the reporter type. If no reporter is specified, Rstest will use the built-in default reporter.
+
+## Built-in Reporters
+
+### Default reporter
+
+By default, Rstest displays test run status, results, and summary information in the terminal.
+
+Output example:
+
+```bash
+ ✓ test/index.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```
+
+### Verbose reporter
+
+The default reporter only outputs test case information when tests fail or run slowly. The verbose reporter will output all test case information after test completion.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=verbose
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: 'verbose'
+});
+```
+  </Tab>
+</Tabs>
+
+With verbose reporter, Rstest outputs:
+
+```bash
+ ✓ test/index.test.ts (2) 2ms
+  ✓ Index > should add two numbers correctly (1ms)
+  ✓ Index > should test source code correctly (1ms)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```

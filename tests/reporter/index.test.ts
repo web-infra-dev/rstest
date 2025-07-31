@@ -22,6 +22,21 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('✗ basic > b');
   });
 
+  it('verbose', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--reporter=verbose'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('✓ basic > a');
+  });
+
   it('custom', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

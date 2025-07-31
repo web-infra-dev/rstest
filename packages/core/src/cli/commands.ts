@@ -21,6 +21,7 @@ type CommonOptions = {
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
+  reporter?: string[];
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -74,6 +75,7 @@ const applyCommonOptions = (cli: CAC) => {
       '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',
     )
+    .option('--reporter <reporter>', 'Specify the reporter to use')
     .option(
       '-t, --testNamePattern <value>',
       'Run only tests with a name that matches the regex',
@@ -147,6 +149,10 @@ export async function initCli(options: CommonOptions): Promise<{
 
   if (options.exclude) {
     config.exclude = castArray(options.exclude);
+  }
+
+  if (options.reporter) {
+    config.reporters = castArray(options.reporter) as typeof config.reporters;
   }
 
   if (options.include) {
