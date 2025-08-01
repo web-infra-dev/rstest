@@ -1,29 +1,33 @@
 [
+  "root",
+  "name",
   "include",
   "exclude",
-  "includeSource",
-  "globals",
   "setupFiles",
-  "testEnvironment",
+  "update",
+  "globals",
+  "passWithNoTests",
+  "includeSource",
   "testNamePattern",
+
+  "retry",
   "testTimeout",
   "hookTimeout",
-  "retry",
-  "root",
-  "reporters",
-  "name",
-  "isolate",
+  "maxConcurrency",
+
   "pool",
-  "passWithNoTests",
-  "printConsoleTrace",
-  "onConsoleLog",
-  "disableConsoleIntercept",
-  "update",
+  "isolate",
+  "testEnvironment",
+
   "clearMocks",
   "resetMocks",
   "restoreMocks",
   "unstubEnvs",
   "unstubGlobals",
-  "maxConcurrency",
-  "slowTestThreshold"
+
+  "reporters",
+  "slowTestThreshold",
+  "printConsoleTrace",
+  "onConsoleLog",
+  "disableConsoleIntercept"
 ]
