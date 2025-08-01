@@ -75,11 +75,11 @@ With verbose reporter, Rstest outputs:
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-### Github Actions reporter
+### Github actions reporter
 
 The Github Actions reporter outputs error messages in the form of [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) when tests fail.
 
-#### Output Example
+#### Output example
 
 When tests fail, the Github Actions reporter outputs information in a format similar to:
 
@@ -95,7 +95,7 @@ These outputs are parsed by GitHub Actions and generate comments at the correspo
 
 When no reporter is manually set, Rstest automatically enables this reporter when it detects a GitHub Actions environment (`process.env.GITHUB_ACTIONS` is `'true'`).
 
-#### Manual Enablement
+#### Manual enablement
 
 You can also manually enable this reporter:
 

@@ -24,9 +24,9 @@ process.env.GITHUB_ACTIONS === 'true'
 
 自定义输出报告器的类型。如果没有指定报告器，Rstest 会使用内置的默认报告器。
 
-## 内置报告器
+## Built-in Reporters
 
-### 默认报告器
+### Default reporter
 
 默认情况下，Rstest 会在终端显示测试运行状态、结果以及汇总信息。
 
@@ -40,7 +40,7 @@ process.env.GITHUB_ACTIONS === 'true'
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-### Verbose 报告器
+### Verbose reporter
 
 默认报告器仅在测试运行失败或耗时缓慢时输出相关的测试用例信息，Verbose 报告器会在测试完成后输出所有的测试用例信息。
 
@@ -75,7 +75,7 @@ export default defineConfig({
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-### Github Actions 报告器
+### Github actions reporter
 
 Github Actions 报告器将在测试失败时以 [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
 
