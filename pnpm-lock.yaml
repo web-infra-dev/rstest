@@ -116,21 +116,9 @@ importers:
       '@rsbuild/core':
         specifier: 1.4.12
         version: 1.4.12
-      '@types/chai':
-        specifier: ^5.2.2
-        version: 5.2.2
-      '@vitest/expect':
-        specifier: ^3.2.4
-        version: 3.2.4
-      '@vitest/snapshot':
-        specifier: ^3.2.4
-        version: 3.2.4
       birpc:
         specifier: 2.5.0
         version: 2.5.0
-      chai:
-        specifier: ^5.2.1
-        version: 5.2.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -162,6 +150,9 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
+      '@types/chai':
+        specifier: ^5.2.2
+        version: 5.2.2
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
@@ -171,9 +162,18 @@ importers:
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
+      '@vitest/expect':
+        specifier: ^3.2.4
+        version: 3.2.4
+      '@vitest/snapshot':
+        specifier: ^3.2.4
+        version: 3.2.4
       cac:
         specifier: ^6.7.14
         version: 6.7.14
+      chai:
+        specifier: ^5.2.1
+        version: 5.2.1
       happy-dom:
         specifier: ^18.0.1
         version: 18.0.1
@@ -204,6 +204,8 @@ importers:
       tinyspy:
         specifier: ^4.0.3
         version: 4.0.3
+
+  packages/core/compiled/picocolors: {}
 
   scripts/tsconfig: {}
 

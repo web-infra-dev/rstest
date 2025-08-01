@@ -11,7 +11,19 @@ export default defineConfig({
       format: 'esm',
       syntax: ['node 18'],
       dts: {
-        bundle: true,
+        bundle: {
+          bundledPackages: [
+            '@types/sinonjs__fake-timers',
+            '@jridgewell/trace-mapping',
+            '@types/chai',
+            '@vitest/expect',
+            '@vitest/snapshot',
+            '@vitest/utils',
+            '@vitest/spy',
+            'tinyrainbow',
+            '@vitest/pretty-format',
+          ],
+        },
         distPath: './dist-types',
       },
       output: {
