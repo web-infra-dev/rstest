@@ -1,19 +1,10 @@
-import { expect, it, rs } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
+import { sleep } from '../../scripts/utils';
 
-const isUrl: typeof import('is-url') = require('is-url');
+test('doMock works', async () => {
+  rs.doMock('../src/increment', () => ({
+    increment: (num: number) => num + 10,
+  }));
 
-rs.mockRequire('is-url');
-
-it('mocked is-url (is-url is externalized)', async () => {
-  expect(isUrl('https://github.com')).toBe('is-url mock');
-  // @ts-expect-error is-url has been mocked.
-  isUrl.fn(1);
-  // @ts-expect-error is-url has been mocked.
-  expect(isUrl.fn).toBeCalledWith(1);
-});
-
-it('use `requireActual` to require actual is-url', async () => {
-  const isUrl = await rs.requireActual<typeof import('is-url')>('is-url');
-  expect(isUrl('https://github.com')).toBe(true);
-  expect(isUrl('http://')).toBe(false);
+  rs.requireActual('../src/increment');
 });

@@ -66,9 +66,9 @@ export default async function mockLoader(source, map) {
             }
             return trimmed;
           })
-          .filter((v) => {
-            return !(v === 'rs' && moduleName === '@rstest/core');
-          })
+          // .filter((v) => {
+          //   return !(v === 'rs' && moduleName === '@rstest/core');
+          // })
           .join(', ');
 
         transformedImport = `const { ${imports} } = await import('${moduleName}')`;
