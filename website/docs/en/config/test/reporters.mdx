@@ -12,7 +12,14 @@ type Reporter = ReporterName | [ReporterName, ReporterOptions];
 type Reporters = Reporter | Reporter[];
 ```
 
-- **Default:** `'default'`
+- **Default:**
+
+```ts
+process.env.GITHUB_ACTIONS === 'true'
+  ? ['default', 'github-actions']
+  : ['default'];
+```
+
 - **CLI:** `--reporter=<name> --reporter=<name1>`
 
 Customize the reporter type. If no reporter is specified, Rstest will use the built-in default reporter.
@@ -67,3 +74,44 @@ With verbose reporter, Rstest outputs:
       Tests 2 passed
    Duration 112ms (build 19ms, tests 93ms)
 ```
+
+### Github actions reporter
+
+The Github Actions reporter outputs error messages in the form of [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) when tests fail.
+
+#### Output example
+
+When tests fail, the Github Actions reporter outputs information in a format similar to:
+
+```bash
+::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
+```
+
+These outputs are parsed by GitHub Actions and generate comments at the corresponding locations.
+
+![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
+
+#### Auto-enablement
+
+When no reporter is manually set, Rstest automatically enables this reporter when it detects a GitHub Actions environment (`process.env.GITHUB_ACTIONS` is `'true'`).
+
+#### Manual enablement
+
+You can also manually enable this reporter:
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=github-actions
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['github-actions']
+});
+```
+  </Tab>
+</Tabs>

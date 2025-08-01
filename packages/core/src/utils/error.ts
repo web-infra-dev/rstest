@@ -106,7 +106,7 @@ const stackIgnores: (RegExp | string)[] = [
   '<anonymous>',
 ];
 
-async function parseErrorStacktrace({
+export async function parseErrorStacktrace({
   stack,
   getSourcemap,
   fullStack,
