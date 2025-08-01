@@ -119,12 +119,6 @@ importers:
       '@types/chai':
         specifier: ^5.2.2
         version: 5.2.2
-      '@vitest/expect':
-        specifier: ^3.2.4
-        version: 3.2.4
-      '@vitest/snapshot':
-        specifier: ^3.2.4
-        version: 3.2.4
       birpc:
         specifier: 2.5.0
         version: 2.5.0
@@ -171,6 +165,12 @@ importers:
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
+      '@vitest/expect':
+        specifier: ^3.2.4
+        version: 3.2.4
+      '@vitest/snapshot':
+        specifier: ^3.2.4
+        version: 3.2.4
       cac:
         specifier: ^6.7.14
         version: 6.7.14
