@@ -15,7 +15,6 @@ export default defineConfig({
           bundledPackages: [
             '@types/sinonjs__fake-timers',
             '@jridgewell/trace-mapping',
-            '@types/chai',
             '@vitest/expect',
             '@vitest/snapshot',
             '@vitest/utils',

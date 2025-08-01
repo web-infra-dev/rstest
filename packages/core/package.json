@@ -54,6 +54,8 @@
     "test": "npx rstest run --globals"
   },
   "dependencies": {
+    "chai": "^5.2.1",
+    "@types/chai": "^5.2.2",
     "@rsbuild/core": "1.4.12",
     "birpc": "2.5.0",
     "pathe": "^2.0.3",
@@ -61,8 +63,6 @@
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
-    "chai": "^5.2.1",
-    "@types/chai": "^5.2.2",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
