@@ -2,6 +2,8 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
 import { mergeRstestConfig, withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
+import { GithubActionsReporter } from '../reporter/githubActions';
+import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
   Project,
@@ -13,6 +15,8 @@ import { castArray, getAbsolutePath } from '../utils/helper';
 
 const reportersMap = {
   default: DefaultReporter as typeof DefaultReporter,
+  verbose: VerboseReporter as typeof VerboseReporter,
+  'github-actions': GithubActionsReporter as typeof GithubActionsReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
@@ -23,10 +27,8 @@ function createReporters(
 ) {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
-      const [name, options = {}] = castArray(reporter) as [
-        BuiltInReporterNames,
-        Record<string, any>,
-      ];
+      const [name, options = {}] =
+        typeof reporter === 'string' ? [reporter, {}] : reporter;
       // built-in reporters
       if (name in reportersMap) {
         const Reporter = reportersMap[name]!;

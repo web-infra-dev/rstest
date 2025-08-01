@@ -13,35 +13,16 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import {
-  color,
-  getTaskNameWithPrefix,
-  logger,
-  prettyTestPath,
-  prettyTime,
-} from '../utils';
+import { color, logger, prettyTestPath } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
-
-const statusStr = {
-  fail: '✗',
-  pass: '✓',
-  todo: '-',
-  skip: '-',
-};
-
-const statusColorfulStr = {
-  fail: color.red(statusStr.fail),
-  pass: color.green(statusStr.pass),
-  todo: color.gray(statusStr.todo),
-  skip: color.gray(statusStr.skip),
-};
+import { logCase, logFileTitle } from './utils';
 
 export class DefaultReporter implements Reporter {
-  private rootPath: string;
-  private config: NormalizedConfig;
+  protected rootPath: string;
+  protected config: NormalizedConfig;
   private options: DefaultReporterOptions = {};
-  private statusRenderer: StatusRenderer | undefined;
+  protected statusRenderer: StatusRenderer | undefined;
 
   constructor({
     rootPath,
@@ -70,27 +51,13 @@ export class DefaultReporter implements Reporter {
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettyTestPath(relativePath)}`;
-
-    const formatDuration = (duration: number) => {
-      return color[duration > slowTestThreshold ? 'yellow' : 'green'](
-        `${prettyTime(duration)}`,
-      );
-    };
-
-    title += ` ${color.gray(`(${test.results.length})`)}`;
+    logFileTitle(test, relativePath, slowTestThreshold);
 
     const isTooSlow = test.duration && test.duration > slowTestThreshold;
-
-    if (isTooSlow) {
-      title += ` ${formatDuration(test.duration!)}`;
-    }
 
     const hasRetryCase = test.results.some(
       (result) => (result.retryCount || 0) > 0,
     );
-
-    logger.log(title);
 
     if (test.status !== 'fail' && !isTooSlow && !hasRetryCase) {
       return;
@@ -113,26 +80,8 @@ export class DefaultReporter implements Reporter {
       ) {
         continue;
       }
-      const icon =
-        isSlowCase && result.status === 'pass'
-          ? color.yellow(statusStr[result.status])
-          : statusColorfulStr[result.status];
-      const nameStr = getTaskNameWithPrefix(result);
-      const duration =
-        typeof result.duration !== 'undefined'
-          ? ` (${prettyTime(result.duration)})`
-          : '';
-      const retry = result.retryCount
-        ? color.yellow(` (retry x${result.retryCount})`)
-        : '';
 
-      console.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}`);
-
-      if (result.errors) {
-        for (const error of result.errors) {
-          console.error(color.red(`    ${error.message}`));
-        }
-      }
+      logCase(result, slowTestThreshold);
     }
   }
 

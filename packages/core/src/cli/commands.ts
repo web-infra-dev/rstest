@@ -46,6 +46,7 @@ const applyCommonOptions = (cli: CAC) => {
       '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',
     )
+    .option('--reporter <reporter>', 'Specify the reporter to use')
     .option(
       '-t, --testNamePattern <value>',
       'Run only tests with a name that matches the regex',

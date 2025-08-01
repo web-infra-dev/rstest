@@ -1,0 +1,117 @@
+---
+overviewHeaders: []
+---
+
+# reporters
+
+- **类型：**
+
+```ts
+type Reporter = ReporterName | [ReporterName, ReporterOptions];
+
+type Reporters = Reporter | Reporter[];
+```
+
+- **默认值：**
+
+```ts
+process.env.GITHUB_ACTIONS === 'true'
+  ? ['default', 'github-actions']
+  : ['default'];
+```
+
+- **CLI：** `--reporter=<name> --reporter=<name1>`
+
+自定义输出报告器的类型。如果没有指定报告器，Rstest 会使用内置的默认报告器。
+
+## Built-in Reporters
+
+### Default reporter
+
+默认情况下，Rstest 会在终端显示测试运行状态、结果以及汇总信息。
+
+输出如下：
+
+```bash
+ ✓ test/index.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```
+
+### Verbose reporter
+
+默认报告器仅在测试运行失败或耗时缓慢时输出相关的测试用例信息，Verbose 报告器会在测试完成后输出所有的测试用例信息。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=verbose
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: 'verbose'
+});
+```
+  </Tab>
+</Tabs>
+
+此时，Rstest 输出如下：
+
+```bash
+ ✓ test/index.test.ts (2) 2ms
+  ✓ Index > should add two numbers correctly (1ms)
+  ✓ Index > should test source code correctly (1ms)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 112ms (build 19ms, tests 93ms)
+```
+
+### Github actions reporter
+
+Github Actions 报告器将在测试失败时以 [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
+
+#### 输出示例
+
+当测试失败时，Github Actions 报告器会输出类似以下格式的信息：
+
+```bash
+::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
+```
+
+这些输出会被 GitHub Actions 解析，并在对应的位置生成注释。
+
+![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
+
+#### 自动启用
+
+当未手动设置任何 reporter 时，Rstest 会在检测到 GitHub Actions 环境(`process.env.GITHUB_ACTIONS` 为 `'true'`)时自动启用此报告器。
+
+#### 手动启用
+
+你也可以手动启用此报告器：
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --reporter=github-actions
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['github-actions']
+});
+```
+  </Tab>
+</Tabs>

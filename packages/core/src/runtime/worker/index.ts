@@ -7,6 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import { setTimeout } from 'node:timers';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError } from '../util';
@@ -92,14 +93,17 @@ const preparePool = async ({
 
   const unhandledErrors: Error[] = [];
 
-  const handleError = (e: Error, type: string) => {
-    e.name = type;
+  const handleError = (e: Error | string, type: string) => {
+    const error: Error = typeof e === 'string' ? new Error(e) : e;
+
+    error.name = type;
+
     if (isTeardown) {
-      e.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${e.stack}`;
-      console.error(e);
+      error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
+      console.error(error);
     } else {
-      console.error(e);
-      unhandledErrors.push(e);
+      console.error(error);
+      unhandledErrors.push(error);
     }
   };
 
@@ -243,6 +247,8 @@ const runInPool = async (
   process.off('SIGTERM', onExit);
 
   const teardown = async () => {
+    await new Promise((resolve) => setTimeout(resolve));
+
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
     // should exit correctly when user's signal listener exists

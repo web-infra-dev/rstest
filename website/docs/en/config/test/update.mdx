@@ -14,10 +14,21 @@ When `update` is enabled, Rstest will update all changed snapshots and delete ob
 
 It should be noted that when you test in local, the newly added snapshot will be automatically updated regardless of whether the `update` configuration is enabled.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest -u
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   update: true,
 });
 ```
+  </Tab>
+</Tabs>

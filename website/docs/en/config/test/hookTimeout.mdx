@@ -5,3 +5,22 @@
 - **CLI:** `--hookTimeout=10000`
 
 Default timeout of [hook](/api/test-api/hooks) in milliseconds. `0` will disable the timeout.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --hookTimeout=10000
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  hookTimeout: 10000,
+});
+```
+  </Tab>
+</Tabs>

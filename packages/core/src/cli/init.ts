@@ -14,6 +14,7 @@ export type CommonOptions = {
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
+  reporter?: string[];
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -69,6 +70,10 @@ async function resolveConfig(
     if (options[key] !== undefined) {
       (config[key] as any) = options[key];
     }
+  }
+
+  if (options.reporter) {
+    config.reporters = castArray(options.reporter) as typeof config.reporters;
   }
 
   if (options.exclude) {

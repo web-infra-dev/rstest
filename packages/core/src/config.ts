@@ -98,7 +98,10 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hookTimeout: 10_000,
   testEnvironment: 'node',
   retry: 0,
-  reporters: ['default'],
+  reporters:
+    process.env.GITHUB_ACTIONS === 'true'
+      ? ['default', 'github-actions']
+      : ['default'],
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
