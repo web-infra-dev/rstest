@@ -19,7 +19,7 @@ export function licensePlugin() {
 
   return new LicenseWebpackPlugin({
     perChunkOutput: false,
-    outputFilename: '../LICENSE',
+    outputFilename: '../LICENSE.md',
     renderLicenses: (modules: LicenseIdentifiedModule[]) => {
       return `MIT License
 
