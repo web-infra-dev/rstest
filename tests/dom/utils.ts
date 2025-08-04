@@ -7,7 +7,7 @@ const __dirname = dirname(__filename);
 
 export const runCli = async (
   _filters: string | string[],
-  testEnvironment: 'jsdom' | 'happy-dom',
+  testEnvironment: 'jsdom' | 'happy-dom' | string,
   extra?: {
     args?: string[];
   },

@@ -120,14 +120,23 @@ const preparePool = async ({
 
   const { api, runner } = createRstestRuntime(workerState);
 
-  if (testEnvironment === 'jsdom') {
-    const { environment } = await import('./env/jsdom');
-    const { teardown } = await environment.setup(global, {});
-    cleanupFns.push(() => teardown(global));
-  } else if (testEnvironment === 'happy-dom') {
-    const { environment } = await import('./env/happyDom');
-    const { teardown } = await environment.setup(global, {});
-    cleanupFns.push(async () => await teardown(global));
+  switch (testEnvironment) {
+    case 'node':
+      break;
+    case 'jsdom': {
+      const { environment } = await import('./env/jsdom');
+      const { teardown } = await environment.setup(global, {});
+      cleanupFns.push(() => teardown(global));
+      break;
+    }
+    case 'happy-dom': {
+      const { environment } = await import('./env/happyDom');
+      const { teardown } = await environment.setup(global, {});
+      cleanupFns.push(async () => await teardown(global));
+      break;
+    }
+    default:
+      throw new Error(`Unknown test environment: ${testEnvironment}`);
   }
 
   const rstestContext = {
