@@ -6,13 +6,13 @@ title: Fake timers
 
 The fake timers may be useful when a piece of code sets a long timeout that we don't want to wait for in a test.
 
-Rstest provides some utility functions to help you fake timers powered by [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers).
+Rstest provides some utility functions to help you fake timers powered by [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers).
 
 ## rstest.useFakeTimers
 
 - **Type:** `(config?: FakeTimerInstallOpts) => Rstest`
 
-To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers) under the hood.
+To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
 ```ts
 rstest.useFakeTimers();
