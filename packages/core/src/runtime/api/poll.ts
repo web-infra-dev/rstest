@@ -1,4 +1,3 @@
-import { setTimeout } from 'node:timers';
 /**
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/chai/poll.ts
@@ -7,6 +6,7 @@ import { setTimeout } from 'node:timers';
 import type { Assertion } from '@vitest/expect';
 import * as chai from 'chai';
 import type { RstestExpect, TestCase } from '../../types';
+import { getRealTimers } from '../util';
 
 // these matchers are not supported because they don't make sense with poll
 const unsupported = [
@@ -86,11 +86,11 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                 } catch (err) {
                   lastError = err;
                   if (!chai.util.flag(assertion, '_isLastPollAttempt')) {
-                    intervalId = setTimeout(check, interval);
+                    intervalId = getRealTimers().setTimeout!(check, interval);
                   }
                 }
               };
-              timeoutId = setTimeout(() => {
+              timeoutId = getRealTimers().setTimeout!(() => {
                 clearTimeout(intervalId);
                 chai.util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {

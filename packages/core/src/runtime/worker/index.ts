@@ -7,10 +7,9 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
-import { setTimeout } from 'node:timers';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
-import { formatTestError } from '../util';
+import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -33,6 +32,7 @@ const preparePool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']) => {
+  setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
@@ -246,7 +246,7 @@ const runInPool = async (
   process.off('SIGTERM', onExit);
 
   const teardown = async () => {
-    await new Promise((resolve) => setTimeout(resolve));
+    await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
