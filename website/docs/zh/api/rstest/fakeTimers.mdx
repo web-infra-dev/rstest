@@ -6,13 +6,13 @@ title: Fake timers
 
 当你的代码中设置了很长的定时器（timeout），而你又不想在测试中等待它们时，fake timers 会非常有用。
 
-Rstest 提供了一些实用函数，基于 [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers) 实现定时器的模拟。
+Rstest 提供了一些实用函数，基于 [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) 实现定时器的模拟。
 
 ## rstest.useFakeTimers
 
 - **类型：** `(config?: FakeTimerInstallOpts) => Rstest`
 
-调用此方法可以启用定时器的模拟。底层使用 [@sinonjs/fake-timers](https://github.com/node-fake-timers/fake-timers)。
+调用此方法可以启用定时器的模拟。底层使用 [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers)。
 
 ```ts
 rstest.useFakeTimers();
