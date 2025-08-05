@@ -37,11 +37,23 @@ describe.only('只运行这个套件', () => {
 
 ## describe.skip
 
-跳过被 skip 标记的 describe 块。
+跳过被 skip 标记的 describe 块里的测试用例。
 
 ```ts
-describe.skip('跳过这个套件', () => {
+describe.skip('跳过这个套件里的测试用例', () => {
   // ...
+});
+```
+
+需要注意的是，skip 标记仅用于跳过测试用例，describe 块内的代码仍会执行。这是因为 Rstest 需要收集测试用例的信息，以确保所有功能正常运行，即使它们被标记为跳过。例如，在快照测试中判断快照是过时还是被标记为 skipped。
+
+```ts
+describe.skip('a', () => {
+  console.log('will run');
+  test('b', () => {
+    console.log('will not run');
+    expect(0).toBe(0);
+  });
 });
 ```
 

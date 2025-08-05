@@ -40,8 +40,20 @@ describe.only('only this suite', () => {
 Skip the describe block(s) marked with `skip`.
 
 ```ts
-describe.skip('skip this suite', () => {
+describe.skip('Skip the test cases in this suite', () => {
   // ...
+});
+```
+
+It should be noted that the skip tag is only used to skip test cases, and the code inside the describe block will still be executed. This is because Rstest needs to collect information about test cases to ensure that all features work properly, even if they are marked as skipped. For example, in snapshot test, determine whether a snapshot is outdated or marked as skipped.
+
+```ts
+describe.skip('a', () => {
+  console.log('will run');
+  test('b', () => {
+    console.log('will not run');
+    expect(0).toBe(0);
+  });
 });
 ```
 
