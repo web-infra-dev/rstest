@@ -4,7 +4,9 @@ A set of useful utility functions.
 
 ## rstest.stubEnv
 
-**Type:** `(name: string, value: string | undefined) => Rstest`
+- **Alias:** `rs.stubEnv`
+
+- **Type:** `(name: string, value: string | undefined) => Rstest`
 
 Temporarily sets an environment variable in `process.env` to the specified value. Useful for testing code that depends on environment variables.
 
@@ -24,7 +26,9 @@ expect(process.env.MY_VAR).toBeUndefined();
 
 ## rstest.unstubAllEnvs
 
-**Type:** `() => Rstest`
+- **Alias:** `rs.unstubAllEnvs`
+
+- **Type:** `() => Rstest`
 
 Restores all environment variables that were changed using `rstest.stubEnv` to their original values.
 
@@ -42,7 +46,9 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 ## rstest.stubGlobal
 
-**Type:** `(name: string | number | symbol, value: unknown) => Rstest`
+- **Alias:** `rs.stubGlobal`
+
+- **Type:** `(name: string | number | symbol, value: unknown) => Rstest`
 
 Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
 
@@ -61,7 +67,9 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 ## rstest.unstubAllGlobals
 
-**Type:** `() => Rstest`
+- **Alias:** `rs.unstubAllGlobals`
+
+- **Type:** `() => Rstest`
 
 Restores all global variables that were changed using `rstest.stubGlobal` to their original values.
 
@@ -79,7 +87,9 @@ expect(globalThis.myGlobal).toBeUndefined();
 
 ## rstest.setConfig
 
-**Type:**
+- **Alias:** `rs.setConfig`
+
+- **Type:**
 
 ```ts
 type RuntimeConfig = {
@@ -107,6 +117,8 @@ rstest.resetConfig(); // Restore to default config
 
 ## rstest.resetConfig
 
-**Type:** `() => void`
+- **Alias:** `rs.resetConfig`
+
+- **Type:** `() => void`
 
 Resets the runtime configuration that was changed using `rstest.setConfig` back to the default values.
