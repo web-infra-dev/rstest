@@ -101,7 +101,7 @@ export class TestRunner {
           status: 'fail' as const,
           parentNames: test.parentNames,
           name: test.name,
-          errors: formatTestError(error),
+          errors: formatTestError(error, test),
           testPath,
         };
       }
@@ -156,7 +156,7 @@ export class TestRunner {
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: formatTestError(error),
+              errors: formatTestError(error, test),
               testPath,
             };
           }

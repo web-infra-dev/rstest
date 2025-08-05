@@ -1,6 +1,6 @@
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
-import type { FormattedError } from '../types';
+import type { FormattedError, Test } from '../types';
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
@@ -15,7 +15,7 @@ export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
 
-export const formatTestError = (err: any): FormattedError[] => {
+export const formatTestError = (err: any, test?: Test): FormattedError[] => {
   const errors = Array.isArray(err) ? err : [err];
 
   return errors.map((error) => {
@@ -26,6 +26,10 @@ export const formatTestError = (err: any): FormattedError[] => {
       name: error.name,
       stack: error.stack,
     };
+
+    if (error instanceof TestRegisterError && test?.type === 'case') {
+      errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+    }
 
     if (
       error.showDiff ||
@@ -100,3 +104,5 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
   }
   return result;
 }
+
+export class TestRegisterError extends Error {}
