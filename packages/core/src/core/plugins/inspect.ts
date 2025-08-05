@@ -9,11 +9,13 @@ export const pluginInspect: () => RsbuildPlugin | null = () =>
         name: 'rstest:inspect',
         setup: (api) => {
           api.modifyRspackConfig(async (config) => {
+            // use inline source map or write to disk
             config.devtool = 'inline-source-map';
             config.optimization ??= {};
             config.optimization.splitChunks = {
               ...(config.optimization.splitChunks || {}),
-              maxSize: 1024 * 1024,
+              // Limit the size of each chunk to speed up the source map loading in inspector
+              maxSize: 1024 * 1024, // 1MB
               chunks: 'all',
             };
           });
