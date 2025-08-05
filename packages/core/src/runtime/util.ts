@@ -2,6 +2,19 @@ import { format } from 'node:util';
 import { diff } from 'jest-diff';
 import type { FormattedError } from '../types';
 
+const REAL_TIMERS: {
+  setTimeout?: typeof globalThis.setTimeout;
+} = {};
+
+// store the original timers
+export const setRealTimers = (): void => {
+  REAL_TIMERS.setTimeout ??= globalThis.setTimeout;
+};
+
+export const getRealTimers = (): typeof REAL_TIMERS => {
+  return REAL_TIMERS;
+};
+
 export const formatTestError = (err: any): FormattedError[] => {
   const errors = Array.isArray(err) ? err : [err];
 

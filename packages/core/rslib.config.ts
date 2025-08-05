@@ -58,6 +58,11 @@ export default defineConfig({
           },
         },
       },
+      shims: {
+        esm: {
+          require: true,
+        },
+      },
       source: {
         entry: {
           public: './src/public.ts',

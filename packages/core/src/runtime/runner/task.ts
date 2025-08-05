@@ -1,4 +1,3 @@
-import { setTimeout } from 'node:timers';
 import type {
   Test,
   TestCase,
@@ -9,6 +8,7 @@ import type {
   TestSuiteListeners,
 } from '../../types';
 import { getTaskNameWithPrefix, ROOT_SUITE_NAME } from '../../utils';
+import { getRealTimers } from '../util';
 
 export const getTestStatus = (
   results: TestResult[],
@@ -213,7 +213,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
   return (async (...args: Parameters<T>) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(
+      timeoutId = getRealTimers().setTimeout!(
         () =>
           reject(
             makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
