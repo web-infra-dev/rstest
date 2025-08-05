@@ -22,7 +22,7 @@ import type {
   TestSuite,
 } from '../../types';
 import { castArray, ROOT_SUITE_NAME } from '../../utils';
-import { formatName } from '../util';
+import { formatName, TestRegisterError } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -34,6 +34,7 @@ export class RunnerRuntime {
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
   private testPath: string;
+  private status: 'running' | 'collect' = 'collect';
 
   /**
    * Collect test status:
@@ -53,6 +54,20 @@ export class RunnerRuntime {
   }) {
     this.testPath = testPath;
     this.runtimeConfig = runtimeConfig;
+  }
+
+  updateStatus(status: 'running' | 'collect'): void {
+    this.status = status;
+  }
+
+  private checkStatus(name: string, type: 'case' | 'suite'): void {
+    if (this.status === 'running') {
+      const error = new TestRegisterError(
+        `${type === 'case' ? 'Test' : 'Describe'} '${name}' cannot run`,
+      );
+
+      throw error;
+    }
   }
 
   afterAll(
@@ -148,6 +163,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'suite');
     const currentSuite: TestSuite = {
       name,
       runMode,
@@ -284,6 +300,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'case');
     this.addTestCase({
       name,
       originalFn,

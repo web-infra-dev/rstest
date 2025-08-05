@@ -39,6 +39,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
+        runtime.instance.updateStatus('running');
 
         const results = await testRunner.runTests({
           tests,
