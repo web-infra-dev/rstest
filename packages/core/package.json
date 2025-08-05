@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -48,7 +48,7 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build",
+    "build": "rslib build && npx prettier ./LICENSE.md --write",
     "typecheck": "tsc --noEmit",
     "dev": "rslib build --watch",
     "test": "npx rstest run --globals"
