@@ -23,6 +23,7 @@ Commands:
   list [...filters]   lists all test files that Rstest will run
 
 Options:
+  --watch                                  Run tests in watch mode
   -h, --help                               Display this message
   -v, --version                            Display version number
   -c, --config <config>
@@ -31,7 +32,7 @@ Options:
 
 ## rstest [...filters]
 
-直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。在开发环境下会自动进入监听模式 (等同于 `rstest watch`)，而在 CI 环境或非终端交互模式下会执行单次测试 (等同于 `rstest run`)。
+直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。
 
 ```bash
 $ npx rstest
@@ -41,6 +42,14 @@ $ npx rstest
   Test Files 1 passed (1)
        Tests 2 passed (2)
     Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+### Watch 模式
+
+如果你希望在文件更改时自动重新运行测试，可以使用 `--watch` 或 `rstest watch` 命令：
+
+```bash
+$ npx rstest --watch
 ```
 
 ## rstest run

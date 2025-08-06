@@ -5,8 +5,8 @@
     "dev": "rsbuild dev --open",
     "build": "rsbuild build",
     "preview": "rsbuild preview",
-    "test": "rstest run",
-    "test:watch": "rstest"
+    "test": "rstest",
+    "test:watch": "rstest --watch"
   },
   "dependencies": {
     "react": "^19.1.1",
