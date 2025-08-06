@@ -15,8 +15,29 @@ import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+function parseInlineSourceMap(code: string) {
+  // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
+  const inlineSourceMapRegex =
+    /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
+  const match = code.match(inlineSourceMapRegex);
+
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const base64Data = match[1];
+    const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
+    const sourceMap = JSON.parse(decodedStr);
+    return sourceMap;
+  } catch (_error) {
+    return null;
+  }
+}
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -84,6 +105,7 @@ export const prepareRsbuild = async (
         }),
         pluginExternal(testEnvironment),
         !isolate ? pluginCacheControl(Object.values(setupFiles)) : null,
+        pluginInspect(),
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
@@ -223,13 +245,21 @@ export const createRsbuildServer = async ({
       }
     }
 
+    const inlineSourceMap =
+      stats.compilation.options.devtool === 'inline-source-map';
+
     const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
       (
         await Promise.all(
           assets!.map(async (asset) => {
+            const assetFilePath = path.join(outputPath!, asset.name);
+
+            if (inlineSourceMap) {
+              const content = await readFile(assetFilePath);
+              return [assetFilePath, parseInlineSourceMap(content)];
+            }
             const sourceMapPath = asset?.info.related?.sourceMap?.[0];
 
-            const assetFilePath = path.join(outputPath!, asset.name);
             if (sourceMapPath) {
               const filePath = path.join(outputPath!, sourceMapPath);
               const sourceMap = await readFile(filePath);
