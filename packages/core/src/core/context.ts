@@ -7,10 +7,14 @@ import { VerboseReporter } from '../reporter/verbose';
 import type { RstestCommand, RstestConfig, RstestContext } from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
-const reportersMap = {
-  default: DefaultReporter as typeof DefaultReporter,
-  verbose: VerboseReporter as typeof VerboseReporter,
-  'github-actions': GithubActionsReporter as typeof GithubActionsReporter,
+const reportersMap: {
+  default: typeof DefaultReporter;
+  verbose: typeof VerboseReporter;
+  'github-actions': typeof GithubActionsReporter;
+} = {
+  default: DefaultReporter,
+  verbose: VerboseReporter,
+  'github-actions': GithubActionsReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
@@ -25,7 +29,7 @@ function createReporters(
         typeof reporter === 'string' ? [reporter, {}] : reporter;
       // built-in reporters
       if (name in reportersMap) {
-        const Reporter = reportersMap[name]!;
+        const Reporter = reportersMap[name];
         return new Reporter({
           ...initOptions,
           options,

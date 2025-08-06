@@ -127,7 +127,7 @@ export const pluginMockRuntime: RsbuildPlugin = {
   name: 'rstest:mock-runtime',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new MockRuntimeRspackPlugin());
+      config.plugins.push(new MockRuntimeRspackPlugin());
     });
   },
 };

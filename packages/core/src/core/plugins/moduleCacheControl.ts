@@ -63,7 +63,7 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
       };
     });
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new RstestCacheControlPlugin());
+      config.plugins.push(new RstestCacheControlPlugin());
     });
   },
 });

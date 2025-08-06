@@ -34,7 +34,7 @@ export const pluginEntryWatch: (params: {
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
       if (isWatch) {
-        config.plugins!.push(new TestFileWatchPlugin(api.context.rootPath));
+        config.plugins.push(new TestFileWatchPlugin(api.context.rootPath));
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries();
           return {

@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import {
   createRsbuild,
   type ManifestData,
@@ -138,7 +137,7 @@ export const createRsbuildServer = async ({
   }>
 > => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
-  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler;
+  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
@@ -165,10 +164,21 @@ export const createRsbuildServer = async ({
     });
   }
 
-  const outputFileSystem =
-    (isMultiCompiler(rspackCompiler!)
-      ? rspackCompiler.compilers[0]!.outputFileSystem
-      : rspackCompiler!.outputFileSystem) || fs;
+  if (!rspackCompiler) {
+    throw new Error('rspackCompiler was not initialized');
+  }
+
+  const outputFileSystem: Rspack.OutputFileSystem | null = isMultiCompiler(
+    rspackCompiler,
+  )
+    ? rspackCompiler.compilers[0]!.outputFileSystem
+    : rspackCompiler.outputFileSystem;
+
+  if (!outputFileSystem) {
+    throw new Error(
+      `Expect outputFileSystem to be defined, but got ${outputFileSystem}`,
+    );
+  }
 
   const getRsbuildStats = async () => {
     const stats = await devServer.environments[name]!.getStats();
@@ -206,10 +216,10 @@ export const createRsbuildServer = async ({
     const getEntryFiles = async () => {
       const entryFiles: Record<string, string[]> = {};
 
-      const entries = Object.keys(manifest!.entries!);
+      const entries = Object.keys(manifest.entries);
 
       for (const entry of entries) {
-        const data = manifest!.entries[entry];
+        const data = manifest.entries[entry];
         entryFiles[entry] = (
           (data?.initial?.js || []).concat(data?.async?.js || []) || []
         ).map((file: string) => path.join(outputPath!, file));

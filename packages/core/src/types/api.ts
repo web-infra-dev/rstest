@@ -25,14 +25,14 @@ type TestFn<ExtraContext = object> = (
 
 export interface TestEachFn {
   <T extends Record<string, unknown>>(
-    cases: ReadonlyArray<T>,
+    cases: readonly T[],
   ): (
     description: string,
     fn?: (param: T) => MaybePromise<void>,
     timeout?: number,
   ) => void;
-  <T extends readonly [unknown, ...Array<unknown>]>(
-    cases: ReadonlyArray<T>,
+  <T extends readonly [unknown, ...unknown[]]>(
+    cases: readonly T[],
   ): (
     description: string,
     fn: (...args: [...T]) => MaybePromise<void>,
@@ -41,7 +41,7 @@ export interface TestEachFn {
 }
 
 export type TestForFn<ExtraContext = object> = <T>(
-  cases: ReadonlyArray<T>,
+  cases: readonly T[],
 ) => (
   description: string,
   fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
@@ -50,15 +50,15 @@ export type TestForFn<ExtraContext = object> = <T>(
 
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
-    cases: ReadonlyArray<T>,
+    cases: readonly T[],
   ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
-  <T extends readonly [unknown, ...Array<unknown>]>(
-    cases: ReadonlyArray<T>,
+  <T extends readonly [unknown, ...unknown[]]>(
+    cases: readonly T[],
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
 export type DescribeForFn = <T>(
-  cases: ReadonlyArray<T>,
+  cases: readonly T[],
 ) => (description: string, fn?: (param: T) => MaybePromise<void>) => void;
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {

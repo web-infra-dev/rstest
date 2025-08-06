@@ -45,7 +45,7 @@ logger.override({
     if (logger.level !== 'verbose') {
       return;
     }
-    const time = color.gray(`${getTime()}`);
+    const time = color.gray(getTime());
     console.log(`  ${color.magenta('rstest')} ${time} ${message}`, ...args);
   },
 });

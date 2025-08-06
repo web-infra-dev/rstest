@@ -132,7 +132,7 @@ const preparePool = async ({
     case 'happy-dom': {
       const { environment } = await import('./env/happyDom');
       const { teardown } = await environment.setup(global, {});
-      cleanupFns.push(async () => await teardown(global));
+      cleanupFns.push(async () => teardown(global));
       break;
     }
     default:
@@ -243,7 +243,7 @@ const runInPool = async (
 
   const cleanups: (() => MaybePromise<void>)[] = [];
 
-  const exit = process.exit;
+  const exit = process.exit.bind(process);
   process.exit = (code = process.exitCode || 0): never => {
     throw new Error(`process.exit unexpectedly called with "${code}"`);
   };

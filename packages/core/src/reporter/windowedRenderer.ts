@@ -192,7 +192,7 @@ export class WindowRenderer {
   }
 
   private interceptStream(stream: NodeJS.WriteStream, type: StreamType) {
-    const original = stream.write;
+    const original = stream.write.bind(stream);
 
     // @ts-expect-error -- not sure how 2 overloads should be typed
     stream.write = (chunk, _, callback) => {
@@ -212,7 +212,7 @@ export class WindowRenderer {
   }
 
   private write(message: string, type: 'output' | 'error' = 'output') {
-    (this.streams[type] as Writable['write'])(message);
+    this.streams[type](message);
   }
 }
 
