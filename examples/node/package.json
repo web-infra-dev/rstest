@@ -4,8 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "build": "rsbuild build",
-    "test": "rstest run",
-    "test:watch": "rstest"
+    "test": "rstest",
+    "test:watch": "rstest --watch"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",

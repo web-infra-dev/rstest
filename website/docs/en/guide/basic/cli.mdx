@@ -23,6 +23,7 @@ Commands:
   list [...filters]   lists all test files that Rstest will run
 
 Options:
+  --watch                                  Run tests in watch mode
   -h, --help                               Display this message
   -v, --version                            Display version number
   -c, --config <config>
@@ -31,7 +32,7 @@ Options:
 
 ## rstest [...filters]
 
-Running `rstest` directly will enable the Rstest test in the current directory. Listening mode is automatically entered in the development environment (equivalent to `rstest watch`), while a single test is performed in the CI environment or non-terminal interactive mode (equivalent to `rstest run`).
+Running `rstest` directly will enable the Rstest test in the current directory.
 
 ```bash
 $ npx rstest
@@ -41,6 +42,14 @@ $ npx rstest
   Test Files 1 passed (1)
        Tests 2 passed (2)
     Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+### Watch mode
+
+If you want to automatically rerun the test when the file changes, you can use the `--watch` flag or `rstest watch` command:
+
+```bash
+$ npx rstest --watch
 ```
 
 ## rstest run

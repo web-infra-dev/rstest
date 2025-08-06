@@ -1,7 +1,6 @@
 import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
-import { isCI } from 'std-env';
 import { loadConfig } from '../config';
 import type {
   ListCommandOptions,
@@ -176,14 +175,22 @@ export function setupCommands(): void {
 
   cli
     .command('[...filters]', 'run tests')
-    .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
-      if (isCI) {
-        await runRest(options, filters, 'run');
-      } else {
-        await runRest(options, filters, 'watch');
-      }
-    });
+    .option('--watch', 'Run tests in watch mode')
+    .action(
+      async (
+        filters: string[],
+        options: CommonOptions & {
+          watch?: boolean;
+        },
+      ) => {
+        showRstest();
+        if (options.watch) {
+          await runRest(options, filters, 'watch');
+        } else {
+          await runRest(options, filters, 'run');
+        }
+      },
+    );
 
   const runRest = async (
     options: CommonOptions,

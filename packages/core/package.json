@@ -51,7 +51,7 @@
     "build": "rslib build && npx prettier ./LICENSE.md --write",
     "typecheck": "tsc --noEmit",
     "dev": "rslib build --watch",
-    "test": "npx rstest run --globals"
+    "test": "npx rstest --globals"
   },
   "dependencies": {
     "chai": "^5.2.1",
