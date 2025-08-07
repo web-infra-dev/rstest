@@ -1,6 +1,7 @@
 import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
+import { setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function runTests(
@@ -115,8 +116,14 @@ export async function runTests(
 
   if (command === 'watch') {
     rsbuildInstance.onDevCompileDone(async () => {
-      await run();
+      const close = await run();
+      // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
+      await setupCliShortcuts({
+        closeServer: async () => {
+          await close();
+        },
+      });
     });
   } else {
     const close = await run();
