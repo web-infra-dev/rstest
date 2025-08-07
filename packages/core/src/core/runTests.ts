@@ -54,7 +54,7 @@ export async function runTests(
     setupFiles,
   );
 
-  const getRsbuildStats = await createRsbuildServer({
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
     name,
     normalizedConfig: context.normalizedConfig,
     // TODO: Try not to call globTestSourceEntries again.
@@ -71,7 +71,6 @@ export async function runTests(
       assetFiles,
       sourceMaps,
       getSourcemap,
-      close,
       buildTime,
     } = await getRsbuildStats();
     const testStart = Date.now();
@@ -108,25 +107,30 @@ export async function runTests(
       });
     }
 
-    return async () => {
-      await close();
-      await pool.close();
-    };
+    await pool.close();
   };
 
   if (command === 'watch') {
-    rsbuildInstance.onDevCompileDone(async () => {
-      const close = await run();
+    rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      await run();
+
+      if (isFirstCompile) {
+        await setupCliShortcuts({
+          closeServer,
+          runAll: async () => {
+            await run();
+          },
+        });
+      }
       // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
-      await setupCliShortcuts({
-        closeServer: async () => {
-          await close();
-        },
-      });
+      // TODO: no need `enter`
+      logger.log(
+        `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+      );
     });
   } else {
-    const close = await run();
-    await close();
+    await run();
+    await closeServer();
   }
 }
