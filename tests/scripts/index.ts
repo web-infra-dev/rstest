@@ -23,6 +23,8 @@ class Cli {
     const strip = options?.stripAnsi ?? true;
     this.exec.process?.stdout?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
+      // TODO: debug
+      console.log(processStd);
       this.stdout += processStd ?? '';
       for (const listener of this.stdoutListeners) {
         listener();
