@@ -119,11 +119,11 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
   }) => Promise<
-    Array<{
+    {
       tests: Test[];
       testPath: string;
       errors?: FormattedError[];
-    }>
+    }[]
   >;
   close: () => Promise<void>;
 }> => {
