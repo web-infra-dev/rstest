@@ -1,7 +1,7 @@
 import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
-import { setupCliShortcuts } from './cliShortcuts';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function runTests(
@@ -111,18 +111,21 @@ export async function runTests(
   };
 
   if (command === 'watch') {
+    const enableCliShortcuts = isCliShortcutsEnabled();
+
     const afterTestsWatchRun = () => {
       // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
       // TODO: no need `enter`
-      logger.log(
-        `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
-      );
+      enableCliShortcuts &&
+        logger.log(
+          `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+        );
     };
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
       await run();
 
-      if (isFirstCompile) {
+      if (isFirstCompile && enableCliShortcuts) {
         await setupCliShortcuts({
           closeServer,
           runAll: async () => {
