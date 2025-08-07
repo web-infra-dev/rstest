@@ -250,7 +250,7 @@ export class TestRunner {
         }
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
-        const cleanups: Array<(ctx: SuiteContext) => void> = [];
+        const cleanups: ((ctx: SuiteContext) => void)[] = [];
         let hasBeforeAllError = false;
 
         if (['run', 'only'].includes(test.runMode) && test.beforeAllListeners) {
@@ -309,7 +309,7 @@ export class TestRunner {
           result = {
             ...currentResult,
             errors:
-              currentResult.status === 'fail' && result && result!.errors
+              currentResult.status === 'fail' && result && result.errors
                 ? result.errors.concat(...(currentResult.errors || []))
                 : currentResult.errors,
           };
@@ -444,7 +444,7 @@ export class TestRunner {
   private async beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
-  ): Promise<Array<() => Promise<void>>> {
+  ): Promise<(() => Promise<void>)[]> {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -487,7 +487,7 @@ export class TestRunner {
     } = getState(expect);
 
     if (test.result?.state === 'fail') {
-      throw test.result!.errors;
+      throw test.result.errors;
     }
 
     if (

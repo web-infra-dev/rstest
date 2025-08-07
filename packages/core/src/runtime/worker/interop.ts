@@ -9,7 +9,7 @@ export const shouldInterop = ({
   modulePath: string;
   mod: any;
 }): boolean => {
-  if (interopDefault === false) {
+  if (!interopDefault) {
     return false;
   }
   // keep nodejs syntax

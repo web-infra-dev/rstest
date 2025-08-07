@@ -23,6 +23,6 @@ export function prepareCli(): void {
 }
 
 export function showRstest(): void {
-  logger.greet(`  ${`Rstest v${RSTEST_VERSION}`}`);
+  logger.greet(`  Rstest v${RSTEST_VERSION}`);
   logger.log('');
 }

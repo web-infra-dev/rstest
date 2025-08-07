@@ -118,7 +118,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                 };
                 check()
                   .then(() => rejectWithCause(lastError))
-                  .catch((e) => rejectWithCause(e));
+                  .catch((e: unknown) => rejectWithCause(e));
               }, timeout);
               check();
             });

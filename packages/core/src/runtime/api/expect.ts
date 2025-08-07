@@ -67,7 +67,7 @@ export function createExpect({
   Object.assign(expect, (globalThis as any)[ASYMMETRIC_MATCHERS_OBJECT]);
 
   expect.getState = () => getState<MatcherState>(expect);
-  expect.setState = (state) => setState(state as Partial<MatcherState>, expect);
+  expect.setState = (state) => setState(state, expect);
 
   const globalState = getState((globalThis as any)[GLOBAL_EXPECT]) || {};
 

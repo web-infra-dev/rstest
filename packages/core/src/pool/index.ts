@@ -66,11 +66,11 @@ export const createPool = async ({
     testResults: TestResult[];
   }>;
   collectTests: () => Promise<
-    Array<{
+    {
       tests: Test[];
       testPath: string;
       errors?: FormattedError[];
-    }>
+    }[]
   >;
   close: () => Promise<void>;
 }> => {
@@ -247,8 +247,8 @@ export const createPool = async ({
               },
               rpcMethods,
             })
-            .catch((err) => {
-              err.fullStack = true;
+            .catch((err: unknown) => {
+              (err as any).fullStack = true;
               return {
                 testPath: entryInfo.testPath,
                 status: 'fail',
@@ -266,7 +266,7 @@ export const createPool = async ({
         }
       }
 
-      const testResults = results.flatMap((r) => r.results!);
+      const testResults = results.flatMap((r) => r.results);
 
       return { results, testResults };
     },
@@ -291,7 +291,7 @@ export const createPool = async ({
               },
               rpcMethods,
             })
-            .catch((err) => {
+            .catch((err: FormattedError) => {
               err.fullStack = true;
               return {
                 testPath: entryInfo.testPath,

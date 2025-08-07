@@ -48,7 +48,7 @@ export async function printError(
 
 async function printCodeFrame(frame: StackFrame) {
   const filePath = frame.file?.startsWith('file')
-    ? new URL(frame.file!)
+    ? new URL(frame.file)
     : frame.file;
 
   if (!filePath) {
@@ -56,7 +56,7 @@ async function printCodeFrame(frame: StackFrame) {
   }
 
   const source = fs.existsSync(filePath)
-    ? fs.readFileSync(filePath!, 'utf-8')
+    ? fs.readFileSync(filePath, 'utf-8')
     : undefined;
 
   if (!source) {
@@ -67,8 +67,8 @@ async function printCodeFrame(frame: StackFrame) {
     source,
     {
       start: {
-        line: frame!.lineNumber!,
-        column: frame!.column!,
+        line: frame.lineNumber!,
+        column: frame.column!,
       },
     },
     {

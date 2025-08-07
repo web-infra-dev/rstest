@@ -142,7 +142,7 @@ export interface ExpectStatic extends VitestExpectStatic {
     | 'toThrowErrorMatchingSnapshot'
     | 'toThrowErrorMatchingInlineSnapshot'
   >;
-  addEqualityTesters: (testers: Array<Tester>) => void;
+  addEqualityTesters: (testers: Tester[]) => void;
   assertions: (expected: number) => void;
   hasAssertions: () => void;
   addSnapshotSerializer: typeof addSerializer;

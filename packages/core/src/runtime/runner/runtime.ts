@@ -42,7 +42,7 @@ export class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: Array<() => MaybePromise<void>> = [];
+  private currentCollectList: (() => MaybePromise<void>)[] = [];
   private runtimeConfig;
 
   constructor({
@@ -76,7 +76,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterAll',
       wrapTimeout({
         name: 'afterAll hook',
@@ -93,7 +93,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeAll',
       wrapTimeout({
         name: 'beforeAll hook',
@@ -110,7 +110,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterEach',
       wrapTimeout({
         name: 'afterEach hook',
@@ -127,7 +127,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeEach',
       wrapTimeout({
         name: 'beforeEach hook',

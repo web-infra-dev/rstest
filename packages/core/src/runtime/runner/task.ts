@@ -179,7 +179,7 @@ export function registerTestSuiteListener(
   key: ListenersKey<TestSuiteListeners>,
   fn: (...args: any[]) => any,
 ): void {
-  const listenersKey = `${key}Listeners` as TestSuiteListeners;
+  const listenersKey: TestSuiteListeners = `${key}Listeners`;
   suite[listenersKey] ??= [];
   suite[listenersKey].push(fn);
 }
@@ -240,7 +240,7 @@ export function limitConcurrency(
   ...args: Args
 ) => Promise<T> {
   let running = 0;
-  const queue: Array<() => void> = [];
+  const queue: (() => void)[] = [];
 
   const runNext = () => {
     if (queue.length > 0 && running < concurrency) {

@@ -71,7 +71,7 @@ export type TestSuite = {
   sequential?: boolean;
   testPath: TestPath;
   /** nested cases and suite could in a suite */
-  tests: Array<TestSuite | TestCase>;
+  tests: (TestSuite | TestCase)[];
   type: 'suite';
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];

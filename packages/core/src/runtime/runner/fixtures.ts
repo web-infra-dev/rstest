@@ -99,7 +99,7 @@ export const handleFixtures = async (
 
     if (deps?.length) {
       for (const dep of deps) {
-        await useFixture(dep, test.fixtures![dep] as NormalizedFixture);
+        await useFixture(dep, test.fixtures![dep]!);
       }
     }
 

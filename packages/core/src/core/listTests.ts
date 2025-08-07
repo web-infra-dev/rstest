@@ -70,10 +70,10 @@ export async function listTests(
   });
 
   const list = await pool.collectTests();
-  const tests: Array<{
+  const tests: {
     file: string;
     name?: string;
-  }> = [];
+  }[] = [];
 
   const traverseTests = (test: Test) => {
     if (['skip', 'todo'].includes(test.runMode)) {
