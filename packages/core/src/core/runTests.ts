@@ -111,6 +111,14 @@ export async function runTests(
   };
 
   if (command === 'watch') {
+    const afterTestsWatchRun = () => {
+      // TODO: support clean logs before dev recompile
+      logger.log(color.green('  Waiting for file changes...'));
+      // TODO: no need `enter`
+      logger.log(
+        `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+      );
+    };
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
       await run();
 
@@ -119,15 +127,12 @@ export async function runTests(
           closeServer,
           runAll: async () => {
             await run();
+            afterTestsWatchRun();
           },
         });
       }
-      // TODO: support clean logs before dev recompile
-      logger.log(color.green('  Waiting for file changes...'));
-      // TODO: no need `enter`
-      logger.log(
-        `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
-      );
+
+      afterTestsWatchRun();
     });
   } else {
     await run();
