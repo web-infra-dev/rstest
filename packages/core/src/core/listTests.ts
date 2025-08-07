@@ -62,14 +62,15 @@ export async function listTests(
     await getRsbuildStats();
 
   const pool = await createPool({
+    context,
+  });
+
+  const list = await pool.collectTests({
     entries,
     sourceMaps,
     setupEntries,
     assetFiles,
-    context,
   });
-
-  const list = await pool.collectTests();
   const tests: {
     file: string;
     name?: string;

@@ -23,6 +23,8 @@ export async function runTests(
     command,
   } = context;
 
+  const entriesCache = new Map<string, Record<string, string>>();
+
   const globTestSourceEntries = async (): Promise<Record<string, string>> => {
     const entries = await getTestEntries({
       include,
@@ -31,6 +33,8 @@ export async function runTests(
       root,
       fileFilters,
     });
+
+    entriesCache.set(name, entries);
 
     if (!Object.keys(entries).length) {
       logger.log(color.red('No test files found.'));
@@ -57,11 +61,31 @@ export async function runTests(
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     name,
     normalizedConfig: context.normalizedConfig,
-    // TODO: Try not to call globTestSourceEntries again.
-    globTestSourceEntries,
+    globTestSourceEntries:
+      command === 'watch'
+        ? globTestSourceEntries
+        : async () => {
+            if (entriesCache.has(name)) {
+              return entriesCache.get(name)!;
+            }
+            return globTestSourceEntries();
+          },
     setupFiles,
     rsbuildInstance,
     rootPath,
+  });
+
+  const recommendWorkerCount =
+    command === 'watch'
+      ? Number.POSITIVE_INFINITY
+      : Array.from(entriesCache.values()).reduce(
+          (acc, entries) => acc + Object.keys(entries).length,
+          0,
+        );
+
+  const pool = await createPool({
+    context,
+    recommendWorkerCount,
   });
 
   const run = async () => {
@@ -75,15 +99,12 @@ export async function runTests(
     } = await getRsbuildStats();
     const testStart = Date.now();
 
-    const pool = await createPool({
+    const { results, testResults } = await pool.runTests({
       entries,
       sourceMaps,
       setupEntries,
       assetFiles,
-      context,
     });
-
-    const { results, testResults } = await pool.runTests();
 
     const testTime = Date.now() - testStart;
 
@@ -106,8 +127,6 @@ export async function runTests(
         getSourcemap,
       });
     }
-
-    await pool.close();
   };
 
   if (command === 'watch') {
@@ -127,7 +146,10 @@ export async function runTests(
 
       if (isFirstCompile && enableCliShortcuts) {
         await setupCliShortcuts({
-          closeServer,
+          closeServer: async () => {
+            await pool.close();
+            await closeServer();
+          },
           runAll: async () => {
             await run();
             afterTestsWatchRun();
@@ -139,6 +161,7 @@ export async function runTests(
     });
   } else {
     await run();
+    await pool.close();
     await closeServer();
   }
 }
