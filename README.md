@@ -31,10 +31,6 @@ More details can be found on [Rstest Roadmap](https://github.com/web-infra-dev/r
 
 Rstack is a unified JavaScript toolchain built around Rspack, with high performance and consistent architecture.
 
-## 🦀 Rstack
-
-Rstack is a unified JavaScript toolchain built around Rspack, with high performance and consistent architecture.
-
 | Name                                                  | Description              | Version                                                                                                                                                                          |
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Rspack](https://github.com/web-infra-dev/rspack)     | Bundler                  | <a href="https://npmjs.com/package/@rspack/core"><img src="https://img.shields.io/npm/v/@rspack/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |
