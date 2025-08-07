@@ -110,7 +110,7 @@ export async function listTests(
       }
     }
 
-    await close();
+    await closeServer();
 
     await pool.close();
     return;
