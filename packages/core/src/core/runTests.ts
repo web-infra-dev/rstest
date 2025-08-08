@@ -146,16 +146,16 @@ export async function runTests(
     const afterTestsWatchRun = () => {
       // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
-      // TODO: no need `enter`
+
       if (enableCliShortcuts) {
         if (snapshotManager.summary.unmatched) {
           // highlight `u` when there are unmatched snapshots
           logger.log(
-            `  ${color.dim('press')} ${color.yellow(color.bold('u + enter'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h + enter')} ${color.dim('to show help')}\n`,
+            `  ${color.dim('press')} ${color.yellow(color.bold('u'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h')} ${color.dim('to show help')}\n`,
           );
         } else {
           logger.log(
-            `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+            `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
           );
         }
       }
