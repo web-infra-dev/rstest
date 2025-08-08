@@ -20,9 +20,11 @@ export type CliShortcut = {
 export async function setupCliShortcuts({
   closeServer,
   runAll,
+  updateSnapshot,
 }: {
   closeServer: () => Promise<void>;
   runAll: () => Promise<void>;
+  updateSnapshot: () => Promise<void>;
 }): Promise<() => void> {
   const shortcuts = [
     {
@@ -37,6 +39,13 @@ export async function setupCliShortcuts({
       description: `${color.bold('a + enter')}  ${color.dim('rerun all tests')}`,
       action: async () => {
         await runAll();
+      },
+    },
+    {
+      key: 'u',
+      description: `${color.bold('u + enter')}  ${color.dim('update snapshot')}`,
+      action: async () => {
+        await updateSnapshot();
       },
     },
     {

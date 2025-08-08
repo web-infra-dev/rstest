@@ -104,6 +104,7 @@ export async function runTests(
       sourceMaps,
       setupEntries,
       assetFiles,
+      updateSnapshot: snapshotManager.options.updateSnapshot,
     });
 
     const testTime = Date.now() - testStart;
@@ -142,6 +143,7 @@ export async function runTests(
         );
     };
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      snapshotManager.clear();
       await run();
 
       if (isFirstCompile && enableCliShortcuts) {
@@ -151,6 +153,13 @@ export async function runTests(
             await closeServer();
           },
           runAll: async () => {
+            snapshotManager.clear();
+            await run();
+            afterTestsWatchRun();
+          },
+          updateSnapshot: async () => {
+            snapshotManager.clear();
+            snapshotManager.options.updateSnapshot = 'all';
             await run();
             afterTestsWatchRun();
           },
