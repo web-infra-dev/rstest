@@ -111,13 +111,13 @@ export async function runTests(
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
 
-    const currentBuildTime = buildHash === hash ? 0 : buildTime;
+    const actualBuildTime = buildHash === hash ? 0 : buildTime;
 
     const testTime = Date.now() - testStart;
 
     const duration = {
-      totalTime: testTime + currentBuildTime,
-      buildTime: currentBuildTime,
+      totalTime: testTime + actualBuildTime,
+      buildTime: actualBuildTime,
       testTime,
     };
 
