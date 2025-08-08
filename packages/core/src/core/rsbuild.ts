@@ -125,17 +125,17 @@ export const createRsbuildServer = async ({
   globTestSourceEntries: () => Promise<Record<string, string>>;
   setupFiles: Record<string, string>;
   rootPath: string;
-}): Promise<
-  () => Promise<{
+}): Promise<{
+  getRsbuildStats: () => Promise<{
     buildTime: number;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    close: () => Promise<void>;
-  }>
-> => {
+  }>;
+  closeServer: () => Promise<void>;
+}> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
@@ -298,9 +298,11 @@ export const createRsbuildServer = async ({
       getSourcemap: (sourcePath: string): SourceMapInput | null => {
         return sourceMaps[sourcePath] || null;
       },
-      close: devServer.close,
     };
   };
 
-  return getRsbuildStats;
+  return {
+    closeServer: devServer.close,
+    getRsbuildStats,
+  };
 };

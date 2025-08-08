@@ -14,7 +14,7 @@ describe('watch', () => {
 
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['watch'],
+      args: ['watch', '--disableConsoleIntercept'],
       options: {
         nodeOptions: {
           cwd: __dirname,

@@ -79,7 +79,16 @@ export async function runRstestCli({
   options?: Partial<Options>;
   args?: string[];
 }) {
-  const process = x(command, args, options as Options);
+  const process = x(command, args, {
+    ...options,
+    nodeOptions: {
+      ...(options?.nodeOptions || {}),
+      env: {
+        ...(options?.nodeOptions?.env || {}),
+        GITHUB_ACTIONS: 'false',
+      },
+    },
+  } as Options);
   const cli = new Cli(process);
 
   const expectExecSuccess = async () => {

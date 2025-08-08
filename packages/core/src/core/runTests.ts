@@ -1,7 +1,7 @@
 import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
-import { setupCliShortcuts } from './cliShortcuts';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function runTests(
@@ -23,6 +23,8 @@ export async function runTests(
     command,
   } = context;
 
+  const entriesCache = new Map<string, Record<string, string>>();
+
   const globTestSourceEntries = async (): Promise<Record<string, string>> => {
     const entries = await getTestEntries({
       include,
@@ -31,6 +33,8 @@ export async function runTests(
       root,
       fileFilters,
     });
+
+    entriesCache.set(name, entries);
 
     if (!Object.keys(entries).length) {
       logger.log(color.red('No test files found.'));
@@ -54,14 +58,34 @@ export async function runTests(
     setupFiles,
   );
 
-  const getRsbuildStats = await createRsbuildServer({
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
     name,
     normalizedConfig: context.normalizedConfig,
-    // TODO: Try not to call globTestSourceEntries again.
-    globTestSourceEntries,
+    globTestSourceEntries:
+      command === 'watch'
+        ? globTestSourceEntries
+        : async () => {
+            if (entriesCache.has(name)) {
+              return entriesCache.get(name)!;
+            }
+            return globTestSourceEntries();
+          },
     setupFiles,
     rsbuildInstance,
     rootPath,
+  });
+
+  const recommendWorkerCount =
+    command === 'watch'
+      ? Number.POSITIVE_INFINITY
+      : Array.from(entriesCache.values()).reduce(
+          (acc, entries) => acc + Object.keys(entries).length,
+          0,
+        );
+
+  const pool = await createPool({
+    context,
+    recommendWorkerCount,
   });
 
   const run = async () => {
@@ -71,20 +95,16 @@ export async function runTests(
       assetFiles,
       sourceMaps,
       getSourcemap,
-      close,
       buildTime,
     } = await getRsbuildStats();
     const testStart = Date.now();
 
-    const pool = await createPool({
+    const { results, testResults } = await pool.runTests({
       entries,
       sourceMaps,
       setupEntries,
       assetFiles,
-      context,
     });
-
-    const { results, testResults } = await pool.runTests();
 
     const testTime = Date.now() - testStart;
 
@@ -107,26 +127,41 @@ export async function runTests(
         getSourcemap,
       });
     }
-
-    return async () => {
-      await close();
-      await pool.close();
-    };
   };
 
   if (command === 'watch') {
-    rsbuildInstance.onDevCompileDone(async () => {
-      const close = await run();
+    const enableCliShortcuts = isCliShortcutsEnabled();
+
+    const afterTestsWatchRun = () => {
       // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
-      await setupCliShortcuts({
-        closeServer: async () => {
-          await close();
-        },
-      });
+      // TODO: no need `enter`
+      enableCliShortcuts &&
+        logger.log(
+          `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+        );
+    };
+    rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      await run();
+
+      if (isFirstCompile && enableCliShortcuts) {
+        await setupCliShortcuts({
+          closeServer: async () => {
+            await pool.close();
+            await closeServer();
+          },
+          runAll: async () => {
+            await run();
+            afterTestsWatchRun();
+          },
+        });
+      }
+
+      afterTestsWatchRun();
     });
   } else {
-    const close = await run();
-    await close();
+    await run();
+    await pool.close();
+    await closeServer();
   }
 }

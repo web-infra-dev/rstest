@@ -49,7 +49,7 @@ export async function listTests(
     setupFiles,
   );
 
-  const getRsbuildStats = await createRsbuildServer({
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
     name,
     globTestSourceEntries,
     normalizedConfig: context.normalizedConfig,
@@ -58,18 +58,19 @@ export async function listTests(
     rootPath,
   });
 
-  const { entries, setupEntries, assetFiles, sourceMaps, close, getSourcemap } =
+  const { entries, setupEntries, assetFiles, sourceMaps, getSourcemap } =
     await getRsbuildStats();
 
   const pool = await createPool({
+    context,
+  });
+
+  const list = await pool.collectTests({
     entries,
     sourceMaps,
     setupEntries,
     assetFiles,
-    context,
   });
-
-  const list = await pool.collectTests();
   const tests: {
     file: string;
     name?: string;
@@ -110,7 +111,7 @@ export async function listTests(
       }
     }
 
-    await close();
+    await closeServer();
 
     await pool.close();
     return;
@@ -148,7 +149,6 @@ export async function listTests(
     }
   }
 
-  await close();
-
+  await closeServer();
   await pool.close();
 }

@@ -19,8 +19,10 @@ export type CliShortcut = {
 
 export async function setupCliShortcuts({
   closeServer,
+  runAll,
 }: {
   closeServer: () => Promise<void>;
+  runAll: () => Promise<void>;
 }): Promise<() => void> {
   const shortcuts = [
     {
@@ -28,6 +30,13 @@ export async function setupCliShortcuts({
       description: `${color.bold('c + enter')}  ${color.dim('clear console')}`,
       action: () => {
         console.clear();
+      },
+    },
+    {
+      key: 'a',
+      description: `${color.bold('a + enter')}  ${color.dim('rerun all tests')}`,
+      action: async () => {
+        await runAll();
       },
     },
     {
@@ -42,10 +51,6 @@ export async function setupCliShortcuts({
       },
     },
   ];
-
-  logger.log(
-    `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
-  );
 
   const { createInterface } = await import('node:readline');
   const rl = createInterface({
