@@ -1,3 +1,18 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ */
 import { AssertionError, strict as assert } from 'node:assert';
 import { Console } from 'node:console';
 import {
@@ -104,7 +119,7 @@ export function createCustomConsole({
       this._counters[label] = 0;
     }
 
-    override debug(firstArg: unknown, ...args: Array<unknown>): void {
+    override debug(firstArg: unknown, ...args: unknown[]): void {
       this._log('debug', format(firstArg, ...args));
     }
 
@@ -113,15 +128,15 @@ export function createCustomConsole({
       this._log('dir', formatWithOptions(options, representation));
     }
 
-    override dirxml(firstArg: unknown, ...args: Array<unknown>): void {
+    override dirxml(firstArg: unknown, ...args: unknown[]): void {
       this._log('dirxml', format(firstArg, ...args));
     }
 
-    override error(firstArg: unknown, ...args: Array<unknown>): void {
+    override error(firstArg: unknown, ...args: unknown[]): void {
       this._log('error', format(firstArg, ...args), 'stderr');
     }
 
-    override group(title?: string, ...args: Array<unknown>): void {
+    override group(title?: string, ...args: unknown[]): void {
       this._groupDepth++;
 
       if (title != null || args.length > 0) {
@@ -129,7 +144,7 @@ export function createCustomConsole({
       }
     }
 
-    override groupCollapsed(title?: string, ...args: Array<unknown>): void {
+    override groupCollapsed(title?: string, ...args: unknown[]): void {
       this._groupDepth++;
 
       if (title != null || args.length > 0) {
@@ -143,11 +158,11 @@ export function createCustomConsole({
       }
     }
 
-    override info(firstArg: unknown, ...args: Array<unknown>): void {
+    override info(firstArg: unknown, ...args: unknown[]): void {
       this._log('info', format(firstArg, ...args));
     }
 
-    override log(firstArg: unknown, ...args: Array<unknown>): void {
+    override log(firstArg: unknown, ...args: unknown[]): void {
       this._log('log', format(firstArg, ...args));
     }
 
@@ -170,7 +185,7 @@ export function createCustomConsole({
       }
     }
 
-    override timeLog(label = 'default', ...data: Array<unknown>): void {
+    override timeLog(label = 'default', ...data: unknown[]): void {
       const startTime = this._timers[label];
 
       if (startTime != null) {
@@ -180,7 +195,7 @@ export function createCustomConsole({
       }
     }
 
-    override warn(firstArg: unknown, ...args: Array<unknown>): void {
+    override warn(firstArg: unknown, ...args: unknown[]): void {
       this._log('warn', format(firstArg, ...args), 'stderr');
     }
 

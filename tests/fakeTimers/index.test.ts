@@ -79,4 +79,26 @@ describe('fake timers', () => {
     rstest.runAllTimers();
     expect(rstest.getTimerCount()).toBe(0);
   });
+
+  it('should work with node:timers', async () => {
+    const { setTimeout } = require('node:timers');
+    const cb = rstest.fn();
+    const cb1 = rstest.fn();
+    setTimeout(cb, 100);
+    setTimeout(cb1, 200);
+
+    expect(rstest.getTimerCount()).toBe(2);
+
+    rstest.runAllTimers();
+    expect(rstest.getTimerCount()).toBe(0);
+
+    let i = 0;
+
+    await expect
+      .poll(() => {
+        i++;
+        return i;
+      })
+      .toBe(3);
+  });
 });

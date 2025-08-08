@@ -14,11 +14,16 @@ export const statusStr = {
   skip: '-',
 };
 
-export const statusColorfulStr = {
-  fail: color.red(statusStr.fail) as string,
-  pass: color.green(statusStr.pass) as string,
-  todo: color.gray(statusStr.todo) as string,
-  skip: color.gray(statusStr.skip) as string,
+export const statusColorfulStr: {
+  fail: string;
+  pass: string;
+  todo: string;
+  skip: string;
+} = {
+  fail: color.red(statusStr.fail),
+  pass: color.green(statusStr.pass),
+  todo: color.gray(statusStr.todo),
+  skip: color.gray(statusStr.skip),
 };
 
 export const logCase = (
@@ -58,7 +63,7 @@ export const logFileTitle = (
 
   const formatDuration = (duration: number) => {
     return color[duration > slowTestThreshold ? 'yellow' : 'green'](
-      `${prettyTime(duration)}`,
+      prettyTime(duration),
     );
   };
 

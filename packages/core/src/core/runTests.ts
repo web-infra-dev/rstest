@@ -1,6 +1,7 @@
 import { createPool } from '../pool';
-import type { RstestContext } from '../types';
+import type { RstestContext, TestFileResult } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function runTests(
@@ -59,7 +60,7 @@ export async function runTests(
     setupFiles,
   );
 
-  const { close, getRsbuildStats } = await createRsbuildServer({
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
     normalizedConfig: context.normalizedConfig,
     globTestSourceEntries:
       command === 'watch'
@@ -75,26 +76,32 @@ export async function runTests(
     rootPath,
   });
 
-  const run = async () => {
+  const recommendWorkerCount =
+    command === 'watch'
+      ? Number.POSITIVE_INFINITY
+      : Array.from(entriesCache.values()).reduce(
+          (acc, entries) => acc + Object.keys(entries).length,
+          0,
+        );
+
+  const pool = await createPool({
+    context,
+    recommendWorkerCount,
+  });
+
+  let testFileResult: TestFileResult[] = [];
+
+  const run = async ({ failedTests }: { failedTests?: string[] } = {}) => {
     let testStart: number;
     const buildStart = Date.now();
-
-    const recommendWorkerCount =
-      command === 'watch'
-        ? Number.POSITIVE_INFINITY
-        : entriesCache
-            .values()
-            .reduce((acc, entries) => acc + Object.keys(entries).length, 0);
-
-    const pool = await createPool({
-      context,
-      recommendWorkerCount,
-    });
 
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const { entries, setupEntries, assetFiles, sourceMaps } =
-          await getRsbuildStats(p.name);
+          await getRsbuildStats({
+            projectName: p.name,
+            fileFilters: failedTests,
+          });
 
         testStart ??= Date.now();
 
@@ -104,6 +111,7 @@ export async function runTests(
           setupEntries,
           assetFiles,
           project: p,
+          updateSnapshot: context.snapshotManager.options.updateSnapshot,
         });
 
         return {
@@ -145,6 +153,8 @@ export async function runTests(
       }
     }
 
+    testFileResult = results;
+
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
     }
@@ -158,20 +168,100 @@ export async function runTests(
         getSourcemap: (name: string) => sourceMaps[name] || null,
       });
     }
-
-    return async () => {
-      await close();
-      await pool.close();
-    };
   };
 
   if (command === 'watch') {
-    rsbuildInstance.onDevCompileDone(async () => {
-      await run();
+    const enableCliShortcuts = isCliShortcutsEnabled();
+
+    const afterTestsWatchRun = () => {
+      // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
+
+      if (enableCliShortcuts) {
+        if (snapshotManager.summary.unmatched) {
+          // highlight `u` when there are unmatched snapshots
+          logger.log(
+            `  ${color.dim('press')} ${color.yellow(color.bold('u'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h')} ${color.dim('to show help')}\n`,
+          );
+        } else {
+          logger.log(
+            `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
+          );
+        }
+      }
+    };
+    const clearLogs = () => {
+      console.clear();
+    };
+    rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      // TODO: clean logs before dev recompile
+      if (!isFirstCompile) {
+        clearLogs();
+      }
+      snapshotManager.clear();
+      await run();
+
+      if (isFirstCompile && enableCliShortcuts) {
+        await setupCliShortcuts({
+          closeServer: async () => {
+            await pool.close();
+            await closeServer();
+          },
+          runAll: async () => {
+            clearLogs();
+            snapshotManager.clear();
+            await run();
+            afterTestsWatchRun();
+          },
+          runFailedTests: async () => {
+            const failedTests = testFileResult
+              .filter((result) => result.status === 'fail')
+              .map((r) => r.testPath);
+
+            if (!failedTests.length) {
+              logger.log(
+                color.yellow(
+                  '\nNo failed tests were found that needed to be rerun.',
+                ),
+              );
+              return;
+            }
+
+            clearLogs();
+
+            snapshotManager.clear();
+
+            await run({ failedTests });
+            afterTestsWatchRun();
+          },
+          updateSnapshot: async () => {
+            if (!snapshotManager.summary.unmatched) {
+              logger.log(
+                color.yellow(
+                  '\nNo snapshots were found that needed to be updated.',
+                ),
+              );
+              return;
+            }
+
+            clearLogs();
+
+            const originalUpdateSnapshot =
+              snapshotManager.options.updateSnapshot;
+            snapshotManager.clear();
+            snapshotManager.options.updateSnapshot = 'all';
+            await run();
+            afterTestsWatchRun();
+            snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+          },
+        });
+      }
+
+      afterTestsWatchRun();
     });
   } else {
-    const close = await run();
-    await close();
+    await run();
+    await pool.close();
+    await closeServer();
   }
 }

@@ -20,7 +20,7 @@ export const pluginIgnoreResolveError: RsbuildPlugin = {
   name: 'rstest:ignore-resolve-error',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new IgnoreModuleNotFoundErrorPlugin());
+      config.plugins.push(new IgnoreModuleNotFoundErrorPlugin());
       config.optimization ??= {};
       config.optimization.emitOnErrors = true;
 

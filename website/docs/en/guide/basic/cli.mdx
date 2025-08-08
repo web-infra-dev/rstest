@@ -23,6 +23,7 @@ Commands:
   list [...filters]   lists all test files that Rstest will run
 
 Options:
+  --watch                                  Run tests in watch mode
   -h, --help                               Display this message
   -v, --version                            Display version number
   -c, --config <config>
@@ -31,7 +32,7 @@ Options:
 
 ## rstest [...filters]
 
-Running `rstest` directly will enable the Rstest test in the current directory. Listening mode is automatically entered in the development environment (equivalent to `rstest watch`), while a single test is performed in the CI environment or non-terminal interactive mode (equivalent to `rstest run`).
+Running `rstest` directly will enable the Rstest test in the current directory.
 
 ```bash
 $ npx rstest
@@ -41,6 +42,14 @@ $ npx rstest
   Test Files 1 passed (1)
        Tests 2 passed (2)
     Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+### Watch mode
+
+If you want to automatically rerun the test when the file changes, you can use the `--watch` flag or `rstest watch` command:
+
+```bash
+$ npx rstest --watch
 ```
 
 ## rstest run
@@ -104,6 +113,7 @@ Rstest CLI provides several common options that can be used with all commands:
 | `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                 |
 | `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                          |
 | `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                         |
+| `--reporter <reporter>`         | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                |
 | `--exclude <exclude>`           | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                      |
 | `-u, --update`                  | Update snapshot files, see [update](/config/test/update)                                                                                                          |
 | `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/passWithNoTests)                                                        |
@@ -123,3 +133,23 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstubEnvs)                            |
 | `-h, --help`                    | Display help for command                                                                                                                                          |
 | `-v, --version`                 | Display version                                                                                                                                                   |
+
+## CLI shortcuts
+
+When running Rstest in watch mode, you can use keyboard shortcuts to perform various actions.
+
+All shortcuts:
+
+```bash
+  Shortcuts:
+  c  clear console
+  f  rerun failed tests
+  a  rerun all tests
+  u  update snapshot
+  q  quit process
+  h  show shortcuts help
+```
+
+:::note
+CLI shortcuts are only available when running Rstest in watch mode (`rstest watch` or `rstest --watch`) and when the terminal supports TTY (interactive mode).
+:::

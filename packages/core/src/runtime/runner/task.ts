@@ -1,4 +1,3 @@
-import { setTimeout } from 'node:timers';
 import type {
   Test,
   TestCase,
@@ -9,6 +8,7 @@ import type {
   TestSuiteListeners,
 } from '../../types';
 import { getTaskNameWithPrefix, ROOT_SUITE_NAME } from '../../utils';
+import { getRealTimers } from '../util';
 
 export const getTestStatus = (
   results: TestResult[],
@@ -179,7 +179,7 @@ export function registerTestSuiteListener(
   key: ListenersKey<TestSuiteListeners>,
   fn: (...args: any[]) => any,
 ): void {
-  const listenersKey = `${key}Listeners` as TestSuiteListeners;
+  const listenersKey: TestSuiteListeners = `${key}Listeners`;
   suite[listenersKey] ??= [];
   suite[listenersKey].push(fn);
 }
@@ -213,7 +213,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
   return (async (...args: Parameters<T>) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(
+      timeoutId = getRealTimers().setTimeout!(
         () =>
           reject(
             makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
@@ -240,7 +240,7 @@ export function limitConcurrency(
   ...args: Args
 ) => Promise<T> {
   let running = 0;
-  const queue: Array<() => void> = [];
+  const queue: (() => void)[] = [];
 
   const runNext = () => {
     if (queue.length > 0 && running < concurrency) {

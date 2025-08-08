@@ -73,7 +73,7 @@ export async function listTests(
     setupFiles,
   );
 
-  const { close, getRsbuildStats } = await createRsbuildServer({
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
     normalizedConfig: context.normalizedConfig,
     setupFiles,
@@ -85,10 +85,12 @@ export async function listTests(
     context,
   });
 
+  const updateSnapshot = context.snapshotManager.options.updateSnapshot;
+
   const returns = await Promise.all(
     context.projects.map(async (project) => {
       const { entries, setupEntries, assetFiles, sourceMaps } =
-        await getRsbuildStats(project.name);
+        await getRsbuildStats({ projectName: project.name });
 
       const list = await pool.collectTests({
         entries,
@@ -96,6 +98,7 @@ export async function listTests(
         setupEntries,
         assetFiles,
         project,
+        updateSnapshot,
       });
 
       return {
@@ -104,8 +107,6 @@ export async function listTests(
       };
     }),
   );
-
-  await pool.close();
 
   const list = returns.flatMap((r) => r.list);
   const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
@@ -160,7 +161,10 @@ export async function listTests(
       }
     }
 
-    await close();
+    await closeServer();
+
+    await pool.close();
+    return;
   }
 
   for (const file of list) {
@@ -202,5 +206,6 @@ export async function listTests(
     }
   }
 
-  await close();
+  await closeServer();
+  await pool.close();
 }

@@ -22,7 +22,7 @@ import type {
   TestSuite,
 } from '../../types';
 import { castArray, ROOT_SUITE_NAME } from '../../utils';
-import { formatName } from '../util';
+import { formatName, TestRegisterError } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -34,6 +34,7 @@ export class RunnerRuntime {
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
   private testPath: string;
+  private status: 'running' | 'collect' = 'collect';
 
   /**
    * Collect test status:
@@ -41,7 +42,7 @@ export class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: Array<() => MaybePromise<void>> = [];
+  private currentCollectList: (() => MaybePromise<void>)[] = [];
   private runtimeConfig;
   private project: string;
 
@@ -59,13 +60,27 @@ export class RunnerRuntime {
     this.runtimeConfig = runtimeConfig;
   }
 
+  updateStatus(status: 'running' | 'collect'): void {
+    this.status = status;
+  }
+
+  private checkStatus(name: string, type: 'case' | 'suite'): void {
+    if (this.status === 'running') {
+      const error = new TestRegisterError(
+        `${type === 'case' ? 'Test' : 'Describe'} '${name}' cannot run`,
+      );
+
+      throw error;
+    }
+  }
+
   afterAll(
     fn: AfterAllListener,
     timeout: number = this.runtimeConfig.hookTimeout,
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterAll',
       wrapTimeout({
         name: 'afterAll hook',
@@ -82,7 +97,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeAll',
       wrapTimeout({
         name: 'beforeAll hook',
@@ -99,7 +114,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterEach',
       wrapTimeout({
         name: 'afterEach hook',
@@ -116,7 +131,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeEach',
       wrapTimeout({
         name: 'beforeEach hook',
@@ -153,6 +168,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'suite');
     const currentSuite: TestSuite = {
       project: this.project,
       name,
@@ -290,6 +306,7 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'case');
     this.addTestCase({
       project: this.project,
       name,

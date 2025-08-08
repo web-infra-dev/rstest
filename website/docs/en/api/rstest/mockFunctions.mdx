@@ -8,6 +8,7 @@ Rstest provides some utility functions to help you mock functions powered by [ti
 
 ## rstest.fn
 
+- **Alias:** `rs.fn`
 - **Type:**
 
 ```ts
@@ -32,6 +33,7 @@ expect(sayHi).toHaveBeenCalledTimes(1);
 
 ## rstest.spyOn
 
+- **Alias:** `rs.spyOn`
 - **Type:**
 
 ```ts
@@ -59,24 +61,28 @@ expect(spy).toHaveBeenCalled();
 
 ## rstest.isMockFunction
 
+- **Alias:** `rs.isMockFunction`
 - **Type:** `(fn: any) => fn is MockInstance`
 
 Determines if the given function is a mocked function.
 
 ## rstest.clearAllMocks
 
+- **Alias:** `rs.clearAllMocks`
 - **Type:** `() => Rstest`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
 ## rstest.resetAllMocks
 
+- **Alias:** `rs.resetAllMocks`
 - **Type:** `() => Rstest`
 
 Clears all mocks properties and reset each mock's implementation to its original.
 
 ## rstest.restoreAllMocks
 
+- **Alias:** `rs.restoreAllMocks`
 - **Type:** `() => Rstest`
 
 Reset all mocks and restore original descriptors of spied-on objects.

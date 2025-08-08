@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import {
   createRsbuild,
   type ManifestData,
@@ -15,8 +14,29 @@ import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+function parseInlineSourceMap(code: string) {
+  // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
+  const inlineSourceMapRegex =
+    /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
+  const match = code.match(inlineSourceMapRegex);
+
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const base64Data = match[1];
+    const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
+    const sourceMap = JSON.parse(decodedStr);
+    return sourceMap;
+  } catch (_error) {
+    return null;
+  }
+}
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -85,6 +105,7 @@ export const prepareRsbuild = async (
               ),
             )
           : null,
+        pluginInspect(),
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
@@ -104,17 +125,22 @@ export const createRsbuildServer = async ({
   setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
 }): Promise<{
-  close: () => Promise<void>;
-  getRsbuildStats: (name: string) => Promise<{
+  getRsbuildStats: (options: {
+    projectName: string;
+    fileFilters?: string[];
+  }) => Promise<{
     buildTime: number;
+    hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
+    getSourcemap: (sourcePath: string) => SourceMapInput | null;
   }>;
+  closeServer: () => Promise<void>;
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
-  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler;
+  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
@@ -141,10 +167,21 @@ export const createRsbuildServer = async ({
     });
   }
 
-  const outputFileSystem =
-    (isMultiCompiler(rspackCompiler!)
-      ? rspackCompiler.compilers[0]!.outputFileSystem
-      : rspackCompiler!.outputFileSystem) || fs;
+  if (!rspackCompiler) {
+    throw new Error('rspackCompiler was not initialized');
+  }
+
+  const outputFileSystem: Rspack.OutputFileSystem | null = isMultiCompiler(
+    rspackCompiler,
+  )
+    ? rspackCompiler.compilers[0]!.outputFileSystem
+    : rspackCompiler.outputFileSystem;
+
+  if (!outputFileSystem) {
+    throw new Error(
+      `Expect outputFileSystem to be defined, but got ${outputFileSystem}`,
+    );
+  }
 
   const readFile = async (fileName: string) => {
     return new Promise<string>((resolve, reject) => {
@@ -171,19 +208,27 @@ export const createRsbuildServer = async ({
     return entryFiles;
   };
 
-  const getRsbuildStats = async (name: string) => {
-    const stats = await devServer.environments[name]!.getStats();
+  const getRsbuildStats = async ({
+    projectName,
+    fileFilters,
+  }: {
+    projectName: string;
+    fileFilters?: string[];
+  }) => {
+    const stats = await devServer.environments[projectName]!.getStats();
 
-    const manifest = devServer.environments[name]!.context
+    const manifest = devServer.environments[projectName]!.context
       .manifest as ManifestData;
 
     const {
       entrypoints,
       outputPath,
       assets,
+      hash,
       time: buildTime,
     } = stats.toJson({
       all: false,
+      hash: true,
       entrypoints: true,
       outputPath: true,
       assets: true,
@@ -196,7 +241,7 @@ export const createRsbuildServer = async ({
     const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
-    const sourceEntries = await globTestSourceEntries(name);
+    const sourceEntries = await globTestSourceEntries(projectName);
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
@@ -206,13 +251,19 @@ export const createRsbuildServer = async ({
         e.assets![e.assets!.length - 1]!.name,
       );
 
-      if (setupFiles[name]![entry]) {
+      if (setupFiles[projectName]![entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[name]![entry]!,
+          testPath: setupFiles[projectName]![entry]!,
           files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {
+        if (
+          fileFilters?.length &&
+          !fileFilters.includes(sourceEntries[entry])
+        ) {
+          continue;
+        }
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
@@ -221,13 +272,21 @@ export const createRsbuildServer = async ({
       }
     }
 
+    const inlineSourceMap =
+      stats.compilation.options.devtool === 'inline-source-map';
+
     const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
       (
         await Promise.all(
           assets!.map(async (asset) => {
+            const assetFilePath = path.join(outputPath!, asset.name);
+
+            if (inlineSourceMap) {
+              const content = await readFile(assetFilePath);
+              return [assetFilePath, parseInlineSourceMap(content)];
+            }
             const sourceMapPath = asset?.info.related?.sourceMap?.[0];
 
-            const assetFilePath = path.join(outputPath!, asset.name);
             if (sourceMapPath) {
               const filePath = path.join(outputPath!, sourceMapPath);
               const sourceMap = await readFile(filePath);
@@ -240,6 +299,7 @@ export const createRsbuildServer = async ({
     );
 
     return {
+      hash,
       entries,
       setupEntries,
       buildTime: buildTime!,
@@ -253,11 +313,14 @@ export const createRsbuildServer = async ({
         ),
       ),
       sourceMaps,
+      getSourcemap: (sourcePath: string): SourceMapInput | null => {
+        return sourceMaps[sourcePath] || null;
+      },
     };
   };
 
   return {
+    closeServer: devServer.close,
     getRsbuildStats,
-    close: devServer.close,
   };
 };
