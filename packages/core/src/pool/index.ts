@@ -3,6 +3,7 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type {
   EntryInfo,
   FormattedError,
+  ProjectContext,
   RstestContext,
   RuntimeConfig,
   SourceMapInput,
@@ -31,7 +32,7 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
-const getRuntimeConfig = (context: RstestContext): RuntimeConfig => {
+const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   const {
     testNamePattern,
     testTimeout,
@@ -111,6 +112,7 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
     updateSnapshot: SnapshotUpdateState;
+    project: ProjectContext;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -121,11 +123,13 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
     updateSnapshot: SnapshotUpdateState;
+    project: ProjectContext;
   }) => Promise<
     {
       tests: Test[];
       testPath: string;
       errors?: FormattedError[];
+      project: string;
     }[]
   >;
   close: () => Promise<void>;
@@ -195,8 +199,6 @@ export const createPool = async ({
     },
   });
 
-  const runtimeConfig = getRuntimeConfig(context);
-
   const rpcMethods = {
     onTestCaseResult: async (result: TestResult) => {
       await Promise.all(
@@ -226,8 +228,11 @@ export const createPool = async ({
       assetFiles,
       setupEntries,
       sourceMaps,
+      project,
       updateSnapshot,
     }) => {
+      const projectName = context.normalizedConfig.name;
+      const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
 
@@ -248,6 +253,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles: neededFiles,
                 context: {
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -261,6 +267,7 @@ export const createPool = async ({
             .catch((err: unknown) => {
               (err as any).fullStack = true;
               return {
+                project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',
                 name: '',
@@ -279,15 +286,19 @@ export const createPool = async ({
 
       const testResults = results.flatMap((r) => r.results);
 
-      return { results, testResults };
+      return { results, testResults, project };
     },
     collectTests: async ({
       entries,
       assetFiles,
       setupEntries,
       sourceMaps,
+      project,
       updateSnapshot,
     }) => {
+      const runtimeConfig = getRuntimeConfig(project);
+      const projectName = project.normalizedConfig.name;
+
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
 
@@ -308,6 +319,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles: neededFiles,
                 context: {
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -321,6 +333,7 @@ export const createPool = async ({
             .catch((err: FormattedError) => {
               err.fullStack = true;
               return {
+                project: projectName,
                 testPath: entryInfo.testPath,
                 tests: [],
                 errors: [err],

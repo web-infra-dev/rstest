@@ -1,5 +1,6 @@
 import type {
   ListCommandOptions,
+  Project,
   RstestCommand,
   RstestConfig,
   RstestInstance,
@@ -7,11 +8,21 @@ import type {
 import { createContext } from './context';
 
 export function createRstest(
-  config: RstestConfig,
+  {
+    config,
+    projects,
+  }: {
+    config: RstestConfig;
+    projects: Project[];
+  },
   command: RstestCommand,
   fileFilters: string[],
 ): RstestInstance {
-  const context = createContext({ cwd: process.cwd(), command }, config);
+  const context = createContext(
+    { cwd: process.cwd(), command },
+    config,
+    projects,
+  );
 
   const runTests = async (): Promise<void> => {
     const { runTests } = await import('./runTests');
