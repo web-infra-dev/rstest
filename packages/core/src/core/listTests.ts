@@ -70,6 +70,7 @@ export async function listTests(
     sourceMaps,
     setupEntries,
     assetFiles,
+    updateSnapshot: context.snapshotManager.options.updateSnapshot,
   });
   const tests: {
     file: string;

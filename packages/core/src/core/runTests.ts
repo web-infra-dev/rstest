@@ -104,6 +104,7 @@ export async function runTests(
       sourceMaps,
       setupEntries,
       assetFiles,
+      updateSnapshot: snapshotManager.options.updateSnapshot,
     });
 
     const testTime = Date.now() - testStart;
@@ -136,12 +137,21 @@ export async function runTests(
       // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
       // TODO: no need `enter`
-      enableCliShortcuts &&
-        logger.log(
-          `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
-        );
+      if (enableCliShortcuts) {
+        if (snapshotManager.summary.unmatched) {
+          // highlight `u` when there are unmatched snapshots
+          logger.log(
+            `  ${color.dim('press')} ${color.yellow(color.bold('u + enter'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h + enter')} ${color.dim('to show help')}\n`,
+          );
+        } else {
+          logger.log(
+            `  ${color.dim('press')} ${color.bold('h + enter')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q + enter')} ${color.dim('to quit')}\n`,
+          );
+        }
+      }
     };
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      snapshotManager.clear();
       await run();
 
       if (isFirstCompile && enableCliShortcuts) {
@@ -151,8 +161,18 @@ export async function runTests(
             await closeServer();
           },
           runAll: async () => {
+            snapshotManager.clear();
             await run();
             afterTestsWatchRun();
+          },
+          updateSnapshot: async () => {
+            const originalUpdateSnapshot =
+              snapshotManager.options.updateSnapshot;
+            snapshotManager.clear();
+            snapshotManager.options.updateSnapshot = 'all';
+            await run();
+            afterTestsWatchRun();
+            snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
           },
         });
       }

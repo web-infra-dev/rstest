@@ -1,4 +1,5 @@
 import os from 'node:os';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type {
   EntryInfo,
   FormattedError,
@@ -109,6 +110,7 @@ export const createPool = async ({
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
+    updateSnapshot: SnapshotUpdateState;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -118,6 +120,7 @@ export const createPool = async ({
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
+    updateSnapshot: SnapshotUpdateState;
   }) => Promise<
     {
       tests: Test[];
@@ -192,8 +195,6 @@ export const createPool = async ({
     },
   });
 
-  const { updateSnapshot } = context.snapshotManager.options;
-
   const runtimeConfig = getRuntimeConfig(context);
 
   const rpcMethods = {
@@ -220,7 +221,13 @@ export const createPool = async ({
   };
 
   return {
-    runTests: async ({ entries, assetFiles, setupEntries, sourceMaps }) => {
+    runTests: async ({
+      entries,
+      assetFiles,
+      setupEntries,
+      sourceMaps,
+      updateSnapshot,
+    }) => {
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
 
@@ -274,7 +281,13 @@ export const createPool = async ({
 
       return { results, testResults };
     },
-    collectTests: async ({ entries, assetFiles, setupEntries, sourceMaps }) => {
+    collectTests: async ({
+      entries,
+      assetFiles,
+      setupEntries,
+      sourceMaps,
+      updateSnapshot,
+    }) => {
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
 
