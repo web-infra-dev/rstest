@@ -133,3 +133,23 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstubEnvs)                                           |
 | `-h, --help`                    | 显示帮助信息                                                                                                                                 |
 | `-v, --version`                 | 显示版本号                                                                                                                                   |
+
+## CLI 快捷键
+
+在 watch 模式下运行 Rstest 时，你可以使用键盘快捷键来执行各种便捷操作。
+
+所有快捷键：
+
+```bash
+  Shortcuts:
+  c  clear console
+  f  rerun failed tests
+  a  rerun all tests
+  u  update snapshot
+  q  quit process
+  h  show shortcuts help
+```
+
+:::note
+CLI 快捷键仅在 watch 模式下运行 Rstest（`rstest watch` 或 `rstest --watch`）且终端支持 TTY（交互模式）时可用。
+:::

@@ -160,7 +160,14 @@ export async function runTests(
         }
       }
     };
+    const clearLogs = () => {
+      console.clear();
+    };
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
+      // TODO: clean logs before dev recompile
+      if (!isFirstCompile) {
+        clearLogs();
+      }
       snapshotManager.clear();
       await run();
 
@@ -171,6 +178,7 @@ export async function runTests(
             await closeServer();
           },
           runAll: async () => {
+            clearLogs();
             snapshotManager.clear();
             await run();
             afterTestsWatchRun();
@@ -183,11 +191,13 @@ export async function runTests(
             if (!failedTests.length) {
               logger.log(
                 color.yellow(
-                  'No failed tests were found that needed to be rerun.',
+                  '\nNo failed tests were found that needed to be rerun.',
                 ),
               );
               return;
             }
+
+            clearLogs();
 
             snapshotManager.clear();
 
@@ -198,11 +208,14 @@ export async function runTests(
             if (!snapshotManager.summary.unmatched) {
               logger.log(
                 color.yellow(
-                  'No snapshots were found that needed to be updated.',
+                  '\nNo snapshots were found that needed to be updated.',
                 ),
               );
               return;
             }
+
+            clearLogs();
+
             const originalUpdateSnapshot =
               snapshotManager.options.updateSnapshot;
             snapshotManager.clear();
