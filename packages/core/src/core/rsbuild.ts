@@ -126,8 +126,9 @@ export const createRsbuildServer = async ({
   setupFiles: Record<string, string>;
   rootPath: string;
 }): Promise<{
-  getRsbuildStats: () => Promise<{
+  getRsbuildStats: (options?: { fileFilters?: string[] }) => Promise<{
     buildTime: number;
+    hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
@@ -180,7 +181,9 @@ export const createRsbuildServer = async ({
     );
   }
 
-  const getRsbuildStats = async () => {
+  const getRsbuildStats = async ({
+    fileFilters,
+  }: { fileFilters?: string[] } | undefined = {}) => {
     const stats = await devServer.environments[name]!.getStats();
 
     const manifest = devServer.environments[name]!.context
@@ -190,9 +193,11 @@ export const createRsbuildServer = async ({
       entrypoints,
       outputPath,
       assets,
+      hash,
       time: buildTime,
     } = stats.toJson({
       all: false,
+      hash: true,
       entrypoints: true,
       outputPath: true,
       assets: true,
@@ -247,6 +252,12 @@ export const createRsbuildServer = async ({
           files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {
+        if (
+          fileFilters?.length &&
+          !fileFilters.includes(sourceEntries[entry])
+        ) {
+          continue;
+        }
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
@@ -282,6 +293,7 @@ export const createRsbuildServer = async ({
     );
 
     return {
+      hash,
       entries,
       setupEntries,
       buildTime: buildTime!,

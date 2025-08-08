@@ -21,7 +21,9 @@ export async function setupCliShortcuts({
   closeServer,
   runAll,
   updateSnapshot,
+  runFailedTests,
 }: {
+  runFailedTests: () => Promise<void>;
   closeServer: () => Promise<void>;
   runAll: () => Promise<void>;
   updateSnapshot: () => Promise<void>;
@@ -32,6 +34,13 @@ export async function setupCliShortcuts({
       description: `${color.bold('c + enter')}  ${color.dim('clear console')}`,
       action: () => {
         console.clear();
+      },
+    },
+    {
+      key: 'f',
+      description: `${color.bold('f + enter')}  ${color.dim('rerun failed tests')}`,
+      action: async () => {
+        await runFailedTests();
       },
     },
     {

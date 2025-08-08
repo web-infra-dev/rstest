@@ -1,5 +1,5 @@
 import { createPool } from '../pool';
-import type { RstestContext } from '../types';
+import type { RstestContext, TestFileResult } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -88,7 +88,10 @@ export async function runTests(
     recommendWorkerCount,
   });
 
-  const run = async () => {
+  let testFileResult: TestFileResult[] = [];
+  let buildHash: string | undefined;
+
+  const run = async ({ fileFilters }: { fileFilters?: string[] } = {}) => {
     const {
       entries,
       setupEntries,
@@ -96,7 +99,8 @@ export async function runTests(
       sourceMaps,
       getSourcemap,
       buildTime,
-    } = await getRsbuildStats();
+      hash,
+    } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
     const { results, testResults } = await pool.runTests({
@@ -107,13 +111,19 @@ export async function runTests(
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
 
+    const currentBuildTime = buildHash === hash ? 0 : buildTime;
+
     const testTime = Date.now() - testStart;
 
     const duration = {
-      totalTime: testTime + buildTime,
-      buildTime,
+      totalTime: testTime + currentBuildTime,
+      buildTime: currentBuildTime,
       testTime,
     };
+
+    buildHash = hash;
+
+    testFileResult = results;
 
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
@@ -165,7 +175,34 @@ export async function runTests(
             await run();
             afterTestsWatchRun();
           },
+          runFailedTests: async () => {
+            const failedTests = testFileResult
+              .filter((result) => result.status === 'fail')
+              .map((r) => r.testPath);
+
+            if (!failedTests.length) {
+              logger.log(
+                color.yellow(
+                  'No failed tests were found that needed to be rerun.',
+                ),
+              );
+              return;
+            }
+
+            snapshotManager.clear();
+
+            await run({ fileFilters: failedTests });
+            afterTestsWatchRun();
+          },
           updateSnapshot: async () => {
+            if (!snapshotManager.summary.unmatched) {
+              logger.log(
+                color.yellow(
+                  'No snapshots were found that needed to be updated.',
+                ),
+              );
+              return;
+            }
             const originalUpdateSnapshot =
               snapshotManager.options.updateSnapshot;
             snapshotManager.clear();
