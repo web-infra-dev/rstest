@@ -47,6 +47,12 @@ export async function setupCliShortcuts({
 
   let isPrompting = false;
 
+  const clearCurrentInputLine = (): void => {
+    try {
+      process.stdout.write('\r\x1b[2K');
+    } catch {}
+  };
+
   const promptTestNamePattern = async (): Promise<void> => {
     if (isPrompting) return;
     isPrompting = true;
@@ -142,6 +148,7 @@ export async function setupCliShortcuts({
       key: 't',
       description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
       action: async () => {
+        clearCurrentInputLine();
         await promptTestNamePattern();
       },
     },
@@ -172,6 +179,7 @@ export async function setupCliShortcuts({
     // Check shortcuts
     for (const shortcut of shortcuts) {
       if (str === shortcut.key) {
+        clearCurrentInputLine();
         void shortcut.action();
         return;
       }
@@ -179,6 +187,7 @@ export async function setupCliShortcuts({
 
     // Show help information
     if (str === 'h') {
+      clearCurrentInputLine();
       let message = `\n  ${color.bold(color.blue('Shortcuts:'))}\n`;
       for (const shortcut of shortcuts) {
         message += `  ${shortcut.description}\n`;
