@@ -106,6 +106,7 @@ export const createPool = async ({
   recommendWorkerCount?: number;
 }): Promise<{
   runTests: (params: {
+    context: RstestContext;
     entries: EntryInfo[];
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
@@ -116,6 +117,7 @@ export const createPool = async ({
     testResults: TestResult[];
   }>;
   collectTests: (params: {
+    context: RstestContext;
     entries: EntryInfo[];
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
@@ -195,8 +197,6 @@ export const createPool = async ({
     },
   });
 
-  const runtimeConfig = getRuntimeConfig(context);
-
   const rpcMethods = {
     onTestCaseResult: async (result: TestResult) => {
       await Promise.all(
@@ -230,6 +230,7 @@ export const createPool = async ({
     }) => {
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
+      const runtimeConfig = getRuntimeConfig(context);
 
       const results = await Promise.all(
         entries.map((entryInfo) => {
@@ -290,6 +291,7 @@ export const createPool = async ({
     }) => {
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
+      const runtimeConfig = getRuntimeConfig(context);
 
       return Promise.all(
         entries.map((entryInfo) => {

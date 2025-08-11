@@ -22,12 +22,99 @@ export async function setupCliShortcuts({
   runAll,
   updateSnapshot,
   runFailedTests,
+  runWithTestNamePattern,
 }: {
   runFailedTests: () => Promise<void>;
   closeServer: () => Promise<void>;
   runAll: () => Promise<void>;
   updateSnapshot: () => Promise<void>;
+  runWithTestNamePattern: (pattern: string | undefined) => Promise<void>;
 }): Promise<() => void> {
+  const { createInterface, emitKeypressEvents } = await import('node:readline');
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  // Ensure keypress events are emitted
+  emitKeypressEvents(process.stdin);
+
+  // Set raw mode to capture individual keystrokes
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+
+  let isPrompting = false;
+
+  const clearCurrentInputLine = (): void => {
+    try {
+      process.stdout.write('\r\x1b[2K');
+    } catch {}
+  };
+
+  const promptTestNamePattern = async (): Promise<void> => {
+    if (isPrompting) return;
+    isPrompting = true;
+
+    // Local buffer for input
+    let buffer = '';
+
+    const render = () => {
+      // Clear line and render prompt + buffer
+      // Using carriage return to start of line and overwrite
+      process.stdout.write(
+        `\r\x1b[2KEnter test name pattern (empty to clear): ${buffer}`,
+      );
+    };
+
+    render();
+
+    const onPromptKey = async (
+      str: string,
+      key: { name: string; ctrl: boolean; meta: boolean; shift: boolean },
+    ) => {
+      // Prevent global handler while prompting
+      if (!isPrompting) return;
+
+      if (key.ctrl && key.name === 'c') {
+        process.exit(0);
+      }
+
+      if (key.name === 'return' || key.name === 'enter') {
+        // Finish input
+        process.stdin.off('keypress', onPromptKey);
+        process.stdout.write('\n');
+        const pattern = buffer.trim() === '' ? undefined : buffer.trim();
+        isPrompting = false;
+        await runWithTestNamePattern(pattern);
+        return;
+      }
+
+      if (key.name === 'escape') {
+        clearCurrentInputLine();
+        // Cancel input
+        process.stdin.off('keypress', onPromptKey);
+        isPrompting = false;
+        return;
+      }
+
+      if (key.name === 'backspace') {
+        buffer = buffer.slice(0, -1);
+        render();
+        return;
+      }
+
+      // Append character
+      if (typeof str === 'string' && str.length === 1) {
+        buffer += str;
+        render();
+      }
+    };
+
+    process.stdin.on('keypress', onPromptKey);
+  };
+
   const shortcuts = [
     {
       key: 'c',
@@ -58,6 +145,14 @@ export async function setupCliShortcuts({
       },
     },
     {
+      key: 't',
+      description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
+      action: async () => {
+        clearCurrentInputLine();
+        await promptTestNamePattern();
+      },
+    },
+    {
       key: 'q',
       description: `${color.bold('q')}  ${color.dim('quit process')}`,
       action: async () => {
@@ -68,23 +163,14 @@ export async function setupCliShortcuts({
         }
       },
     },
-  ];
-
-  const { createInterface } = await import('node:readline');
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  // Set raw mode to capture individual keystrokes
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
+  ] as CliShortcut[];
 
   const handleKeypress = (
     str: string,
     key: { name: string; ctrl: boolean; meta: boolean; shift: boolean },
   ) => {
+    if (isPrompting) return; // Ignore global shortcuts while prompting
+
     // Handle Ctrl+C
     if (key.ctrl && key.name === 'c') {
       process.exit(0);
@@ -93,13 +179,15 @@ export async function setupCliShortcuts({
     // Check shortcuts
     for (const shortcut of shortcuts) {
       if (str === shortcut.key) {
-        shortcut.action();
+        clearCurrentInputLine();
+        void shortcut.action();
         return;
       }
     }
 
     // Show help information
     if (str === 'h') {
+      clearCurrentInputLine();
       let message = `\n  ${color.bold(color.blue('Shortcuts:'))}\n`;
       for (const shortcut of shortcuts) {
         message += `  ${shortcut.description}\n`;
@@ -111,8 +199,10 @@ export async function setupCliShortcuts({
   process.stdin.on('keypress', handleKeypress);
 
   return () => {
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
+    try {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    } catch {}
     rl.close();
   };
 }
