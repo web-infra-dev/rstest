@@ -16,7 +16,7 @@ export async function runTests(
     name: string,
   ): Promise<Record<string, string>> => {
     const { include, exclude, includeSource, root } = projects.find(
-      (p) => p.name === name,
+      (p) => p.environmentName === name,
     )!.normalizedConfig;
     const entries = await getTestEntries({
       include,
@@ -39,13 +39,13 @@ export async function runTests(
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
-        name: projectName,
+        environmentName,
         rootPath,
         normalizedConfig: { setupFiles },
       } = project;
 
       return [
-        projectName,
+        environmentName,
         {
           ...globalSetupFiles,
           ...getSetupFiles(setupFiles, rootPath),
@@ -99,7 +99,7 @@ export async function runTests(
       context.projects.map(async (p) => {
         const { entries, setupEntries, assetFiles, sourceMaps } =
           await getRsbuildStats({
-            projectName: p.name,
+            environmentName: p.environmentName,
             fileFilters: failedTests,
           });
 

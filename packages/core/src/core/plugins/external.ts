@@ -87,7 +87,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
       async (config, { mergeEnvironmentConfig, name }) => {
         const {
           normalizedConfig: { testEnvironment },
-        } = context.projects.find((p) => p.name === name)!;
+        } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(config, {
           output: {
             externals:

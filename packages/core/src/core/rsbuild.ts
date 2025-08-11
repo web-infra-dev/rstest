@@ -78,7 +78,7 @@ export const prepareRsbuild = async (
       },
       environments: Object.fromEntries(
         context.projects.map((project) => [
-          project.name,
+          project.environmentName,
           {
             plugins: project.normalizedConfig.plugins,
             output: {
@@ -126,7 +126,7 @@ export const createRsbuildServer = async ({
   rootPath: string;
 }): Promise<{
   getRsbuildStats: (options: {
-    projectName: string;
+    environmentName: string;
     fileFilters?: string[];
   }) => Promise<{
     buildTime: number;
@@ -209,15 +209,15 @@ export const createRsbuildServer = async ({
   };
 
   const getRsbuildStats = async ({
-    projectName,
+    environmentName,
     fileFilters,
   }: {
-    projectName: string;
+    environmentName: string;
     fileFilters?: string[];
   }) => {
-    const stats = await devServer.environments[projectName]!.getStats();
+    const stats = await devServer.environments[environmentName]!.getStats();
 
-    const manifest = devServer.environments[projectName]!.context
+    const manifest = devServer.environments[environmentName]!.context
       .manifest as ManifestData;
 
     const {
@@ -241,7 +241,7 @@ export const createRsbuildServer = async ({
     const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
-    const sourceEntries = await globTestSourceEntries(projectName);
+    const sourceEntries = await globTestSourceEntries(environmentName);
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
@@ -251,10 +251,10 @@ export const createRsbuildServer = async ({
         e.assets![e.assets!.length - 1]!.name,
       );
 
-      if (setupFiles[projectName]![entry]) {
+      if (setupFiles[environmentName]![entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[projectName]![entry],
+          testPath: setupFiles[environmentName]![entry],
           files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {

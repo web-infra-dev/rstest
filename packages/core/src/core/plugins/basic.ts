@@ -19,7 +19,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             performance,
             dev,
           },
-        } = context.projects.find((p) => p.name === name)!;
+        } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(
           config,
           {

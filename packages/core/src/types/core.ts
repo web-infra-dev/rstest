@@ -8,6 +8,7 @@ export type Project = { config: RstestConfig; configFilePath: string | null };
 
 export type ProjectContext = {
   name: string;
+  environmentName: string;
   rootPath: string;
   normalizedConfig: NormalizedConfig;
 };

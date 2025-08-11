@@ -28,7 +28,7 @@ export async function listTests(
       return testEntries[name];
     }
     const { include, exclude, includeSource, root } = context.projects.find(
-      (p) => p.name === name,
+      (p) => p.environmentName === name,
     )!.normalizedConfig;
 
     const entries = await getTestEntries({
@@ -52,13 +52,13 @@ export async function listTests(
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
-        name: projectName,
+        environmentName,
         rootPath,
         normalizedConfig: { setupFiles },
       } = project;
 
       return [
-        projectName,
+        environmentName,
         {
           ...globalSetupFiles,
           ...getSetupFiles(setupFiles, rootPath),
@@ -90,7 +90,7 @@ export async function listTests(
   const returns = await Promise.all(
     context.projects.map(async (project) => {
       const { entries, setupEntries, assetFiles, sourceMaps } =
-        await getRsbuildStats({ projectName: project.name });
+        await getRsbuildStats({ environmentName: project.environmentName });
 
       const list = await pool.collectTests({
         entries,

@@ -17,6 +17,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            environmentName: 'test',
             normalizedConfig: {
               plugins: [],
               resolve: {},
@@ -55,6 +56,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            environmentName: 'test',
             normalizedConfig: {
               plugins: [],
               resolve: {},
@@ -97,6 +99,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            environmentName: 'test',
             normalizedConfig: {
               plugins: [],
               resolve: {},

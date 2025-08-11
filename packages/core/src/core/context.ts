@@ -54,6 +54,13 @@ function createReporters(
   return result;
 }
 
+/**
+ * Only letters, numbers, "-", "_", and "$" are allowed.
+ */
+function formatEnvironmentName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
+}
+
 export function createContext(
   options: { cwd: string; command: RstestCommand },
   userConfig: RstestConfig,
@@ -98,6 +105,7 @@ export function createContext(
           return {
             rootPath: config.root,
             name: config.name,
+            environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
         })
@@ -105,6 +113,7 @@ export function createContext(
           {
             rootPath,
             name: rstestConfig.name,
+            environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: {
               ...rstestConfig,
               setupFiles: undefined,
