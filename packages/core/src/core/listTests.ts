@@ -111,11 +111,11 @@ export async function listTests(
   const list = returns.flatMap((r) => r.list);
   const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
 
-  const tests: Array<{
+  const tests: {
     file: string;
     name?: string;
     project?: string;
-  }> = [];
+  }[] = [];
 
   const traverseTests = (test: Test) => {
     if (['skip', 'todo'].includes(test.runMode)) {

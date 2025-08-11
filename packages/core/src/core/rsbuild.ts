@@ -197,13 +197,13 @@ export const createRsbuildServer = async ({
   const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
     const entryFiles: Record<string, string[]> = {};
 
-    const entries = Object.keys(manifest!.entries!);
+    const entries = Object.keys(manifest.entries);
 
     for (const entry of entries) {
-      const data = manifest!.entries[entry];
+      const data = manifest.entries[entry];
       entryFiles[entry] = (
         (data?.initial?.js || []).concat(data?.async?.js || []) || []
-      ).map((file: string) => path.join(outputPath!, file));
+      ).map((file: string) => path.join(outputPath, file));
     }
     return entryFiles;
   };
@@ -254,7 +254,7 @@ export const createRsbuildServer = async ({
       if (setupFiles[projectName]![entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[projectName]![entry]!,
+          testPath: setupFiles[projectName]![entry],
           files: entryFiles[entry],
         });
       } else if (sourceEntries[entry]) {
