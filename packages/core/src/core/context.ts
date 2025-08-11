@@ -1,10 +1,16 @@
 import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
-import { withDefaultConfig } from '../config';
+import { mergeRstestConfig, withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { VerboseReporter } from '../reporter/verbose';
-import type { RstestCommand, RstestConfig, RstestContext } from '../types';
+import type {
+  NormalizedConfig,
+  Project,
+  RstestCommand,
+  RstestConfig,
+  RstestContext,
+} from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
 const reportersMap: {
@@ -48,9 +54,17 @@ function createReporters(
   return result;
 }
 
+/**
+ * Only letters, numbers, "-", "_", and "$" are allowed.
+ */
+function formatEnvironmentName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
+}
+
 export function createContext(
   options: { cwd: string; command: RstestCommand },
   userConfig: RstestConfig,
+  projects: Project[],
 ): RstestContext {
   const { cwd, command } = options;
   const rootPath = userConfig.root
@@ -65,6 +79,8 @@ export function createContext(
           config: rstestConfig,
         })
       : [];
+
+  // TODO: project.snapshotManager ?
   const snapshotManager = new SnapshotManager({
     updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
   });
@@ -77,5 +93,32 @@ export function createContext(
     snapshotManager,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,
+    projects: projects.length
+      ? projects.map((project) => {
+          const config = mergeRstestConfig(
+            {
+              ...rstestConfig,
+              setupFiles: undefined,
+            },
+            project.config,
+          ) as NormalizedConfig;
+          return {
+            rootPath: config.root,
+            name: config.name,
+            environmentName: formatEnvironmentName(config.name),
+            normalizedConfig: config,
+          };
+        })
+      : [
+          {
+            rootPath,
+            name: rstestConfig.name,
+            environmentName: formatEnvironmentName(rstestConfig.name),
+            normalizedConfig: {
+              ...rstestConfig,
+              setupFiles: undefined,
+            },
+          },
+        ],
   };
 }

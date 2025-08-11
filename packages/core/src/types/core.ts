@@ -4,6 +4,15 @@ import type { Reporter } from './reporter';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
+export type Project = { config: RstestConfig; configFilePath: string | null };
+
+export type ProjectContext = {
+  name: string;
+  environmentName: string;
+  rootPath: string;
+  normalizedConfig: NormalizedConfig;
+};
+
 export type RstestContext = {
   /** The Rstest core version. */
   version: string;
@@ -13,6 +22,10 @@ export type RstestContext = {
   originalConfig: Readonly<RstestConfig>;
   /** The normalized Rstest config. */
   normalizedConfig: NormalizedConfig;
+  /**
+   * Run tests from one or more projects.
+   */
+  projects: ProjectContext[];
   /**
    * The command type.
    *

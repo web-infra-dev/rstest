@@ -1,7 +1,7 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: ['packages/*', 'examples/*'],
+  projects: ['packages/*'],
   globals: true,
-  setupFiles: ['./scripts/rstest.setup.ts'],
+  setupFiles: ['./setup.ts'],
 });
