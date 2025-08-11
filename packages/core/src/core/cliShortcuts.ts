@@ -92,9 +92,9 @@ export async function setupCliShortcuts({
       }
 
       if (key.name === 'escape') {
+        clearCurrentInputLine();
         // Cancel input
         process.stdin.off('keypress', onPromptKey);
-        process.stdout.write('\n');
         isPrompting = false;
         return;
       }
