@@ -213,6 +213,22 @@ export async function runTests(
             await run();
             afterTestsWatchRun();
           },
+          runWithTestNamePattern: async (pattern?: string) => {
+            clearLogs();
+            // Update testNamePattern for current run
+            context.normalizedConfig.testNamePattern = pattern as any;
+
+            if (pattern) {
+              logger.log(
+                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
+              );
+            } else {
+              logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
+            }
+            snapshotManager.clear();
+            await run();
+            afterTestsWatchRun();
+          },
           runFailedTests: async () => {
             const failedTests = testFileResult
               .filter((result) => result.status === 'fail')
