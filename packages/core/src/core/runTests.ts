@@ -104,6 +104,7 @@ export async function runTests(
     const testStart = Date.now();
 
     const { results, testResults } = await pool.runTests({
+      context,
       entries,
       sourceMaps,
       setupEntries,
@@ -179,6 +180,22 @@ export async function runTests(
           },
           runAll: async () => {
             clearLogs();
+            snapshotManager.clear();
+            await run();
+            afterTestsWatchRun();
+          },
+          runWithTestNamePattern: async (pattern?: string) => {
+            clearLogs();
+            // Update testNamePattern for current run
+            context.normalizedConfig.testNamePattern = pattern as any;
+
+            if (pattern) {
+              logger.log(
+                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
+              );
+            } else {
+              logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
+            }
             snapshotManager.clear();
             await run();
             afterTestsWatchRun();

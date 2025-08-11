@@ -66,6 +66,7 @@ export async function listTests(
   });
 
   const list = await pool.collectTests({
+    context,
     entries,
     sourceMaps,
     setupEntries,
