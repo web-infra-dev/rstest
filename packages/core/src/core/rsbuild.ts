@@ -81,6 +81,7 @@ export const prepareRsbuild = async (
           project.environmentName,
           {
             plugins: project.normalizedConfig.plugins,
+            root: project.rootPath,
             output: {
               target: 'node',
             },
