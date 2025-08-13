@@ -234,8 +234,8 @@ importers:
         specifier: ^6.5.1
         version: 6.5.1
       memfs:
-        specifier: ^4.28.0
-        version: 4.28.0
+        specifier: ^4.36.0
+        version: 4.36.0
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -3164,8 +3164,8 @@ packages:
   medium-zoom@1.1.0:
     resolution: {integrity: sha512-ewyDsp7k4InCUp3jRmwHBRFGyjBimKps/AJLjRSox+2q/2H4p/PNpQf+pwONWlJiOudkBXtbdmVbFjqyybfTmQ==}
 
-  memfs@4.28.0:
-    resolution: {integrity: sha512-b+hDyduUpkxKXpi/fIG5e2HTbcldi0pGdbcCUzXmFJM/ImnQgnSO+qe5ssB52lTbHJfzfEkda2zhmOGK1UtaQA==}
+  memfs@4.36.0:
+    resolution: {integrity: sha512-mfBfzGUdoEw5AZwG8E965ej3BbvW2F9LxEWj4uLxF6BEh1dO2N9eS3AGu9S6vfenuQYrVjsbUOOZK7y3vz4vyQ==}
     engines: {node: '>= 4.0.0'}
 
   merge-stream@2.0.0:
@@ -7880,7 +7880,7 @@ snapshots:
 
   medium-zoom@1.1.0: {}
 
-  memfs@4.28.0:
+  memfs@4.36.0:
     dependencies:
       '@jsonjoy.com/json-pack': 1.2.0(tslib@2.8.1)
       '@jsonjoy.com/util': 1.6.0(tslib@2.8.1)
