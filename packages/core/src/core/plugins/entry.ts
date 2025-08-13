@@ -57,7 +57,10 @@ export const pluginEntryWatch: (params: {
           );
         }
 
-        config.watchOptions.ignored.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
+        config.watchOptions.ignored.push(
+          TEMP_RSTEST_OUTPUT_DIR_GLOB,
+          '**/*.snap',
+        );
       } else {
         // watch false seems not effect when rspack.watch()
         config.watch = false;
