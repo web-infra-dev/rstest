@@ -66,7 +66,7 @@
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
-    "@jridgewell/trace-mapping": "0.3.29",
+    "@jridgewell/trace-mapping": "0.3.30",
     "@microsoft/api-extractor": "^7.52.10",
     "@rslib/core": "0.11.2",
     "@rstest/tsconfig": "workspace:*",

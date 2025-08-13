@@ -34,7 +34,7 @@
     "@biomejs/biome": "^2.1.4",
     "@changesets/cli": "^2.29.5",
     "@rsdoctor/rspack-plugin": "^1.2.2",
-    "@rslint/core": "^0.1.5",
+    "@rslint/core": "^0.1.8",
     "@rstest/core": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.13.8",
