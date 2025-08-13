@@ -204,10 +204,10 @@ export async function runTests(context: RstestContext): Promise<void> {
 
             if (pattern) {
               logger.log(
-                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}`,
+                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
               );
             } else {
-              logger.log(`\n${color.dim('Cleared testNamePattern filter')}`);
+              logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
             }
             snapshotManager.clear();
             await run();
@@ -217,10 +217,10 @@ export async function runTests(context: RstestContext): Promise<void> {
             clearLogs();
             if (filters && filters.length > 0) {
               logger.log(
-                `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}`,
+                `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
               );
             } else {
-              logger.log(`\n${color.dim('Cleared file filters')}`);
+              logger.log(`\n${color.dim('Cleared file filters')}\n`);
             }
             snapshotManager.clear();
             context.fileFilters = filters;
