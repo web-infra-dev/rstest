@@ -49,10 +49,10 @@ function createReporters(
 }
 
 export function createContext(
-  options: { cwd: string; command: RstestCommand },
+  options: { cwd: string; command: RstestCommand; fileFilters?: string[] },
   userConfig: RstestConfig,
 ): RstestContext {
-  const { cwd, command } = options;
+  const { cwd, command, fileFilters } = options;
   const rootPath = userConfig.root
     ? getAbsolutePath(cwd, userConfig.root)
     : cwd;
@@ -74,6 +74,7 @@ export function createContext(
     version: RSTEST_VERSION,
     rootPath,
     reporters,
+    fileFilters,
     snapshotManager,
     originalConfig: userConfig,
     normalizedConfig: rstestConfig,

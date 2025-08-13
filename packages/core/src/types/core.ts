@@ -13,6 +13,8 @@ export type RstestContext = {
   originalConfig: Readonly<RstestConfig>;
   /** The normalized Rstest config. */
   normalizedConfig: NormalizedConfig;
+  /** filter by a filename regex pattern */
+  fileFilters?: string[];
   /**
    * The command type.
    *
