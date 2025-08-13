@@ -1,1 +1,1 @@
-export const sayHi = () => 'hi';
+export const sayHi = () => 'h11i1111';

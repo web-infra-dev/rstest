@@ -1,6 +1,16 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
 
+const PLUGIN_NAME = 'Rstest:TestFileWatchPlugin';
+
+declare module '@rsbuild/core' {
+  namespace Rspack {
+    interface Compiler {
+      __rstest_entries?: Record<string, string>;
+    }
+  }
+}
+
 class TestFileWatchPlugin {
   private contextToWatch: string | null = null;
 
@@ -9,19 +19,27 @@ class TestFileWatchPlugin {
   }
 
   apply(compiler: Rspack.Compiler) {
-    compiler.hooks.afterCompile.tap(
-      'Rstest:TestFileWatchPlugin',
-      (compilation) => {
-        if (this.contextToWatch === null) {
-          return;
+    compiler.hooks.make.tap(PLUGIN_NAME, (compilation) => {
+      const entries: Record<string, string> = {};
+      for (const [key, value] of compilation.entries) {
+        const firstDep = value.dependencies[0];
+        if (firstDep?.request) {
+          entries[key] = firstDep.request;
         }
+      }
+      compiler.__rstest_entries = entries;
+    });
 
-        const contextDep = compilation.contextDependencies;
-        if (!contextDep.has(this.contextToWatch)) {
-          contextDep.add(this.contextToWatch);
-        }
-      },
-    );
+    compiler.hooks.afterCompile.tap(PLUGIN_NAME, (compilation) => {
+      if (this.contextToWatch === null) {
+        return;
+      }
+
+      const contextDep = compilation.contextDependencies;
+      if (!contextDep.has(this.contextToWatch)) {
+        contextDep.add(this.contextToWatch);
+      }
+    });
   }
 }
 
