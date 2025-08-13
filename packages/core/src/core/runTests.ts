@@ -263,10 +263,7 @@ export async function runTests(context: RstestContext): Promise<void> {
               return;
             }
             const failedTests = testFileResult
-              .filter(
-                (result) =>
-                  result.status === 'fail' && result.snapshotResult?.unmatched,
-              )
+              .filter((result) => result.snapshotResult?.unmatched)
               .map((r) => r.testPath);
 
             clearLogs();
