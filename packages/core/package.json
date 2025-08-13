@@ -25,12 +25,8 @@
   },
   "exports": {
     ".": {
-      "types": "./dist-types/public.d.ts",
-      "default": "./dist/public.js"
-    },
-    "./node": {
-      "types": "./dist-types/node.d.ts",
-      "default": "./dist/node.js"
+      "types": "./dist-types/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./globals": {
       "types": "./globals.d.ts"
