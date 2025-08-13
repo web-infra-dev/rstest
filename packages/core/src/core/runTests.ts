@@ -4,10 +4,7 @@ import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-export async function runTests(
-  context: RstestContext,
-  fileFilters: string[],
-): Promise<void> {
+export async function runTests(context: RstestContext): Promise<void> {
   const {
     normalizedConfig: {
       include,
@@ -23,7 +20,13 @@ export async function runTests(
     command,
   } = context;
 
-  const entriesCache = new Map<string, Record<string, string>>();
+  const entriesCache = new Map<
+    string,
+    {
+      entries: Record<string, string>;
+      fileFilters?: string[];
+    }
+  >();
 
   const globTestSourceEntries = async (): Promise<Record<string, string>> => {
     const entries = await getTestEntries({
@@ -31,16 +34,22 @@ export async function runTests(
       exclude,
       includeSource,
       root,
-      fileFilters,
+      fileFilters: context.fileFilters || [],
     });
 
-    entriesCache.set(name, entries);
+    entriesCache.set(name, {
+      entries,
+      fileFilters: context.fileFilters,
+    });
 
     if (!Object.keys(entries).length) {
       logger.log(color.red('No test files found.'));
       logger.log('');
-      if (fileFilters.length) {
-        logger.log(color.gray('filter: '), fileFilters.join(color.gray(', ')));
+      if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
       }
       logger.log(color.gray('include:'), include.join(color.gray(', ')));
       logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
@@ -66,7 +75,7 @@ export async function runTests(
         ? globTestSourceEntries
         : async () => {
             if (entriesCache.has(name)) {
-              return entriesCache.get(name)!;
+              return entriesCache.get(name)!.entries;
             }
             return globTestSourceEntries();
           },
@@ -181,23 +190,46 @@ export async function runTests(
           runAll: async () => {
             clearLogs();
             snapshotManager.clear();
+            context.normalizedConfig.testNamePattern = undefined;
+            context.fileFilters = undefined;
+
+            // TODO: should rerun compile with new entries
             await run();
             afterTestsWatchRun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
             clearLogs();
             // Update testNamePattern for current run
-            context.normalizedConfig.testNamePattern = pattern as any;
+            context.normalizedConfig.testNamePattern = pattern;
 
             if (pattern) {
               logger.log(
-                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
+                `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}`,
               );
             } else {
-              logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
+              logger.log(`\n${color.dim('Cleared testNamePattern filter')}`);
             }
             snapshotManager.clear();
             await run();
+            afterTestsWatchRun();
+          },
+          runWithFileFilters: async (filters?: string[]) => {
+            clearLogs();
+            if (filters && filters.length > 0) {
+              logger.log(
+                `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}`,
+              );
+            } else {
+              logger.log(`\n${color.dim('Cleared file filters')}`);
+            }
+            snapshotManager.clear();
+            context.fileFilters = filters;
+            const entries = await globTestSourceEntries();
+
+            if (!Object.keys(entries).length) {
+              return;
+            }
+            await run({ fileFilters: Object.values(entries) });
             afterTestsWatchRun();
           },
           runFailedTests: async () => {

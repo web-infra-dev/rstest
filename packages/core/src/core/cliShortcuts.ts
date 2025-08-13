@@ -23,12 +23,14 @@ export async function setupCliShortcuts({
   updateSnapshot,
   runFailedTests,
   runWithTestNamePattern,
+  runWithFileFilters,
 }: {
   runFailedTests: () => Promise<void>;
   closeServer: () => Promise<void>;
   runAll: () => Promise<void>;
   updateSnapshot: () => Promise<void>;
   runWithTestNamePattern: (pattern: string | undefined) => Promise<void>;
+  runWithFileFilters: (filters: string[] | undefined) => Promise<void>;
 }): Promise<() => void> {
   const { createInterface, emitKeypressEvents } = await import('node:readline');
 
@@ -53,7 +55,10 @@ export async function setupCliShortcuts({
     } catch {}
   };
 
-  const promptTestNamePattern = async (): Promise<void> => {
+  const promptInput = async (
+    promptText: string,
+    onComplete: (value: string | undefined) => Promise<void>,
+  ): Promise<void> => {
     if (isPrompting) return;
     isPrompting = true;
 
@@ -63,9 +68,7 @@ export async function setupCliShortcuts({
     const render = () => {
       // Clear line and render prompt + buffer
       // Using carriage return to start of line and overwrite
-      process.stdout.write(
-        `\r\x1b[2KEnter test name pattern (empty to clear): ${buffer}`,
-      );
+      process.stdout.write(`\r\x1b[2K${promptText}${buffer}`);
     };
 
     render();
@@ -85,9 +88,9 @@ export async function setupCliShortcuts({
         // Finish input
         process.stdin.off('keypress', onPromptKey);
         process.stdout.write('\n');
-        const pattern = buffer.trim() === '' ? undefined : buffer.trim();
+        const value = buffer.trim() === '' ? undefined : buffer.trim();
         isPrompting = false;
-        await runWithTestNamePattern(pattern);
+        await onComplete(value);
         return;
       }
 
@@ -117,13 +120,6 @@ export async function setupCliShortcuts({
 
   const shortcuts = [
     {
-      key: 'c',
-      description: `${color.bold('c')}  ${color.dim('clear console')}`,
-      action: () => {
-        console.clear();
-      },
-    },
-    {
       key: 'f',
       description: `${color.bold('f')}  ${color.dim('rerun failed tests')}`,
       action: async () => {
@@ -149,7 +145,35 @@ export async function setupCliShortcuts({
       description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
       action: async () => {
         clearCurrentInputLine();
-        await promptTestNamePattern();
+        await promptInput(
+          'Enter test name pattern (empty to clear): ',
+          async (pattern) => {
+            await runWithTestNamePattern(pattern);
+          },
+        );
+      },
+    },
+    {
+      key: 'p',
+      description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
+      action: async () => {
+        clearCurrentInputLine();
+        await promptInput(
+          'Enter file name pattern (empty to clear): ',
+          async (input) => {
+            const filters = input
+              ? input.split(/\s+/).filter(Boolean)
+              : undefined;
+            await runWithFileFilters(filters);
+          },
+        );
+      },
+    },
+    {
+      key: 'c',
+      description: `${color.bold('c')}  ${color.dim('clear console')}`,
+      action: () => {
+        console.clear();
       },
     },
     {
