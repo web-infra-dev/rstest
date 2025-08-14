@@ -1,7 +1,7 @@
 import type { RstestConfig } from './types';
 
 export { runCLI } from './cli';
-
+export { mergeRstestConfig } from './config';
 export * from './runtime/api/public';
 
 export type { RstestConfig };
