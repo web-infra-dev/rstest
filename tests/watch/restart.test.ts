@@ -49,8 +49,6 @@ export default defineConfig({});
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
 
-    await remove(configFile);
-
     cli.exec.kill();
   });
 });
