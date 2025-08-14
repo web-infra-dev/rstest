@@ -1,9 +1,5 @@
 import type { ChokidarOptions, FSWatcher } from 'chokidar';
 
-export type WatchFilesResult = {
-  close(): Promise<void>;
-};
-
 const GLOB_REGEX = /[*?{}[\]()!@+|]/;
 /**
  * A simple glob pattern checker.

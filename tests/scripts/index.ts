@@ -118,11 +118,13 @@ export async function runRstestCli({
 
 export async function prepareFixtures({
   fixturesPath,
+  fixturesTargetPath,
 }: {
   fixturesPath: string;
+  fixturesTargetPath?: string;
 }) {
   const root = path.dirname(fixturesPath);
-  const distPath = path.resolve(`${fixturesPath}-test`);
+  const distPath = fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
   fs.rmSync(distPath, { recursive: true, force: true });
   await fs.promises.mkdir(distPath, { recursive: true });
   await fs.promises.cp(fixturesPath, distPath, {

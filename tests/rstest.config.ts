@@ -14,5 +14,6 @@ export default defineConfig({
     '**/dist/**',
     '**/fixtures/**',
     '**/fixtures-test/**',
+    '**/fixtures-test-*/**',
   ],
 });

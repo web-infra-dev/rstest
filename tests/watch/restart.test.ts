@@ -11,11 +11,12 @@ describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath: `${__dirname}/fixtures-test-1`,
     });
 
     const configFile = path.join(
       __dirname,
-      'fixtures-test/rstest-1.config.mjs',
+      'fixtures-test-1/rstest-1.config.mjs',
     );
     await remove(configFile);
 
@@ -23,7 +24,7 @@ describe('restart', () => {
       configFile,
       `import { defineConfig } from '@rstest/core';
 export default defineConfig({
-  include: ['**/fixtures-test/**/*.test.*'],
+  include: ['**/fixtures-test-1/**/*.test.*'],
 });
       `,
     );
