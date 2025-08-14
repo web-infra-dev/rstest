@@ -262,6 +262,9 @@ export async function runTests(context: RstestContext): Promise<void> {
               );
               return;
             }
+            const failedTests = testFileResult
+              .filter((result) => result.snapshotResult?.unmatched)
+              .map((r) => r.testPath);
 
             clearLogs();
 
@@ -269,7 +272,7 @@ export async function runTests(context: RstestContext): Promise<void> {
               snapshotManager.options.updateSnapshot;
             snapshotManager.clear();
             snapshotManager.options.updateSnapshot = 'all';
-            await run();
+            await run({ fileFilters: failedTests });
             afterTestsWatchRun();
             snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
           },
