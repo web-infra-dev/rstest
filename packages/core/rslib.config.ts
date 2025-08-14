@@ -65,9 +65,7 @@ export default defineConfig({
       },
       source: {
         entry: {
-          public: './src/public.ts',
-          node: './src/node.ts',
-          cli: './src/cli/index.ts',
+          index: './src/index.ts',
           worker: './src/runtime/worker/index.ts',
         },
         define: {

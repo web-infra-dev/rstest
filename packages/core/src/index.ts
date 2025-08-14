@@ -1,5 +1,7 @@
 import type { RstestConfig } from './types';
 
+export { runCLI } from './cli';
+
 export * from './runtime/api/public';
 
 export type { RstestConfig };
@@ -24,3 +26,11 @@ export function defineConfig(config: RstestConfigExport): RstestConfigExport;
 export function defineConfig(config: RstestConfigExport) {
   return config;
 }
+
+export type {
+  Reporter,
+  RstestCommand,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+} from './types';

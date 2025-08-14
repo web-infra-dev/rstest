@@ -1,10 +1,10 @@
-import { defineConfig } from '@rstest/core';
 import type {
   Reporter,
   TestFileInfo,
   TestFileResult,
   TestResult,
-} from '@rstest/core/node';
+} from '@rstest/core';
+import { defineConfig } from '@rstest/core';
 
 export const reporterResult: string[] = [];
 
