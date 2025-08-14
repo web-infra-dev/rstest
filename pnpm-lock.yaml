@@ -177,6 +177,9 @@ importers:
       cac:
         specifier: ^6.7.14
         version: 6.7.14
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
       happy-dom:
         specifier: ^18.0.1
         version: 18.0.1
@@ -6567,7 +6570,6 @@ snapshots:
   chokidar@4.0.3:
     dependencies:
       readdirp: 4.1.2
-    optional: true
 
   chrome-trace-event@1.0.4: {}
 
@@ -8469,8 +8471,7 @@ snapshots:
     dependencies:
       picomatch: 2.3.1
 
-  readdirp@4.1.2:
-    optional: true
+  readdirp@4.1.2: {}
 
   recma-build-jsx@1.0.0:
     dependencies:

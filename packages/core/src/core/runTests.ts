@@ -173,6 +173,14 @@ export async function runTests(context: RstestContext): Promise<void> {
     const clearLogs = () => {
       console.clear();
     };
+
+    const { onBeforeRestart } = await import('./restart');
+
+    onBeforeRestart(async () => {
+      await pool.close();
+      await closeServer();
+    });
+
     rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
       // TODO: clean logs before dev recompile
       if (!isFirstCompile) {
@@ -182,7 +190,7 @@ export async function runTests(context: RstestContext): Promise<void> {
       await run();
 
       if (isFirstCompile && enableCliShortcuts) {
-        await setupCliShortcuts({
+        const closeCliShortcuts = await setupCliShortcuts({
           closeServer: async () => {
             await pool.close();
             await closeServer();
@@ -277,6 +285,8 @@ export async function runTests(context: RstestContext): Promise<void> {
             snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
           },
         });
+
+        onBeforeRestart(closeCliShortcuts);
       }
 
       afterTestsWatchRun();

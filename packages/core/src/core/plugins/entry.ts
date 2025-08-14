@@ -29,7 +29,13 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries: () => Promise<Record<string, string>>;
   setupFiles: Record<string, string>;
   isWatch: boolean;
-}) => RsbuildPlugin = ({ isWatch, globTestSourceEntries, setupFiles }) => ({
+  configFilePath?: string;
+}) => RsbuildPlugin = ({
+  isWatch,
+  globTestSourceEntries,
+  setupFiles,
+  configFilePath,
+}) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
@@ -61,6 +67,10 @@ export const pluginEntryWatch: (params: {
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
           '**/*.snap',
         );
+
+        if (configFilePath) {
+          config.watchOptions.ignored.push(configFilePath);
+        }
       } else {
         // watch false seems not effect when rspack.watch()
         config.watch = false;

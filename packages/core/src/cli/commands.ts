@@ -12,7 +12,7 @@ import { castArray, formatError, getAbsolutePath } from '../utils/helper';
 import { logger } from '../utils/logger';
 import { showRstest } from './prepare';
 
-type CommonOptions = {
+export type CommonOptions = {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
@@ -108,7 +108,7 @@ const applyCommonOptions = (cli: CAC) => {
 
 export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
-  configFilePath: string | null;
+  configFilePath?: string;
 }> {
   const cwd = process.cwd();
   const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
@@ -160,9 +160,48 @@ export async function initCli(options: CommonOptions): Promise<{
 
   return {
     config,
-    configFilePath,
+    configFilePath: configFilePath ?? undefined,
   };
 }
+
+export const runRest = async ({
+  options,
+  filters,
+  command,
+}: {
+  options: CommonOptions;
+  filters: string[];
+  command: RstestCommand;
+}): Promise<void> => {
+  let rstest: RstestInstance | undefined;
+  try {
+    const { config, configFilePath } = await initCli(options);
+    const { createRstest } = await import('../core');
+    rstest = createRstest(
+      { config, configFilePath },
+      command,
+      filters.map(normalize),
+    );
+
+    if (command === 'watch' && configFilePath) {
+      const { watchFilesForRestart } = await import('../core/restart');
+
+      watchFilesForRestart({
+        rstest,
+        options,
+        filters,
+      });
+    }
+    await rstest.runTests();
+  } catch (err) {
+    for (const reporter of rstest?.context.reporters || []) {
+      reporter.onExit?.();
+    }
+    logger.error('Failed to run Rstest.');
+    logger.error(formatError(err));
+    process.exit(1);
+  }
+};
 
 export function setupCommands(): void {
   const cli = cac('rstest');
@@ -185,46 +224,25 @@ export function setupCommands(): void {
       ) => {
         showRstest();
         if (options.watch) {
-          await runRest(options, filters, 'watch');
+          await runRest({ options, filters, command: 'watch' });
         } else {
-          await runRest(options, filters, 'run');
+          await runRest({ options, filters, command: 'run' });
         }
       },
     );
-
-  const runRest = async (
-    options: CommonOptions,
-    filters: string[],
-    command: RstestCommand,
-  ) => {
-    let rstest: RstestInstance | undefined;
-    try {
-      const { config } = await initCli(options);
-      const { createRstest } = await import('../core');
-      rstest = createRstest(config, command, filters.map(normalize));
-      await rstest.runTests();
-    } catch (err) {
-      for (const reporter of rstest?.context.reporters || []) {
-        reporter.onExit?.();
-      }
-      logger.error('Failed to run Rstest.');
-      logger.error(formatError(err));
-      process.exit(1);
-    }
-  };
 
   cli
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      await runRest(options, filters, 'run');
+      await runRest({ options, filters, command: 'run' });
     });
 
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      await runRest(options, filters, 'watch');
+      await runRest({ options, filters, command: 'watch' });
     });
 
   cli
@@ -237,9 +255,13 @@ export function setupCommands(): void {
         options: CommonOptions & ListCommandOptions,
       ) => {
         try {
-          const { config } = await initCli(options);
+          const { config, configFilePath } = await initCli(options);
           const { createRstest } = await import('../core');
-          const rstest = createRstest(config, 'list', filters.map(normalize));
+          const rstest = createRstest(
+            { config, configFilePath },
+            'list',
+            filters.map(normalize),
+          );
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,
