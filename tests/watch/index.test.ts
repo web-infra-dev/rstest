@@ -17,7 +17,7 @@ describe('watch', () => {
       args: ['watch', '--disableConsoleIntercept'],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: `${__dirname}/fixtures-test`,
         },
       },
     });

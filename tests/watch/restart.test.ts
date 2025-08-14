@@ -23,9 +23,7 @@ describe('restart', () => {
     fs.create(
       configFile,
       `import { defineConfig } from '@rstest/core';
-export default defineConfig({
-  include: ['**/fixtures-test-1/**/*.test.*'],
-});
+export default defineConfig({});
       `,
     );
 
@@ -34,7 +32,7 @@ export default defineConfig({
       args: ['watch', '--disableConsoleIntercept', '-c', configFile],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: `${__dirname}/fixtures-test-1`,
         },
       },
     });
