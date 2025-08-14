@@ -76,6 +76,10 @@ export default defineConfig({
         rspack: {
           // fix licensePlugin watch error: ResourceData has been dropped by Rust.
           plugins: isBuildWatch ? [] : [licensePlugin()],
+          optimization: {
+            chunkIds: 'named',
+            // concatenateModules: false,
+          },
         },
       },
     },
