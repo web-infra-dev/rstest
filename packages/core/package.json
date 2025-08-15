@@ -72,6 +72,7 @@
     "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
+    "chokidar": "^4.0.3",
     "happy-dom": "^18.0.1",
     "jest-diff": "^30.0.5",
     "jsdom": "^26.1.0",

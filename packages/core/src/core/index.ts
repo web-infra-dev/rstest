@@ -7,12 +7,18 @@ import type {
 import { createContext } from './context';
 
 export function createRstest(
-  config: RstestConfig,
+  {
+    config,
+    configFilePath,
+  }: {
+    config: RstestConfig;
+    configFilePath?: string;
+  },
   command: RstestCommand,
   fileFilters: string[],
 ): RstestInstance {
   const context = createContext(
-    { cwd: process.cwd(), command, fileFilters },
+    { cwd: process.cwd(), command, fileFilters, configFilePath },
     config,
   );
 

@@ -15,6 +15,8 @@ export type RstestContext = {
   normalizedConfig: NormalizedConfig;
   /** filter by a filename regex pattern */
   fileFilters?: string[];
+  /** The config file path. */
+  configFilePath?: string;
   /**
    * The command type.
    *

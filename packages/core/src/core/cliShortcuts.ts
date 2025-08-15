@@ -227,6 +227,7 @@ export async function setupCliShortcuts({
       process.stdin.setRawMode(false);
       process.stdin.pause();
     } catch {}
+    process.stdin.off('keypress', handleKeypress);
     rl.close();
   };
 }

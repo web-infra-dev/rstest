@@ -10,6 +10,7 @@ describe('watch', () => {
   it('test files should be ran when create / update / delete', async () => {
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath: `${__dirname}/fixtures-test-0`,
     });
 
     const { cli } = await runRstestCli({
@@ -17,7 +18,7 @@ describe('watch', () => {
       args: ['watch', '--disableConsoleIntercept'],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: `${__dirname}/fixtures-test-0`,
         },
       },
     });
@@ -29,7 +30,7 @@ describe('watch', () => {
     // create
     cli.resetStd();
     fs.create(
-      './fixtures-test/bar.test.ts',
+      './fixtures-test-0/bar.test.ts',
       `import { describe, expect, it } from '@rstest/core';
        describe('bar', () => {
          it('bar should be to bar', () => {
@@ -43,7 +44,7 @@ describe('watch', () => {
 
     // update
     cli.resetStd();
-    fs.update('./fixtures-test/bar.test.ts', (content) => {
+    fs.update('./fixtures-test-0/bar.test.ts', (content) => {
       return content.replace("toBe('bar')", "toBe('BAR')");
     });
 
@@ -53,7 +54,7 @@ describe('watch', () => {
 
     // delete
     cli.resetStd();
-    fs.delete('./fixtures-test/bar.test.ts');
+    fs.delete('./fixtures-test-0/bar.test.ts');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 1 passed');
 

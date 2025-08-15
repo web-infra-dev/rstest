@@ -61,13 +61,13 @@ class Cli {
     });
   };
 
-  waitForStdout = (expect: string | RegExp) => {
+  waitForStdout(expect: string | RegExp) {
     return this.waitForStd(expect, 'stdout');
-  };
+  }
 
-  waitForStderr = (expect: string | RegExp) => {
+  waitForStderr(expect: string | RegExp) {
     return this.waitForStd(expect, 'stderr');
-  };
+  }
 }
 
 export async function runRstestCli({
@@ -118,11 +118,13 @@ export async function runRstestCli({
 
 export async function prepareFixtures({
   fixturesPath,
+  fixturesTargetPath,
 }: {
   fixturesPath: string;
+  fixturesTargetPath?: string;
 }) {
   const root = path.dirname(fixturesPath);
-  const distPath = path.resolve(`${fixturesPath}-test`);
+  const distPath = fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
   fs.rmSync(distPath, { recursive: true, force: true });
   await fs.promises.mkdir(distPath, { recursive: true });
   await fs.promises.cp(fixturesPath, distPath, {
