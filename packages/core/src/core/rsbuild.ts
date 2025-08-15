@@ -18,6 +18,11 @@ import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 
+type EntryToChunkHashes = {
+  name: string;
+  chunks: Record<string, string>; // key is chunk name, value is chunk hash
+}[];
+
 function parseInlineSourceMap(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
   const inlineSourceMapRegex =
@@ -135,6 +140,7 @@ export const createRsbuildServer = async ({
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
+    changedEntries?: EntryInfo[]; // undefined means use full entries
   }>;
   closeServer: () => Promise<void>;
 }> => {
@@ -182,6 +188,8 @@ export const createRsbuildServer = async ({
     );
   }
 
+  const buildData: { entryToChunkHashes?: EntryToChunkHashes } = {};
+
   const getRsbuildStats = async ({
     fileFilters,
   }: { fileFilters?: string[] } | undefined = {}) => {
@@ -196,6 +204,8 @@ export const createRsbuildServer = async ({
       assets,
       hash,
       time: buildTime,
+      chunks,
+      // modules,
     } = stats.toJson({
       all: false,
       hash: true,
@@ -205,7 +215,11 @@ export const createRsbuildServer = async ({
       relatedAssets: true,
       cachedAssets: true,
       // get the compilation time
+      chunks: true,
       timings: true,
+      modules: true,
+      reasons: true,
+      chunkModules: true,
     });
 
     const readFile = async (fileName: string) => {
@@ -251,6 +265,7 @@ export const createRsbuildServer = async ({
           distPath,
           testPath: setupFiles[entry],
           files: entryFiles[entry],
+          chunks: e.chunks || [],
         });
       } else if (sourceEntries[entry]) {
         if (
@@ -263,6 +278,7 @@ export const createRsbuildServer = async ({
           distPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
+          chunks: e.chunks || [],
         });
       }
     }
@@ -293,7 +309,57 @@ export const createRsbuildServer = async ({
       ).filter((asset) => asset[1] !== null),
     );
 
+    const entryToChunkHashes: EntryToChunkHashes = [];
+    for (const entry of entries || []) {
+      for (const c of entry.chunks || []) {
+        // @ts-expect-error
+        const chunkInfo = chunks!.find((_c) => _c.names?.includes(c));
+        if (chunkInfo) {
+          const current = entryToChunkHashes.find(
+            (e) => e.name === entry.testPath,
+          );
+          if (current) {
+            current.chunks[c] = chunkInfo.hash ?? '';
+          } else {
+            entryToChunkHashes.push({
+              name: entry.testPath,
+              chunks: {
+                [c]: chunkInfo.hash ?? '',
+              },
+            });
+          }
+        }
+      }
+    }
+
+    let changedEntries: EntryInfo[] | undefined;
+    if (buildData.entryToChunkHashes) {
+      const prev = buildData.entryToChunkHashes;
+      entryToChunkHashes.forEach((entryToChunk) => {
+        const prevChunk = prev.find((p) => p.name === entryToChunk.name);
+        if (prevChunk) {
+          Object.entries(entryToChunk.chunks).forEach(
+            ([chunkName, chunkHash]) => {
+              const prevHash = prevChunk.chunks[chunkName];
+              if (prevHash !== chunkHash) {
+                // changedEntries.push(entryToChunk.name);
+                const entryInfo = entries.find(
+                  (e) => e.testPath === entryToChunk.name,
+                );
+                if (entryInfo) {
+                  changedEntries ??= [];
+                  changedEntries.push(entryInfo);
+                }
+              }
+            },
+          );
+        }
+      });
+    }
+    buildData.entryToChunkHashes = entryToChunkHashes;
+
     return {
+      changedEntries,
       hash,
       entries,
       setupEntries,

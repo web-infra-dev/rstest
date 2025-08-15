@@ -109,12 +109,13 @@ export async function runTests(context: RstestContext): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
+      changedEntries,
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
     const { results, testResults } = await pool.runTests({
       context,
-      entries,
+      entries: changedEntries ?? entries,
       sourceMaps,
       setupEntries,
       assetFiles,
