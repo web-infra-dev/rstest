@@ -214,7 +214,7 @@ export function setupCommands(): void {
 
   cli
     .command('[...filters]', 'run tests')
-    .option('--watch', 'Run tests in watch mode')
+    .option('-w, --watch', 'Run tests in watch mode')
     .action(
       async (
         filters: string[],
