@@ -3,7 +3,7 @@ packages:
   - 'scripts/**'
   - 'packages/**'
   - 'examples/**'
-  - 'tests/**'
+  - 'e2e/**'
 
 strictPeerDependencies: false
 autoInstallPeers: false
