@@ -5,7 +5,7 @@ import { aDirName, aFileName, aMetaDirname, aMetaFileName } from '../src/meta';
 describe('import.meta', () => {
   it('should get test file meta correctly', async () => {
     expect(
-      pathe.normalize(__dirname).endsWith('/rstest/tests/basic/test'),
+      pathe.normalize(__dirname).endsWith('/rstest/e2e/basic/test'),
     ).toBeTruthy();
     expect(
       pathe.normalize(__filename).endsWith('/basic/test/meta.test.ts'),
