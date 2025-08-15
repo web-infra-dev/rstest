@@ -88,7 +88,7 @@ export async function runTests(context: RstestContext): Promise<void> {
     command === 'watch'
       ? Number.POSITIVE_INFINITY
       : Array.from(entriesCache.values()).reduce(
-          (acc, entries) => acc + Object.keys(entries).length,
+          (acc, entry) => acc + Object.keys(entry.entries).length,
           0,
         );
 
