@@ -3,7 +3,7 @@ import type { LicenseIdentifiedModule } from 'license-webpack-plugin/dist/Licens
 
 export function licensePlugin() {
   const formatLicenseTitle = (module: LicenseIdentifiedModule) => {
-    // @ts-ignore
+    // @ts-expect-error
     const gitUrl = module.packageJson?.repository?.url;
     return `Licensed under ${module.licenseId} license${
       gitUrl ? ` in the repository at ${gitUrl}` : ''

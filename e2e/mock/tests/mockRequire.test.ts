@@ -6,6 +6,6 @@ it('mocked redux', () => {
   const redux = require('redux').default;
   redux.isAction('string');
   expect(redux.isAction).toHaveBeenCalledWith('string');
-  // @ts-ignore
+  // @ts-expect-error
   expect(redux.mocked).toBe('redux_yes');
 });
