@@ -50,7 +50,7 @@ describe('CLI shortcuts', () => {
     cli.exec.kill();
   });
 
-  it('shortcut `f` should works as expected', async () => {
+  it('shortcut `f` should work as expected', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f`;
     await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures-shortcuts`,
