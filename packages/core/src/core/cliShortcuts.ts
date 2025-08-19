@@ -212,7 +212,7 @@ export async function setupCliShortcuts({
     // Show help information
     if (str === 'h') {
       clearCurrentInputLine();
-      let message = `\n  ${color.bold(color.blue('Shortcuts:'))}\n`;
+      let message = `  ${color.bold(color.blue('Shortcuts:'))}\n`;
       for (const shortcut of shortcuts) {
         message += `  ${shortcut.description}\n`;
       }
