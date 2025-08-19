@@ -49,6 +49,8 @@ export class GithubActionsReporter {
 
     const { parseErrorStacktrace } = await import('../utils/error');
 
+    this.log('::error::Failed tests:');
+
     for (const test of failedTests) {
       const { testPath } = test;
       const nameStr = getTaskNameWithPrefix(test);
@@ -81,6 +83,8 @@ export class GithubActionsReporter {
         );
       }
     }
+
+    this.log('::endgroup::');
   }
 }
 
