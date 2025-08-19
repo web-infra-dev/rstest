@@ -13,7 +13,6 @@ export default defineConfig({
     '**/node_modules/**',
     '**/dist/**',
     '**/fixtures/**',
-    '**/fixtures-test/**',
-    '**/fixtures-test-*/**',
+    '**/fixtures-*/**',
   ],
 });
