@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('CLI shortcuts', () => {
-  it('should display shortcuts as expected', async () => {
+  it('CLI shortcuts should display and work as expected', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-2`;
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
@@ -45,6 +45,7 @@ describe('CLI shortcuts', () => {
         nodeOptions: {
           env: {
             FORCE_TTY: 'true',
+            CI: undefined,
           },
           cwd: fixturesTargetPath,
         },
