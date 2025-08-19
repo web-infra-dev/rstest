@@ -3,7 +3,7 @@
   "name": "@rstest/tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "rstest run",
+    "test": "rstest run shortcuts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

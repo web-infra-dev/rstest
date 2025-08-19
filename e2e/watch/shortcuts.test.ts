@@ -40,7 +40,7 @@ describe('CLI shortcuts', () => {
 
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
+      args: ['watch', '--disableConsoleIntercept', '--reporter=default'],
       options: {
         nodeOptions: {
           env: {
