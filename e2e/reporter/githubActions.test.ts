@@ -15,7 +15,7 @@ it('github-actions', async () => {
   await cli.exec;
   expect(cli.exec.process?.exitCode).toBe(1);
 
-  const logs = cli.stderr
+  const logs = cli.stdout
     .split('\n')
     .filter(Boolean)
     .filter((log) => log.startsWith('::error'));
