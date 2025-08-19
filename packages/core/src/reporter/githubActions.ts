@@ -24,7 +24,7 @@ export class GithubActionsReporter {
   }
 
   private log(message: string): void {
-    process.stderr.write(`${message}\n`);
+    console.log(`${message}\n`);
   }
 
   async onTestRunEnd({
