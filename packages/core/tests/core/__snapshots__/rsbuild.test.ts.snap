@@ -403,7 +403,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "splitChunks": false,
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name][ext]",
     "chunkFilename": "[name].js",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",

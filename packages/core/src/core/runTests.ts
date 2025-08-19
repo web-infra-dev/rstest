@@ -115,12 +115,25 @@ export async function runTests(context: RstestContext): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
+      changedEntries,
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
+    if (changedEntries?.length) {
+      logger.debug(
+        color.yellow('Test files to re-run:\n') +
+          changedEntries.map((e) => e.testPath).join('\n') +
+          '\n',
+      );
+    } else if (changedEntries?.length === 0) {
+      logger.debug(color.yellow('No test files are re-run.'));
+    } else {
+      logger.debug(color.yellow('Fully run test files.\n'));
+    }
+
     const { results, testResults } = await pool.runTests({
       context,
-      entries,
+      entries: changedEntries ?? entries,
       sourceMaps,
       setupEntries,
       assetFiles,
