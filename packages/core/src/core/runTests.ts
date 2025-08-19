@@ -139,7 +139,7 @@ export async function runTests(context: RstestContext): Promise<void> {
       process.exitCode = 1;
     }
 
-    for (const reporter of reporters) {
+    for await (const reporter of reporters) {
       await reporter.onTestRunEnd?.({
         results,
         testResults,
