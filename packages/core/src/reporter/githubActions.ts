@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
+import { getTaskNameWithPrefix, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
@@ -21,6 +21,10 @@ export class GithubActionsReporter {
   }) {
     this.onWritePath = options.onWritePath;
     this.rootPath = rootPath;
+  }
+
+  private log(message: string): void {
+    process.stderr.write(`${message}\n`);
   }
 
   async onTestRunEnd({
@@ -72,7 +76,7 @@ export class GithubActionsReporter {
           }
         }
 
-        logger.log(
+        this.log(
           `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
         );
       }
