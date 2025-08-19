@@ -49,7 +49,7 @@ export class GithubActionsReporter {
 
     const { parseErrorStacktrace } = await import('../utils/error');
 
-    this.log('::error::Failed tests:');
+    this.log('::group::Failed tests:');
 
     for (const test of failedTests) {
       const { testPath } = test;
