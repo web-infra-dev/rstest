@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
+import { getTaskNameWithPrefix, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
@@ -21,6 +21,10 @@ export class GithubActionsReporter {
   }) {
     this.onWritePath = options.onWritePath;
     this.rootPath = rootPath;
+  }
+
+  private log(message: string): void {
+    process.stderr.write(`${message}\n`);
   }
 
   async onTestRunEnd({
@@ -44,6 +48,8 @@ export class GithubActionsReporter {
     }
 
     const { parseErrorStacktrace } = await import('../utils/error');
+
+    const logs: string[] = [];
 
     for (const test of failedTests) {
       const { testPath } = test;
@@ -72,11 +78,19 @@ export class GithubActionsReporter {
           }
         }
 
-        logger.log(
+        logs.push(
           `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
         );
       }
     }
+
+    this.log('::group::error for github actions');
+
+    for (const log of logs) {
+      this.log(log);
+    }
+
+    this.log('::endgroup::');
   }
 }
 
