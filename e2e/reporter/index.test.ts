@@ -20,8 +20,6 @@ describe.concurrent('reporters', () => {
 
     await cli.exec;
     expect(cli.stdout).toContain('✗ basic > b');
-
-    expect('hello world').toMatchInlineSnapshot(`"hello world111"`);
   });
 
   it('verbose', async () => {
