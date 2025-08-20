@@ -64,7 +64,7 @@
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.30",
     "@microsoft/api-extractor": "^7.52.10",
-    "@rslib/core": "0.12.1",
+    "@rslib/core": "0.12.2",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",

@@ -8,7 +8,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "1.4.15",
-    "@rslib/core": "0.12.1",
+    "@rslib/core": "0.12.2",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
