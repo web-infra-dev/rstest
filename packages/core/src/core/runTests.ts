@@ -181,7 +181,7 @@ export async function runTests(context: RstestContext): Promise<void> {
       await closeServer();
     });
 
-    rsbuildInstance.onBeforeDevCompile(async ({ isFirstCompile }) => {
+    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       if (!isFirstCompile) {
         clearLogs();
       }
