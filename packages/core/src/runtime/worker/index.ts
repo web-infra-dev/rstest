@@ -88,7 +88,9 @@ const preparePool = async ({
   });
 
   // Reset listeners only when preparePool is called again (running without isolation)
-  listeners.forEach((fn) => fn());
+  listeners.forEach((fn) => {
+    fn();
+  });
   listeners.length = 0;
 
   const unhandledErrors: Error[] = [];
