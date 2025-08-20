@@ -1,5 +1,5 @@
 import { createPool } from '../pool';
-import type { RstestContext, TestFileResult } from '../types';
+import type { EntryInfo, RstestContext, TestFileResult } from '../types';
 import {
   color,
   getSetupFiles,
@@ -106,7 +106,14 @@ export async function runTests(context: RstestContext): Promise<void> {
   let testFileResult: TestFileResult[] = [];
   let buildHash: string | undefined;
 
-  const run = async ({ fileFilters }: { fileFilters?: string[] } = {}) => {
+  type RunMode = 'all-failed' | 'all' | 'on-demand';
+  const run = async ({
+    fileFilters,
+    runMode = 'on-demand',
+  }: {
+    fileFilters?: string[];
+    runMode?: RunMode;
+  } = {}) => {
     const {
       entries,
       setupEntries,
@@ -119,21 +126,27 @@ export async function runTests(context: RstestContext): Promise<void> {
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
-    if (changedEntries?.length) {
-      logger.debug(
-        color.yellow('Test files to re-run:\n') +
-          changedEntries.map((e) => e.testPath).join('\n') +
-          '\n',
-      );
-    } else if (changedEntries?.length === 0) {
-      logger.debug(color.yellow('No test files are re-run.'));
-    } else {
-      logger.debug(color.yellow('Fully run test files.\n'));
+    let finalEntries: EntryInfo[] = entries;
+    if (runMode === 'on-demand') {
+      if (changedEntries?.length) {
+        logger.debug(
+          color.yellow('Test files to re-run:\n') +
+            changedEntries.map((e) => e.testPath).join('\n') +
+            '\n',
+        );
+      } else if (changedEntries?.length === 0) {
+        logger.debug(color.yellow('No test files are re-run.'));
+      } else {
+        logger.debug(color.yellow('Fully run test files.\n'));
+      }
+      finalEntries = changedEntries ?? entries;
     }
+
+    console.log('🌂', finalEntries, runMode);
 
     const { results, testResults } = await pool.runTests({
       context,
-      entries: changedEntries ?? entries,
+      entries: finalEntries,
       sourceMaps,
       setupEntries,
       assetFiles,
@@ -280,7 +293,7 @@ export async function runTests(context: RstestContext): Promise<void> {
 
             snapshotManager.clear();
 
-            await run({ fileFilters: failedTests });
+            await run({ fileFilters: failedTests, runMode: 'all-failed' });
             afterTestsWatchRun();
           },
           updateSnapshot: async () => {

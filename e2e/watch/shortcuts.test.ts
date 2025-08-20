@@ -24,6 +24,7 @@ describe('CLI shortcuts', () => {
       options: {
         nodeOptions: {
           env: {
+            DEBUG: 'rstest',
             FORCE_TTY: 'true',
             CI: undefined,
           },
@@ -35,8 +36,8 @@ describe('CLI shortcuts', () => {
     // initial run
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
-
     await cli.waitForStdout('press h to show help');
+    expect(cli.stdout).toMatch('Fully run test files.');
 
     cli.exec.process!.stdin!.write('h');
 
@@ -50,6 +51,7 @@ describe('CLI shortcuts', () => {
     cli.exec.process!.stdin!.write('a');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
+    expect(cli.stdout).toMatch('Fully run test files.');
 
     cli.exec.kill();
   });
@@ -67,6 +69,7 @@ describe('CLI shortcuts', () => {
       options: {
         nodeOptions: {
           env: {
+            DEBUG: 'rstest',
             FORCE_TTY: 'true',
             CI: undefined,
           },
@@ -78,9 +81,8 @@ describe('CLI shortcuts', () => {
     // initial run
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
-
     await cli.waitForStdout('press h to show help');
-
+    expect(cli.stdout).toMatch('Fully run test files.');
     cli.resetStd();
 
     // rerun failed tests
