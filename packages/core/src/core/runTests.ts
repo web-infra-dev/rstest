@@ -181,11 +181,13 @@ export async function runTests(context: RstestContext): Promise<void> {
       await closeServer();
     });
 
-    rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
-      // TODO: clean logs before dev recompile
+    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       if (!isFirstCompile) {
         clearLogs();
       }
+    });
+
+    rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
       await run();
 
