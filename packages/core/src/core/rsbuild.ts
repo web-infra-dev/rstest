@@ -122,7 +122,10 @@ export const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
   buildData: { entryToChunkHashes?: EntryToChunkHashes },
-): EntryInfo[] | undefined => {
+): {
+  affectedEntries: EntryInfo[] | undefined;
+  deletedEntries: string[] | undefined;
+} => {
   const entryToChunkHashes: EntryToChunkHashes = [];
 
   for (const entry of entries || []) {
@@ -152,17 +155,16 @@ export const calcEntriesToRerun = (
     }
   }
 
-  let changedEntries: EntryInfo[] | undefined;
+  let affectedEntries: EntryInfo[] | undefined;
+  let deletedEntries: string[] | undefined;
   if (buildData.entryToChunkHashes) {
     const prev = buildData.entryToChunkHashes;
     const deleted = prev?.filter(
       (p) => !entryToChunkHashes.find((e) => e.name === p.name),
     );
 
-    // deleted
     if (deleted.length) {
-      // To prevent `changedEntries` be undefined.
-      changedEntries ??= [];
+      deletedEntries = deleted.map((entry) => entry.name);
     }
 
     entryToChunkHashes.forEach((entryToChunk) => {
@@ -176,8 +178,8 @@ export const calcEntriesToRerun = (
               (e) => e.testPath === entryToChunk.name,
             );
             if (entryInfo) {
-              changedEntries ??= [];
-              changedEntries.push(entryInfo);
+              affectedEntries ??= [];
+              affectedEntries.push(entryInfo);
             }
           }
         } else {
@@ -186,8 +188,8 @@ export const calcEntriesToRerun = (
             (e) => e.testPath === entryToChunk.name,
           );
           if (entryInfo) {
-            changedEntries ??= [];
-            changedEntries.push(entryInfo);
+            affectedEntries ??= [];
+            affectedEntries.push(entryInfo);
           }
         }
       });
@@ -195,18 +197,18 @@ export const calcEntriesToRerun = (
   }
 
   buildData.entryToChunkHashes = entryToChunkHashes;
-  let dedupedChangedEntries: EntryInfo[] | undefined;
+  let dedupeAffectedEntries: EntryInfo[] | undefined;
 
-  if (changedEntries) {
-    dedupedChangedEntries = [];
-    for (const entry of changedEntries) {
-      if (!dedupedChangedEntries.some((e) => e.testPath === entry.testPath)) {
-        dedupedChangedEntries.push(entry);
+  if (affectedEntries) {
+    dedupeAffectedEntries = [];
+    for (const entry of affectedEntries) {
+      if (!dedupeAffectedEntries.some((e) => e.testPath === entry.testPath)) {
+        dedupeAffectedEntries.push(entry);
       }
     }
   }
 
-  return dedupedChangedEntries;
+  return { affectedEntries: dedupeAffectedEntries, deletedEntries };
 };
 
 export const createRsbuildServer = async ({
@@ -231,7 +233,8 @@ export const createRsbuildServer = async ({
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    changedEntries?: EntryInfo[]; // undefined means use full entries
+    affectedEntries?: EntryInfo[]; // undefined means use full entries
+    deletedEntries?: string[]; // undefined means use full entries
   }>;
   closeServer: () => Promise<void>;
 }> => {
@@ -399,9 +402,16 @@ export const createRsbuildServer = async ({
       ).filter((asset) => asset[1] !== null),
     );
 
-    const changedEntries = calcEntriesToRerun(entries, chunks, buildData);
+    // affectedEntries: entries affected by source code.
+    // deletedEntries: entry files deleted from compilation.
+    const { affectedEntries, deletedEntries } = calcEntriesToRerun(
+      entries,
+      chunks,
+      buildData,
+    );
     return {
-      changedEntries,
+      affectedEntries,
+      deletedEntries,
       hash,
       entries,
       setupEntries,

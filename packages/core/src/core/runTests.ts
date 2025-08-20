@@ -1,5 +1,5 @@
 import { createPool } from '../pool';
-import type { EntryInfo, RstestContext, TestFileResult } from '../types';
+import type { EntryInfo } from '../types';
 import {
   color,
   getSetupFiles,
@@ -9,8 +9,9 @@ import {
 } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import type { Rstest } from './rstest';
 
-export async function runTests(context: RstestContext): Promise<void> {
+export async function runTests(context: Rstest): Promise<void> {
   const {
     normalizedConfig: {
       include,
@@ -103,16 +104,15 @@ export async function runTests(context: RstestContext): Promise<void> {
     recommendWorkerCount,
   });
 
-  let testFileResult: TestFileResult[] = [];
   let buildHash: string | undefined;
 
   type RunMode = 'all-failed' | 'all' | 'on-demand';
   const run = async ({
     fileFilters,
-    runMode = 'on-demand',
+    mode: runMode = 'all',
   }: {
     fileFilters?: string[];
-    runMode?: RunMode;
+    mode?: RunMode;
   } = {}) => {
     const {
       entries,
@@ -122,27 +122,26 @@ export async function runTests(context: RstestContext): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
-      changedEntries,
+      affectedEntries,
+      deletedEntries,
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
     let finalEntries: EntryInfo[] = entries;
     if (runMode === 'on-demand') {
-      if (changedEntries?.length) {
+      if (affectedEntries?.length) {
         logger.debug(
           color.yellow('Test files to re-run:\n') +
-            changedEntries.map((e) => e.testPath).join('\n') +
+            affectedEntries.map((e) => e.testPath).join('\n') +
             '\n',
         );
-      } else if (changedEntries?.length === 0) {
+      } else if (affectedEntries?.length === 0) {
         logger.debug(color.yellow('No test files are re-run.'));
       } else {
         logger.debug(color.yellow('Fully run test files.\n'));
       }
-      finalEntries = changedEntries ?? entries;
+      finalEntries = affectedEntries ?? entries;
     }
-
-    console.log('🌂', finalEntries, runMode);
 
     const { results, testResults } = await pool.runTests({
       context,
@@ -152,6 +151,8 @@ export async function runTests(context: RstestContext): Promise<void> {
       assetFiles,
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
+
+    context.updateReporter(results, testResults, deletedEntries);
 
     const actualBuildTime = buildHash === hash ? 0 : buildTime;
 
@@ -165,19 +166,20 @@ export async function runTests(context: RstestContext): Promise<void> {
 
     buildHash = hash;
 
-    testFileResult = results;
-
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
     }
 
     for (const reporter of reporters) {
       await reporter.onTestRunEnd?.({
-        results,
-        testResults,
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap,
+        filterRerunTestPaths: affectedEntries
+          ? affectedEntries.map((e) => e.testPath)
+          : undefined,
       });
     }
   };
@@ -222,7 +224,7 @@ export async function runTests(context: RstestContext): Promise<void> {
 
     rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run();
+      await run({ mode: 'on-demand' });
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
@@ -237,7 +239,7 @@ export async function runTests(context: RstestContext): Promise<void> {
             context.fileFilters = undefined;
 
             // TODO: should rerun compile with new entries
-            await run();
+            await run({ mode: 'all' });
             afterTestsWatchRun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
@@ -276,7 +278,7 @@ export async function runTests(context: RstestContext): Promise<void> {
             afterTestsWatchRun();
           },
           runFailedTests: async () => {
-            const failedTests = testFileResult
+            const failedTests = context.reporterResults.results
               .filter((result) => result.status === 'fail')
               .map((r) => r.testPath);
 
@@ -293,7 +295,7 @@ export async function runTests(context: RstestContext): Promise<void> {
 
             snapshotManager.clear();
 
-            await run({ fileFilters: failedTests, runMode: 'all-failed' });
+            await run({ fileFilters: failedTests, mode: 'all-failed' });
             afterTestsWatchRun();
           },
           updateSnapshot: async () => {
@@ -305,7 +307,7 @@ export async function runTests(context: RstestContext): Promise<void> {
               );
               return;
             }
-            const failedTests = testFileResult
+            const failedTests = context.reporterResults.results
               .filter((result) => result.snapshotResult?.unmatched)
               .map((r) => r.testPath);
 
