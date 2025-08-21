@@ -106,13 +106,13 @@ export async function runTests(context: Rstest): Promise<void> {
 
   let buildHash: string | undefined;
 
-  type RunMode = 'all-failed' | 'all' | 'on-demand';
+  type Mode = 'all' | 'on-demand';
   const run = async ({
     fileFilters,
-    mode: runMode = 'all',
+    mode = 'all',
   }: {
     fileFilters?: string[];
-    mode?: RunMode;
+    mode?: Mode;
   } = {}) => {
     const {
       entries,
@@ -122,25 +122,30 @@ export async function runTests(context: Rstest): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
+      isFirstRun,
       affectedEntries,
       deletedEntries,
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
     let finalEntries: EntryInfo[] = entries;
-    if (runMode === 'on-demand') {
-      if (affectedEntries?.length) {
-        logger.debug(
-          color.yellow('Test files to re-run:\n') +
-            affectedEntries.map((e) => e.testPath).join('\n') +
-            '\n',
-        );
-      } else if (affectedEntries?.length === 0) {
-        logger.debug(color.yellow('No test files are re-run.'));
+    if (mode === 'on-demand') {
+      if (isFirstRun) {
+        logger.debug(color.yellow('Fully run test files for first run.\n'));
       } else {
-        logger.debug(color.yellow('Fully run test files.\n'));
+        if (affectedEntries.length === 0) {
+          logger.debug(color.yellow('No test files are re-run.'));
+        } else {
+          logger.debug(
+            color.yellow('Test files to re-run:\n') +
+              affectedEntries.map((e) => e.testPath).join('\n') +
+              '\n',
+          );
+        }
+        finalEntries = affectedEntries;
       }
-      finalEntries = affectedEntries ?? entries;
+    } else {
+      logger.debug(color.yellow('Run all tests.\n'));
     }
 
     const { results, testResults } = await pool.runTests({
@@ -295,7 +300,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
             snapshotManager.clear();
 
-            await run({ fileFilters: failedTests, mode: 'all-failed' });
+            await run({ fileFilters: failedTests, mode: 'all' });
             afterTestsWatchRun();
           },
           updateSnapshot: async () => {

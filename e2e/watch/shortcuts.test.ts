@@ -37,7 +37,7 @@ describe('CLI shortcuts', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
     await cli.waitForStdout('press h to show help');
-    expect(cli.stdout).toMatch('Fully run test files.');
+    expect(cli.stdout).toMatch('Fully run test files for first run.');
 
     cli.exec.process!.stdin!.write('h');
 
@@ -51,7 +51,7 @@ describe('CLI shortcuts', () => {
     cli.exec.process!.stdin!.write('a');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
-    expect(cli.stdout).toMatch('Fully run test files.');
+    expect(cli.stdout).toMatch('Run all tests.');
 
     cli.exec.kill();
   });
@@ -82,13 +82,14 @@ describe('CLI shortcuts', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
     await cli.waitForStdout('press h to show help');
-    expect(cli.stdout).toMatch('Fully run test files.');
+    expect(cli.stdout).toMatch('Fully run test files for first run.');
     cli.resetStd();
 
     // rerun failed tests
     cli.exec.process!.stdin!.write('f');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed');
+    expect(cli.stdout).toMatch('Run all tests.');
 
     cli.exec.kill();
   });

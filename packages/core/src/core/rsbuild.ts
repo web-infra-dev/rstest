@@ -20,7 +20,8 @@ import { pluginCacheControl } from './plugins/moduleCacheControl';
 
 type EntryToChunkHashes = {
   name: string;
-  chunks: Record<string, string>; // key is chunk name, value is chunk hash
+  /** key is chunk name, value is chunk hash */
+  chunks: Record<string, string>;
 }[];
 
 function parseInlineSourceMap(code: string) {
@@ -123,13 +124,14 @@ export const calcEntriesToRerun = (
   chunks: Rspack.StatsChunk[] | undefined,
   buildData: { entryToChunkHashes?: EntryToChunkHashes },
 ): {
-  affectedEntries: EntryInfo[] | undefined;
-  deletedEntries: string[] | undefined;
+  affectedEntries: EntryInfo[];
+  deletedEntries: string[];
 } => {
   const entryToChunkHashes: EntryToChunkHashes = [];
 
   for (const entry of entries || []) {
     for (const chunkName of entry.chunks || []) {
+      // Treat runtime chunk as invariant, sometimes it will change but we don't care.
       if (chunkName === 'runtime') {
         continue;
       }
@@ -155,14 +157,15 @@ export const calcEntriesToRerun = (
     }
   }
 
-  let affectedEntries: EntryInfo[] | undefined;
-  let deletedEntries: string[] | undefined;
+  let affectedEntries: EntryInfo[] = [];
+  let deletedEntries: string[] = [];
   if (buildData.entryToChunkHashes) {
     const prev = buildData.entryToChunkHashes;
     const deleted = prev?.filter(
       (p) => !entryToChunkHashes.find((e) => e.name === p.name),
     );
 
+    // deleted
     if (deleted.length) {
       deletedEntries = deleted.map((entry) => entry.name);
     }
@@ -197,7 +200,7 @@ export const calcEntriesToRerun = (
   }
 
   buildData.entryToChunkHashes = entryToChunkHashes;
-  let dedupeAffectedEntries: EntryInfo[] | undefined;
+  let dedupeAffectedEntries: EntryInfo[] = [];
 
   if (affectedEntries) {
     dedupeAffectedEntries = [];
@@ -233,8 +236,9 @@ export const createRsbuildServer = async ({
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    affectedEntries?: EntryInfo[]; // undefined means use full entries
-    deletedEntries?: string[]; // undefined means use full entries
+    isFirstRun: boolean;
+    affectedEntries: EntryInfo[];
+    deletedEntries: string[];
   }>;
   closeServer: () => Promise<void>;
 }> => {
@@ -282,11 +286,13 @@ export const createRsbuildServer = async ({
     );
   }
 
+  let runCount = 0;
   const buildData: { entryToChunkHashes?: EntryToChunkHashes } = {};
 
   const getRsbuildStats = async ({
     fileFilters,
   }: { fileFilters?: string[] } | undefined = {}) => {
+    runCount++;
     const stats = await devServer.environments[name]!.getStats();
 
     const manifest = devServer.environments[name]!.context
@@ -412,6 +418,7 @@ export const createRsbuildServer = async ({
     return {
       affectedEntries,
       deletedEntries,
+      isFirstRun: runCount === 1,
       hash,
       entries,
       setupEntries,

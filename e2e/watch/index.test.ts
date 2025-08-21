@@ -28,7 +28,7 @@ describe('watch', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
     expect(cli.stdout).not.toMatch('Test files to re-run:');
-    expect(cli.stdout).toMatch('Fully run test files.');
+    expect(cli.stdout).toMatch('Fully run test files for first run.');
 
     // create
     cli.resetStd();
@@ -61,7 +61,7 @@ describe('watch', () => {
     cli.resetStd();
     fs.delete('./fixtures-test-0/bar.test.ts');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Fully run test files.');
+    expect(cli.stdout).toMatch('No test files are re-run.');
     expect(cli.stdout).toMatch('Test Files 1 passed');
 
     cli.exec.kill();
