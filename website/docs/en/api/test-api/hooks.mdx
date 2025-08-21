@@ -62,3 +62,23 @@ afterEach(async () => {
   // Cleanup logic after each test
 });
 ```
+
+## onTestFinished
+
+- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+Called after the test has finished running **whatever the test result is**. This can be used to perform cleanup actions. This hook will be called after `afterEach`.
+
+```ts
+import { onTestFinished, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+  // Register a cleanup function to close the server after the test
+  onTestFinished(() => server.close());
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```

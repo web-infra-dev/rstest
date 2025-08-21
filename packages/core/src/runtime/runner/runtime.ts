@@ -448,7 +448,7 @@ export const createRuntimeAPI = ({
   testPath: string;
   runtimeConfig: RuntimeConfig;
 }): {
-  api: RunnerAPI;
+  api: Omit<RunnerAPI, 'onTestFinished'>;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
