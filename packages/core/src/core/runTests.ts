@@ -175,6 +175,7 @@ export async function runTests(context: RstestContext): Promise<void> {
     };
 
     const { onBeforeRestart } = await import('./restart');
+    const { triggerRerun } = await import('./plugins/entry');
 
     onBeforeRestart(async () => {
       await pool.close();
@@ -201,9 +202,7 @@ export async function runTests(context: RstestContext): Promise<void> {
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
 
-            // TODO: should rerun compile with new entries
-            await run();
-            afterTestsWatchRun();
+            triggerRerun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
             clearLogs();

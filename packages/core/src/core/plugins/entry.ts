@@ -25,6 +25,18 @@ class TestFileWatchPlugin {
   }
 }
 
+const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
+
+let rerunTrigger: (() => void) | null = null;
+
+const registerRerunTrigger = (fn: () => void) => {
+  rerunTrigger = fn;
+};
+
+export const triggerRerun = (): void => {
+  rerunTrigger?.();
+};
+
 export const pluginEntryWatch: (params: {
   globTestSourceEntries: () => Promise<Record<string, string>>;
   setupFiles: Record<string, string>;
@@ -38,14 +50,46 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
-    api.modifyRspackConfig(async (config) => {
+    api.onCloseDevServer(() => {
+      rerunTrigger = null;
+    });
+
+    api.modifyRspackConfig(async (config, { rspack }) => {
       if (isWatch) {
+        // FIXME: inspect config will retrigger initConfig
+        if (rerunTrigger) {
+          return;
+        }
+
         config.plugins.push(new TestFileWatchPlugin(api.context.rootPath));
+
+        // Add virtual entry to trigger recompile
+        const virtualEntryName = `${rstestVirtualEntryFlag}${config.name!}.js`;
+        const virtualEntryPath = `${config.context!}/${virtualEntryName}`;
+
+        const virtualModulesPlugin =
+          new rspack.experiments.VirtualModulesPlugin({
+            [virtualEntryPath]: `export const virtualEntry = ${Date.now()}`,
+          });
+
+        registerRerunTrigger(() =>
+          virtualModulesPlugin.writeModule(
+            virtualEntryPath,
+            `export const virtualEntry = ${Date.now()}`,
+          ),
+        );
+
+        config.experiments ??= {};
+        config.experiments.nativeWatcher = true;
+
+        config.plugins.push(virtualModulesPlugin);
+
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries();
           return {
             ...sourceEntries,
             ...setupFiles,
+            [virtualEntryPath]: virtualEntryPath,
           };
         };
 
