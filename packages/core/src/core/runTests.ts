@@ -145,7 +145,11 @@ export async function runTests(context: Rstest): Promise<void> {
         finalEntries = affectedEntries;
       }
     } else {
-      logger.debug(color.yellow('Run all tests.\n'));
+      logger.debug(
+        color.yellow(
+          fileFilters?.length ? 'Run filtered tests.\n' : 'Run all tests.\n',
+        ),
+      );
     }
 
     const { results, testResults } = await pool.runTests({
@@ -157,7 +161,7 @@ export async function runTests(context: Rstest): Promise<void> {
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
 
-    context.updateReporter(results, testResults, deletedEntries);
+    context.updateReporterResultState(results, testResults, deletedEntries);
 
     const actualBuildTime = buildHash === hash ? 0 : buildTime;
 
@@ -182,7 +186,7 @@ export async function runTests(context: Rstest): Promise<void> {
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap,
-        filterRerunTestPaths: affectedEntries
+        filterRerunTestPaths: affectedEntries.length
           ? affectedEntries.map((e) => e.testPath)
           : undefined,
       });

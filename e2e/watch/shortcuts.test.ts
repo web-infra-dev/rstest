@@ -89,7 +89,7 @@ describe('CLI shortcuts', () => {
     cli.exec.process!.stdin!.write('f');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed');
-    expect(cli.stdout).toMatch('Run all tests.');
+    expect(cli.stdout).toMatch('Run filtered tests.');
 
     cli.exec.kill();
   });

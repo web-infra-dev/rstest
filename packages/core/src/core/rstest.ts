@@ -1,4 +1,9 @@
 import { SnapshotManager } from '@vitest/snapshot/manager';
+import { isCI } from 'std-env';
+import { withDefaultConfig } from '../config';
+import { DefaultReporter } from '../reporter';
+import { GithubActionsReporter } from '../reporter/githubActions';
+import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
   Reporter,
@@ -8,12 +13,7 @@ import type {
   Test,
   TestFileResult,
   TestResult,
-} from 'src/types';
-import { isCI } from 'std-env';
-import { withDefaultConfig } from '../config';
-import { DefaultReporter } from '../reporter';
-import { GithubActionsReporter } from '../reporter/githubActions';
-import { VerboseReporter } from '../reporter/verbose';
+} from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
 type Options = {
@@ -75,14 +75,13 @@ export class Rstest implements RstestContext {
     this.normalizedConfig = rstestConfig;
   }
 
-  public updateReporter(
+  public updateReporterResultState(
     results: TestFileResult[],
     testResults: TestResult[],
     deletedEntries: string[] = [],
   ): void {
-    // update results
-    for (let i = 0; i < results.length; i++) {
-      const item = results[i]!;
+    // Update or add results
+    results.forEach((item) => {
       const existingIndex = this.reporterResults.results.findIndex(
         (r) => r.testPath === item.testPath,
       );
@@ -91,27 +90,25 @@ export class Rstest implements RstestContext {
       } else {
         this.reporterResults.results.push(item);
       }
-    }
+    });
 
-    // update test results
-    const pathToClear = testResults.map((r) => r.testPath);
-    for (const file of pathToClear) {
-      this.reporterResults.testResults =
-        this.reporterResults.testResults.filter((r) => r.testPath !== file);
-    }
+    // Clear existing test results for updated paths and add new ones
+    const testPathsToUpdate = new Set(testResults.map((r) => r.testPath));
+    this.reporterResults.testResults = this.reporterResults.testResults.filter(
+      (r) => !testPathsToUpdate.has(r.testPath),
+    );
+    this.reporterResults.testResults.push(...testResults);
 
-    for (let i = 0; i < testResults.length; i++) {
-      const item = testResults[i]!;
-      this.reporterResults.testResults.push(item);
-    }
-
-    // deleted tests that are not in entires
-    for (const entry of deletedEntries) {
+    // Remove deleted entries
+    if (deletedEntries.length > 0) {
+      const deletedPathsSet = new Set(deletedEntries);
       this.reporterResults.results = this.reporterResults.results.filter(
-        (r) => r.testPath !== entry,
+        (r) => !deletedPathsSet.has(r.testPath),
       );
       this.reporterResults.testResults =
-        this.reporterResults.testResults.filter((r) => r.testPath !== entry);
+        this.reporterResults.testResults.filter(
+          (r) => !deletedPathsSet.has(r.testPath),
+        );
     }
   }
 }

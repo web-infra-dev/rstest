@@ -3,6 +3,8 @@ import path from 'pathe';
 import type { RstestContext } from '../../types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
+export const RUNTIME_CHUNK_NAME = 'runtime';
+
 export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
   context,
 ) => ({
@@ -97,7 +99,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               ...(config.optimization || {}),
               // make sure setup file and test file share the runtime
               runtimeChunk: {
-                name: 'runtime',
+                name: RUNTIME_CHUNK_NAME,
               },
             };
           },

@@ -9,7 +9,7 @@ import {
 import path from 'pathe';
 import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
 import { isDebug } from '../utils';
-import { pluginBasic } from './plugins/basic';
+import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
@@ -18,7 +18,7 @@ import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 
-type EntryToChunkHashes = {
+type TestEntryToChunkHashes = {
   name: string;
   /** key is chunk name, value is chunk hash */
   chunks: Record<string, string>;
@@ -122,96 +122,88 @@ export const prepareRsbuild = async (
 export const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
-  buildData: { entryToChunkHashes?: EntryToChunkHashes },
+  buildData: { entryToChunkHashes?: TestEntryToChunkHashes },
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
 } => {
-  const entryToChunkHashes: EntryToChunkHashes = [];
+  const entryToChunkHashesMap = new Map<string, Record<string, string>>();
 
-  for (const entry of entries || []) {
-    for (const chunkName of entry.chunks || []) {
-      // Treat runtime chunk as invariant, sometimes it will change but we don't care.
-      if (chunkName === 'runtime') {
-        continue;
-      }
+  // Build current chunk hashes map
+  const buildChunkHashes = (entry: EntryInfo) => {
+    const validChunks = (entry.chunks || []).filter(
+      (chunk) => chunk !== RUNTIME_CHUNK_NAME,
+    );
 
-      const chunkInfo = chunks!.find((c) =>
+    validChunks.forEach((chunkName) => {
+      const chunkInfo = chunks?.find((c) =>
         c.names?.includes(chunkName as string),
       );
       if (chunkInfo) {
-        const current = entryToChunkHashes.find(
-          (e) => e.name === entry.testPath,
-        );
-        if (current) {
-          current.chunks[chunkName] = chunkInfo.hash ?? '';
-        } else {
-          entryToChunkHashes.push({
-            name: entry.testPath,
-            chunks: {
-              [chunkName]: chunkInfo.hash ?? '',
-            },
-          });
-        }
+        const existing = entryToChunkHashesMap.get(entry.testPath) || {};
+        existing[chunkName] = chunkInfo.hash ?? '';
+        entryToChunkHashesMap.set(entry.testPath, existing);
       }
-    }
-  }
+    });
+  };
 
-  let affectedEntries: EntryInfo[] = [];
-  let deletedEntries: string[] = [];
+  (entries || []).forEach(buildChunkHashes);
+
+  const entryToChunkHashes: TestEntryToChunkHashes = Array.from(
+    entryToChunkHashesMap.entries(),
+  ).map(([name, chunks]) => ({ name, chunks }));
+
+  // Process changes if we have previous data
+  const affectedTestPaths = new Set<string>();
+  const deletedEntries: string[] = [];
+
   if (buildData.entryToChunkHashes) {
-    const prev = buildData.entryToChunkHashes;
-    const deleted = prev?.filter(
-      (p) => !entryToChunkHashes.find((e) => e.name === p.name),
+    const prevMap = new Map(
+      buildData.entryToChunkHashes.map((e) => [e.name, e.chunks]),
+    );
+    const currentNames = new Set(entryToChunkHashesMap.keys());
+
+    // Find deleted entries
+    deletedEntries.push(
+      ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
     );
 
-    // deleted
-    if (deleted.length) {
-      deletedEntries = deleted.map((entry) => entry.name);
-    }
+    // Find modified or added entries
+    const findAffectedEntry = (testPath: string) => {
+      const currentChunks = entryToChunkHashesMap.get(testPath);
+      const prevChunks = prevMap.get(testPath);
 
-    entryToChunkHashes.forEach((entryToChunk) => {
-      const prevChunk = prev?.find((p) => p.name === entryToChunk.name);
-      Object.entries(entryToChunk.chunks).forEach(([chunkName, chunkHash]) => {
-        // modified
-        if (prevChunk) {
-          const prevHash = prevChunk.chunks[chunkName];
-          if (prevHash !== chunkHash) {
-            const entryInfo = entries.find(
-              (e) => e.testPath === entryToChunk.name,
-            );
-            if (entryInfo) {
-              affectedEntries ??= [];
-              affectedEntries.push(entryInfo);
-            }
-          }
-        } else {
-          // added
-          const entryInfo = entries.find(
-            (e) => e.testPath === entryToChunk.name,
-          );
-          if (entryInfo) {
-            affectedEntries ??= [];
-            affectedEntries.push(entryInfo);
-          }
-        }
-      });
+      if (!currentChunks) return;
+
+      if (!prevChunks) {
+        // New entry
+        affectedTestPaths.add(testPath);
+        return;
+      }
+
+      // Check for modified chunks
+      const hasChanges = Object.entries(currentChunks).some(
+        ([chunkName, hash]) => prevChunks[chunkName] !== hash,
+      );
+
+      if (hasChanges) {
+        affectedTestPaths.add(testPath);
+      }
+    };
+
+    entryToChunkHashesMap.forEach((_, testPath) => {
+      findAffectedEntry(testPath);
     });
   }
 
   buildData.entryToChunkHashes = entryToChunkHashes;
-  let dedupeAffectedEntries: EntryInfo[] = [];
 
-  if (affectedEntries) {
-    dedupeAffectedEntries = [];
-    for (const entry of affectedEntries) {
-      if (!dedupeAffectedEntries.some((e) => e.testPath === entry.testPath)) {
-        dedupeAffectedEntries.push(entry);
-      }
-    }
-  }
+  // Convert affected test paths to EntryInfo objects
+  const affectedEntries = Array.from(affectedTestPaths)
+    .map((testPath) => entries.find((e) => e.testPath === testPath))
+    .filter((entry): entry is EntryInfo => entry !== undefined);
 
-  return { affectedEntries: dedupeAffectedEntries, deletedEntries };
+  return { affectedEntries, deletedEntries };
 };
 
 export const createRsbuildServer = async ({
@@ -244,6 +236,7 @@ export const createRsbuildServer = async ({
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
+  let isFirstCompile = false;
 
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
@@ -251,6 +244,10 @@ export const createRsbuildServer = async ({
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;
+      });
+
+      api.onAfterDevCompile(({ isFirstCompile: _isFirstCompile }) => {
+        isFirstCompile = _isFirstCompile;
       });
     },
   };
@@ -286,13 +283,11 @@ export const createRsbuildServer = async ({
     );
   }
 
-  let runCount = 0;
-  const buildData: { entryToChunkHashes?: EntryToChunkHashes } = {};
+  const buildData: { entryToChunkHashes?: TestEntryToChunkHashes } = {};
 
   const getRsbuildStats = async ({
     fileFilters,
   }: { fileFilters?: string[] } | undefined = {}) => {
-    runCount++;
     const stats = await devServer.environments[name]!.getStats();
 
     const manifest = devServer.environments[name]!.context
@@ -316,9 +311,6 @@ export const createRsbuildServer = async ({
       // get the compilation time
       chunks: true,
       timings: true,
-      modules: true,
-      reasons: true,
-      chunkModules: true,
     });
 
     const readFile = async (fileName: string) => {
@@ -418,7 +410,7 @@ export const createRsbuildServer = async ({
     return {
       affectedEntries,
       deletedEntries,
-      isFirstRun: runCount === 1,
+      isFirstRun: isFirstCompile,
       hash,
       entries,
       setupEntries,
