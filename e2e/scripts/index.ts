@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { onTestFinished } from '@rstest/core';
+import { onTestFinished as onRstestFinished } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
 import type { Options, Result } from 'tinyexec';
 import { x } from 'tinyexec';
@@ -75,10 +75,12 @@ export async function runRstestCli({
   command,
   options,
   args = [],
+  onTestFinished = onRstestFinished,
 }: {
   command: string;
   options?: Partial<Options>;
   args?: string[];
+  onTestFinished?: (fn: () => void | Promise<void>) => void;
 }) {
   const process = x(command, args, {
     ...options,

@@ -7,10 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe.concurrent('reporters', () => {
-  it('default', async () => {
+  it('default', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index'],
+      onTestFinished,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -22,10 +23,11 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('✗ basic > b');
   });
 
-  it('verbose', async () => {
+  it('verbose', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index', '--reporter=verbose'],
+      onTestFinished,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -37,10 +39,11 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('✓ basic > a');
   });
 
-  it('custom', async () => {
+  it('custom', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index', '-c', './rstest.customReporterConfig.ts'],
+      onTestFinished,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -56,10 +59,11 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
   });
 
-  it('empty', async () => {
+  it('empty', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index', '-c', './rstest.emptyReporterConfig.ts'],
+      onTestFinished,
       options: {
         nodeOptions: {
           cwd: __dirname,

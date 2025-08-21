@@ -320,6 +320,7 @@ export class RunnerRuntime {
       sequential,
       each,
       fails,
+      onFinished: [],
     });
   }
 

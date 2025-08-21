@@ -37,7 +37,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     api: {
       ...runtime.api,
       onTestFinished: (fn, timeout) => {
-        testRunner.onTestFinished(fn, timeout);
+        testRunner.onTestFinished(testRunner.getCurrentTest(), fn, timeout);
       },
     },
     runner: {
