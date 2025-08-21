@@ -82,3 +82,16 @@ test('test server', () => {
   });
 });
 ```
+
+It should be noted that when you use the `onTestFinished` hook in concurrent tests, you should get the hook from the test context. This is because Rstest cannot accurately track the specific test to which the global `onTestFinished` hook belongs in concurrent tests.
+
+```ts
+describe.concurrent('concurrent suite', () => {
+  test('test 1', async ({ onTestFinished }) => {
+    /* ... */
+  });
+  test('test 2', async ({ onTestFinished }) => {
+    /* ... */
+  });
+});
+```

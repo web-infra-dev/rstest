@@ -82,3 +82,16 @@ test('test server', () => {
   });
 });
 ```
+
+需要注意的是，当你在并发测试中使用 `onTestFinished` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFinished hook 所属的具体测试。
+
+```ts
+describe.concurrent('并发套件', () => {
+  test('test 1', async ({ onTestFinished }) => {
+    /* ... */
+  });
+  test('test 2', async ({ onTestFinished }) => {
+    /* ... */
+  });
+});
+```
