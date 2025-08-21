@@ -1,6 +1,12 @@
 import { createPool } from '../pool';
 import type { RstestContext, TestFileResult } from '../types';
-import { color, getSetupFiles, getTestEntries, logger } from '../utils';
+import {
+  color,
+  getSetupFiles,
+  getTestEntries,
+  isDebug,
+  logger,
+} from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -154,7 +160,6 @@ export async function runTests(context: RstestContext): Promise<void> {
     const enableCliShortcuts = isCliShortcutsEnabled();
 
     const afterTestsWatchRun = () => {
-      // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
 
       if (enableCliShortcuts) {
@@ -171,7 +176,9 @@ export async function runTests(context: RstestContext): Promise<void> {
       }
     };
     const clearLogs = () => {
-      console.clear();
+      if (!isDebug()) {
+        console.clear();
+      }
     };
 
     const { onBeforeRestart } = await import('./restart');
