@@ -43,7 +43,7 @@ expect.soft(1 + 2).toBe(4);
 
 ## expect.poll
 
-- **类型：** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Assertion<T>`
+- **类型：** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Promise<Assertion<T>>`
 
 轮询函数返回的值，直到断言通过或超时。
 

@@ -10,7 +10,7 @@ Alias: `it`.
 
 ## test
 
-- **Type:** `(name: string, fn: (context) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Defines a test case.
 
@@ -68,7 +68,7 @@ test.each([
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, context) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Alternative to `test.each` to provide `TestContext`.
 
@@ -164,3 +164,20 @@ testWithUser('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
 ```
+
+## Types
+
+### TestContext
+
+`TestContext` provides some APIs, context information, and custom fixtures related to the current test.
+
+```ts
+export interface TestContext {
+  /** The `expect` API bound to the current test */
+  expect: Expect;
+  /** The `onTestFinished` hook bound to the current test */
+  onTestFinished: OnTestFinished;
+}
+```
+
+You can extend `TestContext` with custom fixtures using `test.extend`.
