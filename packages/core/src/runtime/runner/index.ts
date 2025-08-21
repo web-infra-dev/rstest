@@ -34,7 +34,12 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const testRunner: TestRunner = new TestRunner();
 
   return {
-    api: runtime.api,
+    api: {
+      ...runtime.api,
+      onTestFinished: (fn, timeout) => {
+        testRunner.onTestFinished(fn, timeout);
+      },
+    },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtime.instance.getTests();

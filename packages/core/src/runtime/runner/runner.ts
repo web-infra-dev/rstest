@@ -5,6 +5,7 @@ import type {
   BeforeEachListener,
   FormattedError,
   MatcherState,
+  OnTestFinishedHandler,
   Rstest,
   RstestExpect,
   RunnerHooks,
@@ -22,7 +23,12 @@ import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
-import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
+import {
+  getTestStatus,
+  limitConcurrency,
+  markAllTestAsSkipped,
+  wrapTimeout,
+} from './task';
 
 const RealDate = Date;
 
@@ -165,7 +171,11 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups);
+        .concat(cleanups)
+        .concat(this.onTestFinishedFns);
+
+      this.onTestFinishedFns.length = 0;
+
       try {
         for (const fn of afterEachFns) {
           await fn();
@@ -439,6 +449,22 @@ export class TestRunner {
     });
 
     return context;
+  }
+
+  private onTestFinishedFns: OnTestFinishedHandler[] = [];
+
+  onTestFinished(fn: OnTestFinishedHandler, timeout?: number): void {
+    if (!this._test) {
+      throw new Error('onTestFinished() can only be called inside a test');
+    }
+    this.onTestFinishedFns.push(
+      wrapTimeout({
+        name: 'onTestFinished hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
   private async beforeRunTest(

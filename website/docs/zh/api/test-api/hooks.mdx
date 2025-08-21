@@ -62,3 +62,23 @@ afterEach(async () => {
   // 每个测试后的清理逻辑
 });
 ```
+
+## onTestFinished
+
+- **类型：** `(fn: () => void | Promise<void>, timeout?: number) => void`
+
+测试运行完成后调用，无论测试成功或失败。可用于执行清理操作。该 hook 会在 `afterEach` 之后执行。
+
+```ts
+import { onTestFinished, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+  // Register a cleanup function to close the server after the test
+  onTestFinished(() => server.close());
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```

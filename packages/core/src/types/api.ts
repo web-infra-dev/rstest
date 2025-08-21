@@ -144,6 +144,8 @@ export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   }>;
 };
 
+export type OnTestFinishedHandler = () => MaybePromise<void>;
+
 export type RunnerAPI = {
   describe: DescribeAPI;
   it: TestAPIs;
@@ -152,6 +154,7 @@ export type RunnerAPI = {
   afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
   beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
   afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
+  onTestFinished: (fn: OnTestFinishedHandler, timeout?: number) => void;
 };
 
 export type RstestExpect = ExpectStatic;
