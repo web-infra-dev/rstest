@@ -172,9 +172,9 @@ export class TestRunner {
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups)
-        .concat(this.onTestFinishedFns);
+        .concat(test.onFinished);
 
-      this.onTestFinishedFns.length = 0;
+      test.onFinished.length = 0;
 
       try {
         for (const fn of afterEachFns) {
@@ -448,16 +448,26 @@ export class TestRunner {
       },
     });
 
+    Object.defineProperty(context, 'onTestFinished', {
+      get: () => {
+        return (fn: OnTestFinishedHandler, timeout?: number) => {
+          this.onTestFinished(current, fn, timeout);
+        };
+      },
+    });
+
     return context;
   }
 
-  private onTestFinishedFns: OnTestFinishedHandler[] = [];
-
-  onTestFinished(fn: OnTestFinishedHandler, timeout?: number): void {
-    if (!this._test) {
+  onTestFinished(
+    test: TestCase | undefined,
+    fn: OnTestFinishedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
       throw new Error('onTestFinished() can only be called inside a test');
     }
-    this.onTestFinishedFns.push(
+    test.onFinished.push(
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,

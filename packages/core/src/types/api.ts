@@ -11,6 +11,7 @@ import type { MaybePromise } from './utils';
 
 export type TestContext = {
   expect: RstestExpect;
+  onTestFinished: RunnerAPI['onTestFinished'];
 };
 
 export type TestCallbackFn<ExtraContext = object> = (

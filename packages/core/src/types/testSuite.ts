@@ -36,8 +36,7 @@ export type TestCase = {
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
-  // TODO
-  onFinished?: any[];
+  onFinished: (() => MaybePromise<void>)[];
   type: 'case';
   parentNames?: string[];
   /**
