@@ -160,7 +160,7 @@ const testWithUser = test.extend({
   },
 });
 
-testWithUser('has user in test context', ({ user, expect }) => {
+testWithUser('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
 ```
