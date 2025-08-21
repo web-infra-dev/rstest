@@ -173,8 +173,10 @@ testWithUser('has user in context', ({ user, expect }) => {
 
 ```ts
 export interface TestContext {
+  /** The `expect` API bound to the current test */
   expect: Expect;
-  onTestFinished: (fn: () => void | Promise<void>, timeout?: number) => void;
+  /** The `onTestFinished` hook bound to the current test */
+  onTestFinished: OnTestFinished;
 }
 ```
 
