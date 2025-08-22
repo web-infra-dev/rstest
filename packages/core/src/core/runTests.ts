@@ -214,6 +214,7 @@ export async function runTests(context: Rstest): Promise<void> {
     };
     const clearScreen = () => {
       if (!isDebug()) {
+        // clear screen
         console.log('\x1Bc');
       }
     };
