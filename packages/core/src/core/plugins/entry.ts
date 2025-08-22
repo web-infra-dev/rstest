@@ -94,6 +94,8 @@ export const pluginEntryWatch: (params: {
         };
 
         config.watchOptions ??= {};
+        config.watchOptions.aggregateTimeout = 5;
+
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
