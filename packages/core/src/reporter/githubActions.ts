@@ -37,6 +37,7 @@ export class GithubActionsReporter {
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const failedTests: TestResult[] = [
       ...results.filter((i) => i.status === 'fail' && i.errors?.length),

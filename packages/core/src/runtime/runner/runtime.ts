@@ -1,4 +1,3 @@
-import type { MaybePromise } from 'src/types/utils';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -8,6 +7,7 @@ import type {
   DescribeEachFn,
   DescribeForFn,
   Fixtures,
+  MaybePromise,
   NormalizedFixtures,
   RunnerAPI,
   RuntimeConfig,

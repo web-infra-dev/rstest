@@ -156,15 +156,30 @@ export const printSummaryErrorLogs = async ({
   results,
   rootPath,
   getSourcemap,
+  filterRerunTestPaths,
 }: {
   rootPath: string;
   results: TestFileResult[];
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
+  filterRerunTestPaths?: string[];
 }): Promise<void> => {
   const failedTests: TestResult[] = [
-    ...results.filter((i) => i.status === 'fail' && i.errors?.length),
-    ...testResults.filter((i) => i.status === 'fail'),
+    ...results.filter(
+      (i) =>
+        i.status === 'fail' &&
+        i.errors?.length &&
+        (filterRerunTestPaths
+          ? filterRerunTestPaths.includes(i.testPath)
+          : true),
+    ),
+    ...testResults.filter(
+      (i) =>
+        i.status === 'fail' &&
+        (filterRerunTestPaths
+          ? filterRerunTestPaths.includes(i.testPath)
+          : true),
+    ),
   ];
 
   if (failedTests.length === 0) {

@@ -4,7 +4,7 @@ import type {
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { createContext } from './context';
+import { Rstest } from './rstest';
 
 export function createRstest(
   {
@@ -17,8 +17,13 @@ export function createRstest(
   command: RstestCommand,
   fileFilters: string[],
 ): RstestInstance {
-  const context = createContext(
-    { cwd: process.cwd(), command, fileFilters, configFilePath },
+  const context = new Rstest(
+    {
+      cwd: process.cwd(),
+      command,
+      fileFilters,
+      configFilePath,
+    },
     config,
   );
 
