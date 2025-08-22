@@ -212,9 +212,9 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
     };
-    const clearLogs = () => {
+    const clearScreen = () => {
       if (!isDebug()) {
-        console.clear();
+        console.log('\x1Bc');
       }
     };
 
@@ -227,7 +227,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       if (!isFirstCompile) {
-        clearLogs();
+        clearScreen();
       }
     });
 
@@ -242,7 +242,7 @@ export async function runTests(context: Rstest): Promise<void> {
             await closeServer();
           },
           runAll: async () => {
-            clearLogs();
+            clearScreen();
             snapshotManager.clear();
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
@@ -252,7 +252,7 @@ export async function runTests(context: Rstest): Promise<void> {
             afterTestsWatchRun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
-            clearLogs();
+            clearScreen();
             // Update testNamePattern for current run
             context.normalizedConfig.testNamePattern = pattern;
 
@@ -268,7 +268,7 @@ export async function runTests(context: Rstest): Promise<void> {
             afterTestsWatchRun();
           },
           runWithFileFilters: async (filters?: string[]) => {
-            clearLogs();
+            clearScreen();
             if (filters && filters.length > 0) {
               logger.log(
                 `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
@@ -300,7 +300,7 @@ export async function runTests(context: Rstest): Promise<void> {
               return;
             }
 
-            clearLogs();
+            clearScreen();
 
             snapshotManager.clear();
 
@@ -320,7 +320,7 @@ export async function runTests(context: Rstest): Promise<void> {
               .filter((result) => result.snapshotResult?.unmatched)
               .map((r) => r.testPath);
 
-            clearLogs();
+            clearScreen();
 
             const originalUpdateSnapshot =
               snapshotManager.options.updateSnapshot;
