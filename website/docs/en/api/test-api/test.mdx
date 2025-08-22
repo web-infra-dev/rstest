@@ -165,6 +165,17 @@ testWithUser('has user in context', ({ user, expect }) => {
 });
 ```
 
+## Chainable modifiers
+
+`test` supports chainable modifiers, so you can use them together. For example:
+
+- `test.only.runIf(condition)` (or `test.runIf(condition).only`) will only run the test block if the condition is true.
+- `test.skipIf(condition).concurrent` (or `test.concurrent.skipIf(condition)`) will skip the test block if the condition is true, otherwise run the tests concurrently.
+- `test.runIf(condition).concurrent` (or `test.concurrent.runIf(condition)`) will only run the test block concurrently if the condition is true.
+- `test.only.concurrent` (or `test.concurrent.only`) will only run the test block concurrently.
+- `test.for(cases).concurrent` (or `test.concurrent.for(cases)`) will run the test block concurrently for each case in the provided array.
+- ......
+
 ## Types
 
 ### TestContext
