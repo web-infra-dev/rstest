@@ -1,10 +1,10 @@
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
+  clearScreen,
   color,
   getSetupFiles,
   getTestEntries,
-  isDebug,
   logger,
 } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
@@ -210,12 +210,6 @@ export async function runTests(context: Rstest): Promise<void> {
             `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
           );
         }
-      }
-    };
-    const clearScreen = () => {
-      if (!isDebug()) {
-        // clear screen
-        console.log('\x1Bc');
       }
     };
 
