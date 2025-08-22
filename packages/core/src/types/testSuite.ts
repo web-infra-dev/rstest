@@ -1,5 +1,10 @@
 import type { SnapshotResult } from '@vitest/snapshot';
-import type { NormalizedFixtures, TestContext } from './api';
+import type {
+  NormalizedFixtures,
+  OnTestFailedHandler,
+  OnTestFinishedHandler,
+  TestContext,
+} from './api';
 import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -36,7 +41,8 @@ export type TestCase = {
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
-  onFinished: (() => MaybePromise<void>)[];
+  onFinished: OnTestFinishedHandler[];
+  onFailed: OnTestFailedHandler[];
   type: 'case';
   parentNames?: string[];
   /**
@@ -57,7 +63,9 @@ export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
 export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
-export type AfterEachListener = () => MaybePromise<void>;
+export type AfterEachListener = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {

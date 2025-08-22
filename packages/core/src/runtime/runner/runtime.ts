@@ -321,6 +321,7 @@ export class RunnerRuntime {
       each,
       fails,
       onFinished: [],
+      onFailed: [],
     });
   }
 
@@ -449,7 +450,7 @@ export const createRuntimeAPI = ({
   testPath: string;
   runtimeConfig: RuntimeConfig;
 }): {
-  api: Omit<RunnerAPI, 'onTestFinished'>;
+  api: Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({

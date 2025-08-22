@@ -5,6 +5,7 @@ import type {
   BeforeEachListener,
   FormattedError,
   MatcherState,
+  OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
   RstestExpect,
@@ -174,16 +175,25 @@ export class TestRunner {
         .concat(cleanups)
         .concat(test.onFinished);
 
-      test.onFinished.length = 0;
-
       try {
         for (const fn of afterEachFns) {
-          await fn();
+          await fn({ task: { result } });
         }
       } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...formatTestError(error));
+      }
+
+      if (result.status === 'fail') {
+        for (const fn of [...test.onFailed].reverse()) {
+          try {
+            await fn({ task: { result } });
+          } catch (error) {
+            result.errors ??= [];
+            result.errors.push(...formatTestError(error));
+          }
+        }
       }
 
       this.resetCurrentTest();
@@ -456,6 +466,14 @@ export class TestRunner {
       },
     });
 
+    Object.defineProperty(context, 'onTestFailed', {
+      get: () => {
+        return (fn: OnTestFailedHandler, timeout?: number) => {
+          this.onTestFailed(current, fn, timeout);
+        };
+      },
+    });
+
     return context;
   }
 
@@ -470,6 +488,24 @@ export class TestRunner {
     test.onFinished.push(
       wrapTimeout({
         name: 'onTestFinished hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
+  }
+
+  onTestFailed(
+    test: TestCase | undefined,
+    fn: OnTestFailedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
+      throw new Error('onTestFailed() can only be called inside a test');
+    }
+    test.onFailed.push(
+      wrapTimeout({
+        name: 'onTestFailed hook',
         fn,
         timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),
