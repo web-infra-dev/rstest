@@ -6,12 +6,14 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  TestResult,
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
 export type TestContext = {
   expect: RstestExpect;
   onTestFinished: RunnerAPI['onTestFinished'];
+  onTestFailed: RunnerAPI['onTestFailed'];
 };
 
 export type TestCallbackFn<ExtraContext = object> = (
@@ -145,7 +147,13 @@ export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   }>;
 };
 
-export type OnTestFinishedHandler = () => MaybePromise<void>;
+export type OnTestFinishedHandler = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
+
+export type OnTestFailedHandler = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
 
 export type RunnerAPI = {
   describe: DescribeAPI;
@@ -156,6 +164,7 @@ export type RunnerAPI = {
   beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
   afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
   onTestFinished: (fn: OnTestFinishedHandler, timeout?: number) => void;
+  onTestFailed: (fn: OnTestFailedHandler, timeout?: number) => void;
 };
 
 export type RstestExpect = ExpectStatic;

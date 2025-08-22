@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 ## afterEach
 
-- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
 
 Runs after each test in the current suite.
 
@@ -65,7 +65,7 @@ afterEach(async () => {
 
 ## onTestFinished
 
-- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
 
 Called after the test has finished running **whatever the test result is**. This can be used to perform cleanup actions. This hook will be called after `afterEach`.
 
@@ -95,3 +95,27 @@ describe.concurrent('concurrent suite', () => {
   });
 });
 ```
+
+## onTestFailed
+
+- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+
+Called after the test has failed.
+
+```ts
+import { onTestFailed, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+
+  onTestFailed(({ task }) => {
+    console.log(task.result.errors);
+  });
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```
+
+It should be noted that when you use the `onTestFailed` hook in concurrent tests, you should get the hook from the test context. This is because Rstest cannot accurately track the specific test to which the global `onTestFailed` hook belongs in concurrent tests.
