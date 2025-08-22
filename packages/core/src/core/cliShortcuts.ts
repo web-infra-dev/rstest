@@ -1,4 +1,4 @@
-import { color, isTTY, logger } from '../utils';
+import { clearScreen, color, isTTY, logger } from '../utils';
 
 export const isCliShortcutsEnabled = (): boolean => isTTY('stdin');
 
@@ -173,7 +173,7 @@ export async function setupCliShortcuts({
       key: 'c',
       description: `${color.bold('c')}  ${color.dim('clear console')}`,
       action: () => {
-        console.clear();
+        clearScreen();
       },
     },
     {

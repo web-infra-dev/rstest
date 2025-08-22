@@ -15,6 +15,11 @@
 import { type Logger, logger } from 'rslog';
 import { color } from './helper';
 
+// Modified based on https://github.com/vitest-dev/vitest/blob/34f67546df3848c66bcdfa48f5221717d498b965/packages/vitest/src/node/logger.ts#L28-L34
+const ESC = '\x1b[';
+const CLEAR_SCREEN = '\x1Bc';
+const ERASE_SCROLLBACK = `${ESC}3J`;
+
 export const isDebug = (): boolean => {
   if (!process.env.DEBUG) {
     return false;
@@ -39,6 +44,10 @@ function getTime() {
 
   return `${hours}:${minutes}:${seconds}`;
 }
+
+export const clearScreen = (): void => {
+  console.log(`${CLEAR_SCREEN}${ERASE_SCROLLBACK}`);
+};
 
 logger.override({
   debug: (message, ...args) => {

@@ -1,6 +1,7 @@
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
+  clearScreen,
   color,
   getSetupFiles,
   getTestEntries,
@@ -212,9 +213,10 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
     };
+
     const clearLogs = () => {
       if (!isDebug()) {
-        console.clear();
+        clearScreen();
       }
     };
 
