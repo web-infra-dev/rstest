@@ -1,6 +1,6 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
-import type { BuiltInReporterNames } from '../core/context';
+import type { BuiltInReporterNames } from '../core/rstest';
 import type {
   TestFileInfo,
   TestFileResult,
@@ -67,6 +67,7 @@ export interface Reporter {
     duration: Duration;
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
+    filterRerunTestPaths?: string[];
   }) => MaybePromise<void>;
 
   /**

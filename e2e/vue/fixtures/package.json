@@ -8,16 +8,16 @@
     "preview": "rsbuild preview"
   },
   "dependencies": {
-    "vue": "^3.5.18"
+    "vue": "^3.5.19"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
-    "@rsbuild/core": "1.5.0-beta.4",
+    "@rsbuild/core": "1.5.0-rc.0",
     "@rsbuild/plugin-babel": "^1.0.6",
     "@rsbuild/plugin-vue": "^1.1.1",
     "@rsbuild/plugin-vue-jsx": "^1.1.1",
     "@vue/test-utils": "^2.4.6",
-    "@vue/compiler-dom": "^3.5.18",
-    "@vue/server-renderer": "^3.5.18"
+    "@vue/compiler-dom": "^3.5.19",
+    "@vue/server-renderer": "^3.5.19"
   }
 }

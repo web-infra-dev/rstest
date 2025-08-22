@@ -1,10 +1,17 @@
 import { createPool } from '../pool';
-import type { RstestContext, TestFileResult } from '../types';
-import { color, getSetupFiles, getTestEntries, logger } from '../utils';
+import type { EntryInfo } from '../types';
+import {
+  color,
+  getSetupFiles,
+  getTestEntries,
+  isDebug,
+  logger,
+} from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import type { Rstest } from './rstest';
 
-export async function runTests(context: RstestContext): Promise<void> {
+export async function runTests(context: Rstest): Promise<void> {
   const {
     normalizedConfig: {
       include,
@@ -97,10 +104,16 @@ export async function runTests(context: RstestContext): Promise<void> {
     recommendWorkerCount,
   });
 
-  let testFileResult: TestFileResult[] = [];
   let buildHash: string | undefined;
 
-  const run = async ({ fileFilters }: { fileFilters?: string[] } = {}) => {
+  type Mode = 'all' | 'on-demand';
+  const run = async ({
+    fileFilters,
+    mode = 'all',
+  }: {
+    fileFilters?: string[];
+    mode?: Mode;
+  } = {}) => {
     const {
       entries,
       setupEntries,
@@ -109,17 +122,41 @@ export async function runTests(context: RstestContext): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
+      affectedEntries,
+      deletedEntries,
     } = await getRsbuildStats({ fileFilters });
     const testStart = Date.now();
 
+    let finalEntries: EntryInfo[] = entries;
+    if (mode === 'on-demand') {
+      if (affectedEntries.length === 0) {
+        logger.debug(color.yellow('No test files are re-run.'));
+      } else {
+        logger.debug(
+          color.yellow('Test files to re-run:\n') +
+            affectedEntries.map((e) => e.testPath).join('\n') +
+            '\n',
+        );
+      }
+      finalEntries = affectedEntries;
+    } else {
+      logger.debug(
+        color.yellow(
+          fileFilters?.length ? 'Run filtered tests.\n' : 'Run all tests.\n',
+        ),
+      );
+    }
+
     const { results, testResults } = await pool.runTests({
       context,
-      entries,
+      entries: finalEntries,
       sourceMaps,
       setupEntries,
       assetFiles,
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
+
+    context.updateReporterResultState(results, testResults, deletedEntries);
 
     const actualBuildTime = buildHash === hash ? 0 : buildTime;
 
@@ -133,19 +170,20 @@ export async function runTests(context: RstestContext): Promise<void> {
 
     buildHash = hash;
 
-    testFileResult = results;
-
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
     }
 
     for (const reporter of reporters) {
       await reporter.onTestRunEnd?.({
-        results,
-        testResults,
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap,
+        filterRerunTestPaths: affectedEntries.length
+          ? affectedEntries.map((e) => e.testPath)
+          : undefined,
       });
     }
   };
@@ -154,7 +192,6 @@ export async function runTests(context: RstestContext): Promise<void> {
     const enableCliShortcuts = isCliShortcutsEnabled();
 
     const afterTestsWatchRun = () => {
-      // TODO: support clean logs before dev recompile
       logger.log(color.green('  Waiting for file changes...'));
 
       if (enableCliShortcuts) {
@@ -171,7 +208,9 @@ export async function runTests(context: RstestContext): Promise<void> {
       }
     };
     const clearLogs = () => {
-      console.clear();
+      if (!isDebug()) {
+        console.clear();
+      }
     };
 
     const { onBeforeRestart } = await import('./restart');
@@ -182,13 +221,23 @@ export async function runTests(context: RstestContext): Promise<void> {
       await closeServer();
     });
 
-    rsbuildInstance.onDevCompileDone(async ({ isFirstCompile }) => {
-      // TODO: clean logs before dev recompile
+    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       if (!isFirstCompile) {
         clearLogs();
       }
+    });
+
+    let forceRerunOnce = false;
+
+    rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run();
+      await run({
+        mode: isFirstCompile || forceRerunOnce ? 'all' : 'on-demand',
+      });
+
+      if (forceRerunOnce) {
+        forceRerunOnce = false;
+      }
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
@@ -202,6 +251,7 @@ export async function runTests(context: RstestContext): Promise<void> {
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
 
+            forceRerunOnce = true;
             triggerRerun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
@@ -240,7 +290,7 @@ export async function runTests(context: RstestContext): Promise<void> {
             afterTestsWatchRun();
           },
           runFailedTests: async () => {
-            const failedTests = testFileResult
+            const failedTests = context.reporterResults.results
               .filter((result) => result.status === 'fail')
               .map((r) => r.testPath);
 
@@ -257,7 +307,7 @@ export async function runTests(context: RstestContext): Promise<void> {
 
             snapshotManager.clear();
 
-            await run({ fileFilters: failedTests });
+            await run({ fileFilters: failedTests, mode: 'all' });
             afterTestsWatchRun();
           },
           updateSnapshot: async () => {
@@ -269,7 +319,7 @@ export async function runTests(context: RstestContext): Promise<void> {
               );
               return;
             }
-            const failedTests = testFileResult
+            const failedTests = context.reporterResults.results
               .filter((result) => result.snapshotResult?.unmatched)
               .map((r) => r.testPath);
 

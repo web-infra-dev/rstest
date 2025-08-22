@@ -5,6 +5,8 @@ import type {
   BeforeEachListener,
   FormattedError,
   MatcherState,
+  OnTestFailedHandler,
+  OnTestFinishedHandler,
   Rstest,
   RstestExpect,
   RunnerHooks,
@@ -22,7 +24,12 @@ import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
-import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
+import {
+  getTestStatus,
+  limitConcurrency,
+  markAllTestAsSkipped,
+  wrapTimeout,
+} from './task';
 
 const RealDate = Date;
 
@@ -165,15 +172,28 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups);
+        .concat(cleanups)
+        .concat(test.onFinished);
+
       try {
         for (const fn of afterEachFns) {
-          await fn();
+          await fn({ task: { result } });
         }
       } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...formatTestError(error));
+      }
+
+      if (result.status === 'fail') {
+        for (const fn of [...test.onFailed].reverse()) {
+          try {
+            await fn({ task: { result } });
+          } catch (error) {
+            result.errors ??= [];
+            result.errors.push(...formatTestError(error));
+          }
+        }
       }
 
       this.resetCurrentTest();
@@ -438,7 +458,59 @@ export class TestRunner {
       },
     });
 
+    Object.defineProperty(context, 'onTestFinished', {
+      get: () => {
+        return (fn: OnTestFinishedHandler, timeout?: number) => {
+          this.onTestFinished(current, fn, timeout);
+        };
+      },
+    });
+
+    Object.defineProperty(context, 'onTestFailed', {
+      get: () => {
+        return (fn: OnTestFailedHandler, timeout?: number) => {
+          this.onTestFailed(current, fn, timeout);
+        };
+      },
+    });
+
     return context;
+  }
+
+  onTestFinished(
+    test: TestCase | undefined,
+    fn: OnTestFinishedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
+      throw new Error('onTestFinished() can only be called inside a test');
+    }
+    test.onFinished.push(
+      wrapTimeout({
+        name: 'onTestFinished hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
+  }
+
+  onTestFailed(
+    test: TestCase | undefined,
+    fn: OnTestFailedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
+      throw new Error('onTestFailed() can only be called inside a test');
+    }
+    test.onFailed.push(
+      wrapTimeout({
+        name: 'onTestFailed hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
   private async beforeRunTest(

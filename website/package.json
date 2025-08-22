@@ -10,9 +10,9 @@
   },
   "devDependencies": {
     "@rsbuild/plugin-sass": "^1.3.5",
-    "@rspress/core": "^2.0.0-beta.27",
-    "@rspress/plugin-llms": "2.0.0-beta.27",
-    "@rstack-dev/doc-ui": "1.10.10",
+    "@rspress/core": "^2.0.0-beta.28",
+    "@rspress/plugin-llms": "2.0.0-beta.28",
+    "@rstack-dev/doc-ui": "1.11.0",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.13.8",
     "@types/react": "^19.1.10",

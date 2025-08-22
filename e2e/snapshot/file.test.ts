@@ -32,7 +32,7 @@ describe('test snapshot', () => {
     expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
     // should generator snapshot name correctly
-    expect
+    await expect
       .poll(() => fs.readFileSync(snapshotFilePath, 'utf-8'))
       .toContain(
         '[`test snapshot > test snapshot generate 1`] = `"hello world"`',

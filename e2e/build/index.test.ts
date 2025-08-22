@@ -7,28 +7,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test build config', () => {
-  it.concurrent.each([
+  it.concurrent.for([
     { name: 'define' },
     { name: 'alias' },
     { name: 'plugin' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
-  ])('$name config should work correctly', async ({ name }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        `fixtures/${name}/index.test.ts`,
-        '-c',
-        `fixtures/${name}/rstest.config.ts`,
-      ],
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
+  ])(
+    '$name config should work correctly',
+    async ({ name }, { onTestFinished }) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          `fixtures/${name}/index.test.ts`,
+          '-c',
+          `fixtures/${name}/rstest.config.ts`,
+        ],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-  });
+      await expectExecSuccess();
+    },
+  );
 });

@@ -1,4 +1,3 @@
-import type { MaybePromise } from 'src/types/utils';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -8,6 +7,7 @@ import type {
   DescribeEachFn,
   DescribeForFn,
   Fixtures,
+  MaybePromise,
   NormalizedFixtures,
   RunnerAPI,
   RuntimeConfig,
@@ -320,6 +320,8 @@ export class RunnerRuntime {
       sequential,
       each,
       fails,
+      onFinished: [],
+      onFailed: [],
     });
   }
 
@@ -448,7 +450,7 @@ export const createRuntimeAPI = ({
   testPath: string;
   runtimeConfig: RuntimeConfig;
 }): {
-  api: RunnerAPI;
+  api: Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({

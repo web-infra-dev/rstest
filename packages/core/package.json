@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -50,9 +50,9 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "chai": "^5.2.1",
+    "chai": "^5.3.1",
     "@types/chai": "^5.2.2",
-    "@rsbuild/core": "1.5.0-beta.4",
+    "@rsbuild/core": "1.5.0-rc.0",
     "birpc": "2.5.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
@@ -63,7 +63,7 @@
     "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.30",
-    "@microsoft/api-extractor": "^7.52.10",
+    "@microsoft/api-extractor": "^7.52.11",
     "@rslib/core": "0.12.2",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
