@@ -95,7 +95,7 @@ export async function runRstestCli({
   const cli = new Cli(process);
 
   onTestFinished(() => {
-    cli.exec.kill();
+    !cli.exec.killed && cli.exec.kill();
   });
 
   const expectExecSuccess = async () => {
