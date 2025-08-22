@@ -122,7 +122,6 @@ export async function runTests(context: Rstest): Promise<void> {
       getSourcemap,
       buildTime,
       hash,
-      isFirstRun,
       affectedEntries,
       deletedEntries,
     } = await getRsbuildStats({ fileFilters });
@@ -130,20 +129,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
     let finalEntries: EntryInfo[] = entries;
     if (mode === 'on-demand') {
-      if (isFirstRun) {
-        logger.debug(color.yellow('Fully run test files for first run.\n'));
+      if (affectedEntries.length === 0) {
+        logger.debug(color.yellow('No test files are re-run.'));
       } else {
-        if (affectedEntries.length === 0) {
-          logger.debug(color.yellow('No test files are re-run.'));
-        } else {
-          logger.debug(
-            color.yellow('Test files to re-run:\n') +
-              affectedEntries.map((e) => e.testPath).join('\n') +
-              '\n',
-          );
-        }
-        finalEntries = affectedEntries;
+        logger.debug(
+          color.yellow('Test files to re-run:\n') +
+            affectedEntries.map((e) => e.testPath).join('\n') +
+            '\n',
+        );
       }
+      finalEntries = affectedEntries;
     } else {
       logger.debug(
         color.yellow(
@@ -214,6 +209,7 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const { onBeforeRestart } = await import('./restart');
+    const { triggerRerun } = await import('./plugins/entry');
 
     onBeforeRestart(async () => {
       await pool.close();
@@ -226,9 +222,17 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     });
 
+    let forceRerunOnce = false;
+
     rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run({ mode: 'on-demand' });
+      await run({
+        mode: isFirstCompile || forceRerunOnce ? 'all' : 'on-demand',
+      });
+
+      if (forceRerunOnce) {
+        forceRerunOnce = false;
+      }
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
@@ -242,9 +246,8 @@ export async function runTests(context: Rstest): Promise<void> {
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
 
-            // TODO: should rerun compile with new entries
-            await run({ mode: 'all' });
-            afterTestsWatchRun();
+            forceRerunOnce = true;
+            triggerRerun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
             clearScreen();
