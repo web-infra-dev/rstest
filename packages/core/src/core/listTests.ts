@@ -43,11 +43,6 @@ export async function listTests(
     return entries;
   };
 
-  const globalSetupFiles = getSetupFiles(
-    context.normalizedConfig.setupFiles,
-    rootPath,
-  );
-
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
@@ -56,13 +51,7 @@ export async function listTests(
         normalizedConfig: { setupFiles },
       } = project;
 
-      return [
-        environmentName,
-        {
-          ...globalSetupFiles,
-          ...getSetupFiles(setupFiles, rootPath),
-        },
-      ];
+      return [environmentName, getSetupFiles(setupFiles, rootPath)];
     }),
   );
 

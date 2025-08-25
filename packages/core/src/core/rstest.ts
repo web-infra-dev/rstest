@@ -1,6 +1,6 @@
 import { SnapshotManager } from '@vitest/snapshot/manager';
 import { isCI } from 'std-env';
-import { mergeRstestConfig, withDefaultConfig } from '../config';
+import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { VerboseReporter } from '../reporter/verbose';
@@ -92,13 +92,8 @@ export class Rstest implements RstestContext {
     this.normalizedConfig = rstestConfig;
     this.projects = projects.length
       ? projects.map((project) => {
-          const config = mergeRstestConfig(
-            {
-              ...rstestConfig,
-              setupFiles: undefined,
-            },
-            project.config,
-          ) as NormalizedConfig;
+          // TODO: support extend projects config
+          const config = withDefaultConfig(project.config);
           return {
             rootPath: config.root,
             name: config.name,
@@ -111,10 +106,7 @@ export class Rstest implements RstestContext {
             rootPath,
             name: rstestConfig.name,
             environmentName: formatEnvironmentName(rstestConfig.name),
-            normalizedConfig: {
-              ...rstestConfig,
-              setupFiles: undefined,
-            },
+            normalizedConfig: rstestConfig,
           },
         ];
   }

@@ -1,1 +1,1 @@
-process.env.TEST_ROOT = '1';
+throw new Error('root setup file error');

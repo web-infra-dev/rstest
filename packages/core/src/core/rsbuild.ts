@@ -125,6 +125,7 @@ export const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
   buildData: { entryToChunkHashes?: TestEntryToChunkHashes },
+  runtimeChunkName: string,
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
@@ -134,7 +135,7 @@ export const calcEntriesToRerun = (
   // Build current chunk hashes map
   const buildChunkHashes = (entry: EntryInfo) => {
     const validChunks = (entry.chunks || []).filter(
-      (chunk) => chunk !== RUNTIME_CHUNK_NAME,
+      (chunk) => chunk !== runtimeChunkName,
     );
 
     validChunks.forEach((chunkName) => {
@@ -412,6 +413,7 @@ export const createRsbuildServer = async ({
       entries,
       chunks,
       buildData[environmentName],
+      `${environmentName}-${RUNTIME_CHUNK_NAME}`,
     );
     return {
       affectedEntries,

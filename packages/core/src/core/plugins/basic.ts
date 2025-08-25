@@ -40,7 +40,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
             output: {
               // Pass resources to the worker on demand according to entry
-              manifest: true,
+              manifest: `${name}-manifest.json`,
               sourceMap: {
                 js: 'source-map',
               },
@@ -114,7 +114,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   ...(config.optimization || {}),
                   // make sure setup file and test file share the runtime
                   runtimeChunk: {
-                    name: RUNTIME_CHUNK_NAME,
+                    name: `${name}-${RUNTIME_CHUNK_NAME}`,
                   },
                 };
               },

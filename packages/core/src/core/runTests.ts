@@ -44,11 +44,6 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
-  const globalSetupFiles = getSetupFiles(
-    context.normalizedConfig.setupFiles,
-    rootPath,
-  );
-
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
@@ -57,13 +52,7 @@ export async function runTests(context: Rstest): Promise<void> {
         normalizedConfig: { setupFiles },
       } = project;
 
-      return [
-        environmentName,
-        {
-          ...globalSetupFiles,
-          ...getSetupFiles(setupFiles, rootPath),
-        },
-      ];
+      return [environmentName, getSetupFiles(setupFiles, rootPath)];
     }),
   );
 
@@ -203,15 +192,15 @@ export async function runTests(context: Rstest): Promise<void> {
     if (results.length === 0) {
       if (command === 'watch') {
         if (mode === 'on-demand') {
-          logger.log(color.yellow('No test files are re-run.\n'));
+          logger.log(color.yellow('No test files are re-run.'));
         } else {
-          logger.log(color.yellow('No test files found\n'));
+          logger.log(color.yellow('No test files found.'));
         }
       } else {
         const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
         logger.log(
           color[code ? 'red' : 'yellow'](
-            `No test files found, exiting with code ${code}\n`,
+            `No test files found, exiting with code ${code}.`,
           ),
         );
         process.exitCode = code;
