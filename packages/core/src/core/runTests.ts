@@ -205,8 +205,28 @@ export async function runTests(context: Rstest): Promise<void> {
         );
         process.exitCode = code;
       }
-      if (fileFilters?.length) {
-        logger.log(color.gray('filter: '), fileFilters.join(color.gray(', ')));
+      if (mode === 'all') {
+        if (context.fileFilters?.length) {
+          logger.log(
+            color.gray('filter: '),
+            context.fileFilters.join(color.gray(', ')),
+          );
+        }
+
+        context.projects.forEach((p) => {
+          if (context.projects.length > 1) {
+            logger.log('');
+            logger.log(color.gray('project:'), p.name);
+          }
+          logger.log(
+            color.gray('include:'),
+            p.normalizedConfig.include.join(color.gray(', ')),
+          );
+          logger.log(
+            color.gray('exclude:'),
+            p.normalizedConfig.exclude.join(color.gray(', ')),
+          );
+        });
       }
     }
 
@@ -320,6 +340,11 @@ export async function runTests(context: Rstest): Promise<void> {
             );
 
             if (!entries.length) {
+              logger.log(
+                color.yellow(
+                  '\nNo matching test files to run with current file filters.\n',
+                ),
+              );
               return;
             }
             await run({ fileFilters: entries });
