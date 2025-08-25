@@ -20,6 +20,7 @@ const OVERVIEW_GROUPS: Group[] = [
       'include',
       'exclude',
       'setupFiles',
+      'projects',
       'update',
       'globals',
       'passWithNoTests',

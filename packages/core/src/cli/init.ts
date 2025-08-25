@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
-import { basename, resolve } from 'pathe';
+import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig } from '../config';
 import type { Project, RstestConfig } from '../types';
-import { castArray, getAbsolutePath } from '../utils/helper';
+import { castArray, getAbsolutePath, logger } from '../utils';
 
 export type CommonOptions = {
   root?: string;
@@ -99,10 +99,8 @@ export async function resolveProjects({
   root: string;
   options: CommonOptions;
 }): Promise<Project[]> {
-  const projects: Project[] = [];
-
   if (!config.projects || !config.projects.length) {
-    return projects;
+    return [];
   }
 
   const getDefaultProjectName = (dir: string) => {
@@ -154,33 +152,46 @@ export async function resolveProjects({
 
   projectPaths.push(...(await globProjects(projectPatterns)));
 
+  const projects = await Promise.all(
+    projectPaths.map(async (project) => {
+      const isDirectory = statSync(project).isDirectory();
+      const { config, configFilePath } = await resolveConfig({
+        ...options,
+        config: isDirectory ? undefined : project,
+        root: isDirectory ? project : dirname(project),
+      });
+
+      config.name ??= getDefaultProjectName(project);
+
+      if (config.projects?.length && config.root !== root) {
+        logger.warn(
+          `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
+        );
+      }
+
+      return {
+        config,
+        configFilePath,
+      };
+    }),
+  );
+
   const names = new Set<string>();
 
-  for (const project of projectPaths || []) {
-    const { config, configFilePath } = await resolveConfig({
-      ...options,
-      root: project,
-    });
-
-    config.name ??= getDefaultProjectName(project);
-
-    projects.push({
-      config,
-      configFilePath,
-    });
-
-    if (names.has(config.name)) {
+  projects.forEach((project) => {
+    if (names.has(project.config.name!)) {
       const conflictProjects = projects.filter(
-        (p) => p.config.name === config.name,
+        (p) => p.config.name === project.config.name,
       );
-      throw `Project name "${config.name}" is already used. Please ensure all projects have unique names.
+      throw `Project name "${project.config.name}" is already used. Please ensure all projects have unique names.
 Conflicting projects:
 ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n')}
         `;
     }
 
-    names.add(config.name);
-  }
+    names.add(project.config.name!);
+  });
+
   return projects;
 }
 

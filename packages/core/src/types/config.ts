@@ -18,6 +18,11 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+/**
+ * A list of glob patterns or files that match your test projects.
+ *
+ * eg. ['packages/*', 'examples/node/rstest.config.ts']
+ */
 type TestProject = string;
 
 export interface RstestConfig {
