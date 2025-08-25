@@ -18,6 +18,13 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+/**
+ * A list of glob patterns or files that match your test projects.
+ *
+ * eg. ['packages/*', 'examples/node/rstest.config.ts']
+ */
+type TestProject = string;
+
 export interface RstestConfig {
   /**
    * Project root
@@ -25,6 +32,10 @@ export interface RstestConfig {
    * @default process.cwd()
    */
   root?: string;
+  /**
+   * Run tests from one or more projects.
+   */
+  projects?: TestProject[];
   /**
    * Project name
    *
@@ -225,7 +236,7 @@ type OptionalKeys =
   | 'onConsoleLog';
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool'>
+  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects'>
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {

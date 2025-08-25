@@ -1,5 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import type { NormalizedConfig } from '../../types';
+import type { RstestContext } from '../../types';
 import { castArray, NODE_BUILTINS } from '../../utils';
 
 const autoExternalNodeModules: (
@@ -78,32 +78,39 @@ function autoExternalNodeBuiltin(
   }
 }
 
-export const pluginExternal: (
-  testEnvironment: NormalizedConfig['testEnvironment'],
-) => RsbuildPlugin = (testEnvironment) => ({
+export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
+  context,
+) => ({
   name: 'rstest:external',
   setup: (api) => {
-    api.modifyRsbuildConfig(async (config, { mergeRsbuildConfig }) => {
-      return mergeRsbuildConfig(config, {
-        output: {
-          externals:
-            testEnvironment === 'node' ? [autoExternalNodeModules] : undefined,
-        },
-        tools: {
-          rspack: (config) => {
-            // Make sure that externals configuration is not modified by users
-            config.externals = castArray(config.externals) || [];
-
-            config.externals.unshift({
-              '@rstest/core': 'global @rstest/core',
-            });
-
-            config.externalsPresets ??= {};
-            config.externalsPresets.node = false;
-            config.externals.push(autoExternalNodeBuiltin);
+    api.modifyEnvironmentConfig(
+      async (config, { mergeEnvironmentConfig, name }) => {
+        const {
+          normalizedConfig: { testEnvironment },
+        } = context.projects.find((p) => p.environmentName === name)!;
+        return mergeEnvironmentConfig(config, {
+          output: {
+            externals:
+              testEnvironment === 'node'
+                ? [autoExternalNodeModules]
+                : undefined,
           },
-        },
-      });
-    });
+          tools: {
+            rspack: (config) => {
+              // Make sure that externals configuration is not modified by users
+              config.externals = castArray(config.externals) || [];
+
+              config.externals.unshift({
+                '@rstest/core': 'global @rstest/core',
+              });
+
+              config.externalsPresets ??= {};
+              config.externalsPresets.node = false;
+              config.externals.push(autoExternalNodeBuiltin);
+            },
+          },
+        });
+      },
+    );
   },
 });

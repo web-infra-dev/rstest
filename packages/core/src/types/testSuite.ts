@@ -53,6 +53,7 @@ export type TestCase = {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
+  project: string;
 };
 
 export type SuiteContext = {
@@ -77,6 +78,7 @@ export type TestSuite = {
   concurrent?: boolean;
   sequential?: boolean;
   testPath: TestPath;
+  project: string;
   /** nested cases and suite could in a suite */
   tests: (TestSuite | TestCase)[];
   type: 'suite';
@@ -118,6 +120,7 @@ export type TestResult = {
   duration?: number;
   errors?: FormattedError[];
   retryCount?: number;
+  project: string;
 };
 
 export type TestFileResult = TestResult & {

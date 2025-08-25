@@ -112,4 +112,4 @@ jobs:
 
       - name: E2E Test
         if: steps.changes.outputs.changed == 'true'
-        run: pnpm run e2e && pnpm run test:example
+        run: pnpm run e2e

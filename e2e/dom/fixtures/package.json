@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "rsbuild dev --open",
     "build": "rsbuild build",
-    "preview": "rsbuild preview"
+    "preview": "rsbuild preview",
+    "test": "rstest run"
   },
   "dependencies": {
     "react": "^19.1.1",

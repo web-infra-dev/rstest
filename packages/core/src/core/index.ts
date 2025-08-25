@@ -1,5 +1,6 @@
 import type {
   ListCommandOptions,
+  Project,
   RstestCommand,
   RstestConfig,
   RstestInstance,
@@ -9,10 +10,12 @@ import { Rstest } from './rstest';
 export function createRstest(
   {
     config,
+    projects,
     configFilePath,
   }: {
     config: RstestConfig;
     configFilePath?: string;
+    projects: Project[];
   },
   command: RstestCommand,
   fileFilters: string[],
@@ -23,6 +26,7 @@ export function createRstest(
       command,
       fileFilters,
       configFilePath,
+      projects,
     },
     config,
   );

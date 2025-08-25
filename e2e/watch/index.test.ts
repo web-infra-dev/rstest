@@ -28,7 +28,7 @@ describe('watch', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
     expect(cli.stdout).not.toMatch('Test files to re-run:');
-    expect(cli.stdout).toMatch('Run all tests.');
+    expect(cli.stdout).toMatch('Run all tests in project');
 
     // create
     cli.resetStd();
@@ -44,7 +44,7 @@ describe('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
-    expect(cli.stdout).toMatch(/Test files to re-run:\n.*bar\.test\.ts\n\n/);
+    expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
 
     // update
     cli.resetStd();
@@ -55,7 +55,7 @@ describe('watch', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 1 failed');
     expect(cli.stdout).toMatch('✗ bar > bar should be to bar');
-    expect(cli.stdout).toMatch(/Test files to re-run:\n.*bar\.test\.ts\n\n/);
+    expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
 
     // delete
     cli.resetStd();

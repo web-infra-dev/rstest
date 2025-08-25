@@ -398,7 +398,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "moduleIds": "named",
     "nodeEnv": false,
     "runtimeChunk": {
-      "name": "runtime",
+      "name": "test-runtime",
     },
     "splitChunks": false,
   },
@@ -445,7 +445,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
-        "fileName": "manifest.json",
+        "fileName": "test-manifest.json",
         "filter": [Function],
         "generate": [Function],
         "map": null,
@@ -906,7 +906,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "moduleIds": "named",
     "nodeEnv": false,
     "runtimeChunk": {
-      "name": "runtime",
+      "name": "test-runtime",
     },
     "splitChunks": false,
   },
@@ -953,7 +953,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
-        "fileName": "manifest.json",
+        "fileName": "test-manifest.json",
         "filter": [Function],
         "generate": [Function],
         "map": null,
