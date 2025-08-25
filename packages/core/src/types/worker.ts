@@ -12,6 +12,7 @@ import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
   distPath: DistPath;
+  chunks: (string | number)[];
   testPath: TestPath;
   files?: string[];
 };

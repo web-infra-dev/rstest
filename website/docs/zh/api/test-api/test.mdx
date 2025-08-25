@@ -10,7 +10,7 @@ title: Test
 
 ## test
 
-- **类型：** `(name: string, fn: (context) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 定义一个测试用例。
 
@@ -68,7 +68,7 @@ test.each([
 
 ## test.for
 
-- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, context) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 `test.each` 的替代方案，提供 `TestContext`。
 
@@ -164,3 +164,20 @@ testWithUser('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
 ```
+
+## Types
+
+### TestContext
+
+`TestContext` 提供一些和当前测试有关的 API、上下文信息，以及自定义的 fixture。
+
+```ts
+export interface TestContext {
+  /** The `expect` API bound to the current test */
+  expect: Expect;
+  /** The `onTestFinished` hook bound to the current test */
+  onTestFinished: OnTestFinished;
+}
+```
+
+你可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。

@@ -32,4 +32,5 @@ test-temp-*
 # ignore directory for artifacts produced by tests
 test-results/
 fixtures-test/
+fixtures-test-*/
 .rslib/

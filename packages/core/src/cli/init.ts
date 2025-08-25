@@ -37,7 +37,7 @@ async function resolveConfig(
   options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
 ): Promise<{
   config: RstestConfig;
-  configFilePath: string | null;
+  configFilePath?: string;
 }> {
   const { content: config, filePath: configFilePath } = await loadConfig({
     cwd: options.root,
@@ -86,7 +86,7 @@ async function resolveConfig(
 
   return {
     config,
-    configFilePath,
+    configFilePath: configFilePath ?? undefined,
   };
 }
 
@@ -186,7 +186,7 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
 
 export async function initCli(options: CommonOptions): Promise<{
   config: RstestConfig;
-  configFilePath: string | null;
+  configFilePath?: string;
   projects: Project[];
 }> {
   const cwd = process.cwd();

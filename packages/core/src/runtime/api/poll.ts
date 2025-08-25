@@ -84,7 +84,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           const promise = () =>
             new Promise<void>((resolve, reject) => {
               let intervalId: any;
-              // biome-ignore lint/style/useConst: let
               let timeoutId: any;
               let lastError: any;
               // TODO: use timeout manager

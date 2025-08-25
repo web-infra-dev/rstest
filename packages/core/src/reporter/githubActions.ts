@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
+import { getTaskNameWithPrefix, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
@@ -23,6 +23,10 @@ export class GithubActionsReporter {
     this.rootPath = rootPath;
   }
 
+  private log(message: string): void {
+    console.log(`${message}\n`);
+  }
+
   async onTestRunEnd({
     results,
     testResults,
@@ -33,6 +37,7 @@ export class GithubActionsReporter {
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const failedTests: TestResult[] = [
       ...results.filter((i) => i.status === 'fail' && i.errors?.length),
@@ -44,6 +49,8 @@ export class GithubActionsReporter {
     }
 
     const { parseErrorStacktrace } = await import('../utils/error');
+
+    const logs: string[] = [];
 
     for (const test of failedTests) {
       const { testPath } = test;
@@ -72,11 +79,19 @@ export class GithubActionsReporter {
           }
         }
 
-        logger.log(
+        logs.push(
           `::${type} file=${this.onWritePath?.(file) || file},line=${line},col=${column},title=${escapeData(title)}::${escapeData(message)}`,
         );
       }
     }
+
+    this.log('::group::error for github actions');
+
+    for (const log of logs) {
+      this.log(log);
+    }
+
+    this.log('::endgroup::');
   }
 }
 

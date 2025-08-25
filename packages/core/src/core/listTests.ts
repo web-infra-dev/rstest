@@ -14,7 +14,6 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 export async function listTests(
   context: RstestContext,
-  fileFilters: string[],
   { filesOnly, json }: ListCommandOptions,
 ): Promise<void> {
   const { rootPath } = context;
@@ -35,7 +34,7 @@ export async function listTests(
       include,
       exclude,
       root,
-      fileFilters,
+      fileFilters: context.fileFilters || [],
       includeSource,
     });
 

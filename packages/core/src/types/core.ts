@@ -4,7 +4,7 @@ import type { Reporter } from './reporter';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
-export type Project = { config: RstestConfig; configFilePath: string | null };
+export type Project = { config: RstestConfig; configFilePath?: string };
 
 export type ProjectContext = {
   name: string;
@@ -22,6 +22,10 @@ export type RstestContext = {
   originalConfig: Readonly<RstestConfig>;
   /** The normalized Rstest config. */
   normalizedConfig: NormalizedConfig;
+  /** filter by a filename regex pattern */
+  fileFilters?: string[];
+  /** The config file path. */
+  configFilePath?: string;
   /**
    * Run tests from one or more projects.
    */

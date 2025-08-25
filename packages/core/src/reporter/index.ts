@@ -133,12 +133,14 @@ export class DefaultReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
+    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
 
@@ -151,6 +153,7 @@ export class DefaultReporter implements Reporter {
       results,
       rootPath: this.rootPath,
       getSourcemap,
+      filterRerunTestPaths,
     });
 
     printSummaryLog({

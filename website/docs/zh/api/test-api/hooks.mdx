@@ -51,7 +51,7 @@ beforeEach(async () => {
 
 ## afterEach
 
-- **类型：** `(fn: () => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
 
 在当前套件的每个测试之后运行。
 
@@ -62,3 +62,60 @@ afterEach(async () => {
   // 每个测试后的清理逻辑
 });
 ```
+
+## onTestFinished
+
+- **类型：** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+
+测试运行完成后调用，无论测试成功或失败。可用于执行清理操作。该 hook 会在 `afterEach` 之后执行。
+
+```ts
+import { onTestFinished, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+  // Register a cleanup function to close the server after the test
+  onTestFinished(() => server.close());
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```
+
+需要注意的是，当你在并发测试中使用 `onTestFinished` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFinished hook 所属的具体测试。
+
+```ts
+describe.concurrent('并发套件', () => {
+  test('test 1', async ({ onTestFinished }) => {
+    /* ... */
+  });
+  test('test 2', async ({ onTestFinished }) => {
+    /* ... */
+  });
+});
+```
+
+## onTestFailed
+
+- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+
+测试运行失败后调用。
+
+```ts
+import { onTestFailed, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+
+  onTestFailed(({ task }) => {
+    console.log(task.result.errors);
+  });
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```
+
+需要注意的是，当你在并发测试中使用 `onTestFailed` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFailed hook 所属的具体测试。

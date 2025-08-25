@@ -23,7 +23,7 @@ Commands:
   list [...filters]   lists all test files that Rstest will run
 
 Options:
-  --watch                                  Run tests in watch mode
+  -w, --watch                              Run tests in watch mode
   -h, --help                               Display this message
   -v, --version                            Display version number
   -c, --config <config>
@@ -142,12 +142,13 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 
 ```bash
   Shortcuts:
-  c  clear console
   f  rerun failed tests
   a  rerun all tests
   u  update snapshot
   t  filter by a test name regex pattern
+  p  filter by a filename regex pattern
   q  quit process
+  c  clear screen
   h  show shortcuts help
 ```
 

@@ -148,3 +148,13 @@ describe.sequential('sequential suite', () => {
   });
 });
 ```
+
+## Chainable modifiers
+
+`describe` supports chainable modifiers, so you can use them together. For example:
+
+- `describe.only.runIf(condition)` (or `describe.runIf(condition).only`) will only run the describe block if the condition is true.
+- `describe.skipIf(condition).concurrent` (or `describe.concurrent.skipIf(condition)`) will skip the describe block if the condition is true, otherwise run the tests concurrently.
+- `describe.runIf(condition).concurrent` (or `describe.concurrent.runIf(condition)`) will only run the describe block concurrently if the condition is true.
+- `describe.only.concurrent` (or `describe.concurrent.only`) will only run the describe block concurrently.
+- ......

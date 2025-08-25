@@ -14,3 +14,5 @@ export declare const beforeEach: Rstest['beforeEach'];
 export declare const afterEach: Rstest['afterEach'];
 export declare const rstest: RstestUtilities;
 export declare const rs: RstestUtilities;
+export declare const onTestFinished: Rstest['onTestFinished'];
+export declare const onTestFailed: Rstest['onTestFailed'];

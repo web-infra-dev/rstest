@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.1.3",
+  "version": "0.2.2",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -18,19 +18,15 @@
   ],
   "license": "MIT",
   "type": "module",
-  "main": "./dist/public.js",
-  "types": "./dist-types/public.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist-types/index.d.ts",
   "bin": {
     "rstest": "./bin/rstest.js"
   },
   "exports": {
     ".": {
-      "types": "./dist-types/public.d.ts",
-      "default": "./dist/public.js"
-    },
-    "./node": {
-      "types": "./dist-types/node.d.ts",
-      "default": "./dist/node.js"
+      "types": "./dist-types/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./globals": {
       "types": "./globals.d.ts"
@@ -54,9 +50,9 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "chai": "^5.2.1",
+    "chai": "^5.3.1",
     "@types/chai": "^5.2.2",
-    "@rsbuild/core": "1.4.15",
+    "@rsbuild/core": "1.5.0-rc.0",
     "birpc": "2.5.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
@@ -66,9 +62,9 @@
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
-    "@jridgewell/trace-mapping": "0.3.29",
-    "@microsoft/api-extractor": "^7.52.10",
-    "@rslib/core": "0.11.2",
+    "@jridgewell/trace-mapping": "0.3.30",
+    "@microsoft/api-extractor": "^7.52.11",
+    "@rslib/core": "0.12.2",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",
@@ -76,6 +72,7 @@
     "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
+    "chokidar": "^4.0.3",
     "happy-dom": "^18.0.1",
     "jest-diff": "^30.0.5",
     "jsdom": "^26.1.0",
@@ -100,7 +97,7 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.12.0"
   },
   "publishConfig": {
     "access": "public",
