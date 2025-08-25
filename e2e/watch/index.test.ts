@@ -28,7 +28,7 @@ describe('watch', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
     expect(cli.stdout).not.toMatch('Test files to re-run:');
-    expect(cli.stdout).toMatch('Fully run test files for first run.');
+    expect(cli.stdout).toMatch('Run all tests.');
 
     // create
     cli.resetStd();

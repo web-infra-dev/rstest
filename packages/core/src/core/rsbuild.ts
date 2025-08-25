@@ -228,7 +228,6 @@ export const createRsbuildServer = async ({
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    isFirstRun: boolean;
     affectedEntries: EntryInfo[];
     deletedEntries: string[];
   }>;
@@ -236,7 +235,6 @@ export const createRsbuildServer = async ({
 }> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
-  let isFirstCompile = false;
 
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
@@ -244,10 +242,6 @@ export const createRsbuildServer = async ({
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;
-      });
-
-      api.onAfterDevCompile(({ isFirstCompile: _isFirstCompile }) => {
-        isFirstCompile = _isFirstCompile;
       });
     },
   };
@@ -410,7 +404,6 @@ export const createRsbuildServer = async ({
     return {
       affectedEntries,
       deletedEntries,
-      isFirstRun: isFirstCompile,
       hash,
       entries,
       setupEntries,
