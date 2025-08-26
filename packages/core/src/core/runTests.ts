@@ -341,9 +341,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
             if (!entries.length) {
               logger.log(
-                color.yellow(
-                  '\nNo matching test files to run with current file filters.\n',
-                ),
+                filters
+                  ? color.yellow(
+                      `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
+                    )
+                  : color.yellow('\nNo matching test files to run.\n'),
               );
               return;
             }
