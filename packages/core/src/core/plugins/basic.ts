@@ -20,7 +20,9 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             tools,
             performance,
             dev,
+            testEnvironment,
           },
+          rootPath,
         } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(
           config,
@@ -63,7 +65,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                     injectModulePathName: true,
                     importMetaPathName: true,
                     hoistMockModule: true,
-                    manualMockRoot: path.resolve(context.rootPath, '__mocks__'),
+                    manualMockRoot: path.resolve(rootPath, '__mocks__'),
                   }),
                 );
 
@@ -90,7 +92,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
                 config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
 
-                if (context.normalizedConfig.testEnvironment === 'node') {
+                if (testEnvironment === 'node') {
                   // skip `module` field in Node.js environment.
                   // ESM module resolved by module field is not always a native ESM module
                   config.resolve.mainFields = config.resolve.mainFields?.filter(
