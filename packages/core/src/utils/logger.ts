@@ -50,5 +50,12 @@ logger.override({
   },
 });
 
+export const clearScreen = (force = false): void => {
+  if (!isDebug() || force) {
+    // clear screen
+    console.log('\x1Bc');
+  }
+};
+
 export { logger };
 export type { Logger };

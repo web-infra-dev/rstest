@@ -6,6 +6,7 @@ describe('RunnerRuntime', () => {
     const { api: runtime, instance } = createRuntimeAPI({
       testPath: __filename,
       runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
+      project: 'rstest',
     });
 
     runtime.describe('suite - 0', () => {
@@ -47,6 +48,7 @@ describe('RunnerRuntime', () => {
     const { api: runtime, instance } = createRuntimeAPI({
       testPath: __filename,
       runtimeConfig: { testTimeout: 100 } as RuntimeConfig,
+      project: 'rstest',
     });
 
     runtime.describe('suite - 0');

@@ -59,8 +59,8 @@ describe('Expect API', () => {
   });
 
   it('test expect modifiers', async () => {
-    expect(Promise.resolve('blue')).resolves.toBe('blue');
-    expect(Promise.reject(new Error('red'))).rejects.toThrow('red');
+    await expect(Promise.resolve('blue')).resolves.toBe('blue');
+    await expect(Promise.reject(new Error('red'))).rejects.toThrow('red');
 
     await expect(
       new Promise((resolve) => {

@@ -4,6 +4,7 @@
   "include",
   "exclude",
   "setupFiles",
+  "projects",
   "update",
   "globals",
   "passWithNoTests",

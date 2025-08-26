@@ -20,7 +20,7 @@ describe('test build config', () => {
         command: 'rstest',
         args: [
           'run',
-          `fixtures/${name}/index.test.ts`,
+          `fixtures/${name}`,
           '-c',
           `fixtures/${name}/rstest.config.ts`,
         ],

@@ -27,19 +27,21 @@ class TestFileWatchPlugin {
 
 const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
 
-let rerunTrigger: (() => void) | null = null;
+let rerunTrigger: Record<string, () => void> = {};
 
-const registerRerunTrigger = (fn: () => void) => {
-  rerunTrigger = fn;
+const registerRerunTrigger = (name: string, fn: () => void) => {
+  rerunTrigger[name] = fn;
 };
 
 export const triggerRerun = (): void => {
-  rerunTrigger?.();
+  Object.values(rerunTrigger).forEach((fn) => {
+    fn();
+  });
 };
 
 export const pluginEntryWatch: (params: {
-  globTestSourceEntries: () => Promise<Record<string, string>>;
-  setupFiles: Record<string, string>;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
@@ -51,17 +53,23 @@ export const pluginEntryWatch: (params: {
   name: 'rstest:entry-watch',
   setup: (api) => {
     api.onCloseDevServer(() => {
-      rerunTrigger = null;
+      rerunTrigger = {};
     });
 
-    api.modifyRspackConfig(async (config, { rspack }) => {
+    api.modifyRspackConfig(async (config, { environment, rspack }) => {
       if (isWatch) {
         // FIXME: inspect config will retrigger initConfig
-        if (rerunTrigger) {
+        if (rerunTrigger[environment.name]) {
           return;
         }
-
-        config.plugins.push(new TestFileWatchPlugin(api.context.rootPath));
+        config.plugins.push(new TestFileWatchPlugin(environment.config.root));
+        config.entry = async () => {
+          const sourceEntries = await globTestSourceEntries(environment.name);
+          return {
+            ...sourceEntries,
+            ...setupFiles[environment.name],
+          };
+        };
 
         // Add virtual entry to trigger recompile
         const virtualEntryName = `${rstestVirtualEntryFlag}${config.name!}.js`;
@@ -72,7 +80,7 @@ export const pluginEntryWatch: (params: {
             [virtualEntryPath]: `export const virtualEntry = ${Date.now()}`,
           });
 
-        registerRerunTrigger(() =>
+        registerRerunTrigger(environment.name, () =>
           virtualModulesPlugin.writeModule(
             virtualEntryPath,
             `export const virtualEntry = ${Date.now()}`,
@@ -83,15 +91,6 @@ export const pluginEntryWatch: (params: {
         config.experiments.nativeWatcher = true;
 
         config.plugins.push(virtualModulesPlugin);
-
-        config.entry = async () => {
-          const sourceEntries = await globTestSourceEntries();
-          return {
-            ...sourceEntries,
-            ...setupFiles,
-            [virtualEntryPath]: virtualEntryPath,
-          };
-        };
 
         config.watchOptions ??= {};
         config.watchOptions.aggregateTimeout = 5;
@@ -123,9 +122,9 @@ export const pluginEntryWatch: (params: {
         config.watchOptions ??= {};
         config.watchOptions.ignored = '**/**';
 
-        const sourceEntries = await globTestSourceEntries();
+        const sourceEntries = await globTestSourceEntries(environment.name);
         config.entry = {
-          ...setupFiles,
+          ...setupFiles[environment.name],
           ...sourceEntries,
         };
       }

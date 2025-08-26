@@ -1,43 +1,16 @@
-import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
-import { loadConfig } from '../config';
 import type {
   ListCommandOptions,
   RstestCommand,
-  RstestConfig,
   RstestInstance,
 } from '../types';
-import { castArray, formatError, getAbsolutePath } from '../utils/helper';
+import { formatError } from '../utils/helper';
 import { logger } from '../utils/logger';
+import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
-export type CommonOptions = {
-  root?: string;
-  config?: string;
-  configLoader?: LoadConfigOptions['loader'];
-  globals?: boolean;
-  isolate?: boolean;
-  include?: string[];
-  exclude?: string[];
-  reporter?: string[];
-  passWithNoTests?: boolean;
-  printConsoleTrace?: boolean;
-  disableConsoleIntercept?: boolean;
-  update?: boolean;
-  testNamePattern?: RegExp | string;
-  testTimeout?: number;
-  hookTimeout?: number;
-  testEnvironment?: string;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  retry?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-};
+export type { CommonOptions } from './init';
 
 const applyCommonOptions = (cli: CAC) => {
   cli
@@ -106,64 +79,6 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function initCli(options: CommonOptions): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-}> {
-  const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
-
-  const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: root,
-    path: options.config,
-    configLoader: options.configLoader,
-  });
-
-  const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
-    'root',
-    'globals',
-    'isolate',
-    'passWithNoTests',
-    'update',
-    'testNamePattern',
-    'testTimeout',
-    'hookTimeout',
-    'clearMocks',
-    'resetMocks',
-    'restoreMocks',
-    'unstubEnvs',
-    'unstubGlobals',
-    'retry',
-    'slowTestThreshold',
-    'maxConcurrency',
-    'printConsoleTrace',
-    'disableConsoleIntercept',
-    'testEnvironment',
-  ];
-  for (const key of keys) {
-    if (options[key] !== undefined) {
-      (config[key] as any) = options[key];
-    }
-  }
-
-  if (options.exclude) {
-    config.exclude = castArray(options.exclude);
-  }
-
-  if (options.reporter) {
-    config.reporters = castArray(options.reporter) as typeof config.reporters;
-  }
-
-  if (options.include) {
-    config.include = castArray(options.include);
-  }
-
-  return {
-    config,
-    configFilePath: configFilePath ?? undefined,
-  };
-}
-
 export const runRest = async ({
   options,
   filters,
@@ -175,10 +90,11 @@ export const runRest = async ({
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
   try {
-    const { config, configFilePath } = await initCli(options);
+    const { initCli } = await import('./init');
+    const { config, configFilePath, projects } = await initCli(options);
     const { createRstest } = await import('../core');
     rstest = createRstest(
-      { config, configFilePath },
+      { config, configFilePath, projects },
       command,
       filters.map(normalize),
     );
@@ -255,10 +171,11 @@ export function setupCommands(): void {
         options: CommonOptions & ListCommandOptions,
       ) => {
         try {
-          const { config, configFilePath } = await initCli(options);
+          const { initCli } = await import('./init');
+          const { config, configFilePath, projects } = await initCli(options);
           const { createRstest } = await import('../core');
           const rstest = createRstest(
-            { config, configFilePath },
+            { config, configFilePath, projects },
             'list',
             filters.map(normalize),
           );

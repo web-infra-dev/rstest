@@ -14,6 +14,20 @@ describe('prepareRsbuild', () => {
           tools: {},
           testEnvironment: 'jsdom',
         },
+        projects: [
+          {
+            name: 'test',
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: 'jsdom',
+            },
+          },
+        ],
       } as unknown as RstestContext,
       async () => ({}),
       {},
@@ -39,6 +53,21 @@ describe('prepareRsbuild', () => {
           testEnvironment: 'node',
           isolate: true,
         },
+        projects: [
+          {
+            name: 'test',
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: 'node',
+              isolate: true,
+            },
+          },
+        ],
       } as unknown as RstestContext,
       async () => ({}),
       {},
@@ -67,6 +96,24 @@ describe('prepareRsbuild', () => {
           output: {},
           tools: {},
         },
+        projects: [
+          {
+            name: 'test',
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {
+                decorators: {
+                  version: 'legacy',
+                },
+                include: [/node_modules[\\/]query-string[\\/]/],
+              },
+              output: {},
+              tools: {},
+            },
+          },
+        ],
       } as unknown as RstestContext,
       async () => ({}),
       {},

@@ -16,31 +16,44 @@ export async function listTests(
   context: RstestContext,
   { filesOnly, json }: ListCommandOptions,
 ): Promise<void> {
-  const {
-    normalizedConfig: {
+  const { rootPath } = context;
+
+  const testEntries: Record<string, Record<string, string>> = {};
+
+  const globTestSourceEntries = async (
+    name: string,
+  ): Promise<Record<string, string>> => {
+    if (testEntries[name]) {
+      return testEntries[name];
+    }
+    const { include, exclude, includeSource, root } = context.projects.find(
+      (p) => p.environmentName === name,
+    )!.normalizedConfig;
+
+    const entries = await getTestEntries({
       include,
       exclude,
       root,
-      name,
-      setupFiles: setups,
+      fileFilters: context.fileFilters || [],
       includeSource,
-    },
-    rootPath,
-  } = context;
+    });
 
-  const testEntries = await getTestEntries({
-    include,
-    exclude,
-    root,
-    fileFilters: context.fileFilters || [],
-    includeSource,
-  });
+    testEntries[name] = entries;
 
-  const globTestSourceEntries = async (): Promise<Record<string, string>> => {
-    return testEntries;
+    return entries;
   };
 
-  const setupFiles = getSetupFiles(setups, rootPath);
+  const setupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { setupFiles },
+      } = project;
+
+      return [environmentName, getSetupFiles(setupFiles, rootPath)];
+    }),
+  );
 
   const rsbuildInstance = await prepareRsbuild(
     context,
@@ -49,7 +62,6 @@ export async function listTests(
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    name,
     globTestSourceEntries,
     normalizedConfig: context.normalizedConfig,
     setupFiles,
@@ -57,24 +69,40 @@ export async function listTests(
     rootPath,
   });
 
-  const { entries, setupEntries, assetFiles, sourceMaps, getSourcemap } =
-    await getRsbuildStats();
-
   const pool = await createPool({
     context,
   });
 
-  const list = await pool.collectTests({
-    context,
-    entries,
-    sourceMaps,
-    setupEntries,
-    assetFiles,
-    updateSnapshot: context.snapshotManager.options.updateSnapshot,
-  });
+  const updateSnapshot = context.snapshotManager.options.updateSnapshot;
+
+  const returns = await Promise.all(
+    context.projects.map(async (project) => {
+      const { entries, setupEntries, assetFiles, sourceMaps } =
+        await getRsbuildStats({ environmentName: project.environmentName });
+
+      const list = await pool.collectTests({
+        entries,
+        sourceMaps,
+        setupEntries,
+        assetFiles,
+        project,
+        updateSnapshot,
+      });
+
+      return {
+        list,
+        sourceMaps,
+      };
+    }),
+  );
+
+  const list = returns.flatMap((r) => r.list);
+  const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
+
   const tests: {
     file: string;
     name?: string;
+    project?: string;
   }[] = [];
 
   const traverseTests = (test: Test) => {
@@ -83,10 +111,18 @@ export async function listTests(
     }
 
     if (test.type === 'case') {
-      tests.push({
-        file: test.testPath,
-        name: getTaskNameWithPrefix(test),
-      });
+      if (showProject) {
+        tests.push({
+          file: test.testPath,
+          name: getTaskNameWithPrefix(test),
+          project: test.project,
+        });
+      } else {
+        tests.push({
+          file: test.testPath,
+          name: getTaskNameWithPrefix(test),
+        });
+      }
     } else {
       for (const child of test.tests) {
         traverseTests(child);
@@ -95,6 +131,7 @@ export async function listTests(
   };
 
   const hasError = list.some((file) => file.errors?.length);
+  const showProject = context.projects.length > 1;
 
   if (hasError) {
     const { printError } = await import('../utils/error');
@@ -107,7 +144,7 @@ export async function listTests(
         logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
 
         for (const error of file.errors) {
-          await printError(error, getSourcemap, rootPath);
+          await printError(error, (name) => sourceMaps[name] || null, rootPath);
         }
       }
     }
@@ -120,9 +157,16 @@ export async function listTests(
 
   for (const file of list) {
     if (filesOnly) {
-      tests.push({
-        file: file.testPath,
-      });
+      if (showProject) {
+        tests.push({
+          file: file.testPath,
+          project: file.project,
+        });
+      } else {
+        tests.push({
+          file: file.testPath,
+        });
+      }
       continue;
     }
     for (const test of file.tests) {

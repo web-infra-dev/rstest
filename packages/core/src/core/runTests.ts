@@ -1,10 +1,10 @@
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
+  clearScreen,
   color,
   getSetupFiles,
   getTestEntries,
-  isDebug,
   logger,
 } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
@@ -12,20 +12,7 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 export async function runTests(context: Rstest): Promise<void> {
-  const {
-    normalizedConfig: {
-      include,
-      exclude,
-      root,
-      name,
-      setupFiles: setups,
-      includeSource,
-    },
-    rootPath,
-    reporters,
-    snapshotManager,
-    command,
-  } = context;
+  const { rootPath, reporters, projects, snapshotManager, command } = context;
 
   const entriesCache = new Map<
     string,
@@ -35,7 +22,12 @@ export async function runTests(context: Rstest): Promise<void> {
     }
   >();
 
-  const globTestSourceEntries = async (): Promise<Record<string, string>> => {
+  const globTestSourceEntries = async (
+    name: string,
+  ): Promise<Record<string, string>> => {
+    const { include, exclude, includeSource, root } = projects.find(
+      (p) => p.environmentName === name,
+    )!.normalizedConfig;
     const entries = await getTestEntries({
       include,
       exclude,
@@ -49,24 +41,20 @@ export async function runTests(context: Rstest): Promise<void> {
       fileFilters: context.fileFilters,
     });
 
-    if (!Object.keys(entries).length) {
-      logger.log(color.red('No test files found.'));
-      logger.log('');
-      if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
-      logger.log(color.gray('include:'), include.join(color.gray(', ')));
-      logger.log(color.gray('exclude:'), exclude.join(color.gray(', ')));
-      logger.log('');
-    }
-
     return entries;
   };
 
-  const setupFiles = getSetupFiles(setups, rootPath);
+  const setupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { setupFiles },
+      } = project;
+
+      return [environmentName, getSetupFiles(setupFiles, rootPath)];
+    }),
+  );
 
   const rsbuildInstance = await prepareRsbuild(
     context,
@@ -75,16 +63,15 @@ export async function runTests(context: Rstest): Promise<void> {
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    name,
     normalizedConfig: context.normalizedConfig,
     globTestSourceEntries:
       command === 'watch'
         ? globTestSourceEntries
-        : async () => {
+        : async (name) => {
             if (entriesCache.has(name)) {
               return entriesCache.get(name)!.entries;
             }
-            return globTestSourceEntries();
+            return globTestSourceEntries(name);
           },
     setupFiles,
     rsbuildInstance,
@@ -104,9 +91,8 @@ export async function runTests(context: Rstest): Promise<void> {
     recommendWorkerCount,
   });
 
-  let buildHash: string | undefined;
-
   type Mode = 'all' | 'on-demand';
+
   const run = async ({
     fileFilters,
     mode = 'all',
@@ -114,61 +100,135 @@ export async function runTests(context: Rstest): Promise<void> {
     fileFilters?: string[];
     mode?: Mode;
   } = {}) => {
-    const {
-      entries,
-      setupEntries,
-      assetFiles,
-      sourceMaps,
-      getSourcemap,
-      buildTime,
-      hash,
-      affectedEntries,
-      deletedEntries,
-    } = await getRsbuildStats({ fileFilters });
-    const testStart = Date.now();
+    let testStart: number;
+    const buildStart = Date.now();
+    const currentEntries: EntryInfo[] = [];
+    const currentDeletedEntries: string[] = [];
 
-    let finalEntries: EntryInfo[] = entries;
-    if (mode === 'on-demand') {
-      if (affectedEntries.length === 0) {
-        logger.debug(color.yellow('No test files are re-run.'));
-      } else {
-        logger.debug(
-          color.yellow('Test files to re-run:\n') +
-            affectedEntries.map((e) => e.testPath).join('\n') +
-            '\n',
-        );
-      }
-      finalEntries = affectedEntries;
-    } else {
-      logger.debug(
-        color.yellow(
-          fileFilters?.length ? 'Run filtered tests.\n' : 'Run all tests.\n',
-        ),
-      );
-    }
+    const returns = await Promise.all(
+      context.projects.map(async (p) => {
+        const {
+          entries,
+          setupEntries,
+          assetFiles,
+          sourceMaps,
+          affectedEntries,
+          deletedEntries,
+        } = await getRsbuildStats({
+          environmentName: p.environmentName,
+          fileFilters,
+        });
 
-    const { results, testResults } = await pool.runTests({
-      context,
-      entries: finalEntries,
-      sourceMaps,
-      setupEntries,
-      assetFiles,
-      updateSnapshot: snapshotManager.options.updateSnapshot,
-    });
+        testStart ??= Date.now();
 
-    context.updateReporterResultState(results, testResults, deletedEntries);
+        currentDeletedEntries.push(...deletedEntries);
 
-    const actualBuildTime = buildHash === hash ? 0 : buildTime;
+        let finalEntries: EntryInfo[] = entries;
+        if (mode === 'on-demand') {
+          if (affectedEntries.length === 0) {
+            logger.debug(
+              color.yellow(
+                `No test files are re-run in project(${p.environmentName}).`,
+              ),
+            );
+          } else {
+            logger.debug(
+              color.yellow(
+                `Test files to re-run in project(${p.environmentName}):\n`,
+              ) +
+                affectedEntries.map((e) => e.testPath).join('\n') +
+                '\n',
+            );
+          }
+          finalEntries = affectedEntries;
+        } else {
+          logger.debug(
+            color.yellow(
+              fileFilters?.length
+                ? `Run filtered tests in project(${p.environmentName}).\n`
+                : `Run all tests in project(${p.environmentName}).\n`,
+            ),
+          );
+        }
 
-    const testTime = Date.now() - testStart;
+        currentEntries.push(...finalEntries);
+        const { results, testResults } = await pool.runTests({
+          entries: finalEntries,
+          sourceMaps,
+          setupEntries,
+          assetFiles,
+          project: p,
+          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+        });
+
+        return {
+          results,
+          testResults,
+          sourceMaps,
+        };
+      }),
+    );
+
+    const buildTime = testStart! - buildStart;
+
+    const testTime = Date.now() - testStart!;
 
     const duration = {
-      totalTime: testTime + actualBuildTime,
-      buildTime: actualBuildTime,
+      totalTime: testTime + buildTime,
+      buildTime,
       testTime,
     };
 
-    buildHash = hash;
+    const results = returns.flatMap((r) => r.results);
+    const testResults = returns.flatMap((r) => r.testResults);
+    const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
+
+    context.updateReporterResultState(
+      results,
+      testResults,
+      currentDeletedEntries,
+    );
+
+    if (results.length === 0) {
+      if (command === 'watch') {
+        if (mode === 'on-demand') {
+          logger.log(color.yellow('No test files are re-run.'));
+        } else {
+          logger.log(color.yellow('No test files found.'));
+        }
+      } else {
+        const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+        logger.log(
+          color[code ? 'red' : 'yellow'](
+            `No test files found, exiting with code ${code}.`,
+          ),
+        );
+        process.exitCode = code;
+      }
+      if (mode === 'all') {
+        if (context.fileFilters?.length) {
+          logger.log(
+            color.gray('filter: '),
+            context.fileFilters.join(color.gray(', ')),
+          );
+        }
+
+        context.projects.forEach((p) => {
+          if (context.projects.length > 1) {
+            logger.log('');
+            logger.log(color.gray('project:'), p.name);
+          }
+          logger.log(
+            color.gray('include:'),
+            p.normalizedConfig.include.join(color.gray(', ')),
+          );
+          logger.log(
+            color.gray('exclude:'),
+            p.normalizedConfig.exclude.join(color.gray(', ')),
+          );
+        });
+      }
+    }
 
     if (results.some((r) => r.status === 'fail')) {
       process.exitCode = 1;
@@ -180,9 +240,9 @@ export async function runTests(context: Rstest): Promise<void> {
         testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
-        getSourcemap,
-        filterRerunTestPaths: affectedEntries.length
-          ? affectedEntries.map((e) => e.testPath)
+        getSourcemap: (name: string) => sourceMaps[name] || null,
+        filterRerunTestPaths: currentEntries.length
+          ? currentEntries.map((e) => e.testPath)
           : undefined,
       });
     }
@@ -207,11 +267,6 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
     };
-    const clearLogs = () => {
-      if (!isDebug()) {
-        console.clear();
-      }
-    };
 
     const { onBeforeRestart } = await import('./restart');
     const { triggerRerun } = await import('./plugins/entry');
@@ -223,7 +278,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       if (!isFirstCompile) {
-        clearLogs();
+        clearScreen();
       }
     });
 
@@ -235,10 +290,6 @@ export async function runTests(context: Rstest): Promise<void> {
         mode: isFirstCompile || forceRerunOnce ? 'all' : 'on-demand',
       });
 
-      if (forceRerunOnce) {
-        forceRerunOnce = false;
-      }
-
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
           closeServer: async () => {
@@ -246,7 +297,7 @@ export async function runTests(context: Rstest): Promise<void> {
             await closeServer();
           },
           runAll: async () => {
-            clearLogs();
+            clearScreen();
             snapshotManager.clear();
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
@@ -255,7 +306,7 @@ export async function runTests(context: Rstest): Promise<void> {
             triggerRerun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
-            clearLogs();
+            clearScreen();
             // Update testNamePattern for current run
             context.normalizedConfig.testNamePattern = pattern;
 
@@ -271,7 +322,7 @@ export async function runTests(context: Rstest): Promise<void> {
             afterTestsWatchRun();
           },
           runWithFileFilters: async (filters?: string[]) => {
-            clearLogs();
+            clearScreen();
             if (filters && filters.length > 0) {
               logger.log(
                 `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
@@ -281,12 +332,28 @@ export async function runTests(context: Rstest): Promise<void> {
             }
             snapshotManager.clear();
             context.fileFilters = filters;
-            const entries = await globTestSourceEntries();
+            const entries = await Promise.all(
+              projects.map(async (p) => {
+                return globTestSourceEntries(p.environmentName);
+              }),
+            ).then((entries) =>
+              entries.reduce<string[]>(
+                (acc, entry) => acc.concat(...Object.values(entry)),
+                [],
+              ),
+            );
 
-            if (!Object.keys(entries).length) {
+            if (!entries.length) {
+              logger.log(
+                filters
+                  ? color.yellow(
+                      `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
+                    )
+                  : color.yellow('\nNo matching test files to run.\n'),
+              );
               return;
             }
-            await run({ fileFilters: Object.values(entries) });
+            await run({ fileFilters: entries });
             afterTestsWatchRun();
           },
           runFailedTests: async () => {
@@ -303,7 +370,7 @@ export async function runTests(context: Rstest): Promise<void> {
               return;
             }
 
-            clearLogs();
+            clearScreen();
 
             snapshotManager.clear();
 
@@ -323,7 +390,7 @@ export async function runTests(context: Rstest): Promise<void> {
               .filter((result) => result.snapshotResult?.unmatched)
               .map((r) => r.testPath);
 
-            clearLogs();
+            clearScreen();
 
             const originalUpdateSnapshot =
               snapshotManager.options.updateSnapshot;

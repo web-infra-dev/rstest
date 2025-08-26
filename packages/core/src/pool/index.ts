@@ -3,6 +3,7 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type {
   EntryInfo,
   FormattedError,
+  ProjectContext,
   RstestContext,
   RuntimeConfig,
   SourceMapInput,
@@ -31,7 +32,7 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
-const getRuntimeConfig = (context: RstestContext): RuntimeConfig => {
+const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   const {
     testNamePattern,
     testTimeout,
@@ -106,28 +107,29 @@ export const createPool = async ({
   recommendWorkerCount?: number;
 }): Promise<{
   runTests: (params: {
-    context: RstestContext;
     entries: EntryInfo[];
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
     updateSnapshot: SnapshotUpdateState;
+    project: ProjectContext;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
   collectTests: (params: {
-    context: RstestContext;
     entries: EntryInfo[];
     assetFiles: Record<string, string>;
     setupEntries: EntryInfo[];
     sourceMaps: Record<string, SourceMapInput>;
     updateSnapshot: SnapshotUpdateState;
+    project: ProjectContext;
   }) => Promise<
     {
       tests: Test[];
       testPath: string;
       errors?: FormattedError[];
+      project: string;
     }[]
   >;
   close: () => Promise<void>;
@@ -192,7 +194,7 @@ export const createPool = async ({
     env: {
       NODE_ENV: 'test',
       // enable diff color by default
-      FORCE_COLOR: '1',
+      FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
       ...process.env,
     },
   });
@@ -226,11 +228,13 @@ export const createPool = async ({
       assetFiles,
       setupEntries,
       sourceMaps,
+      project,
       updateSnapshot,
     }) => {
+      const projectName = context.normalizedConfig.name;
+      const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
-      const runtimeConfig = getRuntimeConfig(context);
 
       const results = await Promise.all(
         entries.map((entryInfo) => {
@@ -249,6 +253,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles: neededFiles,
                 context: {
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -262,6 +267,7 @@ export const createPool = async ({
             .catch((err: unknown) => {
               (err as any).fullStack = true;
               return {
+                project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',
                 name: '',
@@ -280,18 +286,21 @@ export const createPool = async ({
 
       const testResults = results.flatMap((r) => r.results);
 
-      return { results, testResults };
+      return { results, testResults, project };
     },
     collectTests: async ({
       entries,
       assetFiles,
       setupEntries,
       sourceMaps,
+      project,
       updateSnapshot,
     }) => {
+      const runtimeConfig = getRuntimeConfig(project);
+      const projectName = project.normalizedConfig.name;
+
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
       const entryLength = Object.keys(entries).length;
-      const runtimeConfig = getRuntimeConfig(context);
 
       return Promise.all(
         entries.map((entryInfo) => {
@@ -310,6 +319,7 @@ export const createPool = async ({
                 entryInfo,
                 assetFiles: neededFiles,
                 context: {
+                  project: projectName,
                   rootPath: context.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
@@ -323,6 +333,7 @@ export const createPool = async ({
             .catch((err: FormattedError) => {
               err.fullStack = true;
               return {
+                project: projectName,
                 testPath: entryInfo.testPath,
                 tests: [],
                 errors: [err],

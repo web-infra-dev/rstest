@@ -1,0 +1,39 @@
+# projects
+
+- **类型：** `string[]`
+- **默认值：** `[<rootDir>]`
+
+一组目录、配置文件或 glob 模式，用于定义多个测试项目。 `rstest` 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
+
+如果没有 `projects` 字段，`rstest` 会将当前目录视为单个项目。
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+
+    // All apps that provide an rstest config file
+    'apps/**/rstest.config.ts',
+
+    // A specific project directory
+    '<rootDir>/services/auth',
+
+    // A specific project's config file
+    './projects/web/rstest.config.ts',
+  ],
+});
+```
+
+需要注意的是，project 配置并不会继承全局配置，如果你的子项目间存在共享配置，可以抽取 shared 配置，并在子项目中引入：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+import sharedConfig from '../shared/rstest.config';
+
+export default defineConfig({
+  ...sharedConfig,
+});
+```

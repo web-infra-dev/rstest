@@ -6,6 +6,8 @@ import { GithubActionsReporter } from '../reporter/githubActions';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
+  Project,
+  ProjectContext,
   Reporter,
   RstestCommand,
   RstestConfig,
@@ -16,11 +18,19 @@ import type {
 } from '../types';
 import { castArray, getAbsolutePath } from '../utils/helper';
 
+/**
+ * Only letters, numbers, "-", "_", and "$" are allowed.
+ */
+function formatEnvironmentName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
+}
+
 type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
   configFilePath?: string;
+  projects: Project[];
 };
 
 export class Rstest implements RstestContext {
@@ -42,9 +52,16 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  public projects: ProjectContext[] = [];
 
   public constructor(
-    { cwd = process.cwd(), command, fileFilters, configFilePath }: Options,
+    {
+      cwd = process.cwd(),
+      command,
+      fileFilters,
+      configFilePath,
+      projects,
+    }: Options,
     userConfig: RstestConfig,
   ) {
     this.cwd = cwd;
@@ -73,6 +90,25 @@ export class Rstest implements RstestContext {
     this.rootPath = rootPath;
     this.originalConfig = userConfig;
     this.normalizedConfig = rstestConfig;
+    this.projects = projects.length
+      ? projects.map((project) => {
+          // TODO: support extend projects config
+          const config = withDefaultConfig(project.config);
+          return {
+            rootPath: config.root,
+            name: config.name,
+            environmentName: formatEnvironmentName(config.name),
+            normalizedConfig: config,
+          };
+        })
+      : [
+          {
+            rootPath,
+            name: rstestConfig.name,
+            environmentName: formatEnvironmentName(rstestConfig.name),
+            normalizedConfig: rstestConfig,
+          },
+        ];
   }
 
   public updateReporterResultState(
