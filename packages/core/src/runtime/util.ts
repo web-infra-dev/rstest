@@ -37,7 +37,9 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
         error.expected !== undefined &&
         error.actual !== undefined)
     ) {
-      errObj.diff = diff(err.expected, err.actual)!;
+      errObj.diff = diff(err.expected, err.actual, {
+        expand: false,
+      })!;
     }
 
     for (const key of ['actual', 'expected'] as const) {
