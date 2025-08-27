@@ -47,7 +47,10 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 js: 'source-map',
               },
               distPath: {
-                root: TEMP_RSTEST_OUTPUT_DIR,
+                root:
+                  context.projects.length > 1
+                    ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
+                    : TEMP_RSTEST_OUTPUT_DIR,
               },
             },
             tools: {

@@ -79,7 +79,7 @@ describe('watch', () => {
         interval: 20,
       })
       .toMatch('Test Files 1 passed');
-    expect(cli.stdout).toMatch('No test files are re-run.');
+    expect(cli.stdout).toMatch('No test files need re-run.');
 
     cli.exec.kill();
   });

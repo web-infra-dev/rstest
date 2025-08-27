@@ -24,8 +24,10 @@ const clearConsole = () => {
 
 const beforeRestart = async ({
   filePath,
+  root,
   clear = true,
 }: {
+  root: string;
   filePath?: string;
   clear?: boolean;
 }): Promise<void> => {
@@ -34,7 +36,7 @@ const beforeRestart = async ({
   }
 
   if (filePath) {
-    const filename = path.basename(filePath);
+    const filename = path.relative(root, filePath);
     logger.info(`restarting Rstest as ${color.yellow(filename)} changed\n`);
   } else {
     logger.info('restarting Rstest...\n');
@@ -51,13 +53,15 @@ export const restart = async ({
   clear = true,
   options,
   filters,
+  root,
 }: {
+  root: string;
   options: CommonOptions;
   filters: string[];
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
-  await beforeRestart({ filePath, clear });
+  await beforeRestart({ filePath, root, clear });
 
   await runRest({ options, filters, command: 'watch' });
 
@@ -75,12 +79,16 @@ export async function watchFilesForRestart({
   rstest: RstestInstance;
   watchOptions?: ChokidarOptions;
 }): Promise<void> {
-  if (!rstest.context.configFilePath) {
+  const configFilePaths = [
+    rstest.context.configFilePath,
+    ...rstest.context.projects.map((project) => project.configFilePath),
+  ].filter(Boolean) as string[];
+  if (configFilePaths.length === 0) {
     return;
   }
 
   const root = rstest.context.rootPath;
-  const watcher = await createChokidar([rstest.context.configFilePath], root, {
+  const watcher = await createChokidar(configFilePaths, root, {
     // do not trigger add for initial files
     ignoreInitial: true,
     // If watching fails due to read permissions, the errors will be suppressed silently.
@@ -96,7 +104,7 @@ export async function watchFilesForRestart({
     }
     restarting = true;
 
-    const restarted = await restart({ options, filters, filePath });
+    const restarted = await restart({ options, root, filters, filePath });
 
     if (restarted) {
       await watcher.close();

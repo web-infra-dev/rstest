@@ -1,4 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { RstestContext } from '../../types';
 import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
 
 class TestFileWatchPlugin {
@@ -40,6 +41,7 @@ export const triggerRerun = (): void => {
 };
 
 export const pluginEntryWatch: (params: {
+  context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
@@ -48,7 +50,7 @@ export const pluginEntryWatch: (params: {
   isWatch,
   globTestSourceEntries,
   setupFiles,
-  configFilePath,
+  context,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
@@ -73,7 +75,7 @@ export const pluginEntryWatch: (params: {
 
         // Add virtual entry to trigger recompile
         const virtualEntryName = `${rstestVirtualEntryFlag}${config.name!}.js`;
-        const virtualEntryPath = `${config.context!}/${virtualEntryName}`;
+        const virtualEntryPath = `${environment.config.root}/${virtualEntryName}`;
 
         const virtualModulesPlugin =
           new rspack.experiments.VirtualModulesPlugin({
@@ -112,6 +114,10 @@ export const pluginEntryWatch: (params: {
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
           '**/*.snap',
         );
+
+        const configFilePath = context.projects.find(
+          (project) => project.environmentName === environment.name,
+        )?.configFilePath;
 
         if (configFilePath) {
           config.watchOptions.ignored.push(configFilePath);

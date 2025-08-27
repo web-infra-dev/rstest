@@ -80,6 +80,51 @@ describe('prepareRsbuild', () => {
     expect(bundlerConfigs[0]).toMatchSnapshot();
   });
 
+  it('should generate rspack config correctly with projects', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        normalizedConfig: {
+          name: 'test',
+        },
+        projects: [
+          {
+            name: 'test',
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: 'jsdom',
+            },
+          },
+          {
+            name: 'test-node',
+            environmentName: 'test-node',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: 'node',
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+    );
+    expect(rsbuildInstance).toBeDefined();
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]).toMatchSnapshot();
+    expect(bundlerConfigs[1]).toMatchSnapshot();
+  });
+
   it('should generate swc config correctly with user customize', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
