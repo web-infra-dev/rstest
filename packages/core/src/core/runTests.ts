@@ -128,7 +128,7 @@ export async function runTests(context: Rstest): Promise<void> {
           if (affectedEntries.length === 0) {
             logger.debug(
               color.yellow(
-                `No test files are re-run in project(${p.environmentName}).`,
+                `No test files need re-run in project(${p.environmentName}).`,
               ),
             );
           } else {
@@ -192,7 +192,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (results.length === 0) {
       if (command === 'watch') {
         if (mode === 'on-demand') {
-          logger.log(color.yellow('No test files are re-run.'));
+          logger.log(color.yellow('No test files need re-run.'));
         } else {
           logger.log(color.yellow('No test files found.'));
         }
