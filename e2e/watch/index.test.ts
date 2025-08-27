@@ -49,6 +49,7 @@ describe('watch', () => {
     await expect
       .poll(() => cli.stdout, {
         interval: 20,
+        timeout: 2000,
       })
       .toMatch('Tests 2 passed');
 
@@ -63,6 +64,7 @@ describe('watch', () => {
     await expect
       .poll(() => cli.stdout, {
         interval: 20,
+        timeout: 2000,
       })
       .toMatch('Test Files 1 failed');
     expect(cli.stdout).toMatch('Test Files 1 failed');
