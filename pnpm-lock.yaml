@@ -381,8 +381,8 @@ importers:
         specifier: 2.5.0
         version: 2.5.0
       chai:
-        specifier: ^5.3.3
-        version: 5.3.3
+        specifier: ^6.0.1
+        version: 6.0.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -2223,6 +2223,10 @@ packages:
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
+    engines: {node: '>=18'}
+
+  chai@6.0.1:
+    resolution: {integrity: sha512-/JOoU2//6p5vCXh00FpNgtlw0LjvhGttaWc+y7wpW9yjBm3ys0dI8tSKZxIOgNruz5J0RleccatSIC3uxEZP0g==}
     engines: {node: '>=18'}
 
   chalk@4.1.2:
@@ -6861,6 +6865,8 @@ snapshots:
       deep-eql: 5.0.2
       loupe: 3.1.4
       pathval: 2.0.0
+
+  chai@6.0.1: {}
 
   chalk@4.1.2:
     dependencies:
