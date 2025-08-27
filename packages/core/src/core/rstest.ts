@@ -95,6 +95,7 @@ export class Rstest implements RstestContext {
           // TODO: support extend projects config
           const config = withDefaultConfig(project.config);
           return {
+            configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
             environmentName: formatEnvironmentName(config.name),
@@ -103,6 +104,7 @@ export class Rstest implements RstestContext {
         })
       : [
           {
+            configFilePath,
             rootPath,
             name: rstestConfig.name,
             environmentName: formatEnvironmentName(rstestConfig.name),
