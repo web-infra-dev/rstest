@@ -102,7 +102,7 @@ export const prepareRsbuild = async (
         pluginEntryWatch({
           globTestSourceEntries,
           setupFiles,
-          configFilePath: context.configFilePath,
+          context,
           isWatch: command === 'watch',
         }),
         pluginExternal(context),

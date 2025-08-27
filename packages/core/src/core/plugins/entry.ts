@@ -1,4 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { RstestContext } from '../../types';
 import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
 
 class TestFileWatchPlugin {
@@ -26,6 +27,7 @@ class TestFileWatchPlugin {
 }
 
 export const pluginEntryWatch: (params: {
+  context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
@@ -34,7 +36,7 @@ export const pluginEntryWatch: (params: {
   isWatch,
   globTestSourceEntries,
   setupFiles,
-  configFilePath,
+  context,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
@@ -67,6 +69,10 @@ export const pluginEntryWatch: (params: {
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
           '**/*.snap',
         );
+
+        const configFilePath = context.projects.find(
+          (project) => project.environmentName === environment.name,
+        )?.configFilePath;
 
         if (configFilePath) {
           config.watchOptions.ignored.push(configFilePath);

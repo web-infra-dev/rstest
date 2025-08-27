@@ -10,6 +10,7 @@ export type ProjectContext = {
   name: string;
   environmentName: string;
   rootPath: string;
+  configFilePath?: string;
   normalizedConfig: NormalizedConfig;
 };
 
