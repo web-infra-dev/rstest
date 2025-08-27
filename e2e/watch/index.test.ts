@@ -46,8 +46,12 @@ describe('watch', () => {
        });`,
     );
 
-    await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 2 passed');
+    await expect
+      .poll(() => cli.stdout, {
+        interval: 20,
+      })
+      .toMatch('Tests 2 passed');
+
     expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
 
     // update
@@ -56,7 +60,11 @@ describe('watch', () => {
       return content.replace("toBe('bar')", "toBe('BAR')");
     });
 
-    await cli.waitForStdout('Duration');
+    await expect
+      .poll(() => cli.stdout, {
+        interval: 20,
+      })
+      .toMatch('Test Files 1 failed');
     expect(cli.stdout).toMatch('Test Files 1 failed');
     expect(cli.stdout).toMatch('✗ bar > bar should be to bar');
     expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
@@ -64,9 +72,12 @@ describe('watch', () => {
     // delete
     cli.resetStd();
     fs.delete('./fixtures-test-0/bar.test.ts');
-    await cli.waitForStdout('Duration');
+    await expect
+      .poll(() => cli.stdout, {
+        interval: 20,
+      })
+      .toMatch('Test Files 1 passed');
     expect(cli.stdout).toMatch('No test files are re-run.');
-    expect(cli.stdout).toMatch('Test Files 1 passed');
 
     cli.exec.kill();
   });
