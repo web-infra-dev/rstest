@@ -28,10 +28,11 @@ describe('restart', () => {
       configFile,
       `import { defineConfig } from '@rstest/core';
 export default defineConfig({
+  name: 'restart',
   tools: {
     rspack: {
       watchOptions: {
-        aggregateTimeout: 10,
+        ignored: '**/**'
       },
     },
   },

@@ -14,7 +14,7 @@
     "@types/jest-image-snapshot": "^6.4.0",
     "axios": "^1.11.0",
     "jest-image-snapshot": "^6.5.1",
-    "memfs": "^4.36.3",
+    "memfs": "^4.38.2",
     "pathe": "^2.0.3",
     "react": "^19.1.1",
     "redux": "^5.0.1",
