@@ -32,7 +32,8 @@ export async function runTests(context: Rstest): Promise<void> {
       include,
       exclude,
       includeSource,
-      root,
+      rootPath,
+      projectRoot: root,
       fileFilters: context.fileFilters || [],
     });
 
