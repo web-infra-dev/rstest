@@ -24,6 +24,7 @@
   "clearMocks",
   "resetMocks",
   "restoreMocks",
+  "importActualMethods",
   "unstubEnvs",
   "unstubGlobals",
 

@@ -1,0 +1,46 @@
+---
+overviewHeaders: []
+---
+
+# importActualMethods
+
+- **Type:** `('importAttributes' | 'query')[]`
+- **Default:** `['importAttributes', 'query']`
+
+Controls which syntaxes Rstest treats as a request to import the original module implementation when you call `rs.importActual` or annotate an `import`. We recommend keeping `'importAttributes'` enabled and only disabling it if your runtime or bundler cannot parse that syntax.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  importActualMethods: ['query'],
+});
+```
+  </Tab>
+</Tabs>
+
+## Supported methods
+
+:::tip Recommended
+Enable `importAttributes` whenever your environment supports it so you can rely on standard syntax without altering module identifiers.
+:::
+
+### importAttributes
+
+Allows using ECMAScript [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) to flag an actual import. This approach keeps the specifier untouched. Disable it only when targeting environments that cannot parse `with { ... }` on import statements.
+
+```ts
+import axiosActual from 'axios' with { rstest: 'importActual' };
+```
+
+### query
+
+Allows appending a query string so the resolver can fetch the real module even if it has been mocked. Prefer using this as a fallback when your toolchain strips import attributes, and disable it if your toolchain removes or forbids query parameters in module specifiers.
+
+```ts
+import axiosActual from 'axios?rstest=importActual';
+```

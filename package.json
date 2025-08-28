@@ -58,6 +58,9 @@
     "pnpm": ">=10.12.4"
   },
   "pnpm": {
+    "overrides": {
+      "@rspack1/core": "link:../rspack/packages/rspack"
+    },
     "ignoredBuiltDependencies": [
       "@biomejs/biome",
       "nx",

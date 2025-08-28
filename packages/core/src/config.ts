@@ -97,6 +97,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     // The following configurations need overrides
     merged.include = config.include ?? merged.include;
     merged.reporters = config.reporters ?? merged.reporters;
+    merged.importActualMethods =
+      config.importActualMethods ?? merged.importActualMethods;
     if (merged.coverage) {
       merged.coverage.reporters =
         config.coverage?.reporters ?? merged.coverage?.reporters;
@@ -138,6 +140,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
+  importActualMethods: ['importAttributes', 'query'],
   slowTestThreshold: 300,
   unstubGlobals: false,
   unstubEnvs: false,
