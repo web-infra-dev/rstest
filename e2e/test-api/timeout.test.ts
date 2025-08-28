@@ -21,13 +21,13 @@ describe('Test timeout', () => {
       logs.find((log) => log.includes('Error: test timed out in 50ms')),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('timeout.test.ts:5:5')),
+      logs.find((log) => log.includes('timeout.test.ts:5:3')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Error: test timed out in 5000ms')),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('timeout.test.ts:10:5')),
+      logs.find((log) => log.includes('timeout.test.ts:10:3')),
     ).toBeTruthy();
     expect(logs.find((log) => log.includes('Tests 2 failed'))).toBeTruthy();
   }, 10000);

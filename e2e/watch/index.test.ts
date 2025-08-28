@@ -48,7 +48,10 @@ describe('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
-    expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
+    // Updated as the shared module `src/index.ts` is extracted into another chunk.
+    expect(cli.stdout).toMatch(
+      /Test files to re-run.*:\n.*bar\.test\.ts\n.*index\.test\.ts\n\n/,
+    );
 
     // update
     cli.resetStd();
@@ -65,8 +68,11 @@ describe('watch', () => {
     cli.resetStd();
     fs.delete('./fixtures-test-0/bar.test.ts');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('No test files need re-run.');
     expect(cli.stdout).toMatch('Test Files 1 passed');
+    // Updated as extracting the shared module `src/index.ts` is into another chunk in reverted.
+    expect(cli.stdout).toMatch(
+      /Test files to re-run.*:\n.*index\.test\.ts\n\n/,
+    );
 
     cli.exec.kill();
   });

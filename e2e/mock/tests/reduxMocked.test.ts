@@ -17,12 +17,8 @@ it('importActual works', async () => {
 });
 
 it('requireActual and importActual works together', async () => {
-  // const rxEsm = await rs.importActual<typeof redux>('redux');
   const rxCjs = rs.requireActual<typeof redux>('redux');
   expect(rs.isMockFunction(rxCjs.isAction)).toBe(false);
   expect(typeof rxCjs.applyMiddleware).toBe('function');
-
-  // TODO: https://github.com/web-infra-dev/rspack/pull/11111 breaks resolved module in external function,
-  // which will be fixed in the near future.
-  // expect(rxEsm.compose).not.toBe(rxCjs.compose);
+  expect(redux.compose).not.toBe(rxCjs.compose);
 });

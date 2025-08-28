@@ -7,7 +7,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "incremental": false,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -37,6 +39,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -142,6 +145,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "type": "javascript/auto",
         "use": [
           {
+            "loader": "<ROOT>/packages/core/src/core/plugins/mockLoader.mjs",
+          },
+          {
             "loader": "builtin:swc-loader",
             "options": {
               "env": {
@@ -171,7 +177,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -225,7 +231,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -404,6 +410,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "asyncChunks": false,
     "chunkFilename": "[name].js",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
@@ -428,11 +435,13 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     DefinePlugin {
       "_args": [
         {
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
+          "import.meta.env": {
+            "ASSET_PREFIX": """",
+            "BASE_URL": ""/"",
+            "DEV": false,
+            "MODE": ""none"",
+            "PROD": false,
+          },
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -459,6 +468,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "useLegacyEmit": false,
         "writeToFileEmit": false,
       },
+    },
+    RemoveDuplicateModulesPlugin {
+      "_args": [],
+      "affectedHooks": undefined,
+      "name": "RemoveDuplicateModulesPlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {},
@@ -529,7 +543,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "incremental": false,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -560,6 +576,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -665,6 +682,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "type": "javascript/auto",
         "use": [
           {
+            "loader": "<ROOT>/packages/core/src/core/plugins/mockLoader.mjs",
+          },
+          {
             "loader": "builtin:swc-loader",
             "options": {
               "env": {
@@ -694,7 +714,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -748,7 +768,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -916,6 +936,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "asyncChunks": false,
     "chunkFilename": "[name].js",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
@@ -940,11 +961,13 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     DefinePlugin {
       "_args": [
         {
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
+          "import.meta.env": {
+            "ASSET_PREFIX": """",
+            "BASE_URL": ""/"",
+            "DEV": false,
+            "MODE": ""none"",
+            "PROD": false,
+          },
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -971,6 +994,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "useLegacyEmit": false,
         "writeToFileEmit": false,
       },
+    },
+    RemoveDuplicateModulesPlugin {
+      "_args": [],
+      "affectedHooks": undefined,
+      "name": "RemoveDuplicateModulesPlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {},
@@ -1043,7 +1071,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "incremental": false,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -1073,6 +1103,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1178,6 +1209,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
+            "loader": "<ROOT>/packages/core/src/core/plugins/mockLoader.mjs",
+          },
+          {
             "loader": "builtin:swc-loader",
             "options": {
               "env": {
@@ -1207,7 +1241,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1261,7 +1295,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1440,6 +1474,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "asyncChunks": false,
     "chunkFilename": "[name].js",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
@@ -1464,11 +1499,13 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
+          "import.meta.env": {
+            "ASSET_PREFIX": """",
+            "BASE_URL": ""/"",
+            "DEV": false,
+            "MODE": ""none"",
+            "PROD": false,
+          },
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -1495,6 +1532,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "useLegacyEmit": false,
         "writeToFileEmit": false,
       },
+    },
+    RemoveDuplicateModulesPlugin {
+      "_args": [],
+      "affectedHooks": undefined,
+      "name": "RemoveDuplicateModulesPlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {},
@@ -1565,7 +1607,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "incremental": false,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -1596,6 +1640,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1701,6 +1746,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
+            "loader": "<ROOT>/packages/core/src/core/plugins/mockLoader.mjs",
+          },
+          {
             "loader": "builtin:swc-loader",
             "options": {
               "env": {
@@ -1730,7 +1778,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1784,7 +1832,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1963,6 +2011,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "asyncChunks": false,
     "chunkFilename": "[name].js",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
@@ -1987,11 +2036,13 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
+          "import.meta.env": {
+            "ASSET_PREFIX": """",
+            "BASE_URL": ""/"",
+            "DEV": false,
+            "MODE": ""none"",
+            "PROD": false,
+          },
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -2018,6 +2069,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "useLegacyEmit": false,
         "writeToFileEmit": false,
       },
+    },
+    RemoveDuplicateModulesPlugin {
+      "_args": [],
+      "affectedHooks": undefined,
+      "name": "RemoveDuplicateModulesPlugin",
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {},
@@ -2110,6 +2166,9 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
     "type": "javascript/auto",
     "use": [
       {
+        "loader": "<ROOT>/packages/core/src/core/plugins/mockLoader.mjs",
+      },
+      {
         "loader": "builtin:swc-loader",
         "options": {
           "env": {
@@ -2140,7 +2199,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
           },
           "rspackExperiments": {
             "collectTypeScriptInfo": {
-              "exportedEnum": true,
+              "exportedEnum": false,
               "typeExports": true,
             },
           },

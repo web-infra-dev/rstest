@@ -22,7 +22,7 @@ describe('Test timeout configuration', () => {
       logs.find((log) => log.includes('Error: test timed out in 50ms')),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('timeout.test.ts:5:5')),
+      logs.find((log) => log.includes('timeout.test.ts:5:3')),
     ).toBeTruthy();
 
     expect(
