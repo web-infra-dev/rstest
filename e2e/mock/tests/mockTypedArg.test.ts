@@ -1,9 +1,9 @@
 import { expect, it, rs } from '@rstest/core';
 import { b } from '../src/b';
-import { d } from '../src/d';
+import { d1 } from '../src/d';
 
 // b
-rs.mock(import('../src/b'), async () => {
+rs.mock(import('../src/b'), () => {
   return {
     b: 222,
   };
@@ -24,12 +24,12 @@ it('mocked c', async () => {
 });
 
 // d
-rs.mock<{ d: number }>('../src/d', async () => {
+rs.mock<{ d1: number }>('../src/d', () => {
   return {
-    d: 444,
+    d1: 444,
   };
 });
 
 it('mocked d', async () => {
-  expect(d).toBe(444);
+  expect(d1).toBe(444);
 });

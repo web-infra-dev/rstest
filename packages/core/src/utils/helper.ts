@@ -188,3 +188,109 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
     !process.env.CI
   );
 };
+
+/**
+ * Split a request string into path and query parts
+ */
+function splitRequest(request: string): {
+  path: string;
+  queryString: string;
+  hasQuery: boolean;
+} {
+  const questionMarkIndex = request.indexOf('?');
+
+  if (questionMarkIndex === -1) {
+    return { path: request, queryString: '', hasQuery: false };
+  }
+
+  return {
+    path: request.substring(0, questionMarkIndex),
+    queryString: request.substring(questionMarkIndex + 1),
+    hasQuery: true,
+  };
+}
+
+/**
+ * Parse rstest query parameters from a request string
+ */
+export function parseRstestQuery(request: string): {
+  isActualImport: boolean;
+  cleanedRequest: string;
+} {
+  const { path, queryString, hasQuery } = splitRequest(request);
+
+  if (!hasQuery) {
+    return { isActualImport: false, cleanedRequest: request };
+  }
+
+  const params = new URLSearchParams(queryString);
+  const isActualImport =
+    params.has('rstest') && params.get('rstest') === 'importActual';
+
+  if (!isActualImport) {
+    return { isActualImport: false, cleanedRequest: request };
+  }
+
+  params.delete('rstest');
+
+  const remainingQuery = params.toString();
+  return {
+    isActualImport,
+    cleanedRequest: remainingQuery ? `${path}?${remainingQuery}` : path,
+  };
+}
+
+/**
+ * Add query parameters to a request path
+ */
+export function addRequestQuery(
+  path: string,
+  queries: Record<string, string>,
+): string {
+  const { path: basePath, queryString } = splitRequest(path);
+  const params = new URLSearchParams(queryString);
+
+  for (const [key, value] of Object.entries(queries)) {
+    params.set(key, value);
+  }
+
+  const result = params.toString();
+  return result ? `${basePath}?${result}` : basePath;
+}
+
+/**
+ * Remove a specific query parameter from a request string
+ * Handles both encoded and unencoded URLs
+ */
+export function removeRequestQuery(
+  request: string,
+  queryToRemove: string,
+): string {
+  // Try to decode the URL first to handle encoded characters
+  let decodedRequest: string;
+  try {
+    decodedRequest = decodeURIComponent(request);
+  } catch {
+    // If decoding fails, use the original request
+    decodedRequest = request;
+  }
+
+  const { path, queryString, hasQuery } = splitRequest(decodedRequest);
+
+  if (!hasQuery) {
+    return request;
+  }
+
+  const params = new URLSearchParams(queryString);
+  params.delete(queryToRemove);
+
+  const remainingQuery = params.toString();
+  const result = remainingQuery ? `${path}?${remainingQuery}` : path;
+
+  // If the original request was encoded, encode the result back
+  if (request !== decodedRequest) {
+    return encodeURI(result);
+  }
+
+  return result;
+}
