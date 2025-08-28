@@ -34,6 +34,23 @@ rstest foo
 rstest test/foo.test.ts test/bar.test.ts
 ```
 
+### 根据文件路径过滤
+
+此种方式也适用于根据文件路径过滤。
+
+当你根据文件路径过滤，它可以是一个绝对路径或者基于当前工作目录（也称为项目根目录或 workspace 根目录）的相对路径。
+
+```bash
+# 根据绝对路径过滤
+rstest /Users/userName/Desktop/projects/rstest/packages/core/tests/index.test.ts
+
+# 根据相对路径过滤
+rstest packages/core/tests/index.test.ts
+
+# 根据 project 目录过滤
+rstest packages/core
+```
+
 ### include/exclude
 
 当你直接通过 `rstest **/*.test.ts` 过滤文件时，Rstest 会在 [include](/config/test/include) 和 [exclude](/config/test/exclude) 配置的基础上进一步筛选文件。
