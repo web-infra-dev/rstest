@@ -23,6 +23,6 @@ describe('test projects filter', () => {
 
     // test log print
     expect(logs.find((log) => log.includes('node/test/index'))).toBeTruthy();
-    expect(logs.find((log) => log.includes('react/test/index'))).toBeFalsy();
+    expect(logs.find((log) => log.includes('client/test/index'))).toBeFalsy();
   });
 });
