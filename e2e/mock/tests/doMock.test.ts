@@ -9,6 +9,8 @@ test('doMock works', async () => {
     increment: (num: number) => num + 10,
   }));
 
+  rs.requireActual('../src/increment'); // Ensure the module is re-evaluated
+
   const { increment: incrementWith10 } = await import('../src/increment');
   expect(incrementWith10(1)).toBe(11);
 });
