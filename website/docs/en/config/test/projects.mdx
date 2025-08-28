@@ -7,6 +7,8 @@ An array of directories, config files, or glob patterns that define multiple tes
 
 `rstest` will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
 
+You can filter the specified projects to run by using the [--project](/guide/basic/test-filter#filter-by-project-name) option.
+
 If there is no `projects` field, `rstest` will treat current directory as a single project.
 
 ```ts name='rstest.config.ts'

@@ -63,6 +63,28 @@ rstest --testNamePattern login
 rstest -t login
 ```
 
+## Filter by project name
+
+Rstest supports defining multiple test projects via [projects](/config/test/projects). You can filter to run specific projects with the `--project` option.
+
+For example, to match projects whose [name](/config/test/name) is `@test/a` or `@test/b`:
+
+```bash
+rstest --project '@test/a' --project '@test/b'
+```
+
+You can also use wildcards to match project names:
+
+```bash
+rstest --project '@test/*'
+```
+
+You can exclude certain projects by negation:
+
+```bash
+rstest --project '!@test/a'
+```
+
 ## Combined filtering
 
 All filtering methods can be combined. For example:
