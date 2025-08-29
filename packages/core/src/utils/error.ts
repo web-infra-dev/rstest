@@ -115,7 +115,7 @@ export async function parseErrorStacktrace({
   stack: string;
   getSourcemap: GetSourcemap;
 }): Promise<StackFrame[]> {
-  return Promise.all(
+  const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
         fullStack
@@ -149,4 +149,12 @@ export async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
+
+  if (!stackFrames.length && stack.length) {
+    logger.log(
+      `${color.gray(`No error stack found, set 'DEBUG=rstest' to show fullStack.`)}`,
+    );
+  }
+
+  return stackFrames;
 }
