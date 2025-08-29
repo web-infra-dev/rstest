@@ -1,9 +1,19 @@
 # projects
 
-- **Type:** `string[]`
+- **Type:**
+
+```ts
+type ProjectConfig = Omit<
+  RstestConfig,
+  'projects' | 'reporters' | 'pool' | 'isolate'
+>;
+
+type Projects = (string | ProjectConfig)[];
+```
+
 - **Default:** `[<rootDir>]`
 
-An array of directories, config files, or glob patterns that define multiple test projects.
+An array of directories, config files, or glob patterns, or an object to define multiple test projects.
 
 `rstest` will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
 
@@ -27,11 +37,26 @@ export default defineConfig({
 
     // A specific project's config file
     './projects/web/rstest.config.ts',
+
+    // inline project configs
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
   ],
 });
 ```
 
-It should be noted that project configuration does not inherit root configuration. If there is shared configuration between your sub-projects, you can extract the shared configuration and import it in the sub-project:
+## Configuration notes
+
+- Project configuration does not inherit root configuration. If there is shared configuration between your sub-projects, you can extract the shared configuration and import it in the sub-project.
+- Some root-level options such as `reporters`, `pool`, and `isolate` are not valid in a project configuration.
+- `projects` does not support nesting.
 
 ```ts title='packages/pkg-a/rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -39,5 +64,28 @@ import sharedConfig from '../shared/rstest.config';
 
 export default defineConfig({
   ...sharedConfig,
+});
+```
+
+## Inline configuration
+
+`rstest` supports configuring projects inline in the `projects` field. This lets you define multiple test projects in a single root without creating separate config files for each test project.
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // inline project configs
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
+  ],
 });
 ```
