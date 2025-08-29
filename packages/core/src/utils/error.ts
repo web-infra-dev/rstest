@@ -152,7 +152,7 @@ export async function parseErrorStacktrace({
 
   if (!stackFrames.length && stack.length) {
     logger.log(
-      `${color.gray("No error stack found, set 'DEBUG=rstest' to show fullStack.")}`,
+      color.gray("No error stack found, set 'DEBUG=rstest' to show fullStack."),
     );
   }
 
