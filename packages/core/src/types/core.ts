@@ -1,5 +1,9 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
-import type { NormalizedConfig, RstestConfig } from './config';
+import type {
+  NormalizedConfig,
+  NormalizedProjectConfig,
+  RstestConfig,
+} from './config';
 import type { Reporter } from './reporter';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
@@ -11,7 +15,7 @@ export type ProjectContext = {
   environmentName: string;
   rootPath: string;
   configFilePath?: string;
-  normalizedConfig: NormalizedConfig;
+  normalizedConfig: NormalizedProjectConfig;
 };
 
 export type RstestContext = {

@@ -135,9 +135,27 @@ export async function resolveProjects({
     return glob(patterns, globOptions);
   };
 
-  const { projectPaths, projectPatterns } = (config.projects || []).reduce(
+  const formatRootStr = (rootStr: string) => {
+    return rootStr.replace('<rootDir>', root);
+  };
+
+  const { projectPaths, projectPatterns, projectConfigs } = (
+    config.projects || []
+  ).reduce(
     (total, p) => {
-      const projectStr = p.replace('<rootDir>', root);
+      if (typeof p === 'object') {
+        const projectRoot = p.root ? formatRootStr(p.root) : root;
+        total.projectConfigs.push({
+          config: {
+            root: projectRoot,
+            name: p.name ? p.name : getDefaultProjectName(projectRoot),
+            ...p,
+          },
+          configFilePath: undefined,
+        });
+        return total;
+      }
+      const projectStr = formatRootStr(p);
 
       if (isDynamicPattern(projectStr)) {
         total.projectPatterns.push(projectStr);
@@ -154,6 +172,10 @@ export async function resolveProjects({
     {
       projectPaths: [] as string[],
       projectPatterns: [] as string[],
+      projectConfigs: [] as {
+        config: RstestConfig;
+        configFilePath: string | undefined;
+      }[],
     },
   );
 
@@ -181,7 +203,9 @@ export async function resolveProjects({
         configFilePath,
       };
     }),
-  ).then((projects) => filterProjects(projects, options));
+  ).then((projects) =>
+    filterProjects(projects.concat(projectConfigs), options),
+  );
 
   if (!projects.length) {
     let errorMsg = `No projects found, please make sure you have at least one valid project.

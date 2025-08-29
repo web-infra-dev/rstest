@@ -6,6 +6,7 @@ import { GithubActionsReporter } from '../reporter/githubActions';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
+  NormalizedProjectConfig,
   Project,
   ProjectContext,
   Reporter,
@@ -93,7 +94,10 @@ export class Rstest implements RstestContext {
     this.projects = projects.length
       ? projects.map((project) => {
           // TODO: support extend projects config
-          const config = withDefaultConfig(project.config);
+          const config = withDefaultConfig(
+            project.config,
+          ) as NormalizedProjectConfig;
+          config.isolate = rstestConfig.isolate;
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
