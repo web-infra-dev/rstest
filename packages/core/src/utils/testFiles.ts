@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
+import type { Project } from '../types';
 import { castArray, color, getAbsolutePath, parsePosix } from './helper';
 
 export const filterFiles = (
@@ -36,6 +37,32 @@ export const filterFiles = (
       );
     });
   });
+};
+
+export const filterProjects = (
+  projects: Project[],
+  options: {
+    project?: string[];
+  },
+): Project[] => {
+  if (options.project) {
+    const regexes = castArray(options.project).map((pattern) => {
+      // cast wildcard to RegExp, eg. @rstest/*, !@rstest/core
+      const isNeg = pattern.startsWith('!');
+
+      const escaped = (isNeg ? pattern.slice(1) : pattern)
+        .split('*')
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*');
+      return new RegExp(isNeg ? `^(?!${escaped})` : `^${escaped}$`);
+    });
+
+    return projects.filter((proj) =>
+      regexes.some((re) => re.test(proj.config.name!)),
+    );
+  }
+
+  return projects;
 };
 
 const hasInSourceTestCode = (code: string): boolean =>

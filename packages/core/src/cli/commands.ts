@@ -35,6 +35,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
     .option(
+      '--project <name>',
+      'Run only projects that match the name, can be a full name or wildcards pattern',
+    )
+    .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found',
     )
