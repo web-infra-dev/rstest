@@ -1,4 +1,4 @@
-import { rs } from '@rstest/core';
+// import { rs } from '@rstest/core';
 
 process.env.NODE_ENV = 'rstest:production';
 

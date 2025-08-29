@@ -1,10 +1,10 @@
 import { expect, it, rs } from '@rstest/core';
 
-rs.mockRequire('redux');
+rs.mockRequire('is-url');
 
-it('mocked redux', () => {
-  const redux = require('redux').default;
-  redux.isAction('string');
-  expect(redux.isAction).toHaveBeenCalledWith('string');
-  expect(redux.mocked).toBe('redux_yes');
+it('mocked is-url', () => {
+  const isUrl = require('is-url');
+  isUrl.fn('string');
+  expect(isUrl.fn).toHaveBeenCalledWith('string');
+  expect(isUrl()).toBe('is-url mock');
 });
