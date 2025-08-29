@@ -13,9 +13,9 @@ type Projects = (string | ProjectConfig)[];
 
 - **Default:** `[<rootDir>]`
 
-An array of directories, config files, or glob patterns, or an object to define multiple test projects.
+Define multiple test projects. It can be an array of directories, configuration files, or glob patterns, or an object.
 
-`rstest` will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
+Rstest will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
 
 You can filter the specified projects to run by using the [--project](/guide/basic/test-filter#filter-by-project-name) option.
 
