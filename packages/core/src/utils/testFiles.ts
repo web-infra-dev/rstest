@@ -48,20 +48,22 @@ export const formatTestEntryName = (name: string): string =>
 export const getTestEntries = async ({
   include,
   exclude,
-  root,
+  rootPath,
+  projectRoot,
   fileFilters,
   includeSource,
 }: {
+  rootPath: string;
   include: string[];
   exclude: string[];
   includeSource: string[];
   fileFilters: string[];
-  root: string;
+  projectRoot: string;
 }): Promise<{
   [name: string]: string;
 }> => {
   const testFiles = await glob(include, {
-    cwd: root,
+    cwd: projectRoot,
     absolute: true,
     ignore: exclude,
     dot: true,
@@ -70,7 +72,7 @@ export const getTestEntries = async ({
 
   if (includeSource?.length) {
     const sourceFiles = await glob(includeSource, {
-      cwd: root,
+      cwd: projectRoot,
       absolute: true,
       ignore: exclude,
       dot: true,
@@ -92,8 +94,8 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, root).map((entry) => {
-      const relativePath = pathe.relative(root, entry);
+    filterFiles(testFiles, fileFilters, rootPath).map((entry) => {
+      const relativePath = pathe.relative(rootPath, entry);
       return [formatTestEntryName(relativePath), entry];
     }),
   );

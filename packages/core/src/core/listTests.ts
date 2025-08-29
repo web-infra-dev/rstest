@@ -33,7 +33,8 @@ export async function listTests(
     const entries = await getTestEntries({
       include,
       exclude,
-      root,
+      rootPath,
+      projectRoot: root,
       fileFilters: context.fileFilters || [],
       includeSource,
     });
