@@ -25,7 +25,7 @@ describe('test projects filter', () => {
     expect(logs.find((log) => log.includes('node/test/index'))).toBeFalsy();
     expect(logs.find((log) => log.includes('client/test/index'))).toBeTruthy();
   });
- 
+
   it('should run test success with project filter', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
