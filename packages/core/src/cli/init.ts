@@ -128,9 +128,27 @@ export async function resolveProjects({
     return glob(patterns, globOptions);
   };
 
-  const { projectPaths, projectPatterns } = (config.projects || []).reduce(
+  const formatRootStr = (rootStr: string) => {
+    return rootStr.replace('<rootDir>', root);
+  };
+
+  const { projectPaths, projectPatterns, projectConfigs } = (
+    config.projects || []
+  ).reduce(
     (total, p) => {
-      const projectStr = p.replace('<rootDir>', root);
+      if (typeof p === 'object') {
+        const projectRoot = p.root ? formatRootStr(p.root) : root;
+        total.projectConfigs.push({
+          config: {
+            root: projectRoot,
+            name: p.name ? p.name : getDefaultProjectName(projectRoot),
+            ...p,
+          },
+          configFilePath: undefined,
+        });
+        return total;
+      }
+      const projectStr = formatRootStr(p);
 
       if (isDynamicPattern(projectStr)) {
         total.projectPatterns.push(projectStr);
@@ -147,34 +165,40 @@ export async function resolveProjects({
     {
       projectPaths: [] as string[],
       projectPatterns: [] as string[],
+      projectConfigs: [] as {
+        config: RstestConfig;
+        configFilePath: string | undefined;
+      }[],
     },
   );
 
   projectPaths.push(...(await globProjects(projectPatterns)));
 
-  const projects = await Promise.all(
-    projectPaths.map(async (project) => {
-      const isDirectory = statSync(project).isDirectory();
-      const { config, configFilePath } = await resolveConfig({
-        ...options,
-        config: isDirectory ? undefined : project,
-        root: isDirectory ? project : dirname(project),
-      });
+  const projects = (
+    await Promise.all(
+      projectPaths.map(async (project) => {
+        const isDirectory = statSync(project).isDirectory();
+        const { config, configFilePath } = await resolveConfig({
+          ...options,
+          config: isDirectory ? undefined : project,
+          root: isDirectory ? project : dirname(project),
+        });
 
-      config.name ??= getDefaultProjectName(project);
+        config.name ??= getDefaultProjectName(project);
 
-      if (config.projects?.length && config.root !== root) {
-        logger.warn(
-          `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
-        );
-      }
+        if (config.projects?.length && config.root !== root) {
+          logger.warn(
+            `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
+          );
+        }
 
-      return {
-        config,
-        configFilePath,
-      };
-    }),
-  );
+        return {
+          config,
+          configFilePath,
+        };
+      }),
+    )
+  ).concat(projectConfigs);
 
   const names = new Set<string>();
 
