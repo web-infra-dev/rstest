@@ -4,7 +4,13 @@ import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig } from '../config';
 import type { Project, RstestConfig } from '../types';
-import { castArray, getAbsolutePath, logger } from '../utils';
+import {
+  castArray,
+  color,
+  filterProjects,
+  getAbsolutePath,
+  logger,
+} from '../utils';
 
 export type CommonOptions = {
   root?: string;
@@ -15,6 +21,7 @@ export type CommonOptions = {
   include?: string[];
   exclude?: string[];
   reporter?: string[];
+  project?: string[];
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -99,7 +106,7 @@ export async function resolveProjects({
   root: string;
   options: CommonOptions;
 }): Promise<Project[]> {
-  if (!config.projects || !config.projects.length) {
+  if (!config.projects) {
     return [];
   }
 
@@ -174,31 +181,42 @@ export async function resolveProjects({
 
   projectPaths.push(...(await globProjects(projectPatterns)));
 
-  const projects = (
-    await Promise.all(
-      projectPaths.map(async (project) => {
-        const isDirectory = statSync(project).isDirectory();
-        const { config, configFilePath } = await resolveConfig({
-          ...options,
-          config: isDirectory ? undefined : project,
-          root: isDirectory ? project : dirname(project),
-        });
+  const projects = await Promise.all(
+    projectPaths.map(async (project) => {
+      const isDirectory = statSync(project).isDirectory();
+      const { config, configFilePath } = await resolveConfig({
+        ...options,
+        config: isDirectory ? undefined : project,
+        root: isDirectory ? project : dirname(project),
+      });
 
-        config.name ??= getDefaultProjectName(project);
+      config.name ??= getDefaultProjectName(project);
 
-        if (config.projects?.length && config.root !== root) {
-          logger.warn(
-            `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
-          );
-        }
+      if (config.projects?.length && config.root !== root) {
+        logger.warn(
+          `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
+        );
+      }
 
-        return {
-          config,
-          configFilePath,
-        };
-      }),
-    )
-  ).concat(projectConfigs);
+      return {
+        config,
+        configFilePath,
+      };
+    }),
+  ).then((projects) =>
+    filterProjects(projects.concat(projectConfigs), options),
+  );
+
+  if (!projects.length) {
+    let errorMsg = `No projects found, please make sure you have at least one valid project.
+${color.gray('projects:')} ${JSON.stringify(config.projects, null, 2)}`;
+
+    if (options.project) {
+      errorMsg += `\n${color.gray('projectName filter:')} ${JSON.stringify(options.project, null, 2)}`;
+    }
+
+    throw errorMsg;
+  }
 
   const names = new Set<string>();
 

@@ -34,6 +34,23 @@ rstest foo
 rstest test/foo.test.ts test/bar.test.ts
 ```
 
+### 根据文件路径过滤
+
+此种方式也适用于根据文件路径过滤。
+
+当你根据文件路径过滤，它可以是一个绝对路径或者基于当前工作目录（也称为项目根目录或 workspace 根目录）的相对路径。
+
+```bash
+# 根据绝对路径过滤
+rstest /Users/userName/Desktop/projects/rstest/packages/core/tests/index.test.ts
+
+# 根据相对路径过滤
+rstest packages/core/tests/index.test.ts
+
+# 根据 project 目录过滤
+rstest packages/core
+```
+
 ### include/exclude
 
 当你直接通过 `rstest **/*.test.ts` 过滤文件时，Rstest 会在 [include](/config/test/include) 和 [exclude](/config/test/exclude) 配置的基础上进一步筛选文件。
@@ -61,6 +78,28 @@ rstest --include test/a/*.test.ts --include test/b/*.test.ts
 rstest --testNamePattern login
 # 或
 rstest -t login
+```
+
+## 根据项目名称过滤
+
+Rstest 支持通过 [projects](/config/test/projects) 配置来定义多个测试项目，你可以通过 `--project` 选项来过滤运行特定项目。
+
+如，匹配[名称](/config/test/name)为 `@test/a` 或 `@test/b` 的项目：
+
+```bash
+rstest --project '@test/a' --project '@test/b'
+```
+
+你也可以使用通配符来匹配项目名称：
+
+```bash
+rstest --project '@test/*'
+```
+
+你也可以通过取反来排除某些项目：
+
+```bash
+rstest --project '!@test/a'
 ```
 
 ## 组合过滤

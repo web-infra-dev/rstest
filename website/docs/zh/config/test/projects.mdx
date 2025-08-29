@@ -5,6 +5,8 @@
 
 一组目录、配置文件或 glob 模式，用于定义多个测试项目。 `rstest` 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
 
+你可以通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 选项来过滤运行特定项目。
+
 如果没有 `projects` 字段，`rstest` 会将当前目录视为单个项目。
 
 ```ts name='rstest.config.ts'
