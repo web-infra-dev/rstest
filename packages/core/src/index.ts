@@ -28,6 +28,7 @@ export function defineConfig(config: RstestConfigExport) {
 }
 
 export type {
+  ProjectConfig,
   Reporter,
   RstestCommand,
   TestFileInfo,
