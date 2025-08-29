@@ -9,10 +9,5 @@ export default defineConfig({
       react: 'commonjs react',
     },
   },
-  exclude: [
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/fixtures/**',
-    '**/fixtures-*/**',
-  ],
+  exclude: ['**/dist/**', '**/fixtures/**', '**/fixtures-*/**'],
 });

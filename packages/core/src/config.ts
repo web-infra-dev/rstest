@@ -85,6 +85,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     '**/node_modules/**',
     '**/dist/**',
     '**/.{idea,git,cache,output,temp}/**',
+    TEMP_RSTEST_OUTPUT_DIR_GLOB,
   ],
   includeSource: [],
   pool: {
@@ -118,9 +119,6 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
 
   // The following configurations need overrides
   merged.include = config.include || merged.include;
-  merged.exclude = (config.exclude || merged.exclude || []).concat([
-    TEMP_RSTEST_OUTPUT_DIR_GLOB,
-  ]);
   merged.reporters = config.reporters ?? merged.reporters;
   merged.pool =
     typeof config.pool === 'string'

@@ -109,6 +109,17 @@ export async function runRstestCli({
     }
   };
 
+  const expectExecFailed = async () => {
+    await cli.exec;
+    const exitCode = cli.exec.process?.exitCode;
+    if (exitCode === 0) {
+      const logs = cli.stdout.split('\n').filter(Boolean);
+      throw new Error(
+        `expect test failed but passed. Logs:\n\n${logs.join('\n')}`,
+      );
+    }
+  };
+
   const expectLog = (
     msg: string,
     logs: string[] = cli.stdout.split('\n').filter(Boolean),
@@ -120,7 +131,7 @@ export async function runRstestCli({
     }
   };
 
-  return { cli, expectExecSuccess, expectLog };
+  return { cli, expectExecSuccess, expectExecFailed, expectLog };
 }
 
 export async function prepareFixtures({
