@@ -23,6 +23,8 @@ test-temp-*
 .vscode/**/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 .idea/
 .nx/
 .history/
@@ -34,3 +36,5 @@ test-results/
 fixtures-test/
 fixtures-test-*/
 .rslib/
+tests-dist/
+.vscode-test/
