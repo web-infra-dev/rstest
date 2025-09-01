@@ -38,6 +38,14 @@ export async function printError(
       getSourcemap,
     });
 
+    if (!stackFrames.length && error.stack.length) {
+      logger.log(
+        color.gray(
+          "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+        ),
+      );
+    }
+
     if (stackFrames[0]) {
       await printCodeFrame(stackFrames[0]);
     }
@@ -81,13 +89,15 @@ async function printCodeFrame(frame: StackFrame) {
   logger.log('');
 }
 
+export function formatStack(frame: StackFrame, rootPath: string): string {
+  return frame.methodName !== '<unknown>'
+    ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
+    : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
+}
+
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    const msg =
-      frame.methodName !== '<unknown>'
-        ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
-        : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
-    logger.log(color.gray(`        ${msg}`));
+    logger.log(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
   stackFrames.length && logger.log();
 }
@@ -149,12 +159,6 @@ export async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
-
-  if (!stackFrames.length && stack.length) {
-    logger.log(
-      color.gray("No error stack found, set 'DEBUG=rstest' to show fullStack."),
-    );
-  }
 
   return stackFrames;
 }

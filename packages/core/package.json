@@ -81,6 +81,7 @@
     "rslog": "^1.2.11",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
+    "strip-ansi": "^7.1.0",
     "tinyglobby": "^0.2.14",
     "tinyspy": "^4.0.3"
   },
