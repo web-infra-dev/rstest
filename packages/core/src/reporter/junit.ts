@@ -228,8 +228,7 @@ export class JUnitReporter implements Reporter {
       (test) => test.status === 'fail',
     ).length;
     const totalErrors = totalFailures; // In JUnit, failures are treated as errors
-    const totalSkipped = testResults.filter(
-      (test) => test.status === 'skip',
+      (test) => test.status === 'skip' || test.status === 'todo',
     ).length;
     const totalTime = duration.testTime / 1000; // Convert to seconds
 
