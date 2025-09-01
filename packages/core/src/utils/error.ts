@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, logger } from '../utils';
+import { color, formatTestPath, isDebug, logger } from '../utils';
 
 export async function printError(
   error: FormattedError,
@@ -109,13 +109,13 @@ const stackIgnores: (RegExp | string)[] = [
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
-  fullStack,
+  fullStack = isDebug(),
 }: {
   fullStack?: boolean;
   stack: string;
   getSourcemap: GetSourcemap;
 }): Promise<StackFrame[]> {
-  return Promise.all(
+  const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
         fullStack
@@ -149,4 +149,12 @@ export async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
+
+  if (!stackFrames.length && stack.length) {
+    logger.log(
+      color.gray("No error stack found, set 'DEBUG=rstest' to show fullStack."),
+    );
+  }
+
+  return stackFrames;
 }
