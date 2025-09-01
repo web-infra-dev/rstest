@@ -3,6 +3,7 @@ import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JUnitReporter } from '../reporter/junit';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -39,7 +40,7 @@ export class Rstest implements RstestContext {
   public command: RstestCommand;
   public fileFilters?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter)[];
+  public reporters: (Reporter | GithubActionsReporter | JUnitReporter)[];
   public snapshotManager: SnapshotManager;
   public version: string;
   public rootPath: string;
@@ -159,10 +160,12 @@ const reportersMap: {
   default: typeof DefaultReporter;
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
+  junit: typeof JUnitReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
+  junit: JUnitReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
@@ -170,7 +173,7 @@ export type BuiltInReporterNames = keyof typeof reportersMap;
 export function createReporters(
   reporters: RstestConfig['reporters'],
   initOptions: any = {},
-): (Reporter | GithubActionsReporter)[] {
+): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
       const [name, options = {}] =
