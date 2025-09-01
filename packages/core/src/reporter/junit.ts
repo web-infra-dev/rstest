@@ -241,7 +241,6 @@ export class JunitReporter implements Reporter {
         errors: totalErrors,
         skipped: totalSkipped,
         time: totalTime,
-        // TODO
         timestamp: new Date().toISOString(),
         testsuite: testSuites,
       },
