@@ -28,6 +28,9 @@
       "types": "./dist-types/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./package.json": {
+      "default": "./package.json"
+    },
     "./globals": {
       "types": "./globals.d.ts"
     },
