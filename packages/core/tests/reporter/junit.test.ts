@@ -1,10 +1,10 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
-import { JunitReporter } from '../../src/reporter/junit';
+import { JUnitReporter } from '../../src/reporter/junit';
 import type { Duration, TestFileResult, TestResult } from '../../src/types';
 
-describe('JunitReporter', () => {
+describe('JUnitReporter', () => {
   it('should create JUnit XML report correctly', async () => {
-    const reporter = new JunitReporter({
+    const reporter = new JUnitReporter({
       rootPath: '/test/root',
       options: {},
     });
@@ -104,7 +104,7 @@ describe('JunitReporter', () => {
       rs.resetAllMocks();
     });
 
-    const reporter = new JunitReporter({
+    const reporter = new JUnitReporter({
       rootPath: '/test/root',
       options: {},
     });
@@ -134,7 +134,7 @@ describe('JunitReporter', () => {
       logs.push(args.join(' '));
     });
 
-    const reporter = new JunitReporter({
+    const reporter = new JUnitReporter({
       rootPath: '/test/root',
     });
 

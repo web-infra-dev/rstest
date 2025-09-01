@@ -47,7 +47,7 @@ interface JUnitReport {
   };
 }
 
-export class JunitReporter implements Reporter {
+export class JUnitReporter implements Reporter {
   private rootPath: string;
   private outputPath?: string;
 
