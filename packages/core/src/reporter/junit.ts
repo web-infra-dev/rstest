@@ -143,7 +143,7 @@ export class JUnitReporter implements Reporter {
     );
 
     const failures = testCases.filter((test) => test.status === 'fail').length;
-    const errors = testCases.filter((test) => test.status === 'fail').length; // In JUnit, failures are treated as errors
+    const errors = 0; // No separate error tracking; set to 0 for clarity
     const skipped = testCases.filter(
       (test) => test.status === 'skip' || test.status === 'todo',
     ).length;
