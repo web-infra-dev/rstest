@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "outDir": "tests-dist",
+    "sourceMap": false,
+    "strict": true,
+    "rootDir": "tests",
+    "skipLibCheck": true
+  },
+  "inlcude": ["./tests/suite", "./tests/runTests.ts"],
+  "exclude": [
+    "./rslib.config.ts",
+    "./rstest.config.ts",
+    "./src",
+    "./sample",
+    "./tests/unit",
+    "./tests/fixtures"
+  ]
+}
