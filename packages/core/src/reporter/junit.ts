@@ -228,6 +228,7 @@ export class JUnitReporter implements Reporter {
       (test) => test.status === 'fail',
     ).length;
     const totalErrors = 0; // This framework does not distinguish between failures and errors, so errors are always reported as zero.
+    const totalSkipped = testResults.filter(
       (test) => test.status === 'skip' || test.status === 'todo',
     ).length;
     const totalTime = duration.testTime / 1000; // Convert to seconds
