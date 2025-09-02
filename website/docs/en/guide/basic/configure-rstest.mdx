@@ -43,18 +43,18 @@ rstest -c scripts/rstest.config.mjs
 
 ## Configure Rsbuild
 
-Rstest's build configuration inherits from Rsbuild. Therefore, in Rstest, you can use most of the Rsbuild configurations. For example:
+Rstest's build configuration inherits from Rsbuild. Therefore, in Rstest, you can use most of the Rsbuild configurations, such as:
 
-- Through [plugins](/config/#plugins) using Rsbuild plugins;
-- Through [resolve](/config/build/resolve) to configure module resolution behavior;
-- Through [tools.rspack](/config/build/tools#toolsrspack) to configure Rspack;
-- Through [tools.swc](/config/build/tools#toolsswc) to configure builtin:swc-loader.
+- Using Rsbuild plugins through [plugins](/config/#plugins);
+- Configuring module resolution behavior through [resolve](/config/build/resolve);
+- Configuring Rspack through [tools.rspack](/config/build/tools#toolsrspack);
+- Configuring builtin:swc-loader through [tools.swc](/config/build/tools#toolsswc).
 
 More configurations can be referred to [Build Configurations](/config/#build-configurations).
 
 ## Configure Rspack
 
-Rstest's underlying build tool is Rspack, so you can directly use Rspack's configuration items to configure Rstest's build behavior.
+Rstest uses Rspack for building, so you can directly use Rspack's configuration options to configure Rstest's build behavior.
 
 More details can be referred to [Configure Rspack](https://rsbuild.rs/guide/configuration/rspack).
 
