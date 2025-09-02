@@ -1,0 +1,44 @@
+# Features
+
+Here you can learn about the key features supported by Rstest.
+
+## Reuse the Rstack ecosystem
+
+Rstest can directly reuse Rsbuild and Rspack configurations and plugin ecosystems. You can use the same configuration for both development and testing to enjoy a consistent experience across the Rstack toolchain.
+
+Learn more about [Configuring Rstest](/guide/basic/configure-rstest).
+
+### Built on Rspack
+
+Rstest is powered by Rspack, enabling high-performance builds and optimizations such as Tree Shaking and [lazyBarrel](https://rspack.dev/config/experiments#experimentslazybarrel).
+
+## Multi-project testing
+
+Rstest provides multi-project testing capabilities, allowing you to run tests for multiple projects in parallel within a single Rstest process.
+
+Learn more about [Projects](/config/test/projects).
+
+## In-source tests
+
+Rstest supports a Rust-like module testing style, allowing you to write test blocks directly inside source files. This approach is ideal for small utility functions and helpers, enabling quick verification and debugging.
+
+Learn more about [In-source tests](/config/test/includeSource).
+
+## Watch mode
+
+When you modify a test file or one of its dependencies, Rstest analyzes the module graph and only re-runs the affected test files, significantly improving local feedback speed.
+
+## DOM testing
+
+Rstest supports simulating the DOM and browser APIs using jsdom and happy-dom. It provides solid support for frameworks such as React and Vue, and is compatible with Testing Library and CSS Modules.
+
+Learn more about [DOM testing](/config/test/testEnvironment).
+
+## More capabilities
+
+- Jest-compatible assertions and snapshot testing
+- Mock / Spy utilities
+- File-level sandbox isolation
+- Rich lifecycle hooks
+- Reporters and CI integration
+- Filtering by directory / project / test name
