@@ -7,7 +7,12 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
+import type {
+  EntryInfo,
+  NormalizedProjectConfig,
+  RstestContext,
+  SourceMapInput,
+} from '../types';
 import { isDebug } from '../utils';
 import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
@@ -216,7 +221,9 @@ export const createRsbuildServer = async ({
   inspectedConfig,
 }: {
   rsbuildInstance: RsbuildInstance;
-  inspectedConfig: Record<string, any>;
+  inspectedConfig: RstestContext['normalizedConfig'] & {
+    projects: NormalizedProjectConfig[];
+  };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
