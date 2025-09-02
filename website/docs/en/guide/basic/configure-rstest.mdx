@@ -41,6 +41,23 @@ You can also abbreviate the `--config` option to `-c`:
 rstest -c scripts/rstest.config.mjs
 ```
 
+## Configure Rsbuild
+
+Rstest's build configuration inherits from Rsbuild. Therefore, in Rstest, you can use most of the Rsbuild configurations. For example:
+
+- Through [plugins](/config/#plugins) using Rsbuild plugins;
+- Through [resolve](/config/build/resolve) to configure module resolution behavior;
+- Through [tools.rspack](/config/build/tools#toolsrspack) to configure Rspack;
+- Through [tools.swc](/config/build/tools#toolsswc) to configure builtin:swc-loader.
+
+More configurations can be referred to [Build Configurations](/config/#build-configurations).
+
+## Configure Rspack
+
+Rstest's underlying build tool is Rspack, so you can directly use Rspack's configuration items to configure Rstest's build behavior.
+
+More details can be referred to [Configure Rspack](https://rsbuild.rs/guide/configuration/rspack).
+
 ## Detect Rstest environment
 
 You can use `process.env.RSTEST` to detect whether it is an Rstest test environment to apply different configurations/codes in your tests.

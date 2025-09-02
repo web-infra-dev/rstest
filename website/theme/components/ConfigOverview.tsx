@@ -1,5 +1,6 @@
 import { Link } from '@rspress/core/theme';
 import styles from './ConfigOverview.module.scss';
+import { useI18nUrl } from './utils';
 
 export interface GroupItem {
   text: string;
@@ -59,6 +60,7 @@ const OVERVIEW_GROUPS: Group[] = [
 ];
 
 export default function Overview() {
+  const tUrl = useI18nUrl();
   const Nodes = OVERVIEW_GROUPS.map((group) => (
     <div key={group.name} className={styles.overviewGroups}>
       <div className={styles.group}>
@@ -66,7 +68,7 @@ export default function Overview() {
         <ul>
           {group.items?.map((item) => (
             <li key={item}>
-              <Link href={`/config/test/${item}`}>{item}</Link>
+              <Link href={tUrl(`/config/test/${item}`)}>{item}</Link>
             </li>
           ))}
         </ul>
@@ -119,17 +121,20 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
 ];
 
 export function BuildOverview() {
+  const tUrl = useI18nUrl();
   const Nodes = BUILD_OVERVIEW_GROUPS.map((group) => (
     <div key={group.name} className={styles.overviewGroups}>
       <div className={styles.group}>
         <h2>
-          <Link href={`/config/build/${group.name}`}> {group.name}</Link>
+          <Link href={tUrl(`/config/build/${group.name}`)}> {group.name}</Link>
         </h2>
         <ul>
           {group.items?.map((item) => (
             <li key={item}>
               <Link
-                href={`/config/build/${group.name}#${item.replace('.', '')}`}
+                href={tUrl(
+                  `/config/build/${group.name}#${item.replace('.', '')}`,
+                )}
               >
                 {item}
               </Link>
