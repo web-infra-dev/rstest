@@ -64,7 +64,10 @@ export async function listTests(
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
-    normalizedConfig: context.normalizedConfig,
+    inspectedConfig: {
+      ...context.normalizedConfig,
+      projects: context.projects.map((p) => p.normalizedConfig),
+    },
     setupFiles,
     rsbuildInstance,
     rootPath,
