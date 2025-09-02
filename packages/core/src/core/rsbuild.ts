@@ -213,10 +213,10 @@ export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
-  normalizedConfig,
+  inspectedConfig,
 }: {
   rsbuildInstance: RsbuildInstance;
-  normalizedConfig: RstestContext['normalizedConfig'];
+  inspectedConfig: Record<string, any>;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
@@ -260,7 +260,7 @@ export const createRsbuildServer = async ({
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
-        rstest: normalizedConfig,
+        rstest: inspectedConfig,
       },
     });
   }

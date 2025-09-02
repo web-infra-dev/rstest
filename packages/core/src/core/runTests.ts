@@ -64,7 +64,10 @@ export async function runTests(context: Rstest): Promise<void> {
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    normalizedConfig: context.normalizedConfig,
+    inspectedConfig: {
+      ...context.normalizedConfig,
+      projects: context.projects.map((p) => p.normalizedConfig),
+    },
     globTestSourceEntries:
       command === 'watch'
         ? globTestSourceEntries
