@@ -1,4 +1,6 @@
-# Debug mode
+# Debugging
+
+## Debug mode
 
 Rstest provides a debug mode to troubleshoot problems, you can add the `DEBUG=rstest` environment variable when building to enable Rstest's debug mode.
 
@@ -6,9 +8,14 @@ Rstest provides a debug mode to troubleshoot problems, you can add the `DEBUG=rs
 DEBUG=rstest pnpm test
 ```
 
-In debug mode, Rstest will write test outputs to disk, and write the Rstest config, Rsbuild config and Rspack config to the dist directory, which is convenient for developers to view and debug.
+In debug mode, Rstest will:
 
-## Rstest config file
+- Write test temporary outputs to disk
+- Write the Rstest config, Rsbuild config and Rspack config to the dist directory
+- Show full error stack traces
+- Set logger level to `verbose`
+
+### Rstest config file
 
 In debug mode, Rstest will automatically generate `dist/.rsbuild/rstest.config.mjs` file, which contains the final generated Rstest config. In this file, you can know the final result of the Rstest config you passed in after being processed by the framework and Rstest.
 
@@ -44,3 +51,29 @@ export default {
 ```
 
 For a complete introduction to Rstest config, please see the [Configure Rstest](/guide/basic/configure-rstest) chapter.
+
+## Debugging in VS Code
+
+Rstest supports debugging in VS Code using `debugger` statements or breakpoints. Just open the `JavaScript Debug Terminal` and run the test command in the terminal.
+
+You can also add a dedicated launch configuration to debug a test file in VS Code:
+
+```json title=".vscode/launch.json"
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Current Test File",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/@rstest/core/bin/rstest.js",
+      "args": ["run", "${file}"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}
+```
+
+Then you can start debugging the current test file directly in VS Code by press `F5` or go to `Run and Debug` panel.
