@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
+import { pluginAlgolia } from '@rspress/plugin-algolia';
 import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
@@ -73,6 +74,9 @@ export default defineConfig({
     ],
   },
   plugins: [
+    pluginAlgolia({
+      verificationContent: '71ECBF977243215D',
+    }),
     pluginFontOpenSans(),
     pluginSitemap({
       domain: siteUrl,
