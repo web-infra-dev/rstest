@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
   type ManifestData,
@@ -5,6 +6,7 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
+  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type {
@@ -22,6 +24,8 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type TestEntryToChunkHashes = {
   name: string;
@@ -251,6 +255,26 @@ export const createRsbuildServer = async ({
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
     setup: (api) => {
+      api.modifyRspackConfig((rspackConfig) => {
+        rspackConfig.output!.asyncChunks = false;
+        // TODO: remove this line after https://github.com/web-infra-dev/rspack/issues/11247 is resolved.
+        rspackConfig.experiments!.incremental = false;
+      });
+
+      api.modifyBundlerChain((chain, utils) => {
+        chain
+          .plugin('RemoveDuplicateModulesPlugin')
+          .use(rspack.experiments.RemoveDuplicateModulesPlugin);
+        // add mock-loader to this rule
+        chain.module
+          .rule(utils.CHAIN_ID.RULE.JS)
+          .use('mock-loader')
+          .loader(path.resolve(__dirname, './mockLoader.mjs'))
+          // Right after SWC to only handle JS files.
+          .before(utils.CHAIN_ID.USE.SWC)
+          .end();
+      });
+
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;
