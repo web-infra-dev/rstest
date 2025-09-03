@@ -1,10 +1,11 @@
-import { sayHi } from '../src/index';
+import { sayHi } from '@/src';
 
 it('should test source code correctly', () => {
   expect(sayHi()).toBe('hi');
 });
 
 it('should can not get document', () => {
+  // @ts-expect-error
   expect(global.document).toBeUndefined();
 });
 
