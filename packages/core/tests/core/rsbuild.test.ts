@@ -1,11 +1,18 @@
+import { join } from 'pathe';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { RstestContext } from '../../src/types';
+
+process.env.DEBUG = 'false';
+
+const rootPath = join(__dirname, '../..');
 
 describe('prepareRsbuild', () => {
   it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
+        rootPath,
         normalizedConfig: {
+          root: rootPath,
           name: 'test',
           plugins: [],
           resolve: {},
@@ -17,6 +24,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            rootPath,
             environmentName: 'test',
             normalizedConfig: {
               plugins: [],
@@ -43,7 +51,9 @@ describe('prepareRsbuild', () => {
   it('should generate rspack config correctly (node)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
+        rootPath,
         normalizedConfig: {
+          root: rootPath,
           name: 'test',
           plugins: [],
           resolve: {},
@@ -56,6 +66,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            rootPath,
             environmentName: 'test',
             normalizedConfig: {
               plugins: [],
@@ -83,12 +94,15 @@ describe('prepareRsbuild', () => {
   it('should generate rspack config correctly with projects', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
+        rootPath,
         normalizedConfig: {
+          root: rootPath,
           name: 'test',
         },
         projects: [
           {
             name: 'test',
+            rootPath,
             environmentName: 'test',
             normalizedConfig: {
               plugins: [],
@@ -101,6 +115,7 @@ describe('prepareRsbuild', () => {
           },
           {
             name: 'test-node',
+            rootPath,
             environmentName: 'test-node',
             normalizedConfig: {
               plugins: [],
@@ -128,7 +143,9 @@ describe('prepareRsbuild', () => {
   it('should generate swc config correctly with user customize', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
+        rootPath,
         normalizedConfig: {
+          root: rootPath,
           name: 'test',
           plugins: [],
           resolve: {},
@@ -144,6 +161,7 @@ describe('prepareRsbuild', () => {
         projects: [
           {
             name: 'test',
+            rootPath,
             environmentName: 'test',
             normalizedConfig: {
               plugins: [],

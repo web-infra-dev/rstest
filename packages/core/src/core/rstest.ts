@@ -1,4 +1,6 @@
+import { existsSync } from 'node:fs';
 import { SnapshotManager } from '@vitest/snapshot/manager';
+import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
@@ -18,7 +20,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath } from '../utils/helper';
+import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
 
 /**
  * Only letters, numbers, "-", "_", and "$" are allowed.
@@ -99,6 +101,15 @@ export class Rstest implements RstestContext {
             project.config,
           ) as NormalizedProjectConfig;
           config.isolate = rstestConfig.isolate;
+          config.source ??= {};
+
+          if (!config.source.tsconfigPath) {
+            const tsconfigPath = join(config.root, TS_CONFIG_FILE);
+
+            if (existsSync(tsconfigPath)) {
+              config.source.tsconfigPath = tsconfigPath;
+            }
+          }
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,

@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["./"],
-  "exclude": ["vue/"]
+  "exclude": ["vue/", "projects/fixtures/"]
 }
