@@ -20,7 +20,7 @@ const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
 ): Rstest[T] => {
   const fn = (...args: Parameters<Rstest[T]>) => {
     check(name);
-    return globalThis.RSTEST_API![name]!.call(
+    return globalThis.RSTEST_API![name].call(
       globalThis.RSTEST_API![name],
       // @ts-expect-error
       ...args,
