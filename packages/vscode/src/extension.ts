@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { RstestApi } from './master';
 import {
   getContentFromFilesystem,
@@ -167,6 +167,7 @@ class Rstest {
   private startTestRun = (request: vscode.TestRunRequest) => {
     const queue: { test: vscode.TestItem; data: TestMdCase | TestCase }[] = [];
     const run = this.ctrl.createTestRun(request);
+    console.log('👩‍🎨', request, run);
     // map of file uris to statements on each line:
     const coveredLines = new Map<
       /* file uri */ string,
@@ -184,6 +185,7 @@ class Rstest {
           run.enqueued(test);
           queue.push({ test, data });
         } else if (data instanceof TestCase) {
+          console.log('😓', data);
           run.enqueued(test);
           queue.push({ test, data });
         } else {

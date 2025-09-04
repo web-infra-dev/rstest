@@ -1,9 +1,9 @@
 {
-  "name": "test-provider-sample",
-  "displayName": "test-provider-sample",
-  "description": "Sample showing how to use the test APIs",
+  "name": "rstest-vscode",
+  "displayName": "Rstest",
+  "publisher": "rstack",
+  "description": "VS Code extension for Rstest",
   "version": "0.0.1",
-  "publisher": "vscode-samples",
   "private": true,
   "license": "MIT",
   "repository": "https://github.com/Microsoft/vscode-extension-samples",
@@ -11,30 +11,29 @@
     "vscode": "^1.100.0"
   },
   "categories": [
-    "Other"
+    "Testing"
   ],
   "activationEvents": [
-    "workspaceContains:*.md"
+    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
+    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "rslib build",
+    "vscode:prepublish": "npm run build",
+    "build": "rslib build",
+    "build:local": "SOURCEMAP=true rslib build",
     "typecheck": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "rslib build --watch"
   },
   "devDependencies": {
-    "@eslint/js": "^9.13.0",
     "@rslib/core": "0.12.2",
     "@rsbuild/core": "1.5.0",
     "@rstest/core": "workspace:*",
-    "@stylistic/eslint-plugin": "^2.9.0",
     "@swc/core": "^1.13.5",
     "@types/node": "^22",
     "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.1",
     "birpc": "2.5.0",
-    "eslint": "^9.13.0",
     "get-port": "^7.1.0",
     "typescript": "^5.9.2",
     "ws": "^8.18.3"

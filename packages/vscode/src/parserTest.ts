@@ -1,5 +1,5 @@
 import { Compiler } from '@swc/core';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 
 export const parseTestFile = (
   code: string,

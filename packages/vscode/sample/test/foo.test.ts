@@ -4,7 +4,7 @@ import { sayFoo } from '../src/foo';
 describe('Foo', () => {
   describe('inner Foo', () => {
     it('should return "foo"', () => {
-      expect(sayFoo()).toBe('foo1');
+      expect(sayFoo()).toBe('foo');
     });
   });
 });

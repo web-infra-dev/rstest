@@ -1,5 +1,5 @@
 import { TextDecoder } from 'util';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { RstestApi } from './master';
 import { parseMarkdown } from './parser';
 import { parseTestFile } from './parserTest';

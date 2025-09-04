@@ -7,10 +7,14 @@ export default defineConfig({
       bundle: false,
       format: 'cjs',
       output: {
-        distPath: {
-          root: 'out',
+        sourceMap: process.env.SOURCEMAP === 'true',
+      },
+      tools: {
+        rspack: {
+          output: {
+            devtoolModuleFilenameTemplate: '[absolute-resource-path]',
+          },
         },
-        sourceMap: true,
       },
     },
   ],

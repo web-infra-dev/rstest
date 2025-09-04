@@ -1,10 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import * as path from 'node:path';
+import path from 'node:path';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import getPort from 'get-port';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
