@@ -22,19 +22,26 @@
     "vscode:prepublish": "npm run build",
     "build": "rslib build",
     "build:local": "SOURCEMAP=true rslib build",
-    "typecheck": "tsc -p ./",
+    "test": "tsc -p tsconfig.test.json && vscode-test",
+    "typecheck": "tsc -p ./ && node ./tests-dist/runTest.js",
     "watch": "rslib build --watch"
   },
   "devDependencies": {
-    "@rslib/core": "0.12.2",
     "@rsbuild/core": "1.5.0",
+    "@rslib/core": "0.12.2",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.13.5",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22",
+    "@types/glob": "^7.1.1",
     "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
     "birpc": "2.5.0",
     "get-port": "^7.1.0",
+    "glob": "^7.1.4",
+    "mocha": "^11.7.2",
     "typescript": "^5.9.2",
     "ws": "^8.18.3"
   }

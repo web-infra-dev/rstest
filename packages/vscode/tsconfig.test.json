@@ -5,13 +5,12 @@
     "lib": ["ES2024"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "outDir": "dist",
-    "sourceMap": true,
-    "noEmit": true,
+    "outDir": "tests-dist",
+    "sourceMap": false,
     "strict": true,
-    "rootDir": "src",
+    "rootDir": "tests",
     "skipLibCheck": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+  "inlcude": ["./tests"],
+  "exclude": ["./rslib.config.ts", "./src", "./sample"]
 }
