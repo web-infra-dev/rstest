@@ -78,6 +78,39 @@ export class RstestApi {
     }
   }
 
+  public async runFileTests(fileItem: vscode.TestItem) {
+    if (this.ws) {
+      const fileId = `file_${fileItem.id}`;
+      const data: WorkerRunTestData = {
+        type: 'runTest',
+        id: fileId,
+        fileFilters: [fileItem.uri!.fsPath],
+        testNamePattern: '', // Empty pattern to run all tests in the file
+      };
+
+      // Create a promise that will be resolved when we get a response with the matching ID
+      const promise = new Promise<WorkerEventFinish>((resolve, reject) => {
+        this.testPromises.set(fileId, { resolve, reject });
+
+        // Set a timeout to prevent hanging indefinitely
+        setTimeout(() => {
+          const promiseObj = this.testPromises.get(fileId);
+          if (promiseObj) {
+            this.testPromises.delete(fileId);
+            reject(
+              new Error(
+                `File test execution timed out for ${fileItem.uri!.fsPath}`,
+              ),
+            );
+          }
+        }, 30000); // 30 seconds timeout for file-level tests
+      });
+
+      this.ws.send(JSON.stringify(data));
+      return promise;
+    }
+  }
+
   public async createChildProcess() {
     const execArgv: string[] = [];
     const workerPath = path.resolve(__dirname, 'worker/index.js');

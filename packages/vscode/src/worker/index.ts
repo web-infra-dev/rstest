@@ -61,13 +61,13 @@ class Worker {
           root: this.cwd,
           reporters: [
             new VscodeReporter({
-              onTestRunEndCallback: ({ results, testResults }) => {
+              onTestRunEndCallback: ({ testFileResults, testResults }) => {
                 this.ws.send(
                   JSON.stringify({
                     type: 'finish',
                     id: data.id,
-                    results,
                     testResults,
+                    testFileResults,
                   }),
                 );
               },

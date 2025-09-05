@@ -21,7 +21,7 @@ export type WorkerEvent = WorkerEventFinish;
 export type WorkerEventFinish = {
   type: 'finish';
   id: string;
-  results: TestResult[];
-  testResults?: TestFileResult[];
+  testResults: TestResult[];
+  testFileResults?: TestFileResult[];
 };
 //#endregion

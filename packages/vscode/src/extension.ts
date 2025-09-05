@@ -125,7 +125,7 @@ class Rstest {
       );
     };
 
-    this.ctrl.createRunProfile(
+    const runProfile = this.ctrl.createRunProfile(
       'Run Tests',
       vscode.TestRunProfileKind.Run,
       runHandler,
@@ -142,6 +142,7 @@ class Rstest {
       undefined,
       true,
     );
+
     coverageProfile.loadDetailedCoverage = async (_testRun, coverage) => {
       if (coverage instanceof MarkdownFileCoverage) {
         return coverage.coveredLines.filter(
@@ -185,14 +186,111 @@ class Rstest {
           run.enqueued(test);
           queue.push({ test, data });
         } else if (data instanceof TestCase) {
-          console.log('😓', data);
           run.enqueued(test);
           queue.push({ test, data });
-        } else {
-          if (data instanceof TestFile && !data.didResolve) {
+        } else if (data instanceof TestFile) {
+          if (!data.didResolve) {
             await data.updateFromDisk(this.ctrl, test);
           }
 
+          // Run all tests for this file at once
+          run.enqueued(test);
+          run.started(test);
+          run.appendOutput(`Running all tests in file ${test.id}\r\n`);
+
+          try {
+            const rstestResults = await this.api.runFileTests(test);
+
+            // Process results for each child test item
+            const testItems = gatherTestItems(test.children);
+            for (const testItem of testItems) {
+              const itemData = testData.get(testItem);
+              if (
+                itemData instanceof TestCase ||
+                itemData instanceof TestMdCase
+              ) {
+                // Find matching result in rstestResults.testResults by name or parent
+                const testResult = rstestResults?.testResults.find(
+                  (result) =>
+                    result.name === testItem.label ||
+                    result.parentNames?.includes(testItem.label),
+                );
+
+                if (testResult) {
+                  run.started(testItem);
+
+                  if (testResult.status === 'pass') {
+                    run.passed(testItem, testResult.duration || 0);
+                  } else if (testResult.status === 'skip') {
+                    run.skipped(testItem);
+                  } else if (
+                    testResult.status === 'fail' &&
+                    testResult.errors?.length
+                  ) {
+                    run.failed(
+                      testItem,
+                      new vscode.TestMessage(
+                        testResult.errors[0].message || 'Test failed',
+                      ),
+                      testResult.duration || 0,
+                    );
+                  } else {
+                    // Handle other statuses (todo, etc.)
+                    run.skipped(testItem);
+                  }
+
+                  run.appendOutput(`Completed ${testItem.id}\r\n`);
+                } else {
+                  // No result found for this test item
+                  run.skipped(testItem);
+                }
+              }
+            }
+
+            // Mark the file test as passed if no test failed
+            if (
+              rstestResults &&
+              !rstestResults.testResults.some(
+                (result) => result.status === 'fail',
+              )
+            ) {
+              // Calculate total duration from all test results
+              const totalDuration = rstestResults.testResults.reduce(
+                (sum, result) => sum + (result.duration || 0),
+                0,
+              );
+              run.passed(test, totalDuration);
+            } else if (rstestResults) {
+              // Calculate total duration from all test results
+              const totalDuration = rstestResults.testResults.reduce(
+                (sum, result) => sum + (result.duration || 0),
+                0,
+              );
+              run.failed(
+                test,
+                new vscode.TestMessage('Some tests in this file failed'),
+                totalDuration,
+              );
+            } else {
+              run.failed(
+                test,
+                new vscode.TestMessage('No results returned for this file'),
+              );
+            }
+          } catch (error: any) {
+            run.failed(
+              test,
+              new vscode.TestMessage(
+                `Error running file tests: ${error.message || String(error)}`,
+              ),
+            );
+            // Skip all child tests in case of error
+            for (const child of gatherTestItems(test.children)) {
+              run.skipped(child);
+            }
+          }
+        } else {
+          // Process child tests
           await discoverTests(gatherTestItems(test.children));
         }
 
