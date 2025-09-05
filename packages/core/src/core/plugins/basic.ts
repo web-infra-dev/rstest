@@ -23,6 +23,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             testEnvironment,
           },
           rootPath,
+          name: projectName,
         } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(
           config,
@@ -32,7 +33,15 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             resolve,
             source,
             output,
-            dev,
+            dev: {
+              ...dev,
+              progressBar:
+                dev?.progressBar === true
+                  ? {
+                      id: projectName,
+                    }
+                  : dev?.progressBar,
+            },
           },
           {
             source: {

@@ -213,7 +213,7 @@ export interface RstestConfig {
     'bundleAnalyze'
   >;
 
-  dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
+  dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk' | 'progressBar'>;
 
   output?: Pick<
     NonNullable<RsbuildConfig['output']>,

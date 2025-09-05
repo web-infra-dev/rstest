@@ -1036,6 +1036,132 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
 }
 `;
 
+exports[`prepareRsbuild > should generate rspack config correctly with progress bar 1`] = `
+[
+  {
+    "name": "RsbuildCorePlugin",
+  },
+  DefinePlugin {
+    "_args": [
+      {
+        "import.meta.env.ASSET_PREFIX": """",
+        "import.meta.env.BASE_URL": ""/"",
+        "import.meta.env.DEV": false,
+        "import.meta.env.MODE": ""none"",
+        "import.meta.env.PROD": false,
+        "import.meta.rstest": "global['@rstest/core']",
+        "process.env.ASSET_PREFIX": """",
+        "process.env.BASE_URL": ""/"",
+      },
+    ],
+    "affectedHooks": "compilation",
+    "name": "DefinePlugin",
+  },
+  WebpackManifestPlugin {
+    "options": {
+      "assetHookStage": Infinity,
+      "basePath": "",
+      "fileName": "test-manifest.json",
+      "filter": [Function],
+      "generate": [Function],
+      "map": null,
+      "publicPath": null,
+      "removeKeyHash": /\\(\\[a-f0-9\\]\\{16,32\\}\\\\\\.\\?\\)/gi,
+      "seed": undefined,
+      "serialize": [Function],
+      "sort": null,
+      "transformExtensions": /\\^\\(gz\\|map\\)\\$/i,
+      "useEntryKeys": false,
+      "useLegacyEmit": false,
+      "writeToFileEmit": false,
+    },
+  },
+  IgnoreModuleNotFoundErrorPlugin {},
+  MockRuntimeRspackPlugin {},
+  RstestCacheControlPlugin {},
+  RstestPlugin {
+    "_args": [
+      {
+        "hoistMockModule": true,
+        "importMetaPathName": true,
+        "injectModulePathName": true,
+        "manualMockRoot": "<ROOT>/packages/core/__mocks__",
+      },
+    ],
+    "affectedHooks": undefined,
+    "name": "RstestPlugin",
+  },
+]
+`;
+
+exports[`prepareRsbuild > should generate rspack config correctly with progress bar 2`] = `
+[
+  {
+    "name": "RsbuildCorePlugin",
+  },
+  DefinePlugin {
+    "_args": [
+      {
+        "import.meta.env.ASSET_PREFIX": """",
+        "import.meta.env.BASE_URL": ""/"",
+        "import.meta.env.DEV": false,
+        "import.meta.env.MODE": ""none"",
+        "import.meta.env.PROD": false,
+        "import.meta.rstest": "global['@rstest/core']",
+        "process.env.ASSET_PREFIX": """",
+        "process.env.BASE_URL": ""/"",
+      },
+    ],
+    "affectedHooks": "compilation",
+    "name": "DefinePlugin",
+  },
+  ProgressPlugin {
+    "_args": [
+      {
+        "id": "@test/node",
+        "prefix": "@test/node",
+      },
+    ],
+    "affectedHooks": undefined,
+    "name": "ProgressPlugin",
+  },
+  WebpackManifestPlugin {
+    "options": {
+      "assetHookStage": Infinity,
+      "basePath": "",
+      "fileName": "test-node-manifest.json",
+      "filter": [Function],
+      "generate": [Function],
+      "map": null,
+      "publicPath": null,
+      "removeKeyHash": /\\(\\[a-f0-9\\]\\{16,32\\}\\\\\\.\\?\\)/gi,
+      "seed": undefined,
+      "serialize": [Function],
+      "sort": null,
+      "transformExtensions": /\\^\\(gz\\|map\\)\\$/i,
+      "useEntryKeys": false,
+      "useLegacyEmit": false,
+      "writeToFileEmit": false,
+    },
+  },
+  IgnoreModuleNotFoundErrorPlugin {},
+  MockRuntimeRspackPlugin {},
+  RstestCacheControlPlugin {},
+  RstestPlugin {
+    "_args": [
+      {
+        "hoistMockModule": true,
+        "importMetaPathName": true,
+        "injectModulePathName": true,
+        "manualMockRoot": "<ROOT>/packages/core/__mocks__",
+      },
+    ],
+    "affectedHooks": undefined,
+    "name": "RstestPlugin",
+  },
+]
+`;
+
 exports[`prepareRsbuild > should generate rspack config correctly with projects 1`] = `
 {
   "context": "<ROOT>/packages/core",

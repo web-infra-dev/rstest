@@ -7,3 +7,9 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 ## dev.writeToDisk <RsbuildDocBadge path="/config/dev/write-to-disk" text="dev.writeToDisk" />
 
 默认情况下，Rstest 不会将测试临时文件写入磁盘，当你需要调试 Rstest 产物时可能需要此配置项。
+
+## dev.progressBar <RsbuildDocBadge path="/config/dev/progress-bar" text="dev.progressBar" />
+
+是否渲染进度条以显示构建进度。
+
+默认情况下，Rstest 不会显示构建进度条因为构建会很快结束，如果构建时间较长，你可以开启此配置项以观测构建进度。

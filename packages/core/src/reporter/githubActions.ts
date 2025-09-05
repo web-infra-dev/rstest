@@ -2,13 +2,14 @@ import { relative } from 'pathe';
 import type {
   Duration,
   GetSourcemap,
+  Reporter,
   SnapshotSummary,
   TestFileResult,
   TestResult,
 } from '../types';
 import { getTaskNameWithPrefix, TEST_DELIMITER } from '../utils';
 
-export class GithubActionsReporter {
+export class GithubActionsReporter implements Reporter {
   private onWritePath: (path: string) => string;
   private rootPath: string;
 

@@ -112,7 +112,7 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'dev',
-    items: ['dev.writeToDisk'],
+    items: ['dev.writeToDisk', 'dev.progressBar'],
   },
   {
     name: 'performance',
