@@ -30,10 +30,10 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.2.2",
+    "@biomejs/biome": "^2.2.3",
     "@changesets/cli": "^2.29.6",
     "@rsdoctor/rspack-plugin": "^1.2.3",
-    "@rslint/core": "^0.1.12",
+    "@rslint/core": "^0.1.13",
     "@rstest/core": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.13.8",
