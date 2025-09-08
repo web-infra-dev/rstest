@@ -81,14 +81,19 @@ export async function listTests(
 
   const returns = await Promise.all(
     context.projects.map(async (project) => {
-      const { entries, setupEntries, assetFiles, sourceMaps } =
-        await getRsbuildStats({ environmentName: project.environmentName });
+      const {
+        entries,
+        setupEntries,
+        getSourceMaps,
+        getAssetFiles,
+        sourceMaps,
+      } = await getRsbuildStats({ environmentName: project.environmentName });
 
       const list = await pool.collectTests({
         entries,
-        sourceMaps,
         setupEntries,
-        assetFiles,
+        getAssetFiles,
+        getSourceMaps,
         project,
         updateSnapshot,
       });

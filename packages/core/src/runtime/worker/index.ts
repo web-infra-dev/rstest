@@ -7,12 +7,28 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import { install } from 'source-map-support';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
+
+let sourceMaps: Record<string, any> = {};
+
+// provides source map support for stack traces
+install({
+  retrieveSourceMap: (source) => {
+    if (sourceMaps[source]) {
+      return {
+        url: source,
+        map: JSON.parse(sourceMaps[source]),
+      };
+    }
+    return null;
+  },
+});
 
 const getGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
@@ -28,7 +44,6 @@ let isTeardown = false;
 
 const preparePool = async ({
   entryInfo: { distPath, testPath },
-  sourceMaps,
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']) => {
@@ -71,21 +86,6 @@ const preparePool = async ({
   };
 
   const { createRstestRuntime } = await import('../api');
-  // provides source map support for stack traces
-  const { install } = await import('source-map-support');
-
-  install({
-    // @ts-expect-error map type
-    retrieveSourceMap: (source) => {
-      if (sourceMaps[source]) {
-        return {
-          url: source,
-          map: sourceMaps[source],
-        };
-      }
-      return null;
-    },
-  });
 
   // Reset listeners only when preparePool is called again (running without isolation)
   listeners.forEach((fn) => {
@@ -174,7 +174,7 @@ const loadFiles = async ({
   isolate,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
-  assetFiles: RunWorkerOptions['options']['assetFiles'];
+  assetFiles: Record<string, string>;
   rstestContext: Record<string, any>;
   distPath: string;
   testPath: string;
@@ -236,7 +236,6 @@ const runInPool = async (
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
-    assetFiles,
     type,
     context: {
       project,
@@ -271,10 +270,13 @@ const runInPool = async (
       const {
         rstestContext,
         runner,
+        rpc,
         cleanup,
         unhandledErrors,
         interopDefault,
       } = await preparePool(options);
+      const assets = await rpc.getAssetsByEntry(options.entryInfo);
+      sourceMaps = assets.sourceMaps;
 
       cleanups.push(cleanup);
 
@@ -282,7 +284,7 @@ const runInPool = async (
         rstestContext,
         distPath,
         testPath,
-        assetFiles,
+        assetFiles: assets.assetFiles,
         setupEntries,
         interopDefault,
         isolate,
@@ -317,13 +319,16 @@ const runInPool = async (
       interopDefault,
     } = await preparePool(options);
 
+    const assets = await rpc.getAssetsByEntry(options.entryInfo);
+    sourceMaps = assets.sourceMaps;
+
     cleanups.push(cleanup);
 
     await loadFiles({
       rstestContext,
       distPath,
       testPath,
-      assetFiles,
+      assetFiles: assets.assetFiles,
       setupEntries,
       interopDefault,
       isolate,

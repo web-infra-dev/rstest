@@ -114,8 +114,9 @@ export async function runTests(context: Rstest): Promise<void> {
         const {
           entries,
           setupEntries,
-          assetFiles,
+          getAssetFiles,
           sourceMaps,
+          getSourceMaps,
           affectedEntries,
           deletedEntries,
         } = await getRsbuildStats({
@@ -158,9 +159,9 @@ export async function runTests(context: Rstest): Promise<void> {
         currentEntries.push(...finalEntries);
         const { results, testResults } = await pool.runTests({
           entries: finalEntries,
-          sourceMaps,
+          getSourceMaps,
           setupEntries,
-          assetFiles,
+          getAssetFiles,
           project: p,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
         });
@@ -185,7 +186,6 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
-    const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
 
     context.updateReporterResultState(
       results,
@@ -244,7 +244,12 @@ export async function runTests(context: Rstest): Promise<void> {
         testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
-        getSourcemap: (name: string) => sourceMaps[name] || null,
+        getSourcemap: (name: string) => {
+          const sourceMap = returns
+            .find((r) => r.sourceMaps.has(name))
+            ?.sourceMaps.get(name);
+          return sourceMap ? JSON.parse(sourceMap) || null : null;
+        },
         filterRerunTestPaths: currentEntries.length
           ? currentEntries.map((e) => e.testPath)
           : undefined,

@@ -24,6 +24,10 @@ export type ServerRPC = {};
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
+  getAssetsByEntry: (entryInfo: EntryInfo) => Promise<{
+    assetFiles: Record<string, string>;
+    sourceMaps: Record<string, SourceMapInput>;
+  }>;
   onTestFileResult: (test: TestFileResult) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   onConsoleLog: (log: UserConsoleLog) => void;
@@ -59,8 +63,6 @@ export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
-    assetFiles: Record<string, string>;
-    sourceMaps: Record<string, SourceMapInput>;
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';

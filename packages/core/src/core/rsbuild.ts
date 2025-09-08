@@ -29,7 +29,7 @@ type TestEntryToChunkHashes = {
   chunks: Record<string, string>;
 }[];
 
-function parseInlineSourceMap(code: string) {
+function parseInlineSourceMapStr(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
   const inlineSourceMapRegex =
     /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
@@ -42,8 +42,7 @@ function parseInlineSourceMap(code: string) {
   try {
     const base64Data = match[1];
     const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
-    const sourceMap = JSON.parse(decodedStr);
-    return sourceMap;
+    return decodedStr;
   } catch (_error) {
     return null;
   }
@@ -237,9 +236,9 @@ export const createRsbuildServer = async ({
     hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
-    assetFiles: Record<string, string>;
-    sourceMaps: Record<string, SourceMapInput>;
-    getSourcemap: (sourcePath: string) => SourceMapInput | null;
+    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    getSourceMaps: (names: string[]) => Promise<Record<string, SourceMapInput>>;
+    sourceMaps: Map<string, string>;
     affectedEntries: EntryInfo[];
     deletedEntries: string[];
   }>;
@@ -390,27 +389,21 @@ export const createRsbuildServer = async ({
     const inlineSourceMap =
       stats.compilation.options.devtool === 'inline-source-map';
 
-    const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
-      (
-        await Promise.all(
-          assets!.map(async (asset) => {
-            const assetFilePath = path.join(outputPath!, asset.name);
+    const sourceMapPaths: Record<string, string | null> = Object.fromEntries(
+      assets!.map((asset) => {
+        const assetFilePath = path.join(outputPath!, asset.name);
 
-            if (inlineSourceMap) {
-              const content = await readFile(assetFilePath);
-              return [assetFilePath, parseInlineSourceMap(content)];
-            }
-            const sourceMapPath = asset?.info.related?.sourceMap?.[0];
+        if (inlineSourceMap) {
+          return [assetFilePath, assetFilePath];
+        }
+        const sourceMapPath = asset?.info.related?.sourceMap?.[0];
 
-            if (sourceMapPath) {
-              const filePath = path.join(outputPath!, sourceMapPath);
-              const sourceMap = await readFile(filePath);
-              return [assetFilePath, JSON.parse(sourceMap)];
-            }
-            return [assetFilePath, null];
-          }),
-        )
-      ).filter((asset) => asset[1] !== null),
+        if (sourceMapPath) {
+          const filePath = path.join(outputPath!, sourceMapPath);
+          return [assetFilePath, filePath];
+        }
+        return [assetFilePath, null];
+      }),
     );
 
     buildData[environmentName] ??= {};
@@ -423,6 +416,52 @@ export const createRsbuildServer = async ({
       buildData[environmentName],
       `${environmentName}-${RUNTIME_CHUNK_NAME}`,
     );
+
+    const cachedAssetFiles = new Map<string, string>();
+
+    const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+
+    const readFileWithCache = async (name: string) => {
+      if (cachedAssetFiles.has(name)) {
+        return cachedAssetFiles.get(name)!;
+      }
+      const content = await readFile(name);
+
+      // Only save setup and runtime files that are accessed frequently to avoid memory pressure
+      if (setupAssets.includes(name) || name.includes('rstest-runtime')) {
+        cachedAssetFiles.set(name, content);
+      }
+
+      return content;
+    };
+
+    const sourceMaps = new Map<string, string>();
+
+    const getSourceMap = async (name: string): Promise<null | string> => {
+      const sourceMapPath = sourceMapPaths[name];
+      if (!sourceMapPath) {
+        return null;
+      }
+
+      if (sourceMaps.has(name)) {
+        return sourceMaps.get(name)!;
+      }
+
+      let content = null;
+
+      if (inlineSourceMap) {
+        const file = await readFile(sourceMapPath);
+        content = parseInlineSourceMapStr(file);
+      } else {
+        const sourceMap = await readFile(sourceMapPath);
+        content = sourceMap;
+      }
+
+      sourceMaps.set(name, content!);
+
+      return content;
+    };
+
     return {
       affectedEntries,
       deletedEntries,
@@ -430,19 +469,28 @@ export const createRsbuildServer = async ({
       entries,
       setupEntries,
       buildTime: buildTime!,
-      // Resources need to be obtained synchronously when the test is loaded, so files need to be read in advance
-      assetFiles: Object.fromEntries(
-        await Promise.all(
-          assets!.map(async (a) => {
-            const filePath = path.join(outputPath!, a.name);
-            return [filePath, await readFile(filePath)];
-          }),
-        ),
-      ),
-      sourceMaps,
-      getSourcemap: (sourcePath: string): SourceMapInput | null => {
-        return sourceMaps[sourcePath] || null;
+      getAssetFiles: async (names: string[]) => {
+        return Object.fromEntries(
+          await Promise.all(
+            names.map(async (name) => {
+              const content = await readFileWithCache(name);
+
+              return [name, content];
+            }),
+          ),
+        );
       },
+      getSourceMaps: async (names: string[]) => {
+        return Object.fromEntries(
+          await Promise.all(
+            names.map(async (name) => {
+              const content = await getSourceMap(name);
+              return [name, content];
+            }),
+          ),
+        );
+      },
+      sourceMaps,
     };
   };
 
