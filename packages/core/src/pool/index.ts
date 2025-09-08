@@ -239,7 +239,7 @@ export const createPool = async ({
               },
               rpcMethods: {
                 ...rpcMethods,
-                getAssetsByEntry: async (entryInfo: EntryInfo) => {
+                getAssetsByEntry: async () => {
                   const {
                     assetFiles: neededFiles,
                     sourceMaps: neededSourceMaps,
@@ -310,7 +310,7 @@ export const createPool = async ({
               },
               rpcMethods: {
                 ...rpcMethods,
-                getAssetsByEntry: async (entryInfo: EntryInfo) => {
+                getAssetsByEntry: async () => {
                   const { assetFiles, sourceMaps: neededSourceMaps } =
                     await filterAssetsByEntry(
                       entryInfo,

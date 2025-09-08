@@ -275,7 +275,7 @@ const runInPool = async (
         unhandledErrors,
         interopDefault,
       } = await preparePool(options);
-      const assets = await rpc.getAssetsByEntry(options.entryInfo);
+      const assets = await rpc.getAssetsByEntry();
       sourceMaps = assets.sourceMaps;
 
       cleanups.push(cleanup);
@@ -319,7 +319,7 @@ const runInPool = async (
       interopDefault,
     } = await preparePool(options);
 
-    const assets = await rpc.getAssetsByEntry(options.entryInfo);
+    const assets = await rpc.getAssetsByEntry();
     sourceMaps = assets.sourceMaps;
 
     cleanups.push(cleanup);
