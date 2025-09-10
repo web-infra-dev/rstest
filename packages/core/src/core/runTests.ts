@@ -97,10 +97,12 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   // Initialize coverage collector
-  const coverageProvider = await createCoverageProvider(
-    context.normalizedConfig.coverage || {},
-    context.rootPath,
-  );
+  const coverageProvider = context.normalizedConfig.coverage.enabled
+    ? await createCoverageProvider(
+        context.normalizedConfig.coverage || {},
+        context.rootPath,
+      )
+    : null;
 
   type Mode = 'all' | 'on-demand';
 

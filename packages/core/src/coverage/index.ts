@@ -28,7 +28,7 @@ export const loadCoverageProvider = async (
     };
   } catch (error) {
     throw new Error(
-      `Failed to load coverage provider module: ${moduleName} from ${root}. Make sure it is installed.\nOriginal error: ${(error as Error).message}`,
+      `Failed to load coverage provider module: ${moduleName} in ${root}. Make sure it is installed.\nOriginal error: ${(error as Error).message}`,
     );
   }
 };
