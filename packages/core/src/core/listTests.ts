@@ -33,7 +33,8 @@ export async function listTests(
     const entries = await getTestEntries({
       include,
       exclude,
-      root,
+      rootPath,
+      projectRoot: root,
       fileFilters: context.fileFilters || [],
       includeSource,
     });
@@ -63,7 +64,10 @@ export async function listTests(
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
-    normalizedConfig: context.normalizedConfig,
+    inspectedConfig: {
+      ...context.normalizedConfig,
+      projects: context.projects.map((p) => p.normalizedConfig),
+    },
     setupFiles,
     rsbuildInstance,
     rootPath,

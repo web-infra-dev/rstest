@@ -3,16 +3,61 @@ import type { Rstest, RstestUtilities } from '../../types';
 export type { Assertion } from '../../types/expect';
 export type { Mock } from '../../types/mock';
 
-export declare const expect: Rstest['expect'];
-export declare const assert: Rstest['assert'];
-export declare const it: Rstest['it'];
-export declare const test: Rstest['test'];
-export declare const describe: Rstest['describe'];
-export declare const beforeAll: Rstest['beforeAll'];
-export declare const afterAll: Rstest['afterAll'];
-export declare const beforeEach: Rstest['beforeEach'];
-export declare const afterEach: Rstest['afterEach'];
-export declare const rstest: RstestUtilities;
-export declare const rs: RstestUtilities;
-export declare const onTestFinished: Rstest['onTestFinished'];
-export declare const onTestFailed: Rstest['onTestFailed'];
+declare global {
+  var RSTEST_API: Rstest | undefined;
+}
+
+const check = (name: keyof Rstest) => {
+  if (!globalThis.RSTEST_API?.[name]) {
+    throw new Error(
+      `Rstest API '${name}' is not registered yet, please make sure you are running in a rstest environment.`,
+    );
+  }
+};
+
+const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
+  name: T,
+): Rstest[T] => {
+  const fn = (...args: Parameters<Rstest[T]>) => {
+    check(name);
+    return globalThis.RSTEST_API![name].call(
+      globalThis.RSTEST_API![name],
+      // @ts-expect-error
+      ...args,
+    );
+  };
+
+  return new Proxy(fn, {
+    get(_target, key, receiver) {
+      check(name);
+      return Reflect.get(globalThis.RSTEST_API?.[name] || {}, key, receiver);
+    },
+  }) as Rstest[T];
+};
+
+const wrapRstestUtilitiesAPI = <T extends keyof Pick<Rstest, 'rstest' | 'rs'>>(
+  name: T,
+): Rstest[T] => {
+  return new Proxy({} as Rstest[T], {
+    get(_target, key, receiver) {
+      check(name);
+      return Reflect.get(globalThis.RSTEST_API?.[name] || {}, key, receiver);
+    },
+  });
+};
+
+export const expect: Rstest['expect'] = wrapRstestAPI('expect');
+export const assert: Rstest['assert'] = wrapRstestAPI('assert');
+export const it: Rstest['it'] = wrapRstestAPI('it');
+export const test: Rstest['test'] = wrapRstestAPI('test');
+export const describe: Rstest['describe'] = wrapRstestAPI('describe');
+export const beforeAll: Rstest['beforeAll'] = wrapRstestAPI('beforeAll');
+export const afterAll: Rstest['afterAll'] = wrapRstestAPI('afterAll');
+export const beforeEach: Rstest['beforeEach'] = wrapRstestAPI('beforeEach');
+export const afterEach: Rstest['afterEach'] = wrapRstestAPI('afterEach');
+export const rstest: RstestUtilities = wrapRstestUtilitiesAPI('rstest');
+export const rs: RstestUtilities = wrapRstestUtilitiesAPI('rs');
+export const onTestFinished: Rstest['onTestFinished'] =
+  wrapRstestAPI('onTestFinished');
+export const onTestFailed: Rstest['onTestFailed'] =
+  wrapRstestAPI('onTestFailed');

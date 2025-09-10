@@ -14,11 +14,12 @@ import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
-const getGlobalApi = (api: Rstest) => {
+const registerGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
     [key in keyof Rstest]?: Rstest[key];
   }>((apis, key) => {
-    apis[key] = api[key] as any;
+    // @ts-expect-error register to global
+    globalThis[key] = api[key] as any;
     return apis;
   }, {});
 };
@@ -141,11 +142,14 @@ const preparePool = async ({
       throw new Error(`Unknown test environment: ${testEnvironment}`);
   }
 
+  if (globals) {
+    registerGlobalApi(api);
+  }
+
   const rstestContext = {
     global,
     console: global.console,
     Error,
-    ...(globals ? getGlobalApi(api) : {}),
   };
 
   // @ts-expect-error

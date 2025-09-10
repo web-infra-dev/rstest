@@ -1,0 +1,44 @@
+# 功能导航
+
+在这里，你可以了解到 Rstest 支持的主要功能。
+
+## 复用 Rstack 生态
+
+Rstest 可直接复用 Rsbuild、Rspack 等构建配置与插件生态。你可以使用同一套配置进行开发与测试，享受 Rstack 工具链带来的一致化体验。
+
+了解更多关于 [配置 Rstest](/guide/basic/configure-rstest)。
+
+### 基于 Rspack 构建
+
+Rstest 底层使用 Rspack 构建，能够在 Rstest 中享受 Rspack 带来的高性能构建和 Tree-shaking、[lazyBarrel](https://rspack.rs/zh/config/experiments#experimentslazybarrel) 等优化。
+
+## 多项目测试
+
+Rstest 提供了多项目测试的能力，支持在单个 Rstest 进程中并行对多个项目进行测试。
+
+了解更多关于 [多项目测试](/config/test/projects)。
+
+## 源码内联测试
+
+Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)方式，可在源码文件内直接书写测试块。此方式适用于小型功能函数与工具方法，便于快速验证和调试。
+
+了解更多关于 [源码内联测试](/config/test/includeSource)。
+
+## Watch 模式
+
+当你修改测试文件或其依赖模块时，Rstest 会基于模块图分析，仅重新运行受影响的测试文件，从而显著提升本地测试效率。
+
+## DOM 测试
+
+Rstest 支持使用 jsdom 与 happy-dom 模拟 DOM 与浏览器 API，并对 React、Vue 等框架提供良好支持，兼容 Testing Library、CSS Modules 等。
+
+了解更多关于 [DOM 测试](/config/test/testEnvironment#dom-测试)。
+
+## 更多能力
+
+- 与 Jest 兼容的断言与快照测试
+- Mock / Spy 能力
+- 文件级沙箱隔离
+- 多种生命周期钩子
+- 多种报告器与 CI 集成
+- 支持按文件夹 / 项目 / 测试名进行过滤

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, logger } from '../utils';
+import { color, formatTestPath, isDebug, logger } from '../utils';
 
 export async function printError(
   error: FormattedError,
@@ -37,6 +37,14 @@ export async function printError(
       fullStack: error.fullStack,
       getSourcemap,
     });
+
+    if (!stackFrames.length && error.stack.length) {
+      logger.log(
+        color.gray(
+          "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+        ),
+      );
+    }
 
     if (stackFrames[0]) {
       await printCodeFrame(stackFrames[0]);
@@ -81,13 +89,15 @@ async function printCodeFrame(frame: StackFrame) {
   logger.log('');
 }
 
+export function formatStack(frame: StackFrame, rootPath: string): string {
+  return frame.methodName !== '<unknown>'
+    ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
+    : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
+}
+
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    const msg =
-      frame.methodName !== '<unknown>'
-        ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
-        : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
-    logger.log(color.gray(`        ${msg}`));
+    logger.log(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
   stackFrames.length && logger.log();
 }
@@ -109,13 +119,13 @@ const stackIgnores: (RegExp | string)[] = [
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
-  fullStack,
+  fullStack = isDebug(),
 }: {
   fullStack?: boolean;
   stack: string;
   getSourcemap: GetSourcemap;
 }): Promise<StackFrame[]> {
-  return Promise.all(
+  const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
         fullStack
@@ -149,4 +159,6 @@ export async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
+
+  return stackFrames;
 }

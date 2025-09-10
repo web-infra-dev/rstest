@@ -34,6 +34,23 @@ You can also specify multiple test files or glob patterns:
 rstest test/foo.test.ts test/bar.test.ts
 ```
 
+### Filter by file path
+
+This method also applies to filtering by file path.
+
+When filtering by file path, it can be either an absolute path or a relative path based on the current working directory (also called the project root directory or workspace root directory)
+
+```bash
+# Filtering by absolute path
+rstest /Users/userName/Desktop/projects/rstest/packages/core/tests/index.test.ts
+
+# Filtering by relative path
+rstest packages/core/tests/index.test.ts
+
+# Filtering by project directory
+rstest packages/core
+```
+
 ### include/exclude
 
 When you filter files directly with `rstest **/*.test.ts`, rstest will further filter files based on the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
@@ -61,6 +78,28 @@ For example, to only run test cases whose names contain "login":
 rstest --testNamePattern login
 # or
 rstest -t login
+```
+
+## Filter by project name
+
+Rstest supports defining multiple test projects via [projects](/config/test/projects). You can filter to run specific projects with the `--project` option.
+
+For example, to match projects whose [name](/config/test/name) is `@test/a` or `@test/b`:
+
+```bash
+rstest --project '@test/a' --project '@test/b'
+```
+
+You can also use wildcards to match project names:
+
+```bash
+rstest --project '@test/*'
+```
+
+You can exclude certain projects by negation:
+
+```bash
+rstest --project '!@test/a'
 ```
 
 ## Combined filtering

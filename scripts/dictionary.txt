@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 antd
 apng
+apos
 applescript
 atrules
 autodocs

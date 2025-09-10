@@ -55,6 +55,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
             tools: {
               rspack: (config, { isProd, rspack }) => {
+                config.context = rootPath;
                 // treat `test` as development mode
                 config.mode = isProd ? 'production' : 'development';
                 config.output ??= {};
