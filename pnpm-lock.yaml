@@ -259,6 +259,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  e2e/runner/test/fixtures/test-rstest-globals:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../../packages/core
+
   e2e/runner/test/fixtures/test-rstest-import:
     devDependencies:
       '@rstest/core':

@@ -27,3 +27,24 @@ it('should import rstest correctly in node_modules', async () => {
   await expectExecSuccess();
   expectLog('Tests 2 passed | 1 todo');
 });
+
+it('should use rstest global APIs correctly in node_modules', async () => {
+  await prepareFixtures({
+    fixturesPath: join(__dirname, './fixtures/test-rstest-globals'),
+    fixturesTargetPath: join(
+      __dirname,
+      './fixtures/node_modules/rstest-globals',
+    ),
+  });
+  const { expectExecSuccess, expectLog } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'globals.test.ts', '--globals'],
+    options: {
+      nodeOptions: {
+        cwd: join(__dirname, 'fixtures'),
+      },
+    },
+  });
+  await expectExecSuccess();
+  expectLog('Tests 2 passed | 1 todo');
+});
