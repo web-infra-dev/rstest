@@ -1,10 +1,8 @@
 import istanbulLibCoverage from 'istanbul-lib-coverage';
-import type { CoverageOptions } from '../types/coverage';
-
-const { createCoverageMap } = istanbulLibCoverage;
-
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
+
+const { createCoverageMap } = istanbulLibCoverage;
 
 interface CoverageMap {
   files(): string[];
@@ -17,32 +15,7 @@ declare global {
   var __coverage__: any;
 }
 
-export interface CoverageProvider {
-  /**
-   * Initialize coverage collection
-   */
-  init(): void;
-
-  /**
-   * Collect coverage data from global coverage object
-   */
-  collect(): CoverageMap | null;
-
-  /**
-   * Generate coverage reports
-   */
-  generateReports(
-    coverageMap: CoverageMap,
-    options: CoverageOptions,
-  ): Promise<void>;
-
-  /**
-   * Clean up coverage data
-   */
-  cleanup(): void;
-}
-
-export class IstanbulCoverageProvider implements CoverageProvider {
+export class CoverageProvider {
   private coverageMap: CoverageMap | null = null;
 
   init(): void {
@@ -50,6 +23,10 @@ export class IstanbulCoverageProvider implements CoverageProvider {
     if (typeof globalThis !== 'undefined') {
       (globalThis as any).__coverage__ = (globalThis as any).__coverage__ || {};
     }
+  }
+
+  createCoverageMap(): CoverageMap {
+    return createCoverageMap({});
   }
 
   collect(): CoverageMap | null {
@@ -76,11 +53,7 @@ export class IstanbulCoverageProvider implements CoverageProvider {
     }
   }
 
-  async generateReports(
-    coverageMap: CoverageMap,
-    options: CoverageOptions,
-  ): Promise<void> {
-    console.log(options);
+  async generateReports(coverageMap: CoverageMap): Promise<void> {
     if (!coverageMap || coverageMap.files().length === 0) {
       return;
     }

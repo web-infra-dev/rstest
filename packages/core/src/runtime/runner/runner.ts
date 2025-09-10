@@ -1,9 +1,9 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
 import type { SnapshotState } from '@vitest/snapshot';
-import type { CoverageProvider } from '../../coverage';
 import type {
   AfterEachListener,
   BeforeEachListener,
+  CoverageProvider,
   FormattedError,
   MatcherState,
   Rstest,

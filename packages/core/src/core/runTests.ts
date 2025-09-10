@@ -1,11 +1,9 @@
-import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { RstestContext } from '../types';
 import { color, getSetupFiles, getTestEntries, logger } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-const { createCoverageMap } = istanbulLibCoverage;
 export async function runTests(
   context: RstestContext,
   fileFilters: string[],
@@ -79,8 +77,9 @@ export async function runTests(
     const testStart = Date.now();
 
     // Initialize coverage collector
-    const coverageProvider = createCoverageProvider(
+    const coverageProvider = await createCoverageProvider(
       context.normalizedConfig.coverage || {},
+      context.rootPath,
     );
 
     const pool = await createPool({
@@ -105,8 +104,7 @@ export async function runTests(
     if (coverageProvider) {
       try {
         // Collect coverage data from all test results
-
-        const finalCoverageMap = createCoverageMap();
+        const finalCoverageMap = coverageProvider.createCoverageMap();
 
         // Merge coverage data from all test files
         for (const result of results) {

@@ -1,23 +1,50 @@
-import type { CoverageOptions } from '../types/coverage';
-import type { CoverageProvider } from './istanbul';
-import { IstanbulCoverageProvider } from './istanbul';
+import { createRequire } from 'node:module';
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { CoverageOptions, CoverageProvider } from '../types/coverage';
+export const CoverageProviderMap: Record<string, string> = {
+  istanbul: '@rstest/coverage-istanbul',
+};
 
-export function createCoverageProvider(
+export const loadCoverageProvider = async (
   options: CoverageOptions,
-): CoverageProvider | null {
+  root: string,
+): Promise<{
+  CoverageProvider: typeof CoverageProvider;
+  pluginCoverage: (options: CoverageOptions) => RsbuildPlugin;
+}> => {
+  const moduleName = CoverageProviderMap[options.provider || 'istanbul'];
+  if (!moduleName) {
+    throw new Error(`Unknown coverage provider: ${options.provider}`);
+  }
+  try {
+    const require = createRequire(root);
+    const modulePath = require.resolve(moduleName, {
+      paths: [root],
+    });
+    const { pluginCoverage, CoverageProvider } = await import(modulePath);
+    return {
+      pluginCoverage,
+      CoverageProvider,
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to load coverage provider module: ${moduleName} from ${root}. Make sure it is installed.\nOriginal error: ${(error as Error).message}`,
+    );
+  }
+};
+
+export async function createCoverageProvider(
+  options: CoverageOptions,
+  root: string,
+): Promise<CoverageProvider | null> {
   if (!options.enabled) {
     return null;
   }
 
-  switch (options.provider) {
-    case 'istanbul':
-      return new IstanbulCoverageProvider();
-    case 'v8':
-      // TODO: Implement V8 coverage collector
-      throw new Error('V8 coverage provider is not implemented yet');
-    default:
-      return new IstanbulCoverageProvider();
+  if (!options.provider || CoverageProviderMap[options.provider]) {
+    const { CoverageProvider } = await loadCoverageProvider(options, root);
+    return new CoverageProvider(options);
   }
-}
 
-export type { CoverageProvider } from './istanbul';
+  throw new Error(`Unknown coverage provider: ${options.provider}`);
+}

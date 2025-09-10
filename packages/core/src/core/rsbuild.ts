@@ -222,27 +222,6 @@ export const prepareRsbuild = async (
                 ...(config.module.parser.javascript || {}),
               };
 
-              if (coverage?.enabled && coverage?.provider === 'istanbul') {
-                const swcPluginCoverageInstrument = `${process.cwd()}/node_modules/@rstest/coverage-istanbul/node_modules/swc-plugin-coverage-instrument/target/wasm32-wasip1/release/swc_plugin_coverage.wasm`;
-                config.module.rules ??= [];
-                config.module.rules.push({
-                  test: /\.(js|ts)$/,
-                  exclude: [/node_modules/],
-                  loader: 'builtin:swc-loader',
-                  options: {
-                    jsc: {
-                      parser: {
-                        syntax: 'typescript',
-                      },
-                      experimental: {
-                        plugins: [[swcPluginCoverageInstrument, {}]],
-                      },
-                    },
-                  },
-                  type: 'javascript/auto',
-                });
-              }
-
               config.resolve ??= {};
               config.resolve.extensions ??= [];
               config.resolve.extensions.push('.cjs');
@@ -287,6 +266,15 @@ export const prepareRsbuild = async (
       },
     },
   });
+
+  if (coverage?.enabled) {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  }
   if (!isolate) {
     rsbuildInstance.addPlugins([pluginCacheControl(Object.values(setupFiles))]);
   }

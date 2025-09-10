@@ -1,15 +1,11 @@
 {
+  "extends": "@rstest/tsconfig/base",
   "compilerOptions": {
-    "lib": ["ES2021"],
-    "module": "ESNext",
-    "noEmit": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "moduleResolution": "bundler",
-    "useDefineForClassFields": true,
-    "allowImportingTsExtensions": true
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "rootDir": "src",
+    "composite": true,
+    "isolatedDeclarations": true
   },
   "include": ["src"]
 }

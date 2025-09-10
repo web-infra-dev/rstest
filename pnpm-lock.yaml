@@ -134,30 +134,12 @@ importers:
       chai:
         specifier: ^5.2.1
         version: 5.2.1
-      istanbul-lib-coverage:
-        specifier: ^3.2.2
-        version: 3.2.2
-      istanbul-lib-instrument:
-        specifier: ^6.0.3
-        version: 6.0.3
-      istanbul-lib-report:
-        specifier: ^3.0.1
-        version: 3.0.1
-      istanbul-lib-source-maps:
-        specifier: ^5.0.6
-        version: 5.0.6
-      istanbul-reports:
-        specifier: ^3.1.7
-        version: 3.1.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
       std-env:
         specifier: ^3.9.0
         version: 3.9.0
-      swc-plugin-coverage-instrument:
-        specifier: ^0.0.28
-        version: 0.0.28
       tinypool:
         specifier: ^1.1.1
         version: 1.1.1
@@ -183,21 +165,6 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
-      '@types/istanbul-lib-coverage':
-        specifier: ^2.0.6
-        version: 2.0.6
-      '@types/istanbul-lib-instrument':
-        specifier: ^1.7.7
-        version: 1.7.7
-      '@types/istanbul-lib-report':
-        specifier: ^3.0.3
-        version: 3.0.3
-      '@types/istanbul-lib-source-maps':
-        specifier: ^4.0.4
-        version: 4.0.4
-      '@types/istanbul-reports':
-        specifier: ^3.0.4
-        version: 3.0.4
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
@@ -243,6 +210,21 @@ importers:
 
   packages/coverage-istanbul:
     dependencies:
+      istanbul-lib-coverage:
+        specifier: ^3.2.2
+        version: 3.2.2
+      istanbul-lib-instrument:
+        specifier: ^6.0.3
+        version: 6.0.3
+      istanbul-lib-report:
+        specifier: ^3.0.1
+        version: 3.0.1
+      istanbul-lib-source-maps:
+        specifier: ^5.0.6
+        version: 5.0.6
+      istanbul-reports:
+        specifier: ^3.1.7
+        version: 3.1.7
       swc-plugin-coverage-instrument:
         specifier: ^0.0.28
         version: 0.0.28
@@ -250,6 +232,27 @@ importers:
       '@rslib/core':
         specifier: ^0.11.0
         version: 0.11.0(@microsoft/api-extractor@7.52.8(@types/node@22.16.5))(typescript@5.8.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      '@types/istanbul-lib-coverage':
+        specifier: ^2.0.6
+        version: 2.0.6
+      '@types/istanbul-lib-instrument':
+        specifier: ^1.7.7
+        version: 1.7.7
+      '@types/istanbul-lib-report':
+        specifier: ^3.0.3
+        version: 3.0.3
+      '@types/istanbul-lib-source-maps':
+        specifier: ^4.0.4
+        version: 4.0.4
+      '@types/istanbul-reports':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/node':
         specifier: ^22.16.5
         version: 22.16.5

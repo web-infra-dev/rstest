@@ -298,8 +298,9 @@ const runInPool = async (
       interopDefault,
     } = await preparePool(options);
     // Initialize coverage collector if coverage is enabled
-    const coverageProvider = createCoverageProvider(
+    const coverageProvider = await createCoverageProvider(
       options.context.runtimeConfig.coverage || {},
+      options.context.rootPath,
     );
     if (coverageProvider) {
       coverageProvider.init();
