@@ -1,5 +1,10 @@
 import type { SnapshotResult } from '@vitest/snapshot';
-import type { NormalizedFixtures, TestContext } from './api';
+import type {
+  NormalizedFixtures,
+  OnTestFailedHandler,
+  OnTestFinishedHandler,
+  TestContext,
+} from './api';
 import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -36,8 +41,8 @@ export type TestCase = {
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
-  // TODO
-  onFinished?: any[];
+  onFinished: OnTestFinishedHandler[];
+  onFailed: OnTestFailedHandler[];
   type: 'case';
   parentNames?: string[];
   /**
@@ -48,6 +53,7 @@ export type TestCase = {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
+  project: string;
 };
 
 export type SuiteContext = {
@@ -58,7 +64,9 @@ export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
 export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
-export type AfterEachListener = () => MaybePromise<void>;
+export type AfterEachListener = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {
@@ -70,8 +78,9 @@ export type TestSuite = {
   concurrent?: boolean;
   sequential?: boolean;
   testPath: TestPath;
+  project: string;
   /** nested cases and suite could in a suite */
-  tests: Array<TestSuite | TestCase>;
+  tests: (TestSuite | TestCase)[];
   type: 'suite';
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];
@@ -111,6 +120,7 @@ export type TestResult = {
   duration?: number;
   errors?: FormattedError[];
   retryCount?: number;
+  project: string;
 };
 
 export type TestFileResult = TestResult & {

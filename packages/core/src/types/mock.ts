@@ -1,5 +1,5 @@
 import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
-import type { FunctionLike } from './utils';
+import type { FunctionLike, MaybePromise } from './utils';
 import type { RuntimeConfig } from './worker';
 
 interface MockResultReturn<T> {
@@ -56,21 +56,21 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of the call arguments of all calls that have been made to the mock.
    */
-  calls: Array<Parameters<T>>;
+  calls: Parameters<T>[];
   /**
    * List of all the object instances that have been instantiated from the mock.
    */
-  instances: Array<ReturnType<T>>;
+  instances: ReturnType<T>[];
   /**
    * List of all the function contexts that have been applied to calls to the mock.
    */
-  contexts: Array<ThisParameterType<T>>;
+  contexts: ThisParameterType<T>[];
   /**
    * The order of mock's execution.
    * This returns an array of numbers which are shared between all defined mocks.
    * The index is starting with `1`.
    */
-  invocationCallOrder: Array<number>;
+  invocationCallOrder: number[];
   /**
    * List of the call arguments of the last call that was made to the mock.
    * If the function was not called, it will return `undefined`.
@@ -79,7 +79,7 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
   /**
    * List of the results of all calls that have been made to the mock.
    */
-  results: Array<MockResult<ReturnType<T>>>;
+  results: MockResult<ReturnType<T>>[];
 
   /**
    * List of the results of all values that were `resolved` or `rejected` from the function.
@@ -172,8 +172,9 @@ export interface Mock<T extends FunctionLike = FunctionLike>
 }
 
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
+type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
-export type RstestUtilities = {
+export interface RstestUtilities {
   /**
    * Creates a spy on a function.
    */
@@ -208,10 +209,10 @@ export type RstestUtilities = {
   /**
    * Mock a module
    */
-  mock: <T = unknown>(
-    moduleName: string,
-    moduleFactory?: () => T | Promise<T>,
-  ) => void;
+  mock<T = unknown>(
+    moduleName: string | Promise<T>,
+    moduleFactory?: MockFactory<T>,
+  ): void;
 
   /**
    * Mock a module
@@ -224,10 +225,10 @@ export type RstestUtilities = {
   /**
    * Mock a module, not hoisted.
    */
-  doMock: <T = unknown>(
-    moduleName: string,
-    moduleFactory?: () => T | Promise<T>,
-  ) => void;
+  doMock<T = unknown>(
+    moduleName: string | Promise<T>,
+    moduleFactory?: MockFactory<T>,
+  ): void;
 
   /**
    * Mock a module, not hoisted.
@@ -337,4 +338,4 @@ export type RstestUtilities = {
    * Removes all timers that are scheduled to run.
    */
   clearAllTimers: () => RstestUtilities;
-};
+}

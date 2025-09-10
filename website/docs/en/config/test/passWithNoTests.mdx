@@ -8,10 +8,21 @@ Pass when no tests are found.
 
 By default, Rstest marks test failures when no test suites are found. You can allow the test to pass when no tests are found by setting `passWithNoTests` to `true`.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --passWithNoTests
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   passWithNoTests: true,
 });
 ```
+  </Tab>
+</Tabs>

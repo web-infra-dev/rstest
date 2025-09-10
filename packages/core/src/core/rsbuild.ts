@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import {
   createRsbuild,
   type ManifestData,
@@ -6,21 +5,49 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
-  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
-import {
-  castArray,
-  isDebug,
-  NODE_BUILTINS,
-  TEMP_RSTEST_OUTPUT_DIR,
-} from '../utils';
+import type {
+  EntryInfo,
+  NormalizedProjectConfig,
+  RstestContext,
+  SourceMapInput,
+} from '../types';
+import { isDebug } from '../utils';
+import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
+import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
+import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+type TestEntryToChunkHashes = {
+  name: string;
+  /** key is chunk name, value is chunk hash */
+  chunks: Record<string, string>;
+}[];
+
+function parseInlineSourceMap(code: string) {
+  // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
+  const inlineSourceMapRegex =
+    /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
+  const match = code.match(inlineSourceMapRegex);
+
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  try {
+    const base64Data = match[1];
+    const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
+    const sourceMap = JSON.parse(decodedStr);
+    return sourceMap;
+  } catch (_error) {
+    return null;
+  }
+}
 
 const isMultiCompiler = <
   C extends Rspack.Compiler = Rspack.Compiler,
@@ -31,102 +58,14 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
-const autoExternalNodeModules: (
-  data: Rspack.ExternalItemFunctionData,
-  callback: (
-    err?: Error,
-    result?: Rspack.ExternalItemValue,
-    type?: Rspack.ExternalsType,
-  ) => void,
-) => void = ({ context, request, dependencyType, getResolve }, callback) => {
-  if (!request) {
-    return callback();
-  }
-
-  if (request.startsWith('@swc/helpers/')) {
-    // @swc/helper is a special case (Load by require but resolve to esm)
-    return callback();
-  }
-
-  const doExternal = (externalPath: string = request) => {
-    callback(
-      undefined,
-      externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'import',
-    );
-  };
-
-  const resolver = getResolve?.();
-
-  if (!resolver) {
-    return callback();
-  }
-
-  resolver(context!, request, (err, resolvePath) => {
-    if (err) {
-      // ignore resolve error
-      return callback();
-    }
-
-    if (resolvePath && /node_modules/.test(resolvePath)) {
-      return doExternal(resolvePath);
-    }
-    return callback();
-  });
-};
-
-function autoExternalNodeBuiltin(
-  { request, dependencyType }: Rspack.ExternalItemFunctionData,
-  callback: (
-    err?: Error,
-    result?: Rspack.ExternalItemValue,
-    type?: Rspack.ExternalsType,
-  ) => void,
-): void {
-  if (!request) {
-    callback();
-    return;
-  }
-
-  const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
-    if (typeof builtin === 'string') {
-      return builtin === request;
-    }
-
-    return builtin.test(request);
-  });
-
-  if (isNodeBuiltin) {
-    callback(
-      undefined,
-      request,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
-    );
-  } else {
-    callback();
-  }
-}
-
 export const prepareRsbuild = async (
   context: RstestContext,
-  globTestSourceEntries: () => Promise<Record<string, string>>,
-  setupFiles: Record<string, string>,
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
+  setupFiles: Record<string, Record<string, string>>,
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: {
-      isolate,
-      name,
-      plugins,
-      resolve,
-      source,
-      output,
-      tools,
-      testEnvironment,
-      performance,
-      dev = {},
-      coverage,
-    },
+    normalizedConfig: { isolate, dev = {}, coverage },
   } = context;
   const debugMode = isDebug();
 
@@ -136,11 +75,7 @@ export const prepareRsbuild = async (
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     rsbuildConfig: {
-      tools,
-      plugins,
-      resolve,
-      source,
-      output,
+      root: context.rootPath,
       server: {
         printUrls: false,
         strictPort: false,
@@ -151,119 +86,41 @@ export const prepareRsbuild = async (
       },
       dev: {
         hmr: false,
+        writeToDisk,
       },
-      performance,
-      environments: {
-        [name]: {
-          dev: {
-            writeToDisk,
-          },
-          source: {
-            define: {
-              'import.meta.rstest': "global['@rstest/core']",
+      environments: Object.fromEntries(
+        context.projects.map((project) => [
+          project.environmentName,
+          {
+            plugins: project.normalizedConfig.plugins,
+            root: project.rootPath,
+            output: {
+              target: 'node',
             },
           },
-          output: {
-            // Pass resources to the worker on demand according to entry
-            manifest: true,
-            sourceMap: {
-              js: 'source-map',
-            },
-            externals:
-              testEnvironment === 'node'
-                ? [autoExternalNodeModules]
-                : undefined,
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
-            },
-            target: 'node',
-          },
-          tools: {
-            rspack: (config, { isProd }) => {
-              // treat `test` as development mode
-              config.mode = isProd ? 'production' : 'development';
-              config.output ??= {};
-              config.output.iife = false;
-              // polyfill interop
-              config.output.importFunctionName = '__rstest_dynamic_import__';
-              config.output.devtoolModuleFilenameTemplate =
-                '[absolute-resource-path]';
-              config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: path.resolve(context.rootPath, '__mocks__'),
-                }),
-              );
-
-              // Avoid externals configuration being modified by users
-              config.externals = castArray(config.externals) || [];
-
-              config.externals.unshift({
-                '@rstest/core': 'global @rstest/core',
-              });
-
-              config.externalsPresets ??= {};
-              config.externalsPresets.node = false;
-              config.externals.push(autoExternalNodeBuiltin);
-
-              config.module.parser ??= {};
-              config.module.parser.javascript = {
-                // Keep dynamic import expressions.
-                // eg. (modulePath) => import(modulePath)
-                importDynamic: false,
-                // Keep dynamic require expressions.
-                // eg. (modulePath) => require(modulePath)
-                requireDynamic: false,
-                requireAsExpression: false,
-                // Keep require.resolve expressions.
-                requireResolve: false,
-                ...(config.module.parser.javascript || {}),
-              };
-
-              config.resolve ??= {};
-              config.resolve.extensions ??= [];
-              config.resolve.extensions.push('.cjs');
-
-              if (testEnvironment === 'node') {
-                // skip `module` field in Node.js environment.
-                // ESM module resolved by module field is not always a native ESM module
-                config.resolve.mainFields = config.resolve.mainFields?.filter(
-                  (filed) => filed !== 'module',
-                ) || ['main'];
-              }
-
-              config.resolve.byDependency ??= {};
-              config.resolve.byDependency.commonjs ??= {};
-              // skip `module` field when commonjs require
-              // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
-              config.resolve.byDependency.commonjs.mainFields = ['main', '...'];
-
-              config.optimization = {
-                moduleIds: 'named',
-                chunkIds: 'named',
-                nodeEnv: false,
-                ...(config.optimization || {}),
-                // make sure setup file and test file share the runtime
-                runtimeChunk: {
-                  name: 'runtime',
-                },
-              };
-            },
-          },
-          plugins: [
-            pluginIgnoreResolveError,
-            pluginMockRuntime,
-            pluginCSSFilter(),
-            pluginEntryWatch({
-              globTestSourceEntries,
-              setupFiles,
-              isWatch: command === 'watch',
-            }),
-          ],
-        },
-      },
+        ]),
+      ),
+      plugins: [
+        pluginBasic(context),
+        pluginIgnoreResolveError,
+        pluginMockRuntime,
+        pluginCSSFilter(),
+        pluginEntryWatch({
+          globTestSourceEntries,
+          setupFiles,
+          context,
+          isWatch: command === 'watch',
+        }),
+        pluginExternal(context),
+        !isolate
+          ? pluginCacheControl(
+              Object.values(setupFiles).flatMap((files) =>
+                Object.values(files),
+              ),
+            )
+          : null,
+        pluginInspect(),
+      ].filter(Boolean) as RsbuildPlugin[],
     },
   });
 
@@ -275,39 +132,130 @@ export const prepareRsbuild = async (
     );
     rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
-  if (!isolate) {
-    rsbuildInstance.addPlugins([pluginCacheControl(Object.values(setupFiles))]);
-  }
 
   return rsbuildInstance;
 };
 
+export const calcEntriesToRerun = (
+  entries: EntryInfo[],
+  chunks: Rspack.StatsChunk[] | undefined,
+  buildData: { entryToChunkHashes?: TestEntryToChunkHashes },
+  runtimeChunkName: string,
+): {
+  affectedEntries: EntryInfo[];
+  deletedEntries: string[];
+} => {
+  const entryToChunkHashesMap = new Map<string, Record<string, string>>();
+
+  // Build current chunk hashes map
+  const buildChunkHashes = (entry: EntryInfo) => {
+    const validChunks = (entry.chunks || []).filter(
+      (chunk) => chunk !== runtimeChunkName,
+    );
+
+    validChunks.forEach((chunkName) => {
+      const chunkInfo = chunks?.find((c) =>
+        c.names?.includes(chunkName as string),
+      );
+      if (chunkInfo) {
+        const existing = entryToChunkHashesMap.get(entry.testPath) || {};
+        existing[chunkName] = chunkInfo.hash ?? '';
+        entryToChunkHashesMap.set(entry.testPath, existing);
+      }
+    });
+  };
+
+  (entries || []).forEach(buildChunkHashes);
+
+  const entryToChunkHashes: TestEntryToChunkHashes = Array.from(
+    entryToChunkHashesMap.entries(),
+  ).map(([name, chunks]) => ({ name, chunks }));
+
+  // Process changes if we have previous data
+  const affectedTestPaths = new Set<string>();
+  const deletedEntries: string[] = [];
+
+  if (buildData.entryToChunkHashes) {
+    const prevMap = new Map(
+      buildData.entryToChunkHashes.map((e) => [e.name, e.chunks]),
+    );
+    const currentNames = new Set(entryToChunkHashesMap.keys());
+
+    // Find deleted entries
+    deletedEntries.push(
+      ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
+    );
+
+    // Find modified or added entries
+    const findAffectedEntry = (testPath: string) => {
+      const currentChunks = entryToChunkHashesMap.get(testPath);
+      const prevChunks = prevMap.get(testPath);
+
+      if (!currentChunks) return;
+
+      if (!prevChunks) {
+        // New entry
+        affectedTestPaths.add(testPath);
+        return;
+      }
+
+      // Check for modified chunks
+      const hasChanges = Object.entries(currentChunks).some(
+        ([chunkName, hash]) => prevChunks[chunkName] !== hash,
+      );
+
+      if (hasChanges) {
+        affectedTestPaths.add(testPath);
+      }
+    };
+
+    entryToChunkHashesMap.forEach((_, testPath) => {
+      findAffectedEntry(testPath);
+    });
+  }
+
+  buildData.entryToChunkHashes = entryToChunkHashes;
+
+  // Convert affected test paths to EntryInfo objects
+  const affectedEntries = Array.from(affectedTestPaths)
+    .map((testPath) => entries.find((e) => e.testPath === testPath))
+    .filter((entry): entry is EntryInfo => entry !== undefined);
+
+  return { affectedEntries, deletedEntries };
+};
+
 export const createRsbuildServer = async ({
-  name,
   globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
-  normalizedConfig,
+  inspectedConfig,
 }: {
   rsbuildInstance: RsbuildInstance;
-  name: string;
-  normalizedConfig: RstestContext['normalizedConfig'];
-  globTestSourceEntries: () => Promise<Record<string, string>>;
-  setupFiles: Record<string, string>;
+  inspectedConfig: RstestContext['normalizedConfig'] & {
+    projects: NormalizedProjectConfig[];
+  };
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
-}): Promise<
-  () => Promise<{
+}): Promise<{
+  getRsbuildStats: (options: {
+    environmentName: string;
+    fileFilters?: string[];
+  }) => Promise<{
     buildTime: number;
+    hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, SourceMapInput>;
     getSourcemap: (sourcePath: string) => SourceMapInput | null;
-    close: () => Promise<void>;
-  }>
-> => {
+    affectedEntries: EntryInfo[];
+    deletedEntries: string[];
+  }>;
+  closeServer: () => Promise<void>;
+}> => {
   // Read files from memory via `rspackCompiler.outputFileSystem`
-  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler;
+  let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
@@ -329,67 +277,93 @@ export const createRsbuildServer = async ({
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
-        rstest: normalizedConfig,
+        rstest: inspectedConfig,
       },
     });
   }
 
-  const outputFileSystem =
-    (isMultiCompiler(rspackCompiler!)
-      ? rspackCompiler.compilers[0]!.outputFileSystem
-      : rspackCompiler!.outputFileSystem) || fs;
+  if (!rspackCompiler) {
+    throw new Error('rspackCompiler was not initialized');
+  }
 
-  const getRsbuildStats = async () => {
-    const stats = await devServer.environments[name]!.getStats();
+  const outputFileSystem: Rspack.OutputFileSystem | null = isMultiCompiler(
+    rspackCompiler,
+  )
+    ? rspackCompiler.compilers[0]!.outputFileSystem
+    : rspackCompiler.outputFileSystem;
 
-    const manifest = devServer.environments[name]!.context
+  if (!outputFileSystem) {
+    throw new Error(
+      `Expect outputFileSystem to be defined, but got ${outputFileSystem}`,
+    );
+  }
+
+  const readFile = async (fileName: string) => {
+    return new Promise<string>((resolve, reject) => {
+      outputFileSystem.readFile(fileName, (err, data) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(typeof data === 'string' ? data : data!.toString());
+      });
+    });
+  };
+
+  const buildData: Record<
+    string,
+    { entryToChunkHashes?: TestEntryToChunkHashes }
+  > = {};
+
+  const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
+    const entryFiles: Record<string, string[]> = {};
+
+    const entries = Object.keys(manifest.entries);
+
+    for (const entry of entries) {
+      const data = manifest.entries[entry];
+      entryFiles[entry] = (
+        (data?.initial?.js || []).concat(data?.async?.js || []) || []
+      ).map((file: string) => path.join(outputPath, file));
+    }
+    return entryFiles;
+  };
+
+  const getRsbuildStats = async ({
+    environmentName,
+    fileFilters,
+  }: {
+    environmentName: string;
+    fileFilters?: string[];
+  }) => {
+    const stats = await devServer.environments[environmentName]!.getStats();
+
+    const manifest = devServer.environments[environmentName]!.context
       .manifest as ManifestData;
 
     const {
       entrypoints,
       outputPath,
       assets,
+      hash,
       time: buildTime,
+      chunks,
     } = stats.toJson({
       all: false,
+      hash: true,
       entrypoints: true,
       outputPath: true,
       assets: true,
       relatedAssets: true,
       cachedAssets: true,
       // get the compilation time
+      chunks: true,
       timings: true,
     });
 
-    const readFile = async (fileName: string) => {
-      return new Promise<string>((resolve, reject) => {
-        outputFileSystem.readFile(fileName, (err, data) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(typeof data === 'string' ? data : data!.toString());
-        });
-      });
-    };
-
-    const getEntryFiles = async () => {
-      const entryFiles: Record<string, string[]> = {};
-
-      const entries = Object.keys(manifest!.entries!);
-
-      for (const entry of entries) {
-        const data = manifest!.entries[entry];
-        entryFiles[entry] = (
-          (data?.initial?.js || []).concat(data?.async?.js || []) || []
-        ).map((file: string) => path.join(outputPath!, file));
-      }
-      return entryFiles;
-    };
-
-    const entryFiles = await getEntryFiles();
+    const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
-    const sourceEntries = await globTestSourceEntries();
+    const sourceEntries = await globTestSourceEntries(environmentName);
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
@@ -399,28 +373,44 @@ export const createRsbuildServer = async ({
         e.assets![e.assets!.length - 1]!.name,
       );
 
-      if (setupFiles[entry]) {
+      if (setupFiles[environmentName]![entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[entry],
+          testPath: setupFiles[environmentName]![entry],
           files: entryFiles[entry],
+          chunks: e.chunks || [],
         });
       } else if (sourceEntries[entry]) {
+        if (
+          fileFilters?.length &&
+          !fileFilters.includes(sourceEntries[entry])
+        ) {
+          continue;
+        }
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
+          chunks: e.chunks || [],
         });
       }
     }
+
+    const inlineSourceMap =
+      stats.compilation.options.devtool === 'inline-source-map';
 
     const sourceMaps: Record<string, SourceMapInput> = Object.fromEntries(
       (
         await Promise.all(
           assets!.map(async (asset) => {
+            const assetFilePath = path.join(outputPath!, asset.name);
+
+            if (inlineSourceMap) {
+              const content = await readFile(assetFilePath);
+              return [assetFilePath, parseInlineSourceMap(content)];
+            }
             const sourceMapPath = asset?.info.related?.sourceMap?.[0];
 
-            const assetFilePath = path.join(outputPath!, asset.name);
             if (sourceMapPath) {
               const filePath = path.join(outputPath!, sourceMapPath);
               const sourceMap = await readFile(filePath);
@@ -432,7 +422,20 @@ export const createRsbuildServer = async ({
       ).filter((asset) => asset[1] !== null),
     );
 
+    buildData[environmentName] ??= {};
+
+    // affectedEntries: entries affected by source code.
+    // deletedEntries: entry files deleted from compilation.
+    const { affectedEntries, deletedEntries } = calcEntriesToRerun(
+      entries,
+      chunks,
+      buildData[environmentName],
+      `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+    );
     return {
+      affectedEntries,
+      deletedEntries,
+      hash,
       entries,
       setupEntries,
       buildTime: buildTime!,
@@ -449,9 +452,11 @@ export const createRsbuildServer = async ({
       getSourcemap: (sourcePath: string): SourceMapInput | null => {
         return sourceMaps[sourcePath] || null;
       },
-      close: devServer.close,
     };
   };
 
-  return getRsbuildStats;
+  return {
+    closeServer: devServer.close,
+    getRsbuildStats,
+  };
 };

@@ -1,43 +1,16 @@
-import type { LoadConfigOptions } from '@rsbuild/core';
 import cac, { type CAC } from 'cac';
 import { normalize } from 'pathe';
-import { isCI } from 'std-env';
-import { loadConfig } from '../config';
 import type {
   ListCommandOptions,
   RstestCommand,
-  RstestConfig,
   RstestInstance,
 } from '../types';
-import { castArray, formatError, getAbsolutePath } from '../utils/helper';
+import { formatError } from '../utils/helper';
 import { logger } from '../utils/logger';
+import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
-type CommonOptions = {
-  root?: string;
-  config?: string;
-  configLoader?: LoadConfigOptions['loader'];
-  globals?: boolean;
-  isolate?: boolean;
-  include?: string[];
-  exclude?: string[];
-  passWithNoTests?: boolean;
-  printConsoleTrace?: boolean;
-  disableConsoleIntercept?: boolean;
-  update?: boolean;
-  testNamePattern?: RegExp | string;
-  testTimeout?: number;
-  hookTimeout?: number;
-  testEnvironment?: string;
-  clearMocks?: boolean;
-  resetMocks?: boolean;
-  restoreMocks?: boolean;
-  unstubGlobals?: boolean;
-  unstubEnvs?: boolean;
-  retry?: number;
-  maxConcurrency?: number;
-  slowTestThreshold?: number;
-};
+export type { CommonOptions } from './init';
 
 const applyCommonOptions = (cli: CAC) => {
   cli
@@ -62,6 +35,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
     .option(
+      '--project <name>',
+      'Run only projects that match the name, can be a full name or wildcards pattern',
+    )
+    .option(
       '--passWithNoTests',
       'Allows the test suite to pass when no files are found',
     )
@@ -74,6 +51,7 @@ const applyCommonOptions = (cli: CAC) => {
       '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',
     )
+    .option('--reporter <reporter>', 'Specify the reporter to use')
     .option(
       '-t, --testNamePattern <value>',
       'Run only tests with a name that matches the regex',
@@ -105,59 +83,45 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
-export async function initCli(options: CommonOptions): Promise<{
-  config: RstestConfig;
-  configFilePath: string | null;
-}> {
-  const cwd = process.cwd();
-  const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
+export const runRest = async ({
+  options,
+  filters,
+  command,
+}: {
+  options: CommonOptions;
+  filters: string[];
+  command: RstestCommand;
+}): Promise<void> => {
+  let rstest: RstestInstance | undefined;
+  try {
+    const { initCli } = await import('./init');
+    const { config, configFilePath, projects } = await initCli(options);
+    const { createRstest } = await import('../core');
+    rstest = createRstest(
+      { config, configFilePath, projects },
+      command,
+      filters.map(normalize),
+    );
 
-  const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: root,
-    path: options.config,
-    configLoader: options.configLoader,
-  });
+    if (command === 'watch' && configFilePath) {
+      const { watchFilesForRestart } = await import('../core/restart');
 
-  const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
-    'root',
-    'globals',
-    'isolate',
-    'passWithNoTests',
-    'update',
-    'testNamePattern',
-    'testTimeout',
-    'hookTimeout',
-    'clearMocks',
-    'resetMocks',
-    'restoreMocks',
-    'unstubEnvs',
-    'unstubGlobals',
-    'retry',
-    'slowTestThreshold',
-    'maxConcurrency',
-    'printConsoleTrace',
-    'disableConsoleIntercept',
-    'testEnvironment',
-  ];
-  for (const key of keys) {
-    if (options[key] !== undefined) {
-      (config[key] as any) = options[key];
+      watchFilesForRestart({
+        rstest,
+        options,
+        filters,
+      });
     }
+    await rstest.runTests();
+  } catch (err) {
+    for (const reporter of rstest?.context.reporters || []) {
+      reporter.onExit?.();
+    }
+    logger.error('Failed to run Rstest.');
+    logger.error(formatError(err));
+    process.exit(1);
   }
-
-  if (options.exclude) {
-    config.exclude = castArray(options.exclude);
-  }
-
-  if (options.include) {
-    config.include = castArray(options.include);
-  }
-
-  return {
-    config,
-    configFilePath,
-  };
-}
+};
 
 export function setupCommands(): void {
   const cli = cac('rstest');
@@ -170,48 +134,35 @@ export function setupCommands(): void {
 
   cli
     .command('[...filters]', 'run tests')
-    .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
-      if (isCI) {
-        await runRest(options, filters, 'run');
-      } else {
-        await runRest(options, filters, 'watch');
-      }
-    });
-
-  const runRest = async (
-    options: CommonOptions,
-    filters: string[],
-    command: RstestCommand,
-  ) => {
-    let rstest: RstestInstance | undefined;
-    try {
-      const { config } = await initCli(options);
-      const { createRstest } = await import('../core');
-      rstest = createRstest(config, command, filters.map(normalize));
-      await rstest.runTests();
-    } catch (err) {
-      for (const reporter of rstest?.context.reporters || []) {
-        reporter.onExit?.();
-      }
-      logger.error('Failed to run Rstest.');
-      logger.error(formatError(err));
-      process.exit(1);
-    }
-  };
+    .option('-w, --watch', 'Run tests in watch mode')
+    .action(
+      async (
+        filters: string[],
+        options: CommonOptions & {
+          watch?: boolean;
+        },
+      ) => {
+        showRstest();
+        if (options.watch) {
+          await runRest({ options, filters, command: 'watch' });
+        } else {
+          await runRest({ options, filters, command: 'run' });
+        }
+      },
+    );
 
   cli
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      await runRest(options, filters, 'run');
+      await runRest({ options, filters, command: 'run' });
     });
 
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
       showRstest();
-      await runRest(options, filters, 'watch');
+      await runRest({ options, filters, command: 'watch' });
     });
 
   cli
@@ -224,9 +175,14 @@ export function setupCommands(): void {
         options: CommonOptions & ListCommandOptions,
       ) => {
         try {
-          const { config } = await initCli(options);
+          const { initCli } = await import('./init');
+          const { config, configFilePath, projects } = await initCli(options);
           const { createRstest } = await import('../core');
-          const rstest = createRstest(config, 'list', filters.map(normalize));
+          const rstest = createRstest(
+            { config, configFilePath, projects },
+            'list',
+            filters.map(normalize),
+          );
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,

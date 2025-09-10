@@ -1,3 +1,18 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) 2021-Present VoidZero Inc. and Vitest contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ */
 import type { SnapshotSummary } from '@vitest/snapshot';
 import path from 'pathe';
 import type {
@@ -141,15 +156,30 @@ export const printSummaryErrorLogs = async ({
   results,
   rootPath,
   getSourcemap,
+  filterRerunTestPaths,
 }: {
   rootPath: string;
   results: TestFileResult[];
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
+  filterRerunTestPaths?: string[];
 }): Promise<void> => {
   const failedTests: TestResult[] = [
-    ...results.filter((i) => i.status === 'fail' && i.errors?.length),
-    ...testResults.filter((i) => i.status === 'fail'),
+    ...results.filter(
+      (i) =>
+        i.status === 'fail' &&
+        i.errors?.length &&
+        (filterRerunTestPaths
+          ? filterRerunTestPaths.includes(i.testPath)
+          : true),
+    ),
+    ...testResults.filter(
+      (i) =>
+        i.status === 'fail' &&
+        (filterRerunTestPaths
+          ? filterRerunTestPaths.includes(i.testPath)
+          : true),
+    ),
   ];
 
   if (failedTests.length === 0) {

@@ -8,6 +8,9 @@ declare global {
   const afterAll: typeof import('@rstest/core')['afterAll'];
   const beforeEach: typeof import('@rstest/core')['beforeEach'];
   const afterEach: typeof import('@rstest/core')['afterEach'];
+  const onTestFinished: typeof import('@rstest/core')['onTestFinished'];
+  const onTestFailed: typeof import('@rstest/core')['onTestFailed'];
+  const rs: typeof import('@rstest/core')['rs'];
   const rstest: typeof import('@rstest/core')['rstest'];
 }
 export {};

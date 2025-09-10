@@ -99,7 +99,7 @@ export const handleFixtures = async (
 
     if (deps?.length) {
       for (const dep of deps) {
-        await useFixture(dep, test.fixtures![dep] as NormalizedFixture);
+        await useFixture(dep, test.fixtures![dep]!);
       }
     }
 
@@ -183,6 +183,21 @@ function filterOutComments(s: string): string {
 /**
  * This method is modified based on source found in
  * https://github.com/microsoft/playwright/blob/3584e722237488c07dd23bbf12966f5509bf25c6/packages/playwright/src/common/fixtures.ts#L272
+ *
+ * Portions Copyright (c) Microsoft Corporation.
+ * Portions Copyright 2017 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 // biome-ignore lint/complexity/noBannedTypes: Function type
 export function getFixtureUsedProps(fn: Function): string[] {

@@ -23,6 +23,7 @@ Commands:
   list [...filters]   lists all test files that Rstest will run
 
 Options:
+  -w, --watch                              Run tests in watch mode
   -h, --help                               Display this message
   -v, --version                            Display version number
   -c, --config <config>
@@ -31,7 +32,7 @@ Options:
 
 ## rstest [...filters]
 
-直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。在开发环境下会自动进入监听模式 (等同于 `rstest watch`)，而在 CI 环境或非终端交互模式下会执行单次测试 (等同于 `rstest run`)。
+直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。
 
 ```bash
 $ npx rstest
@@ -41,6 +42,14 @@ $ npx rstest
   Test Files 1 passed (1)
        Tests 2 passed (2)
     Duration 189 ms (build 22 ms, tests 167 ms)
+```
+
+### Watch 模式
+
+如果你希望在文件更改时自动重新运行测试，可以使用 `--watch` 或 `rstest watch` 命令：
+
+```bash
+$ npx rstest --watch
 ```
 
 ## rstest run
@@ -108,6 +117,7 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                                                             |
 | `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/passWithNoTests)                                                         |
 | `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/printConsoleTrace)                                                      |
+| `--project <name>`              | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                                                     |
 | `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disableConsoleIntercept)                                                      |
 | `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slowTestThreshold)                                               |
 | `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/testNamePattern)                                                               |
@@ -115,6 +125,7 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/testTimeout)                                                                 |
 | `--hookTimeout <value>`         | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hookTimeout)                                                           |
 | `--retry <retry>`               | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                         |
+| `--reporter <reporter>`         | 指定测试报告器，详见 [reporters](/config/test/reporters)                                                                                     |
 | `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/maxConcurrency)                                                                           |
 | `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clearMocks)                                                 |
 | `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/resetMocks)                                                                     |
@@ -123,3 +134,25 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstubEnvs)                                           |
 | `-h, --help`                    | 显示帮助信息                                                                                                                                 |
 | `-v, --version`                 | 显示版本号                                                                                                                                   |
+
+## CLI 快捷键
+
+在 watch 模式下运行 Rstest 时，你可以使用键盘快捷键来执行各种便捷操作。
+
+所有快捷键：
+
+```bash
+  Shortcuts:
+  f  rerun failed tests
+  a  rerun all tests
+  u  update snapshot
+  t  filter by a test name regex pattern
+  p  filter by a filename regex pattern
+  q  quit process
+  c  clear screen
+  h  show shortcuts help
+```
+
+:::note
+CLI 快捷键仅在 watch 模式下运行 Rstest（`rstest watch` 或 `rstest --watch`）且终端支持 TTY（交互模式）时可用。
+:::

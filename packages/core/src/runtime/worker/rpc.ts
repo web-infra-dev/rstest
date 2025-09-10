@@ -6,8 +6,8 @@ import type { RuntimeRPC, ServerRPC } from '../../types';
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
 const processSend = process.send!.bind(process);
-const processOn = process.on!.bind(process);
-const processOff = process.off!.bind(process);
+const processOn = process.on.bind(process);
+const processOff = process.off.bind(process);
 const dispose: (() => void)[] = [];
 
 export type WorkerRpcOptions = Pick<

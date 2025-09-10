@@ -40,8 +40,20 @@ describe.only('only this suite', () => {
 Skip the describe block(s) marked with `skip`.
 
 ```ts
-describe.skip('skip this suite', () => {
+describe.skip('Skip the test cases in this suite', () => {
   // ...
+});
+```
+
+It should be noted that the skip tag is only used to skip test cases, and the code inside the describe block will still be executed. This is because Rstest needs to collect information about test cases to ensure that all features work properly, even if they are marked as skipped. For example, in snapshot tests, it determines whether a snapshot is outdated or marked as skipped.
+
+```ts
+describe.skip('a', () => {
+  console.log('will run');
+  test('b', () => {
+    console.log('will not run');
+    expect(0).toBe(0);
+  });
 });
 ```
 
@@ -136,3 +148,13 @@ describe.sequential('sequential suite', () => {
   });
 });
 ```
+
+## Chainable modifiers
+
+`describe` supports chainable modifiers, so you can use them together. For example:
+
+- `describe.only.runIf(condition)` (or `describe.runIf(condition).only`) will only run the describe block if the condition is true.
+- `describe.skipIf(condition).concurrent` (or `describe.concurrent.skipIf(condition)`) will skip the describe block if the condition is true, otherwise run the tests concurrently.
+- `describe.runIf(condition).concurrent` (or `describe.concurrent.runIf(condition)`) will only run the describe block concurrently if the condition is true.
+- `describe.only.concurrent` (or `describe.concurrent.only`) will only run the describe block concurrently.
+- ......

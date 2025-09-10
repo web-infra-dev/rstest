@@ -4,3 +4,15 @@
 - **Default:** `rstest`
 
 The name of the test project.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'node',
+});
+```
+
+When you define multiple test projects via [projects](/config/test/projects), it's recommended to give each project a unique name so that you can filter specific projects using the [--project](/guide/basic/test-filter#filter-by-project-name) option.
+
+If a project's name is not provided, Rstest will use the `name` field from the current project's `package.json`. If it does not exist, the folder name will be used instead.

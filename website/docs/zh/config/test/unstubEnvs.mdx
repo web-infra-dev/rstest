@@ -9,3 +9,22 @@ overviewHeaders: []
 - **CLI：** `--unstubEnvs`
 
 每次测试时恢复之前使用 [rstest.stubEnv](/api/rstest/utilities#rsteststubenv) 更改的所有 `process.env` 值。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --unstubEnvs
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  unstubEnvs: true,
+});
+```
+  </Tab>
+</Tabs>

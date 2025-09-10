@@ -45,10 +45,17 @@ logger.override({
     if (logger.level !== 'verbose') {
       return;
     }
-    const time = color.gray(`${getTime()}`);
+    const time = color.gray(getTime());
     console.log(`  ${color.magenta('rstest')} ${time} ${message}`, ...args);
   },
 });
+
+export const clearScreen = (force = false): void => {
+  if (!isDebug() || force) {
+    // clear screen
+    console.log('\x1Bc');
+  }
+};
 
 export { logger };
 export type { Logger };

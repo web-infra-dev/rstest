@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, logger } from '../utils';
+import { color, formatTestPath, isDebug, logger } from '../utils';
 
 export async function printError(
   error: FormattedError,
@@ -38,6 +38,14 @@ export async function printError(
       getSourcemap,
     });
 
+    if (!stackFrames.length && error.stack.length) {
+      logger.log(
+        color.gray(
+          "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+        ),
+      );
+    }
+
     if (stackFrames[0]) {
       await printCodeFrame(stackFrames[0]);
     }
@@ -48,7 +56,7 @@ export async function printError(
 
 async function printCodeFrame(frame: StackFrame) {
   const filePath = frame.file?.startsWith('file')
-    ? new URL(frame.file!)
+    ? new URL(frame.file)
     : frame.file;
 
   if (!filePath) {
@@ -56,7 +64,7 @@ async function printCodeFrame(frame: StackFrame) {
   }
 
   const source = fs.existsSync(filePath)
-    ? fs.readFileSync(filePath!, 'utf-8')
+    ? fs.readFileSync(filePath, 'utf-8')
     : undefined;
 
   if (!source) {
@@ -67,8 +75,8 @@ async function printCodeFrame(frame: StackFrame) {
     source,
     {
       start: {
-        line: frame!.lineNumber!,
-        column: frame!.column!,
+        line: frame.lineNumber!,
+        column: frame.column!,
       },
     },
     {
@@ -81,13 +89,15 @@ async function printCodeFrame(frame: StackFrame) {
   logger.log('');
 }
 
+export function formatStack(frame: StackFrame, rootPath: string): string {
+  return frame.methodName !== '<unknown>'
+    ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
+    : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
+}
+
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    const msg =
-      frame.methodName !== '<unknown>'
-        ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
-        : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
-    logger.log(color.gray(`        ${msg}`));
+    logger.log(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
   stackFrames.length && logger.log();
 }
@@ -100,19 +110,22 @@ const stackIgnores: (RegExp | string)[] = [
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
   /node:\w+/,
+  /webpack\/runtime/,
+  // windows path
+  /webpack\\runtime/,
   '<anonymous>',
 ];
 
-async function parseErrorStacktrace({
+export async function parseErrorStacktrace({
   stack,
   getSourcemap,
-  fullStack,
+  fullStack = isDebug(),
 }: {
   fullStack?: boolean;
   stack: string;
   getSourcemap: GetSourcemap;
 }): Promise<StackFrame[]> {
-  return Promise.all(
+  const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
         fullStack
@@ -146,4 +159,6 @@ async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
+
+  return stackFrames;
 }

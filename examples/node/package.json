@@ -4,13 +4,13 @@
   "type": "commonjs",
   "scripts": {
     "build": "rsbuild build",
-    "test": "rstest run",
-    "test:watch": "rstest"
+    "test": "rstest",
+    "test:watch": "rstest --watch"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
-    "@types/node": "^22.13.8",
-    "typescript": "^5.8.3"
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.2"
   }
 }

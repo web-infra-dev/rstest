@@ -6,6 +6,8 @@ import type {
   CoverageProvider,
   FormattedError,
   MatcherState,
+  OnTestFailedHandler,
+  OnTestFinishedHandler,
   Rstest,
   RstestExpect,
   RunnerHooks,
@@ -23,7 +25,12 @@ import { createExpect } from '../api/expect';
 import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
-import { getTestStatus, limitConcurrency, markAllTestAsSkipped } from './task';
+import {
+  getTestStatus,
+  limitConcurrency,
+  markAllTestAsSkipped,
+  wrapTimeout,
+} from './task';
 
 const RealDate = Date;
 
@@ -49,6 +56,7 @@ export class TestRunner {
     this.workerState = state;
     const {
       runtimeConfig: { passWithNoTests, retry, maxConcurrency },
+      project,
       snapshotOptions,
     } = state;
     const results: TestResult[] = [];
@@ -74,6 +82,7 @@ export class TestRunner {
           parentNames: test.parentNames,
           name: test.name,
           testPath,
+          project,
         };
         return result;
       }
@@ -83,6 +92,7 @@ export class TestRunner {
           parentNames: test.parentNames,
           name: test.name,
           testPath,
+          project,
         };
         return result;
       }
@@ -103,8 +113,9 @@ export class TestRunner {
           status: 'fail' as const,
           parentNames: test.parentNames,
           name: test.name,
-          errors: formatTestError(error),
+          errors: formatTestError(error, test),
           testPath,
+          project,
         };
       }
 
@@ -124,6 +135,7 @@ export class TestRunner {
               parentNames: test.parentNames,
               name: test.name,
               testPath,
+              project,
               errors: [
                 {
                   message: 'Expect test to fail',
@@ -132,6 +144,7 @@ export class TestRunner {
             };
           } catch (_err) {
             result = {
+              project,
               status: 'pass' as const,
               parentNames: test.parentNames,
               name: test.name,
@@ -148,6 +161,7 @@ export class TestRunner {
             await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
+              project,
               parentNames: test.parentNames,
               name: test.name,
               status: 'pass' as const,
@@ -155,10 +169,11 @@ export class TestRunner {
             };
           } catch (error) {
             result = {
+              project,
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: formatTestError(error),
+              errors: formatTestError(error, test),
               testPath,
             };
           }
@@ -167,15 +182,28 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups);
+        .concat(cleanups)
+        .concat(test.onFinished);
+
       try {
         for (const fn of afterEachFns) {
-          await fn();
+          await fn({ task: { result } });
         }
       } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...formatTestError(error));
+      }
+
+      if (result.status === 'fail') {
+        for (const fn of [...test.onFailed].reverse()) {
+          try {
+            await fn({ task: { result } });
+          } catch (error) {
+            result.errors ??= [];
+            result.errors.push(...formatTestError(error));
+          }
+        }
       }
 
       this.resetCurrentTest();
@@ -247,12 +275,13 @@ export class TestRunner {
             name: test.name,
             testPath,
             errors: [noTestError],
+            project,
           };
           hooks.onTestCaseResult?.(result);
         }
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
-        const cleanups: Array<(ctx: SuiteContext) => void> = [];
+        const cleanups: ((ctx: SuiteContext) => void)[] = [];
         let hasBeforeAllError = false;
 
         if (['run', 'only'].includes(test.runMode) && test.beforeAllListeners) {
@@ -311,7 +340,7 @@ export class TestRunner {
           result = {
             ...currentResult,
             errors:
-              currentResult.status === 'fail' && result && result!.errors
+              currentResult.status === 'fail' && result && result.errors
                 ? result.errors.concat(...(currentResult.errors || []))
                 : currentResult.errors,
           };
@@ -331,6 +360,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
+          project,
           testPath,
           name: '',
           status: 'pass',
@@ -339,6 +369,7 @@ export class TestRunner {
       }
 
       return {
+        project,
         testPath,
         name: '',
         status: 'fail',
@@ -361,6 +392,7 @@ export class TestRunner {
     const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
+      project,
       testPath,
       name: '',
       status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
@@ -440,13 +472,65 @@ export class TestRunner {
       },
     });
 
+    Object.defineProperty(context, 'onTestFinished', {
+      get: () => {
+        return (fn: OnTestFinishedHandler, timeout?: number) => {
+          this.onTestFinished(current, fn, timeout);
+        };
+      },
+    });
+
+    Object.defineProperty(context, 'onTestFailed', {
+      get: () => {
+        return (fn: OnTestFailedHandler, timeout?: number) => {
+          this.onTestFailed(current, fn, timeout);
+        };
+      },
+    });
+
     return context;
+  }
+
+  onTestFinished(
+    test: TestCase | undefined,
+    fn: OnTestFinishedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
+      throw new Error('onTestFinished() can only be called inside a test');
+    }
+    test.onFinished.push(
+      wrapTimeout({
+        name: 'onTestFinished hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
+  }
+
+  onTestFailed(
+    test: TestCase | undefined,
+    fn: OnTestFailedHandler,
+    timeout?: number,
+  ): void {
+    if (!test) {
+      throw new Error('onTestFailed() can only be called inside a test');
+    }
+    test.onFailed.push(
+      wrapTimeout({
+        name: 'onTestFailed hook',
+        fn,
+        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        stackTraceError: new Error('STACK_TRACE_ERROR'),
+      }),
+    );
   }
 
   private async beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
-  ): Promise<Array<() => Promise<void>>> {
+  ): Promise<(() => Promise<void>)[]> {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -489,7 +573,7 @@ export class TestRunner {
     } = getState(expect);
 
     if (test.result?.state === 'fail') {
-      throw test.result!.errors;
+      throw test.result.errors;
     }
 
     if (

@@ -31,4 +31,8 @@ export const globalApis: (keyof Rstest)[] = [
   'rstest',
   'rs',
   'assert',
+  'onTestFinished',
+  'onTestFailed',
 ];
+
+export const TS_CONFIG_FILE = 'tsconfig.json';

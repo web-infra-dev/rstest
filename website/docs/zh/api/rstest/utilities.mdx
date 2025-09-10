@@ -4,7 +4,9 @@
 
 ## rstest.stubEnv
 
-**类型：** `(name: string, value: string | undefined) => Rstest`
+- **别名：** `rs.stubEnv`
+
+- **类型：** `(name: string, value: string | undefined) => Rstest`
 
 临时设置 `process.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
 
@@ -24,7 +26,9 @@ expect(process.env.MY_VAR).toBeUndefined();
 
 ## rstest.unstubAllEnvs
 
-**类型：** `() => Rstest`
+- **别名：** `rs.unstubAllEnvs`
+
+- **类型：** `() => Rstest`
 
 恢复所有通过 `rstest.stubEnv` 更改的环境变量到原始值。
 
@@ -42,7 +46,9 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 ## rstest.stubGlobal
 
-**类型：** `(name: string | number | symbol, value: unknown) => Rstest`
+- **别名：** `rs.stubGlobal`
+
+- **类型：** `(name: string | number | symbol, value: unknown) => Rstest`
 
 临时设置全局变量为指定值。适用于模拟全局对象或函数。
 
@@ -61,7 +67,9 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 ## rstest.unstubAllGlobals
 
-**类型：** `() => Rstest`
+- **别名：** `rs.unstubAllGlobals`
+
+- **类型：** `() => Rstest`
 
 恢复所有通过 `rstest.stubGlobal` 更改的全局变量到原始值。
 
@@ -79,7 +87,9 @@ expect(globalThis.myGlobal).toBeUndefined();
 
 ## rstest.setConfig
 
-**类型：**
+- **别名：** `rs.setConfig`
+
+- **类型：**
 
 ```ts
 type RuntimeConfig = {
@@ -107,6 +117,8 @@ rstest.resetConfig(); // 恢复默认配置
 
 ## rstest.resetConfig
 
-**类型：** `() => void`
+- **别名：** `rs.resetConfig`
+
+- **类型：** `() => void`
 
 将通过 `rstest.setConfig` 修改的运行时配置重置为默认值。

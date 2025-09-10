@@ -43,7 +43,7 @@ expect.soft(1 + 2).toBe(4);
 
 ## expect.poll
 
-- **Type:** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Assertion<T>`
+- **Type:** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Promise<Assertion<T>>`
 
 Polls the value returned by the function until the assertion passes or timeout.
 
@@ -251,6 +251,10 @@ expect('hello world').toMatchSnapshot();
 expect(() => {
   throw new Error('fail');
 }).toThrowErrorMatchingSnapshot();
+
+await expect('hello world').toMatchFileSnapshot(
+  '__snapshots__/file.output.txt',
+);
 ```
 
 ### Promise matchers

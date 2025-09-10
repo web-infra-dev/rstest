@@ -1,6 +1,20 @@
 /**
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/integrations/snapshot/chai.ts
+ *
+ * MIT License
+ *
+ * Copyright (c) 2021-Present VoidZero Inc. and Vitest contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  */
 import type { ChaiPlugin } from '@vitest/expect';
 import { equals, iterableEquality, subsetEquality } from '@vitest/expect';

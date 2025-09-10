@@ -2,14 +2,25 @@
 
 - **Type:** `string[]`
 - **Default:** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
-- **CLI:** `--include **/*.test.ts --include **/*.spec.ts`
+- **CLI:** `--include '**/*.test.ts' --include '**/*.spec.ts'`
 
 A list of glob patterns that match your test files.
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --include '**/*.{test,spec}.?(c|m)[jt]s?(x)'
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
 });
 ```
+  </Tab>
+</Tabs>

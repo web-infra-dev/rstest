@@ -1,4 +1,3 @@
-import type { MaybePromise } from 'src/types/utils';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -8,6 +7,7 @@ import type {
   DescribeEachFn,
   DescribeForFn,
   Fixtures,
+  MaybePromise,
   NormalizedFixtures,
   RunnerAPI,
   RuntimeConfig,
@@ -22,7 +22,7 @@ import type {
   TestSuite,
 } from '../../types';
 import { castArray, ROOT_SUITE_NAME } from '../../utils';
-import { formatName } from '../util';
+import { formatName, TestRegisterError } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -34,6 +34,7 @@ export class RunnerRuntime {
   /** a calling stack of the current test suites and case */
   private _currentTest: Test[] = [];
   private testPath: string;
+  private status: 'running' | 'collect' = 'collect';
 
   /**
    * Collect test status:
@@ -41,18 +42,36 @@ export class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: Array<() => MaybePromise<void>> = [];
+  private currentCollectList: (() => MaybePromise<void>)[] = [];
   private runtimeConfig;
+  private project: string;
 
   constructor({
     testPath,
     runtimeConfig,
+    project,
   }: {
     testPath: string;
     runtimeConfig: RuntimeConfig;
+    project: string;
   }) {
+    this.project = project;
     this.testPath = testPath;
     this.runtimeConfig = runtimeConfig;
+  }
+
+  updateStatus(status: 'running' | 'collect'): void {
+    this.status = status;
+  }
+
+  private checkStatus(name: string, type: 'case' | 'suite'): void {
+    if (this.status === 'running') {
+      const error = new TestRegisterError(
+        `${type === 'case' ? 'Test' : 'Describe'} '${name}' cannot run`,
+      );
+
+      throw error;
+    }
   }
 
   afterAll(
@@ -61,7 +80,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterAll',
       wrapTimeout({
         name: 'afterAll hook',
@@ -78,7 +97,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeAll',
       wrapTimeout({
         name: 'beforeAll hook',
@@ -95,7 +114,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'afterEach',
       wrapTimeout({
         name: 'afterEach hook',
@@ -112,7 +131,7 @@ export class RunnerRuntime {
   ): MaybePromise<void> {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite!,
+      currentSuite,
       'beforeEach',
       wrapTimeout({
         name: 'beforeEach hook',
@@ -125,6 +144,7 @@ export class RunnerRuntime {
 
   private getDefaultRootSuite(): TestSuite {
     return {
+      project: this.project,
       runMode: 'run',
       testPath: this.testPath,
       name: ROOT_SUITE_NAME,
@@ -148,7 +168,9 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'suite');
     const currentSuite: TestSuite = {
+      project: this.project,
       name,
       runMode,
       tests: [],
@@ -284,7 +306,9 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
   }): void {
+    this.checkStatus(name, 'case');
     this.addTestCase({
+      project: this.project,
       name,
       originalFn,
       fn: fn
@@ -303,6 +327,8 @@ export class RunnerRuntime {
       sequential,
       each,
       fails,
+      onFinished: [],
+      onFailed: [],
     });
   }
 
@@ -427,14 +453,17 @@ export class RunnerRuntime {
 export const createRuntimeAPI = ({
   testPath,
   runtimeConfig,
+  project,
 }: {
   testPath: string;
   runtimeConfig: RuntimeConfig;
+  project: string;
 }): {
-  api: RunnerAPI;
+  api: Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
   instance: RunnerRuntime;
 } => {
   const runtimeInstance: RunnerRuntime = new RunnerRuntime({
+    project,
     testPath,
     runtimeConfig,
   });

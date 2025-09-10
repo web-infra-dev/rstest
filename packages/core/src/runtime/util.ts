@@ -1,8 +1,22 @@
+import { createRequire } from 'node:module';
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
-import type { FormattedError } from '../types';
+import type { FormattedError, Test } from '../types';
 
-export const formatTestError = (err: any): FormattedError[] => {
+const REAL_TIMERS: {
+  setTimeout?: typeof globalThis.setTimeout;
+} = {};
+
+// store the original timers
+export const setRealTimers = (): void => {
+  REAL_TIMERS.setTimeout ??= globalThis.setTimeout;
+};
+
+export const getRealTimers = (): typeof REAL_TIMERS => {
+  return REAL_TIMERS;
+};
+
+export const formatTestError = (err: any, test?: Test): FormattedError[] => {
   const errors = Array.isArray(err) ? err : [err];
 
   return errors.map((error) => {
@@ -14,13 +28,19 @@ export const formatTestError = (err: any): FormattedError[] => {
       stack: error.stack,
     };
 
+    if (error instanceof TestRegisterError && test?.type === 'case') {
+      errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+    }
+
     if (
       error.showDiff ||
       (error.showDiff === undefined &&
         error.expected !== undefined &&
         error.actual !== undefined)
     ) {
-      errObj.diff = diff(err.expected, err.actual)!;
+      errObj.diff = diff(err.expected, err.actual, {
+        expand: false,
+      })!;
     }
 
     for (const key of ['actual', 'expected'] as const) {
@@ -86,4 +106,26 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
     }
   }
   return result;
+}
+
+export class TestRegisterError extends Error {}
+
+export class RstestError extends Error {
+  public fullStack?: boolean;
+}
+
+export function checkPkgInstalled(name: string): void {
+  const require = createRequire(import.meta.url);
+  try {
+    require.resolve(name);
+  } catch (error: any) {
+    if (error.code === 'MODULE_NOT_FOUND') {
+      const error = new RstestError(
+        `Missing dependency "${name}". Please install it first.`,
+      );
+      error.fullStack = true;
+      throw error;
+    }
+    throw error;
+  }
 }

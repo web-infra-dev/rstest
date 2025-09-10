@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.0.9",
+  "version": "0.3.4",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -18,19 +18,15 @@
   ],
   "license": "MIT",
   "type": "module",
-  "main": "./dist/public.js",
-  "types": "./dist-types/public.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist-types/index.d.ts",
   "bin": {
     "rstest": "./bin/rstest.js"
   },
   "exports": {
     ".": {
-      "types": "./dist-types/public.d.ts",
-      "default": "./dist/public.js"
-    },
-    "./node": {
-      "types": "./dist-types/node.d.ts",
-      "default": "./dist/node.js"
+      "types": "./dist-types/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./globals": {
       "types": "./globals.d.ts"
@@ -48,27 +44,27 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build",
+    "build": "rslib build && npx prettier ./LICENSE.md --write",
     "typecheck": "tsc --noEmit",
     "dev": "rslib build --watch",
-    "test": "npx rstest run --globals"
+    "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "1.4.8",
+    "chai": "^5.3.3",
     "@types/chai": "^5.2.2",
-    "@vitest/expect": "^3.2.4",
-    "@vitest/snapshot": "^3.2.4",
+    "@rsbuild/core": "1.5.0",
     "birpc": "2.5.0",
-    "chai": "^5.2.1",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
+    "@vitest/expect": "^3.2.4",
+    "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
-    "@jridgewell/trace-mapping": "0.3.29",
-    "@microsoft/api-extractor": "^7.52.8",
-    "@rslib/core": "0.11.0",
+    "@jridgewell/trace-mapping": "0.3.30",
+    "@microsoft/api-extractor": "^7.52.11",
+    "@rslib/core": "0.12.2",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",
@@ -76,14 +72,16 @@
     "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
     "cac": "^6.7.14",
+    "chokidar": "^4.0.3",
     "happy-dom": "^18.0.1",
-    "jest-diff": "^30.0.4",
+    "jest-diff": "^30.0.5",
     "jsdom": "^26.1.0",
     "license-webpack-plugin": "^4.0.2",
     "picocolors": "^1.1.1",
-    "rslog": "^1.2.9",
+    "rslog": "^1.2.11",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
+    "strip-ansi": "^7.1.0",
     "tinyglobby": "^0.2.14",
     "tinyspy": "^4.0.3"
   },
@@ -100,11 +98,10 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.12.0"
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true,
     "registry": "https://registry.npmjs.org/"
   }
 }

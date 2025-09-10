@@ -1,26 +1,44 @@
 import type {
   ListCommandOptions,
+  Project,
   RstestCommand,
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { createContext } from './context';
+import { Rstest } from './rstest';
 
 export function createRstest(
-  config: RstestConfig,
+  {
+    config,
+    projects,
+    configFilePath,
+  }: {
+    config: RstestConfig;
+    configFilePath?: string;
+    projects: Project[];
+  },
   command: RstestCommand,
   fileFilters: string[],
 ): RstestInstance {
-  const context = createContext({ cwd: process.cwd(), command }, config);
+  const context = new Rstest(
+    {
+      cwd: process.cwd(),
+      command,
+      fileFilters,
+      configFilePath,
+      projects,
+    },
+    config,
+  );
 
   const runTests = async (): Promise<void> => {
     const { runTests } = await import('./runTests');
-    await runTests(context, fileFilters);
+    await runTests(context);
   };
 
   const listTests = async (options: ListCommandOptions): Promise<void> => {
     const { listTests } = await import('./listTests');
-    await listTests(context, fileFilters, options);
+    await listTests(context, options);
   };
 
   return {

@@ -1,3 +1,18 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) 2021-Present VoidZero Inc. and Vitest contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ */
 import type { Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 
@@ -177,7 +192,7 @@ export class WindowRenderer {
   }
 
   private interceptStream(stream: NodeJS.WriteStream, type: StreamType) {
-    const original = stream.write;
+    const original = stream.write.bind(stream);
 
     // @ts-expect-error -- not sure how 2 overloads should be typed
     stream.write = (chunk, _, callback) => {
@@ -197,7 +212,7 @@ export class WindowRenderer {
   }
 
   private write(message: string, type: 'output' | 'error' = 'output') {
-    (this.streams[type] as Writable['write'])(message);
+    this.streams[type](message);
   }
 }
 

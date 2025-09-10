@@ -1,3 +1,4 @@
+import type { CoverageProvider as RstestCoverageProvider } from '@rstest/core';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
@@ -15,13 +16,13 @@ declare global {
   var __coverage__: any;
 }
 
-export class CoverageProvider {
-  private coverageMap: CoverageMap | null = null;
+export class CoverageProvider implements RstestCoverageProvider {
+  private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
 
   init(): void {
     // Initialize global coverage object
     if (typeof globalThis !== 'undefined') {
-      (globalThis as any).__coverage__ = (globalThis as any).__coverage__ || {};
+      globalThis.__coverage__ = globalThis.__coverage__ || {};
     }
   }
 
@@ -30,10 +31,7 @@ export class CoverageProvider {
   }
 
   collect(): CoverageMap | null {
-    if (
-      typeof globalThis === 'undefined' ||
-      !(globalThis as any).__coverage__
-    ) {
+    if (typeof globalThis === 'undefined' || !globalThis.__coverage__) {
       return null;
     }
 
@@ -43,7 +41,7 @@ export class CoverageProvider {
       }
       // Merge current coverage data
       if (this.coverageMap) {
-        this.coverageMap.merge((globalThis as any).__coverage__);
+        this.coverageMap.merge(globalThis.__coverage__);
       }
 
       return this.coverageMap;
@@ -64,15 +62,15 @@ export class CoverageProvider {
         defaultSummarizer: 'nested',
         coverageMap: createCoverageMap(coverageMap.toJSON()),
       });
-      const reportersList = ['html', 'json'];
+      const reportersList = ['html', 'json'] as const;
       for (const reporter of reportersList) {
-        const report = reports.create(reporter as any, {
+        const report = reports.create(reporter, {
           // Add any specific options for the reporter here
         });
         report.execute(context);
       }
 
-      console.log('\nCoverage reports generated in ./coverage directory');
+      console.log('Coverage reports generated in ./coverage directory');
     } catch (error) {
       console.error('Failed to generate coverage reports:', error);
     }
@@ -80,7 +78,7 @@ export class CoverageProvider {
 
   cleanup(): void {
     if (typeof globalThis !== 'undefined' && '__coverage__' in globalThis) {
-      delete (globalThis as any).__coverage__;
+      delete globalThis.__coverage__;
     }
     this.coverageMap = null;
   }

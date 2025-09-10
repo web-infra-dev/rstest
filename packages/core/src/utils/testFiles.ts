@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
+import type { Project } from '../types';
 import { castArray, color, getAbsolutePath, parsePosix } from './helper';
 
 export const filterFiles = (
@@ -38,6 +39,32 @@ export const filterFiles = (
   });
 };
 
+export const filterProjects = (
+  projects: Project[],
+  options: {
+    project?: string[];
+  },
+): Project[] => {
+  if (options.project) {
+    const regexes = castArray(options.project).map((pattern) => {
+      // cast wildcard to RegExp, eg. @rstest/*, !@rstest/core
+      const isNeg = pattern.startsWith('!');
+
+      const escaped = (isNeg ? pattern.slice(1) : pattern)
+        .split('*')
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*');
+      return new RegExp(isNeg ? `^(?!${escaped})` : `^${escaped}$`);
+    });
+
+    return projects.filter((proj) =>
+      regexes.some((re) => re.test(proj.config.name!)),
+    );
+  }
+
+  return projects;
+};
+
 const hasInSourceTestCode = (code: string): boolean =>
   code.includes('import.meta.rstest');
 
@@ -48,20 +75,22 @@ export const formatTestEntryName = (name: string): string =>
 export const getTestEntries = async ({
   include,
   exclude,
-  root,
+  rootPath,
+  projectRoot,
   fileFilters,
   includeSource,
 }: {
+  rootPath: string;
   include: string[];
   exclude: string[];
   includeSource: string[];
   fileFilters: string[];
-  root: string;
+  projectRoot: string;
 }): Promise<{
   [name: string]: string;
 }> => {
   const testFiles = await glob(include, {
-    cwd: root,
+    cwd: projectRoot,
     absolute: true,
     ignore: exclude,
     dot: true,
@@ -70,7 +99,7 @@ export const getTestEntries = async ({
 
   if (includeSource?.length) {
     const sourceFiles = await glob(includeSource, {
-      cwd: root,
+      cwd: projectRoot,
       absolute: true,
       ignore: exclude,
       dot: true,
@@ -92,8 +121,8 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, root).map((entry) => {
-      const relativePath = pathe.relative(root, entry);
+    filterFiles(testFiles, fileFilters, rootPath).map((entry) => {
+      const relativePath = pathe.relative(rootPath, entry);
       return [formatTestEntryName(relativePath), entry];
     }),
   );

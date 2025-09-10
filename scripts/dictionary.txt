@@ -1,6 +1,7 @@
 # Custom Dictionary Words
 antd
 apng
+apos
 applescript
 atrules
 autodocs
@@ -34,6 +35,7 @@ distpath
 docgen
 dogfooding
 dorny
+endgroup
 envinfo
 estree
 facti
@@ -108,6 +110,7 @@ rsbuild
 rsdoctor
 rsfamily
 rslib
+rslint
 rslog
 rspack
 rspress
@@ -135,8 +138,9 @@ taze
 templating
 tinyexec
 tinyglobby
-transpiling
+tinyrainbow
 tinyspy
+transpiling
 treeshaking
 tsbuildinfo
 tsconfck

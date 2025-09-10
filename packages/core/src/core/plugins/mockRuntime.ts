@@ -34,8 +34,7 @@ Object.keys(originalRequire).forEach(key => {
 
 __webpack_require__.rstest_original_modules = {};
 
-// TODO: Remove "reset_modules" in next Rspack version.
-__webpack_require__.rstest_reset_modules = __webpack_require__.reset_modules = () => {
+__webpack_require__.rstest_reset_modules = () => {
   const mockedIds = Object.keys(__webpack_require__.rstest_original_modules)
   Object.keys(__webpack_module_cache__).forEach(id => {
     // Do not reset mocks registry.
@@ -45,21 +44,27 @@ __webpack_require__.rstest_reset_modules = __webpack_require__.reset_modules = (
   });
 }
 
-// TODO: Remove "unmock" in next Rspack version.
-__webpack_require__.rstest_unmock = __webpack_require__.unmock = (id) => {
+__webpack_require__.rstest_unmock = (id) => {
   delete __webpack_module_cache__[id]
 }
 
-// TODO: Remove "require_actual" and "import_actual" in next Rspack version.
-__webpack_require__.rstest_require_actual = __webpack_require__.rstest_import_actual = __webpack_require__.require_actual = __webpack_require__.import_actual = (id) => {
+__webpack_require__.rstest_require_actual = __webpack_require__.rstest_import_actual = (id) => {
   const originalModule = __webpack_require__.rstest_original_modules[id];
   // Use fallback module if the module is not mocked.
   const fallbackMod = __webpack_require__(id);
   return originalModule ? originalModule : fallbackMod;
 }
 
-// TODO: Remove "set_mock" in next Rspack version.
-__webpack_require__.rstest_set_mock = __webpack_require__.set_mock = (id, modFactory) => {
+__webpack_require__.rstest_exec = async (id, modFactory) => {
+  if (__webpack_module_cache__) {
+    let asyncFactory = __webpack_module_cache__[id];
+    if (asyncFactory && asyncFactory.constructor.name === 'AsyncFunction') {
+      await asyncFactory();
+    }
+  }
+};
+
+__webpack_require__.rstest_mock = (id, modFactory) => {
   let requiredModule = undefined
   try {
     requiredModule = __webpack_require__(id);
@@ -71,11 +76,38 @@ __webpack_require__.rstest_set_mock = __webpack_require__.set_mock = (id, modFac
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
   } else if (typeof modFactory === 'function') {
-    let exports = modFactory();
+    if (modFactory.constructor.name === 'AsyncFunction') {
+      __webpack_module_cache__[id] = async () => {
+        const exports = await modFactory();
+        __webpack_require__.r(exports);
+        __webpack_module_cache__[id] = { exports, id, loaded: true };
+      }
+    } else {
+      const exports = modFactory();
+      __webpack_require__.r(exports);
+      __webpack_module_cache__[id] = { exports, id, loaded: true };
+    }
+  }
+};
+
+__webpack_require__.rstest_do_mock = (id, modFactory) => {
+  let requiredModule = undefined
+  try {
+    requiredModule = __webpack_require__(id);
+  } catch {
+    // TODO: non-resolved module
+  } finally {
+    __webpack_require__.rstest_original_modules[id] = requiredModule;
+  }
+  if (typeof modFactory === 'string' || typeof modFactory === 'number') {
+    __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
+  } else if (typeof modFactory === 'function') {
+    const exports = modFactory();
     __webpack_require__.r(exports);
     __webpack_module_cache__[id] = { exports, id, loaded: true };
   }
 };
+
 `;
       }
     }
@@ -95,7 +127,7 @@ export const pluginMockRuntime: RsbuildPlugin = {
   name: 'rstest:mock-runtime',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
-      config.plugins!.push(new MockRuntimeRspackPlugin());
+      config.plugins.push(new MockRuntimeRspackPlugin());
     });
   },
 };

@@ -1,8 +1,22 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
-import type { NormalizedConfig, RstestConfig } from './config';
+import type {
+  NormalizedConfig,
+  NormalizedProjectConfig,
+  RstestConfig,
+} from './config';
 import type { Reporter } from './reporter';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
+
+export type Project = { config: RstestConfig; configFilePath?: string };
+
+export type ProjectContext = {
+  name: string;
+  environmentName: string;
+  rootPath: string;
+  configFilePath?: string;
+  normalizedConfig: NormalizedProjectConfig;
+};
 
 export type RstestContext = {
   /** The Rstest core version. */
@@ -13,6 +27,14 @@ export type RstestContext = {
   originalConfig: Readonly<RstestConfig>;
   /** The normalized Rstest config. */
   normalizedConfig: NormalizedConfig;
+  /** filter by a filename regex pattern */
+  fileFilters?: string[];
+  /** The config file path. */
+  configFilePath?: string;
+  /**
+   * Run tests from one or more projects.
+   */
+  projects: ProjectContext[];
   /**
    * The command type.
    *

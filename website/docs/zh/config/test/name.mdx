@@ -4,3 +4,15 @@
 - **默认值：** `rstest`
 
 测试项目的名称。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'node',
+});
+```
+
+当你通过 [projects](/config/test/projects) 定义多个测试项目时，建议为每个项目指定唯一的名称，方便通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 选项来过滤运行特定项目。
+
+如果 project 未提供名称，Rstest 将会使用当前项目的 `package.json` 中定义的 `name` 属性，如果不存在，则使用文件夹名称。

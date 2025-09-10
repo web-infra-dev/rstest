@@ -6,11 +6,14 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  TestResult,
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
 export type TestContext = {
   expect: RstestExpect;
+  onTestFinished: RunnerAPI['onTestFinished'];
+  onTestFailed: RunnerAPI['onTestFailed'];
 };
 
 export type TestCallbackFn<ExtraContext = object> = (
@@ -25,14 +28,14 @@ type TestFn<ExtraContext = object> = (
 
 export interface TestEachFn {
   <T extends Record<string, unknown>>(
-    cases: ReadonlyArray<T>,
+    cases: readonly T[],
   ): (
     description: string,
     fn?: (param: T) => MaybePromise<void>,
     timeout?: number,
   ) => void;
-  <T extends readonly [unknown, ...Array<unknown>]>(
-    cases: ReadonlyArray<T>,
+  <T extends readonly [unknown, ...unknown[]]>(
+    cases: readonly T[],
   ): (
     description: string,
     fn: (...args: [...T]) => MaybePromise<void>,
@@ -41,7 +44,7 @@ export interface TestEachFn {
 }
 
 export type TestForFn<ExtraContext = object> = <T>(
-  cases: ReadonlyArray<T>,
+  cases: readonly T[],
 ) => (
   description: string,
   fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
@@ -50,15 +53,15 @@ export type TestForFn<ExtraContext = object> = <T>(
 
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
-    cases: ReadonlyArray<T>,
+    cases: readonly T[],
   ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
-  <T extends readonly [unknown, ...Array<unknown>]>(
-    cases: ReadonlyArray<T>,
+  <T extends readonly [unknown, ...unknown[]]>(
+    cases: readonly T[],
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
 }
 
 export type DescribeForFn = <T>(
-  cases: ReadonlyArray<T>,
+  cases: readonly T[],
 ) => (description: string, fn?: (param: T) => MaybePromise<void>) => void;
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
@@ -144,6 +147,14 @@ export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   }>;
 };
 
+export type OnTestFinishedHandler = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
+
+export type OnTestFailedHandler = (params: {
+  task: { result: Readonly<TestResult> };
+}) => MaybePromise<void>;
+
 export type RunnerAPI = {
   describe: DescribeAPI;
   it: TestAPIs;
@@ -152,6 +163,8 @@ export type RunnerAPI = {
   afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
   beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
   afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
+  onTestFinished: (fn: OnTestFinishedHandler, timeout?: number) => void;
+  onTestFailed: (fn: OnTestFailedHandler, timeout?: number) => void;
 };
 
 export type RstestExpect = ExpectStatic;

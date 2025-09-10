@@ -25,20 +25,31 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
 } {
   const {
     testPath,
+    project,
     runtimeConfig: { testNamePattern },
   } = workerState;
   const runtime = createRuntimeAPI({
+    project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
   const testRunner: TestRunner = new TestRunner();
 
   return {
-    api: runtime.api,
+    api: {
+      ...runtime.api,
+      onTestFinished: (fn, timeout) => {
+        testRunner.onTestFinished(testRunner.getCurrentTest(), fn, timeout);
+      },
+      onTestFailed: (fn, timeout) => {
+        testRunner.onTestFailed(testRunner.getCurrentTest(), fn, timeout);
+      },
+    },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
+        runtime.instance.updateStatus('running');
 
         const results = await testRunner.runTests({
           tests,

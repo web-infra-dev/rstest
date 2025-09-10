@@ -14,13 +14,24 @@ Retry the test specific number of times if it fails. This is useful for some fla
 
 You can get two retries by setting `retry:2` when the test fails:
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --retry 2
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   retry: 2,
 });
 ```
+  </Tab>
+</Tabs>
 
 When the test has retried, you may get the following logs:
 

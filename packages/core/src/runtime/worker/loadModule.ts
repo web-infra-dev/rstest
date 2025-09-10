@@ -71,7 +71,7 @@ const defineRstestDynamicImport =
   async (specifier: string, importAttributes: ImportCallOptions) => {
     const resolvedPath = isAbsolute(specifier)
       ? pathToFileURL(specifier)
-      : await import.meta.resolve(specifier, pathToFileURL(testPath));
+      : import.meta.resolve(specifier, pathToFileURL(testPath));
 
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
@@ -82,10 +82,7 @@ const defineRstestDynamicImport =
       delete importAttributes.with.rstest;
     }
 
-    const importedModule = await import(
-      modulePath,
-      importAttributes as ImportCallOptions
-    );
+    const importedModule = await import(modulePath, importAttributes);
 
     if (
       shouldInterop({

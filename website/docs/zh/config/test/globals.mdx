@@ -12,13 +12,24 @@ overviewHeaders: []
 
 默认情况下，Rstest 不提供全局 API。如果你想像使用 Jest 一样全局使用这些 API，可以在配置中添加 `globals: true`或者在命令行中传入 `--globals` 选项。
 
-```ts title="rstest.config.ts"
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --globals
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globals: true,
 });
 ```
+  </Tab>
+</Tabs>
 
 ## 使用
 
