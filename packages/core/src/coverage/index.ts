@@ -24,7 +24,9 @@ export const loadCoverageProvider = async (
     const modulePath = require.resolve(moduleName, {
       paths: [rootPath],
     });
-    const { pluginCoverage, CoverageProvider } = await import(modulePath);
+    const { pluginCoverage, CoverageProvider } = await import(
+      pathToFileURL(modulePath).toString()
+    );
     return {
       pluginCoverage,
       CoverageProvider,

@@ -102,6 +102,7 @@ export class Rstest implements RstestContext {
           ) as NormalizedProjectConfig;
           config.isolate = rstestConfig.isolate;
           config.source ??= {};
+          config.coverage = rstestConfig.coverage;
 
           if (!config.source.tsconfigPath) {
             const tsconfigPath = join(config.root, TS_CONFIG_FILE);
