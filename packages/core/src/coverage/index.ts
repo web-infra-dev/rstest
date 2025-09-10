@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { CoverageOptions, CoverageProvider } from '../types/coverage';
 export const CoverageProviderMap: Record<string, string> = {
@@ -12,14 +13,16 @@ export const loadCoverageProvider = async (
   CoverageProvider: typeof CoverageProvider;
   pluginCoverage: (options: CoverageOptions) => RsbuildPlugin;
 }> => {
+  const rootPath = pathToFileURL(root).toString();
+
   const moduleName = CoverageProviderMap[options.provider || 'istanbul'];
   if (!moduleName) {
     throw new Error(`Unknown coverage provider: ${options.provider}`);
   }
   try {
-    const require = createRequire(root);
+    const require = createRequire(rootPath);
     const modulePath = require.resolve(moduleName, {
-      paths: [root],
+      paths: [rootPath],
     });
     const { pluginCoverage, CoverageProvider } = await import(modulePath);
     return {
