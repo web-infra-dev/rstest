@@ -246,12 +246,6 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog';
 
-export type NormalizedProjectConfig = Required<
-  Omit<NormalizedConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
-> & {
-  [key in OptionalKeys]?: NormalizedConfig[key];
-};
-
 export type NormalizedConfig = Required<
   Omit<RstestConfig, OptionalKeys | 'pool' | 'projects' | 'coverage'>
 > & {
@@ -259,4 +253,10 @@ export type NormalizedConfig = Required<
 } & {
   pool: RstestPoolOptions;
   coverage: NormalizedCoverageOptions;
+};
+
+export type NormalizedProjectConfig = Required<
+  Omit<NormalizedConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
+> & {
+  [key in OptionalKeys]?: NormalizedConfig[key];
 };
