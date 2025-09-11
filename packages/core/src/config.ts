@@ -118,6 +118,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
       '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
+      '**/*.{test,spec}.?(c|m)[jt]s?(x)',
     ],
     enabled: false,
     provider: 'istanbul',

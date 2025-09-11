@@ -16,7 +16,7 @@ export type CoverageOptions = {
   /**
    * A list of glob patterns that should be excluded from coverage collection.
    *
-   * @default ['**\/node_modules/**', '**\/dist/**', '**\/test/**', '**\/__tests__/**', '**\/__mocks__/**']
+   * @default ['**\/node_modules/**', '**\/dist/**', '**\/test/**', '**\/__tests__/**', '**\/*.{test,spec}.?(c|m)[jt]s?(x)', '**\/__mocks__/**']
    */
   exclude?: string[];
 
