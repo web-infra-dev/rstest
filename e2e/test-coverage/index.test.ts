@@ -29,20 +29,12 @@ it('coverage-istanbul', async () => {
     ),
   ).toBeTruthy();
   expect(
-    logs.find(
-      (log) =>
-        log.includes('string.ts') &&
-        log.replaceAll(' ', '').includes('93.75|100|83.33|92.85|7'),
-    ),
-  ).toBeTruthy();
-  // TODO: should not include test files
+    logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
+  ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
+
   expect(
-    logs.find(
-      (log) =>
-        log.includes('All files') &&
-        log.replaceAll(' ', '').includes('99.43|100|98.68|99.41'),
-    ),
-  ).toBeTruthy();
+    logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
+  ).toMatchInlineSnapshot(`"Allfiles|98.33|100|94.44|98.21|"`);
 
   // text reporter
   expectLog('% Stmts', logs);
@@ -81,20 +73,10 @@ it('coverage-istanbul with custom options', async () => {
   expectLog('Coverage enabled with istanbul', logs);
 
   // test coverage
+  expect(logs.find((log) => log.includes('index.ts'))).toBeFalsy();
   expect(
-    logs.find(
-      (log) =>
-        log.includes('index.ts') &&
-        log.replaceAll(' ', '').includes('100|100|100|100'),
-    ),
-  ).toBeFalsy();
-  expect(
-    logs.find(
-      (log) =>
-        log.includes('string.ts') &&
-        log.replaceAll(' ', '').includes('93.75|100|83.33|92.85|7'),
-    ),
-  ).toBeTruthy();
+    logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
+  ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
 
   // text reporter
   expectLog('% Stmts', logs);

@@ -23,20 +23,12 @@ describe('test projects coverage', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(
-      logs.find(
-        (log) =>
-          log.includes('All files') &&
-          log.replaceAll(' ', '').includes('100|100|100|100'),
-      ),
-    ).toBeTruthy();
+      logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"Allfiles|100|100|100|100|"`);
 
     expect(
-      logs.find(
-        (log) =>
-          log.includes('client/test') &&
-          log.replaceAll(' ', '').includes('100|100|100|100'),
-      ),
-    ).toBeTruthy();
+      logs.find((log) => log.includes('client/src'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"client/src|100|100|100|100|"`);
 
     expect(
       logs.find(

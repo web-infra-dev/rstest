@@ -112,6 +112,13 @@ const createDefaultConfig = (): NormalizedConfig => ({
   printConsoleTrace: false,
   disableConsoleIntercept: false,
   coverage: {
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/test/**',
+      '**/__tests__/**',
+      '**/__mocks__/**',
+    ],
     enabled: false,
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],

@@ -14,6 +14,13 @@ export type CoverageOptions = {
   enabled?: boolean;
 
   /**
+   * A list of glob patterns that should be excluded from coverage collection.
+   *
+   * @default ['**\/node_modules/**', '**\/dist/**', '**\/test/**', '**\/__tests__/**', '**\/__mocks__/**']
+   */
+  exclude?: string[];
+
+  /**
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */
