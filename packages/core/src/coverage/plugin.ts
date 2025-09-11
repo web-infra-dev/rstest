@@ -7,7 +7,7 @@ export const pluginCoverageCore: (
 ) => RsbuildPlugin = (coverageOptions) => ({
   name: 'rstest:coverage-core',
   setup: (api) => {
-    api.onBeforeDevCompile(async ({ isFirstCompile }) => {
+    api.onBeforeDevCompile(({ isFirstCompile }) => {
       if (isFirstCompile && coverageOptions.clean) {
         if (fs.existsSync(coverageOptions.reportsDirectory)) {
           fs.rmSync(coverageOptions.reportsDirectory, { recursive: true });
