@@ -113,6 +113,8 @@ const createDefaultConfig = (): NormalizedConfig => ({
   disableConsoleIntercept: false,
   coverage: {
     enabled: false,
+    provider: 'istanbul',
+    reporters: ['text', 'html', 'clover', 'json'],
   },
 });
 
@@ -125,6 +127,10 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     TEMP_RSTEST_OUTPUT_DIR_GLOB,
   ]);
   merged.reporters = config.reporters ?? merged.reporters;
+
+  merged.coverage ??= {};
+  merged.coverage.reporters =
+    config.coverage?.reporters ?? merged.coverage?.reporters;
   merged.pool =
     typeof config.pool === 'string'
       ? {
