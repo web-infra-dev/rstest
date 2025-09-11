@@ -22,9 +22,7 @@ declare global {
 export class CoverageProvider implements RstestCoverageProvider {
   private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
 
-  constructor(private options: NormalizedCoverageOptions) {
-    this.options = options;
-  }
+  constructor(private options: NormalizedCoverageOptions) {}
 
   init(): void {
     // Initialize global coverage object
