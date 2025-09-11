@@ -104,7 +104,7 @@ class Rstest {
   private setupTestController() {
     const runHandler = (
       request: vscode.TestRunRequest,
-      cancellation: vscode.CancellationToken,
+      _cancellation: vscode.CancellationToken,
     ) => {
       if (request.continuous) {
         vscode.window.showInformationMessage(

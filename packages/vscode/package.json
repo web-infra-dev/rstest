@@ -38,7 +38,6 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run build",
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
     "build:local": "SOURCEMAP=true rslib build",
@@ -46,7 +45,9 @@
     "test:unit": "rstest",
     "test": "npm run test:unit && npm run test:e2e",
     "typecheck": "tsc --noEmit",
-    "watch": "rslib build --watch"
+    "watch": "rslib build --watch",
+    "package:vsix": "npm run build && vsce package",
+    "publish:vsce": "vsce publish"
   },
   "devDependencies": {
     "@rsbuild/core": "1.5.0",
@@ -60,6 +61,7 @@
     "@types/ws": "^8.18.1",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.6.0",
     "get-port": "^7.1.0",
     "glob": "^7.1.4",
     "mocha": "^11.7.2",

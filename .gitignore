@@ -38,3 +38,4 @@ fixtures-test-*/
 .rslib/
 tests-dist/
 .vscode-test/
+packages/vscode/*.vsix
