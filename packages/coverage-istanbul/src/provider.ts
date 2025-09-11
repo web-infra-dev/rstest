@@ -2,17 +2,12 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
+import type { CoverageMap } from 'istanbul-lib-coverage';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 
 const { createCoverageMap } = istanbulLibCoverage;
-
-interface CoverageMap {
-  files(): string[];
-  merge(other: any): void;
-  toJSON(): any;
-}
 
 // Global type declaration for coverage
 declare global {
@@ -63,7 +58,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     try {
       const context = createContext({
-        dir: 'coverage',
+        dir: this.options.reportsDirectory,
         defaultSummarizer: 'nested',
         coverageMap: createCoverageMap(coverageMap.toJSON()),
       });

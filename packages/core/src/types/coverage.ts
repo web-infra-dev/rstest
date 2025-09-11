@@ -1,3 +1,4 @@
+import type { CoverageMap } from 'istanbul-lib-coverage';
 import type { ReportOptions } from 'istanbul-reports';
 
 type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
@@ -24,16 +25,16 @@ export type CoverageOptions = {
    */
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
 
+  /**
+   * The directory to store coverage reports.
+   * @default './coverage'
+   */
+  reportsDirectory?: string;
+
   // TODO: support clean
 };
 
 export type NormalizedCoverageOptions = Required<CoverageOptions>;
-
-interface CoverageMap {
-  files(): string[];
-  merge(other: any): void;
-  toJSON(): any;
-}
 
 export declare class CoverageProvider {
   constructor(options: CoverageOptions);
