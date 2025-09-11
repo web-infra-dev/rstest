@@ -216,6 +216,15 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
 
+  e2e/projects/fixtures:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../packages/coverage-istanbul
+
   e2e/projects/fixtures/packages/client:
     dependencies:
       react:
@@ -438,6 +447,9 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
+      '@types/istanbul-lib-coverage':
+        specifier: ^2.0.6
+        version: 2.0.6
       '@types/istanbul-reports':
         specifier: ^3.0.4
         version: 3.0.4

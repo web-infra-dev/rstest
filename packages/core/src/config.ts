@@ -4,7 +4,7 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
-import { dirname, isAbsolute, join } from 'pathe';
+import { dirname, isAbsolute, join, resolve } from 'pathe';
 import type { NormalizedConfig, RstestConfig } from './types';
 import {
   color,
@@ -115,6 +115,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     enabled: false,
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],
+    reportsDirectory: './coverage',
   },
 });
 
@@ -131,6 +132,11 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.coverage ??= {};
   merged.coverage.reporters =
     config.coverage?.reporters ?? merged.coverage?.reporters;
+  const reportsDirectory = merged.coverage.reportsDirectory!;
+  merged.coverage.reportsDirectory = isAbsolute(reportsDirectory)
+    ? reportsDirectory
+    : resolve(merged.root!, reportsDirectory);
+
   merged.pool =
     typeof config.pool === 'string'
       ? {

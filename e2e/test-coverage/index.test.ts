@@ -104,3 +104,25 @@ it('coverage-istanbul with custom options', async () => {
     fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
   ).toBeTruthy();
 });
+
+it('coverage-istanbul with custom reportsDirectory', async () => {
+  const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', '-c', 'rstest.reportsDirectory.config.ts'],
+    options: {
+      nodeOptions: {
+        cwd: join(__dirname, 'fixtures'),
+      },
+    },
+  });
+
+  await expectExecSuccess();
+
+  const logs = cli.stdout.split('\n').filter(Boolean);
+
+  expectLog('Coverage enabled with istanbul', logs);
+
+  expect(
+    fs.existsSync(join(__dirname, 'fixtures/test-temp-coverage/index.html')),
+  ).toBeTruthy();
+});
