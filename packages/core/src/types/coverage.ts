@@ -1,3 +1,10 @@
+import type { ReportOptions } from 'istanbul-reports';
+
+type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
+  Name extends keyof ReportOptions
+    ? [Name, Partial<ReportOptions[Name]>]
+    : [Name, Record<string, unknown>];
+
 export type CoverageOptions = {
   /**
    * Enable coverage collection.
@@ -10,8 +17,17 @@ export type CoverageOptions = {
    * @default 'istanbul'
    */
   provider?: 'istanbul';
+
+  /**
+   * The reporters to use for coverage collection.
+   * @default ['text', 'html', 'clover', 'json']
+   */
+  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+
   // TODO: support clean
 };
+
+export type NormalizedCoverageOptions = Required<CoverageOptions>;
 
 interface CoverageMap {
   files(): string[];

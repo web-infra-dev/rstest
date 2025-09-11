@@ -1,4 +1,7 @@
-import type { CoverageProvider as RstestCoverageProvider } from '@rstest/core';
+import type {
+  NormalizedCoverageOptions,
+  CoverageProvider as RstestCoverageProvider,
+} from '@rstest/core';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
@@ -18,6 +21,10 @@ declare global {
 
 export class CoverageProvider implements RstestCoverageProvider {
   private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
+
+  constructor(private options: NormalizedCoverageOptions) {
+    this.options = options;
+  }
 
   init(): void {
     // Initialize global coverage object
@@ -62,15 +69,14 @@ export class CoverageProvider implements RstestCoverageProvider {
         defaultSummarizer: 'nested',
         coverageMap: createCoverageMap(coverageMap.toJSON()),
       });
-      const reportersList = ['html', 'json'] as const;
+      const reportersList = this.options.reporters;
       for (const reporter of reportersList) {
-        const report = reports.create(reporter, {
-          // Add any specific options for the reporter here
-        });
+        const [reporterName, reporterOptions] = Array.isArray(reporter)
+          ? reporter
+          : [reporter, {}];
+        const report = reports.create(reporterName, reporterOptions);
         report.execute(context);
       }
-
-      console.log('Coverage reports generated in ./coverage directory');
     } catch (error) {
       console.error('Failed to generate coverage reports:', error);
     }

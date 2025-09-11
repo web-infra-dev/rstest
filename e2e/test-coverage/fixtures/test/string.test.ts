@@ -1,11 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import {
-  capitalize,
-  countWords,
-  isPalindrome,
-  reverseString,
-  truncate,
-} from '../src/string';
+import { capitalize, countWords, isPalindrome, truncate } from '../src/string';
 
 describe('String Utils', () => {
   describe('capitalize', () => {
@@ -19,20 +13,6 @@ describe('String Utils', () => {
 
     it('should handle single character', () => {
       expect(capitalize('a')).toBe('A');
-    });
-  });
-
-  describe('reverseString', () => {
-    it('should reverse string', () => {
-      expect(reverseString('hello')).toBe('olleh');
-    });
-
-    it('should handle empty string', () => {
-      expect(reverseString('')).toBe('');
-    });
-
-    it('should handle palindrome', () => {
-      expect(reverseString('racecar')).toBe('racecar');
     });
   });
 

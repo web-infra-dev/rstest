@@ -438,6 +438,9 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
+      '@types/istanbul-reports':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7

@@ -104,6 +104,13 @@ export async function runTests(context: Rstest): Promise<void> {
       )
     : null;
 
+  if (coverageProvider) {
+    logger.log(
+      ` ${color.gray('Coverage enabled with')} %s\n`,
+      color.yellow(context.normalizedConfig.coverage.provider),
+    );
+  }
+
   type Mode = 'all' | 'on-demand';
 
   const run = async ({
