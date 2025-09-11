@@ -1,5 +1,5 @@
 import type { RsbuildConfig } from '@rsbuild/core';
-import type { CoverageOptions } from './coverage';
+import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
@@ -21,7 +21,7 @@ export type RstestPoolOptions = {
 
 export type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate'
+  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
 >;
 
 /**
@@ -246,16 +246,17 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog';
 
-export type NormalizedProjectConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
-> & {
-  [key in OptionalKeys]?: RstestConfig[key];
-};
-
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects'>
+  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects' | 'coverage'>
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {
   pool: RstestPoolOptions;
+  coverage: NormalizedCoverageOptions;
+};
+
+export type NormalizedProjectConfig = Required<
+  Omit<NormalizedConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
+> & {
+  [key in OptionalKeys]?: NormalizedConfig[key];
 };

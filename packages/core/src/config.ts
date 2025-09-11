@@ -116,6 +116,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',
+    clean: true,
   },
 });
 

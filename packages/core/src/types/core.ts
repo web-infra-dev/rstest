@@ -39,8 +39,9 @@ export type RstestContext = {
   /**
    * The command type.
    *
-   * - dev: `rstest dev`
-   * - run: `rstest run`
+   * - run: `rstest`
+   * - dev: `rstest dev` or watch mode
+   * - list: `rstest list`
    */
   command: RstestCommand;
   reporters: Reporter[];
