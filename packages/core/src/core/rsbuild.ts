@@ -65,7 +65,7 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {} },
+    normalizedConfig: { isolate, dev = {}, coverage },
   } = context;
   const debugMode = isDebug();
 
@@ -123,6 +123,15 @@ export const prepareRsbuild = async (
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
+
+  if (coverage?.enabled) {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  }
 
   return rsbuildInstance;
 };

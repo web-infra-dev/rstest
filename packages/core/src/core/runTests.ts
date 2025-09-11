@@ -1,3 +1,4 @@
+import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
@@ -94,6 +95,14 @@ export async function runTests(context: Rstest): Promise<void> {
     context,
     recommendWorkerCount,
   });
+
+  // Initialize coverage collector
+  const coverageProvider = context.normalizedConfig.coverage.enabled
+    ? await createCoverageProvider(
+        context.normalizedConfig.coverage || {},
+        context.rootPath,
+      )
+    : null;
 
   type Mode = 'all' | 'on-demand';
 
@@ -249,6 +258,32 @@ export async function runTests(context: Rstest): Promise<void> {
           ? currentEntries.map((e) => e.testPath)
           : undefined,
       });
+    }
+
+    // Generate coverage reports after all tests complete
+    if (coverageProvider) {
+      try {
+        // Collect coverage data from all test results
+        const finalCoverageMap = coverageProvider.createCoverageMap();
+
+        // Merge coverage data from all test files
+        for (const result of results) {
+          if ((result as any).coverage) {
+            finalCoverageMap.merge((result as any).coverage);
+          }
+        }
+
+        // Generate coverage reports
+        await coverageProvider.generateReports(
+          finalCoverageMap,
+          context.normalizedConfig.coverage,
+        );
+
+        // Cleanup
+        coverageProvider.cleanup();
+      } catch (error) {
+        logger.error('Failed to generate coverage reports:', error);
+      }
     }
   };
 

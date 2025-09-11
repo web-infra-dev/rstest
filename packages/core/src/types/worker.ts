@@ -1,6 +1,6 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
-import type { RstestContext } from './core';
+import type { ProjectContext, RstestContext } from './core';
 import type { SourceMapInput } from './reporter';
 import type {
   TestFileInfo,
@@ -47,10 +47,12 @@ export type RuntimeConfig = Pick<
   | 'testEnvironment'
   | 'isolate'
   | 'hookTimeout'
+  | 'coverage'
 >;
 
 export type WorkerContext = {
   rootPath: RstestContext['rootPath'];
+  projectRoot: ProjectContext['rootPath'];
   project: string;
   runtimeConfig: RuntimeConfig;
 };

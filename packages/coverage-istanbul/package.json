@@ -1,0 +1,42 @@
+{
+  "name": "@rstest/coverage-istanbul",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Istanbul coverage provider for Rstest",
+  "author": "Travis Zhang<https://github.com/travzhang>",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch"
+  },
+  "dependencies": {
+    "swc-plugin-coverage-instrument": "^0.0.28",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-instrument": "^6.0.3",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-lib-source-maps": "^5.0.6",
+    "istanbul-reports": "^3.1.7"
+  },
+  "devDependencies": {
+    "@rstest/tsconfig": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rslib/core": "0.12.2",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.2",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-instrument": "^1.7.7",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-lib-source-maps": "^4.0.4",
+    "@types/istanbul-reports": "^3.0.4"
+  }
+}

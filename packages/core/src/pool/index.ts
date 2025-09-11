@@ -50,6 +50,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     testEnvironment,
     hookTimeout,
     isolate,
+    coverage,
   } = context.normalizedConfig;
 
   return {
@@ -69,6 +70,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     disableConsoleIntercept,
     testEnvironment,
     isolate,
+    coverage,
   };
 };
 
@@ -255,6 +257,7 @@ export const createPool = async ({
                 context: {
                   project: projectName,
                   rootPath: context.rootPath,
+                  projectRoot: project.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
                 type: 'run',
@@ -321,6 +324,7 @@ export const createPool = async ({
                 context: {
                   project: projectName,
                   rootPath: context.rootPath,
+                  projectRoot: project.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),
                 },
                 type: 'collect',

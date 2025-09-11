@@ -111,6 +111,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  coverage: {
+    enabled: false,
+  },
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
