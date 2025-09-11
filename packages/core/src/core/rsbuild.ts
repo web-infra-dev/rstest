@@ -124,13 +124,17 @@ export const prepareRsbuild = async (
     },
   });
 
-  if (coverage?.enabled) {
+  if (coverage?.enabled && command !== 'list') {
     const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverageCore } = await import('../coverage/plugin');
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
       context.rootPath,
     );
-    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+    rsbuildInstance.addPlugins([
+      pluginCoverage(coverage),
+      pluginCoverageCore(coverage),
+    ]);
   }
 
   return rsbuildInstance;

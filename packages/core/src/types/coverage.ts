@@ -31,7 +31,11 @@ export type CoverageOptions = {
    */
   reportsDirectory?: string;
 
-  // TODO: support clean
+  /**
+   * Whether to clean the coverage directory before running tests.
+   * @default true
+   */
+  clean?: boolean;
 };
 
 export type NormalizedCoverageOptions = Required<CoverageOptions>;

@@ -99,10 +99,9 @@ it('coverage-istanbul with custom options', async () => {
   // text reporter
   expectLog('% Stmts', logs);
 
-  // TODO: should clean and not generate html reporter
   expect(
     fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
-  ).toBeTruthy();
+  ).toBeFalsy();
 });
 
 it('coverage-istanbul with custom reportsDirectory', async () => {
