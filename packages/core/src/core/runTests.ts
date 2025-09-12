@@ -286,6 +286,21 @@ export async function runTests(context: Rstest): Promise<void> {
           context.normalizedConfig.coverage,
         );
 
+        if (context.normalizedConfig.coverage.thresholds) {
+          const { checkThresholds } = await import(
+            '../coverage/checkThresholds'
+          );
+          const thresholdResult = checkThresholds(
+            finalCoverageMap,
+            context.normalizedConfig.coverage.thresholds,
+          );
+          if (!thresholdResult.success) {
+            process.exitCode = 1;
+            logger.log('');
+            logger.log(thresholdResult.message);
+          }
+        }
+
         // Cleanup
         coverageProvider.cleanup();
       } catch (error) {

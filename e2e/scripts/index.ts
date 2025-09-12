@@ -110,10 +110,15 @@ export async function runRstestCli({
   };
 
   const expectLog = (
-    msg: string,
+    msg: string | RegExp,
     logs: string[] = cli.stdout.split('\n').filter(Boolean),
   ) => {
-    const matchedLog = logs.find((log) => log.includes(msg));
+    const matchedLog = logs.find((log) => {
+      if (typeof msg === 'string') {
+        return log.includes(msg);
+      }
+      return log.match(msg);
+    });
 
     if (!matchedLog) {
       throw new Error(`Can't find log(${msg}) in:\n${logs.join('\n')}`);
