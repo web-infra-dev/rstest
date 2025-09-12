@@ -25,6 +25,9 @@ importers:
       '@rstest/core':
         specifier: workspace:*
         version: link:packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:packages/coverage-istanbul
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4

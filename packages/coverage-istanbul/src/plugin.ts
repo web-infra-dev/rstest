@@ -1,31 +1,33 @@
 import { createRequire } from 'node:module';
-import type { RsbuildPlugin } from '@rstest/core';
+import type { NormalizedCoverageOptions, RsbuildPlugin } from '@rstest/core';
 
 const require = createRequire(import.meta.url);
 
-export const pluginCoverage: () => RsbuildPlugin = () => ({
+export const pluginCoverage: (
+  options: NormalizedCoverageOptions,
+) => RsbuildPlugin = (options) => ({
   name: 'rstest:coverage',
   setup: (api) => {
-    api.modifyRspackConfig((config) => {
+    api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig }) => {
       const swcPluginPath = require.resolve('swc-plugin-coverage-instrument');
 
-      config.module.rules ??= [];
-      config.module.rules.push({
-        test: /\.(js|ts)$/,
-        // TODO: exclude test files.
-        exclude: [/node_modules/],
-        loader: 'builtin:swc-loader',
-        options: {
-          jsc: {
-            parser: {
-              syntax: 'typescript',
-            },
-            experimental: {
-              plugins: [[swcPluginPath, {}]],
+      return mergeEnvironmentConfig(config, {
+        tools: {
+          swc: {
+            jsc: {
+              experimental: {
+                plugins: [
+                  [
+                    swcPluginPath,
+                    {
+                      unstableExclude: options.exclude,
+                    },
+                  ],
+                ],
+              },
             },
           },
         },
-        type: 'javascript/auto',
       });
     });
   },

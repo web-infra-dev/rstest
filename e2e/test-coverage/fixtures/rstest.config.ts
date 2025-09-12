@@ -5,4 +5,5 @@ export default defineConfig({
     enabled: true,
     provider: 'istanbul',
   },
+  setupFiles: ['./rstest.setup.ts'],
 });

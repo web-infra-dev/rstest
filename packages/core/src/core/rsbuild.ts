@@ -131,6 +131,10 @@ export const prepareRsbuild = async (
       coverage,
       context.rootPath,
     );
+    coverage.exclude.push(
+      ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
+    );
+
     rsbuildInstance.addPlugins([
       pluginCoverage(coverage),
       pluginCoverageCore(coverage),

@@ -14,6 +14,21 @@ export type CoverageOptions = {
   enabled?: boolean;
 
   /**
+   * A list of glob patterns that should be excluded from coverage collection.
+   *
+   * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
+   *
+   * @default ['**\/node_modules/**',
+   *           '**\/dist/**',
+   *           '**\/test/**',
+   *           '**\/__tests__/**',
+   *           '**\/*.{test,spec}.?(c|m)[jt]s?(x)',
+   *           '**\/__mocks__/**'
+   * ]
+   */
+  exclude?: string[];
+
+  /**
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */

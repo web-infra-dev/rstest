@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { sayHi } from '../src/index';
+import { sayHi } from './index';
 
 describe('Index', () => {
   it('should add two numbers correctly', () => {
@@ -8,5 +8,9 @@ describe('Index', () => {
 
   it('should test source code correctly', () => {
     expect(sayHi()).toBe('hi');
+  });
+
+  it('should test env correctly', () => {
+    expect(process.env.rstest).toBe('1');
   });
 });

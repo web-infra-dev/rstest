@@ -7,7 +7,8 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('test projects coverage', () => {
+// TODO: swc-plugin-coverage-instrument `unstableExclude` option should works in windows
+describe.skipIf(process.platform === 'win32')('test projects coverage', () => {
   it('should run projects correctly with coverage', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -23,20 +24,12 @@ describe('test projects coverage', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(
-      logs.find(
-        (log) =>
-          log.includes('All files') &&
-          log.replaceAll(' ', '').includes('100|100|100|100'),
-      ),
-    ).toBeTruthy();
+      logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"Allfiles|100|100|100|100|"`);
 
     expect(
-      logs.find(
-        (log) =>
-          log.includes('client/test') &&
-          log.replaceAll(' ', '').includes('100|100|100|100'),
-      ),
-    ).toBeTruthy();
+      logs.find((log) => log.includes('client/src'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"client/src|100|100|100|100|"`);
 
     expect(
       logs.find(
