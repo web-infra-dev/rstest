@@ -6,4 +6,5 @@ export default defineConfig({
     provider: 'istanbul',
     reporters: [['text', { skipFull: true }]],
   },
+  setupFiles: ['./rstest.setup.ts'],
 });

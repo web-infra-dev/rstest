@@ -21,7 +21,7 @@ describe('test projects coverage', () => {
 
     await expectExecSuccess();
     const logs = cli.stdout.split('\n').filter(Boolean);
-    console.log('logs', logs);
+
     expect(
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"Allfiles|100|100|100|100|"`);

@@ -6,4 +6,5 @@ export default defineConfig({
     provider: 'istanbul',
     reportsDirectory: 'test-temp-coverage',
   },
+  setupFiles: ['./rstest.setup.ts'],
 });

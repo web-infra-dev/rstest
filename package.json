@@ -32,6 +32,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.2.2",
     "@changesets/cli": "^2.29.6",
+    "@rstest/coverage-istanbul": "workspace:*",
     "@rsdoctor/rspack-plugin": "^1.2.3",
     "@rslint/core": "^0.1.12",
     "@rstest/core": "workspace:*",
