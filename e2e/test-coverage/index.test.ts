@@ -24,6 +24,14 @@ it('coverage-istanbul', async () => {
   expect(
     logs.find(
       (log) =>
+        log.includes('index.test.ts') &&
+        log.replaceAll(' ', '').includes('100|100|100|100'),
+    ),
+  ).toBeFalsy();
+
+  expect(
+    logs.find(
+      (log) =>
         log.includes('index.ts') &&
         log.replaceAll(' ', '').includes('100|100|100|100'),
     ),
