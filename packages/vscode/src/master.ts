@@ -108,7 +108,7 @@ export class RstestApi {
 
   public async createChildProcess() {
     const execArgv: string[] = [];
-    const workerPath = path.resolve(__dirname, 'worker/index.js');
+    const workerPath = path.resolve(__dirname, 'worker.js');
     const port = await getPort();
     const wsAddress = `ws://localhost:${port}`;
     const rstestProcess = spawn('node', [...execArgv, workerPath], {

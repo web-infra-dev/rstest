@@ -46,7 +46,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "watch": "rslib build --watch",
-    "package:vsix": "npm run build && vsce package",
+    "package:vsce": "npm run build && vsce package",
     "publish:vsce": "vsce publish"
   },
   "devDependencies": {

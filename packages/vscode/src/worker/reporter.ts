@@ -19,6 +19,7 @@ export class VscodeReporter implements Reporter {
 
   onTestRunEnd: Reporter['onTestRunEnd'] = ({ results, testResults }) => {
     if (this.onTestRunEndCallback) {
+      console.log('💃', results, testResults);
       this.onTestRunEndCallback({
         testFileResults: results,
         testResults: testResults,

@@ -46,8 +46,6 @@ class Rstest {
     this.api = new RstestApi();
     this.api.createChildProcess();
 
-    // Populate the test tree eagerly on construction
-    // (does not rely on the Testing view resolving the root)
     scanAllTestFiles(this.ctrl);
   }
 
@@ -336,7 +334,14 @@ async function findInitialFiles(
   pattern: vscode.GlobPattern,
 ) {
   for (const file of await vscode.workspace.findFiles(pattern)) {
-    getOrCreateFile(controller, file);
+    const path = file.fsPath.toString();
+    const shouldIgnore =
+      path.includes('/node_modules/') ||
+      path.includes('/.git/') ||
+      path.endsWith('.git');
+    if (!shouldIgnore) {
+      getOrCreateFile(controller, file);
+    }
   }
 }
 

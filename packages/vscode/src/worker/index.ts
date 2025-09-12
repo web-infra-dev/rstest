@@ -11,6 +11,7 @@ class Worker {
   public cwd!: string;
 
   constructor() {
+    console.log('🤚');
     this.ws = new WebSocket(process.env.RSTEST_WS_ADDRESS!);
     // this.initPromise = this.waitInitPromise();
     this.ws.on('message', (bufferData) => {
@@ -26,10 +27,16 @@ class Worker {
   }
 
   public async runTest(data: WorkerRunTestData) {
-    const rstest = await this.createRstest(data);
-    rstest.context.fileFilters = data.fileFilters;
-    rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
-    await rstest.runTests();
+    console.log('🙋', data);
+    try {
+      const rstest = await this.createRstest(data);
+      rstest.context.fileFilters = data.fileFilters;
+      rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
+      let res = await rstest.runTests();
+      console.log('🏁', res);
+    } catch (error) {
+      console.log('🤒', error);
+    }
   }
 
   // private waitInitPromise = () => {
@@ -47,6 +54,7 @@ class Worker {
     const rstestModule = (await import(
       this.rstestPath
     )) as typeof import('@rstest/core');
+    console.log('🤶', rstestModule);
     const { createRstest, loadConfig } = rstestModule;
     const { filePath } = await loadConfig({
       cwd: this.cwd,

@@ -529,8 +529,6 @@ importers:
         specifier: ^8.18.3
         version: 8.18.3
 
-  packages/vscode/compiled/glob: {}
-
   scripts/tsconfig: {}
 
   website:

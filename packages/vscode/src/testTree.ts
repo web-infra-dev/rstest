@@ -51,7 +51,15 @@ export async function scanAllTestFiles(
     for (const g of globs) {
       const pattern = new vscode.RelativePattern(folder, g);
       const found = await vscode.workspace.findFiles(pattern);
-      for (const f of found) uris.add(f.toString());
+      for (const f of found) {
+        const shouldIgnore =
+          f.fsPath.includes('/node_modules/') ||
+          f.fsPath.includes('/.git/') ||
+          f.fsPath.endsWith('.git');
+        if (!shouldIgnore) {
+          uris.add(f.toString());
+        }
+      }
     }
   }
 

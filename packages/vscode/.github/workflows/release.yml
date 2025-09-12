@@ -2,14 +2,25 @@ name: Release VS Code Extension
 
 on:
   workflow_dispatch: {}
-  push:
-    tags:
-      - 'v*'
-      - 'vscode-v*'
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          [
+            win32-x64,
+            win32-arm64,
+            darwin-x64,
+            darwin-arm64,
+            linux-x64,
+            linux-arm64,
+            linux-armhf,
+            alpine-x64,
+            alpine-arm64,
+          ]
     defaults:
       run:
         working-directory: packages/vscode
@@ -34,23 +45,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package VSIX
-        run: npx vsce package
-
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rstest-vsix
-          path: packages/vscode/*.vsix
-
-      - name: Publish to VS Code Marketplace
-        if: ${{ secrets.VSCE_PAT != '' }}
+      - name: Publish to VS Code Marketplace (target)
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish
-
-      - name: Create GitHub Release (tag push only)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: packages/vscode/*.vsix
+        run: npx vsce publish --target ${{ matrix.target }}
