@@ -3,8 +3,7 @@ import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
 import { runRstestCli } from '../scripts';
 
-// TODO: swc-plugin-coverage-instrument `unstableExclude` option should works in windows
-describe.skipIf(process.platform === 'win32')('test coverage-istanbul', () => {
+describe('test coverage-istanbul', () => {
   it('coverage-istanbul', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

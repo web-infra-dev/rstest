@@ -7,8 +7,7 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// TODO: swc-plugin-coverage-instrument `unstableExclude` option should works in windows
-describe.skipIf(process.platform === 'win32')('test projects coverage', () => {
+describe('test projects coverage', () => {
   it('should run projects correctly with coverage', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
