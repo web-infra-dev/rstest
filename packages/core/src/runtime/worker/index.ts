@@ -7,6 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -320,6 +321,14 @@ const runInPool = async (
       unhandledErrors,
       interopDefault,
     } = await preparePool(options);
+    // Initialize coverage collector if coverage is enabled
+    const coverageProvider = await createCoverageProvider(
+      options.context.runtimeConfig.coverage || {},
+      options.context.rootPath,
+    );
+    if (coverageProvider) {
+      coverageProvider.init();
+    }
 
     cleanups.push(cleanup);
 
@@ -339,6 +348,14 @@ const runInPool = async (
           await rpc.onTestFileStart(test);
         },
         onTestFileResult: async (test) => {
+          // Collect coverage data after test file completes
+          if (coverageProvider) {
+            const coverageMap = coverageProvider.collect();
+            if (coverageMap) {
+              // Attach coverage data to test result
+              (test as any).coverage = coverageMap.toJSON();
+            }
+          }
           await rpc.onTestFileResult(test);
         },
         onTestCaseResult: async (result) => {

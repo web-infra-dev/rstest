@@ -1,3 +1,4 @@
+import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
@@ -94,6 +95,21 @@ export async function runTests(context: Rstest): Promise<void> {
     context,
     recommendWorkerCount,
   });
+
+  // Initialize coverage collector
+  const coverageProvider = context.normalizedConfig.coverage.enabled
+    ? await createCoverageProvider(
+        context.normalizedConfig.coverage || {},
+        context.rootPath,
+      )
+    : null;
+
+  if (coverageProvider) {
+    logger.log(
+      ` ${color.gray('Coverage enabled with')} %s\n`,
+      color.yellow(context.normalizedConfig.coverage.provider),
+    );
+  }
 
   type Mode = 'all' | 'on-demand';
 
@@ -249,6 +265,47 @@ export async function runTests(context: Rstest): Promise<void> {
           ? currentEntries.map((e) => e.testPath)
           : undefined,
       });
+    }
+
+    // Generate coverage reports after all tests complete
+    if (coverageProvider) {
+      try {
+        // Collect coverage data from all test results
+        const finalCoverageMap = coverageProvider.createCoverageMap();
+
+        // Merge coverage data from all test files
+        for (const result of results) {
+          if ((result as any).coverage) {
+            finalCoverageMap.merge((result as any).coverage);
+          }
+        }
+
+        // Generate coverage reports
+        await coverageProvider.generateReports(
+          finalCoverageMap,
+          context.normalizedConfig.coverage,
+        );
+
+        if (context.normalizedConfig.coverage.thresholds) {
+          const { checkThresholds } = await import(
+            '../coverage/checkThresholds'
+          );
+          const thresholdResult = checkThresholds(
+            finalCoverageMap,
+            context.normalizedConfig.coverage.thresholds,
+          );
+          if (!thresholdResult.success) {
+            process.exitCode = 1;
+            logger.log('');
+            logger.log(thresholdResult.message);
+          }
+        }
+
+        // Cleanup
+        coverageProvider.cleanup();
+      } catch (error) {
+        logger.error('Failed to generate coverage reports:', error);
+      }
     }
   };
 

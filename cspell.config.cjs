@@ -18,6 +18,7 @@ module.exports = {
     'node_modules',
     'pnpm-lock.yaml',
     'LICENSE.md',
+    'e2e/**',
   ],
   flagWords: banWords,
   dictionaries: ['dictionary'],
