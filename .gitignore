@@ -34,3 +34,5 @@ test-results/
 fixtures-test/
 fixtures-test-*/
 .rslib/
+
+!packages/core/src/coverage

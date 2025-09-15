@@ -1,5 +1,6 @@
 import type { Window as HappyDOMWindow } from 'happy-dom';
 import type { TestEnvironment } from '../../../types';
+import { checkPkgInstalled } from '../../util';
 import { addDefaultErrorHandler, installGlobal } from './utils';
 
 type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
@@ -9,8 +10,9 @@ export const environment = <
 >{
   name: 'happy-dom',
   async setup(global, { happyDom = {} }) {
-    const { Window } = await import('happy-dom');
+    checkPkgInstalled('happy-dom');
 
+    const { Window } = await import('happy-dom');
     const win = new Window({
       ...happyDom,
       url: happyDom.url || 'http://localhost:3000',

@@ -3,6 +3,7 @@ import type { SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
+  CoverageProvider,
   FormattedError,
   MatcherState,
   OnTestFailedHandler,
@@ -50,6 +51,7 @@ export class TestRunner {
     state: WorkerState;
     hooks: RunnerHooks;
     api: Rstest;
+    coverageProvider?: CoverageProvider;
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {

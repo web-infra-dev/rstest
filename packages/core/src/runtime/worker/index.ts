@@ -7,6 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -14,11 +15,12 @@ import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
-const getGlobalApi = (api: Rstest) => {
+const registerGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
     [key in keyof Rstest]?: Rstest[key];
   }>((apis, key) => {
-    apis[key] = api[key] as any;
+    // @ts-expect-error register to global
+    globalThis[key] = api[key] as any;
     return apis;
   }, {});
 };
@@ -141,11 +143,14 @@ const preparePool = async ({
       throw new Error(`Unknown test environment: ${testEnvironment}`);
   }
 
+  if (globals) {
+    registerGlobalApi(api);
+  }
+
   const rstestContext = {
     global,
     console: global.console,
     Error,
-    ...(globals ? getGlobalApi(api) : {}),
   };
 
   // @ts-expect-error
@@ -316,6 +321,14 @@ const runInPool = async (
       unhandledErrors,
       interopDefault,
     } = await preparePool(options);
+    // Initialize coverage collector if coverage is enabled
+    const coverageProvider = await createCoverageProvider(
+      options.context.runtimeConfig.coverage || {},
+      options.context.rootPath,
+    );
+    if (coverageProvider) {
+      coverageProvider.init();
+    }
 
     cleanups.push(cleanup);
 
@@ -335,6 +348,14 @@ const runInPool = async (
           await rpc.onTestFileStart(test);
         },
         onTestFileResult: async (test) => {
+          // Collect coverage data after test file completes
+          if (coverageProvider) {
+            const coverageMap = coverageProvider.collect();
+            if (coverageMap) {
+              // Attach coverage data to test result
+              (test as any).coverage = coverageMap.toJSON();
+            }
+          }
           await rpc.onTestFileResult(test);
         },
         onTestCaseResult: async (result) => {

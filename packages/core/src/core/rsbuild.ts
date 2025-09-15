@@ -7,7 +7,12 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
-import type { EntryInfo, RstestContext, SourceMapInput } from '../types';
+import type {
+  EntryInfo,
+  NormalizedProjectConfig,
+  RstestContext,
+  SourceMapInput,
+} from '../types';
 import { isDebug } from '../utils';
 import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
@@ -60,7 +65,7 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {} },
+    normalizedConfig: { isolate, dev = {}, coverage },
   } = context;
   const debugMode = isDebug();
 
@@ -70,6 +75,7 @@ export const prepareRsbuild = async (
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     rsbuildConfig: {
+      root: context.rootPath,
       server: {
         printUrls: false,
         strictPort: false,
@@ -117,6 +123,23 @@ export const prepareRsbuild = async (
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
+
+  if (coverage?.enabled && command !== 'list') {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverageCore } = await import('../coverage/plugin');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    coverage.exclude.push(
+      ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
+    );
+
+    rsbuildInstance.addPlugins([
+      pluginCoverage(coverage),
+      pluginCoverageCore(coverage),
+    ]);
+  }
 
   return rsbuildInstance;
 };
@@ -213,10 +236,12 @@ export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
   rsbuildInstance,
-  normalizedConfig,
+  inspectedConfig,
 }: {
   rsbuildInstance: RsbuildInstance;
-  normalizedConfig: RstestContext['normalizedConfig'];
+  inspectedConfig: RstestContext['normalizedConfig'] & {
+    projects: NormalizedProjectConfig[];
+  };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   rootPath: string;
@@ -260,7 +285,7 @@ export const createRsbuildServer = async ({
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
-        rstest: normalizedConfig,
+        rstest: inspectedConfig,
       },
     });
   }

@@ -1,6 +1,7 @@
 export type * from './api';
 export type * from './config';
 export type * from './core';
+export type * from './coverage';
 export type * from './environment';
 export type * from './expect';
 export type * from './mock';

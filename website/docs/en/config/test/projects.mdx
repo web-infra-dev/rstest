@@ -5,7 +5,7 @@
 ```ts
 type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate'
+  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
 >;
 
 type Projects = (string | ProjectConfig)[];

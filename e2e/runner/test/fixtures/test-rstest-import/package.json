@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "name": "@rstest/tests-rstest-import",
+  "main": "index.js",
+  "type": "module",
+  "sideEffects": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "@rstest/core": "workspace:*"
+  }
+}

@@ -2,7 +2,7 @@
 
 exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = `
 {
-  "context": "<ROOT>",
+  "context": "<ROOT>/packages/core",
   "devtool": "source-map",
   "entry": {},
   "experiments": {
@@ -152,7 +152,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -206,7 +206,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -413,7 +413,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "library": {
       "type": "commonjs2",
     },
-    "path": "<ROOT>/dist/.rstest-temp",
+    "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
@@ -469,7 +469,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": "<ROOT>/__mocks__",
+          "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -508,6 +508,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       ".json",
       ".cjs",
     ],
+    "tsConfig": {
+      "configFile": "<ROOT>/packages/core/tsconfig.json",
+      "references": "auto",
+    },
   },
   "target": "node",
   "watch": false,
@@ -520,7 +524,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
 
 exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
 {
-  "context": "<ROOT>",
+  "context": "<ROOT>/packages/core",
   "devtool": "source-map",
   "entry": {},
   "experiments": {
@@ -671,7 +675,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -725,7 +729,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -921,7 +925,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "library": {
       "type": "commonjs2",
     },
-    "path": "<ROOT>/dist/.rstest-temp",
+    "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
@@ -976,7 +980,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": "<ROOT>/__mocks__",
+          "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -1018,6 +1022,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "mainFields": [
       "main",
     ],
+    "tsConfig": {
+      "configFile": "<ROOT>/packages/core/tsconfig.json",
+      "references": "auto",
+    },
   },
   "target": "node",
   "watch": false,
@@ -1030,7 +1038,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
 
 exports[`prepareRsbuild > should generate rspack config correctly with projects 1`] = `
 {
-  "context": "<ROOT>",
+  "context": "<ROOT>/packages/core",
   "devtool": "source-map",
   "entry": {},
   "experiments": {
@@ -1180,7 +1188,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -1234,7 +1242,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -1441,7 +1449,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "library": {
       "type": "commonjs2",
     },
-    "path": "<ROOT>/dist/.rstest-temp/test",
+    "path": "<ROOT>/packages/core/dist/.rstest-temp/test",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
@@ -1497,7 +1505,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": "<ROOT>/__mocks__",
+          "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -1536,6 +1544,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       ".json",
       ".cjs",
     ],
+    "tsConfig": {
+      "configFile": "<ROOT>/packages/core/tsconfig.json",
+      "references": "auto",
+    },
   },
   "target": "node",
   "watch": false,
@@ -1548,7 +1560,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
 
 exports[`prepareRsbuild > should generate rspack config correctly with projects 2`] = `
 {
-  "context": "<ROOT>",
+  "context": "<ROOT>/packages/core",
   "devtool": "source-map",
   "entry": {},
   "experiments": {
@@ -1699,7 +1711,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -1753,7 +1765,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               "isModule": "unknown",
               "jsc": {
                 "experimental": {
-                  "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
                   "keepImportAttributes": true,
                 },
                 "externalHelpers": true,
@@ -1960,7 +1972,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "library": {
       "type": "commonjs2",
     },
-    "path": "<ROOT>/dist/.rstest-temp/test-node",
+    "path": "<ROOT>/packages/core/dist/.rstest-temp/test-node",
     "pathinfo": false,
     "publicPath": "/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
@@ -2016,7 +2028,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectModulePathName": true,
-          "manualMockRoot": "<ROOT>/__mocks__",
+          "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
       "affectedHooks": undefined,
@@ -2058,6 +2070,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "mainFields": [
       "main",
     ],
+    "tsConfig": {
+      "configFile": "<ROOT>/packages/core/tsconfig.json",
+      "references": "auto",
+    },
   },
   "target": "node",
   "watch": false,
@@ -2104,7 +2120,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
           "isModule": "unknown",
           "jsc": {
             "experimental": {
-              "cacheRoot": "<ROOT>/node_modules/.cache/.swc",
+              "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
               "keepImportAttributes": true,
             },
             "externalHelpers": true,

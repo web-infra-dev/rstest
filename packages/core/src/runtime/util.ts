@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
 import type { FormattedError, Test } from '../types';
@@ -108,3 +109,23 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
 }
 
 export class TestRegisterError extends Error {}
+
+export class RstestError extends Error {
+  public fullStack?: boolean;
+}
+
+export function checkPkgInstalled(name: string): void {
+  const require = createRequire(import.meta.url);
+  try {
+    require.resolve(name);
+  } catch (error: any) {
+    if (error.code === 'MODULE_NOT_FOUND') {
+      const error = new RstestError(
+        `Missing dependency "${name}". Please install it first.`,
+      );
+      error.fullStack = true;
+      throw error;
+    }
+    throw error;
+  }
+}

@@ -40,7 +40,7 @@ export const createRstestRuntime = (
 
   const rstest = createRstestUtilities(workerState);
 
-  return {
+  const runtime = {
     runner,
     api: {
       ...runnerAPI,
@@ -50,4 +50,8 @@ export const createRstestRuntime = (
       rs: rstest,
     },
   };
+
+  globalThis.RSTEST_API = runtime.api;
+
+  return runtime;
 };

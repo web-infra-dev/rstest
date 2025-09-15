@@ -1,8 +1,11 @@
+import { existsSync } from 'node:fs';
 import { SnapshotManager } from '@vitest/snapshot/manager';
+import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JUnitReporter } from '../reporter/junit';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -17,7 +20,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath } from '../utils/helper';
+import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
 
 /**
  * Only letters, numbers, "-", "_", and "$" are allowed.
@@ -39,7 +42,7 @@ export class Rstest implements RstestContext {
   public command: RstestCommand;
   public fileFilters?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter)[];
+  public reporters: (Reporter | GithubActionsReporter | JUnitReporter)[];
   public snapshotManager: SnapshotManager;
   public version: string;
   public rootPath: string;
@@ -98,6 +101,16 @@ export class Rstest implements RstestContext {
             project.config,
           ) as NormalizedProjectConfig;
           config.isolate = rstestConfig.isolate;
+          config.source ??= {};
+          config.coverage = rstestConfig.coverage;
+
+          if (!config.source.tsconfigPath) {
+            const tsconfigPath = join(config.root, TS_CONFIG_FILE);
+
+            if (existsSync(tsconfigPath)) {
+              config.source.tsconfigPath = tsconfigPath;
+            }
+          }
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
@@ -159,10 +172,12 @@ const reportersMap: {
   default: typeof DefaultReporter;
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
+  junit: typeof JUnitReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
+  junit: JUnitReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
@@ -170,7 +185,7 @@ export type BuiltInReporterNames = keyof typeof reportersMap;
 export function createReporters(
   reporters: RstestConfig['reporters'],
   initOptions: any = {},
-): (Reporter | GithubActionsReporter)[] {
+): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
       const [name, options = {}] =

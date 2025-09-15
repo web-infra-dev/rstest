@@ -4,7 +4,7 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
-import { dirname, isAbsolute, join } from 'pathe';
+import { dirname, isAbsolute, join, resolve } from 'pathe';
 import type { NormalizedConfig, RstestConfig } from './types';
 import {
   color,
@@ -111,6 +111,26 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  coverage: {
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/test/**',
+      '**/__tests__/**',
+      '**/__mocks__/**',
+      // This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
+      // not support `?()`: '**/*.{test,spec}.?(c|m)[jt]s?(x)',
+      '**/*.{test,spec}.[jt]s',
+      '**/*.{test,spec}.[c|m][jt]s',
+      '**/*.{test,spec}.[jt]sx',
+      '**/*.{test,spec}.[c|m][jt]sx',
+    ],
+    enabled: false,
+    provider: 'istanbul',
+    reporters: ['text', 'html', 'clover', 'json'],
+    reportsDirectory: './coverage',
+    clean: true,
+  },
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
@@ -122,6 +142,15 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     TEMP_RSTEST_OUTPUT_DIR_GLOB,
   ]);
   merged.reporters = config.reporters ?? merged.reporters;
+
+  merged.coverage ??= {};
+  merged.coverage.reporters =
+    config.coverage?.reporters ?? merged.coverage?.reporters;
+  const reportsDirectory = merged.coverage.reportsDirectory!;
+  merged.coverage.reportsDirectory = isAbsolute(reportsDirectory)
+    ? reportsDirectory
+    : resolve(merged.root!, reportsDirectory);
+
   merged.pool =
     typeof config.pool === 'string'
       ? {
