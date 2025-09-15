@@ -26,6 +26,7 @@
   "unstubEnvs",
   "unstubGlobals",
 
+  "coverage",
   "reporters",
   "slowTestThreshold",
   "printConsoleTrace",

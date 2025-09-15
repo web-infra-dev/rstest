@@ -1,0 +1,207 @@
+# coverage
+
+- **类型：**
+
+```ts
+type CoverageOptions = {
+  enabled?: boolean;
+  provider?: 'istanbul';
+  exclude?: string[];
+  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reportsDirectory?: string;
+  clean?: boolean;
+  thresholds?: CoverageThresholds;
+};
+```
+
+- **默认值：** `undefined`
+- **版本：** `>=0.4.0`
+
+收集测试覆盖率信息并生成覆盖率报告。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+
+## 选项
+
+### enabled
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+启用或禁用测试覆盖率收集。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+
+### provider
+
+- **类型：** `'istanbul'`
+- **默认值：** `'istanbul'`
+
+选择覆盖率收集方式。目前仅支持 [istanbul](https://istanbul.js.org/)。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+#### Istanbul provider
+
+为了启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
+
+### exclude
+
+- **类型：** `string[]`
+- **默认值：**
+
+```ts
+[
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/test/**',
+  '**/__tests__/**',
+  '**/__mocks__/**',
+  '**/*.{test,spec}.[jt]s',
+  '**/*.{test,spec}.[c|m][jt]s',
+  '**/*.{test,spec}.[jt]sx',
+  '**/*.{test,spec}.[c|m][jt]sx',
+];
+```
+
+匹配 glob 规则的文件将从测试覆盖率收集中排除。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    exclude: ['**/node_modules/**', '**/dist/**'],
+  },
+});
+```
+
+### reporters
+
+- **类型：** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **默认值：** `['text', 'html', 'clover', 'json']`
+
+用于覆盖率收集的报告器。每个报告器可以是字符串（报告器名称）或包含报告器名称及其选项的元组。
+
+- 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
+- 有关报告器选项的详细信息，可参考 [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'html',
+      ['text', { skipFull: true }],
+      ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+### reportsDirectory
+
+- **类型：** `string`
+- **默认值：** `'./coverage'`
+
+存储覆盖率报告的目录。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### clean
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+是否在运行测试之前清理覆盖率目录。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    clean: true,
+  },
+});
+```
+
+### thresholds
+
+- **类型：**
+
+```ts
+type CoverageThresholds = {
+  /** 语句的阈值 */
+  statements?: number;
+  /** 函数的阈值 */
+  functions?: number;
+  /** 分支的阈值 */
+  branches?: number;
+  /** 行的阈值 */
+  lines?: number;
+};
+```
+
+- **默认值：** `undefined`
+
+设置最低代码覆盖率要求。你可以为语句、函数、分支和行覆盖率设置阈值。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      statements: 80,
+      functions: 80,
+      branches: 80,
+      lines: 80,
+    },
+  },
+});
+```
