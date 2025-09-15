@@ -22,9 +22,7 @@
   "dependencies": {
     "swc-plugin-coverage-instrument": "^0.0.30",
     "istanbul-lib-coverage": "^3.2.2",
-    "istanbul-lib-instrument": "^6.0.3",
     "istanbul-lib-report": "^3.0.1",
-    "istanbul-lib-source-maps": "^5.0.6",
     "istanbul-reports": "^3.1.7"
   },
   "devDependencies": {
@@ -34,9 +32,7 @@
     "@types/node": "^22.16.5",
     "typescript": "^5.9.2",
     "@types/istanbul-lib-coverage": "^2.0.6",
-    "@types/istanbul-lib-instrument": "^1.7.7",
     "@types/istanbul-lib-report": "^3.0.3",
-    "@types/istanbul-lib-source-maps": "^4.0.4",
     "@types/istanbul-reports": "^3.0.4"
   }
 }
