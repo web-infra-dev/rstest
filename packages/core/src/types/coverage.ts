@@ -1,10 +1,25 @@
-import type { CoverageMap } from 'istanbul-lib-coverage';
+import type { CoverageMap, CoverageSummary } from 'istanbul-lib-coverage';
 import type { ReportOptions } from 'istanbul-reports';
 
 type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
   Name extends keyof ReportOptions
     ? [Name, Partial<ReportOptions[Name]>]
     : [Name, Record<string, unknown>];
+
+type Thresholds = {
+  /** Thresholds for statements */
+  statements?: number;
+  /** Thresholds for functions */
+  functions?: number;
+  /** Thresholds for branches */
+  branches?: number;
+  /** Thresholds for lines */
+  lines?: number;
+};
+
+export type { CoverageMap, CoverageSummary };
+
+export type CoverageThresholds = Thresholds;
 
 export type CoverageOptions = {
   /**
@@ -51,9 +66,20 @@ export type CoverageOptions = {
    * @default true
    */
   clean?: boolean;
+
+  /**
+   * Coverage thresholds
+   *
+   * @default undefined
+   */
+  thresholds?: CoverageThresholds;
 };
 
-export type NormalizedCoverageOptions = Required<CoverageOptions>;
+export type NormalizedCoverageOptions = Required<
+  Omit<CoverageOptions, 'thresholds'>
+> & {
+  thresholds?: CoverageThresholds;
+};
 
 export declare class CoverageProvider {
   constructor(options: CoverageOptions);
