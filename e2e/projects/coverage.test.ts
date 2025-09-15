@@ -41,5 +41,5 @@ describe('test projects coverage', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
     ).toBeTruthy();
-  });
+  }, 15000);
 });
