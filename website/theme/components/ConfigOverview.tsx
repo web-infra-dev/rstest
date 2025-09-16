@@ -50,6 +50,7 @@ const OVERVIEW_GROUPS: Group[] = [
   {
     name: 'output',
     items: [
+      'coverage',
       'reporters',
       'slowTestThreshold',
       'onConsoleLog',

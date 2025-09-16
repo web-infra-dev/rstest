@@ -1,0 +1,207 @@
+# coverage
+
+- **Type:**
+
+```ts
+type CoverageOptions = {
+  enabled?: boolean;
+  provider?: 'istanbul';
+  exclude?: string[];
+  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reportsDirectory?: string;
+  clean?: boolean;
+  thresholds?: CoverageThresholds;
+};
+```
+
+- **Default:** `undefined`
+- **Version:** `>=0.4.0`
+
+Collect test coverage information and generate coverage reports.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+
+## Options
+
+### enabled
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Enable or disable test coverage collection.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+
+### provider
+
+- **Type:** `'istanbul'`
+- **Default:** `'istanbul'`
+
+The coverage provider to use. Currently, only [istanbul](https://istanbul.js.org/) is supported.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+#### Istanbul provider
+
+To enable istanbul coverage, you need to install the `@rstest/coverage-istanbul` package first.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument).
+
+### exclude
+
+- **Type:** `string[]`
+- **Default:**
+
+```ts
+[
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/test/**',
+  '**/__tests__/**',
+  '**/__mocks__/**',
+  '**/*.{test,spec}.[jt]s',
+  '**/*.{test,spec}.[c|m][jt]s',
+  '**/*.{test,spec}.[jt]sx',
+  '**/*.{test,spec}.[c|m][jt]sx',
+];
+```
+
+A glob pattern array to exclude files from test coverage collection.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    exclude: ['**/node_modules/**', '**/dist/**'],
+  },
+});
+```
+
+### reporters
+
+- **Type:** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **Default:** `['text', 'html', 'clover', 'json']`
+
+The reporters to use for coverage collection. Each reporter can be either a string (the reporter name) or a tuple with the reporter name and its options.
+
+- See [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/) for available reporters.
+- See [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'html',
+      ['text', { skipFull: true }],
+      ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+### reportsDirectory
+
+- **Type:** `string`
+- **Default:** `'./coverage'`
+
+The directory to store coverage reports.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### clean
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to clean the coverage directory before running tests.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    clean: true,
+  },
+});
+```
+
+### thresholds
+
+- **Type:**
+
+```ts
+type CoverageThresholds = {
+  /** Thresholds for statements */
+  statements?: number;
+  /** Thresholds for functions */
+  functions?: number;
+  /** Thresholds for branches */
+  branches?: number;
+  /** Thresholds for lines */
+  lines?: number;
+};
+```
+
+- **Default:** `undefined`
+
+Coverage thresholds for enforcing minimum coverage requirements. You can set thresholds for statements, functions, branches, and lines.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      statements: 80,
+      functions: 80,
+      branches: 80,
+      lines: 80,
+    },
+  },
+});
+```
