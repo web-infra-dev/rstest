@@ -36,6 +36,16 @@ export default defineConfig({
           util: 'node:util',
           path: 'node:path',
         },
+        copy: [
+          {
+            from: 'src/core/plugins/mockRuntimeCode.js',
+            to: 'mockRuntimeCode.js',
+          },
+          {
+            from: 'src/core/plugins/mockLoader.mjs',
+            to: 'mockLoader.mjs',
+          },
+        ],
         minify: {
           jsOptions: {
             minimizerOptions: {
@@ -75,7 +85,7 @@ export default defineConfig({
       tools: {
         rspack: {
           // fix licensePlugin watch error: ResourceData has been dropped by Rust.
-          plugins: isBuildWatch ? [] : [licensePlugin()],
+          plugins: [isBuildWatch ? null : licensePlugin()].filter(Boolean),
         },
       },
     },

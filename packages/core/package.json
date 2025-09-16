@@ -52,8 +52,9 @@
   "dependencies": {
     "chai": "^5.3.3",
     "@types/chai": "^5.2.2",
-    "@rsbuild/core": "1.5.0",
+    "@rsbuild/core": "1.5.6",
     "birpc": "2.5.0",
+    "es-module-lexer": "^1.7.0",
     "pathe": "^2.0.3",
     "std-env": "^3.9.0",
     "tinypool": "^1.1.1"
@@ -64,7 +65,7 @@
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.30",
     "@microsoft/api-extractor": "^7.52.11",
-    "@rslib/core": "0.12.2",
+    "@rslib/core": "0.13.2",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",
@@ -79,6 +80,7 @@
     "jest-diff": "^30.0.5",
     "jsdom": "^26.1.0",
     "license-webpack-plugin": "^4.0.2",
+    "magic-string": "^0.30.17",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.11",
     "source-map-support": "^0.5.21",

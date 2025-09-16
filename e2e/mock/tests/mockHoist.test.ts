@@ -1,17 +1,20 @@
+/** biome-ignore-all assist/source/organizeImports: ../src/c should come after ../src/d */
+
 import { expect, it, rs } from '@rstest/core';
-import { c } from '../src/c';
 import { d } from '../src/d';
+// @ts-expect-error it's has been mocked
+import { c, dd } from '../src/c';
 
 rs.mock('../src/c', () => {
   return {
     c: rs.fn(),
-    d,
+    dd: d,
   };
 });
 
 it('mocked c', async () => {
-  // @ts-expect-error: It has been mocked.
+  // @ts-expect-error it's has been mocked
   c('c');
   expect(c).toHaveBeenCalledWith('c');
-  expect(d).toBe(4);
+  expect(dd).toBe(4);
 });

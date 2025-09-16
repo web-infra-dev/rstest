@@ -20,7 +20,7 @@ import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
-import { pluginMockRuntime } from './plugins/mockRuntime';
+import { pluginMock } from './plugins/mock';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 
 type TestEntryToChunkHashes = {
@@ -103,7 +103,7 @@ export const prepareRsbuild = async (
       plugins: [
         pluginBasic(context),
         pluginIgnoreResolveError,
-        pluginMockRuntime,
+        pluginMock,
         pluginCSSFilter(),
         pluginEntryWatch({
           globTestSourceEntries,

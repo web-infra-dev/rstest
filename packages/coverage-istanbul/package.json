@@ -28,7 +28,7 @@
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@rslib/core": "0.12.2",
+    "@rslib/core": "0.13.2",
     "@types/node": "^22.16.5",
     "typescript": "^5.9.2",
     "@types/istanbul-lib-coverage": "^2.0.6",
