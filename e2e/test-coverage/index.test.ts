@@ -47,11 +47,11 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|95.23|100|83.33|92.85|7"`);
 
     expect(
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"Allfiles|98.33|100|94.44|98.21|"`);
+    ).toMatchInlineSnapshot(`"Allfiles|98.68|100|94.44|98.21|"`);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -93,7 +93,7 @@ describe('test coverage-istanbul', () => {
     expect(logs.find((log) => log.includes('index.ts'))).toBeFalsy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|95.23|100|83.33|92.85|7"`);
 
     // text reporter
     expectLog('% Stmts', logs);
