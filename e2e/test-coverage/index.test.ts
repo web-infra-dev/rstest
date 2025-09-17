@@ -47,11 +47,11 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|95.23|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|80.95|50|66.66|78.57|2-3,7"`);
 
     expect(
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"Allfiles|98.68|100|94.44|98.21|"`);
+    ).toMatchInlineSnapshot(`"Allfiles|94.73|83.33|88.88|94.64|"`);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -111,7 +111,7 @@ describe('test coverage-istanbul', () => {
     expect(logs.find((log) => log.includes('index.ts'))).toBeFalsy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|95.23|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|80.95|50|66.66|78.57|2-3,7"`);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -163,6 +163,11 @@ describe('test coverage-istanbul', () => {
 
     expectLog(
       /Coverage for statements .* does not meet global threshold/,
+      logs,
+    );
+
+    expectLog(
+      /Uncovered lines .* exceeds maximum global threshold allowed/,
       logs,
     );
   });

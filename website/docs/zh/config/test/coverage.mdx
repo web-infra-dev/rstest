@@ -205,6 +205,8 @@ type CoverageThresholds = {
 
 设置最低代码覆盖率要求。你可以为语句、函数、分支和行覆盖率设置阈值。
 
+当阈值设置为正数时，表示所需的最低百分比。当阈值设置为负数时，表示允许未覆盖的最大数量。
+
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
@@ -215,7 +217,7 @@ export default defineConfig({
       statements: 80,
       functions: 80,
       branches: 80,
-      lines: 80,
+      lines: -10,
     },
   },
 });
@@ -224,8 +226,8 @@ export default defineConfig({
 当代码覆盖率低于指定阈值时，测试将失败并输出如下错误信息：
 
 ```bash
-Coverage for statements 75% does not meet global threshold 80%
-Coverage for functions 75% does not meet global threshold 80%
-Coverage for branches 75% does not meet global threshold 80%
-Coverage for lines 75% does not meet global threshold 80%
+Error: Coverage for statements 75% does not meet global threshold 80%
+Error: Coverage for functions 75% does not meet global threshold 80%
+Error: Coverage for branches 75% does not meet global threshold 80%
+Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
 ```

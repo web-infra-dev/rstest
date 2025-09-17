@@ -7,6 +7,7 @@ export default defineConfig({
     reporters: [],
     thresholds: {
       statements: 100,
+      lines: -1,
     },
   },
   setupFiles: ['./rstest.setup.ts'],

@@ -205,6 +205,8 @@ type CoverageThresholds = {
 
 Coverage thresholds for enforcing minimum coverage requirements. You can set thresholds for statements, functions, branches, and lines.
 
+Thresholds specified as a positive number are taken to be the minimum percentage required. Thresholds specified as a negative number represent the maximum number of uncovered entities allowed.
+
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
@@ -215,7 +217,7 @@ export default defineConfig({
       statements: 80,
       functions: 80,
       branches: 80,
-      lines: 80,
+      lines: -10,
     },
   },
 });
@@ -224,8 +226,8 @@ export default defineConfig({
 When the code coverage is below the specified thresholds, the test will fail and output an error message like below:
 
 ```bash
-Coverage for statements 75% does not meet global threshold 80%
-Coverage for functions 75% does not meet global threshold 80%
-Coverage for branches 75% does not meet global threshold 80%
-Coverage for lines 75% does not meet global threshold 80%
+Error: Coverage for statements 75% does not meet global threshold 80%
+Error: Coverage for functions 75% does not meet global threshold 80%
+Error: Coverage for branches 75% does not meet global threshold 80%
+Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
