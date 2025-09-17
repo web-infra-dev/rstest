@@ -5,6 +5,6 @@
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "picocolors": "^1.1.1",
-    "strip-ansi": "^7.1.0"
+    "strip-ansi": "^7.1.2"
   }
 }
