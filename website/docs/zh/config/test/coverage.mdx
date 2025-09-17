@@ -81,6 +81,8 @@ export default defineConfig({
 
 #### Istanbul provider
 
+[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率分析工具，它通过插桩的方式来收集代码覆盖率信息。
+
 要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
 
 import { PackageManagerTabs } from '@theme';
@@ -217,4 +219,13 @@ export default defineConfig({
     },
   },
 });
+```
+
+当代码覆盖率低于指定阈值时，测试将失败并输出如下错误信息：
+
+```bash
+Coverage for statements 75% does not meet global threshold 80%
+Coverage for functions 75% does not meet global threshold 80%
+Coverage for branches 75% does not meet global threshold 80%
+Coverage for lines 75% does not meet global threshold 80%
 ```
