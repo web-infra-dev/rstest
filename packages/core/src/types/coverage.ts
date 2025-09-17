@@ -1,4 +1,8 @@
-import type { CoverageMap, CoverageSummary } from 'istanbul-lib-coverage';
+import type {
+  CoverageMap,
+  CoverageSummary,
+  Totals,
+} from 'istanbul-lib-coverage';
 import type { ReportOptions } from 'istanbul-reports';
 
 type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
@@ -16,6 +20,8 @@ type Thresholds = {
   /** Thresholds for lines */
   lines?: number;
 };
+
+export type CoverageSummaryTotals = Totals;
 
 export type { CoverageMap, CoverageSummary };
 

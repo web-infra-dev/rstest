@@ -1,21 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
-import { capitalize, countWords, isPalindrome, truncate } from '../src/string';
+import { countWords, isPalindrome, truncate } from '../src/string';
 
 describe('String Utils', () => {
-  describe('capitalize', () => {
-    it('should capitalize first letter', () => {
-      expect(capitalize('hello')).toBe('Hello');
-    });
-
-    it('should handle empty string', () => {
-      expect(capitalize('')).toBe('');
-    });
-
-    it('should handle single character', () => {
-      expect(capitalize('a')).toBe('A');
-    });
-  });
-
   describe('isPalindrome', () => {
     it('should return true for palindrome', () => {
       expect(isPalindrome('racecar')).toBe(true);
