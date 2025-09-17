@@ -22,6 +22,7 @@ export type CommonOptions = {
   exclude?: string[];
   reporter?: string[];
   project?: string[];
+  coverage?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -81,6 +82,11 @@ async function resolveConfig(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (options.coverage !== undefined) {
+    config.coverage ??= {};
+    config.coverage.enabled = options.coverage;
   }
 
   if (options.exclude) {

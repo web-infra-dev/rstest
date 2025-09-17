@@ -7,7 +7,7 @@ describe('test coverage-istanbul', () => {
   it('coverage-istanbul', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run'],
+      args: ['run', '-c', 'rstest.enable.config.ts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -70,6 +70,24 @@ describe('test coverage-istanbul', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/coverage/coverage-final.json')),
     ).toBeTruthy();
+  });
+
+  it('enable coverage with `--coverage`', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
   });
 
   it('coverage-istanbul with custom options', async () => {
