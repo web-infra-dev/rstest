@@ -1,23 +1,28 @@
-# Rslib project
+<picture>
+  <img alt="Rstest Banner" src="https://assets.rspack.rs/rstest/rstest-banner.png">
+</picture>
 
-## Setup
+# @rstest/coverage-istanbul
 
-Install the dependencies:
+[Istanbul](https://istanbul.js.org/) coverage provider for Rstest.
+
+## Install
 
 ```bash
-pnpm install
+npm add @rstest/coverage-istanbul -D
 ```
 
-## Get started
+## Usage
 
-Build the library:
+Enable coverage collection in `rstest.config.ts`:
 
-```bash
-pnpm build
-```
+```ts
+import { defineConfig } from '@rstest/core';
 
-Build the library in watch mode:
-
-```bash
-pnpm dev
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
 ```
