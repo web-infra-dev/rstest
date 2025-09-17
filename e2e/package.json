@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.5.7",
+    "@rsbuild/core": "1.5.0",
     "@rslib/core": "0.13.3",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
