@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { CoverageOptions, CoverageProvider } from '../types/coverage';
+import { color } from '../utils';
 export const CoverageProviderMap: Record<string, string> = {
   istanbul: '@rstest/coverage-istanbul',
 };
@@ -31,10 +32,12 @@ export const loadCoverageProvider = async (
       pluginCoverage,
       CoverageProvider,
     };
-  } catch (error) {
-    throw new Error(
-      `Failed to load coverage provider module: ${moduleName} in ${root}. Make sure it is installed.\nOriginal error: ${(error as Error).message}`,
+  } catch {
+    const error = new Error(
+      `Failed to load coverage provider module: ${color.cyan(moduleName)} in ${color.underline(root)}, please make sure it is installed.\n`,
     );
+    error.stack = '';
+    throw error;
   }
 };
 
