@@ -81,6 +81,8 @@ export default defineConfig({
 
 #### Istanbul provider
 
+[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects code coverage information through instrumentation.
+
 To enable istanbul coverage, you need to install the `@rstest/coverage-istanbul` package first.
 
 import { PackageManagerTabs } from '@theme';
@@ -217,4 +219,13 @@ export default defineConfig({
     },
   },
 });
+```
+
+When the code coverage is below the specified thresholds, the test will fail and output an error message like below:
+
+```bash
+Coverage for statements 75% does not meet global threshold 80%
+Coverage for functions 75% does not meet global threshold 80%
+Coverage for branches 75% does not meet global threshold 80%
+Coverage for lines 75% does not meet global threshold 80%
 ```
