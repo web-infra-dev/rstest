@@ -17,16 +17,17 @@ type CoverageOptions = {
 - **Default:** `undefined`
 - **Version:** `>=0.4.0`
 
-Collect test coverage information and generate coverage reports.
+Collect code coverage and generate coverage reports.
 
-```ts title='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+```bash
+$ npx rstest --coverage
 
-export default defineConfig({
-  coverage: {
-    enabled: true,
-  },
-});
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+----------|---------|----------|---------|---------|-------------------
+All files |     100 |      100 |     100 |     100 |
+ index.ts |     100 |      100 |     100 |     100 |
+----------|---------|----------|---------|---------|-------------------
 ```
 
 ## Options
@@ -35,10 +36,20 @@ export default defineConfig({
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--coverage`, `--coverage=false`
 
 Enable or disable test coverage collection.
 
-```ts title='rstest.config.ts'
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --coverage
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -47,6 +58,8 @@ export default defineConfig({
   },
 });
 ```
+  </Tab>
+</Tabs>
 
 ### provider
 
