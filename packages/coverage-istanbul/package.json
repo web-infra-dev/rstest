@@ -15,9 +15,17 @@
   "files": [
     "dist"
   ],
+  "keywords": [
+    "rstest",
+    "coverage",
+    "istanbul"
+  ],
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
   },
   "dependencies": {
     "swc-plugin-coverage-instrument": "^0.0.31",
