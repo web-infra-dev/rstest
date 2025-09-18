@@ -10,7 +10,7 @@ export type RstestPoolType = 'forks';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
-  type: RstestPoolType;
+  type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /** Minimum number or percentage of workers to run tests in. */

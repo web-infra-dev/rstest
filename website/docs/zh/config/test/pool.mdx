@@ -9,7 +9,7 @@ overviewHeaders: []
 ```ts
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
-  type: 'fork';
+  type?: 'fork';
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
   /** 最小运行的线程池的数量或百分比 */

@@ -9,7 +9,7 @@ overviewHeaders: []
 ```ts
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
-  type: 'fork';
+  type?: 'fork';
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /** Minimum number or percentage of workers to run tests in. */
