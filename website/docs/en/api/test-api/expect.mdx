@@ -7,6 +7,28 @@ overviewHeaders: [2, 3]
 
 `expect` is used to assert values in tests. It provides a rich set of matchers, supports chainable modifiers, soft assertions, polling, and snapshot testing.
 
+You can import the `expect` API from the `@rstest/core` package:
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('should add two numbers correctly', () => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+You can also get the `expect` API from the [test context](/api/test-api/test#testcontext), which is helpful for tracing assertion belonging in concurrent tests.
+
+```ts
+import { test } from '@rstest/core';
+
+test('should add two numbers correctly', ({ expect }) => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
 ## expect
 
 - **Type:** `<T>(actual: T, message?: string) => Assertion<T>`
