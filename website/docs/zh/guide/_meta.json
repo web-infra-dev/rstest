@@ -13,5 +13,10 @@
     "type": "dir",
     "name": "advanced",
     "label": "进阶"
+  },
+  {
+    "type": "dir",
+    "name": "migration",
+    "label": "迁移"
   }
 ]

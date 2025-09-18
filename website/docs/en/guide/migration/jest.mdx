@@ -1,0 +1,95 @@
+# Migrating from Jest
+
+Rstest is designed to be Jest-compatible, making migration from Jest projects straightforward. Here's how to migrate your Jest project to Rstest:
+
+## Installation and setup
+
+First, you need to install Rstest as a development dependency.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+Next, update the test script in your `package.json` to use [rstest](/guide/basic/cli) instead of `jest`. For example:
+
+```diff
+"scripts": {
+-  "test": "jest"
++  "test": "rstest"
+}
+```
+
+## Configuration Migration
+
+Update your jest config file (e.g., `jest.config.js` or `jest.config.ts`) to a `rstest.config.ts` file.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+Here are some common Jest configurations and their Rstest equivalents:
+
+| Jest Configuration           | Rstest Equivalent    |
+| ---------------------------- | -------------------- |
+| `testRegex`                  | `include`            |
+| `testMatch`                  | `include`            |
+| `testPathIgnorePatterns`     | `exclude`            |
+| `injectGlobals`              | `globals`            |
+| `moduleNameMapper`           | `resolve.alias`      |
+| `collectCoverage`            | `coverage.enabled`   |
+| `coverageDirectory`          | `coverage.directory` |
+| `coverageProvider`           | `coverage.provider`  |
+| `coveragePathIgnorePatterns` | `coverage.exclude`   |
+
+For more details, please refer to the [Configuration](/config) section.
+
+### Inject globals
+
+Rstest does not mount the test APIs (e.g., `describe`, `expect`, `it`, `test`) to the global object by default, which is different from Jest.
+
+If you want to continue using the global test APIs, you can enable the `globals` option in your `rstest.config.ts` file:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+### Code transformation
+
+Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything.
+
+However, if you have custom Babel configurations or use specific Babel plugins/presets, you can add [Rsbuild's Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel).
+
+```ts title='rstest.config.ts'
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginBabel()],
+});
+```
+
+## Update test API
+
+Your existing Jest test files should work with minimal changes since Rstest provides Jest-compatible APIs. Simply update your imports from Jest to Rstest:
+
+```diff
+- import { describe, expect, it, test } from '@jest/globals';
++ import { describe, expect, it, test } from '@rstest/core';
+```
+
+Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/).
+
+```diff
+- const fn = jest.fn();
++ const fn = rstest.fn();
+
+fn.mockResolvedValue('foo');
+```
