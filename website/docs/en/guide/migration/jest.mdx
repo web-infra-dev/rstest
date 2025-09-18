@@ -65,7 +65,7 @@ export default defineConfig({
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything.
 
-However, if you have custom Babel configurations or use specific Babel plugins/presets, you can add [Rsbuild's Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel).
+However, if you have custom Babel configurations or use specific Babel plugins/presets, you can add [Rsbuild's Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel):
 
 ```ts title='rstest.config.ts'
 import { pluginBabel } from '@rsbuild/plugin-babel';
