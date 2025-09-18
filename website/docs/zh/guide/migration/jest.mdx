@@ -1,0 +1,95 @@
+# 从 Jest 迁移
+
+Rstest 提供兼容 Jest 的 API，这使得从 Jest 项目迁移变得简单。以下是如何将你的 Jest 项目迁移到 Rstest：
+
+## 安装依赖
+
+首先，你需要安装 Rstest 依赖。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+接下来，更新 `package.json` 中的测试脚本，使用 [rstest](/guide/basic/cli) 替代 `jest`。例如：
+
+```diff
+"scripts": {
+-  "test": "jest"
++  "test": "rstest"
+}
+```
+
+## 配置迁移
+
+将你的 jest 配置文件（例如 `jest.config.js` 或 `jest.config.ts`）更新为 `rstest.config.ts` 文件：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+以下是一些常见的 Jest 配置及其对应的 Rstest 配置：
+
+| Jest 配置                    | Rstest 等效配置      |
+| ---------------------------- | -------------------- |
+| `testRegex`                  | `include`            |
+| `testMatch`                  | `include`            |
+| `testPathIgnorePatterns`     | `exclude`            |
+| `injectGlobals`              | `globals`            |
+| `moduleNameMapper`           | `resolve.alias`      |
+| `collectCoverage`            | `coverage.enabled`   |
+| `coverageDirectory`          | `coverage.directory` |
+| `coverageProvider`           | `coverage.provider`  |
+| `coveragePathIgnorePatterns` | `coverage.exclude`   |
+
+更多详情，请参考[配置](/config)部分。
+
+### 注入全局 API
+
+与 Jest 不同，Rstest 默认不会将测试 API（如 `describe`、`expect`、`it`、`test`）挂载到全局对象上。
+
+如果你希望继续使用全局测试 API，可以在 `rstest.config.ts` 文件中启用 `globals` 选项：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+### 代码转换
+
+Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。
+
+如果你有自定义的 Babel 配置或使用特定的 Babel 插件/预设，你可以添加 [Rsbuild Babel 插件](https://rsbuild.rs/zh/plugins/list/plugin-babel)：
+
+```ts title='rstest.config.ts'
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginBabel()],
+});
+```
+
+## 更新测试 API
+
+Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更改为 Rstest：
+
+```diff
+- import { describe, expect, it, test } from '@jest/globals';
++ import { describe, expect, it, test } from '@rstest/core';
+```
+
+Rstest 提供了一个 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
+
+```diff
+- const fn = jest.fn();
++ const fn = rstest.fn();
+
+fn.mockResolvedValue('foo');
+```
