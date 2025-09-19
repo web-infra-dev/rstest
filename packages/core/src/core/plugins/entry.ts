@@ -70,6 +70,9 @@ export const pluginEntryWatch: (params: {
           '**/*.snap',
         );
 
+        config.experiments ??= {};
+        config.experiments.nativeWatcher = true;
+
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;
