@@ -33,19 +33,24 @@ export default defineConfig({
 
 以下是一些常见的 Jest 配置及其对应的 Rstest 配置：
 
-| Jest 配置                    | Rstest 等效配置      |
-| ---------------------------- | -------------------- |
-| `testRegex`                  | `include`            |
-| `testMatch`                  | `include`            |
-| `testPathIgnorePatterns`     | `exclude`            |
-| `injectGlobals`              | `globals`            |
-| `moduleNameMapper`           | `resolve.alias`      |
-| `collectCoverage`            | `coverage.enabled`   |
-| `coverageDirectory`          | `coverage.directory` |
-| `coverageProvider`           | `coverage.provider`  |
-| `coveragePathIgnorePatterns` | `coverage.exclude`   |
+| Jest 配置                    | Rstest 对等配置                                                       |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `testRegex`                  | [`include`](/config/test/include)                                     |
+| `testMatch`                  | [`include`](/config/test/include)                                     |
+| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                     |
+| `transformIgnorePatterns`    | [`source.exclude`](/config/build/source#sourceexclude)                |
+| `displayName`                | [`name`](/config/test/name)                                           |
+| `rootDir`                    | [`root`](/config/test/root)                                           |
+| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)         |
+| `injectGlobals`              | [`globals`](/config/test/globals)                                     |
+| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                 |
+| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                   |
+| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory) |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                 |
+| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                   |
+| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)             |
 
-更多详情，请参考[配置](/config)部分。
+更多详情，请参考 [配置文档](/config)。
 
 ### 注入全局 API
 
@@ -85,7 +90,7 @@ Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更
 + import { describe, expect, it, test } from '@rstest/core';
 ```
 
-Rstest 提供了一个 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
+Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
 
 ```diff
 - const fn = jest.fn();
