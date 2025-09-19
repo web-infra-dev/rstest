@@ -33,17 +33,22 @@ export default defineConfig({
 
 Here are some common Jest configurations and their Rstest equivalents:
 
-| Jest Configuration           | Rstest Equivalent    |
-| ---------------------------- | -------------------- |
-| `testRegex`                  | `include`            |
-| `testMatch`                  | `include`            |
-| `testPathIgnorePatterns`     | `exclude`            |
-| `injectGlobals`              | `globals`            |
-| `moduleNameMapper`           | `resolve.alias`      |
-| `collectCoverage`            | `coverage.enabled`   |
-| `coverageDirectory`          | `coverage.directory` |
-| `coverageProvider`           | `coverage.provider`  |
-| `coveragePathIgnorePatterns` | `coverage.exclude`   |
+| Jest Configuration           | Rstest Equivalent                                                     |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `testRegex`                  | [`include`](/config/test/include)                                     |
+| `testMatch`                  | [`include`](/config/test/include)                                     |
+| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                     |
+| `transformIgnorePatterns`    | [`source.exclude`](/config/build/source#sourceexclude)                |
+| `displayName`                | [`name`](/config/test/name)                                           |
+| `rootDir`                    | [`root`](/config/test/root)                                           |
+| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)         |
+| `injectGlobals`              | [`globals`](/config/test/globals)                                     |
+| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                 |
+| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                   |
+| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory) |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                 |
+| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                   |
+| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)             |
 
 For more details, please refer to the [Configuration](/config) section.
 
