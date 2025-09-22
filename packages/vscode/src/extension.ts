@@ -231,34 +231,6 @@ class Rstest {
       }
     };
 
-    // const runTestQueue = async () => {
-    //   for (const { test, data } of queue) {
-    //     run.appendOutput(`Running ${test.id}\r\n`);
-    //     if (run.token.isCancellationRequested) {
-    //       run.skipped(test);
-    //     } else {
-    //       run.started(test);
-    //       await data.run(test, run, this.api);
-    //     }
-
-    //     const lineNo = test.range!.start.line;
-    //     const fileCoverage = coveredLines.get(test.uri!.toString());
-    //     const lineInfo = fileCoverage?.[lineNo];
-    //     if (lineInfo) {
-    //       (lineInfo.executed as number)++;
-    //     }
-
-    //     run.appendOutput(`Completed ${test.id}\r\n`);
-    //   }
-
-    //   // TODO: support coverage in the future
-    //   // for (const [uri, statements] of coveredLines) {
-    //   //   run.addCoverage(new MarkdownFileCoverage(uri, statements));
-    //   // }
-
-    //   run.end();
-    // };
-
     discoverTests(request.include ?? gatherTestItems(this.ctrl.items))
       .then(() => run.end())
       .catch((error) => {
@@ -279,12 +251,6 @@ class Rstest {
 
     return;
   }
-
-  // async initialize(context: vscode.ExtensionContext) {
-  //   context.subscriptions.push(
-  //     ...startWatchingWorkspace(this.ctrl, this.fileChangedEmitter),
-  //   );
-  // }
 }
 
 function getOrCreateFile(controller: vscode.TestController, uri: vscode.Uri) {

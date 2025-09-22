@@ -5,13 +5,12 @@ import getPort from 'get-port';
 import vscode from 'vscode';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
-
+import { logger } from './logger';
 import type {
   WorkerEvent,
   WorkerEventFinish,
   WorkerRunTestData,
 } from './types';
-import { logger } from './logger';
 
 export class RstestApi {
   public ws: WebSocket | null = null;
@@ -137,6 +136,10 @@ export class RstestApi {
     const workerPath = path.resolve(__dirname, 'worker.js');
     const port = await getPort();
     const wsAddress = `ws://localhost:${port}`;
+    logger.debug('Spawning worker process', {
+      workerPath,
+      wsAddress,
+    });
     const rstestProcess = spawn('node', [...execArgv, workerPath], {
       stdio: 'pipe',
       env: {
@@ -148,12 +151,12 @@ export class RstestApi {
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
-      logger.debug('🟢 worker', content.trimEnd());
+      logger.debug('worker stdout', content.trimEnd());
     });
 
     rstestProcess.stderr?.on('data', (d) => {
       const content = d.toString();
-      logger.error('🔴 worker', content.trimEnd());
+      logger.error('worker stderr', content.trimEnd());
     });
 
     const server = createServer().listen(port).unref();
@@ -161,6 +164,7 @@ export class RstestApi {
 
     wss.once('connection', (ws) => {
       this.ws = ws;
+      logger.debug('Worker connected', { wsAddress });
       const { cwd, rstestPath } = this.resolveRstestPath()[0];
       ws.send(
         JSON.stringify({
@@ -169,11 +173,21 @@ export class RstestApi {
           cwd,
         }),
       );
+      logger.debug('Sent init payload to worker', { cwd, rstestPath });
 
       ws.on('message', (_data) => {
         const _message = JSON.parse(_data.toString()) as WorkerEvent;
         if (_message.type === 'finish') {
           const message: WorkerEventFinish = _message;
+          logger.debug('Received worker completion event', {
+            id: message.id,
+            testResultCount: Array.isArray(message.testResults)
+              ? message.testResults.length
+              : undefined,
+            testFileResultCount: Array.isArray(message.testFileResults)
+              ? message.testFileResults.length
+              : undefined,
+          });
           // Check if we have a pending promise for this test ID
           const promiseObj = this.testPromises.get(message.id);
           if (promiseObj) {
@@ -186,7 +200,9 @@ export class RstestApi {
       });
     });
 
-    rstestProcess.on('exit', () => {});
+    rstestProcess.on('exit', (code, signal) => {
+      logger.debug('Worker process exited', { code, signal });
+    });
   }
 
   public async createRstestWorker() {}

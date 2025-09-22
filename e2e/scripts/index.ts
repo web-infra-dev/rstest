@@ -11,7 +11,6 @@ class Cli {
   public stdout = '';
   public stderr = '';
   private stdoutListeners: Array<() => void> = [];
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: will use it
   private stderrListeners: Array<() => void> = [];
 
   constructor(
