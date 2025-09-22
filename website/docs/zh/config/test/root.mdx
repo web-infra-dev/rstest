@@ -4,6 +4,16 @@
 - **默认值：** [process.cwd()](https://nodejs.org/api/process.html#processcwd)
 - **CLI：** `-r=<path>`, `--root=<path>`
 
-指定项目根目录。可以是绝对路径，也可以是相对于 `process.cwd()` 的路径。
+指定项目根目录。可以是绝对路径，也可以是相对于 `process.cwd()` 的路径。 `root` 将决定配置文件加载的起点，测试文件被搜索的起点等。
 
-`root` 将决定配置文件加载的起点，测试文件被搜索的起点等。
+在任何基于路径的配置设置中使用 `<rootDir>` 将会引用此值。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  setupFiles: ['<rootDir>/setup.js'],
+  include: ['<rootDir>/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  root: './my-project',
+});
+```
