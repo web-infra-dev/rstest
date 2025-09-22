@@ -158,7 +158,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   );
   merged.coverage.reportsDirectory = isAbsolute(reportsDirectory)
     ? reportsDirectory
-    : resolve(merged.root!, reportsDirectory);
+    : resolve(merged.root, reportsDirectory);
 
   merged.pool =
     typeof config.pool === 'string'
