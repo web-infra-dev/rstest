@@ -7,6 +7,7 @@ export default defineConfig({
   source: {
     define: {
       RSTEST_VERSION: JSON.stringify('0.0.0'),
+      'process.env.GITHUB_ACTIONS': JSON.stringify('false'),
     },
   },
 });
