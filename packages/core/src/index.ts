@@ -1,11 +1,10 @@
+import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
   RstestConfig,
 } from './types';
-
-export type { RsbuildPlugin } from '@rsbuild/core';
 
 export { runCLI } from './cli';
 export { mergeRstestConfig } from './config';
@@ -16,6 +15,7 @@ export type {
   CoverageOptions,
   CoverageProvider,
   RstestConfig,
+  RsbuildPlugin,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
