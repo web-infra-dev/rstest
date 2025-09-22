@@ -19,7 +19,7 @@ The extension activates automatically when your workspace contains Rstest config
 | ---------------------------- | -------- | -------- | -------------------------------- | ------------------------------------------------------------- |
 | `rstest.testFileGlobPattern` | string[] | Resource | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace. |
 
-## How it Works
+## How it works
 
 - On activation, the extension scans for test files using `rstest.testFileGlobPattern` and creates a Test Explorer tree.
 - File system watchers keep the tree synchronized as files are created, modified, or deleted.
@@ -35,11 +35,12 @@ Common commands (run from this package):
 - `npm run test:unit` — Unit tests via Rstest
 - `npm run test:e2e` — VS Code Extension Host E2E tests
 
-### Packaging & Publishing
+### Packaging & publishing
 
 - Local package (current platform): `npm run package:vsix`
 - Publish (current platform): `npm run publish:vsce` (requires `VSCE_PAT`)
 
 CI
+
 - On tag push or manual dispatch, GitHub Actions runs on Linux and publishes for all platforms using `vsce publish --target` (win32/darwin/linux; x64 and arm64).
 - Configure the `VSCE_PAT` repository secret for Marketplace publishing.

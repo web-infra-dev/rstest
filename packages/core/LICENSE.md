@@ -727,7 +727,7 @@ Licensed under MIT license.
 
 ### magic-string
 
-Licensed under MIT license.
+Licensed under MIT license in the repository at https://github.com/rich-harris/magic-string.git.
 
 > Copyright 2018 Rich Harris
 >

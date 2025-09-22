@@ -1,8 +1,9 @@
 import { TextDecoder } from 'node:util';
+import type { TestResult } from '@rstest/core';
 import vscode from 'vscode';
+import { logger } from './logger';
 import type { RstestApi } from './master';
 import { parseTestFile } from './parserTest';
-import { logger } from './logger';
 import { getWorkspaceTestPatterns, shouldIgnorePath } from './utils';
 
 const textDecoder = new TextDecoder('utf-8');
@@ -33,6 +34,235 @@ export function gatherTestItems(collection: vscode.TestItemCollection) {
   });
   return items;
 }
+
+const getAncestorLabels = (item: vscode.TestItem): string[] => {
+  const labels: string[] = [];
+  let current = item.parent;
+  while (current) {
+    if (
+      typeof current.label === 'string' &&
+      !current.id.startsWith('file://')
+    ) {
+      labels.unshift(current.label);
+    }
+    current = current.parent;
+  }
+  return labels;
+};
+
+type CaseNodeStatus = 'pass' | 'fail' | 'skip';
+
+type CaseNode = {
+  item: vscode.TestItem;
+  ancestors: string[];
+  children: CaseNode[];
+  parent?: CaseNode;
+  directResult?: TestResult;
+  status?: CaseNodeStatus;
+  duration: number;
+};
+
+type ApplyResultsOptions = {
+  includeRoot: boolean;
+  aggregateFailureMessage: string;
+};
+
+type ApplyResultsSummary = {
+  totalDuration: number;
+  anyFailed: boolean;
+  rootHadDirectResult: boolean;
+  matchedResultCount: number;
+  unmatchedResultNames: string[];
+  failedNodeCount: number;
+  totalNodeCount: number;
+};
+
+const applyResultsToTestCases = (
+  root: vscode.TestItem,
+  run: vscode.TestRun,
+  results: TestResult[],
+  options: ApplyResultsOptions,
+): ApplyResultsSummary => {
+  const startedItems = new Set<vscode.TestItem>();
+  const ensureStarted = (item: vscode.TestItem) => {
+    if (!startedItems.has(item)) {
+      run.started(item);
+      startedItems.add(item);
+    }
+  };
+
+  const candidateItems = options.includeRoot
+    ? [root, ...gatherTestItems(root.children)]
+    : gatherTestItems(root.children);
+
+  const nodes: CaseNode[] = [];
+  const nodeByItem = new Map<vscode.TestItem, CaseNode>();
+  let matchedResultCount = 0;
+  const unmatchedResultNames: string[] = [];
+
+  for (const item of candidateItems) {
+    const data = testData.get(item);
+    if (!(data instanceof TestCase)) continue;
+    const node: CaseNode = {
+      item,
+      ancestors: getAncestorLabels(item),
+      children: [],
+      duration: 0,
+    };
+    nodes.push(node);
+    nodeByItem.set(item, node);
+  }
+
+  for (const node of nodes) {
+    const parentItem = node.item.parent;
+    if (!parentItem) continue;
+    const parentNode = nodeByItem.get(parentItem);
+    if (parentNode) {
+      node.parent = parentNode;
+      parentNode.children.push(node);
+    }
+  }
+
+  const matchesParents = (node: CaseNode, parentNames: string[]): boolean => {
+    if (node.ancestors.length !== parentNames.length) {
+      return false;
+    }
+    return node.ancestors.every((label, index) => label === parentNames[index]);
+  };
+
+  for (const result of results) {
+    const parentNames = Array.isArray(result.parentNames)
+      ? (result.parentNames as string[])
+      : [];
+    let match: CaseNode | undefined;
+    for (const node of nodes) {
+      if (
+        node.item.label === result.name &&
+        matchesParents(node, parentNames)
+      ) {
+        match = node;
+        break;
+      }
+    }
+    if (match) {
+      match.directResult = result;
+      matchedResultCount++;
+    } else if (result.name) {
+      unmatchedResultNames.push(result.name);
+    }
+  }
+
+  const sortedNodes = [...nodes].sort(
+    (a, b) => b.ancestors.length - a.ancestors.length,
+  );
+
+  let totalDuration = 0;
+  let anyFailed = false;
+
+  for (const node of sortedNodes) {
+    const { directResult } = node;
+    if (directResult) {
+      const duration = directResult.duration || 0;
+      ensureStarted(node.item);
+
+      if (directResult.status === 'pass') {
+        run.passed(node.item, duration);
+        node.status = 'pass';
+      } else if (directResult.status === 'skip') {
+        run.skipped(node.item);
+        node.status = 'skip';
+      } else if (
+        directResult.status === 'fail' &&
+        directResult.errors?.length
+      ) {
+        anyFailed = true;
+        run.failed(
+          node.item,
+          new vscode.TestMessage(
+            directResult.errors[0].message || 'Test failed',
+          ),
+          duration,
+        );
+        node.status = 'fail';
+      } else if (directResult.status === 'fail') {
+        anyFailed = true;
+        run.failed(node.item, new vscode.TestMessage('Test failed'), duration);
+        node.status = 'fail';
+      } else {
+        run.skipped(node.item);
+        node.status = 'skip';
+      }
+
+      run.appendOutput(`Completed ${node.item.id}\r\n`);
+      node.duration = duration;
+      if (node.status === 'fail') {
+        anyFailed = true;
+      }
+      totalDuration += duration;
+      continue;
+    }
+
+    if (node.children.length === 0) {
+      ensureStarted(node.item);
+      run.skipped(node.item);
+      node.status = 'skip';
+      node.duration = 0;
+      continue;
+    }
+
+    let aggregatedDuration = 0;
+    let childFailed = false;
+    let childHasStatus = false;
+
+    for (const child of node.children) {
+      aggregatedDuration += child.duration;
+      if (child.status) {
+        childHasStatus = true;
+      }
+      if (child.status === 'fail') {
+        childFailed = true;
+      }
+    }
+
+    if (!childHasStatus) {
+      ensureStarted(node.item);
+      run.skipped(node.item);
+      node.status = 'skip';
+      node.duration = aggregatedDuration;
+      continue;
+    }
+
+    ensureStarted(node.item);
+    node.duration = aggregatedDuration;
+
+    if (childFailed) {
+      anyFailed = true;
+      run.failed(
+        node.item,
+        new vscode.TestMessage(options.aggregateFailureMessage),
+        aggregatedDuration,
+      );
+      node.status = 'fail';
+    } else {
+      run.passed(node.item, aggregatedDuration);
+      node.status = 'pass';
+    }
+  }
+
+  const rootNode = options.includeRoot ? nodeByItem.get(root) : undefined;
+  const rootHadDirectResult = Boolean(rootNode?.directResult);
+  const failedNodeCount = nodes.filter((node) => node.status === 'fail').length;
+
+  return {
+    totalDuration,
+    anyFailed,
+    rootHadDirectResult,
+    matchedResultCount,
+    unmatchedResultNames,
+    failedNodeCount,
+    totalNodeCount: nodes.length,
+  };
+};
 
 /**
  * Scans the workspace for all test files and ensures they exist as root
@@ -195,69 +425,33 @@ export class TestFile {
     try {
       const rstestResults = await api.runFileTests(item);
 
-      // Process results for each child test item
-      const testItems = gatherTestItems(item.children);
-      for (const testItem of testItems) {
-        const itemData = testData.get(testItem);
-        if (itemData instanceof TestCase) {
-          // Find matching result in rstestResults.testResults by name or parent
-          const testResult = rstestResults?.testResults.find(
-            (result) =>
-              result.name === testItem.label ||
-              (Array.isArray(result.parentNames) &&
-                (result.parentNames as string[]).includes(
-                  testItem.label as string,
-                )),
-          );
+      const results = rstestResults?.testResults ?? [];
+      const {
+        totalDuration,
+        anyFailed,
+        matchedResultCount,
+        unmatchedResultNames,
+        failedNodeCount,
+        totalNodeCount,
+      } = applyResultsToTestCases(item, run, results, {
+        includeRoot: false,
+        aggregateFailureMessage: 'Some nested tests failed',
+      });
 
-          if (testResult) {
-            run.started(testItem);
-
-            if (testResult.status === 'pass') {
-              run.passed(testItem, testResult.duration || 0);
-            } else if (testResult.status === 'skip') {
-              run.skipped(testItem);
-            } else if (
-              testResult.status === 'fail' &&
-              testResult.errors?.length
-            ) {
-              run.failed(
-                testItem,
-                new vscode.TestMessage(
-                  testResult.errors[0].message || 'Test failed',
-                ),
-                testResult.duration || 0,
-              );
-            } else {
-              // Handle other statuses (todo, etc.)
-              run.skipped(testItem);
-            }
-
-            run.appendOutput(`Completed ${testItem.id}\r\n`);
-          } else {
-            // No result found for this test item
-            run.skipped(testItem);
-          }
-        }
-      }
+      logger.debug('Applied file test results', {
+        fileId: item.id,
+        totalNodeCount,
+        matchedResultCount,
+        unmatchedResultCount: unmatchedResultNames.length,
+        unmatchedResultSample: unmatchedResultNames.slice(0, 3),
+        failedNodeCount,
+        totalDuration,
+      });
 
       // Mark the file test as passed if no test failed
-      if (
-        rstestResults &&
-        !rstestResults.testResults.some((result) => result.status === 'fail')
-      ) {
-        // Calculate total duration from all test results
-        const totalDuration = rstestResults.testResults.reduce(
-          (sum, result) => sum + (result.duration || 0),
-          0,
-        );
+      if (rstestResults && !anyFailed) {
         run.passed(item, totalDuration);
       } else if (rstestResults) {
-        // Calculate total duration from all test results
-        const totalDuration = rstestResults.testResults.reduce(
-          (sum, result) => sum + (result.duration || 0),
-          0,
-        );
         run.failed(
           item,
           new vscode.TestMessage('Some tests in this file failed'),
@@ -312,95 +506,28 @@ export class TestCase {
       const rstestResults = await api.runTest(item);
 
       if (rstestResults && rstestResults.testResults.length > 0) {
-        // Collect descendants to update individually
-        const descendants = gatherTestItems(item.children);
+        const {
+          totalDuration,
+          matchedResultCount,
+          unmatchedResultNames,
+          failedNodeCount,
+          totalNodeCount,
+          rootHadDirectResult,
+        } = applyResultsToTestCases(item, run, rstestResults.testResults, {
+          includeRoot: true,
+          aggregateFailureMessage: 'Some sub-tests in this case failed',
+        });
 
-        // Helper: collect ancestor labels recursively to the root (skip file nodes)
-        const getAncestorLabels = (ti: vscode.TestItem): string[] => {
-          if (!ti.parent) return [];
-          const parentLabels = getAncestorLabels(ti.parent);
-          if (
-            typeof ti.parent.label === 'string' &&
-            !ti.parent.id.startsWith('file://')
-          ) {
-            return [...parentLabels, ti.parent.label];
-          }
-          return parentLabels;
-        };
-
-        let totalDuration = 0;
-        let anyFailed = false;
-
-        // Iterate every result and set status for its matching VS Code item
-        for (const result of rstestResults.testResults) {
-          let match: vscode.TestItem | undefined;
-          // Prefer exact descendant match by name and ancestors
-          for (const d of descendants) {
-            if (d.label === result.name) {
-              const parents = Array.isArray(result.parentNames)
-                ? (result.parentNames as string[])
-                : [];
-              const ancestors = getAncestorLabels(d);
-              const fits = parents.every((p) => ancestors.includes(p));
-              if (fits) {
-                match = d;
-                break;
-              }
-            }
-          }
-
-          // If no descendant matched and this refers to the parent case
-          if (!match && result.name === item.label) {
-            match = item;
-          }
-
-          if (match) {
-            run.started(match);
-            totalDuration += result.duration || 0;
-            if (result.status === 'pass') {
-              run.passed(match, result.duration || 0);
-            } else if (result.status === 'skip') {
-              run.skipped(match);
-            } else if (result.status === 'fail' && result.errors?.length) {
-              anyFailed = true;
-              run.failed(
-                match,
-                new vscode.TestMessage(
-                  result.errors[0].message || 'Test failed',
-                ),
-                result.duration || 0,
-              );
-            } else {
-              run.skipped(match);
-            }
-          }
-        }
-
-        // Mark any descendant with no explicit result as skipped
-        for (const d of descendants) {
-          const hadResult = rstestResults.testResults.some(
-            (r: any) => r.name === d.label,
-          );
-          if (!hadResult) {
-            run.skipped(d);
-          }
-        }
-
-        // If parent has no explicit result, aggregate by children
-        const parentHasExplicit = rstestResults.testResults.some(
-          (r: any) => r.name === item.label,
-        );
-        if (!parentHasExplicit) {
-          if (anyFailed) {
-            run.failed(
-              item,
-              new vscode.TestMessage('Some sub-tests in this case failed'),
-              totalDuration,
-            );
-          } else {
-            run.passed(item, totalDuration);
-          }
-        }
+        logger.debug('Applied case test results', {
+          testId: item.id,
+          totalNodeCount,
+          matchedResultCount,
+          unmatchedResultCount: unmatchedResultNames.length,
+          unmatchedResultSample: unmatchedResultNames.slice(0, 3),
+          failedNodeCount,
+          totalDuration,
+          rootHadDirectResult,
+        });
       } else {
         run.failed(
           item,

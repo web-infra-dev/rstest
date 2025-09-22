@@ -4,7 +4,6 @@ export default defineConfig({
   lib: [
     {
       syntax: ['node 20'],
-      // bundle: false,
       source: {
         entry: {
           extension: './src/extension.ts',
@@ -28,7 +27,6 @@ export default defineConfig({
     },
     {
       syntax: ['node 20'],
-      // bundle: false,
       format: 'cjs',
       source: {
         entry: {

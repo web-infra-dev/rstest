@@ -50,7 +50,9 @@ export class Logger implements vscode.Disposable {
   }
 
   public dispose() {
-    this.disposables.forEach((disposable) => disposable.dispose());
+    this.disposables.forEach((disposable) => {
+      disposable.dispose();
+    });
     this.channel.dispose();
   }
 

@@ -1,19 +1,15 @@
 import { WebSocket } from 'ws';
 import type { WorkerInitData, WorkerRunTestData } from '../types';
-import { VscodeReporter } from './reporter';
 import { logger } from './logger';
+import { VscodeReporter } from './reporter';
 
 class Worker {
   private ws: WebSocket;
-  // private rstest!: RstestInstance;
-  // public initPromise: Promise<void>;
-  // private resolveInitPromise!: () => void;
   public rstestPath!: string;
   public cwd!: string;
 
   constructor() {
     this.ws = new WebSocket(process.env.RSTEST_WS_ADDRESS!);
-    // this.initPromise = this.waitInitPromise();
     this.ws.on('message', (bufferData) => {
       const _data = JSON.parse(bufferData.toString());
       if (_data.type === 'init') {
@@ -27,44 +23,64 @@ class Worker {
   }
 
   public async runTest(data: WorkerRunTestData) {
-    logger.debug('🙋', data);
+    logger.debug('Received runTest request', JSON.stringify(data, null, 2));
     try {
       const rstest = await this.createRstest(data);
       rstest.context.fileFilters = data.fileFilters;
       rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
-      let res = await rstest.runTests();
-      logger.debug('🏁', res);
+      const res = await rstest.runTests();
+      logger.debug(
+        'Test run completed',
+        JSON.stringify({ id: data.id, result: res }, null, 2),
+      );
     } catch (error) {
-      logger.error('🤒', error);
+      logger.error('Test run failed', error);
     }
   }
-
-  // private waitInitPromise = () => {
-  //   return new Promise<void>((resolve) => {
-  //     this.resolveInitPromise = resolve as any;
-  //   });
-  // };
 
   public async initRstest(data: WorkerInitData) {
     this.rstestPath = data.rstestPath;
     this.cwd = data.cwd;
+    logger.debug('Initialized worker context', {
+      cwd: this.cwd,
+      rstestPath: this.rstestPath,
+    });
   }
 
   public async createRstest(data: WorkerRunTestData) {
     const rstestModule = (await import(
       this.rstestPath
     )) as typeof import('@rstest/core');
-    logger.debug('🤶', rstestModule);
-    const { createRstest, loadConfig } = rstestModule;
+    logger.debug('Loaded Rstest module');
+    const { createRstest, loadConfig, initCli } = rstestModule;
     const { filePath } = await loadConfig({
       cwd: this.cwd,
     });
 
-    // process.env.DEBUG = 'rstest';
+    logger.debug('Loaded Rstest config', {
+      id: data.id,
+      configFile: filePath ?? null,
+    });
+
+    type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
+
+    const commonOptions: CommonOptions = {
+      root: this.cwd,
+      config: filePath ?? undefined,
+    };
+
+    const initializedOptions = await initCli(commonOptions);
+    logger.debug('commonOptions', JSON.stringify(commonOptions, null, 2));
+    const { config, configFilePath, projects } = initializedOptions;
+    logger.debug(
+      'initializedOptions',
+      JSON.stringify(initializedOptions, null, 2),
+    );
+
     const rstest = createRstest(
       {
         config: {
-          root: this.cwd,
+          ...config,
           reporters: [
             new VscodeReporter({
               onTestRunEndCallback: ({ testFileResults, testResults }) => {
@@ -80,17 +96,12 @@ class Worker {
             }),
           ],
         },
-        configFilePath: filePath ?? undefined,
-        projects: [],
+        configFilePath,
+        projects,
       },
       'run',
       [],
     );
-
-    // TODO: pass to here
-    // this.rstest.context.fileFilters = ['foo']; // to filter file name
-    // this.rstest.context.normalizedConfig.testNamePattern = 'foo'; // to filter pattern
-    // this.resolveInitPromise();
 
     return rstest;
   }
@@ -98,6 +109,4 @@ class Worker {
 
 (async () => {
   const _worker = new Worker();
-  // await worker.initPromise;
-  // await worker.runTest();
 })();

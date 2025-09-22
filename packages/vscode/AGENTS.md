@@ -1,8 +1,8 @@
-# Repository Guidelines
+# Repository guidelines
 
 Concise contributor guide for the Rstest VS Code extension package.
 
-## Project Structure & Module Organization
+## Project structure & module organization
 
 - `src/` — TypeScript sources. Key modules: `extension.ts` (entry/TestController), `testTree.ts` (builds TestItem tree), `parserTest.ts` (SWC-based parser), `master.ts` (spawns worker), `worker/` (runner + reporter).
 - `tests/` — E2E tests under `tests/suite/**`. Compiled to `tests-dist/` for the Extension Host.
@@ -10,7 +10,7 @@ Concise contributor guide for the Rstest VS Code extension package.
 - `dist/` — Built extension output. Do not edit.
 - Config: `tsconfig.json`, `tsconfig.test.json`, `rslib.config.ts`, `rstest.config.ts`.
 
-## Build, Test, and Development Commands
+## Build, test, and development commands
 
 - `npm run build` — Build with `rslib` (use `build:local` for sourcemaps).
 - `npm run watch` — Rebuild on change.
@@ -19,25 +19,25 @@ Concise contributor guide for the Rstest VS Code extension package.
 - `npm run test:e2e` — Compile tests and run VS Code Extension Host E2E (downloads VS Code on first run).
 - `npm run lint` — Run Biome checks.
 
-## Coding Style & Naming Conventions
+## Coding style & naming conventions
 
 - Language: TypeScript, 2-space indentation. Keep changes minimal and focused.
 - Naming: camelCase for files and symbols; PascalCase for classes; follow existing patterns (e.g., `testTree.ts`, `parserTest.ts`).
 - Linting: Biome (`npm run lint`). Prefer simple, readable logic over cleverness.
 
-## Testing Guidelines
+## Testing guidelines
 
 - Name tests `*.test.ts`. Place parser/unit tests in `tests/unit/**`; E2E tests in `tests/suite/**` (loaded by the E2E runner only).
 - E2E opens `tests/fixtures` workspace automatically; use `toLabelTree()` from `tests/suite/index.test.ts` for stable tree assertions.
 - Typical loop: `npm run typecheck` → `npm run test:unit` → `npm run test:e2e`.
 
-## Commit & Pull Request Guidelines
+## Commit & pull request guidelines
 
 - Write clear, imperative commit messages; keep PRs small and scoped. Reference issues (e.g., `Fixes #123`).
 - Include rationale, testing notes, and screenshots/logs if relevant (e.g., label trees, error output).
 - Avoid unrelated refactors; update or add tests with behavior changes.
 
-## Architecture Overview
+## Architecture overview
 
 - Two-process design: VS Code extension (`extension.ts`) communicates with a worker (`worker/index.ts`) via WebSocket. Main sends `WorkerInitData`/`WorkerRunTestData`; worker emits `WorkerEventFinish`.
 

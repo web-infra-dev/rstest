@@ -6,4 +6,3 @@ describe('JS', () => {
     expect(1).toBe(1);
   });
 });
-

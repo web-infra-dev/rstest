@@ -5,13 +5,12 @@ import getPort from 'get-port';
 import vscode from 'vscode';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
-
+import { logger } from './logger';
 import type {
   WorkerEvent,
   WorkerEventFinish,
   WorkerRunTestData,
 } from './types';
-import { logger } from './logger';
 
 export class RstestApi {
   public ws: WebSocket | null = null;
@@ -22,7 +21,7 @@ export class RstestApi {
   private versionMismatchWarned = false;
 
   public resolveRstestPath(): { cwd: string; rstestPath: string }[] {
-    // TODO: support pnp
+    // TODO: support Yarn PnP
     try {
       // TODO: use 0 temporarily.
       const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -30,14 +29,21 @@ export class RstestApi {
         vscode.window.showErrorMessage('No workspace found');
         throw new Error('No workspace found');
       }
-
       const nodeExport = require.resolve('@rstest/core', {
         paths: [workspace.uri.fsPath],
       });
-
-      const corePackageJsonPath = require.resolve('@rstest/core/package.json', {
-        paths: [workspace.uri.fsPath],
-      });
+      let corePackageJsonPath: string;
+      try {
+        corePackageJsonPath = require.resolve('@rstest/core/package.json', {
+          paths: [workspace.uri.fsPath],
+        });
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          'Failed to resolve @rstest/core/package.json. Please upgrade @rstest/core to the latest version.',
+        );
+        logger.error('Failed to resolve @rstest/core/package.json', e);
+        return [];
+      }
       const corePackageJson = require(corePackageJsonPath) as {
         version?: string;
       };
@@ -137,6 +143,10 @@ export class RstestApi {
     const workerPath = path.resolve(__dirname, 'worker.js');
     const port = await getPort();
     const wsAddress = `ws://localhost:${port}`;
+    logger.debug('Spawning worker process', {
+      workerPath,
+      wsAddress,
+    });
     const rstestProcess = spawn('node', [...execArgv, workerPath], {
       stdio: 'pipe',
       env: {
@@ -148,12 +158,12 @@ export class RstestApi {
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
-      logger.debug('🟢 worker', content.trimEnd());
+      logger.debug('worker stdout', content.trimEnd());
     });
 
     rstestProcess.stderr?.on('data', (d) => {
       const content = d.toString();
-      logger.error('🔴 worker', content.trimEnd());
+      logger.error('worker stderr', content.trimEnd());
     });
 
     const server = createServer().listen(port).unref();
@@ -161,7 +171,13 @@ export class RstestApi {
 
     wss.once('connection', (ws) => {
       this.ws = ws;
+      logger.debug('Worker connected', { wsAddress });
       const { cwd, rstestPath } = this.resolveRstestPath()[0];
+      if (!cwd || !rstestPath) {
+        logger.error('Failed to resolve rstest path or cwd');
+        return;
+      }
+
       ws.send(
         JSON.stringify({
           type: 'init',
@@ -169,11 +185,17 @@ export class RstestApi {
           cwd,
         }),
       );
+      logger.debug('Sent init payload to worker', { cwd, rstestPath });
 
       ws.on('message', (_data) => {
         const _message = JSON.parse(_data.toString()) as WorkerEvent;
         if (_message.type === 'finish') {
           const message: WorkerEventFinish = _message;
+          logger.debug('Received worker completion event', {
+            id: message.id,
+            testResult: message.testResults,
+            testFileResult: message.testFileResults,
+          });
           // Check if we have a pending promise for this test ID
           const promiseObj = this.testPromises.get(message.id);
           if (promiseObj) {
@@ -186,7 +208,9 @@ export class RstestApi {
       });
     });
 
-    rstestProcess.on('exit', () => {});
+    rstestProcess.on('exit', (code, signal) => {
+      logger.debug('Worker process exited', { code, signal });
+    });
   }
 
   public async createRstestWorker() {}

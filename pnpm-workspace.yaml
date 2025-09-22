@@ -7,4 +7,4 @@ packages:
 
 strictPeerDependencies: false
 autoInstallPeers: false
-hoistPattern: ['@secretlint/*']
+hoistPattern: []

@@ -3,10 +3,14 @@
   "displayName": "Rstest",
   "publisher": "rstack",
   "description": "VS Code extension for Rstest",
-  "version": "0.0.1",
+  "version": "0.5.1",
   "private": true,
   "license": "MIT",
-  "repository": "https://github.com/Microsoft/vscode-extension-samples",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/vscode"
+  },
   "engines": {
     "vscode": "^1.100.0"
   },
@@ -60,12 +64,12 @@
   },
   "devDependencies": {
     "@rsbuild/core": "1.5.0",
-    "@rslib/core": "0.12.2",
+    "@rslib/core": "0.13.3",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.13.5",
     "@types/glob": "^7.1.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^22.13.8",
+    "@types/node": "^22.16.5",
     "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.1",
     "@vscode/test-cli": "^0.0.11",
