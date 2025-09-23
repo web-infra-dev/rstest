@@ -54,10 +54,6 @@ describe('test exclude option', () => {
     await expectExecSuccess();
 
     expectLog('Test Files 1 passed');
-
-    // await expectExecFailed();
-
-    // expectLog('Test Files 1 failed | 1 passed (2)');
   });
 
   it('should not exclude dist correctly with override false', async () => {
