@@ -77,7 +77,7 @@ export async function loadConfig({
 }
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
-  return configs.reduce((result, config) => {
+  return configs.reduce<RstestConfig>((result, config) => {
     const merged = mergeRsbuildConfig(result, {
       ...config,
       exclude: Array.isArray(config.exclude)
@@ -86,7 +86,7 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
             override: false,
           }
         : config.exclude,
-    }) as RstestConfig;
+    });
 
     if (!Array.isArray(config.exclude) && config.exclude?.override) {
       merged.exclude = {
@@ -103,7 +103,7 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     }
 
     return merged;
-  }, {} as RstestConfig);
+  }, {});
 };
 
 const createDefaultConfig = (): NormalizedConfig => ({
