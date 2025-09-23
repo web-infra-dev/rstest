@@ -1,8 +1,6 @@
 import { createRequire } from 'node:module';
 import type { NormalizedCoverageOptions, RsbuildPlugin } from '@rstest/core';
 
-const require = createRequire(import.meta.url);
-
 let transformCoverageFn:
   | ((code: string, filename: string) => Promise<{ code: string; map?: any }>)
   | undefined;
@@ -13,7 +11,7 @@ const transformCoverage: NonNullable<typeof transformCoverageFn> = async (
 ) => {
   if (!transformCoverageFn) {
     throw new Error(
-      'can not transform coverage since swc transform function is not registered',
+      'Can not transform coverage since swc transform function is not registered',
     );
   }
   return transformCoverageFn(code, filename);
@@ -27,6 +25,8 @@ export const pluginCoverage: (
   name: 'rstest:coverage',
   setup: (api) => {
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig }) => {
+      const require = createRequire(import.meta.url);
+
       const swcPluginPath = require.resolve('swc-plugin-coverage-instrument');
 
       return mergeEnvironmentConfig(config, {

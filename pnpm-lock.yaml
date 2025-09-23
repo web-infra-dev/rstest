@@ -517,7 +517,7 @@ importers:
         specifier: ^3.2.2
         version: 3.2.2
       istanbul-lib-instrument:
-        specifier: ^5.2.1
+        specifier: 5.2.1
         version: 5.2.1
       istanbul-lib-report:
         specifier: ^3.0.1
