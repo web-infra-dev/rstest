@@ -56,7 +56,7 @@ describe('test exclude option', () => {
     expectLog('Test Files 1 passed');
   });
 
-  it('should not exclude dist correctly with override false', async () => {
+  it('should not exclude dist when override is true', async () => {
     const { expectLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.override.config.ts'],
