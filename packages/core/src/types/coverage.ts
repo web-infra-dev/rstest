@@ -1,6 +1,8 @@
 import type {
   CoverageMap,
+  CoverageMapData,
   CoverageSummary,
+  FileCoverageData,
   Totals,
 } from 'istanbul-lib-coverage';
 import type { ReportOptions } from 'istanbul-reports';
@@ -23,7 +25,7 @@ type Thresholds = {
 
 export type CoverageSummaryTotals = Totals;
 
-export type { CoverageMap, CoverageSummary };
+export type { CoverageMap, CoverageMapData, CoverageSummary };
 
 export type CoverageThresholds = Thresholds;
 
@@ -33,6 +35,14 @@ export type CoverageOptions = {
    * @default false
    */
   enabled?: boolean;
+
+  /**
+   * A list of glob patterns that should be included for coverage collection.
+   * Only collect coverage for tested files by default.
+   *
+   * @default undefined
+   */
+  include?: string[];
 
   /**
    * A list of glob patterns that should be excluded from coverage collection.
@@ -82,9 +92,10 @@ export type CoverageOptions = {
 };
 
 export type NormalizedCoverageOptions = Required<
-  Omit<CoverageOptions, 'thresholds'>
+  Omit<CoverageOptions, 'thresholds' | 'include'>
 > & {
   thresholds?: CoverageThresholds;
+  include?: string[];
 };
 
 export declare class CoverageProvider {
@@ -103,6 +114,13 @@ export declare class CoverageProvider {
    * Create a new coverage map
    */
   createCoverageMap(): CoverageMap;
+
+  /**
+   * Generate coverage for untested files
+   */
+  generateCoverageForUntestedFiles(
+    untestedFiles: string[],
+  ): Promise<FileCoverageData[]>;
 
   /**
    * Generate coverage reports

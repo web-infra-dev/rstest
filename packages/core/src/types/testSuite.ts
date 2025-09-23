@@ -5,6 +5,7 @@ import type {
   OnTestFinishedHandler,
   TestContext,
 } from './api';
+import type { CoverageMapData } from './coverage';
 import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -126,6 +127,7 @@ export type TestResult = {
 export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
+  coverage?: CoverageMapData;
 };
 
 export interface UserConsoleLog {

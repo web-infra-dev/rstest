@@ -91,6 +91,26 @@ import { PackageManagerTabs } from '@theme';
 
 `@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
 
+### include
+
+- **类型：** `string[]`
+- **默认值：** `undefined`
+
+对匹配 glob 规则的文件进行测试覆盖率收集。
+
+默认情况下，rstest 会收集已测试文件的覆盖率。如果你希望在覆盖率报告中包含未测试的文件，可以使用 `include` 选项指定要包含的文件或模式。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    include: ['src/**/*.{js,jsx,ts,tsx}'],
+  },
+});
+```
+
 ### exclude
 
 - **类型：** `string[]`

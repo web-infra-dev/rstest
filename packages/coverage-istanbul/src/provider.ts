@@ -2,7 +2,7 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
-import type { CoverageMap } from 'istanbul-lib-coverage';
+import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
@@ -24,6 +24,44 @@ export class CoverageProvider implements RstestCoverageProvider {
     if (typeof globalThis !== 'undefined') {
       globalThis.__coverage__ = globalThis.__coverage__ || {};
     }
+  }
+
+  async generateCoverageForUntestedFiles(
+    uncoveredFiles: string[],
+  ): Promise<FileCoverageData[]> {
+    const { transformCoverage } = await import('./plugin');
+
+    const { readInitialCoverage } = await import('istanbul-lib-instrument');
+    // TODO: use swc to parse code and get the coverage data
+    const {
+      default: { MAGIC_VALUE },
+      // @ts-expect-error
+    } = await import('istanbul-lib-instrument/src/constants.js');
+
+    const { readFile } = await import('node:fs/promises');
+
+    return await Promise.all(
+      uncoveredFiles.map(async (file) => {
+        try {
+          const content = await readFile(file, 'utf-8');
+          const { code } = await transformCoverage(content, file);
+          // replace _coverageSchema: "${swc_value}" to _coverageSchema: ${MAGIC_VALUE}
+          const { coverageData } =
+            readInitialCoverage(
+              code.replace(
+                /_coverageSchema: "(.*)"/g,
+                `_coverageSchema: "${MAGIC_VALUE}"`,
+              ),
+            ) || {};
+
+          return coverageData;
+        } catch (e) {
+          console.error(
+            `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
+          );
+        }
+      }),
+    ).then((results) => results.filter((r): r is FileCoverageData => !!r));
   }
 
   createCoverageMap(): CoverageMap {
