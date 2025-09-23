@@ -47,7 +47,17 @@ describe('Index', () => {
 
 ### 类型支持
 
-为了让 TypeScript 支持全局 API，你可以创建一个 `src/rstestEnv.d.ts` 文件来引用：
+为了让 TypeScript 正确识别全局 API，在 `tsconfig.json` 中添加 `@rstest/core/globals` 类型声明：
+
+```ts title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
+
+或者创建一个 `src/rstestEnv.d.ts` 文件来引用类型定义：
 
 ```ts title=rstestEnv.d.ts
 /// <reference types="@rstest/core/globals" />
