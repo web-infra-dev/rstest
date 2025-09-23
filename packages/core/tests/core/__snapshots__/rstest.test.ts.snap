@@ -8,7 +8,6 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]**",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
@@ -74,7 +73,6 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]**",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
@@ -143,7 +141,6 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]**",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
