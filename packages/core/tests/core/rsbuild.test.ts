@@ -197,4 +197,51 @@ describe('prepareRsbuild', () => {
       ),
     ).toMatchSnapshot();
   });
+
+  it('should generate rspack config correctly in watch mode', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'watch',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {},
+          tools: {},
+          testEnvironment: 'node',
+          isolate: true,
+          coverage: {
+            reportsDirectory: join(rootPath, './coverage'),
+          },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: 'node',
+              isolate: true,
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+    );
+    expect(rsbuildInstance).toBeDefined();
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]).toMatchSnapshot();
+  });
 });
