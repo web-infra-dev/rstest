@@ -31,7 +31,7 @@ export async function runTests(context: Rstest): Promise<void> {
     )!.normalizedConfig;
     const entries = await getTestEntries({
       include,
-      exclude,
+      exclude: exclude.patterns,
       includeSource,
       rootPath,
       projectRoot: root,
@@ -244,7 +244,7 @@ export async function runTests(context: Rstest): Promise<void> {
           );
           logger.log(
             color.gray('exclude:'),
-            p.normalizedConfig.exclude.join(color.gray(', ')),
+            p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
           );
         });
       }

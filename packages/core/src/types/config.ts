@@ -59,7 +59,16 @@ export interface RstestConfig {
    *
    * @default ['**\/node_modules/**', '**\/dist/**']
    */
-  exclude?: string[];
+  exclude?:
+    | string[]
+    | {
+        patterns: string[];
+        /**
+         * override default exclude patterns
+         * @default false
+         */
+        override?: boolean;
+      };
   /**
    * A list of glob patterns that match your in-source test files
    *
@@ -248,7 +257,7 @@ type OptionalKeys =
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles'
+    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
   >
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
@@ -256,6 +265,10 @@ export type NormalizedConfig = Required<
   pool: RstestPoolOptions;
   coverage: NormalizedCoverageOptions;
   setupFiles: string[];
+  exclude: {
+    patterns: string[];
+    override?: boolean;
+  };
 };
 
 export type NormalizedProjectConfig = Required<
