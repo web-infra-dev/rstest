@@ -99,10 +99,12 @@ import { PackageManagerTabs } from '@theme';
 ```ts
 [
   '**/node_modules/**',
+  '**/[.]**',
   '**/dist/**',
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
+  '**/*.d.ts',
   '**/*.{test,spec}.[jt]s',
   '**/*.{test,spec}.[c|m][jt]s',
   '**/*.{test,spec}.[jt]sx',

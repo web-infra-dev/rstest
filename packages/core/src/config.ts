@@ -114,10 +114,12 @@ const createDefaultConfig = (): NormalizedConfig => ({
   coverage: {
     exclude: [
       '**/node_modules/**',
+      '**/[.]**',
       '**/dist/**',
       '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
+      '**/*.d.ts',
       // This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
       // not support `?()`: '**/*.{test,spec}.?(c|m)[jt]s?(x)',
       '**/*.{test,spec}.[jt]s',
