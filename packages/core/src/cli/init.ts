@@ -8,6 +8,7 @@ import {
   castArray,
   color,
   filterProjects,
+  formatRootStr,
   getAbsolutePath,
   logger,
 } from '../utils';
@@ -141,16 +142,12 @@ export async function resolveProjects({
     return glob(patterns, globOptions);
   };
 
-  const formatRootStr = (rootStr: string) => {
-    return rootStr.replace('<rootDir>', root);
-  };
-
   const { projectPaths, projectPatterns, projectConfigs } = (
     config.projects || []
   ).reduce(
     (total, p) => {
       if (typeof p === 'object') {
-        const projectRoot = p.root ? formatRootStr(p.root) : root;
+        const projectRoot = p.root ? formatRootStr(p.root, root) : root;
         total.projectConfigs.push({
           config: {
             root: projectRoot,
@@ -161,7 +158,7 @@ export async function resolveProjects({
         });
         return total;
       }
-      const projectStr = formatRootStr(p);
+      const projectStr = formatRootStr(p, root);
 
       if (isDynamicPattern(projectStr)) {
         total.projectPatterns.push(projectStr);

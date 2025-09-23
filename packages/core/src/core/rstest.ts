@@ -77,7 +77,11 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(userConfig);
+    const rstestConfig = withDefaultConfig({
+      ...userConfig,
+      root: rootPath,
+    });
+
     const reporters =
       command !== 'list'
         ? createReporters(rstestConfig.reporters, {
