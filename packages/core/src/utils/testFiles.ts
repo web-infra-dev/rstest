@@ -138,11 +138,14 @@ const tryResolve = (request: string, rootPath: string) => {
 };
 
 export const getSetupFiles = (
-  setups: string[] | string | undefined,
+  setups: string[],
   rootPath: string,
 ): Record<string, string> => {
+  if (!setups.length) {
+    return {};
+  }
   return Object.fromEntries(
-    castArray(setups).map((setupFile) => {
+    setups.map((setupFile) => {
       const setupFilePath = getAbsolutePath(rootPath, setupFile);
       try {
         if (!existsSync(setupFilePath)) {

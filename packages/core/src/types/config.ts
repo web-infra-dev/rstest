@@ -235,7 +235,6 @@ export interface RstestConfig {
 }
 
 type OptionalKeys =
-  | 'setupFiles'
   | 'testNamePattern'
   | 'plugins'
   | 'source'
@@ -247,16 +246,25 @@ type OptionalKeys =
   | 'onConsoleLog';
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects' | 'coverage'>
+  Omit<
+    RstestConfig,
+    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles'
+  >
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {
   pool: RstestPoolOptions;
   coverage: NormalizedCoverageOptions;
+  setupFiles: string[];
 };
 
 export type NormalizedProjectConfig = Required<
-  Omit<NormalizedConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
+  Omit<
+    NormalizedConfig,
+    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+  >
 > & {
   [key in OptionalKeys]?: NormalizedConfig[key];
+} & {
+  setupFiles: string[];
 };

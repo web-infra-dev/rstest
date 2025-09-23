@@ -7,9 +7,11 @@ import {
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import type { NormalizedConfig, RstestConfig } from './types';
 import {
+  castArray,
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  formatRootStr,
   logger,
   TEMP_RSTEST_OUTPUT_DIR_GLOB,
 } from './utils';
@@ -86,6 +88,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     '**/dist/**',
     '**/.{idea,git,cache,output,temp}/**',
   ],
+  setupFiles: [],
   includeSource: [],
   pool: {
     type: 'forks',
@@ -118,6 +121,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
       '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
+      '**/*.d.ts',
       // This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
       // not support `?()`: '**/*.{test,spec}.?(c|m)[jt]s?(x)',
       '**/*.{test,spec}.[jt]s',
@@ -134,8 +138,12 @@ const createDefaultConfig = (): NormalizedConfig => ({
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
-  const merged = mergeRstestConfig(createDefaultConfig(), config);
+  const merged = mergeRstestConfig(
+    createDefaultConfig(),
+    config,
+  ) as NormalizedConfig;
 
+  merged.setupFiles = castArray(merged.setupFiles);
   // The following configurations need overrides
   merged.include = config.include || merged.include;
   merged.exclude = (config.exclude || merged.exclude || []).concat([
@@ -143,13 +151,15 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   ]);
   merged.reporters = config.reporters ?? merged.reporters;
 
-  merged.coverage ??= {};
   merged.coverage.reporters =
     config.coverage?.reporters ?? merged.coverage?.reporters;
-  const reportsDirectory = merged.coverage.reportsDirectory!;
+  const reportsDirectory = formatRootStr(
+    merged.coverage.reportsDirectory,
+    merged.root,
+  );
   merged.coverage.reportsDirectory = isAbsolute(reportsDirectory)
     ? reportsDirectory
-    : resolve(merged.root!, reportsDirectory);
+    : resolve(merged.root, reportsDirectory);
 
   merged.pool =
     typeof config.pool === 'string'
@@ -158,5 +168,13 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
         }
       : merged.pool;
 
-  return merged as NormalizedConfig;
+  return {
+    ...merged,
+    include: merged.include.map((p) => formatRootStr(p, merged.root)),
+    exclude: merged.exclude.map((p) => formatRootStr(p, merged.root)),
+    setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
+    includeSource: merged.includeSource.map((p) =>
+      formatRootStr(p, merged.root),
+    ),
+  };
 };
