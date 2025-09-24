@@ -190,15 +190,16 @@ export default defineConfig({
 - **类型：**
 
 ```ts
-type CoverageThresholds = {
-  /** 语句的阈值 */
+type CoverageThreshold = {
   statements?: number;
-  /** 函数的阈值 */
   functions?: number;
-  /** 分支的阈值 */
   branches?: number;
-  /** 行的阈值 */
   lines?: number;
+};
+
+type CoverageThresholds = CoverageThreshold & {
+  /** 为匹配的文件指定覆盖率阈值 */
+  [glob: string]: CoverageThreshold;
 };
 ```
 
@@ -232,3 +233,34 @@ Error: Coverage for functions 75% does not meet global threshold 80%
 Error: Coverage for branches 75% does not meet global threshold 80%
 Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
+
+#### glob 模式
+
+当指定 glob 模式时，Rstest 将根据匹配的文件模式进行代码覆盖率检查。如果指定的文件路径不存在，则返回错误。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      // 为匹配的文件指定覆盖率阈值
+      'src/**': {
+        statements: 100,
+      },
+      'node/**/*.js': {
+        statements: 90,
+      },
+      // 指定所有文件的总阈值
+      statements: 80,
+    },
+  },
+});
+```
+
+根据以上配置，rstest 将在以下情况下失败：
+
+- `src/**` 匹配到的文件的总语句覆盖率低于 100%。
+- `node/**/*.js` 匹配到的文件的总语句覆盖率低于 90%。
+- 全局的语句覆盖率低于 80%。
