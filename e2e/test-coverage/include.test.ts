@@ -17,13 +17,17 @@ describe('test coverage-istanbul include option', () => {
     await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
-
+    console.log(logs);
     // test coverage
     expect(
-      logs.find((log) => log.includes('index.ts'))?.replaceAll(' ', ''),
+      logs
+        .find((log) => log.includes('index.ts') && log.includes('|'))
+        ?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"index.ts|0|100|0|0|1"`);
     expect(
-      logs.find((log) => log.includes('date.ts'))?.replaceAll(' ', ''),
+      logs
+        .find((log) => log.includes('date.ts') && log.includes('|'))
+        ?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"date.ts|100|100|100|100|"`);
 
     expectLog('Test Files 1 passed', logs);

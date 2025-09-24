@@ -32,9 +32,17 @@ export async function generateCoverage(
         expandDirectories: false,
       });
 
+      console.log('match all files', allFiles.join('\n'));
+
       // should be better to filter files before swc coverage is processed
       finalCoverageMap.filter((file) => {
-        return allFiles.includes(file);
+        const isIncluded = allFiles.includes(file);
+
+        if (isIncluded) {
+          console.log('unincluded file', file);
+        }
+
+        return isIncluded;
       });
 
       const coveredFiles = finalCoverageMap.files();
