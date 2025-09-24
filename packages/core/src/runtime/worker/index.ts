@@ -353,7 +353,7 @@ const runInPool = async (
             const coverageMap = coverageProvider.collect();
             if (coverageMap) {
               // Attach coverage data to test result
-              (test as any).coverage = coverageMap.toJSON();
+              test.coverage = coverageMap.toJSON();
             }
           }
           await rpc.onTestFileResult(test);

@@ -26,7 +26,8 @@
     "swc-plugin-coverage-instrument": "^0.0.31",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
-    "istanbul-reports": "^3.2.0"
+    "istanbul-reports": "^3.2.0",
+    "istanbul-lib-instrument": "5.2.1"
   },
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",
@@ -34,6 +35,7 @@
     "@rslib/core": "0.13.3",
     "@types/node": "^22.16.5",
     "typescript": "^5.9.2",
+    "@types/istanbul-lib-instrument": "^1.7.8",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/istanbul-reports": "^3.0.4"
