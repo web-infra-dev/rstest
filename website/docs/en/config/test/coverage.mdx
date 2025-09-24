@@ -6,6 +6,7 @@
 type CoverageOptions = {
   enabled?: boolean;
   provider?: 'istanbul';
+  include?: string[];
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
   reportsDirectory?: string;
