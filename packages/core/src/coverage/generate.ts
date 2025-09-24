@@ -23,6 +23,9 @@ export async function generateCoverage(
       }
     }
 
+    const coveredFiles1 = finalCoverageMap.files();
+    console.log('coveredFiles', coveredFiles1);
+
     if (coverage.include?.length) {
       const allFiles = await glob(coverage.include, {
         cwd: rootPath,
