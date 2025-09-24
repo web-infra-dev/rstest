@@ -269,45 +269,14 @@ export async function runTests(context: Rstest): Promise<void> {
 
     // Generate coverage reports after all tests complete
     if (coverageProvider) {
-      try {
-        // Collect coverage data from all test results
-        const finalCoverageMap = coverageProvider.createCoverageMap();
+      const { generateCoverage } = await import('../coverage/generate');
 
-        // Merge coverage data from all test files
-        for (const result of results) {
-          if ((result as any).coverage) {
-            finalCoverageMap.merge((result as any).coverage);
-          }
-        }
-
-        // Generate coverage reports
-        await coverageProvider.generateReports(
-          finalCoverageMap,
-          context.normalizedConfig.coverage,
-        );
-
-        if (context.normalizedConfig.coverage.thresholds) {
-          const { checkThresholds } = await import(
-            '../coverage/checkThresholds'
-          );
-          const thresholdResult = checkThresholds({
-            coverageMap: finalCoverageMap,
-            thresholds: context.normalizedConfig.coverage.thresholds,
-            coverageProvider,
-            rootPath: context.rootPath,
-          });
-          if (!thresholdResult.success) {
-            process.exitCode = 1;
-            logger.log('');
-            logger.log(thresholdResult.message);
-          }
-        }
-
-        // Cleanup
-        coverageProvider.cleanup();
-      } catch (error) {
-        logger.error('Failed to generate coverage reports:', error);
-      }
+      await generateCoverage(
+        context.normalizedConfig.coverage,
+        context.rootPath,
+        results,
+        coverageProvider,
+      );
     }
   };
 

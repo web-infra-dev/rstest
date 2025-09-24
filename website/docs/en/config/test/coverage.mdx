@@ -91,6 +91,26 @@ import { PackageManagerTabs } from '@theme';
 
 `@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument).
 
+### include
+
+- **Type:** `string[]`
+- **Default:** `undefined`
+
+A list of glob patterns that should be included for coverage collection.
+
+By default, rstest will only collect coverage for files that are tested. If you want to include untested files in the coverage report, you can use the `include` option to specify the files or patterns to include.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    include: ['src/**/*.{js,jsx,ts,tsx}'],
+  },
+});
+```
+
 ### exclude
 
 - **Type:** `string[]`
@@ -103,6 +123,7 @@ import { PackageManagerTabs } from '@theme';
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
+  '**/[.]*',
   '**/*.d.ts',
   '**/*.{test,spec}.[jt]s',
   '**/*.{test,spec}.[c|m][jt]s',
@@ -112,6 +133,8 @@ import { PackageManagerTabs } from '@theme';
 ```
 
 A glob pattern array to exclude files from test coverage collection.
+
+Any patterns specified here will be merged with default values.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
