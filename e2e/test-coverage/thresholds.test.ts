@@ -1,10 +1,10 @@
 import { join } from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { describe, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
 describe('coverageThresholds', () => {
   it('should check global threshold correctly', async () => {
-    const { expectLog, cli } = await runRstestCli({
+    const { expectLog, cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.thresholds.config.ts'],
       options: {
@@ -14,10 +14,7 @@ describe('coverageThresholds', () => {
       },
     });
 
-    await cli.exec;
-    const exitCode = cli.exec.process?.exitCode;
-
-    expect(exitCode).toBe(1);
+    await expectExecFailed();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
@@ -33,7 +30,7 @@ describe('coverageThresholds', () => {
   });
 
   it('should check glob threshold correctly', async () => {
-    const { expectLog, cli } = await runRstestCli({
+    const { expectLog, expectExecFailed, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.globThresholds.config.ts'],
       options: {
@@ -43,10 +40,7 @@ describe('coverageThresholds', () => {
       },
     });
 
-    await cli.exec;
-    const exitCode = cli.exec.process?.exitCode;
-
-    expect(exitCode).toBe(1);
+    await expectExecFailed();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
 
