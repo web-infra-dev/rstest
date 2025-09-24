@@ -1,3 +1,4 @@
+import { normalize } from 'pathe';
 import { glob } from 'tinyglobby';
 import type { TestFileResult } from '../types';
 import type {
@@ -23,9 +24,6 @@ export async function generateCoverage(
       }
     }
 
-    const coveredFiles1 = finalCoverageMap.files();
-    console.log('coveredFiles', coveredFiles1);
-
     if (coverage.include?.length) {
       const allFiles = await glob(coverage.include, {
         cwd: rootPath,
@@ -35,23 +33,13 @@ export async function generateCoverage(
         expandDirectories: false,
       });
 
-      console.log('match all files', allFiles.join('\n'));
-
       // should be better to filter files before swc coverage is processed
-      finalCoverageMap.filter((file) => {
-        const isIncluded = allFiles.includes(file);
-
-        if (isIncluded) {
-          console.log('unincluded file', file);
-        }
-
-        return isIncluded;
-      });
+      finalCoverageMap.filter((file) => allFiles.includes(normalize(file)));
 
       const coveredFiles = finalCoverageMap.files();
-      console.log('coveredFiles', coveredFiles);
+
       const uncoveredFiles = allFiles.filter(
-        (file) => !coveredFiles.includes(file),
+        (file) => !coveredFiles.includes(normalize(file)),
       );
 
       if (uncoveredFiles.length) {
