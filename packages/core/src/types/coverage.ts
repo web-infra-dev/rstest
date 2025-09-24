@@ -31,7 +31,13 @@ export type CoverageThresholds =
   | CoverageThreshold
   | (CoverageThreshold & {
       /** check thresholds for matched files */
-      [glob: string]: CoverageThreshold;
+      [glob: string]: CoverageThreshold & {
+        /**
+         * check thresholds per file
+         * @default false
+         */
+        perFile?: boolean;
+      };
     });
 
 export type CoverageOptions = {

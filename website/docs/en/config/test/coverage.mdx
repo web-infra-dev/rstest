@@ -222,7 +222,9 @@ type CoverageThreshold = {
 
 type CoverageThresholds = CoverageThreshold & {
   /** check thresholds for matched files */
-  [glob: string]: CoverageThreshold;
+  [glob: string]: CoverageThreshold & {
+    perFile?: boolean;
+  };
 };
 ```
 
@@ -287,3 +289,23 @@ Following the above configuration, rstest will fail if:
 - The total code coverage of all files in `src/**` is below 100%.
 - The total code coverage of all files in `node/**/*.js` is below 90%.
 - The global code coverage is below 80% for statements.
+
+#### check threshold for per file
+
+Rstest also supports checking thresholds for each matched file by setting `perFile` to `true`.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      'src/**': {
+        statements: 90,
+        perFile: true,
+      },
+    },
+  },
+});
+```

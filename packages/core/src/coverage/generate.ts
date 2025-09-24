@@ -63,14 +63,11 @@ export async function generateCoverage(
         thresholds: coverage.thresholds,
       });
       if (!thresholdResult.success) {
-        process.exitCode = 1;
         logger.log('');
         logger.log(thresholdResult.message);
+        process.exitCode = 1;
       }
     }
-
-    // Cleanup
-    coverageProvider.cleanup();
   } catch (error) {
     logger.error('Failed to generate coverage reports:', error);
   }

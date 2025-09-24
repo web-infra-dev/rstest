@@ -355,6 +355,8 @@ const runInPool = async (
               // Attach coverage data to test result
               test.coverage = coverageMap.toJSON();
             }
+            // Cleanup
+            coverageProvider.cleanup();
           }
           await rpc.onTestFileResult(test);
         },
