@@ -8,6 +8,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
+      "**/[.]*",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
