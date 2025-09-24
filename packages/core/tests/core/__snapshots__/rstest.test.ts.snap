@@ -29,12 +29,15 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
-  "exclude": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/.{idea,git,cache,output,temp}/**",
-    "**/dist/.rstest-temp",
-  ],
+  "exclude": {
+    "override": false,
+    "patterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/dist/.rstest-temp",
+    ],
+  },
   "globals": false,
   "hookTimeout": 10000,
   "include": [
@@ -95,12 +98,15 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
-  "exclude": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/.{idea,git,cache,output,temp}/**",
-    "**/dist/.rstest-temp",
-  ],
+  "exclude": {
+    "override": false,
+    "patterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/dist/.rstest-temp",
+    ],
+  },
   "globals": false,
   "hookTimeout": 10000,
   "include": [
@@ -164,12 +170,15 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
-  "exclude": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/.{idea,git,cache,output,temp}/**",
-    "**/dist/.rstest-temp",
-  ],
+  "exclude": {
+    "override": false,
+    "patterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/dist/.rstest-temp",
+    ],
+  },
   "globals": false,
   "hookTimeout": 10000,
   "include": [

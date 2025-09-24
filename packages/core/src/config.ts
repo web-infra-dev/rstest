@@ -76,18 +76,48 @@ export async function loadConfig({
   return { content: content as RstestConfig, filePath: configFilePath };
 }
 
-export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig =>
-  mergeRsbuildConfig<RstestConfig>(...configs);
+export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
+  return configs.reduce<RstestConfig>((result, config) => {
+    const merged = mergeRsbuildConfig(result, {
+      ...config,
+      exclude: Array.isArray(config.exclude)
+        ? {
+            patterns: config.exclude,
+            override: false,
+          }
+        : config.exclude,
+    });
+
+    if (!Array.isArray(config.exclude) && config.exclude?.override) {
+      merged.exclude = {
+        patterns: config.exclude.patterns,
+      };
+    }
+
+    // The following configurations need overrides
+    merged.include = config.include ?? merged.include;
+    merged.reporters = config.reporters ?? merged.reporters;
+    if (merged.coverage) {
+      merged.coverage.reporters =
+        config.coverage?.reporters ?? merged.coverage?.reporters;
+    }
+
+    return merged;
+  }, {});
+};
 
 const createDefaultConfig = (): NormalizedConfig => ({
   root: process.cwd(),
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: [
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/.{idea,git,cache,output,temp}/**',
-  ],
+  exclude: {
+    patterns: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+    ],
+    override: false,
+  },
   setupFiles: [],
   includeSource: [],
   pool: {
@@ -145,15 +175,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
-  // The following configurations need overrides
-  merged.include = config.include || merged.include;
-  merged.exclude = (config.exclude || merged.exclude || []).concat([
-    TEMP_RSTEST_OUTPUT_DIR_GLOB,
-  ]);
-  merged.reporters = config.reporters ?? merged.reporters;
 
-  merged.coverage.reporters =
-    config.coverage?.reporters ?? merged.coverage?.reporters;
+  merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
+
   const reportsDirectory = formatRootStr(
     merged.coverage.reportsDirectory,
     merged.root,
@@ -172,7 +196,12 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   return {
     ...merged,
     include: merged.include.map((p) => formatRootStr(p, merged.root)),
-    exclude: merged.exclude.map((p) => formatRootStr(p, merged.root)),
+    exclude: {
+      ...merged.exclude,
+      patterns: merged.exclude.patterns.map((p) =>
+        formatRootStr(p, merged.root),
+      ),
+    },
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
       formatRootStr(p, merged.root),
