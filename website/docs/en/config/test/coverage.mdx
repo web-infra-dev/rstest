@@ -190,15 +190,16 @@ export default defineConfig({
 - **Type:**
 
 ```ts
-type CoverageThresholds = {
-  /** Thresholds for statements */
+type CoverageThreshold = {
   statements?: number;
-  /** Thresholds for functions */
   functions?: number;
-  /** Thresholds for branches */
   branches?: number;
-  /** Thresholds for lines */
   lines?: number;
+};
+
+type CoverageThresholds = CoverageThreshold & {
+  /** check thresholds for matched files */
+  [glob: string]: CoverageThreshold;
 };
 ```
 
@@ -232,3 +233,34 @@ Error: Coverage for functions 75% does not meet global threshold 80%
 Error: Coverage for branches 75% does not meet global threshold 80%
 Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
+
+#### glob pattern
+
+If globs are specified, thresholds will be checked for each matched file pattern. If the file specified by path is not found, an error is returned.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      // Thresholds for matching glob pattern
+      'src/**': {
+        statements: 100,
+      },
+      'node/**/*.js': {
+        statements: 90,
+      },
+      // Thresholds for all files
+      statements: 80,
+    },
+  },
+});
+```
+
+Following the above configuration, rstest will fail if:
+
+- The total code coverage of all files in `src/**` is below 100%.
+- The total code coverage of all files in `node/**/*.js` is below 90%.
+- The global code coverage is below 80% for statements.

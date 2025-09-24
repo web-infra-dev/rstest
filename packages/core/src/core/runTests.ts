@@ -290,10 +290,12 @@ export async function runTests(context: Rstest): Promise<void> {
           const { checkThresholds } = await import(
             '../coverage/checkThresholds'
           );
-          const thresholdResult = checkThresholds(
-            finalCoverageMap,
-            context.normalizedConfig.coverage.thresholds,
-          );
+          const thresholdResult = checkThresholds({
+            coverageMap: finalCoverageMap,
+            thresholds: context.normalizedConfig.coverage.thresholds,
+            coverageProvider,
+            rootPath: context.rootPath,
+          });
           if (!thresholdResult.success) {
             process.exitCode = 1;
             logger.log('');
