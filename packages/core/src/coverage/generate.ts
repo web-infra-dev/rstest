@@ -46,7 +46,7 @@ export async function generateCoverage(
       });
 
       const coveredFiles = finalCoverageMap.files();
-
+      console.log('coveredFiles', coveredFiles);
       const uncoveredFiles = allFiles.filter(
         (file) => !coveredFiles.includes(file),
       );
