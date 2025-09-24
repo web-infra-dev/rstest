@@ -12,14 +12,14 @@ type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
     ? [Name, Partial<ReportOptions[Name]>]
     : [Name, Record<string, unknown>];
 
-type Thresholds = {
-  /** Thresholds for statements */
+export type CoverageThreshold = {
+  /** Threshold for statements */
   statements?: number;
-  /** Thresholds for functions */
+  /** Threshold for functions */
   functions?: number;
-  /** Thresholds for branches */
+  /** Threshold for branches */
   branches?: number;
-  /** Thresholds for lines */
+  /** Threshold for lines */
   lines?: number;
 };
 
@@ -27,7 +27,12 @@ export type CoverageSummaryTotals = Totals;
 
 export type { CoverageMap, CoverageMapData, CoverageSummary };
 
-export type CoverageThresholds = Thresholds;
+export type CoverageThresholds =
+  | CoverageThreshold
+  | (CoverageThreshold & {
+      /** check thresholds for matched files */
+      [glob: string]: CoverageThreshold;
+    });
 
 export type CoverageOptions = {
   /**

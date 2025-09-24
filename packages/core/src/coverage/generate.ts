@@ -56,10 +56,12 @@ export async function generateCoverage(
 
     if (coverage.thresholds) {
       const { checkThresholds } = await import('../coverage/checkThresholds');
-      const thresholdResult = checkThresholds(
-        finalCoverageMap,
-        coverage.thresholds,
-      );
+      const thresholdResult = checkThresholds({
+        coverageMap: finalCoverageMap,
+        coverageProvider,
+        rootPath,
+        thresholds: coverage.thresholds,
+      });
       if (!thresholdResult.success) {
         process.exitCode = 1;
         logger.log('');

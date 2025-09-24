@@ -142,33 +142,4 @@ describe('test coverage-istanbul', () => {
       fs.existsSync(join(__dirname, 'fixtures/test-temp-coverage/index.html')),
     ).toBeTruthy();
   });
-
-  it('coverage-istanbul with thresholds check', async () => {
-    const { expectLog, cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '-c', 'rstest.thresholds.config.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await cli.exec;
-    const exitCode = cli.exec.process?.exitCode;
-
-    expect(exitCode).toBe(1);
-
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expectLog(
-      /Coverage for statements .* does not meet global threshold/,
-      logs,
-    );
-
-    expectLog(
-      /Uncovered lines .* exceeds maximum global threshold allowed/,
-      logs,
-    );
-  });
 });

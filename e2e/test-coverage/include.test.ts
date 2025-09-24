@@ -17,7 +17,6 @@ describe('test coverage-istanbul include option', () => {
     await expectExecSuccess();
 
     const logs = cli.stdout.split('\n').filter(Boolean);
-    console.log(logs);
     // test coverage
     expect(
       logs
