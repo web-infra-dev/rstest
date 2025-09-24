@@ -19,12 +19,12 @@ describe('coverageThresholds', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expectLog(
-      /Coverage for statements .* does not meet global threshold/,
+      /Coverage for statements .* does not meet global threshold/i,
       logs,
     );
 
     expectLog(
-      /Uncovered lines .* exceeds maximum global threshold allowed/,
+      /Uncovered lines .* exceeds maximum global threshold allowed/i,
       logs,
     );
   });
@@ -45,10 +45,31 @@ describe('coverageThresholds', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expectLog(
-      /Coverage for statements .* does not meet "src\/\*\*" threshold/,
+      /Error: coverage for statements .* does not meet "src\/\*\*" threshold/i,
       logs,
     );
 
-    expectLog(/Coverage data for "node\/\*\*" was not found/, logs);
+    expectLog(/Coverage data for "node\/\*\*" was not found/i, logs);
+  });
+
+  it('should check per files threshold correctly', async () => {
+    const { expectLog, expectExecFailed, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.perFileThresholds.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog(
+      /src\/string.ts coverage for statements .* does not meet "src\/\*\*" threshold/,
+      logs,
+    );
   });
 });
