@@ -74,9 +74,7 @@ export const pluginCoverage: (
     });
 
     api.onExit(() => {
-      Object.keys(transformCoverageFns).forEach((key) => {
-        delete transformCoverageFns[key];
-      });
+      Object.assign(transformCoverageFns, {});
     });
   },
 });
