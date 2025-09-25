@@ -12,6 +12,7 @@ export default defineConfig({
       join(__dirname, 'src/b.ts'),
       './src/c.ts',
     ],
+    clean: false,
     reporters: ['text'],
   },
   setupFiles: ['./rstest.setup.ts'],
