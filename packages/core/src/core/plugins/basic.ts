@@ -38,6 +38,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             source: {
               define: {
                 'import.meta.rstest': "global['@rstest/core']",
+                'import.meta.env': 'process.env',
               },
             },
             output: {

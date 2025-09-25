@@ -428,6 +428,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -940,6 +941,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -1454,6 +1456,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -1986,6 +1989,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -2509,6 +2513,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
