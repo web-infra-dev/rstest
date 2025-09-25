@@ -26,9 +26,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
   }
 
-  async generateCoverageForUntestedFiles(
-    uncoveredFiles: string[],
-  ): Promise<FileCoverageData[]> {
+  async generateCoverageForUntestedFiles({
+    environmentName,
+    files,
+  }: {
+    environmentName: string;
+    files: string[];
+  }): Promise<FileCoverageData[]> {
     const { transformCoverage } = await import('./plugin');
 
     const { readInitialCoverage } = await import('istanbul-lib-instrument');
@@ -41,10 +45,14 @@ export class CoverageProvider implements RstestCoverageProvider {
     const { readFile } = await import('node:fs/promises');
 
     return await Promise.all(
-      uncoveredFiles.map(async (file) => {
+      files.map(async (file) => {
         try {
           const content = await readFile(file, 'utf-8');
-          const { code } = await transformCoverage(content, file);
+          const { code } = await transformCoverage(
+            environmentName,
+            content,
+            file,
+          );
           // replace _coverageSchema: "${swc_value}" to _coverageSchema: ${MAGIC_VALUE}
           const { coverageData } =
             readInitialCoverage(

@@ -271,12 +271,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (coverageProvider) {
       const { generateCoverage } = await import('../coverage/generate');
 
-      await generateCoverage(
-        context.normalizedConfig.coverage,
-        context.rootPath,
-        results,
-        coverageProvider,
-      );
+      await generateCoverage(context, results, coverageProvider);
     }
   };
 

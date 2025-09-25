@@ -1,20 +1,24 @@
 import { createRequire } from 'node:module';
 import type { NormalizedCoverageOptions, RsbuildPlugin } from '@rstest/core';
 
-let transformCoverageFn:
-  | ((code: string, filename: string) => Promise<{ code: string; map?: any }>)
-  | undefined;
+type TransformCoverageFn = (
+  code: string,
+  filename: string,
+) => Promise<{ code: string; map?: any }>;
 
-const transformCoverage: NonNullable<typeof transformCoverageFn> = async (
-  code,
-  filename,
-) => {
-  if (!transformCoverageFn) {
+const transformCoverageFns: Record<string, TransformCoverageFn> = {};
+
+const transformCoverage = async (
+  environmentName: string,
+  code: string,
+  filename: string,
+): ReturnType<TransformCoverageFn> => {
+  if (!transformCoverageFns[environmentName]) {
     throw new Error(
-      'Can not transform coverage since swc transform function is not registered',
+      `Can not transform coverage since swc transform function for ${environmentName} is not registered`,
     );
   }
-  return transformCoverageFn(code, filename);
+  return transformCoverageFns[environmentName](code, filename);
 };
 
 export { transformCoverage };
@@ -50,14 +54,17 @@ export const pluginCoverage: (
     });
 
     api.modifyBundlerChain({
-      handler: (chain, { rspack, CHAIN_ID }) => {
+      handler: (chain, { rspack, CHAIN_ID, environment }) => {
         const { rspackExperiments: _rspackExperiments, ...swcOptions } =
           chain.module
             .rule(CHAIN_ID.RULE.JS)
             .use(CHAIN_ID.USE.SWC)
             .get('options') || {};
 
-        transformCoverageFn = async (code: string, filename: string) =>
+        transformCoverageFns[environment.name] = async (
+          code: string,
+          filename: string,
+        ) =>
           rspack.experiments.swc.transform(code, {
             ...swcOptions,
             filename,
@@ -67,7 +74,9 @@ export const pluginCoverage: (
     });
 
     api.onExit(() => {
-      transformCoverageFn = undefined;
+      Object.keys(transformCoverageFns).forEach((key) => {
+        delete transformCoverageFns[key];
+      });
     });
   },
 });

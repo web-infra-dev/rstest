@@ -1,8 +1,10 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  setupFiles: ['./rstest.setup.ts'],
+  projects: ['packages/*'],
   coverage: {
+    enabled: true,
     reporters: ['text'],
+    include: ['src/**/*'],
   },
 });
