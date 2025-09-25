@@ -129,9 +129,10 @@ export declare class CoverageProvider {
   /**
    * Generate coverage for untested files
    */
-  generateCoverageForUntestedFiles(
-    untestedFiles: string[],
-  ): Promise<FileCoverageData[]>;
+  generateCoverageForUntestedFiles(params: {
+    environmentName: string;
+    files: string[];
+  }): Promise<FileCoverageData[]>;
 
   /**
    * Generate coverage reports

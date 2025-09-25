@@ -1,6 +1,6 @@
 import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { TestFileResult } from '../types';
+import type { RstestContext, TestFileResult } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -45,11 +45,15 @@ const getIncludedFiles = async (
 };
 
 export async function generateCoverage(
-  coverage: CoverageOptions,
-  rootPath: string,
+  context: RstestContext,
   results: TestFileResult[],
   coverageProvider: CoverageProvider,
 ): Promise<void> {
+  const {
+    rootPath,
+    normalizedConfig: { coverage },
+    projects,
+  } = context;
   try {
     const finalCoverageMap = coverageProvider.createCoverageMap();
 
@@ -61,24 +65,46 @@ export async function generateCoverage(
     }
 
     if (coverage.include?.length) {
-      const allFiles = await getIncludedFiles(coverage, rootPath);
+      const coveredFiles = finalCoverageMap.files();
+
+      let isTimeout = false;
+
+      const timeoutId = setTimeout(() => {
+        isTimeout = true;
+        logger.info('Generating coverage for untested files...');
+      }, 1000);
+
+      const allFiles = (
+        await Promise.all(
+          projects.map(async (p) => {
+            const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+
+            const uncoveredFiles = includedFiles.filter(
+              (file) => !coveredFiles.includes(normalize(file)),
+            );
+
+            if (uncoveredFiles.length) {
+              await generateCoverageForUntestedFiles(
+                p.environmentName,
+                uncoveredFiles,
+                finalCoverageMap,
+                coverageProvider,
+              );
+            }
+
+            return includedFiles;
+          }),
+        )
+      ).flat();
+
+      clearTimeout(timeoutId);
+
+      if (isTimeout) {
+        logger.info('Coverage for untested files generated.');
+      }
 
       // should be better to filter files before swc coverage is processed
       finalCoverageMap.filter((file) => allFiles.includes(normalize(file)));
-
-      const coveredFiles = finalCoverageMap.files();
-
-      const uncoveredFiles = allFiles.filter(
-        (file) => !coveredFiles.includes(normalize(file)),
-      );
-
-      if (uncoveredFiles.length) {
-        await generateCoverageForUntestedFiles(
-          uncoveredFiles,
-          finalCoverageMap,
-          coverageProvider,
-        );
-      }
     }
 
     // Generate coverage reports
@@ -104,12 +130,11 @@ export async function generateCoverage(
 }
 
 async function generateCoverageForUntestedFiles(
+  environmentName: string,
   uncoveredFiles: string[],
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
 ): Promise<void> {
-  logger.debug('Generating coverage for untested files...');
-
   if (!coverageProvider.generateCoverageForUntestedFiles) {
     logger.warn(
       'Current coverage provider does not support generating coverage for untested files.',
@@ -117,8 +142,10 @@ async function generateCoverageForUntestedFiles(
     return;
   }
 
-  const coverages =
-    await coverageProvider.generateCoverageForUntestedFiles(uncoveredFiles);
+  const coverages = await coverageProvider.generateCoverageForUntestedFiles({
+    environmentName,
+    files: uncoveredFiles,
+  });
 
   coverages.forEach((coverageData) => {
     coverageMap.addFileCoverage(coverageData);
