@@ -5,6 +5,7 @@ export default defineConfig({
     enabled: true,
     provider: 'istanbul',
     reporters: [],
+    clean: false,
     thresholds: {
       'node/**': {
         statements: 90,
