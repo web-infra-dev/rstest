@@ -29,6 +29,18 @@ describe('test coverage-istanbul include option', () => {
         ?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"date.ts|100|100|100|100|"`);
 
+    expect(
+      logs.find((log) => log.includes('a.ts') && log.includes('|')),
+    ).toBeFalsy();
+
+    expect(
+      logs.find((log) => log.includes('b.ts') && log.includes('|')),
+    ).toBeFalsy();
+
+    expect(
+      logs.find((log) => log.includes('c.ts') && log.includes('|')),
+    ).toBeFalsy();
+
     expectLog('Test Files 1 passed', logs);
   });
 });
