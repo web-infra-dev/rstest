@@ -296,6 +296,7 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     const { onBeforeRestart } = await import('./restart');
+    const { triggerRerun } = await import('./plugins/entry');
 
     onBeforeRestart(async () => {
       await pool.close();
@@ -308,9 +309,13 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     });
 
+    let forceRerunOnce = false;
+
     rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run({ mode: isFirstCompile ? 'all' : 'on-demand' });
+      await run({
+        mode: isFirstCompile || forceRerunOnce ? 'all' : 'on-demand',
+      });
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
@@ -324,9 +329,8 @@ export async function runTests(context: Rstest): Promise<void> {
             context.normalizedConfig.testNamePattern = undefined;
             context.fileFilters = undefined;
 
-            // TODO: should rerun compile with new entries
-            await run({ mode: 'all' });
-            afterTestsWatchRun();
+            forceRerunOnce = true;
+            triggerRerun();
           },
           runWithTestNamePattern: async (pattern?: string) => {
             clearScreen();
