@@ -47,7 +47,17 @@ describe('Index', () => {
 
 ### TypeScript support
 
-To get TypeScript working with the global APIs, you can create a `src/rstestEnv.d.ts` file to reference:
+To enable TypeScript to properly recognize the global APIs, add the `@rstest/core/globals` type declaration in your `tsconfig.json`:
+
+```ts title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
+
+Alternatively, create a `src/rstestEnv.d.ts` file to reference the type definitions:
 
 ```ts title=rstestEnv.d.ts
 /// <reference types="@rstest/core/globals" />

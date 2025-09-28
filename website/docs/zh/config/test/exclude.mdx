@@ -4,7 +4,7 @@ overviewHeaders: []
 
 # exclude
 
-- **类型：** `string[]`
+- **类型：** `string[] | { patterns: string[]; override?: boolean }`
 - **默认值：** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
 - **CLI：** `--exclude "**/node_modules/**"`
 
@@ -33,3 +33,19 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## 覆盖默认值
+
+默认情况下，Rstest 会将你的自定义配置与默认配置进行合并。如果你希望覆盖默认的 `exclude` 配置，可以将 `override` 设置为 `true`。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: {
+    patterns: ['**/node_modules/**'],
+    override: true,
+  },
+});
+```

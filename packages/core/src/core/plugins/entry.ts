@@ -67,6 +67,7 @@ export const pluginEntryWatch: (params: {
 
         config.watchOptions.ignored.push(
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
+          context.normalizedConfig.coverage.reportsDirectory,
           '**/*.snap',
         );
 

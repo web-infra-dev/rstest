@@ -1,4 +1,5 @@
 import type { RsbuildConfig } from '@rsbuild/core';
+import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
@@ -9,7 +10,7 @@ export type RstestPoolType = 'forks';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
-  type: RstestPoolType;
+  type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /** Minimum number or percentage of workers to run tests in. */
@@ -20,7 +21,7 @@ export type RstestPoolOptions = {
 
 export type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate'
+  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
 >;
 
 /**
@@ -58,7 +59,16 @@ export interface RstestConfig {
    *
    * @default ['**\/node_modules/**', '**\/dist/**']
    */
-  exclude?: string[];
+  exclude?:
+    | string[]
+    | {
+        patterns: string[];
+        /**
+         * override default exclude patterns
+         * @default false
+         */
+        override?: boolean;
+      };
   /**
    * A list of glob patterns that match your in-source test files
    *
@@ -199,6 +209,11 @@ export interface RstestConfig {
    */
   onConsoleLog?: (content: string) => boolean | void;
 
+  /**
+   * Coverage options
+   */
+  coverage?: CoverageOptions;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
@@ -229,7 +244,6 @@ export interface RstestConfig {
 }
 
 type OptionalKeys =
-  | 'setupFiles'
   | 'testNamePattern'
   | 'plugins'
   | 'source'
@@ -240,16 +254,30 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog';
 
-export type NormalizedProjectConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
-> & {
-  [key in OptionalKeys]?: RstestConfig[key];
-};
-
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects'>
+  Omit<
+    RstestConfig,
+    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+  >
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {
   pool: RstestPoolOptions;
+  coverage: NormalizedCoverageOptions;
+  setupFiles: string[];
+  exclude: {
+    patterns: string[];
+    override?: boolean;
+  };
+};
+
+export type NormalizedProjectConfig = Required<
+  Omit<
+    NormalizedConfig,
+    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+  >
+> & {
+  [key in OptionalKeys]?: NormalizedConfig[key];
+} & {
+  setupFiles: string[];
 };

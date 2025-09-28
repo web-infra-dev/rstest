@@ -34,6 +34,7 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--include <include>', 'Match test files')
     .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
+    .option('--coverage', 'Enable code coverage collection')
     .option(
       '--project <name>',
       'Run only projects that match the name, can be a full name or wildcards pattern',

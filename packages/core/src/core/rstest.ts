@@ -77,7 +77,11 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(userConfig);
+    const rstestConfig = withDefaultConfig({
+      ...userConfig,
+      root: rootPath,
+    });
+
     const reporters =
       command !== 'list'
         ? createReporters(rstestConfig.reporters, {
@@ -102,6 +106,7 @@ export class Rstest implements RstestContext {
           ) as NormalizedProjectConfig;
           config.isolate = rstestConfig.isolate;
           config.source ??= {};
+          config.coverage = rstestConfig.coverage;
 
           if (!config.source.tsconfigPath) {
             const tsconfigPath = join(config.root, TS_CONFIG_FILE);

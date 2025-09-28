@@ -32,7 +32,7 @@ export async function listTests(
 
     const entries = await getTestEntries({
       include,
-      exclude,
+      exclude: exclude.patterns,
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],

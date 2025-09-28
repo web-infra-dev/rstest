@@ -4,6 +4,16 @@
 - **Default:** [process.cwd()](https://nodejs.org/api/process.html#processcwd)
 - **CLI:** `-r=<path>`, `--root=<path>`
 
-Specify the project root directory. Can be an absolute path, or a path relative to `process.cwd()`.
+Specify the project root directory. Can be an absolute path, or a path relative to `process.cwd()`. `root` determines the starting point for loading configuration files, searching test files, etc.
 
-`root` determines the starting point for loading configuration files, searching test files, etc.
+Using `<rootDir>` in any path-based configuration settings will reference this value.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from 'rstest';
+
+export default defineConfig({
+  setupFiles: ['<rootDir>/setup.js'],
+  include: ['<rootDir>/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  root: './my-project',
+});
+```

@@ -13,6 +13,9 @@ export default defineConfig({
         bundle: {
           bundledPackages: [
             '@types/sinonjs__fake-timers',
+            '@types/istanbul-reports',
+            '@types/istanbul-lib-report',
+            '@types/istanbul-lib-coverage',
             '@jridgewell/trace-mapping',
             '@vitest/expect',
             '@vitest/snapshot',

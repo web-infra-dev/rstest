@@ -7,6 +7,28 @@ overviewHeaders: [2, 3]
 
 `expect` 用于在测试中创建断言。Rstest 提供了丰富的 API 及匹配器，支持轮询、快照断言等。
 
+你可以从 `@rstest/core` 包中导入 `expect` API：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('should add two numbers correctly', () => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+你也可以从 [测试上下文](/api/test-api/test#testcontext) 中获取 `expect` API，这有助于在并行测试中准确追踪断言的来源。
+
+```ts
+import { test } from '@rstest/core';
+
+test('should add two numbers correctly', ({ expect }) => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
 ## expect
 
 - **类型：** `<T>(actual: T, message?: string) => Assertion<T>`

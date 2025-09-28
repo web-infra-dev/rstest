@@ -428,6 +428,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -940,6 +941,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -1032,6 +1034,529 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "watchOptions": {
     "aggregateTimeout": 0,
     "ignored": "**/**",
+  },
+}
+`;
+
+exports[`prepareRsbuild > should generate rspack config correctly in watch mode 1`] = `
+{
+  "context": "<ROOT>/packages/core",
+  "devtool": "source-map",
+  "entry": [Function],
+  "experiments": {
+    "asyncWebAssembly": true,
+    "inlineEnum": true,
+    "lazyBarrel": true,
+    "rspackFuture": {
+      "bundlerInfo": {
+        "force": false,
+      },
+    },
+    "typeReexportsPresence": true,
+  },
+  "externals": [
+    {
+      "@rstest/core": "global @rstest/core",
+    },
+    [Function],
+    [Function],
+  ],
+  "externalsPresets": {
+    "node": false,
+  },
+  "ignoreWarnings": [
+    /Module not found/,
+  ],
+  "infrastructureLogging": {
+    "level": "error",
+  },
+  "mode": "development",
+  "module": {
+    "parser": {
+      "javascript": {
+        "exportsPresence": "error",
+        "importDynamic": false,
+        "requireAsExpression": false,
+        "requireDynamic": false,
+        "requireResolve": false,
+        "typeReexportsPresence": "tolerant",
+      },
+    },
+    "rules": [
+      {
+        "resolve": {
+          "fullySpecified": false,
+        },
+        "test": /\\\\\\.m\\?js/,
+      },
+      {
+        "dependency": {
+          "not": "url",
+        },
+        "resolve": {
+          "preferRelative": true,
+        },
+        "resourceQuery": {
+          "not": [
+            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+          ],
+        },
+        "sideEffects": true,
+        "test": /\\\\\\.css\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+          },
+          {
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "importLoaders": 0,
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
+        ],
+      },
+      {
+        "resolve": {
+          "preferRelative": true,
+        },
+        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+        "sideEffects": true,
+        "test": /\\\\\\.css\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 0,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+        ],
+      },
+      {
+        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        "test": /\\\\\\.css\\$/,
+        "type": "asset/source",
+      },
+      {
+        "dependency": {
+          "not": "url",
+        },
+        "include": [
+          {
+            "not": /\\[\\\\\\\\/\\]node_modules\\[\\\\\\\\/\\]/,
+          },
+          /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
+        ],
+        "resourceQuery": {
+          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        },
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "builtin:swc-loader",
+            "options": {
+              "env": {
+                "targets": [
+                  "node >= 16",
+                ],
+              },
+              "isModule": "unknown",
+              "jsc": {
+                "experimental": {
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                  "keepImportAttributes": true,
+                },
+                "externalHelpers": true,
+                "output": {
+                  "charset": "utf8",
+                },
+                "parser": {
+                  "decorators": true,
+                  "syntax": "typescript",
+                  "tsx": false,
+                },
+                "transform": {
+                  "decoratorVersion": "2022-03",
+                  "legacyDecorator": false,
+                },
+              },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": true,
+                  "typeExports": true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "type": "asset/source",
+      },
+      {
+        "mimetype": {
+          "or": [
+            "text/javascript",
+            "application/javascript",
+          ],
+        },
+        "resolve": {
+          "fullySpecified": false,
+        },
+        "use": [
+          {
+            "loader": "builtin:swc-loader",
+            "options": {
+              "env": {
+                "targets": [
+                  "node >= 16",
+                ],
+              },
+              "isModule": "unknown",
+              "jsc": {
+                "experimental": {
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                  "keepImportAttributes": true,
+                },
+                "externalHelpers": true,
+                "output": {
+                  "charset": "utf8",
+                },
+                "parser": {
+                  "decorators": true,
+                  "syntax": "typescript",
+                  "tsx": false,
+                },
+                "transform": {
+                  "decoratorVersion": "2022-03",
+                  "legacyDecorator": false,
+                },
+              },
+              "rspackExperiments": {
+                "collectTypeScriptInfo": {
+                  "exportedEnum": true,
+                  "typeExports": true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/image/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/image/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/svg/[name].[contenthash:8].svg",
+            },
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/svg/[name].[contenthash:8].svg",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.svg\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/media/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/media/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "generator": {
+              "filename": "static/font/[name].[contenthash:8][ext]",
+            },
+            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/font/[name].[contenthash:8][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "dependency": "url",
+        "generator": {
+          "filename": "static/wasm/[contenthash:8].module.wasm",
+        },
+        "test": /\\\\\\.wasm\\$/,
+        "type": "asset/resource",
+      },
+      {
+        "test": /\\\\\\.node\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  "name": "test",
+  "optimization": {
+    "chunkIds": "named",
+    "emitOnErrors": true,
+    "minimize": false,
+    "moduleIds": "named",
+    "nodeEnv": false,
+    "runtimeChunk": {
+      "name": "test-runtime",
+    },
+    "splitChunks": false,
+  },
+  "output": {
+    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "chunkFilename": "[name].js",
+    "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
+    "filename": "[name].js",
+    "hashFunction": "xxhash64",
+    "iife": false,
+    "importFunctionName": "__rstest_dynamic_import__",
+    "library": {
+      "type": "commonjs2",
+    },
+    "path": "<ROOT>/packages/core/dist/.rstest-temp",
+    "pathinfo": false,
+    "publicPath": "/",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+  },
+  "performance": {
+    "hints": false,
+  },
+  "plugins": [
+    {
+      "name": "RsbuildCorePlugin",
+    },
+    DefinePlugin {
+      "_args": [
+        {
+          "import.meta.env": "process.env",
+          "import.meta.env.ASSET_PREFIX": """",
+          "import.meta.env.BASE_URL": ""/"",
+          "import.meta.env.DEV": false,
+          "import.meta.env.MODE": ""none"",
+          "import.meta.env.PROD": false,
+          "import.meta.rstest": "global['@rstest/core']",
+          "process.env.ASSET_PREFIX": """",
+          "process.env.BASE_URL": ""/"",
+        },
+      ],
+      "affectedHooks": "compilation",
+      "name": "DefinePlugin",
+    },
+    WebpackManifestPlugin {
+      "options": {
+        "assetHookStage": Infinity,
+        "basePath": "",
+        "fileName": "test-manifest.json",
+        "filter": [Function],
+        "generate": [Function],
+        "map": null,
+        "publicPath": null,
+        "removeKeyHash": /\\(\\[a-f0-9\\]\\{16,32\\}\\\\\\.\\?\\)/gi,
+        "seed": undefined,
+        "serialize": [Function],
+        "sort": null,
+        "transformExtensions": /\\^\\(gz\\|map\\)\\$/i,
+        "useEntryKeys": false,
+        "useLegacyEmit": false,
+        "writeToFileEmit": false,
+      },
+    },
+    IgnoreModuleNotFoundErrorPlugin {},
+    MockRuntimeRspackPlugin {},
+    TestFileWatchPlugin {
+      "contextToWatch": "<ROOT>/packages/core",
+    },
+    RstestPlugin {
+      "_args": [
+        {
+          "hoistMockModule": true,
+          "importMetaPathName": true,
+          "injectModulePathName": true,
+          "manualMockRoot": "<ROOT>/packages/core/__mocks__",
+        },
+      ],
+      "affectedHooks": undefined,
+      "name": "RstestPlugin",
+    },
+  ],
+  "resolve": {
+    "alias": {
+      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+    },
+    "byDependency": {
+      "commonjs": {
+        "mainFields": [
+          "main",
+          "...",
+        ],
+      },
+    },
+    "extensionAlias": {
+      ".js": [
+        ".js",
+        ".ts",
+        ".tsx",
+      ],
+      ".jsx": [
+        ".jsx",
+        ".tsx",
+      ],
+    },
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".mjs",
+      ".js",
+      ".jsx",
+      ".json",
+      ".cjs",
+    ],
+    "mainFields": [
+      "main",
+    ],
+    "tsConfig": {
+      "configFile": "<ROOT>/packages/core/tsconfig.json",
+      "references": "auto",
+    },
+  },
+  "target": "node",
+  "watchOptions": {
+    "aggregateTimeout": 0,
+    "ignored": [
+      "**/.git",
+      "**/node_modules",
+      "**/dist/.rstest-temp",
+      "<ROOT>/packages/core/coverage",
+      "**/*.snap",
+    ],
   },
 }
 `;
@@ -1464,6 +1989,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,
@@ -1987,6 +2513,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     DefinePlugin {
       "_args": [
         {
+          "import.meta.env": "process.env",
           "import.meta.env.ASSET_PREFIX": """",
           "import.meta.env.BASE_URL": ""/"",
           "import.meta.env.DEV": false,

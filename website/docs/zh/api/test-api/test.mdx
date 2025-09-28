@@ -177,7 +177,9 @@ export interface TestContext {
   expect: Expect;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
+  /** The `onTestFailed` hook bound to the current test */
+  onTestFailed: OnTestFailed;
 }
 ```
 
-你可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。
+你也可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。

@@ -1,3 +1,4 @@
+import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import {
@@ -12,7 +13,14 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 export async function runTests(context: Rstest): Promise<void> {
-  const { rootPath, reporters, projects, snapshotManager, command } = context;
+  const {
+    rootPath,
+    reporters,
+    projects,
+    snapshotManager,
+    command,
+    normalizedConfig: { coverage },
+  } = context;
 
   const entriesCache = new Map<
     string,
@@ -30,7 +38,7 @@ export async function runTests(context: Rstest): Promise<void> {
     )!.normalizedConfig;
     const entries = await getTestEntries({
       include,
-      exclude,
+      exclude: exclude.patterns,
       includeSource,
       rootPath,
       projectRoot: root,
@@ -94,6 +102,18 @@ export async function runTests(context: Rstest): Promise<void> {
     context,
     recommendWorkerCount,
   });
+
+  // Initialize coverage collector
+  const coverageProvider = coverage.enabled
+    ? await createCoverageProvider(coverage, context.rootPath)
+    : null;
+
+  if (coverageProvider) {
+    logger.log(
+      ` ${color.gray('Coverage enabled with')} %s\n`,
+      color.yellow(coverage.provider),
+    );
+  }
 
   type Mode = 'all' | 'on-demand';
 
@@ -228,13 +248,15 @@ export async function runTests(context: Rstest): Promise<void> {
           );
           logger.log(
             color.gray('exclude:'),
-            p.normalizedConfig.exclude.join(color.gray(', ')),
+            p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
           );
         });
       }
     }
 
-    if (results.some((r) => r.status === 'fail')) {
+    const isFailure = results.some((r) => r.status === 'fail');
+
+    if (isFailure) {
       process.exitCode = 1;
     }
 
@@ -254,6 +276,13 @@ export async function runTests(context: Rstest): Promise<void> {
           ? currentEntries.map((e) => e.testPath)
           : undefined,
       });
+    }
+
+    // Generate coverage reports after all tests complete
+    if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+      const { generateCoverage } = await import('../coverage/generate');
+
+      await generateCoverage(context, results, coverageProvider);
     }
   };
 

@@ -13,6 +13,7 @@ export type Project = { config: RstestConfig; configFilePath?: string };
 export type ProjectContext = {
   name: string;
   environmentName: string;
+  /** The root path of current project. */
   rootPath: string;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
@@ -21,7 +22,7 @@ export type ProjectContext = {
 export type RstestContext = {
   /** The Rstest core version. */
   version: string;
-  /** The root path of current project. */
+  /** The root path of rstest. */
   rootPath: string;
   /** The original Rstest config passed from the createRstest method. */
   originalConfig: Readonly<RstestConfig>;
@@ -38,8 +39,9 @@ export type RstestContext = {
   /**
    * The command type.
    *
-   * - dev: `rstest dev`
-   * - run: `rstest run`
+   * - run: `rstest`
+   * - dev: `rstest dev` or watch mode
+   * - list: `rstest list`
    */
   command: RstestCommand;
   reporters: Reporter[];

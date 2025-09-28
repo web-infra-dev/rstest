@@ -1,3 +1,8 @@
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig({});
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});

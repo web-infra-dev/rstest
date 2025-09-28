@@ -10,6 +10,7 @@ declare global {
   const afterEach: typeof import('@rstest/core')['afterEach'];
   const onTestFinished: typeof import('@rstest/core')['onTestFinished'];
   const onTestFailed: typeof import('@rstest/core')['onTestFailed'];
+  const rs: typeof import('@rstest/core')['rs'];
   const rstest: typeof import('@rstest/core')['rstest'];
 }
 export {};

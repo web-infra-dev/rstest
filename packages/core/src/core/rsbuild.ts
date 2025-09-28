@@ -64,7 +64,7 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {} },
+    normalizedConfig: { isolate, dev = {}, coverage },
   } = context;
   const debugMode = isDebug();
 
@@ -122,6 +122,23 @@ export const prepareRsbuild = async (
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
+
+  if (coverage?.enabled && command !== 'list') {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverageCore } = await import('../coverage/plugin');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    coverage.exclude.push(
+      ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
+    );
+
+    rsbuildInstance.addPlugins([
+      pluginCoverage(coverage),
+      pluginCoverageCore(coverage),
+    ]);
+  }
 
   return rsbuildInstance;
 };
