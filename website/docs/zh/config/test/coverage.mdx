@@ -10,6 +10,7 @@ type CoverageOptions = {
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
   reportsDirectory?: string;
+  reportOnFailure?: boolean;
   clean?: boolean;
   thresholds?: CoverageThresholds;
 };
@@ -185,6 +186,23 @@ export default defineConfig({
   coverage: {
     enabled: true,
     reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### reportOnFailure
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+在测试失败时是否生成覆盖率报告并检查阈值。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportOnFailure: true,
   },
 });
 ```

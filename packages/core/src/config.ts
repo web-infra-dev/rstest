@@ -165,6 +165,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',
     clean: true,
+    reportOnFailure: false,
   },
 });
 

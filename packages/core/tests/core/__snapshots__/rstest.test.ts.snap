@@ -20,6 +20,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
       "**/*.{test,spec}.[c|m][jt]sx",
     ],
     "provider": "istanbul",
+    "reportOnFailure": false,
     "reporters": [
       "text",
       "html",
@@ -89,6 +90,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/*.{test,spec}.[c|m][jt]sx",
     ],
     "provider": "istanbul",
+    "reportOnFailure": false,
     "reporters": [
       "text",
       "html",
@@ -161,6 +163,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/*.{test,spec}.[c|m][jt]sx",
     ],
     "provider": "istanbul",
+    "reportOnFailure": false,
     "reporters": [
       "text",
       "html",
