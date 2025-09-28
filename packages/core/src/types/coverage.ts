@@ -100,6 +100,12 @@ export type CoverageOptions = {
    * @default undefined
    */
   thresholds?: CoverageThresholds;
+
+  /**
+   * Whether to report coverage when tests fail.
+   * @default false
+   */
+  reportOnFailure?: boolean;
 };
 
 export type NormalizedCoverageOptions = Required<

@@ -13,7 +13,14 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 export async function runTests(context: Rstest): Promise<void> {
-  const { rootPath, reporters, projects, snapshotManager, command } = context;
+  const {
+    rootPath,
+    reporters,
+    projects,
+    snapshotManager,
+    command,
+    normalizedConfig: { coverage },
+  } = context;
 
   const entriesCache = new Map<
     string,
@@ -97,17 +104,14 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   // Initialize coverage collector
-  const coverageProvider = context.normalizedConfig.coverage.enabled
-    ? await createCoverageProvider(
-        context.normalizedConfig.coverage || {},
-        context.rootPath,
-      )
+  const coverageProvider = coverage.enabled
+    ? await createCoverageProvider(coverage, context.rootPath)
     : null;
 
   if (coverageProvider) {
     logger.log(
       ` ${color.gray('Coverage enabled with')} %s\n`,
-      color.yellow(context.normalizedConfig.coverage.provider),
+      color.yellow(coverage.provider),
     );
   }
 
@@ -250,7 +254,9 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    if (results.some((r) => r.status === 'fail')) {
+    const isFailure = results.some((r) => r.status === 'fail');
+
+    if (isFailure) {
       process.exitCode = 1;
     }
 
@@ -268,7 +274,7 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     // Generate coverage reports after all tests complete
-    if (coverageProvider) {
+    if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
       const { generateCoverage } = await import('../coverage/generate');
 
       await generateCoverage(context, results, coverageProvider);

@@ -10,6 +10,7 @@ type CoverageOptions = {
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
   reportsDirectory?: string;
+  reportOnFailure?: boolean;
   clean?: boolean;
   thresholds?: CoverageThresholds;
 };
@@ -187,6 +188,23 @@ export default defineConfig({
   coverage: {
     enabled: true,
     reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### reportOnFailure
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Whether to report coverage and check thresholds when tests fail.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportOnFailure: true,
   },
 });
 ```
