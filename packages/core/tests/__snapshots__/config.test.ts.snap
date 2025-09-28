@@ -20,6 +20,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/*.{test,spec}.[c|m][jt]sx",
     ],
     "provider": "istanbul",
+    "reportOnFailure": false,
     "reporters": [
       "text",
       "html",
