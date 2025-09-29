@@ -29,12 +29,12 @@ export async function printError(
       if ((globalApis as string[]).includes(varName)) {
         error.message = error.message.replace(
           `${varName} is not defined`,
-          `${varName} is not defined, did you forget to enable "globals" configuration?`,
+          `${varName} is not defined. Did you forget to enable "globals" configuration?`,
         );
       } else if (['jest', 'vitest'].includes(varName)) {
         error.message = error.message.replace(
           `${varName} is not defined`,
-          `${varName} is not defined, did you mean rstest?`,
+          `${varName} is not defined. Did you mean rstest?`,
         );
       }
     }
