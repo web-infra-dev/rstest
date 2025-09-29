@@ -31,6 +31,11 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should load node built-in modules correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/node', 'happy-dom');
+    await expectExecSuccess();
+  });
+
   it('should run test correctly with custom externals', async () => {
     const { expectExecSuccess } = await runCli(appFilters, 'happy-dom', {
       args: externalConfigArgs,
