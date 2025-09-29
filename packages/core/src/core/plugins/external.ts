@@ -1,4 +1,4 @@
-import { isBuiltin } from 'node:module';
+import { builtinModules } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
@@ -10,7 +10,7 @@ const autoExternalNodeModules: (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = ({ context, request, dependencyType, getResolve }, callback) => {
+) => void = ({ context, request, getResolve }, callback) => {
   if (!request) {
     return callback();
   }
@@ -21,11 +21,7 @@ const autoExternalNodeModules: (
   }
 
   const doExternal = (externalPath: string = request) => {
-    callback(
-      undefined,
-      externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'import',
-    );
+    callback(undefined, externalPath, 'commonjs-import');
   };
 
   const resolver = getResolve?.();
@@ -48,7 +44,7 @@ const autoExternalNodeModules: (
 };
 
 function autoExternalNodeBuiltin(
-  { request, dependencyType }: Rspack.ExternalItemFunctionData,
+  { request }: Rspack.ExternalItemFunctionData,
   callback: (
     err?: Error,
     result?: Rspack.ExternalItemValue,
@@ -60,22 +56,16 @@ function autoExternalNodeBuiltin(
     return;
   }
 
-  const isNodeBuiltin =
-    isBuiltin(request) ||
-    ADDITIONAL_NODE_BUILTINS.some((builtin) => {
-      if (typeof builtin === 'string') {
-        return builtin === request;
-      }
+  const isNodeBuiltin = ADDITIONAL_NODE_BUILTINS.some((builtin) => {
+    if (typeof builtin === 'string') {
+      return builtin === request;
+    }
 
-      return builtin.test(request);
-    });
+    return builtin.test(request);
+  });
 
   if (isNodeBuiltin) {
-    callback(
-      undefined,
-      request,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
-    );
+    callback(undefined, request, 'commonjs-import');
   } else {
     callback();
   }
@@ -107,9 +97,11 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
                 '@rstest/core': 'global @rstest/core',
               });
 
+              config.externalsType ??= 'commonjs-import';
+
               config.externalsPresets ??= {};
               config.externalsPresets.node = false;
-              config.externals.push(autoExternalNodeBuiltin);
+              config.externals.push(...builtinModules, autoExternalNodeBuiltin);
             },
           },
         });
