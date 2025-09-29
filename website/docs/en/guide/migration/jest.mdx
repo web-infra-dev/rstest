@@ -129,6 +129,15 @@ The `done` callback is not supported in Rstest. Instead, you can return a Promis
 + }));
 ```
 
+### Hooks
+
+The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are used to perform cleaning work after testing.
+
+```diff
+- beforeEach(() => doSomething());
++ beforeEach(() => { doSomething() });
+```
+
 ### Timeout
 
 If you used `jest.setTimeout()` to set the timeout for a test, you can use `rstest.setConfig()` instead.

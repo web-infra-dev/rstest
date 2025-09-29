@@ -21,6 +21,21 @@ beforeAll(async (ctx) => {
 });
 ```
 
+`beforeAll` also supports returning a function that runs after all tests for cleanup (equivalent to `afterAll`):
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async () => {
+  const cleanUp = await doSomething();
+
+  // Cleanup logic after all tests
+  return async () => {
+    await cleanUp();
+  };
+});
+```
+
 ## afterAll
 
 - **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
@@ -46,6 +61,21 @@ import { beforeEach } from '@rstest/core';
 
 beforeEach(async () => {
   // Setup logic before each test
+});
+```
+
+`beforeEach` also supports returning a function that runs after each test for cleanup (equivalent to `afterEach`):
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  const cleanUp = await doSomething();
+
+  // Cleanup logic after each test
+  return async () => {
+    await cleanUp();
+  };
 });
 ```
 
