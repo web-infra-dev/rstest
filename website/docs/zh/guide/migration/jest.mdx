@@ -129,6 +129,15 @@ Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise �
 + }));
 ```
 
+### Hooks
+
+Rstest 中 `beforeEach` 和 `beforeAll` 钩子的返回函数用于执行测试后的清理工作。
+
+```diff
+- beforeEach(() => doSomething());
++ beforeEach(() => { doSomething() });
+```
+
 ### 超时设置
 
 如果你使用 `jest.setTimeout()` 来设置测试的超时时间，你可以改用 `rstest.setConfig()`。
