@@ -23,22 +23,18 @@ export async function printError(
     return;
   }
 
-  if (error.message.includes('jest is not defined')) {
-    error.message = error.message.replace(
-      'jest is not defined',
-      'jest is not defined, did you mean rstest?',
-    );
-  } else if (error.message.includes('is not defined')) {
-    const match = error.message.match(/(.*) is not defined/);
-    if (match) {
-      const varName = match[1];
-      if (
-        varName &&
-        globalApis.includes(varName as (typeof globalApis)[number])
-      ) {
+  if (error.message.includes('is not defined')) {
+    const [, varName] = error.message.match(/(.*) is not defined/) || [];
+    if (varName) {
+      if ((globalApis as string[]).includes(varName)) {
         error.message = error.message.replace(
           `${varName} is not defined`,
           `${varName} is not defined, did you forget to enable "globals" configuration?`,
+        );
+      } else if (['jest', 'vitest'].includes(varName)) {
+        error.message = error.message.replace(
+          `${varName} is not defined`,
+          `${varName} is not defined, did you mean rstest?`,
         );
       }
     }
