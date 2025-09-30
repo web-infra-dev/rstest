@@ -53,6 +53,7 @@ const OVERVIEW_GROUPS: Group[] = [
       'coverage',
       'reporters',
       'slowTestThreshold',
+      'snapshotFormat',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',

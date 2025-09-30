@@ -65,6 +65,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "./setup.ts",
   ],
   "slowTestThreshold": 300,
+  "snapshotFormat": {},
   "testEnvironment": "node",
   "testTimeout": 5000,
   "unstubEnvs": false,
