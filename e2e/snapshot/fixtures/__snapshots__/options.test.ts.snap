@@ -1,0 +1,15 @@
+// Rstest Snapshot v1
+
+exports[`test snapshot > test snapshot generate 1`] = `
+Object {
+  "a": 1,
+  "b": Array [
+    1,
+    2,
+    3,
+  ],
+  "c": Object {
+    "d": "hello",
+  },
+}
+`;

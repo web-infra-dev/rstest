@@ -144,6 +144,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  snapshotFormat: {},
   coverage: {
     exclude: [
       '**/node_modules/**',

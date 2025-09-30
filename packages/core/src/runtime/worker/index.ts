@@ -46,6 +46,7 @@ const preparePool = async ({
       printConsoleTrace,
       disableConsoleIntercept,
       testEnvironment,
+      snapshotFormat,
     },
   } = context;
 
@@ -66,6 +67,7 @@ const preparePool = async ({
     snapshotOptions: {
       updateSnapshot,
       snapshotEnvironment: new RstestSnapshotEnvironment(),
+      snapshotFormat,
     },
     distPath,
     testPath,

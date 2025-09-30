@@ -1,0 +1,16 @@
+# snapshotFormat
+
+- **类型：** `PrettyFormatOptions`
+- **默认值：** `undefined`
+
+使用 [pretty-format](https://www.npmjs.com/package/pretty-format) 提供的选项自定义快照格式。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  snapshotFormat: {
+    printBasicPrototype: true,
+  },
+});
+```

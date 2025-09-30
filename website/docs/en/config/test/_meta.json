@@ -29,6 +29,7 @@
   "coverage",
   "reporters",
   "slowTestThreshold",
+  "snapshotFormat",
   "printConsoleTrace",
   "onConsoleLog",
   "disableConsoleIntercept"
