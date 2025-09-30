@@ -49,6 +49,7 @@ export type RuntimeConfig = Pick<
   | 'hookTimeout'
   | 'coverage'
   | 'snapshotFormat'
+  | 'env'
 >;
 
 export type WorkerContext = {

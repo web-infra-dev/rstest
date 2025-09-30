@@ -145,6 +145,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   printConsoleTrace: false,
   disableConsoleIntercept: false,
   snapshotFormat: {},
+  env: {},
   coverage: {
     exclude: [
       '**/node_modules/**',

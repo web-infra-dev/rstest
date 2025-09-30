@@ -219,6 +219,11 @@ export interface RstestConfig {
   snapshotFormat?: SnapshotFormat;
 
   /**
+   * Custom environment variables available on `process.env` during tests.
+   */
+  env?: Partial<NodeJS.ProcessEnv>;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;

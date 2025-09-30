@@ -30,6 +30,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
+  "env": {},
   "exclude": {
     "override": false,
     "patterns": [
@@ -101,6 +102,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
+  "env": {},
   "exclude": {
     "override": false,
     "patterns": [
@@ -175,6 +177,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
   "disableConsoleIntercept": false,
+  "env": {},
   "exclude": {
     "override": false,
     "patterns": [
