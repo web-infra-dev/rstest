@@ -30,6 +30,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
   "disableConsoleIntercept": false,
+  "env": {},
   "exclude": {
     "override": false,
     "patterns": [
