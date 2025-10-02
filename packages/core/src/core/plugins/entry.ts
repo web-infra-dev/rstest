@@ -26,6 +26,20 @@ class TestFileWatchPlugin {
   }
 }
 
+const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
+
+let rerunTrigger: Record<string, () => void> = {};
+
+const registerRerunTrigger = (name: string, fn: () => void) => {
+  rerunTrigger[name] = fn;
+};
+
+export const triggerRerun = (): void => {
+  Object.values(rerunTrigger).forEach((fn) => {
+    fn();
+  });
+};
+
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -40,8 +54,16 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
-    api.modifyRspackConfig(async (config, { environment }) => {
+    api.onCloseDevServer(() => {
+      rerunTrigger = {};
+    });
+
+    api.modifyRspackConfig(async (config, { environment, rspack }) => {
       if (isWatch) {
+        // FIXME: inspect config will retrigger initConfig
+        if (rerunTrigger[environment.name]) {
+          return;
+        }
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries(environment.name);
@@ -51,7 +73,30 @@ export const pluginEntryWatch: (params: {
           };
         };
 
+        // Add virtual entry to trigger recompile
+        const virtualEntryName = `${rstestVirtualEntryFlag}${config.name!}.js`;
+        const virtualEntryPath = `${environment.config.root}/${virtualEntryName}`;
+
+        const virtualModulesPlugin =
+          new rspack.experiments.VirtualModulesPlugin({
+            [virtualEntryPath]: `export const virtualEntry = ${Date.now()}`,
+          });
+
+        registerRerunTrigger(environment.name, () =>
+          virtualModulesPlugin.writeModule(
+            virtualEntryPath,
+            `export const virtualEntry = ${Date.now()}`,
+          ),
+        );
+
+        config.experiments ??= {};
+        config.experiments.nativeWatcher = true;
+
+        config.plugins.push(virtualModulesPlugin);
+
         config.watchOptions ??= {};
+        config.watchOptions.aggregateTimeout = 5;
+
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
