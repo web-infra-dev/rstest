@@ -3,6 +3,8 @@ import type { WorkerInitData, WorkerRunTestData } from '../types';
 import { logger } from './logger';
 import { VscodeReporter } from './reporter';
 
+type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
+
 class Worker {
   private ws: WebSocket;
   public rstestPath!: string;
@@ -52,21 +54,10 @@ class Worker {
       this.rstestPath
     )) as typeof import('@rstest/core');
     logger.debug('Loaded Rstest module');
-    const { createRstest, loadConfig, initCli } = rstestModule;
-    const { filePath } = await loadConfig({
-      cwd: this.cwd,
-    });
-
-    logger.debug('Loaded Rstest config', {
-      id: data.id,
-      configFile: filePath ?? null,
-    });
-
-    type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
+    const { createRstest, initCli } = rstestModule;
 
     const commonOptions: CommonOptions = {
       root: this.cwd,
-      config: filePath ?? undefined,
     };
 
     const initializedOptions = await initCli(commonOptions);

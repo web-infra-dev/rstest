@@ -483,9 +483,6 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
-      license-webpack-plugin:
-        specifier: ^4.0.2
-        version: 4.0.2(webpack@5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17)))
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -516,6 +513,9 @@ importers:
       tinyspy:
         specifier: ^4.0.3
         version: 4.0.3
+      webpack-license-plugin:
+        specifier: ^4.5.1
+        version: 4.5.1(webpack@5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17)))
 
   packages/coverage-istanbul:
     dependencies:
@@ -3958,14 +3958,6 @@ packages:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
 
-  license-webpack-plugin@4.0.2:
-    resolution: {integrity: sha512-771TFWFD70G1wLTC4oU2Cw4qvtmNrIw+wRvBtn+okgHl7slJVi7zfNcdmqDL72BojM30VNJ2UHylr1o77U37Jw==}
-    peerDependencies:
-      webpack: '*'
-    peerDependenciesMeta:
-      webpack:
-        optional: true
-
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -4362,6 +4354,11 @@ packages:
 
   napi-build-utils@2.0.0:
     resolution: {integrity: sha512-GEbrYkbfF7MoNaoh2iGG84Mnf/WZfB0GdGEsM8wz7Expx/LlWf5U8t9nvJKXSp3qr5IsEbK04cBGhol/KwOsWA==}
+
+  needle@3.3.1:
+    resolution: {integrity: sha512-6k0YULvhpw+RoLNiQCRKOl09Rv1dPLr8hHnVjHqdolKwDrdNyk+Hmrthi4lIGPPz3r39dLx0hsF5s40sZ3Us4Q==}
+    engines: {node: '>= 4.4.x'}
+    hasBin: true
 
   negotiator@0.6.3:
     resolution: {integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==}
@@ -5217,6 +5214,9 @@ packages:
   spdx-expression-parse@3.0.1:
     resolution: {integrity: sha512-cbqHunsQWnJNE6KhVSMsMeH5H/L9EpymbzqTQ3uLwNCLZ1Q481oWaofqH7nO6V07xlXwY6PhQdQ2IedWx/ZK4Q==}
 
+  spdx-expression-validate@2.0.0:
+    resolution: {integrity: sha512-b3wydZLM+Tc6CFvaRDBOF9d76oGIHNCLYFeHbftFXUWjnfZWganmDmvtM5sm1cRwJc/VDBMLyGGrsLFd1vOxbg==}
+
   spdx-license-ids@3.0.22:
     resolution: {integrity: sha512-4PRT4nh1EImPbt2jASOKHX7PB7I+e4IWNLvkKFDxNhJlfjbYlleYQh285Z/3mPTHSAK/AvdMmw5BNNuYH8ShgQ==}
 
@@ -5689,6 +5689,12 @@ packages:
   webidl-conversions@7.0.0:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
     engines: {node: '>=12'}
+
+  webpack-license-plugin@4.5.1:
+    resolution: {integrity: sha512-WbjMSMPHzFePCSQJqP0qFskGPSwdf3JxIoXa1SK3d1hCXQee7KUrIb+riyXUId71kcHOSyE12pTyrhMl1ozszA==}
+    engines: {node: '>=16.0.0'}
+    peerDependencies:
+      webpack: '>=4.0.0 < 6.0.0'
 
   webpack-sources@3.3.3:
     resolution: {integrity: sha512-yd1RBzSGanHkitROoPFd6qsrxt+oFhg/129YzheDGqeustzX0vTZJZsSsQjVQC4yzBQ56K55XU8gaNCtIzOnTg==}
@@ -9775,12 +9781,6 @@ snapshots:
 
   leven@3.1.0: {}
 
-  license-webpack-plugin@4.0.2(webpack@5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17))):
-    dependencies:
-      webpack-sources: 3.3.3
-    optionalDependencies:
-      webpack: 5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17))
-
   lie@3.3.0:
     dependencies:
       immediate: 3.0.6
@@ -10426,6 +10426,11 @@ snapshots:
 
   napi-build-utils@2.0.0:
     optional: true
+
+  needle@3.3.1:
+    dependencies:
+      iconv-lite: 0.6.3
+      sax: 1.4.1
 
   negotiator@0.6.3: {}
 
@@ -11386,6 +11391,10 @@ snapshots:
       spdx-exceptions: 2.5.0
       spdx-license-ids: 3.0.22
 
+  spdx-expression-validate@2.0.0:
+    dependencies:
+      spdx-expression-parse: 3.0.1
+
   spdx-license-ids@3.0.22: {}
 
   sprintf-js@1.0.3: {}
@@ -11817,6 +11826,15 @@ snapshots:
   web-namespaces@2.0.1: {}
 
   webidl-conversions@7.0.0: {}
+
+  webpack-license-plugin@4.5.1(webpack@5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17))):
+    dependencies:
+      chalk: 5.4.1
+      lodash: 4.17.21
+      needle: 3.3.1
+      spdx-expression-validate: 2.0.0
+      webpack: 5.101.2(@swc/core@1.13.5(@swc/helpers@0.5.17))
+      webpack-sources: 3.3.3
 
   webpack-sources@3.3.3: {}
 
