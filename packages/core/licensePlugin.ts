@@ -1,27 +1,36 @@
-import { LicenseWebpackPlugin } from 'license-webpack-plugin';
-import type { LicenseIdentifiedModule } from 'license-webpack-plugin/dist/LicenseIdentifiedModule';
+import WebpackLicensePlugin from 'webpack-license-plugin';
+
+type PackageLicenseMeta = NonNullable<
+  ConstructorParameters<typeof WebpackLicensePlugin>[0]
+> extends Partial<{
+  additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
+}>
+  ? Meta
+  : never;
 
 export function licensePlugin() {
-  const formatLicenseTitle = (module: LicenseIdentifiedModule) => {
-    // @ts-expect-error
-    const gitUrl = module.packageJson?.repository?.url;
-    return `Licensed under ${module.licenseId} license${
-      gitUrl ? ` in the repository at ${gitUrl}` : ''
+  const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {
+    const licenseId = packageMeta.license ?? 'undefined';
+    const repositoryUrl = packageMeta.repository;
+
+    return `Licensed under ${licenseId} license${
+      repositoryUrl ? ` in the repository at ${repositoryUrl}` : ''
     }.`;
   };
 
-  const formatLicenseText = (license: string) => {
-    return license
+  const formatLicenseText = (licenseText?: string) => {
+    if (!licenseText) {
+      return '';
+    }
+
+    return licenseText
       .split('\n')
       .map((line) => `> ${line}`)
       .join('\n');
   };
 
-  return new LicenseWebpackPlugin({
-    perChunkOutput: false,
-    outputFilename: '../LICENSE.md',
-    renderLicenses: (modules: LicenseIdentifiedModule[]) => {
-      return `MIT License
+  const renderLicenses = (packages: PackageLicenseMeta[]) => {
+    return `MIT License
 
 Copyright (c) 2025-present Bytedance, Inc. and its affiliates.
 
@@ -305,16 +314,26 @@ Licensed under Apache license in the repository at https://github.com/microsoft/
 
 The following third-party packages are bundled into @rstest/core.
 
-${modules
+${packages
   .sort((left, right) => {
     return left.name < right.name ? -1 : 1;
   })
-  .reduce((file, module) => {
-    return `${file}### ${module.name}${
-      module.licenseId ? `\n\n${formatLicenseTitle(module)}` : ''
-    }${module.licenseText ? `\n\n${formatLicenseText(module.licenseText)}` : ''}\n\n`;
+  .reduce((file, packageMeta) => {
+    return `${file}### ${packageMeta.name}${
+      packageMeta.license ? `\n\n${formatLicenseTitle(packageMeta)}` : ''
+    }${
+      packageMeta.licenseText
+        ? `\n\n${formatLicenseText(packageMeta.licenseText)}`
+        : ''
+    }\n\n`;
   }, '')
   .trim()}\n`;
+  };
+
+  return new WebpackLicensePlugin({
+    outputFilename: '../LICENSE.md',
+    additionalFiles: {
+      '../LICENSE.md': (packages) => renderLicenses(packages),
     },
   });
 }

@@ -6,8 +6,10 @@ import type {
   RstestConfig,
 } from './types';
 
-export { runCLI } from './cli';
-export { mergeRstestConfig } from './config';
+export { initCli, runCLI } from './cli';
+export { loadConfig, mergeRstestConfig } from './config';
+export { createRstest } from './core';
+
 export * from './runtime/api/public';
 
 export type {

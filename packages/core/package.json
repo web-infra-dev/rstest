@@ -28,6 +28,9 @@
       "types": "./dist-types/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./package.json": {
+      "default": "./package.json"
+    },
     "./globals": {
       "types": "./globals.d.ts"
     },
@@ -78,7 +81,7 @@
     "happy-dom": "^20.0.0",
     "jest-diff": "^30.1.2",
     "jsdom": "^26.1.0",
-    "license-webpack-plugin": "^4.0.2",
+    "webpack-license-plugin": "^4.5.1",
     "picocolors": "^1.1.1",
     "rslog": "^1.2.11",
     "source-map-support": "^0.5.21",
