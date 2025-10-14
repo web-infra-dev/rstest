@@ -13,6 +13,7 @@ import { getWorkspaceTestPatterns, shouldIgnorePath } from './utils';
 
 export async function activate(context: vscode.ExtensionContext) {
   const rstest = new Rstest(context);
+  await rstest.initialize();
   return rstest;
 }
 
@@ -46,8 +47,10 @@ class Rstest {
     this.setupTestController();
     this.api = new RstestApi();
     this.api.createChildProcess();
+  }
 
-    scanAllTestFiles(this.ctrl);
+  async initialize() {
+    await scanAllTestFiles(this.ctrl);
   }
 
   private setupEventHandlers(context: vscode.ExtensionContext) {
