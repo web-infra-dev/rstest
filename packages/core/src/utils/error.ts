@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, isDebug, logger } from '../utils';
+import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
 
 export async function printError(
   error: FormattedError,
@@ -22,6 +22,24 @@ export async function printError(
     logger.log(`${color.red(tips.join('\n'))}\n`);
     return;
   }
+
+  if (error.message.includes('is not defined')) {
+    const [, varName] = error.message.match(/(.*) is not defined/) || [];
+    if (varName) {
+      if ((globalApis as string[]).includes(varName)) {
+        error.message = error.message.replace(
+          `${varName} is not defined`,
+          `${varName} is not defined. Did you forget to enable "globals" configuration?`,
+        );
+      } else if (['jest', 'vitest'].includes(varName)) {
+        error.message = error.message.replace(
+          `${varName} is not defined`,
+          `${varName} is not defined. Did you mean rstest?`,
+        );
+      }
+    }
+  }
+
   logger.log(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );

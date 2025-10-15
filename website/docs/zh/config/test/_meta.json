@@ -11,6 +11,7 @@
   "includeSource",
   "testNamePattern",
 
+  "env",
   "retry",
   "testTimeout",
   "hookTimeout",
@@ -29,6 +30,7 @@
   "coverage",
   "reporters",
   "slowTestThreshold",
+  "snapshotFormat",
   "printConsoleTrace",
   "onConsoleLog",
   "disableConsoleIntercept"

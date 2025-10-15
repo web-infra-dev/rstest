@@ -31,7 +31,7 @@ const OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'runtime',
-    items: ['retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
+    items: ['env', 'retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
   },
   {
     name: 'environment',
@@ -53,6 +53,7 @@ const OVERVIEW_GROUPS: Group[] = [
       'coverage',
       'reporters',
       'slowTestThreshold',
+      'snapshotFormat',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',

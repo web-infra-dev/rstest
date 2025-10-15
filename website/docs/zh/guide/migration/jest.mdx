@@ -31,24 +31,28 @@ export default defineConfig({
 });
 ```
 
+### Jest 配置映射
+
 以下是一些常见的 Jest 配置及其对应的 Rstest 配置：
 
-| Jest 配置                    | Rstest 对等配置                                                       |
-| ---------------------------- | --------------------------------------------------------------------- |
-| `testRegex`                  | [`include`](/config/test/include)                                     |
-| `testMatch`                  | [`include`](/config/test/include)                                     |
-| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                     |
-| `transformIgnorePatterns`    | [`source.exclude`](/config/build/source#sourceexclude)                |
-| `displayName`                | [`name`](/config/test/name)                                           |
-| `rootDir`                    | [`root`](/config/test/root)                                           |
-| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)         |
-| `injectGlobals`              | [`globals`](/config/test/globals)                                     |
-| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                 |
-| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                   |
-| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory) |
-| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                 |
-| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                   |
-| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)             |
+| Jest 配置                    | Rstest 对等配置                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `testRegex`                  | [`include`](/config/test/include)                                                                                  |
+| `testMatch`                  | [`include`](/config/test/include)                                                                                  |
+| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                                                                  |
+| `transformIgnorePatterns`    | [`output.externals`](/config/build/output#outputexternals)、[`source.exclude`](/config/build/source#sourceexclude) |
+| `displayName`                | [`name`](/config/test/name)                                                                                        |
+| `rootDir`                    | [`root`](/config/test/root)                                                                                        |
+| `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setupFiles)                                                                            |
+| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)                                                      |
+| `injectGlobals`              | [`globals`](/config/test/globals)                                                                                  |
+| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                                              |
+| `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                             |
+| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                                                |
+| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                                              |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                                              |
+| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                                                |
+| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                                          |
 
 更多详情，请参考 [配置文档](/config)。
 
@@ -68,7 +72,18 @@ export default defineConfig({
 
 ### 代码转换
 
-Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。
+Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。
+
+```diff
+export default {
+-  transform: {
+-    '^.+\\.(t|j)sx?$': ['@swc/jest', {}],
+-  },
++  tools: {
++    swc: {}
++  }
+}
+```
 
 如果你有自定义的 Babel 配置或使用特定的 Babel 插件/预设，你可以添加 [Rsbuild Babel 插件](https://rsbuild.rs/zh/plugins/list/plugin-babel)：
 
@@ -82,6 +97,8 @@ export default defineConfig({
 ```
 
 ## 更新测试 API
+
+### 测试 API
 
 Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更改为 Rstest：
 
@@ -97,4 +114,47 @@ Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函�
 + const fn = rstest.fn();
 
 fn.mockResolvedValue('foo');
+```
+
+### Done 回调
+
+Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise 或使用 `async/await` 进行异步测试。
+
+```diff
+- test('async test with done', (done) => {
++ test('async test with done', () => new Promise(done => {
+  // ...
+  done();
+- });
++ }));
+```
+
+如果你需要处理错误，你可以按照以下方式修改：
+
+```diff
+- test('async test with done', (done) => {
++ test('async test with done', () => new Promise((resolve, reject) => {
++   const done = err => (err ? reject(err) : resolve());
+  // ...
+  done(error);
+- });
++ }));
+```
+
+### Hooks
+
+Rstest 中 `beforeEach` 和 `beforeAll` 钩子的返回函数用于执行测试后的清理工作。
+
+```diff
+- beforeEach(() => doSomething());
++ beforeEach(() => { doSomething() });
+```
+
+### 超时设置
+
+如果你使用 `jest.setTimeout()` 来设置测试的超时时间，你可以改用 `rstest.setConfig()`。
+
+```diff
+- jest.setTimeout(5_000)
++ rstest.setConfig({ testTimeout: 5_000 })
 ```

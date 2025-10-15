@@ -1,0 +1,16 @@
+# snapshotFormat
+
+- **Type:** `PrettyFormatOptions`
+- **Default:** `undefined`
+
+Customize the snapshot format using options from the [pretty-format](https://www.npmjs.com/package/pretty-format).
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  snapshotFormat: {
+    printBasicPrototype: true,
+  },
+});
+```

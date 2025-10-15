@@ -1,6 +1,7 @@
+import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
-import { castArray, NODE_BUILTINS } from '../../utils';
+import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
 const autoExternalNodeModules: (
   data: Rspack.ExternalItemFunctionData,
@@ -59,13 +60,15 @@ function autoExternalNodeBuiltin(
     return;
   }
 
-  const isNodeBuiltin = NODE_BUILTINS.some((builtin) => {
-    if (typeof builtin === 'string') {
-      return builtin === request;
-    }
+  const isNodeBuiltin =
+    isBuiltin(request) ||
+    ADDITIONAL_NODE_BUILTINS.some((builtin) => {
+      if (typeof builtin === 'string') {
+        return builtin === request;
+      }
 
-    return builtin.test(request);
-  });
+      return builtin.test(request);
+    });
 
   if (isNodeBuiltin) {
     callback(

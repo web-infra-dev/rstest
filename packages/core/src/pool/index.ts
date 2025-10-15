@@ -51,9 +51,12 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     hookTimeout,
     isolate,
     coverage,
+    snapshotFormat,
+    env,
   } = context.normalizedConfig;
 
   return {
+    env,
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -71,6 +74,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     testEnvironment,
     isolate,
     coverage,
+    snapshotFormat,
   };
 };
 

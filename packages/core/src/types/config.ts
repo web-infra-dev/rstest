@@ -1,4 +1,5 @@
 import type { RsbuildConfig } from '@rsbuild/core';
+import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -22,6 +23,11 @@ export type RstestPoolOptions = {
 export type ProjectConfig = Omit<
   RstestConfig,
   'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+>;
+
+type SnapshotFormat = Omit<
+  NonNullable<SnapshotStateOptions['snapshotFormat']>,
+  'plugins' | 'compareKeys'
 >;
 
 /**
@@ -208,6 +214,14 @@ export interface RstestConfig {
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;
+
+  /** Format snapshot output */
+  snapshotFormat?: SnapshotFormat;
+
+  /**
+   * Custom environment variables available on `process.env` during tests.
+   */
+  env?: Partial<NodeJS.ProcessEnv>;
 
   /**
    * Coverage options

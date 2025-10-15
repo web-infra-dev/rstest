@@ -52,6 +52,8 @@ export type RuntimeConfig = Pick<
   | 'isolate'
   | 'hookTimeout'
   | 'coverage'
+  | 'snapshotFormat'
+  | 'env'
 >;
 
 export type WorkerContext = {
@@ -79,5 +81,6 @@ export type WorkerState = WorkerContext & {
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;
+    snapshotFormat: RuntimeConfig['snapshotFormat'];
   };
 };

@@ -44,6 +44,12 @@ const registerGlobalApi = (api: Rstest) => {
 const listeners: (() => void)[] = [];
 let isTeardown = false;
 
+const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
+  if (env) {
+    Object.assign(process.env, env);
+  }
+};
+
 const preparePool = async ({
   entryInfo: { distPath, testPath },
   updateSnapshot,
@@ -61,8 +67,12 @@ const preparePool = async ({
       printConsoleTrace,
       disableConsoleIntercept,
       testEnvironment,
+      snapshotFormat,
+      env,
     },
   } = context;
+
+  setupEnv(env);
 
   if (!disableConsoleIntercept) {
     const { createCustomConsole } = await import('./console');
@@ -81,6 +91,7 @@ const preparePool = async ({
     snapshotOptions: {
       updateSnapshot,
       snapshotEnvironment: new RstestSnapshotEnvironment(),
+      snapshotFormat,
     },
     distPath,
     testPath,

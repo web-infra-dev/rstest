@@ -2,6 +2,8 @@ import { logger } from '../utils/logger';
 import { setupCommands } from './commands';
 import { prepareCli } from './prepare';
 
+export { initCli } from './init';
+
 export async function runCLI(): Promise<void> {
   prepareCli();
 
