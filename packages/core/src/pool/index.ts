@@ -6,7 +6,6 @@ import type {
   ProjectContext,
   RstestContext,
   RuntimeConfig,
-  SourceMapInput,
   Test,
   TestFileInfo,
   TestFileResult,
@@ -14,6 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { needFlagExperimentalDetectModule, serializableConfig } from '../utils';
+import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
 
 const getNumCpus = (): number => {
@@ -81,7 +81,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
   getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
-  getSourceMaps: (names: string[]) => Promise<Record<string, SourceMapInput>>,
+  getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
 ) => {
   const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
@@ -102,7 +102,7 @@ export const createPool = async ({
   runTests: (params: {
     entries: EntryInfo[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, SourceMapInput>>;
+    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
@@ -113,7 +113,7 @@ export const createPool = async ({
   collectTests: (params: {
     entries: EntryInfo[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, SourceMapInput>>;
+    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
@@ -208,11 +208,6 @@ export const createPool = async ({
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
       );
     },
-    onTestFileResult: async (test: TestFileResult) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileResult?.(test)),
-      );
-    },
   };
 
   return {
@@ -229,8 +224,8 @@ export const createPool = async ({
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       const results = await Promise.all(
-        entries.map((entryInfo) => {
-          return pool
+        entries.map(async (entryInfo) => {
+          const result = await pool
             .runTest({
               options: {
                 entryInfo,
@@ -243,24 +238,24 @@ export const createPool = async ({
                 type: 'run',
                 setupEntries,
                 updateSnapshot,
+                assets: isMemorySufficient()
+                  ? await filterAssetsByEntry(
+                      entryInfo,
+                      getAssetFiles,
+                      getSourceMaps,
+                      setupAssets,
+                    )
+                  : undefined,
               },
               rpcMethods: {
                 ...rpcMethods,
-                getAssetsByEntry: async () => {
-                  const {
-                    assetFiles: neededFiles,
-                    sourceMaps: neededSourceMaps,
-                  } = await filterAssetsByEntry(
+                getAssetsByEntry: async () =>
+                  filterAssetsByEntry(
                     entryInfo,
                     getAssetFiles,
                     getSourceMaps,
                     setupAssets,
-                  );
-                  return {
-                    assetFiles: neededFiles,
-                    sourceMaps: neededSourceMaps,
-                  };
-                },
+                  ),
               },
             })
             .catch((err: unknown) => {
@@ -274,6 +269,8 @@ export const createPool = async ({
                 errors: [err],
               } as TestFileResult;
             });
+          reporters.map((reporter) => reporter.onTestFileResult?.(result));
+          return result;
         }),
       );
 
@@ -301,7 +298,7 @@ export const createPool = async ({
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
-        entries.map((entryInfo) => {
+        entries.map(async (entryInfo) => {
           return pool
             .collectTests({
               options: {
@@ -315,22 +312,24 @@ export const createPool = async ({
                 type: 'collect',
                 setupEntries,
                 updateSnapshot,
-              },
-              rpcMethods: {
-                ...rpcMethods,
-                getAssetsByEntry: async () => {
-                  const { assetFiles, sourceMaps: neededSourceMaps } =
-                    await filterAssetsByEntry(
+                assets: isMemorySufficient()
+                  ? await filterAssetsByEntry(
                       entryInfo,
                       getAssetFiles,
                       getSourceMaps,
                       setupAssets,
-                    );
-                  return {
-                    assetFiles,
-                    sourceMaps: neededSourceMaps,
-                  };
-                },
+                    )
+                  : undefined,
+              },
+              rpcMethods: {
+                ...rpcMethods,
+                getAssetsByEntry: async () =>
+                  filterAssetsByEntry(
+                    entryInfo,
+                    getAssetFiles,
+                    getSourceMaps,
+                    setupAssets,
+                  ),
               },
             })
             .catch((err: FormattedError) => {

@@ -11,9 +11,9 @@ import type {
   EntryInfo,
   NormalizedProjectConfig,
   RstestContext,
-  SourceMapInput,
 } from '../types';
 import { isDebug } from '../utils';
+import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
@@ -231,6 +231,19 @@ export const calcEntriesToRerun = (
   return { affectedEntries, deletedEntries };
 };
 
+class AssetsMemorySafeMap extends Map<string, string> {
+  override set(key: string, value: string): this {
+    if (this.has(key)) {
+      return this;
+    }
+    if (!isMemorySufficient()) {
+      this.clear();
+    }
+
+    return super.set(key, value);
+  }
+}
+
 export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
@@ -253,9 +266,9 @@ export const createRsbuildServer = async ({
     hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
+    assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, SourceMapInput>>;
-    sourceMaps: Map<string, string>;
+    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     affectedEntries: EntryInfo[];
     deletedEntries: string[];
   }>;
@@ -434,9 +447,8 @@ export const createRsbuildServer = async ({
       `${environmentName}-${RUNTIME_CHUNK_NAME}`,
     );
 
-    const cachedAssetFiles = new Map<string, string>();
-
-    const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+    const cachedAssetFiles = new AssetsMemorySafeMap();
+    const cachedSourceMaps = new AssetsMemorySafeMap();
 
     const readFileWithCache = async (name: string) => {
       if (cachedAssetFiles.has(name)) {
@@ -444,15 +456,10 @@ export const createRsbuildServer = async ({
       }
       const content = await readFile(name);
 
-      // Only save setup and runtime files that are accessed frequently to avoid memory pressure
-      if (setupAssets.includes(name) || name.includes('rstest-runtime')) {
-        cachedAssetFiles.set(name, content);
-      }
+      cachedAssetFiles.set(name, content);
 
       return content;
     };
-
-    const sourceMaps = new Map<string, string>();
 
     const getSourceMap = async (name: string): Promise<null | string> => {
       const sourceMapPath = sourceMapPaths[name];
@@ -460,8 +467,8 @@ export const createRsbuildServer = async ({
         return null;
       }
 
-      if (sourceMaps.has(name)) {
-        return sourceMaps.get(name)!;
+      if (cachedSourceMaps.has(name)) {
+        return cachedSourceMaps.get(name)!;
       }
 
       let content = null;
@@ -474,10 +481,14 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      sourceMaps.set(name, content!);
+      cachedSourceMaps.set(name, content as string);
 
       return content;
     };
+
+    const assetNames = assets!.map((asset) =>
+      path.join(outputPath!, asset.name),
+    );
 
     return {
       affectedEntries,
@@ -486,12 +497,12 @@ export const createRsbuildServer = async ({
       entries,
       setupEntries,
       buildTime: buildTime!,
+      assetNames,
       getAssetFiles: async (names: string[]) => {
         return Object.fromEntries(
           await Promise.all(
             names.map(async (name) => {
               const content = await readFileWithCache(name);
-
               return [name, content];
             }),
           ),
@@ -507,7 +518,6 @@ export const createRsbuildServer = async ({
           ),
         );
       },
-      sourceMaps,
     };
   };
 

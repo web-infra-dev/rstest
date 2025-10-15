@@ -1,13 +1,7 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { ProjectContext, RstestContext } from './core';
-import type { SourceMapInput } from './reporter';
-import type {
-  TestFileInfo,
-  TestFileResult,
-  TestResult,
-  UserConsoleLog,
-} from './testSuite';
+import type { TestFileInfo, TestResult, UserConsoleLog } from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
@@ -26,9 +20,8 @@ export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: () => Promise<{
     assetFiles: Record<string, string>;
-    sourceMaps: Record<string, SourceMapInput>;
+    sourceMaps: Record<string, string>;
   }>;
-  onTestFileResult: (test: TestFileResult) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   onConsoleLog: (log: UserConsoleLog) => void;
 };
@@ -70,6 +63,11 @@ export type RunWorkerOptions = {
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
+    /** assets is only defined when memory is sufficient, otherwise you should get them via rpc getAssetsByEntry method */
+    assets?: {
+      assetFiles: Record<string, string>;
+      sourceMaps: Record<string, string>;
+    };
   };
   rpcMethods: RuntimeRPC;
 };

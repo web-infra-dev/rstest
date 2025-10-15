@@ -59,8 +59,6 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
           api,
         });
 
-        hooks.onTestFileResult?.(results);
-
         return results;
       },
       collectTests: async () => {

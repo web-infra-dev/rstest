@@ -132,10 +132,10 @@ export async function runTests(context: Rstest): Promise<void> {
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {
+          assetNames,
           entries,
           setupEntries,
           getAssetFiles,
-          sourceMaps,
           getSourceMaps,
           affectedEntries,
           deletedEntries,
@@ -189,7 +189,8 @@ export async function runTests(context: Rstest): Promise<void> {
         return {
           results,
           testResults,
-          sourceMaps,
+          assetNames,
+          getSourceMaps,
         };
       }),
     );
@@ -266,11 +267,11 @@ export async function runTests(context: Rstest): Promise<void> {
         testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
-        getSourcemap: (name: string) => {
-          const sourceMap = returns
-            .find((r) => r.sourceMaps.has(name))
-            ?.sourceMaps.get(name);
-          return sourceMap ? JSON.parse(sourceMap) || null : null;
+        getSourcemap: async (name: string) => {
+          const resource = returns.find((r) => r.assetNames.includes(name));
+
+          const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
+          return sourceMap ? JSON.parse(sourceMap) : null;
         },
         filterRerunTestPaths: currentEntries.length
           ? currentEntries.map((e) => e.testPath)

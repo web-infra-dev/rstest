@@ -16,7 +16,7 @@ import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
-let sourceMaps: Record<string, any> = {};
+let sourceMaps: Record<string, string> = {};
 
 // provides source map support for stack traces
 install({
@@ -252,6 +252,7 @@ const runInPool = async (
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
+    assets,
     type,
     context: {
       project,
@@ -291,8 +292,9 @@ const runInPool = async (
         unhandledErrors,
         interopDefault,
       } = await preparePool(options);
-      const assets = await rpc.getAssetsByEntry();
-      sourceMaps = assets.sourceMaps;
+      const { assetFiles, sourceMaps: sourceMapsFromAssets } =
+        assets || (await rpc.getAssetsByEntry());
+      sourceMaps = sourceMapsFromAssets;
 
       cleanups.push(cleanup);
 
@@ -300,7 +302,7 @@ const runInPool = async (
         rstestContext,
         distPath,
         testPath,
-        assetFiles: assets.assetFiles,
+        assetFiles,
         setupEntries,
         interopDefault,
         isolate,
@@ -343,8 +345,9 @@ const runInPool = async (
       coverageProvider.init();
     }
 
-    const assets = await rpc.getAssetsByEntry();
-    sourceMaps = assets.sourceMaps;
+    const { assetFiles, sourceMaps: sourceMapsFromAssets } =
+      assets || (await rpc.getAssetsByEntry());
+    sourceMaps = sourceMapsFromAssets;
 
     cleanups.push(cleanup);
 
@@ -352,7 +355,7 @@ const runInPool = async (
       rstestContext,
       distPath,
       testPath,
-      assetFiles: assets.assetFiles,
+      assetFiles,
       setupEntries,
       interopDefault,
       isolate,
@@ -362,19 +365,6 @@ const runInPool = async (
       {
         onTestFileStart: async (test) => {
           await rpc.onTestFileStart(test);
-        },
-        onTestFileResult: async (test) => {
-          // Collect coverage data after test file completes
-          if (coverageProvider) {
-            const coverageMap = coverageProvider.collect();
-            if (coverageMap) {
-              // Attach coverage data to test result
-              test.coverage = coverageMap.toJSON();
-            }
-            // Cleanup
-            coverageProvider.cleanup();
-          }
-          await rpc.onTestFileResult(test);
         },
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
@@ -388,6 +378,17 @@ const runInPool = async (
       results.errors = (results.errors || []).concat(
         ...formatTestError(unhandledErrors),
       );
+    }
+
+    // Collect coverage data after test file completes
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.collect();
+      if (coverageMap) {
+        // Attach coverage data to test result
+        results.coverage = coverageMap.toJSON();
+      }
+      // Cleanup
+      coverageProvider.cleanup();
     }
 
     return results;
