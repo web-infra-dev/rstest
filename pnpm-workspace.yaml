@@ -7,4 +7,5 @@ packages:
 
 strictPeerDependencies: false
 autoInstallPeers: false
-hoistPattern: []
+# for vsce
+hoistPattern: ['@secretlint/*']
