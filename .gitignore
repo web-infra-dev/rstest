@@ -40,3 +40,4 @@ fixtures-test-*/
 tests-dist/
 .vscode-test/
 packages/vscode/*.vsix
+packages/vscode/icon.png

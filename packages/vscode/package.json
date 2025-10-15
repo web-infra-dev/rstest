@@ -1,5 +1,6 @@
 {
   "name": "rstest",
+  "icon": "icon.png",
   "displayName": "Rstest",
   "publisher": "rstack",
   "description": "VS Code extension for Rstest",
@@ -52,6 +53,7 @@
     }
   },
   "scripts": {
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rspress-logo-512x512.png --output icon.png",
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
     "build:local": "SOURCEMAP=true rslib build",

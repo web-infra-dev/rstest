@@ -15,9 +15,10 @@ The extension activates automatically when your workspace contains Rstest config
 
 ## Configuration
 
-| Setting                      | Type     | Scope    | Default                          | Description                                                   |
-| ---------------------------- | -------- | -------- | -------------------------------- | ------------------------------------------------------------- |
-| `rstest.testFileGlobPattern` | string[] | Resource | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace. |
+| Setting                      | Type     | Default                          | Description                                                                     |
+| ---------------------------- | -------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| `rstest.testFileGlobPattern` | string[] | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace.                   |
+| `rstest.logLevel`            | string   | `default`                        | Controls Output channel verbosity; set to `debug` for extra diagnostic logging. |
 
 ## How it works
 
