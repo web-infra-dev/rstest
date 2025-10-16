@@ -66,7 +66,7 @@ export default function Overview() {
   const Nodes = OVERVIEW_GROUPS.map((group) => (
     <div key={group.name} className={styles.overviewGroups}>
       <div className={styles.group}>
-        <h2>{group.name}</h2>
+        <div className={styles.title}>{group.name}</div>
         <ul>
           {group.items?.map((item) => (
             <li key={item}>
@@ -127,9 +127,9 @@ export function BuildOverview() {
   const Nodes = BUILD_OVERVIEW_GROUPS.map((group) => (
     <div key={group.name} className={styles.overviewGroups}>
       <div className={styles.group}>
-        <h2>
-          <Link href={tUrl(`/config/build/${group.name}`)}> {group.name}</Link>
-        </h2>
+        <div className={styles.title}>
+          <Link href={tUrl(`/config/build/${group.name}`)}>{group.name}</Link>
+        </div>
         <ul>
           {group.items?.map((item) => (
             <li key={item}>
