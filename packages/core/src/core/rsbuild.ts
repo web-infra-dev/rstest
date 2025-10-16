@@ -475,7 +475,7 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      enableAssetsCache && cachedSourceMaps.set(name, content!);
+      enableAssetsCache && content && cachedSourceMaps.set(name, content);
 
       return content;
     };
