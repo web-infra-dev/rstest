@@ -1,10 +1,12 @@
 import process from 'node:process';
 
+// 1GB maximum heap memory by default
 const DefaultMaxHeapSize = 1024 * 1024 * 1024;
 
 export function isMemorySufficient(options?: {
-  memoryThreshold: number; // memory usage threshold, above which it is considered memory tight
-  maxHeapSize: number; // 1GB maximum heap memory
+  /** memory usage threshold, above which it is considered memory tight */
+  memoryThreshold: number;
+  maxHeapSize: number;
 }): boolean {
   const { memoryThreshold = 0.7, maxHeapSize = DefaultMaxHeapSize } =
     options || {};

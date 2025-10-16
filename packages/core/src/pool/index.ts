@@ -238,6 +238,7 @@ export const createPool = async ({
                 type: 'run',
                 setupEntries,
                 updateSnapshot,
+                /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
                 assets: isMemorySufficient()
                   ? await filterAssetsByEntry(
                       entryInfo,
@@ -249,6 +250,7 @@ export const createPool = async ({
               },
               rpcMethods: {
                 ...rpcMethods,
+                // getAssetsByEntry is only used when memory is not sufficient since it may be slow
                 getAssetsByEntry: async () =>
                   filterAssetsByEntry(
                     entryInfo,

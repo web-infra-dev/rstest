@@ -63,7 +63,7 @@ export type RunWorkerOptions = {
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
-    /** assets is only defined when memory is sufficient, otherwise you should get them via rpc getAssetsByEntry method */
+    /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
     assets?: {
       assetFiles: Record<string, string>;
       sourceMaps: Record<string, string>;
