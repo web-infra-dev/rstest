@@ -152,7 +152,7 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = getSourcemap(frame.file!);
+        const sourcemap = await getSourcemap(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
           const { line, column, source, name } = originalPositionFor(traceMap, {

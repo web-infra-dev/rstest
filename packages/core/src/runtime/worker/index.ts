@@ -7,6 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
@@ -14,6 +15,21 @@ import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
+
+let sourceMaps: Record<string, string> = {};
+
+// provides source map support for stack traces
+install({
+  retrieveSourceMap: (source) => {
+    if (sourceMaps[source]) {
+      return {
+        url: source,
+        map: JSON.parse(sourceMaps[source]),
+      };
+    }
+    return null;
+  },
+});
 
 const registerGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
@@ -36,7 +52,6 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
 
 const preparePool = async ({
   entryInfo: { distPath, testPath },
-  sourceMaps,
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']) => {
@@ -84,21 +99,6 @@ const preparePool = async ({
   };
 
   const { createRstestRuntime } = await import('../api');
-  // provides source map support for stack traces
-  const { install } = await import('source-map-support');
-
-  install({
-    // @ts-expect-error map type
-    retrieveSourceMap: (source) => {
-      if (sourceMaps[source]) {
-        return {
-          url: source,
-          map: sourceMaps[source],
-        };
-      }
-      return null;
-    },
-  });
 
   // Reset listeners only when preparePool is called again (running without isolation)
   listeners.forEach((fn) => {
@@ -190,7 +190,7 @@ const loadFiles = async ({
   isolate,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
-  assetFiles: RunWorkerOptions['options']['assetFiles'];
+  assetFiles: Record<string, string>;
   rstestContext: Record<string, any>;
   distPath: string;
   testPath: string;
@@ -252,7 +252,7 @@ const runInPool = async (
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
-    assetFiles,
+    assets,
     type,
     context: {
       project,
@@ -287,10 +287,14 @@ const runInPool = async (
       const {
         rstestContext,
         runner,
+        rpc,
         cleanup,
         unhandledErrors,
         interopDefault,
       } = await preparePool(options);
+      const { assetFiles, sourceMaps: sourceMapsFromAssets } =
+        assets || (await rpc.getAssetsByEntry());
+      sourceMaps = sourceMapsFromAssets;
 
       cleanups.push(cleanup);
 
@@ -341,6 +345,10 @@ const runInPool = async (
       coverageProvider.init();
     }
 
+    const { assetFiles, sourceMaps: sourceMapsFromAssets } =
+      assets || (await rpc.getAssetsByEntry());
+    sourceMaps = sourceMapsFromAssets;
+
     cleanups.push(cleanup);
 
     await loadFiles({
@@ -358,19 +366,6 @@ const runInPool = async (
         onTestFileStart: async (test) => {
           await rpc.onTestFileStart(test);
         },
-        onTestFileResult: async (test) => {
-          // Collect coverage data after test file completes
-          if (coverageProvider) {
-            const coverageMap = coverageProvider.collect();
-            if (coverageMap) {
-              // Attach coverage data to test result
-              test.coverage = coverageMap.toJSON();
-            }
-            // Cleanup
-            coverageProvider.cleanup();
-          }
-          await rpc.onTestFileResult(test);
-        },
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
         },
@@ -383,6 +378,17 @@ const runInPool = async (
       results.errors = (results.errors || []).concat(
         ...formatTestError(unhandledErrors),
       );
+    }
+
+    // Collect coverage data after test file completes
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.collect();
+      if (coverageMap) {
+        // Attach coverage data to test result
+        results.coverage = coverageMap.toJSON();
+      }
+      // Cleanup
+      coverageProvider.cleanup();
     }
 
     return results;
