@@ -262,7 +262,6 @@ export const createRsbuildServer = async ({
     environmentName: string;
     fileFilters?: string[];
   }) => Promise<{
-    buildTime: number;
     hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
@@ -357,17 +356,12 @@ export const createRsbuildServer = async ({
   }) => {
     const stats = await devServer.environments[environmentName]!.getStats();
 
+    const enableAssetsCache = isMemorySufficient();
+
     const manifest = devServer.environments[environmentName]!.context
       .manifest as ManifestData;
 
-    const {
-      entrypoints,
-      outputPath,
-      assets,
-      hash,
-      time: buildTime,
-      chunks,
-    } = stats.toJson({
+    const { entrypoints, outputPath, assets, hash, chunks } = stats.toJson({
       all: false,
       hash: true,
       entrypoints: true,
@@ -451,12 +445,12 @@ export const createRsbuildServer = async ({
     const cachedSourceMaps = new AssetsMemorySafeMap();
 
     const readFileWithCache = async (name: string) => {
-      if (cachedAssetFiles.has(name)) {
+      if (enableAssetsCache && cachedAssetFiles.has(name)) {
         return cachedAssetFiles.get(name)!;
       }
       const content = await readFile(name);
 
-      cachedAssetFiles.set(name, content);
+      enableAssetsCache && cachedAssetFiles.set(name, content);
 
       return content;
     };
@@ -467,7 +461,7 @@ export const createRsbuildServer = async ({
         return null;
       }
 
-      if (cachedSourceMaps.has(name)) {
+      if (enableAssetsCache && cachedSourceMaps.has(name)) {
         return cachedSourceMaps.get(name)!;
       }
 
@@ -481,7 +475,7 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      cachedSourceMaps.set(name, content as string);
+      enableAssetsCache && cachedSourceMaps.set(name, content as string);
 
       return content;
     };
@@ -496,7 +490,6 @@ export const createRsbuildServer = async ({
       hash,
       entries,
       setupEntries,
-      buildTime: buildTime!,
       assetNames,
       getAssetFiles: async (names: string[]) => {
         return Object.fromEntries(
