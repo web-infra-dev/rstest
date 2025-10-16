@@ -1,11 +1,15 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
 import { remove } from 'fs-extra';
 import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+rs.setConfig({
+  retry: 3,
+});
 
 describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
@@ -23,7 +27,16 @@ describe('restart', () => {
     fs.create(
       configFile,
       `import { defineConfig } from '@rstest/core';
-export default defineConfig({});
+export default defineConfig({
+  name: 'restart',
+  tools: {
+    rspack: {
+      watchOptions: {
+        ignored: '**/**'
+      },
+    },
+  },
+});
       `,
     );
 
