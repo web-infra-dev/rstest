@@ -1,5 +1,5 @@
 import { relative } from 'pathe';
-import type { TestFileResult } from '../types';
+import type { TestFileResult, TestResult } from '../types';
 import { color, prettyTestPath, prettyTime } from '../utils';
 import { getSummaryStatusString } from './summary';
 import { WindowRenderer } from './windowedRenderer';
@@ -7,7 +7,7 @@ import { WindowRenderer } from './windowedRenderer';
 export class StatusRenderer {
   private rootPath: string;
   private renderer: WindowRenderer;
-  private runningModules = new Set<string>();
+  private runningModules = new Map<string, TestResult[]>();
   private testModules: TestFileResult[] = [];
   private startTime: number | undefined = undefined;
 
@@ -28,7 +28,7 @@ export class StatusRenderer {
   getContent(): string[] {
     this.startTime ??= Date.now();
     const summary = [];
-    for (const module of this.runningModules) {
+    for (const module of this.runningModules.keys()) {
       const relativePath = relative(this.rootPath, module);
       summary.push(
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
@@ -46,6 +46,16 @@ export class StatusRenderer {
       );
     }
 
+    const testResults: TestResult[] = Array.from(this.runningModules.values())
+      .flat()
+      .concat(this.testModules.flatMap((mod) => mod.results));
+
+    if (testResults.length) {
+      summary.push(
+        `${color.gray('Tests'.padStart(11))} ${getSummaryStatusString(testResults, '', false)}`,
+      );
+    }
+
     summary.push(
       `${color.gray('Duration'.padStart(11))} ${prettyTime(Date.now() - this.startTime!)}`,
     );
@@ -55,9 +65,16 @@ export class StatusRenderer {
     return summary;
   }
 
-  addRunningModule(testPath: string): void {
-    this.runningModules.add(testPath);
+  onTestFileStart(testPath: string): void {
+    this.runningModules.set(testPath, []);
     this.renderer?.schedule();
+  }
+
+  onTestCaseResult(result: TestResult): void {
+    this.runningModules.set(result.testPath, [
+      ...(this.runningModules.get(result.testPath) || []),
+      result,
+    ]);
   }
 
   onTestFileResult(test: TestFileResult): void {
