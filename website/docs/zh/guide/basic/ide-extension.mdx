@@ -1,0 +1,43 @@
+# IDE 集成
+
+Rstest VS Code 扩展能够在编辑器内同步项目测试，让你在 VS Code 中浏览、运行和调试测试。
+
+## 安装
+
+- **应用市场**：在扩展视图中搜索 `RStack Rstest` 并安装。
+- **命令行**：执行 `code --install-extension rstack.rstest`。
+
+安装完成后请重载 VS Code，或运行“Developer: Reload Window”命令以激活扩展。
+
+## 激活与工作区准备
+
+当工作区中存在 Rstest 配置文件（例如 `rstest.config.ts`、`rstest.workspace.json` 或 `rstest.projects.json`）时，扩展会自动激活。激活后会按照配置的 glob 模式扫描工作区，构建与测试文件结构一致的测试资源管理器树（包含 `describe` 与单个测试）。
+
+如果打开的是多根目录工作区，扩展会扫描每个包含 Rstest 项目的文件夹。新增或修改测试文件时，测试资源管理器会自动刷新，无需手动重建。
+
+## 运行测试
+
+可以在测试资源管理器或编辑器中触发测试运行：
+
+- 在测试资源管理器中点击文件、测试套件或单个测试旁的运行图标。
+- 使用编辑器内显示在套件和测试上方的 Code Lens 操作。
+- 在测试文件中右键，选择 **Run Rstest** 或 **Debug Rstest**。
+
+运行过程会将输出流式写入 VS Code 的 “Rstest” Output 面板。失败的断言会以内联诊断的形式高亮，方便直接跳转到问题位置。
+
+## 配置选项
+
+扩展在 `rstest.*` 命名空间下提供以下设置：
+
+| 设置 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `rstest.testFileGlobPattern` | `string[]` | `["**/*.test.*", "**/*.spec.*"]` | 用于发现测试文件的 glob 模式，项目使用特殊命名时可按需调整。 |
+| `rstest.logLevel` | `string` | `"default"` | 控制扩展 Output 面板的日志级别，设置为 `"debug"` 可排查测试发现问题。 |
+
+这些设置可以在用户级、工作区级或单独文件夹的 `.vscode/settings.json` 中配置。
+
+## 排查建议
+
+- 若测试资源管理器为空，请确认工作区存在有效的 Rstest 配置文件，并检查 `rstest.testFileGlobPattern` 是否匹配你的测试文件。
+- 开启 Rstest Output 面板并将 `rstest.logLevel` 设置为 `debug`，可以查看详细的测试发现日志。
+- 修改设置或升级扩展后，可通过重载窗口来重新构建测试资源管理器。

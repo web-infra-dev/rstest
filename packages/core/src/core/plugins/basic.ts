@@ -84,7 +84,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   requireDynamic: false,
                   requireAsExpression: false,
                   // Keep require.resolve expressions.
-                  requireResolve: false,
+                  z: false,
                   ...(config.module.parser.javascript || {}),
                 };
 

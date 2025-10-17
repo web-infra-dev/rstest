@@ -1,0 +1,43 @@
+# IDE extension
+
+The Rstest VS Code extension keeps the editor in sync with your project’s tests so you can browse, run, and debug them without leaving VS Code.
+
+## Installation
+
+- **Marketplace**: search for `RStack Rstest` in the Extensions view and install it.
+- **Command line**: run `code --install-extension rstack.rstest`.
+
+After installation, reload VS Code or run the “Developer: Reload Window” command to activate the extension.
+
+## Activation and workspace setup
+
+The extension activates automatically when it detects any Rstest config file (for example `rstest.config.ts`, `rstest.workspace.json`, or `rstest.projects.json`) in the opened workspace. When activation completes it scans the workspace using the configured glob patterns and builds a Test Explorer tree that mirrors your suites (`describe`) and tests.
+
+If you open a multi-root workspace, the extension scans every folder that contains an Rstest project. When new files are created or existing ones are changed, the Test Explorer refreshes automatically—no manual rebuilds are required.
+
+## Running tests
+
+You can execute tests from the Test Explorer or directly from the editor:
+
+- Click the run icons next to a file, suite, or individual test name in the Test Explorer.
+- Use the code lens actions that appear above suites and tests in the editor.
+- Right-click inside a test file and choose **Run Rstest** or **Debug Rstest**.
+
+All runs stream output to the “Rstest” channel in the VS Code Output panel. Failures are highlighted inline with problem diagnostics so you can jump straight to the failing assertion.
+
+## Configuration options
+
+The extension exposes settings under `rstest.*`:
+
+| Setting                      | Type       | Default                          | Description                                                                                              |
+| ---------------------------- | ---------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `rstest.testFileGlobPattern` | `string[]` | `["**/*.test.*", "**/*.spec.*"]` | Glob patterns used to discover test files. Adjust when your project uses custom file naming.             |
+| `rstest.logLevel`            | `string`   | `"default"`                      | Controls the verbosity of the extension’s Output channel. Set to `"debug"` to diagnose discovery issues. |
+
+Settings can be applied at the user level, the workspace level, or via `.vscode/settings.json` in individual folders.
+
+## Troubleshooting tips
+
+- If the Test Explorer appears empty, confirm your workspace includes a valid Rstest config file and that `rstest.testFileGlobPattern` matches your test files.
+- Enable the Rstest Output channel and set `rstest.logLevel` to `debug` for detailed discovery logs.
+- Reload the window after changing configuration or upgrading the extension to ensure the Test Explorer is rebuilt.
