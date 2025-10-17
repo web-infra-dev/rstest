@@ -123,6 +123,12 @@ export const printSnapshotSummaryLog = (
   }
 };
 
+export const TestFileSummaryLabel: string = color.gray(
+  'Test Files'.padStart(11),
+);
+export const TestSummaryLabel: string = color.gray('Tests'.padStart(11));
+export const DurationLabel: string = color.gray('Duration'.padStart(11));
+
 export const printSummaryLog = ({
   results,
   testResults,
@@ -138,15 +144,11 @@ export const printSummaryLog = ({
 }): void => {
   logger.log('');
   printSnapshotSummaryLog(snapshotSummary, rootPath);
-  logger.log(
-    `${color.gray('Test Files'.padStart(11))} ${getSummaryStatusString(results)}`,
-  );
-  logger.log(
-    `${color.gray('Tests'.padStart(11))} ${getSummaryStatusString(testResults)}`,
-  );
+  logger.log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
+  logger.log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
 
   logger.log(
-    `${color.gray('Duration'.padStart(11))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
+    `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
   logger.log('');
 };
