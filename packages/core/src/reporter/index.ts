@@ -51,7 +51,7 @@ export class DefaultReporter implements Reporter {
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    logFileTitle(test, relativePath, slowTestThreshold);
+    logFileTitle(test, relativePath);
 
     const displayedCases = test.results.filter(
       (result) =>
