@@ -86,6 +86,7 @@ export class StatusRenderer {
   clear(): void {
     this.testModules.length = 0;
     this.runningModules.clear();
+    this.startTime = undefined;
     this.renderer?.finish();
   }
 }
