@@ -53,15 +53,12 @@ export class DefaultReporter implements Reporter {
 
     logFileTitle(test, relativePath);
 
-    const displayedCases = test.results.filter(
-      (result) =>
+    for (const result of test.results) {
+      const isDisplayed =
         result.status === 'fail' ||
-        (result.duration || 0) > slowTestThreshold ||
-        (result.retryCount || 0) > 0,
-    );
-
-    for (const result of displayedCases) {
-      logCase(result, slowTestThreshold);
+        (result.duration ?? 0) > slowTestThreshold ||
+        (result.retryCount ?? 0) > 0;
+      isDisplayed && logCase(result, slowTestThreshold);
     }
   }
 
