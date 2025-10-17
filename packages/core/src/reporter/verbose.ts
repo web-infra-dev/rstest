@@ -10,7 +10,7 @@ export class VerboseReporter extends DefaultReporter {
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    logFileTitle(test, relativePath, slowTestThreshold, true);
+    logFileTitle(test, relativePath, true);
 
     for (const result of test.results) {
       logCase(result, slowTestThreshold);

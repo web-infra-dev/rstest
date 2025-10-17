@@ -56,22 +56,17 @@ export const logCase = (
 export const logFileTitle = (
   test: TestFileResult,
   relativePath: string,
-  slowTestThreshold: number,
   alwaysShowTime = false,
 ): void => {
   let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettyTestPath(relativePath)}`;
 
   const formatDuration = (duration: number) => {
-    return color[duration > slowTestThreshold ? 'yellow' : 'green'](
-      prettyTime(duration),
-    );
+    return color.green(prettyTime(duration));
   };
 
   title += ` ${color.gray(`(${test.results.length})`)}`;
 
-  const isTooSlow = test.duration && test.duration > slowTestThreshold;
-
-  if (alwaysShowTime || isTooSlow) {
+  if (alwaysShowTime) {
     title += ` ${formatDuration(test.duration!)}`;
   }
 
