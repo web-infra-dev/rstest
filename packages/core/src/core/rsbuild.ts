@@ -1,5 +1,3 @@
-// import { fileURLToPath } from 'node:url';
-
 import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,

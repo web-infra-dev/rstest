@@ -1,6 +1,6 @@
 import { expect, rs, test } from '@rstest/core';
 
-test('doMockRequire works', async () => {
+test('doMockRequire works', () => {
   const { increment: incrementWith1 } = require('../src/increment');
   expect(incrementWith1(1)).toBe(2);
 
@@ -12,7 +12,7 @@ test('doMockRequire works', async () => {
   expect(incrementWith10(1)).toBe(11);
 });
 
-test('the second doMockRequire can override the first doMockRequire', async () => {
+test('the second doMockRequire can override the first doMockRequire', () => {
   rs.doMockRequire('../src/increment', () => ({
     increment: (num: number) => num + 10,
   }));
@@ -30,7 +30,7 @@ test('the second doMockRequire can override the first doMockRequire', async () =
   expect(incrementWith20(1)).toBe(21);
 });
 
-test('the third doMockRequire can override the second doMockRequire', async () => {
+test('the third doMockRequire can override the second doMockRequire', () => {
   rs.doMockRequire('../src/increment', () => {
     return {
       increment: (num: number) => num + 100,
