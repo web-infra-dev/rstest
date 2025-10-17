@@ -351,6 +351,8 @@ const runInPool = async (
 
     cleanups.push(cleanup);
 
+    rpc.onTestFileStart?.({ testPath });
+
     await loadFiles({
       rstestContext,
       distPath,
@@ -363,9 +365,6 @@ const runInPool = async (
     const results = await runner.runTests(
       testPath,
       {
-        onTestFileStart: async (test) => {
-          await rpc.onTestFileStart(test);
-        },
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
         },
