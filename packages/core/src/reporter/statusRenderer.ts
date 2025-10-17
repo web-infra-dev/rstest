@@ -1,7 +1,12 @@
 import { relative } from 'pathe';
 import type { TestFileResult, TestResult } from '../types';
 import { color, prettyTestPath, prettyTime } from '../utils';
-import { getSummaryStatusString } from './summary';
+import {
+  DurationLabel,
+  getSummaryStatusString,
+  TestFileSummaryLabel,
+  TestSummaryLabel,
+} from './summary';
 import { WindowRenderer } from './windowedRenderer';
 
 export class StatusRenderer {
@@ -37,12 +42,10 @@ export class StatusRenderer {
     summary.push('');
 
     if (this.testModules.length === 0) {
-      summary.push(
-        `${color.gray('Test Files'.padStart(11))} ${this.runningModules.size} total`,
-      );
+      summary.push(`${TestFileSummaryLabel} ${this.runningModules.size} total`);
     } else {
       summary.push(
-        `${color.gray('Test Files'.padStart(11))} ${getSummaryStatusString(this.testModules, '', false)} ${color.dim('|')} ${this.runningModules.size + this.testModules.length} total`,
+        `${TestFileSummaryLabel} ${getSummaryStatusString(this.testModules, '', false)} ${color.dim('|')} ${this.runningModules.size + this.testModules.length} total`,
       );
     }
 
@@ -52,13 +55,11 @@ export class StatusRenderer {
 
     if (testResults.length) {
       summary.push(
-        `${color.gray('Tests'.padStart(11))} ${getSummaryStatusString(testResults, '', false)}`,
+        `${TestSummaryLabel} ${getSummaryStatusString(testResults, '', false)}`,
       );
     }
 
-    summary.push(
-      `${color.gray('Duration'.padStart(11))} ${prettyTime(Date.now() - this.startTime)}`,
-    );
+    summary.push(`${DurationLabel} ${prettyTime(Date.now() - this.startTime)}`);
 
     summary.push('');
 
