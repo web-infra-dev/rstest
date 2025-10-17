@@ -57,7 +57,7 @@ export class StatusRenderer {
     }
 
     summary.push(
-      `${color.gray('Duration'.padStart(11))} ${prettyTime(Date.now() - this.startTime!)}`,
+      `${color.gray('Duration'.padStart(11))} ${prettyTime(Date.now() - this.startTime)}`,
     );
 
     summary.push('');
