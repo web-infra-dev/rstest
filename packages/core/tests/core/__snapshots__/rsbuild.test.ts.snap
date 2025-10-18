@@ -7,7 +7,8 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -37,6 +38,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -171,7 +173,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -225,7 +227,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -429,11 +431,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -530,7 +527,8 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -561,6 +559,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -695,7 +694,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -749,7 +748,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -942,11 +941,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -1045,7 +1039,8 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "entry": [Function],
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -1076,6 +1071,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1210,7 +1206,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1264,7 +1260,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1457,11 +1453,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -1568,7 +1559,8 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -1598,6 +1590,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1732,7 +1725,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1786,7 +1779,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -1990,11 +1983,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -2091,7 +2079,8 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineEnum": true,
+    "inlineConst": false,
+    "inlineEnum": false,
     "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
@@ -2122,6 +2111,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "error",
         "importDynamic": false,
+        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -2256,7 +2246,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -2310,7 +2300,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "rspackExperiments": {
                 "collectTypeScriptInfo": {
-                  "exportedEnum": true,
+                  "exportedEnum": false,
                   "typeExports": true,
                 },
               },
@@ -2514,11 +2504,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.env.ASSET_PREFIX": """",
-          "import.meta.env.BASE_URL": ""/"",
-          "import.meta.env.DEV": false,
-          "import.meta.env.MODE": ""none"",
-          "import.meta.env.PROD": false,
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
@@ -2667,7 +2652,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
           },
           "rspackExperiments": {
             "collectTypeScriptInfo": {
-              "exportedEnum": true,
+              "exportedEnum": false,
               "typeExports": true,
             },
           },

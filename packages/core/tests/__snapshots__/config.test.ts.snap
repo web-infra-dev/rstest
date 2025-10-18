@@ -43,6 +43,10 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   },
   "globals": false,
   "hookTimeout": 10000,
+  "importActualMethods": [
+    "importAttributes",
+    "query",
+  ],
   "include": [
     "tests/**/*.test.ts",
   ],

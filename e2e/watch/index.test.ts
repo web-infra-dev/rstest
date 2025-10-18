@@ -10,7 +10,9 @@ rs.setConfig({
   retry: 3,
 });
 
-describe('watch', () => {
+// TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
+// Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
+describe.skipIf(process.platform === 'win32')('watch', () => {
   it('test files should be ran when create / update / delete', async () => {
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
@@ -48,7 +50,10 @@ describe('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
-    expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
+    // Updated as the shared module `src/index.ts` is extracted into another chunk.
+    expect(cli.stdout).toMatch(
+      /Test files to re-run.*:\n.*bar\.test\.ts\n.*index\.test\.ts\n\n/,
+    );
 
     // update
     cli.resetStd();
@@ -65,8 +70,11 @@ describe('watch', () => {
     cli.resetStd();
     fs.delete('./fixtures-test-0/bar.test.ts');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('No test files need re-run.');
     expect(cli.stdout).toMatch('Test Files 1 passed');
+    // Updated as extracting the shared module `src/index.ts` is into another chunk in reverted.
+    expect(cli.stdout).toMatch(
+      /Test files to re-run.*:\n.*index\.test\.ts\n\n/,
+    );
 
     cli.exec.kill();
   });
