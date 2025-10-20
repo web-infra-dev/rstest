@@ -5,7 +5,7 @@ import type { FormattedError, GetSourcemap } from '../types';
 import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
 
 const hintNotDefinedError = (message: string): string => {
-  const [, varName] = message.match(/(.*) is not defined/) || [];
+  const [, varName] = message.match(/(\w+) is not defined/) || [];
   if (varName) {
     if ((globalApis as string[]).includes(varName)) {
       return message.replace(
