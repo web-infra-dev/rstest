@@ -42,11 +42,11 @@ export class DefaultReporter implements Reporter {
   }
 
   onTestFileStart(test: TestFileInfo): void {
-    this.statusRenderer?.addRunningModule(test.testPath);
+    this.statusRenderer?.onTestFileStart(test.testPath);
   }
 
   onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.removeRunningModule(test.testPath);
+    this.statusRenderer?.onTestFileResult(test);
 
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
@@ -62,9 +62,8 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onTestCaseResult(_result: TestResult): void {
-    // TODO
-    // this.statusRenderer?.updateRunningModule({ result.testPath, status: result.status });
+  onTestCaseResult(result: TestResult): void {
+    this.statusRenderer?.onTestCaseResult(result);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
