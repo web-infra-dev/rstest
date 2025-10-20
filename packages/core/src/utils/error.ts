@@ -4,6 +4,31 @@ import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
 import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
 
+const hintNotDefinedError = (message: string): string => {
+  const [, varName] = message.match(/(.*) is not defined/) || [];
+  if (varName) {
+    if ((globalApis as string[]).includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to enable "globals" configuration?`,
+      );
+    }
+    if (['jest', 'vitest'].includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you mean rstest?`,
+      );
+    }
+    if (varName === 'React') {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to install "${color.yellow('@rsbuild/plugin-react')}" plugin?`,
+      );
+    }
+  }
+  return message;
+};
+
 export async function printError(
   error: FormattedError,
   getSourcemap: GetSourcemap,
@@ -24,20 +49,7 @@ export async function printError(
   }
 
   if (error.message.includes('is not defined')) {
-    const [, varName] = error.message.match(/(.*) is not defined/) || [];
-    if (varName) {
-      if ((globalApis as string[]).includes(varName)) {
-        error.message = error.message.replace(
-          `${varName} is not defined`,
-          `${varName} is not defined. Did you forget to enable "globals" configuration?`,
-        );
-      } else if (['jest', 'vitest'].includes(varName)) {
-        error.message = error.message.replace(
-          `${varName} is not defined`,
-          `${varName} is not defined. Did you mean rstest?`,
-        );
-      }
-    }
+    error.message = hintNotDefinedError(error.message);
   }
 
   logger.log(
