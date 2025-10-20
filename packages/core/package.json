@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
