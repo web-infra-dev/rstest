@@ -74,7 +74,7 @@ jobs:
             vsce-target: linux-x64
             platform: linux
             arch: x64
-          - runner: ubuntu-22.04-arm64
+          - runner: ubuntu-22.04
             vsce-target: linux-arm64
             platform: linux
             arch: arm64
