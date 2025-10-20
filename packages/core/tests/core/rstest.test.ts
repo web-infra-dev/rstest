@@ -35,7 +35,7 @@ describe('rstest context', () => {
           },
           {
             config: {
-              root: join(rootPath, 'test-project1'),
+              root: 'test-project1',
               name: 'test-project1',
               setupFiles: ['<rootDir>/scripts/rstest.setup.ts'],
             },

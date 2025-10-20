@@ -100,6 +100,8 @@ export class Rstest implements RstestContext {
     this.normalizedConfig = rstestConfig;
     this.projects = projects.length
       ? projects.map((project) => {
+          project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
           // TODO: support extend projects config
           const config = withDefaultConfig(
             project.config,
