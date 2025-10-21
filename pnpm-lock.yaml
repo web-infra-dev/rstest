@@ -612,13 +612,13 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       glob:
-        specifier: ^7.1.4
+        specifier: ^7.2.3
         version: 7.2.3
       mocha:
-        specifier: ^11.7.2
+        specifier: ^11.7.4
         version: 11.7.4
       typescript:
-        specifier: ^5.9.2
+        specifier: ^5.9.3
         version: 5.9.3
       ws:
         specifier: ^8.18.3
