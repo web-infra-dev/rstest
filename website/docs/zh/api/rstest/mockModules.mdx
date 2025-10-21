@@ -8,7 +8,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.mock
 
-- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
+- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
 
 调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
 
@@ -16,7 +16,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 根据提供的第二个参数，`rs.mock` 有两种行为：
 
-1. 如果 `rs.mock` 方法的第二个参数提供了一个工厂函数，则替换为工厂函数的返回值（工厂函数可以是异步函数，取异步函数 await 后的返回值）作为被 mock 的模块的实现。
+1. 如果 `rs.mock` 方法的第二个参数提供了一个工厂函数，则替换为工厂函数的返回值作为被 mock 的模块的实现。
 
 <div style={{ display: 'flex', gap: '1rem' }}>
   <div>
@@ -81,7 +81,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
    ```ts
    // Compared to rs.mock('../src/b', ...) the type is enhanced.
-   rs.mock(import('../src/b'), async () => {
+   rs.mock(import('../src/b'), () => {
      return {
        b: 222,
      };
@@ -90,7 +90,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.doMock
 
-- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Promise<Partial<T>> | Partial<T>)) => void`
+- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
 
 与 `rs.mock` 类似，`rs.doMock` 也会 mock 模块，但它不会被提升到模块顶部。它会在被执行到时调用，这意味着，如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
@@ -117,10 +117,24 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 无视一个模块是否被 mock，导入其原始的模块。如果你想 mock 模块的部分实现，可以使用 `rs.importActual` 来获取原始模块的实现与 mock 的实现进行合并进行部分 mock。
 
 ```ts title="src/sum.test.ts"
-rs.mock('./sum', async () => {
-  const originalModule = await rs.importActual('./sum');
-  return { ...originalModule, sum2: rs.fn() };
+rs.mock('./sum');
+
+it('test', async () => {
+  const actualModule = await rs.importActual('./sum');
+  expect(actualModule.sum(1, 2)).toBe(3);
 });
+```
+
+Rstest 也提供了同步的 `importActual` 能力，允许你在同步的 `import` 语句中导入未被 mock 的模块实现。使用方法是在 `import` 语句中添加 `with { rstest: 'importActual' }` 的 [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with)：
+
+```ts title="src/api.test.ts"
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+// Partially mock the './api' module
+rs.mock('./api', () => ({
+  ...apiActual,
+  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
+}));
 ```
 
 ## rs.importMock

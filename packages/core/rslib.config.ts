@@ -1,4 +1,4 @@
-import { defineConfig } from '@rslib/core';
+import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
 
 const isBuildWatch = process.argv.includes('--watch');
@@ -78,7 +78,21 @@ export default defineConfig({
       tools: {
         rspack: {
           // fix licensePlugin watch error: ResourceData has been dropped by Rust.
-          plugins: isBuildWatch ? [] : [licensePlugin()],
+          plugins: [
+            new rspack.CopyRspackPlugin({
+              patterns: [
+                {
+                  from: 'src/core/plugins/mockRuntimeCode.js',
+                  to: 'mockRuntimeCode.js',
+                },
+                {
+                  from: 'src/core/plugins/importActualLoader.mjs',
+                  to: 'importActualLoader.mjs',
+                },
+              ],
+            }),
+            isBuildWatch ? null : licensePlugin(),
+          ].filter(Boolean),
         },
       },
     },

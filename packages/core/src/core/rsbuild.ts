@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
   type ManifestData,
@@ -5,6 +6,7 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
+  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type {
@@ -22,6 +24,8 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type TestEntryToChunkHashes = {
   name: string;
@@ -279,6 +283,21 @@ export const createRsbuildServer = async ({
   const rstestCompilerPlugin: RsbuildPlugin = {
     name: 'rstest:compiler',
     setup: (api) => {
+      api.modifyBundlerChain((chain) => {
+        chain
+          .plugin('RemoveDuplicateModulesPlugin')
+          .use(rspack.experiments.RemoveDuplicateModulesPlugin);
+
+        // add mock-loader to this rule
+        chain.module
+          .rule('rstest-mock-module-doppelgangers')
+          .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
+          .with({ rstest: 'importActual' })
+          .use('import-actual-loader')
+          .loader(path.resolve(__dirname, './importActualLoader.mjs'))
+          .end();
+      });
+
       api.onAfterCreateCompiler(({ compiler }) => {
         // outputFileSystem to be updated later by `rsbuild-dev-middleware`
         rspackCompiler = compiler;

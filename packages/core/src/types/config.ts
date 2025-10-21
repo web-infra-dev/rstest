@@ -192,7 +192,6 @@ export interface RstestConfig {
    * @default false
    */
   restoreMocks?: boolean;
-
   /**
    * The number of milliseconds after which a test or suite is considered slow and reported as such in the results.
    * @default 300
