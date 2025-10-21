@@ -21,6 +21,7 @@ describe.concurrent('reporters', () => {
 
     await cli.exec;
     expect(cli.stdout).toContain('✗ basic > b');
+    expect(cli.stdout).not.toContain('- basic > c');
   });
 
   it('verbose', async ({ onTestFinished }) => {
@@ -37,6 +38,24 @@ describe.concurrent('reporters', () => {
 
     await cli.exec;
     expect(cli.stdout).toContain('✓ basic > a');
+    expect(cli.stdout).toContain('- basic > c');
+  });
+
+  it('hideSkippedTests', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'index', '--reporter=verbose', '--hideSkippedTests'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('✓ basic > a');
+    expect(cli.stdout).not.toContain('- basic > c');
   });
 
   it('custom', async ({ onTestFinished }) => {
@@ -55,7 +74,7 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('[custom reporter] onTestFileStart');
     expect(
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
-    ).toBe(2);
+    ).toBe(3);
     expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
   });
 

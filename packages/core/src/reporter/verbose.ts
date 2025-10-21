@@ -13,7 +13,10 @@ export class VerboseReporter extends DefaultReporter {
     logFileTitle(test, relativePath, true);
 
     for (const result of test.results) {
-      logCase(result, slowTestThreshold);
+      logCase(result, {
+        slowTestThreshold,
+        hideSkippedTests: this.config.hideSkippedTests,
+      });
     }
   }
 }

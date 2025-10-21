@@ -146,6 +146,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   disableConsoleIntercept: false,
   snapshotFormat: {},
   env: {},
+  hideSkippedTests: false,
   coverage: {
     exclude: [
       '**/node_modules/**',

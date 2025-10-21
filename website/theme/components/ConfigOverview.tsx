@@ -52,6 +52,7 @@ const OVERVIEW_GROUPS: Group[] = [
     items: [
       'coverage',
       'reporters',
+      'hideSkippedTests',
       'slowTestThreshold',
       'snapshotFormat',
       'onConsoleLog',
