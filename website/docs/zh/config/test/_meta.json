@@ -32,6 +32,7 @@
   "hideSkippedTests",
   "slowTestThreshold",
   "snapshotFormat",
+  "resolveSnapshotPath",
   "printConsoleTrace",
   "onConsoleLog",
   "disableConsoleIntercept"

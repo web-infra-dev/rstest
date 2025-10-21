@@ -225,6 +225,11 @@ export interface RstestConfig {
   snapshotFormat?: SnapshotFormat;
 
   /**
+   * Resolve custom snapshot path
+   */
+  resolveSnapshotPath?: (testPath: string, snapExtension: string) => string;
+
+  /**
    * Custom environment variables available on `process.env` during tests.
    */
   env?: Partial<NodeJS.ProcessEnv>;
@@ -272,7 +277,8 @@ type OptionalKeys =
   | 'performance'
   | 'tools'
   | 'dev'
-  | 'onConsoleLog';
+  | 'onConsoleLog'
+  | 'resolveSnapshotPath';
 
 export type NormalizedConfig = Required<
   Omit<

@@ -1,0 +1,19 @@
+# resolveSnapshotPath
+
+- **类型：** `(testPath: string, snapExtension: string) => string`
+- **默认值：** `undefined`
+
+自定义快照路径。
+
+默认情况下，Rstest 会将快照文件保存在与测试文件相同的目录下的 `__snapshots__` 文件夹中。 你可以使用 `resolveSnapshotPath` 来自定义快照文件的存放位置。
+
+例如，将快照存储在测试文件同级：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolveSnapshotPath: (testPath, snapshotExtension) =>
+    testPath + snapshotExtension,
+});
+```

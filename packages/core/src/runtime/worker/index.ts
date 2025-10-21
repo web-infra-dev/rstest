@@ -90,7 +90,10 @@ const preparePool = async ({
     ...context,
     snapshotOptions: {
       updateSnapshot,
-      snapshotEnvironment: new RstestSnapshotEnvironment(),
+      snapshotEnvironment: new RstestSnapshotEnvironment({
+        resolveSnapshotPath: (filepath: string) =>
+          rpc.resolveSnapshotPath(filepath),
+      }),
       snapshotFormat,
     },
     distPath,
