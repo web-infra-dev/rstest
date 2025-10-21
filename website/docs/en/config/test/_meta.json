@@ -29,6 +29,7 @@
 
   "coverage",
   "reporters",
+  "hideSkippedTests",
   "slowTestThreshold",
   "snapshotFormat",
   "printConsoleTrace",

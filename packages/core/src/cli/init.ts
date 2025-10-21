@@ -40,6 +40,7 @@ export type CommonOptions = {
   retry?: number;
   maxConcurrency?: number;
   slowTestThreshold?: number;
+  hideSkippedTests?: boolean;
 };
 
 async function resolveConfig(
@@ -74,6 +75,7 @@ async function resolveConfig(
     'printConsoleTrace',
     'disableConsoleIntercept',
     'testEnvironment',
+    'hideSkippedTests',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

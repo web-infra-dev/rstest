@@ -42,6 +42,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
   },
   "globals": false,
+  "hideSkippedTests": false,
   "hookTimeout": 10000,
   "include": [
     "tests/**/*.test.ts",

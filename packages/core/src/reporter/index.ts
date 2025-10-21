@@ -58,7 +58,11 @@ export class DefaultReporter implements Reporter {
         result.status === 'fail' ||
         (result.duration ?? 0) > slowTestThreshold ||
         (result.retryCount ?? 0) > 0;
-      isDisplayed && logCase(result, slowTestThreshold);
+      isDisplayed &&
+        logCase(result, {
+          slowTestThreshold,
+          hideSkippedTests: this.config.hideSkippedTests,
+        });
     }
   }
 

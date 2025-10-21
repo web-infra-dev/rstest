@@ -28,9 +28,16 @@ export const statusColorfulStr: {
 
 export const logCase = (
   result: TestResult,
-  slowTestThreshold: number,
+  options: {
+    slowTestThreshold: number;
+    hideSkippedTests: boolean;
+  },
 ): void => {
-  const isSlowCase = (result.duration || 0) > slowTestThreshold;
+  const isSlowCase = (result.duration || 0) > options.slowTestThreshold;
+
+  if (options.hideSkippedTests && result.status === 'skip') {
+    return;
+  }
 
   const icon =
     isSlowCase && result.status === 'pass'

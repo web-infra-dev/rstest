@@ -155,6 +155,12 @@ export interface RstestConfig {
         | ReporterWithOptions
       )[];
   /**
+   * Hide skipped tests logs.
+   *
+   * @default false
+   */
+  hideSkippedTests?: boolean;
+  /**
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
