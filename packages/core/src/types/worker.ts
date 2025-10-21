@@ -24,6 +24,7 @@ export type RuntimeRPC = {
   }>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   onConsoleLog: (log: UserConsoleLog) => void;
+  resolveSnapshotPath: (filepath: string) => string;
 };
 
 export type RuntimeConfig = Pick<

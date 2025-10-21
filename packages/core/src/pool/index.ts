@@ -1,5 +1,6 @@
 import os from 'node:os';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import { basename, dirname, join } from 'pathe';
 import type {
   EntryInfo,
   FormattedError,
@@ -207,6 +208,20 @@ export const createPool = async ({
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
       );
+    },
+    resolveSnapshotPath: (testPath: string): string => {
+      const snapExtension = '.snap';
+      const resolver =
+        context.normalizedConfig.resolveSnapshotPath ||
+        // test/index.ts -> test/__snapshots__/index.ts.snap
+        (() =>
+          join(
+            join(dirname(testPath), '__snapshots__'),
+            `${basename(testPath)}${snapExtension}`,
+          ));
+
+      const snapshotPath = resolver(testPath, snapExtension);
+      return snapshotPath;
     },
   };
 

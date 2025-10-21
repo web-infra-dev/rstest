@@ -55,6 +55,7 @@ const OVERVIEW_GROUPS: Group[] = [
       'hideSkippedTests',
       'slowTestThreshold',
       'snapshotFormat',
+      'resolveSnapshotPath',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
