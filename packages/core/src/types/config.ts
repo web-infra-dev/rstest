@@ -193,11 +193,6 @@ export interface RstestConfig {
    */
   restoreMocks?: boolean;
   /**
-   * Control how import actual module works.
-   * @default ['importAttributes', 'query']
-   */
-  importActualMethods?: ('importAttributes' | 'query')[];
-  /**
    * The number of milliseconds after which a test or suite is considered slow and reported as such in the results.
    * @default 300
    */

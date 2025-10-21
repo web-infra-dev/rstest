@@ -289,15 +289,13 @@ export const createRsbuildServer = async ({
           .use(rspack.experiments.RemoveDuplicateModulesPlugin);
 
         // add mock-loader to this rule
-        if (inspectedConfig.importActualMethods?.includes('importAttributes')) {
-          chain.module
-            .rule('rstest-mock-module-doppelgangers')
-            .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
-            .with({ rstest: 'importActual' })
-            .use('mock-loader')
-            .loader(path.resolve(__dirname, './mockLoader.mjs'))
-            .end();
-        }
+        chain.module
+          .rule('rstest-mock-module-doppelgangers')
+          .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
+          .with({ rstest: 'importActual' })
+          .use('import-actual-loader')
+          .loader(path.resolve(__dirname, './mockLoader.mjs'))
+          .end();
       });
 
       api.onAfterCreateCompiler(({ compiler }) => {

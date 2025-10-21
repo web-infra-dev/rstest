@@ -3,7 +3,6 @@ import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
-import { removeRequestQuery } from '../../utils';
 import { logger } from '../../utils/logger';
 import { asModule, interopModule, shouldInterop } from './interop';
 
@@ -83,8 +82,7 @@ const defineRstestDynamicImport =
       delete importAttributes.with.rstest;
     }
 
-    const finalModulePath = removeRequestQuery(modulePath, 'rstest');
-    const importedModule = await import(finalModulePath, importAttributes);
+    const importedModule = await import(modulePath, importAttributes);
 
     if (
       shouldInterop({

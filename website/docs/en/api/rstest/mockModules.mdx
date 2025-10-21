@@ -88,17 +88,6 @@ Based on the second parameter provided, `rs.mock` has two behaviors:
    });
    ```
 
-If you want to sync-import the actual implementation, refer to [`importActualMethods`](../../config/test/importActualMethods) for the supported synchronous `importActual` options. When `'importAttributes'` is enabled, the following pattern loads the unmocked module as the test file executes and lets you combine it with `rs.mock` for partial mocks:
-
-```ts title="src/api.test.ts"
-import * as apiActual from './api' with { rstest: 'importActual' };
-
-rs.mock('./api', () => ({
-  ...apiActual,
-  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
-}));
-```
-
 ## rs.doMock
 
 - **Type**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
@@ -125,7 +114,7 @@ Similar to `rs.mock`, `rs.doMock` also mocks modules, but it is not hoisted to t
 
 - **Type**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Imports the original module regardless of whether it has been mocked. If you want to partially mock a module, you can use `rs.importActual` to get the original module's implementation and merge it with the mock implementation for partial mocking.
+Loads the original implementation of a module even if it has already been mocked. Use `rs.importActual` when you want a partial mock so you can merge the real exports with your overrides.
 
 ```ts title="src/sum.test.ts"
 rs.mock('./sum');
@@ -134,6 +123,18 @@ it('test', async () => {
   const actualModule = await rs.importActual('./sum');
   expect(actualModule.sum(1, 2)).toBe(3);
 });
+```
+
+Rstest also exposes a synchronous `importActual` option for static imports. Add the [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` to load the real module as the file evaluates:
+
+```ts title="src/api.test.ts"
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+// Partially mock the './api' module
+rs.mock('./api', () => ({
+  ...apiActual,
+  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
+}));
 ```
 
 ## rs.importMock

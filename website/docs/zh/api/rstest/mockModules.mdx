@@ -125,11 +125,12 @@ it('test', async () => {
 });
 ```
 
-如果你希望在同步的 `import` 语句中拿到真实实现，参考 [`importActualMethods`](../../config/test/importActualMethods) 中已经启用的同步的 `importActual` 方法。当启用了 `'importAttributes'` 时，下面的写法会在测试文件加载时直接引入未被 mock 的模块，再结合 `rs.mock` 进行常见的部分模块 mock：
+Rstest 也提供了同步的 `importActual` 能力，允许你在同步的 `import` 语句中导入未被 mock 的模块实现。使用方法是在 `import` 语句中添加 `with { rstest: 'importActual' }` 的 [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with)：
 
 ```ts title="src/api.test.ts"
 import * as apiActual from './api' with { rstest: 'importActual' };
 
+// Partially mock the './api' module
 rs.mock('./api', () => ({
   ...apiActual,
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),

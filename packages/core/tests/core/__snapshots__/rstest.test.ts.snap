@@ -43,10 +43,6 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "globals": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
-  "importActualMethods": [
-    "importAttributes",
-    "query",
-  ],
   "include": [
     "**/*.{test,spec}.?(c|m)[jt]s?(x)",
   ],
@@ -120,10 +116,6 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "globals": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
-  "importActualMethods": [
-    "importAttributes",
-    "query",
-  ],
   "include": [
     "<ROOT>/packages/core/test-project/tests/**/*.test.ts",
   ],
@@ -200,10 +192,6 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "globals": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
-  "importActualMethods": [
-    "importAttributes",
-    "query",
-  ],
   "include": [
     "**/*.{test,spec}.?(c|m)[jt]s?(x)",
   ],
