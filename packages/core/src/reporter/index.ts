@@ -13,7 +13,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger, prettyTestPath } from '../utils';
+import { color, logger } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle } from './utils';
@@ -77,7 +77,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    const titles = [log.name];
+    const titles = [];
 
     const testPath = relative(this.rootPath, log.testPath);
 
@@ -86,19 +86,18 @@ export class DefaultReporter implements Reporter {
       const filePath = relative(this.rootPath, frame!.file || '');
 
       if (filePath !== testPath) {
-        titles.push(prettyTestPath(testPath));
+        titles.push(testPath);
       }
-      titles.push(
-        prettyTestPath(filePath) +
-          color.gray(`:${frame!.lineNumber}:${frame!.column}`),
-      );
+      titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
     } else {
-      titles.push(prettyTestPath(testPath));
+      titles.push(testPath);
     }
 
+    logger.log('');
     // TODO: output to stdout or stderr
-    logger.log(titles.join(color.gray(' | ')));
-
+    logger.log(
+      `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
+    );
     logger.log(log.content);
     logger.log('');
   }
