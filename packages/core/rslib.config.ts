@@ -86,8 +86,8 @@ export default defineConfig({
                   to: 'mockRuntimeCode.js',
                 },
                 {
-                  from: 'src/core/plugins/mockLoader.mjs',
-                  to: 'mockLoader.mjs',
+                  from: 'src/core/plugins/importActualLoader.mjs',
+                  to: 'importActualLoader.mjs',
                 },
               ],
             }),

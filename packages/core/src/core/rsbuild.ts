@@ -294,7 +294,7 @@ export const createRsbuildServer = async ({
           .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
           .with({ rstest: 'importActual' })
           .use('import-actual-loader')
-          .loader(path.resolve(__dirname, './mockLoader.mjs'))
+          .loader(path.resolve(__dirname, './importActualLoader.mjs'))
           .end();
       });
 
