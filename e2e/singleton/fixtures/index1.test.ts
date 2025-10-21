@@ -1,11 +1,12 @@
 import { expect, it } from '@rstest/core';
+import { getC } from 'c';
 import { getA } from './a';
 
-it('should singleton A - 1', () => {
+it('should singleton A', () => {
   expect(getA()).toBe(process.env.A);
 });
 
-it('should singleton B - 2', async () => {
+it('should singleton B', async () => {
   if (process.env.TestNoIsolate) {
     const { getB } = await import('./b');
     expect(getB()).toBe(process.env.B);
@@ -14,7 +15,11 @@ it('should singleton B - 2', async () => {
   }
 });
 
-it('should singleton C', async () => {
+it('should singleton B - 1', async () => {
   const { getB } = await import('./b');
-  expect(getB()).toBe(process.env.C);
+  expect(getB()).toBe(process.env.B1);
+});
+
+it('should singleton C', () => {
+  expect(getC()).toBe(process.env.C);
 });
