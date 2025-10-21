@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { beforeAll, describe, it } from '@rstest/core';
+import fs from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -8,6 +9,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test singleton', () => {
+  beforeAll(async () => {
+    fs.ensureDirSync(join(__dirname, 'fixtures', 'node_modules'));
+    fs.writeFileSync(
+      join(__dirname, 'fixtures', 'node_modules', 'c.js'),
+      `
+    let c = undefined;
+
+export const getC = () => {
+  if (!c) {
+    c = Math.ceil(Math.random() * 1000).toString();
+  }
+  return c;
+};
+`,
+    );
+  });
+
   it('should load singleton module correctly', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
