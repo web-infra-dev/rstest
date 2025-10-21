@@ -63,7 +63,6 @@ export class TestRunner {
     const errors: FormattedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
 
-    hooks.onTestFileStart?.({ testPath });
     const snapshotClient = getSnapshotClient();
 
     await snapshotClient.setup(testPath, snapshotOptions);

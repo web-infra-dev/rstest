@@ -1,0 +1,77 @@
+// Rstest Snapshot v1
+
+exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
+{
+  "clearMocks": false,
+  "coverage": {
+    "clean": true,
+    "enabled": false,
+    "exclude": [
+      "**/node_modules/**",
+      "**/[.]*",
+      "**/dist/**",
+      "**/test/**",
+      "**/__tests__/**",
+      "**/__mocks__/**",
+      "**/*.d.ts",
+      "**/*.{test,spec}.[jt]s",
+      "**/*.{test,spec}.[c|m][jt]s",
+      "**/*.{test,spec}.[jt]sx",
+      "**/*.{test,spec}.[c|m][jt]sx",
+    ],
+    "provider": "istanbul",
+    "reportOnFailure": false,
+    "reporters": [
+      "text",
+      "html",
+      "clover",
+      "json",
+    ],
+    "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
+  },
+  "disableConsoleIntercept": false,
+  "env": {},
+  "exclude": {
+    "override": false,
+    "patterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/aa/**",
+      "**/dist/.rstest-temp",
+    ],
+  },
+  "globals": false,
+  "hideSkippedTests": false,
+  "hookTimeout": 10000,
+  "include": [
+    "tests/**/*.test.ts",
+  ],
+  "includeSource": [],
+  "isolate": true,
+  "maxConcurrency": 5,
+  "name": "rstest",
+  "passWithNoTests": false,
+  "pool": {
+    "type": "forks",
+  },
+  "printConsoleTrace": false,
+  "reporters": [
+    "verbose",
+  ],
+  "resetMocks": false,
+  "restoreMocks": false,
+  "retry": 0,
+  "root": "<ROOT>/packages/core/tests",
+  "setupFiles": [
+    "./setup.ts",
+  ],
+  "slowTestThreshold": 300,
+  "snapshotFormat": {},
+  "testEnvironment": "node",
+  "testTimeout": 5000,
+  "unstubEnvs": false,
+  "unstubGlobals": false,
+  "update": false,
+}
+`;

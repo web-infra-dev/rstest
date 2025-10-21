@@ -34,6 +34,7 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--include <include>', 'Match test files')
     .option('--exclude <exclude>', 'Exclude files from test')
     .option('-u, --update', 'Update snapshot files')
+    .option('--coverage', 'Enable code coverage collection')
     .option(
       '--project <name>',
       'Run only projects that match the name, can be a full name or wildcards pattern',
@@ -62,6 +63,7 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
     .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
+    .option('--hideSkippedTests', 'Hide skipped tests from the output')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(

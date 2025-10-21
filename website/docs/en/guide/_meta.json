@@ -13,5 +13,10 @@
     "type": "dir",
     "name": "advanced",
     "label": "Advanced"
+  },
+  {
+    "type": "dir",
+    "name": "migration",
+    "label": "Migration"
   }
 ]

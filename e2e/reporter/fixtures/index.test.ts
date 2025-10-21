@@ -8,4 +8,8 @@ describe('basic', () => {
   it('b', () => {
     expect(1 + 1).not.toBe(2);
   });
+
+  it.skip('c', () => {
+    expect(1 + 1).not.toBe(2);
+  });
 });

@@ -32,7 +32,7 @@ export async function listTests(
 
     const entries = await getTestEntries({
       include,
-      exclude,
+      exclude: exclude.patterns,
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],
@@ -81,27 +81,32 @@ export async function listTests(
 
   const returns = await Promise.all(
     context.projects.map(async (project) => {
-      const { entries, setupEntries, assetFiles, sourceMaps } =
-        await getRsbuildStats({ environmentName: project.environmentName });
+      const {
+        entries,
+        setupEntries,
+        getSourceMaps,
+        getAssetFiles,
+        assetNames,
+      } = await getRsbuildStats({ environmentName: project.environmentName });
 
       const list = await pool.collectTests({
         entries,
-        sourceMaps,
         setupEntries,
-        assetFiles,
+        getAssetFiles,
+        getSourceMaps,
         project,
         updateSnapshot,
       });
 
       return {
         list,
-        sourceMaps,
+        getSourceMaps,
+        assetNames,
       };
     }),
   );
 
   const list = returns.flatMap((r) => r.list);
-  const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
 
   const tests: {
     file: string;
@@ -148,7 +153,16 @@ export async function listTests(
         logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
 
         for (const error of file.errors) {
-          await printError(error, (name) => sourceMaps[name] || null, rootPath);
+          await printError(
+            error,
+            async (name) => {
+              const resource = returns.find((r) => r.assetNames.includes(name));
+
+              const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
+              return sourceMap ? JSON.parse(sourceMap) : null;
+            },
+            rootPath,
+          );
         }
       }
     }

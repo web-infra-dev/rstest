@@ -8,9 +8,9 @@ A set of useful utility functions.
 
 - **Type:** `(name: string, value: string | undefined) => Rstest`
 
-Temporarily sets an environment variable in `process.env` to the specified value. Useful for testing code that depends on environment variables.
+Temporarily sets an environment variable in `process.env` and `import.meta.env` to the specified value. Useful for testing code that depends on environment variables.
 
-- If `value` is `undefined`, the variable will be removed from `process.env`.
+- If `value` is `undefined`, the variable will be removed from `process.env` and `import.meta.env`.
 - You can call this multiple times to stub multiple variables.
 - Use `rstest.unstubAllEnvs()` to restore all environment variables changed by this method.
 
@@ -19,9 +19,11 @@ Temporarily sets an environment variable in `process.env` to the specified value
 ```ts
 rstest.stubEnv('NODE_ENV', 'test');
 expect(process.env.NODE_ENV).toBe('test');
+expect(import.meta.env.NODE_ENV).toBe('test');
 
 rstest.stubEnv('MY_VAR', undefined);
 expect(process.env.MY_VAR).toBeUndefined();
+expect(import.meta.env.MY_VAR).toBeUndefined();
 ```
 
 ## rstest.unstubAllEnvs

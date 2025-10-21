@@ -1,13 +1,7 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { ProjectContext, RstestContext } from './core';
-import type { SourceMapInput } from './reporter';
-import type {
-  TestFileInfo,
-  TestFileResult,
-  TestResult,
-  UserConsoleLog,
-} from './testSuite';
+import type { TestFileInfo, TestResult, UserConsoleLog } from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
@@ -24,9 +18,13 @@ export type ServerRPC = {};
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
-  onTestFileResult: (test: TestFileResult) => Promise<void>;
+  getAssetsByEntry: () => Promise<{
+    assetFiles: Record<string, string>;
+    sourceMaps: Record<string, string>;
+  }>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   onConsoleLog: (log: UserConsoleLog) => void;
+  resolveSnapshotPath: (filepath: string) => string;
 };
 
 export type RuntimeConfig = Pick<
@@ -48,6 +46,8 @@ export type RuntimeConfig = Pick<
   | 'isolate'
   | 'hookTimeout'
   | 'coverage'
+  | 'snapshotFormat'
+  | 'env'
 >;
 
 export type WorkerContext = {
@@ -61,11 +61,14 @@ export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
-    assetFiles: Record<string, string>;
-    sourceMaps: Record<string, SourceMapInput>;
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
+    /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
+    assets?: {
+      assetFiles: Record<string, string>;
+      sourceMaps: Record<string, string>;
+    };
   };
   rpcMethods: RuntimeRPC;
 };
@@ -77,5 +80,6 @@ export type WorkerState = WorkerContext & {
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;
+    snapshotFormat: RuntimeConfig['snapshotFormat'];
   };
 };

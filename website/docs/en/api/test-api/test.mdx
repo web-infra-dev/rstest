@@ -188,7 +188,9 @@ export interface TestContext {
   expect: Expect;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
+  /** The `onTestFailed` hook bound to the current test */
+  onTestFailed: OnTestFailed;
 }
 ```
 
-You can extend `TestContext` with custom fixtures using `test.extend`.
+You can also extend `TestContext` with custom fixtures using `test.extend`.

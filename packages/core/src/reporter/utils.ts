@@ -28,9 +28,16 @@ export const statusColorfulStr: {
 
 export const logCase = (
   result: TestResult,
-  slowTestThreshold: number,
+  options: {
+    slowTestThreshold: number;
+    hideSkippedTests: boolean;
+  },
 ): void => {
-  const isSlowCase = (result.duration || 0) > slowTestThreshold;
+  const isSlowCase = (result.duration || 0) > options.slowTestThreshold;
+
+  if (options.hideSkippedTests && result.status === 'skip') {
+    return;
+  }
 
   const icon =
     isSlowCase && result.status === 'pass'
@@ -56,22 +63,17 @@ export const logCase = (
 export const logFileTitle = (
   test: TestFileResult,
   relativePath: string,
-  slowTestThreshold: number,
   alwaysShowTime = false,
 ): void => {
   let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettyTestPath(relativePath)}`;
 
   const formatDuration = (duration: number) => {
-    return color[duration > slowTestThreshold ? 'yellow' : 'green'](
-      prettyTime(duration),
-    );
+    return color.green(prettyTime(duration));
   };
 
   title += ` ${color.gray(`(${test.results.length})`)}`;
 
-  const isTooSlow = test.duration && test.duration > slowTestThreshold;
-
-  if (alwaysShowTime || isTooSlow) {
+  if (alwaysShowTime) {
     title += ` ${formatDuration(test.duration!)}`;
   }
 

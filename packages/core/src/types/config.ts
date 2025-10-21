@@ -1,4 +1,5 @@
 import type { RsbuildConfig } from '@rsbuild/core';
+import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -10,7 +11,7 @@ export type RstestPoolType = 'forks';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
-  type: RstestPoolType;
+  type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /** Minimum number or percentage of workers to run tests in. */
@@ -22,6 +23,11 @@ export type RstestPoolOptions = {
 export type ProjectConfig = Omit<
   RstestConfig,
   'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+>;
+
+type SnapshotFormat = Omit<
+  NonNullable<SnapshotStateOptions['snapshotFormat']>,
+  'plugins' | 'compareKeys'
 >;
 
 /**
@@ -59,7 +65,16 @@ export interface RstestConfig {
    *
    * @default ['**\/node_modules/**', '**\/dist/**']
    */
-  exclude?: string[];
+  exclude?:
+    | string[]
+    | {
+        patterns: string[];
+        /**
+         * override default exclude patterns
+         * @default false
+         */
+        override?: boolean;
+      };
   /**
    * A list of glob patterns that match your in-source test files
    *
@@ -140,6 +155,12 @@ export interface RstestConfig {
         | ReporterWithOptions
       )[];
   /**
+   * Hide skipped tests logs.
+   *
+   * @default false
+   */
+  hideSkippedTests?: boolean;
+  /**
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
@@ -171,7 +192,6 @@ export interface RstestConfig {
    * @default false
    */
   restoreMocks?: boolean;
-
   /**
    * The number of milliseconds after which a test or suite is considered slow and reported as such in the results.
    * @default 300
@@ -199,6 +219,19 @@ export interface RstestConfig {
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;
+
+  /** Format snapshot output */
+  snapshotFormat?: SnapshotFormat;
+
+  /**
+   * Resolve custom snapshot path
+   */
+  resolveSnapshotPath?: (testPath: string, snapExtension: string) => string;
+
+  /**
+   * Custom environment variables available on `process.env` during tests.
+   */
+  env?: Partial<NodeJS.ProcessEnv>;
 
   /**
    * Coverage options
@@ -235,7 +268,6 @@ export interface RstestConfig {
 }
 
 type OptionalKeys =
-  | 'setupFiles'
   | 'testNamePattern'
   | 'plugins'
   | 'source'
@@ -244,19 +276,33 @@ type OptionalKeys =
   | 'performance'
   | 'tools'
   | 'dev'
-  | 'onConsoleLog';
+  | 'onConsoleLog'
+  | 'resolveSnapshotPath';
 
 export type NormalizedConfig = Required<
-  Omit<RstestConfig, OptionalKeys | 'pool' | 'projects' | 'coverage'>
+  Omit<
+    RstestConfig,
+    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+  >
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
 } & {
   pool: RstestPoolOptions;
   coverage: NormalizedCoverageOptions;
+  setupFiles: string[];
+  exclude: {
+    patterns: string[];
+    override?: boolean;
+  };
 };
 
 export type NormalizedProjectConfig = Required<
-  Omit<NormalizedConfig, OptionalKeys | 'projects' | 'reporters' | 'pool'>
+  Omit<
+    NormalizedConfig,
+    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+  >
 > & {
   [key in OptionalKeys]?: NormalizedConfig[key];
+} & {
+  setupFiles: string[];
 };

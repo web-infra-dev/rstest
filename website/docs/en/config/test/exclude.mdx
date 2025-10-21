@@ -4,7 +4,7 @@ overviewHeaders: []
 
 # exclude
 
-- **Type:** `string[]`
+- **Type:** `string[] | { patterns: string[]; override?: boolean }`
 - **Default:** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
 - **CLI:** `--exclude "**/node_modules/**"`
 
@@ -33,3 +33,19 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## Override default value
+
+By default, Rstest will merge your custom config with the default config. If you want to override the default `exclude` configuration, you can set `override` to `true`.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  exclude: {
+    patterns: ['**/node_modules/**'],
+    override: true,
+  },
+});
+```

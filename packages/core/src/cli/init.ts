@@ -8,6 +8,7 @@ import {
   castArray,
   color,
   filterProjects,
+  formatRootStr,
   getAbsolutePath,
   logger,
 } from '../utils';
@@ -22,6 +23,7 @@ export type CommonOptions = {
   exclude?: string[];
   reporter?: string[];
   project?: string[];
+  coverage?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -38,6 +40,7 @@ export type CommonOptions = {
   retry?: number;
   maxConcurrency?: number;
   slowTestThreshold?: number;
+  hideSkippedTests?: boolean;
 };
 
 async function resolveConfig(
@@ -72,6 +75,7 @@ async function resolveConfig(
     'printConsoleTrace',
     'disableConsoleIntercept',
     'testEnvironment',
+    'hideSkippedTests',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -81,6 +85,11 @@ async function resolveConfig(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (options.coverage !== undefined) {
+    config.coverage ??= {};
+    config.coverage.enabled = options.coverage;
   }
 
   if (options.exclude) {
@@ -135,16 +144,12 @@ export async function resolveProjects({
     return glob(patterns, globOptions);
   };
 
-  const formatRootStr = (rootStr: string) => {
-    return rootStr.replace('<rootDir>', root);
-  };
-
   const { projectPaths, projectPatterns, projectConfigs } = (
     config.projects || []
   ).reduce(
     (total, p) => {
       if (typeof p === 'object') {
-        const projectRoot = p.root ? formatRootStr(p.root) : root;
+        const projectRoot = p.root ? formatRootStr(p.root, root) : root;
         total.projectConfigs.push({
           config: {
             root: projectRoot,
@@ -155,7 +160,7 @@ export async function resolveProjects({
         });
         return total;
       }
-      const projectStr = formatRootStr(p);
+      const projectStr = formatRootStr(p, root);
 
       if (isDynamicPattern(projectStr)) {
         total.projectPatterns.push(projectStr);

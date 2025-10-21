@@ -1,0 +1,160 @@
+# Migrating from jest
+
+Rstest is designed to be Jest-compatible, making migration from Jest projects straightforward. Here's how to migrate your Jest project to Rstest:
+
+## Installation and setup
+
+First, you need to install Rstest as a development dependency.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+Next, update the test script in your `package.json` to use [rstest](/guide/basic/cli) instead of `jest`. For example:
+
+```diff
+"scripts": {
+-  "test": "jest"
++  "test": "rstest"
+}
+```
+
+## Configuration migration
+
+Update your jest config file (e.g., `jest.config.js` or `jest.config.ts`) to a `rstest.config.ts` file.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+### Jest configuration mappings
+
+Here are some common Jest configurations and their Rstest equivalents:
+
+| Jest Configuration           | Rstest Equivalent                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `testRegex`                  | [`include`](/config/test/include)                                                                                  |
+| `testMatch`                  | [`include`](/config/test/include)                                                                                  |
+| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                                                                  |
+| `transformIgnorePatterns`    | [`output.externals`](/config/build/output#outputexternals)、[`source.exclude`](/config/build/source#sourceexclude) |
+| `displayName`                | [`name`](/config/test/name)                                                                                        |
+| `rootDir`                    | [`root`](/config/test/root)                                                                                        |
+| `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setupFiles)                                                                            |
+| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)                                                      |
+| `injectGlobals`              | [`globals`](/config/test/globals)                                                                                  |
+| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                                              |
+| `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                             |
+| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                                                |
+| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                                              |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                                              |
+| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                                                |
+| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                                          |
+
+For more details, please refer to the [Configuration](/config) section.
+
+### Inject globals
+
+Rstest does not mount the test APIs (e.g., `describe`, `expect`, `it`, `test`) to the global object by default, which is different from Jest.
+
+If you want to continue using the global test APIs, you can enable the `globals` option in your `rstest.config.ts` file:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globals: true,
+});
+```
+
+### Code transformation
+
+Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
+
+```diff
+export default {
+-  transform: {
+-    '^.+\\.(t|j)sx?$': ['@swc/jest', {}],
+-  },
++  tools: {
++    swc: {}
++  }
+}
+```
+
+However, if you have custom Babel configurations or use specific Babel plugins/presets, you can add [Rsbuild's Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel):
+
+```ts title='rstest.config.ts'
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginBabel()],
+});
+```
+
+## Update test API
+
+### Test API
+
+Your existing Jest test files should work with minimal changes since Rstest provides Jest-compatible APIs. Simply update your imports from Jest to Rstest:
+
+```diff
+- import { describe, expect, it, test } from '@jest/globals';
++ import { describe, expect, it, test } from '@rstest/core';
+```
+
+Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/).
+
+```diff
+- const fn = jest.fn();
++ const fn = rstest.fn();
+
+fn.mockResolvedValue('foo');
+```
+
+### Done callback
+
+The `done` callback is not supported in Rstest. Instead, you can return a Promise or use `async/await` for asynchronous tests.
+
+```diff
+- test('async test with done', (done) => {
++ test('async test with done', () => new Promise(done => {
+  // ...
+  done();
+- });
++ }));
+```
+
+If you need to handle errors, you can modify it as follows:
+
+```diff
+- test('async test with done', (done) => {
++ test('async test with done', () => new Promise((resolve, reject) => {
++   const done = err => (err ? reject(err) : resolve());
+  // ...
+  done(error);
+- });
++ }));
+```
+
+### Hooks
+
+The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are used to perform cleaning work after testing.
+
+```diff
+- beforeEach(() => doSomething());
++ beforeEach(() => { doSomething() });
+```
+
+### Timeout
+
+If you used `jest.setTimeout()` to set the timeout for a test, you can use `rstest.setConfig()` instead.
+
+```diff
+- jest.setTimeout(5_000)
++ rstest.setConfig({ testTimeout: 5_000 })
+```

@@ -29,7 +29,6 @@ describe('test snapshot', () => {
     });
 
     await expectFile(snapshotFilePath, 3000);
-    expect(fs.existsSync(snapshotFilePath)).toBeTruthy();
 
     // should generator snapshot name correctly
     await expect
@@ -39,6 +38,33 @@ describe('test snapshot', () => {
       );
 
     fs.rmSync(snapshotFilePath);
+  });
+
+  it('resolveSnapshotPath', async () => {
+    const snapshotFilePath = join(__dirname, 'fixtures/index.test.ts.snap');
+
+    fs.rmSync(snapshotFilePath, {
+      force: true,
+    });
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/index.test.ts',
+        '-u',
+        '-c',
+        'fixtures/rstest.snapshotPath.config.ts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    await expectFile(snapshotFilePath, 3000);
   });
 
   describe('test snapshot file state', () => {

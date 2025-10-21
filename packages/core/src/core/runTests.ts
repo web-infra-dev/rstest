@@ -13,7 +13,14 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 export async function runTests(context: Rstest): Promise<void> {
-  const { rootPath, reporters, projects, snapshotManager, command } = context;
+  const {
+    rootPath,
+    reporters,
+    projects,
+    snapshotManager,
+    command,
+    normalizedConfig: { coverage },
+  } = context;
 
   const entriesCache = new Map<
     string,
@@ -31,7 +38,7 @@ export async function runTests(context: Rstest): Promise<void> {
     )!.normalizedConfig;
     const entries = await getTestEntries({
       include,
-      exclude,
+      exclude: exclude.patterns,
       includeSource,
       rootPath,
       projectRoot: root,
@@ -97,17 +104,14 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   // Initialize coverage collector
-  const coverageProvider = context.normalizedConfig.coverage.enabled
-    ? await createCoverageProvider(
-        context.normalizedConfig.coverage || {},
-        context.rootPath,
-      )
+  const coverageProvider = coverage.enabled
+    ? await createCoverageProvider(coverage, context.rootPath)
     : null;
 
   if (coverageProvider) {
     logger.log(
       ` ${color.gray('Coverage enabled with')} %s\n`,
-      color.yellow(context.normalizedConfig.coverage.provider),
+      color.yellow(coverage.provider),
     );
   }
 
@@ -128,10 +132,11 @@ export async function runTests(context: Rstest): Promise<void> {
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {
+          assetNames,
           entries,
           setupEntries,
-          assetFiles,
-          sourceMaps,
+          getAssetFiles,
+          getSourceMaps,
           affectedEntries,
           deletedEntries,
         } = await getRsbuildStats({
@@ -174,9 +179,9 @@ export async function runTests(context: Rstest): Promise<void> {
         currentEntries.push(...finalEntries);
         const { results, testResults } = await pool.runTests({
           entries: finalEntries,
-          sourceMaps,
+          getSourceMaps,
           setupEntries,
-          assetFiles,
+          getAssetFiles,
           project: p,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
         });
@@ -184,7 +189,8 @@ export async function runTests(context: Rstest): Promise<void> {
         return {
           results,
           testResults,
-          sourceMaps,
+          assetNames,
+          getSourceMaps,
         };
       }),
     );
@@ -201,7 +207,6 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
-    const sourceMaps = Object.assign({}, ...returns.map((r) => r.sourceMaps));
 
     context.updateReporterResultState(
       results,
@@ -244,13 +249,15 @@ export async function runTests(context: Rstest): Promise<void> {
           );
           logger.log(
             color.gray('exclude:'),
-            p.normalizedConfig.exclude.join(color.gray(', ')),
+            p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
           );
         });
       }
     }
 
-    if (results.some((r) => r.status === 'fail')) {
+    const isFailure = results.some((r) => r.status === 'fail');
+
+    if (isFailure) {
       process.exitCode = 1;
     }
 
@@ -260,7 +267,12 @@ export async function runTests(context: Rstest): Promise<void> {
         testResults: context.reporterResults.testResults,
         snapshotSummary: snapshotManager.summary,
         duration,
-        getSourcemap: (name: string) => sourceMaps[name] || null,
+        getSourcemap: async (name: string) => {
+          const resource = returns.find((r) => r.assetNames.includes(name));
+
+          const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
+          return sourceMap ? JSON.parse(sourceMap) : null;
+        },
         filterRerunTestPaths: currentEntries.length
           ? currentEntries.map((e) => e.testPath)
           : undefined,
@@ -268,44 +280,10 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     // Generate coverage reports after all tests complete
-    if (coverageProvider) {
-      try {
-        // Collect coverage data from all test results
-        const finalCoverageMap = coverageProvider.createCoverageMap();
+    if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+      const { generateCoverage } = await import('../coverage/generate');
 
-        // Merge coverage data from all test files
-        for (const result of results) {
-          if ((result as any).coverage) {
-            finalCoverageMap.merge((result as any).coverage);
-          }
-        }
-
-        // Generate coverage reports
-        await coverageProvider.generateReports(
-          finalCoverageMap,
-          context.normalizedConfig.coverage,
-        );
-
-        if (context.normalizedConfig.coverage.thresholds) {
-          const { checkThresholds } = await import(
-            '../coverage/checkThresholds'
-          );
-          const thresholdResult = checkThresholds(
-            finalCoverageMap,
-            context.normalizedConfig.coverage.thresholds,
-          );
-          if (!thresholdResult.success) {
-            process.exitCode = 1;
-            logger.log('');
-            logger.log(thresholdResult.message);
-          }
-        }
-
-        // Cleanup
-        coverageProvider.cleanup();
-      } catch (error) {
-        logger.error('Failed to generate coverage reports:', error);
-      }
+      await generateCoverage(context, results, coverageProvider);
     }
   };
 

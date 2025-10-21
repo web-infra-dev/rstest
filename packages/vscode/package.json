@@ -1,0 +1,86 @@
+{
+  "name": "rstest",
+  "icon": "icon.png",
+  "displayName": "Rstest",
+  "publisher": "rstack",
+  "description": "VS Code extension for Rstest",
+  "version": "0.5.4",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/vscode"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Testing"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
+    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Rstest",
+      "properties": {
+        "rstest.testFileGlobPattern": {
+          "markdownDescription": "Glob patterns used to discover test files. Must be an array of strings.",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/*.test.*",
+            "**/*.spec.*"
+          ]
+        },
+        "rstest.logLevel": {
+          "markdownDescription": "Controls how much diagnostic output the Rstest extension emits to the Output view.",
+          "scope": "window",
+          "type": "string",
+          "enum": [
+            "default",
+            "debug"
+          ],
+          "default": "default"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rspress-logo-512x512.png --output icon.png",
+    "build": "rslib build",
+    "lint": "biome check . --diagnostic-level=warn",
+    "build:local": "SOURCEMAP=true rslib build",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:unit": "rstest",
+    "test": "npm run test:unit && npm run test:e2e",
+    "typecheck": "tsc --noEmit",
+    "watch": "rslib build --watch",
+    "package:vsce": "npm run build && vsce package"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "1.6.0-beta.0",
+    "@rslib/core": "0.13.3",
+    "@rstest/core": "workspace:*",
+    "@swc/core": "^1.13.5",
+    "@types/glob": "^7.1.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.16.5",
+    "@types/vscode": "^1.100.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.6.0",
+    "get-port": "^7.1.0",
+    "glob": "^7.1.4",
+    "mocha": "^11.7.2",
+    "typescript": "^5.9.2",
+    "ws": "^8.18.3"
+  }
+}

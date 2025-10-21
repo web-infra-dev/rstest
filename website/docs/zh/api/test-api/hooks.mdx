@@ -21,6 +21,21 @@ beforeAll(async (ctx) => {
 });
 ```
 
+`beforeAll` 也支持返回一个函数，在所有测试之后运行，用于清理操作（等价于 `afterAll`）：
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async () => {
+  const cleanUp = await doSomething();
+
+  // 在所有测试后的清理逻辑
+  return async () => {
+    await cleanUp();
+  };
+});
+```
+
 ## afterAll
 
 - **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
@@ -46,6 +61,21 @@ import { beforeEach } from '@rstest/core';
 
 beforeEach(async () => {
   // 每个测试前的初始化逻辑
+});
+```
+
+`beforeEach` 也支持返回一个函数，在每个测试之后运行，用于清理操作（等价于 `afterEach`）：
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  const cleanUp = await doSomething();
+
+  // 每个测试后的清理逻辑
+  return async () => {
+    await cleanUp();
+  };
 });
 ```
 

@@ -77,7 +77,11 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(userConfig);
+    const rstestConfig = withDefaultConfig({
+      ...userConfig,
+      root: rootPath,
+    });
+
     const reporters =
       command !== 'list'
         ? createReporters(rstestConfig.reporters, {
@@ -96,6 +100,8 @@ export class Rstest implements RstestContext {
     this.normalizedConfig = rstestConfig;
     this.projects = projects.length
       ? projects.map((project) => {
+          project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
           // TODO: support extend projects config
           const config = withDefaultConfig(
             project.config,

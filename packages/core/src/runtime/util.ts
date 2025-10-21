@@ -19,7 +19,9 @@ export const getRealTimers = (): typeof REAL_TIMERS => {
 export const formatTestError = (err: any, test?: Test): FormattedError[] => {
   const errors = Array.isArray(err) ? err : [err];
 
-  return errors.map((error) => {
+  return errors.map((rawError) => {
+    const error =
+      typeof rawError === 'string' ? { message: rawError } : rawError;
     const errObj: FormattedError = {
       ...error,
       // Some error attributes cannot be enumerated

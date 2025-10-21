@@ -102,6 +102,7 @@ prefresh
 preprocessors
 publint
 pxtorem
+quasis
 quxx
 rebranded
 rolldown

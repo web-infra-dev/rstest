@@ -1,10 +1,20 @@
 import { relative } from 'pathe';
-import { color, prettyTestPath } from '../utils';
+import type { TestFileResult, TestResult } from '../types';
+import { color, prettyTestPath, prettyTime } from '../utils';
+import {
+  DurationLabel,
+  getSummaryStatusString,
+  TestFileSummaryLabel,
+  TestSummaryLabel,
+} from './summary';
 import { WindowRenderer } from './windowedRenderer';
+
 export class StatusRenderer {
   private rootPath: string;
   private renderer: WindowRenderer;
-  private runningModules = new Set<string>();
+  private runningModules = new Map<string, TestResult[]>();
+  private testModules: TestFileResult[] = [];
+  private startTime: number | undefined = undefined;
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
@@ -21,29 +31,63 @@ export class StatusRenderer {
   }
 
   getContent(): string[] {
+    this.startTime ??= Date.now();
     const summary = [];
-    for (const module of this.runningModules) {
+    for (const module of this.runningModules.keys()) {
       const relativePath = relative(this.rootPath, module);
       summary.push(
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
       );
     }
     summary.push('');
+
+    if (this.testModules.length === 0) {
+      summary.push(`${TestFileSummaryLabel} ${this.runningModules.size} total`);
+    } else {
+      summary.push(
+        `${TestFileSummaryLabel} ${getSummaryStatusString(this.testModules, '', false)} ${color.dim('|')} ${this.runningModules.size + this.testModules.length} total`,
+      );
+    }
+
+    const testResults: TestResult[] = Array.from(this.runningModules.values())
+      .flat()
+      .concat(this.testModules.flatMap((mod) => mod.results));
+
+    if (testResults.length) {
+      summary.push(
+        `${TestSummaryLabel} ${getSummaryStatusString(testResults, '', false)}`,
+      );
+    }
+
+    summary.push(`${DurationLabel} ${prettyTime(Date.now() - this.startTime)}`);
+
+    summary.push('');
+
     return summary;
   }
 
-  addRunningModule(testPath: string): void {
-    this.runningModules.add(testPath);
+  onTestFileStart(testPath: string): void {
+    this.runningModules.set(testPath, []);
     this.renderer?.schedule();
   }
 
-  removeRunningModule(testPath: string): void {
-    this.runningModules.delete(testPath);
+  onTestCaseResult(result: TestResult): void {
+    this.runningModules.set(result.testPath, [
+      ...(this.runningModules.get(result.testPath) || []),
+      result,
+    ]);
+  }
+
+  onTestFileResult(test: TestFileResult): void {
+    this.runningModules.delete(test.testPath);
+    this.testModules.push(test);
     this.renderer?.schedule();
   }
 
   clear(): void {
+    this.testModules.length = 0;
     this.runningModules.clear();
+    this.startTime = undefined;
     this.renderer?.finish();
   }
 }

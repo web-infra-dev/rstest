@@ -1,0 +1,326 @@
+# coverage
+
+- **类型：**
+
+```ts
+type CoverageOptions = {
+  enabled?: boolean;
+  provider?: 'istanbul';
+  include?: string[];
+  exclude?: string[];
+  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reportsDirectory?: string;
+  reportOnFailure?: boolean;
+  clean?: boolean;
+  thresholds?: CoverageThresholds;
+};
+```
+
+- **默认值：** `undefined`
+- **版本：** `>=0.4.0`
+
+收集测试覆盖率信息并生成覆盖率报告。
+
+```bash
+$ npx rstest --coverage
+
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+----------|---------|----------|---------|---------|-------------------
+All files |     100 |      100 |     100 |     100 |
+ index.ts |     100 |      100 |     100 |     100 |
+----------|---------|----------|---------|---------|-------------------
+```
+
+## 选项
+
+### enabled
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--coverage`, `--coverage=false`
+
+启用或禁用测试覆盖率收集。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --coverage
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+  </Tab>
+</Tabs>
+
+### provider
+
+- **类型：** `'istanbul'`
+- **默认值：** `'istanbul'`
+
+选择覆盖率收集方式。目前仅支持 [istanbul](https://istanbul.js.org/)。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+#### Istanbul provider
+
+[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率分析工具，它通过插桩的方式来收集代码覆盖率信息。
+
+要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
+
+### include
+
+- **类型：** `string[]`
+- **默认值：** `undefined`
+
+对匹配 glob 规则的文件进行测试覆盖率收集。
+
+默认情况下，Rstest 会收集已测试文件的覆盖率。如果你希望在覆盖率报告中包含未测试的文件，可以使用 `include` 选项指定要包含的文件或模式。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    include: ['src/**/*.{js,jsx,ts,tsx}'],
+  },
+});
+```
+
+### exclude
+
+- **类型：** `string[]`
+- **默认值：**
+
+```ts
+[
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/test/**',
+  '**/__tests__/**',
+  '**/__mocks__/**',
+  '**/[.]*',
+  '**/*.d.ts',
+  '**/*.{test,spec}.[jt]s',
+  '**/*.{test,spec}.[c|m][jt]s',
+  '**/*.{test,spec}.[jt]sx',
+  '**/*.{test,spec}.[c|m][jt]sx',
+];
+```
+
+匹配 glob 规则的文件将从测试覆盖率收集中排除。自定义配置将与默认值合并。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    exclude: ['**/node_modules/**', '**/dist/**'],
+  },
+});
+```
+
+### reporters
+
+- **类型：** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **默认值：** `['text', 'html', 'clover', 'json']`
+
+用于覆盖率收集的报告器。每个报告器可以是字符串（报告器名称）或包含报告器名称及其选项的元组。
+
+- 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
+- 有关报告器选项的详细信息，可参考 [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'html',
+      ['text', { skipFull: true }],
+      ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+### reportsDirectory
+
+- **类型：** `string`
+- **默认值：** `'./coverage'`
+
+存储覆盖率报告的目录。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### reportOnFailure
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+在测试失败时是否生成覆盖率报告并检查阈值。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportOnFailure: true,
+  },
+});
+```
+
+### clean
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+是否在运行测试之前清理覆盖率目录。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    clean: true,
+  },
+});
+```
+
+### thresholds
+
+- **类型：**
+
+```ts
+type CoverageThreshold = {
+  statements?: number;
+  functions?: number;
+  branches?: number;
+  lines?: number;
+};
+
+type CoverageThresholds = CoverageThreshold & {
+  /** 为匹配的文件指定覆盖率阈值 */
+  [glob: string]: CoverageThreshold;
+};
+```
+
+- **默认值：** `undefined`
+
+设置最低代码覆盖率要求。你可以为语句、函数、分支和行覆盖率设置阈值。
+
+当阈值设置为正数时，表示所需的最低百分比。当阈值设置为负数时，表示允许未覆盖的最大数量。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      statements: 80,
+      functions: 80,
+      branches: 80,
+      lines: -10,
+    },
+  },
+});
+```
+
+当代码覆盖率低于指定阈值时，测试将失败并输出如下错误信息：
+
+```bash
+Error: Coverage for statements 75% does not meet global threshold 80%
+Error: Coverage for functions 75% does not meet global threshold 80%
+Error: Coverage for branches 75% does not meet global threshold 80%
+Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
+```
+
+#### glob 模式
+
+当指定 glob 模式时，Rstest 将根据匹配的文件模式进行代码覆盖率检查。如果指定的文件路径不存在，则返回错误。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      // 为匹配的文件指定覆盖率阈值
+      'src/**': {
+        statements: 100,
+      },
+      'node/**/*.js': {
+        statements: 90,
+      },
+      // 指定所有文件的总阈值
+      statements: 80,
+    },
+  },
+});
+```
+
+根据以上配置，rstest 将在以下情况下失败：
+
+- `src/**` 匹配到的文件的总语句覆盖率低于 100%。
+- `node/**/*.js` 匹配到的文件的总语句覆盖率低于 90%。
+- 全局的语句覆盖率低于 80%。
+
+#### 单文件检查
+
+Rstest 支持通过将 `perFile` 设置为 `true` 来为每个匹配文件分别检查阈值。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      'src/**': {
+        statements: 90,
+        perFile: true,
+      },
+    },
+  },
+});
+```

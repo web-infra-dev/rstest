@@ -9,6 +9,7 @@
     "plugins": ["@typescript-eslint"],
     // We should fix the corresponding code according to the following rules and gradually enable more rules.
     "rules": {
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/use-unknown-in-catch-callback-variable": "off",
       "@typescript-eslint/no-confusing-void-expression": "off",

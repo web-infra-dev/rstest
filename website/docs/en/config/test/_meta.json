@@ -11,6 +11,7 @@
   "includeSource",
   "testNamePattern",
 
+  "env",
   "retry",
   "testTimeout",
   "hookTimeout",
@@ -26,8 +27,12 @@
   "unstubEnvs",
   "unstubGlobals",
 
+  "coverage",
   "reporters",
+  "hideSkippedTests",
   "slowTestThreshold",
+  "snapshotFormat",
+  "resolveSnapshotPath",
   "printConsoleTrace",
   "onConsoleLog",
   "disableConsoleIntercept"

@@ -25,6 +25,21 @@ describe('Test Edge Cases', () => {
     expect(logs.find((log) => log.includes('Error: Symbol('))).toBeFalsy();
   });
 
+  it('should handle error string correctly', async () => {
+    const { expectExecFailed, expectLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/errorString.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectLog('Unknown Error: aaaa');
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({

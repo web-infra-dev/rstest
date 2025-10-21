@@ -1,0 +1,21 @@
+# resolveSnapshotPath
+
+- **Type:** `(testPath: string, snapExtension: string) => string`
+- **Default:** `undefined`
+
+Custom handler for resolving snapshot paths in tests.
+
+By default, Rstest saves snapshot files in the same directory as the test files, under a `__snapshots__` folder.
+
+You can use `resolveSnapshotPath` to customize this behavior and specify a different location for your snapshot files.
+
+For example, store snapshots next to test files:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolveSnapshotPath: (testPath, snapshotExtension) =>
+    testPath + snapshotExtension,
+});
+```

@@ -13,7 +13,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger, prettyTestPath } from '../utils';
+import { color, logger } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle } from './utils';
@@ -42,52 +42,32 @@ export class DefaultReporter implements Reporter {
   }
 
   onTestFileStart(test: TestFileInfo): void {
-    this.statusRenderer?.addRunningModule(test.testPath);
+    this.statusRenderer?.onTestFileStart(test.testPath);
   }
 
   onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.removeRunningModule(test.testPath);
+    this.statusRenderer?.onTestFileResult(test);
 
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    logFileTitle(test, relativePath, slowTestThreshold);
-
-    const isTooSlow = test.duration && test.duration > slowTestThreshold;
-
-    const hasRetryCase = test.results.some(
-      (result) => (result.retryCount || 0) > 0,
-    );
-
-    if (test.status !== 'fail' && !isTooSlow && !hasRetryCase) {
-      return;
-    }
-
-    const showAllCases =
-      isTooSlow &&
-      !test.results.some(
-        (result) => (result.duration || 0) > slowTestThreshold,
-      );
+    logFileTitle(test, relativePath);
 
     for (const result of test.results) {
-      const isSlowCase = (result.duration || 0) > slowTestThreshold;
-      const retried = (result.retryCount || 0) > 0;
-      if (
-        !showAllCases &&
-        result.status !== 'fail' &&
-        !isSlowCase &&
-        !retried
-      ) {
-        continue;
-      }
-
-      logCase(result, slowTestThreshold);
+      const isDisplayed =
+        result.status === 'fail' ||
+        (result.duration ?? 0) > slowTestThreshold ||
+        (result.retryCount ?? 0) > 0;
+      isDisplayed &&
+        logCase(result, {
+          slowTestThreshold,
+          hideSkippedTests: this.config.hideSkippedTests,
+        });
     }
   }
 
-  onTestCaseResult(_result: TestResult): void {
-    // TODO
-    // this.statusRenderer?.updateRunningModule({ result.testPath, status: result.status });
+  onTestCaseResult(result: TestResult): void {
+    this.statusRenderer?.onTestCaseResult(result);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
@@ -97,7 +77,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    const titles = [log.name];
+    const titles = [];
 
     const testPath = relative(this.rootPath, log.testPath);
 
@@ -106,19 +86,18 @@ export class DefaultReporter implements Reporter {
       const filePath = relative(this.rootPath, frame!.file || '');
 
       if (filePath !== testPath) {
-        titles.push(prettyTestPath(testPath));
+        titles.push(testPath);
       }
-      titles.push(
-        prettyTestPath(filePath) +
-          color.gray(`:${frame!.lineNumber}:${frame!.column}`),
-      );
+      titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
     } else {
-      titles.push(prettyTestPath(testPath));
+      titles.push(testPath);
     }
 
+    logger.log('');
     // TODO: output to stdout or stderr
-    logger.log(titles.join(color.gray(' | ')));
-
+    logger.log(
+      `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
+    );
     logger.log(log.content);
     logger.log('');
   }

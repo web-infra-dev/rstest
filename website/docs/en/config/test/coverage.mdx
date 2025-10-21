@@ -1,0 +1,330 @@
+# coverage
+
+- **Type:**
+
+```ts
+type CoverageOptions = {
+  enabled?: boolean;
+  provider?: 'istanbul';
+  include?: string[];
+  exclude?: string[];
+  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reportsDirectory?: string;
+  reportOnFailure?: boolean;
+  clean?: boolean;
+  thresholds?: CoverageThresholds;
+};
+```
+
+- **Default:** `undefined`
+- **Version:** `>=0.4.0`
+
+Collect code coverage and generate coverage reports.
+
+```bash
+$ npx rstest --coverage
+
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+----------|---------|----------|---------|---------|-------------------
+All files |     100 |      100 |     100 |     100 |
+ index.ts |     100 |      100 |     100 |     100 |
+----------|---------|----------|---------|---------|-------------------
+```
+
+## Options
+
+### enabled
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--coverage`, `--coverage=false`
+
+Enable or disable test coverage collection.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --coverage
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+  },
+});
+```
+  </Tab>
+</Tabs>
+
+### provider
+
+- **Type:** `'istanbul'`
+- **Default:** `'istanbul'`
+
+The coverage provider to use. Currently, only [istanbul](https://istanbul.js.org/) is supported.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+#### Istanbul provider
+
+[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects code coverage information through instrumentation.
+
+To enable istanbul coverage, you need to install the `@rstest/coverage-istanbul` package first.
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
+
+`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument).
+
+### include
+
+- **Type:** `string[]`
+- **Default:** `undefined`
+
+A list of glob patterns that should be included for coverage collection.
+
+By default, rstest will only collect coverage for files that are tested. If you want to include untested files in the coverage report, you can use the `include` option to specify the files or patterns to include.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    include: ['src/**/*.{js,jsx,ts,tsx}'],
+  },
+});
+```
+
+### exclude
+
+- **Type:** `string[]`
+- **Default:**
+
+```ts
+[
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/test/**',
+  '**/__tests__/**',
+  '**/__mocks__/**',
+  '**/[.]*',
+  '**/*.d.ts',
+  '**/*.{test,spec}.[jt]s',
+  '**/*.{test,spec}.[c|m][jt]s',
+  '**/*.{test,spec}.[jt]sx',
+  '**/*.{test,spec}.[c|m][jt]sx',
+];
+```
+
+A glob pattern array to exclude files from test coverage collection.
+
+Any patterns specified here will be merged with default values.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    exclude: ['**/node_modules/**', '**/dist/**'],
+  },
+});
+```
+
+### reporters
+
+- **Type:** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **Default:** `['text', 'html', 'clover', 'json']`
+
+The reporters to use for coverage collection. Each reporter can be either a string (the reporter name) or a tuple with the reporter name and its options.
+
+- See [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/) for available reporters.
+- See [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'html',
+      ['text', { skipFull: true }],
+      ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+### reportsDirectory
+
+- **Type:** `string`
+- **Default:** `'./coverage'`
+
+The directory to store coverage reports.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportsDirectory: './coverage-reports',
+  },
+});
+```
+
+### reportOnFailure
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Whether to report coverage and check thresholds when tests fail.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reportOnFailure: true,
+  },
+});
+```
+
+### clean
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to clean the coverage directory before running tests.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    clean: true,
+  },
+});
+```
+
+### thresholds
+
+- **Type:**
+
+```ts
+type CoverageThreshold = {
+  statements?: number;
+  functions?: number;
+  branches?: number;
+  lines?: number;
+};
+
+type CoverageThresholds = CoverageThreshold & {
+  /** check thresholds for matched files */
+  [glob: string]: CoverageThreshold & {
+    perFile?: boolean;
+  };
+};
+```
+
+- **Default:** `undefined`
+
+Coverage thresholds for enforcing minimum coverage requirements. You can set thresholds for statements, functions, branches, and lines.
+
+Thresholds specified as a positive number are taken to be the minimum percentage required. Thresholds specified as a negative number represent the maximum number of uncovered entities allowed.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      statements: 80,
+      functions: 80,
+      branches: 80,
+      lines: -10,
+    },
+  },
+});
+```
+
+When the code coverage is below the specified thresholds, the test will fail and output an error message like below:
+
+```bash
+Error: Coverage for statements 75% does not meet global threshold 80%
+Error: Coverage for functions 75% does not meet global threshold 80%
+Error: Coverage for branches 75% does not meet global threshold 80%
+Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
+```
+
+#### glob pattern
+
+If globs are specified, thresholds will be checked for each matched file pattern. If the file specified by path is not found, an error is returned.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      // Thresholds for matching glob pattern
+      'src/**': {
+        statements: 100,
+      },
+      'node/**/*.js': {
+        statements: 90,
+      },
+      // Thresholds for all files
+      statements: 80,
+    },
+  },
+});
+```
+
+Following the above configuration, rstest will fail if:
+
+- The total code coverage of all files in `src/**` is below 100%.
+- The total code coverage of all files in `node/**/*.js` is below 90%.
+- The global code coverage is below 80% for statements.
+
+#### check threshold for per file
+
+Rstest also supports checking thresholds for each matched file by setting `perFile` to `true`.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    thresholds: {
+      'src/**': {
+        statements: 90,
+        perFile: true,
+      },
+    },
+  },
+});
+```

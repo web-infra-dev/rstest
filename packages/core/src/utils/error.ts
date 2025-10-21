@@ -2,7 +2,32 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, isDebug, logger } from '../utils';
+import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
+
+const hintNotDefinedError = (message: string): string => {
+  const [, varName] = message.match(/(\w+) is not defined/) || [];
+  if (varName) {
+    if ((globalApis as string[]).includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to enable "globals" configuration?`,
+      );
+    }
+    if (['jest', 'vitest'].includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you mean rstest?`,
+      );
+    }
+    if (varName === 'React') {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to install "${color.yellow('@rsbuild/plugin-react')}" plugin?`,
+      );
+    }
+  }
+  return message;
+};
 
 export async function printError(
   error: FormattedError,
@@ -22,6 +47,11 @@ export async function printError(
     logger.log(`${color.red(tips.join('\n'))}\n`);
     return;
   }
+
+  if (error.message.includes('is not defined')) {
+    error.message = hintNotDefinedError(error.message);
+  }
+
   logger.log(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
@@ -134,7 +164,7 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = getSourcemap(frame.file!);
+        const sourcemap = await getSourcemap(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
           const { line, column, source, name } = originalPositionFor(traceMap, {

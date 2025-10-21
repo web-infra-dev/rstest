@@ -1,0 +1,53 @@
+# hideSkippedTests
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--hideSkippedTests`
+
+不展示跳过测试的日志。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --hideSkippedTests
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  hideSkippedTests: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## 示例
+
+默认情况下，在你使用 [verbose 报告器](/config/test/reporters#verbose-reporter)时，Rstest 会显示所有测试用例的日志。
+
+```bash
+ ✓ test/index.test.ts (2) 1ms
+  ✓ Index > should add two numbers correctly (0ms)
+  - Index > should test source code correctly (1ms)
+
+ Test Files 1 passed
+      Tests 1 passed | 1 skipped (2)
+   Duration 93ms (build 50ms, tests 43ms)
+```
+
+当你设置 `hideSkippedTests` 为 `true` 时，Rstest 会在测试完成后隐藏所有跳过的测试用例的日志。
+
+此时输出如下：
+
+```bash
+ ✓ test/index.test.ts (2) 1ms
+  ✓ Index > should add two numbers correctly (0ms)
+
+ Test Files 1 passed
+      Tests 1 passed | 1 skipped (2)
+   Duration 93ms (build 50ms, tests 43ms)
+```

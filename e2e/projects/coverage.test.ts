@@ -39,7 +39,30 @@ describe('test projects coverage', () => {
     ).toBeTruthy();
 
     expect(
+      logs.find((log) => log.includes('App1.ts') && log.includes('|')),
+    ).toBeFalsy();
+
+    expect(
       fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
     ).toBeTruthy();
-  });
+  }, 15000);
+
+  it('should run projects correctly with coverage.include', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--globals', '-c', 'rstest.coverage.include.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(
+      logs.find((log) => log.includes('App1.ts') && log.includes('|')),
+    ).toBeTruthy();
+  }, 15000);
 });

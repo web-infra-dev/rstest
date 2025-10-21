@@ -7,7 +7,7 @@ describe('test coverage-istanbul', () => {
   it('coverage-istanbul', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run'],
+      args: ['run', '-c', 'rstest.enable.config.ts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -47,11 +47,11 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|80.95|50|66.66|78.57|2-3,7"`);
 
     expect(
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"Allfiles|98.33|100|94.44|98.21|"`);
+    ).toMatchInlineSnapshot(`"Allfiles|94.73|83.33|88.88|94.64|"`);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -70,6 +70,24 @@ describe('test coverage-istanbul', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/coverage/coverage-final.json')),
     ).toBeTruthy();
+  });
+
+  it('enable coverage with `--coverage`', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
   });
 
   it('coverage-istanbul with custom options', async () => {
@@ -93,7 +111,7 @@ describe('test coverage-istanbul', () => {
     expect(logs.find((log) => log.includes('index.ts'))).toBeFalsy();
     expect(
       logs.find((log) => log.includes('string.ts'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|93.75|100|83.33|92.85|7"`);
+    ).toMatchInlineSnapshot(`"string.ts|80.95|50|66.66|78.57|2-3,7"`);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -123,29 +141,5 @@ describe('test coverage-istanbul', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/test-temp-coverage/index.html')),
     ).toBeTruthy();
-  });
-
-  it('coverage-istanbul with thresholds check', async () => {
-    const { expectLog, cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', '-c', 'rstest.thresholds.config.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await cli.exec;
-    const exitCode = cli.exec.process?.exitCode;
-
-    expect(exitCode).toBe(1);
-
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expectLog(
-      /Coverage for statements .* does not meet global threshold/,
-      logs,
-    );
   });
 });

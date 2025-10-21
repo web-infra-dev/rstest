@@ -42,7 +42,7 @@ jobs:
           corepack enable
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: 'pnpm'
@@ -59,3 +59,73 @@ jobs:
       - name: Publish to npm
         run: |
           pnpm -r publish --tag ${{ github.event.inputs.npm_tag }} --publish-branch ${{ github.event.inputs.branch }}
+
+  release_vscode_extension:
+    name: Release VS Code Extension (${{ matrix.vsce-target }})
+    if: github.repository == 'web-infra-dev/rstest' && github.event_name == 'workflow_dispatch'
+    needs: release
+    runs-on: ${{ matrix.runner }}
+    environment: vscode-marketplace
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            vsce-target: linux-x64
+            platform: linux
+            arch: x64
+          - runner: ubuntu-22.04
+            vsce-target: linux-arm64
+            platform: linux
+            arch: arm64
+          - runner: macos-13
+            vsce-target: darwin-x64
+            platform: darwin
+            arch: x64
+          - runner: macos-14
+            vsce-target: darwin-arm64
+            platform: darwin
+            arch: arm64
+          - runner: windows-2022
+            vsce-target: win32-x64
+            platform: win32
+            arch: x64
+          - runner: windows-latest
+            vsce-target: win32-arm64
+            platform: win32
+            arch: arm64
+    defaults:
+      run:
+        shell: bash
+    env:
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_platform: ${{ matrix.platform }}
+      VSCE_TARGET: ${{ matrix.vsce-target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Pnpm
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Package VS Code Extension
+        run: pnpm --filter ./packages/vscode run package:vsce -o "rstest-${{ matrix.vsce-target }}.vsix"
+
+      - name: Publish VS Code Extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm --filter ./packages/vscode exec vsce publish --target ${{ matrix.vsce-target }}
