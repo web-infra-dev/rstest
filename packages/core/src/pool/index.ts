@@ -216,7 +216,8 @@ export const createPool = async ({
         // test/index.ts -> test/__snapshots__/index.ts.snap
         (() =>
           join(
-            join(dirname(testPath), '__snapshots__'),
+            dirname(testPath),
+            '__snapshots__',
             `${basename(testPath)}${snapExtension}`,
           ));
 
