@@ -12,7 +12,7 @@ describe('test singleton', () => {
   beforeAll(async () => {
     fs.ensureDirSync(join(__dirname, 'fixtures', 'node_modules'));
     fs.writeFileSync(
-      join(__dirname, 'fixtures', 'node_modules', 'c.js'),
+      join(__dirname, 'fixtures', 'node_modules', 'c.mjs'),
       `
     let c = undefined;
 
