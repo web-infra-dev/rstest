@@ -28,14 +28,17 @@ global.__rstest_clean_core_cache__ = __rstest_clean_core_cache__;
       }
     }
 
-    compiler.hooks.thisCompilation.tap('CustomPlugin', (compilation) => {
-      compilation.hooks.additionalTreeRuntimeRequirements.tap(
-        'CustomPlugin',
-        (chunk) => {
-          compilation.addRuntimeModule(chunk, new RetestCacheControlModule());
-        },
-      );
-    });
+    compiler.hooks.thisCompilation.tap(
+      'RstestCacheControlPlugin',
+      (compilation) => {
+        compilation.hooks.additionalTreeRuntimeRequirements.tap(
+          'RstestAddCacheControlRuntimePlugin',
+          (chunk) => {
+            compilation.addRuntimeModule(chunk, new RetestCacheControlModule());
+          },
+        );
+      },
+    );
   }
 }
 

@@ -6,7 +6,6 @@ import {
   logger as RsbuildLogger,
   type RsbuildPlugin,
   type Rspack,
-  rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
 import type {
@@ -284,10 +283,6 @@ export const createRsbuildServer = async ({
     name: 'rstest:compiler',
     setup: (api) => {
       api.modifyBundlerChain((chain) => {
-        chain
-          .plugin('RemoveDuplicateModulesPlugin')
-          .use(rspack.experiments.RemoveDuplicateModulesPlugin);
-
         // add mock-loader to this rule
         chain.module
           .rule('rstest-mock-module-doppelgangers')
