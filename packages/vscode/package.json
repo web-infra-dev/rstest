@@ -13,7 +13,7 @@
     "directory": "packages/vscode"
   },
   "engines": {
-    "vscode": "^1.999.0"
+    "vscode": "^1.100.0"
   },
   "categories": [
     "Testing"

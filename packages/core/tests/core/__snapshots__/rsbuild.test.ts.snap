@@ -9,7 +9,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
-    "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
@@ -529,7 +528,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
-    "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
@@ -1041,7 +1039,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
-    "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
@@ -1561,7 +1558,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
-    "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
@@ -2081,7 +2077,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
-    "lazyBarrel": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
