@@ -58,7 +58,9 @@ const preparePool = async ({
   setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
-  process.env.RSTEST_WORKER_ID = String(context.workerId);
+  process.env.RSTEST_WORKER_ID = String(
+    process.__tinypool_state__?.workerId || context.taskId,
+  );
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 

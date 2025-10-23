@@ -55,7 +55,7 @@ export type WorkerContext = {
   projectRoot: ProjectContext['rootPath'];
   project: string;
   runtimeConfig: RuntimeConfig;
-  workerId: number;
+  taskId: number;
 };
 
 export type RunWorkerOptions = {

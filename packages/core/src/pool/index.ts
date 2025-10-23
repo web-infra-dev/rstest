@@ -246,7 +246,7 @@ export const createPool = async ({
               options: {
                 entryInfo,
                 context: {
-                  workerId: index + 1,
+                  taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
@@ -323,7 +323,7 @@ export const createPool = async ({
               options: {
                 entryInfo,
                 context: {
-                  workerId: index + 1,
+                  taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
