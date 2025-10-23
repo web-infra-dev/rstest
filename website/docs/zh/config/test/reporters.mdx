@@ -75,13 +75,13 @@ export default defineConfig({
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-### Github actions reporter
+### GitHub Actions reporter
 
-Github Actions 报告器将在测试失败时以 [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
+GitHub Actions 报告器将在测试失败时以 [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
 
 #### 输出示例
 
-当测试失败时，Github Actions 报告器会输出类似以下格式的信息：
+当测试失败时，GitHub Actions 报告器会输出类似以下格式的信息：
 
 ```bash
 ::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
