@@ -24,6 +24,6 @@ describe('test <rootDir>', () => {
 
     await expectExecSuccess();
 
-    expectLog('Test Files 1 passed');
+    expectLog('Test Files 3 passed');
   });
 });
