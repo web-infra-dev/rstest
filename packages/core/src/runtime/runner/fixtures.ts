@@ -4,7 +4,7 @@ import type {
   NormalizedFixtures,
   TestCase,
 } from '../../types';
-import { isObject } from '../../utils';
+import { isObject } from '../../utils/helper';
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
