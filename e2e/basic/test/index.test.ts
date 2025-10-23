@@ -15,6 +15,10 @@ describe('Index', () => {
     expect(process.env.RSTEST).toBe('true');
   });
 
+  it('should get WORKER ID correctly', () => {
+    expect(process.env.RSTEST_WORKER_ID).toBeDefined();
+  });
+
   it('should use node API correctly', async () => {
     expect(
       pathe
