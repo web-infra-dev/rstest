@@ -3,6 +3,13 @@
 exports[`rstest context > should generate rstest context correctly 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -81,6 +88,13 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
 exports[`rstest context > should generate rstest context correctly with multiple projects 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -162,6 +176,13 @@ exports[`rstest context > should generate rstest context correctly with multiple
 exports[`rstest context > should generate rstest context correctly with multiple projects 2`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,

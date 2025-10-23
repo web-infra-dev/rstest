@@ -1,6 +1,6 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { normalize } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
+import { fileURLToPath } from 'url-extras';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -25,7 +25,8 @@ import type {
   TestRunMode,
   TestSuite,
 } from '../../types';
-import { castArray, ROOT_SUITE_NAME } from '../../utils';
+import { ROOT_SUITE_NAME } from '../../utils/constants';
+import { castArray } from '../../utils/helper';
 import { formatName, TestRegisterError } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
@@ -492,7 +493,7 @@ export const createRuntimeAPI = ({
         let filename = frame.file ?? '';
         if (filename.startsWith('file://')) filename = fileURLToPath(filename);
         // testPath is always unix path style, so convert filename with same way
-        filename = filename.replaceAll(path.sep, '/');
+        filename = normalize(filename);
         if (filename === testPath) {
           const line = frame.lineNumber;
           const column = frame.column;

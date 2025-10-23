@@ -40,6 +40,7 @@ endgroup
 envinfo
 estree
 facti
+fastpaths
 filenaming
 flac
 flexbox
@@ -76,9 +77,10 @@ mjsx
 modularly
 mtsx
 napi
-nosources
 nodenext
+noglobstar
 nolyfill
+nosources
 npmjs
 ntqry
 onclosetag

@@ -75,6 +75,7 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
@@ -114,6 +115,22 @@ export default defineConfig({
         filename: {
           js: '[name].mjs',
         },
+      },
+    },
+    {
+      id: 'browser_runtime',
+      format: 'esm',
+      syntax: 'es2021',
+      dts: {
+        bundle: false,
+      },
+      source: {
+        entry: {
+          'browser-runtime': './src/browserRuntime.ts',
+        },
+      },
+      output: {
+        target: 'web',
       },
     },
   ],

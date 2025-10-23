@@ -28,6 +28,14 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./browser-runtime": {
+      "types": "./dist/browser-runtime.d.ts",
+      "default": "./dist/browser-runtime.js"
+    },
     "./package.json": {
       "default": "./package.json"
     },
@@ -61,6 +69,7 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.55.2",
     "@rslib/core": "^0.19.0",
+    "@rstest/browser-ui": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.1.0",
     "@types/babel__code-frame": "^7.0.6",

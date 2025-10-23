@@ -1,5 +1,6 @@
 import type { RstestUtilities, RuntimeConfig, WorkerState } from '../../types';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
+import { initSpy } from './spy';
 
 export const createRstestUtilities: (
   workerState: WorkerState,
@@ -23,7 +24,6 @@ export const createRstestUtilities: (
     return _timers;
   };
 
-  const { initSpy } = await import('./spy');
   const { fn, spyOn, isMockFunction, mocks } = initSpy();
 
   const rstest: RstestUtilities = {
