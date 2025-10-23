@@ -32,7 +32,7 @@ class Cli {
     this.exec.process?.stderr?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stderr += processStd ?? '';
-      for (const listener of this.stdoutListeners) {
+      for (const listener of this.stderrListeners) {
         listener();
       }
     });
@@ -199,13 +199,9 @@ export async function prepareFixtures({
   };
 
   const rename = (oldPath: string, newPath: string) => {
-    const relativePath = path.relative(root, oldPath);
-    if (oldPath === relativePath) {
-      const newRelativePath = path.relative(root, newPath);
-      const oldAbsPath = path.join(root, relativePath);
-      const newAbsPath = path.join(root, newRelativePath);
-      fs.renameSync(oldAbsPath, newAbsPath);
-    }
+    const oldAbsPath = path.resolve(root, oldPath);
+    const newAbsPath = path.resolve(root, newPath);
+    fs.renameSync(oldAbsPath, newAbsPath);
   };
 
   return {

@@ -1,0 +1,30 @@
+{
+  "name": "@rstest/browser-ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Prebuilt browser container UI for rstest",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "rsbuild dev --config ./rsbuild.config.ts",
+    "build": "rsbuild build --config ./rsbuild.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "antd": "^5.29.1",
+    "birpc": "2.6.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "1.6.12-canary-20251204065915",
+    "@rstest/tsconfig": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.6.3"
+  }
+}
