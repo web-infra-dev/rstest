@@ -60,7 +60,7 @@ const preparePool = async ({
 
   // Prefer public env var from tinypool, fallback to context.taskId
   process.env.RSTEST_WORKER_ID = String(
-    process.env.TINYPPOOL_WORKER_ID || context.taskId,
+    process.__tinypool_state__.workerId || context.taskId,
   );
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
