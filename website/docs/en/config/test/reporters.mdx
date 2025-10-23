@@ -75,13 +75,13 @@ With verbose reporter, Rstest outputs:
    Duration 112ms (build 19ms, tests 93ms)
 ```
 
-### Github actions reporter
+### GitHub Actions reporter
 
-The Github Actions reporter outputs error messages in the form of [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) when tests fail.
+The GitHub Actions reporter outputs error messages in the form of [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) when tests fail.
 
 #### Output example
 
-When tests fail, the Github Actions reporter outputs information in a format similar to:
+When tests fail, the GitHub Actions reporter outputs information in a format similar to:
 
 ```bash
 ::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
