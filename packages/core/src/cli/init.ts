@@ -17,6 +17,7 @@ export type CommonOptions = {
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
+  browser?: boolean;
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
@@ -119,6 +120,11 @@ async function resolveConfig(
 
   if (!mergedConfig.root) {
     mergedConfig.root = options.cwd;
+  }
+
+  if (options.browser !== undefined) {
+    config.browser ??= {};
+    config.browser.enabled = options.browser;
   }
 
   return {

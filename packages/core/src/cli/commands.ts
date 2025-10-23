@@ -80,6 +80,7 @@ const applyCommonOptions = (cli: CAC) => {
       '--restoreMocks',
       'Automatically restore mock state and implementation before every test',
     )
+    .option('--browser', 'Run tests in browser mode (Chromium)')
     .option(
       '--unstubGlobals',
       'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
