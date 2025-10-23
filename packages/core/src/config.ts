@@ -94,6 +94,13 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
       };
     }
 
+    if (config.browser) {
+      merged.browser = {
+        ...(merged.browser || {}),
+        ...config.browser,
+      };
+    }
+
     // The following configurations need overrides
     merged.include = config.include ?? merged.include;
     merged.reporters = config.reporters ?? merged.reporters;
@@ -149,6 +156,11 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hideSkippedTests: false,
   logHeapUsage: false,
   bail: 0,
+  browser: {
+    enabled: false,
+    browser: 'chromium',
+    headless: false,
+  },
   coverage: {
     exclude: [
       '**/node_modules/**',
@@ -198,6 +210,12 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
           type: config.pool,
         }
       : merged.pool;
+
+  merged.browser = {
+    enabled: merged.browser?.enabled ?? false,
+    browser: merged.browser?.browser ?? 'chromium',
+    headless: merged.browser?.headless ?? false,
+  };
 
   return {
     ...merged,
