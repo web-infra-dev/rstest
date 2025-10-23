@@ -54,7 +54,8 @@
   "dependencies": {
     "@types/chai": "^5.2.3",
     "@rsbuild/core": "1.6.12-canary-20251204065915",
-    "tinypool": "^1.1.1"
+    "tinypool": "^1.1.1",
+    "playwright-core": "^1.49.1"
   },
   "devDependencies": {
     "chai": "^5.3.3",

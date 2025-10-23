@@ -38,6 +38,29 @@ export type ProjectConfig = Omit<
   | 'bail'
 >;
 
+export type BrowserModeConfig = {
+  /**
+   * Enable browser mode when running tests.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Which browser implementation to use.
+   *
+   * Currently only Chromium is supported.
+   *
+   * @default 'chromium'
+   */
+  browser?: 'chromium';
+  /**
+   * Run browser in headless mode.
+   *
+   * @default true
+   */
+  headless?: boolean;
+};
+
 type SnapshotFormat = Omit<
   NonNullable<SnapshotStateOptions['snapshotFormat']>,
   'plugins' | 'compareKeys'
@@ -265,6 +288,11 @@ export interface RstestConfig {
   env?: Partial<NodeJS.ProcessEnv>;
 
   /**
+   * Browser mode configuration.
+   */
+  browser?: BrowserModeConfig;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;
@@ -316,15 +344,28 @@ type OptionalKeys =
   | 'chaiConfig'
   | 'resolveSnapshotPath';
 
+export type NormalizedBrowserModeConfig = {
+  enabled: boolean;
+  browser: 'chromium';
+  headless: boolean;
+};
+
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'exclude'
+    | 'browser'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
     coverage: NormalizedCoverageOptions;
+    browser: NormalizedBrowserModeConfig;
     setupFiles: string[];
     exclude: {
       patterns: string[];

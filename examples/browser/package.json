@@ -1,0 +1,15 @@
+{
+  "name": "@examples/browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "pnpm test:browser",
+    "test:browser": "rstest --browser",
+    "test:browser:watch": "rstest --browser --watch"
+  },
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.3"
+  }
+}
