@@ -58,6 +58,8 @@ const preparePool = async ({
   setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
+  process.env.RSTEST_WORKER_ID = String(context.workerId);
+
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
   const { rpc } = createRuntimeRpc(createForksRpcOptions());
