@@ -32,7 +32,7 @@
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@rslib/core": "0.15.1",
+    "@rslib/core": "0.16.0",
     "@types/node": "^22.16.5",
     "typescript": "^5.9.3",
     "@types/istanbul-lib-instrument": "^1.7.8",

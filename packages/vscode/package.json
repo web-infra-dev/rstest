@@ -13,7 +13,7 @@
     "directory": "packages/vscode"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.999.0"
   },
   "categories": [
     "Testing"
@@ -65,18 +65,18 @@
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.6.0-beta.0",
-    "@rslib/core": "0.15.1",
+    "@rsbuild/core": "1.6.0-beta.1",
+    "@rslib/core": "0.16.0",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.13.5",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.105.0",
     "@types/ws": "^8.18.1",
-    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "3.6.0",
+    "@vscode/vsce": "3.6.2",
     "get-port": "^7.1.0",
     "glob": "^7.2.3",
     "mocha": "^11.7.4",

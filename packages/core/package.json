@@ -54,7 +54,7 @@
   },
   "dependencies": {
     "@types/chai": "^5.2.3",
-    "@rsbuild/core": "1.6.0-beta.0",
+    "@rsbuild/core": "1.6.0-beta.1",
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
@@ -65,8 +65,8 @@
     "@vitest/snapshot": "^3.2.4",
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.31",
-    "@microsoft/api-extractor": "^7.53.1",
-    "@rslib/core": "0.15.1",
+    "@microsoft/api-extractor": "^7.53.2",
+    "@rslib/core": "0.16.0",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",
@@ -78,7 +78,7 @@
     "@types/picomatch": "^4.0.2",
     "cac": "^6.7.14",
     "chokidar": "^4.0.3",
-    "happy-dom": "^20.0.7",
+    "happy-dom": "^20.0.8",
     "jest-diff": "^30.2.0",
     "jsdom": "^26.1.0",
     "webpack-license-plugin": "^4.5.1",
