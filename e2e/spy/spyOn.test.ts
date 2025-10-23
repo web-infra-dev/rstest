@@ -42,8 +42,8 @@ describe('test spyOn', () => {
   });
 
   it('spyOn import', () => {
-    // @ts-expect-error test
     expect(() => {
+      // @ts-expect-error test
       utils.sayHi = () => 'hello';
     }).toThrowError(
       'Cannot set property sayHi of #<Object> which has only a getter',
