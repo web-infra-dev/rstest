@@ -7,7 +7,8 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
-import { getTaskNameWithPrefix, ROOT_SUITE_NAME } from '../../utils';
+import { ROOT_SUITE_NAME } from '../../utils/constants';
+import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 
 export const getTestStatus = (

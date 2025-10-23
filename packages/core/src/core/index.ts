@@ -34,8 +34,13 @@ export function createRstest(
   );
 
   const runTests = async (): Promise<void> => {
-    const { runTests } = await import('./runTests');
-    await runTests(context);
+    if (context.normalizedConfig.browser.enabled) {
+      const { runBrowserTests } = await import('../browser');
+      await runBrowserTests(context);
+    } else {
+      const { runTests } = await import('./runTests');
+      await runTests(context);
+    }
   };
 
   const listTests = async (options: ListCommandOptions) => {

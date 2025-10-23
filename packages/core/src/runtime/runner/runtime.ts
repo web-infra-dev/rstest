@@ -25,7 +25,8 @@ import type {
   TestRunMode,
   TestSuite,
 } from '../../types';
-import { castArray, ROOT_SUITE_NAME } from '../../utils';
+import { ROOT_SUITE_NAME } from '../../utils/constants';
+import { castArray } from '../../utils/helper';
 import { formatName, TestRegisterError } from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
