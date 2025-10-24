@@ -1,10 +1,10 @@
-import { isAbsolute, join, parse, sep } from 'pathe';
+import { isAbsolute, join, normalize, parse, sep } from 'pathe';
 import color from 'picocolors';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export const formatRootStr = (rootStr: string, root: string): string => {
-  return rootStr.replace('<rootDir>', root);
+  return rootStr.replace('<rootDir>', normalize(root));
 };
 
 export function getAbsolutePath(base: string, filepath: string): string {
