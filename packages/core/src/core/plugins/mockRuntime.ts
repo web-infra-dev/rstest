@@ -37,6 +37,17 @@ class MockRuntimeRspackPlugin {
             );
             module.source!.source = Buffer.from(finalSource);
           }
+
+          if (module.name === 'define_property_getters') {
+            const finalSource = module.source!.source.toString('utf-8').replace(
+              // Sets the object configurable so that imported properties can be spied
+              // Hard coded in EJS template https://github.com/web-infra-dev/rspack/blob/main/crates/rspack_plugin_runtime/src/runtime_module/runtime/define_property_getters.ejs
+              'enumerable: true, get:',
+              'enumerable: true, configurable: true, get:',
+            );
+
+            module.source!.source = Buffer.from(finalSource);
+          }
         },
       );
     });
