@@ -66,6 +66,61 @@ test.each([
 });
 ```
 
+You can inject parameters with [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) in the test name in the order of the test function parameters.
+
+- `%s`: String
+- `%d`: Number
+- `%i`: Integer
+- `%f`: Floating point value
+- `%j`: JSON
+- `%o`: Object
+- `%#`: 0-based index of the test case
+- `%$`: 1-based index of the test case
+- `%%`: Single percent sign ('%')
+
+```ts
+test.each([
+  [1, 2, 3],
+  [2, 2, 4],
+])('adds %i + %i to equal %i', (a, b, sum) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// adds 1 + 2 to equal 3
+// adds 2 + 2 to equal 4
+```
+
+You can also access object properties and array elements with `$` prefix:
+
+```ts
+test.each([
+  { a: 1, b: 1, sum: 2 },
+  { a: 1, b: 2, sum: 3 },
+  { a: 2, b: 1, sum: 3 },
+])('adds $a + $b to equal $sum', ({ a, b, sum }) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// adds 1 + 1 to equal 2
+// adds 1 + 2 to equal 3
+// adds 2 + 1 to equal 3
+
+test.each([
+  [1, 1, 2],
+  [1, 2, 3],
+  [2, 1, 3],
+])('add $0 + $1 to equal $2', (a, b, sum) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// add 1 + 1 to equal 2
+// add 1 + 2 to equal 3
+// add 2 + 1 to equal 3
+```
+
 ## test.for
 
 - **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
