@@ -189,13 +189,14 @@ export async function resolveProjects({
   const projects = await Promise.all(
     projectPaths.map(async (project) => {
       const isDirectory = statSync(project).isDirectory();
+      const root = isDirectory ? project : dirname(project);
       const { config, configFilePath } = await resolveConfig({
         ...options,
         config: isDirectory ? undefined : project,
-        root: isDirectory ? project : dirname(project),
+        root,
       });
 
-      config.name ??= getDefaultProjectName(project);
+      config.name ??= getDefaultProjectName(root);
 
       if (config.projects?.length && config.root !== root) {
         logger.warn(
