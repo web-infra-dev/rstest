@@ -3,7 +3,7 @@
 exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = `
 {
   "context": "<ROOT>/packages/core",
-  "devtool": "source-map",
+  "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
@@ -522,7 +522,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
 exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
 {
   "context": "<ROOT>/packages/core",
-  "devtool": "source-map",
+  "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
@@ -1033,7 +1033,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
 exports[`prepareRsbuild > should generate rspack config correctly in watch mode 1`] = `
 {
   "context": "<ROOT>/packages/core",
-  "devtool": "source-map",
+  "devtool": "nosources-source-map",
   "entry": [Function],
   "experiments": {
     "asyncWebAssembly": true,
@@ -1552,7 +1552,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
 exports[`prepareRsbuild > should generate rspack config correctly with projects 1`] = `
 {
   "context": "<ROOT>/packages/core",
-  "devtool": "source-map",
+  "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
@@ -2071,7 +2071,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
 exports[`prepareRsbuild > should generate rspack config correctly with projects 2`] = `
 {
   "context": "<ROOT>/packages/core",
-  "devtool": "source-map",
+  "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,

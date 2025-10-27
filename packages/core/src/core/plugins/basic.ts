@@ -65,6 +65,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.output.importFunctionName = '__rstest_dynamic_import__';
                 config.output.devtoolModuleFilenameTemplate =
                   '[absolute-resource-path]';
+
+                if (!config.devtool || !config.devtool.includes('inline')) {
+                  config.devtool = 'nosources-source-map';
+                }
+
                 config.plugins.push(
                   new rspack.experiments.RstestPlugin({
                     injectModulePathName: true,
