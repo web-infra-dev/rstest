@@ -8,11 +8,11 @@
   },
   "devDependencies": {
     "@rsbuild/core": "1.6.0-beta.1",
-    "@rslib/core": "0.16.0",
+    "@rslib/core": "0.16.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
-    "axios": "^1.12.2",
+    "axios": "^1.13.0",
     "is-url": "^1.2.4",
     "@types/is-url": "^1.2.32",
     "jest-image-snapshot": "^6.5.1",
