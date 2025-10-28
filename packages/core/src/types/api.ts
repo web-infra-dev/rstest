@@ -41,6 +41,13 @@ export interface TestEachFn {
     fn: (...args: [...T]) => MaybePromise<void>,
     timeout?: number,
   ) => void;
+  <T>(
+    cases: readonly T[],
+  ): (
+    description: string,
+    fn: (...args: T[]) => MaybePromise<void>,
+    timeout?: number,
+  ) => void;
 }
 
 export type TestForFn<ExtraContext = object> = <T>(
