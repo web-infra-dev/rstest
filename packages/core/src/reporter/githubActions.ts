@@ -85,7 +85,7 @@ export class GithubActionsReporter {
       }
     }
 
-    this.log('::group::error for github actions');
+    this.log('::group::Error for GitHub Actions');
 
     for (const log of logs) {
       this.log(log);

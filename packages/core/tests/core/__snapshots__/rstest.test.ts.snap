@@ -29,6 +29,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "dev": undefined,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -50,6 +51,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "isolate": true,
   "maxConcurrency": 5,
   "name": "rstest",
+  "output": undefined,
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -102,6 +104,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "dev": undefined,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -123,6 +126,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "isolate": true,
   "maxConcurrency": 5,
   "name": "test-project",
+  "output": undefined,
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -178,6 +182,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "dev": undefined,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -199,6 +204,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "isolate": true,
   "maxConcurrency": 5,
   "name": "test-project1",
+  "output": undefined,
   "passWithNoTests": false,
   "pool": {
     "type": "forks",

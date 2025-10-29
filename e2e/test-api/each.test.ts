@@ -23,3 +23,7 @@ it.each([
   expect(a + b).toBe(expected);
   logs.push('executed');
 });
+
+it.each([1, 2, 3])('test number %i', (a) => {
+  expect(a).toBeTypeOf('number');
+});

@@ -682,7 +682,7 @@ Licensed under MIT license in the repository at chalk/ansi-styles.
 
 ### birpc
 
-Licensed under MIT license in the repository at git+https://github.com/antfu/birpc.git.
+Licensed under MIT license in the repository at git+https://github.com/antfu-collective/birpc.git.
 
 > MIT License
 >

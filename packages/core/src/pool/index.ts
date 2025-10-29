@@ -240,12 +240,13 @@ export const createPool = async ({
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       const results = await Promise.all(
-        entries.map(async (entryInfo) => {
+        entries.map(async (entryInfo, index) => {
           const result = await pool
             .runTest({
               options: {
                 entryInfo,
                 context: {
+                  taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
@@ -316,12 +317,13 @@ export const createPool = async ({
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
-        entries.map(async (entryInfo) => {
+        entries.map(async (entryInfo, index) => {
           return pool
             .collectTests({
               options: {
                 entryInfo,
                 context: {
+                  taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,

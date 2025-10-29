@@ -1,1 +1,1 @@
-["cli", "configure-rstest", "test-filter"]
+["cli", "configure-rstest", "test-filter", "vscode-extension"]

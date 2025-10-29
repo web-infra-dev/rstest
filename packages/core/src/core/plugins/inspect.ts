@@ -10,7 +10,7 @@ export const pluginInspect: () => RsbuildPlugin | null = () =>
         setup: (api) => {
           api.modifyRspackConfig(async (config) => {
             // use inline source map or write to disk
-            config.devtool = 'inline-source-map';
+            config.devtool = 'inline-nosources-source-map';
             config.optimization ??= {};
             config.optimization.splitChunks = {
               ...(config.optimization.splitChunks || {}),

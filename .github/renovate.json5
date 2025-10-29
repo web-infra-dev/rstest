@@ -69,6 +69,8 @@
     'node',
     // umd tests need to lock this version
     'react-aliased',
+    'vscode',
+    '@types/vscode',
   ],
   postUpdateOptions: ['pnpmDedupe'],
 }
