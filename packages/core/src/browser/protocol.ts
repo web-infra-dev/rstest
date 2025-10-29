@@ -30,6 +30,13 @@ export type BrowserHostConfig = {
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };
+  plan?: BrowserExecutionPlan;
+};
+
+export type BrowserExecutionPlan = {
+  channelId: string;
+  setupIds: string[];
+  testIds: string[];
 };
 
 export type BrowserClientMessage =

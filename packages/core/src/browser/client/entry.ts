@@ -4,6 +4,7 @@ import { setRealTimers } from '../../runtime/util';
 import type { RunnerHooks, RuntimeConfig, WorkerState } from '../../types';
 import type {
   BrowserClientMessage,
+  BrowserExecutionPlan,
   BrowserHostConfig,
   BrowserManifestEntry,
   BrowserProjectRuntime,
@@ -100,6 +101,25 @@ const run = async () => {
 
   setRealTimers();
 
+  const plan: BrowserExecutionPlan = options.plan ?? {
+    channelId: 'default',
+    setupIds: manifest
+      .filter((entry) => entry.type === 'setup')
+      .map((entry) => entry.id),
+    testIds: manifest
+      .filter((entry) => entry.type === 'test')
+      .map((entry) => entry.id),
+  };
+
+  const selectedSetups = manifest.filter(
+    (entry): entry is ManifestEntry =>
+      entry.type === 'setup' && plan.setupIds.includes(entry.id),
+  );
+  const selectedTests = manifest.filter(
+    (entry): entry is ManifestEntry =>
+      entry.type === 'test' && plan.testIds.includes(entry.id),
+  );
+
   const projects = new Map<
     string,
     BrowserProjectRuntime & { runtimeConfig: RuntimeConfig }
@@ -113,9 +133,7 @@ const run = async () => {
     ]),
   );
 
-  const entries = manifest as unknown as ManifestEntry[];
-
-  for (const entry of entries) {
+  for (const entry of selectedSetups) {
     const project = projects.get(entry.projectName);
     if (!project) {
       continue;
@@ -123,10 +141,16 @@ const run = async () => {
 
     ensureProcessEnv(project.runtimeConfig.env);
 
-    if (entry.type === 'setup') {
-      await entry.load();
+    await entry.load();
+  }
+
+  for (const entry of selectedTests) {
+    const project = projects.get(entry.projectName);
+    if (!project) {
       continue;
     }
+
+    ensureProcessEnv(project.runtimeConfig.env);
 
     const workerState: WorkerState = {
       project: project.name,
