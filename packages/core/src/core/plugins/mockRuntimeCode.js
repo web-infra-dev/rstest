@@ -29,10 +29,6 @@ __webpack_require__ = new Proxy(
   },
 );
 
-Object.keys(originalWebpackRequire).forEach((key) => {
-  __webpack_require__[key] = originalWebpackRequire[key];
-});
-
 __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_factories = {};
 
