@@ -1039,6 +1039,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     "asyncWebAssembly": true,
     "inlineConst": false,
     "inlineEnum": false,
+    "nativeWatcher": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
