@@ -2,17 +2,32 @@
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
 const originalWebpackRequire = __webpack_require__;
-__webpack_require__ = function (...args) {
-  try {
-    return originalWebpackRequire(...args);
-  } catch (e) {
-    const errMsg = e.message ?? e.toString();
-    if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
-      throw new Error(`[Rstest] Cannot find module "${args[0]}"`);
+__webpack_require__ = new Proxy(
+  function (...args) {
+    try {
+      return originalWebpackRequire(...args);
+    } catch (e) {
+      const errMsg = e.message ?? e.toString();
+      if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
+        throw new Error(`[Rstest] Cannot find module "${args[0]}"`);
+      }
+      throw e;
     }
-    throw e;
-  }
-};
+  },
+  {
+    set(target, property, value) {
+      target[property] = value;
+      originalWebpackRequire[property] = value;
+      return true;
+    },
+    get(target, property) {
+      if (property in target) {
+        return target[property];
+      }
+      return originalWebpackRequire[property];
+    },
+  },
+);
 
 Object.keys(originalWebpackRequire).forEach((key) => {
   __webpack_require__[key] = originalWebpackRequire[key];
@@ -50,7 +65,7 @@ __webpack_require__.rstest_require_actual =
 
 // #region rs.mock
 __webpack_require__.rstest_mock = (id, modFactory) => {
-  let requiredModule = undefined;
+  let requiredModule;
   try {
     requiredModule = __webpack_require__(id);
   } catch {
@@ -85,7 +100,7 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
 
 // #region rs.mockRequire
 __webpack_require__.rstest_mock_require = (id, modFactory) => {
-  let requiredModule = undefined;
+  let requiredModule;
   try {
     requiredModule = __webpack_require__(id);
   } catch {
@@ -107,7 +122,7 @@ __webpack_require__.rstest_mock_require = (id, modFactory) => {
 
 // #region rs.doMock
 __webpack_require__.rstest_do_mock = (id, modFactory) => {
-  let requiredModule = undefined;
+  let requiredModule;
   try {
     requiredModule = __webpack_require__(id);
   } catch {
@@ -128,7 +143,7 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
 
 // #region rs.doMockRequire
 __webpack_require__.rstest_do_mock_require = (id, modFactory) => {
-  let requiredModule = undefined;
+  let requiredModule;
   try {
     requiredModule = __webpack_require__(id);
   } catch {

@@ -12,7 +12,6 @@ import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
 import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
-import { loadModule } from './loadModule';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 
@@ -196,6 +195,7 @@ const loadFiles = async ({
   testPath,
   interopDefault,
   isolate,
+  outputModule,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: Record<string, string>;
@@ -204,14 +204,19 @@ const loadFiles = async ({
   testPath: string;
   interopDefault: boolean;
   isolate: boolean;
+  outputModule: boolean;
 }): Promise<void> => {
+  const { loadModule } = outputModule
+    ? await import('./loadEsModule')
+    : await import('./loadModule');
+
   // clean rstest core cache manually
   if (!isolate) {
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
   }`,
-      distPath,
+      distPath: '',
       testPath,
       rstestContext,
       assetFiles,
@@ -314,6 +319,7 @@ const runInPool = async (
         setupEntries,
         interopDefault,
         isolate,
+        outputModule: options.context.outputModule,
       });
       const tests = await runner.collectTests();
       return {
@@ -369,6 +375,7 @@ const runInPool = async (
       setupEntries,
       interopDefault,
       isolate,
+      outputModule: options.context.outputModule,
     });
     const results = await runner.runTests(
       testPath,

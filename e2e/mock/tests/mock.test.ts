@@ -50,4 +50,7 @@ it('mocked axios', async () => {
   expect(originalAxios.aaa).toBeUndefined();
   // @ts-expect-error
   expect(originalAxios.bbb).toBeUndefined();
+
+  expect(originalAxios.Axios).toBeDefined();
+  expect(axios.Axios).toBeDefined();
 });
