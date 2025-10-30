@@ -434,8 +434,8 @@ importers:
         specifier: ^7.53.3
         version: 7.53.3(@types/node@22.18.6)
       '@rslib/core':
-        specifier: 0.16.1
-        version: 0.16.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: https://pkg.pr.new/@rslib/core@fe8ce3e
+        version: https://pkg.pr.new/@rslib/core@fe8ce3e(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -1643,6 +1643,20 @@ packages:
 
   '@rslib/core@0.16.1':
     resolution: {integrity: sha512-KhZwWO4kcP4PPdBH2aAgg/A6FYapbDh2rhsxo8dqOOPWCjDFU3QKAYPieKg+k4IrRQlye8AWOXo2rbyF4FC01g==}
+    engines: {node: '>=18.12.0'}
+    hasBin: true
+    peerDependencies:
+      '@microsoft/api-extractor': ^7
+      typescript: ^5
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      typescript:
+        optional: true
+
+  '@rslib/core@https://pkg.pr.new/@rslib/core@fe8ce3e':
+    resolution: {tarball: https://pkg.pr.new/@rslib/core@fe8ce3e}
+    version: 0.16.1
     engines: {node: '>=18.12.0'}
     hasBin: true
     peerDependencies:
@@ -4899,6 +4913,23 @@ packages:
       typescript:
         optional: true
 
+  rsbuild-plugin-dts@https://pkg.pr.new/web-infra-dev/rslib/rsbuild-plugin-dts@fe8ce3e:
+    resolution: {tarball: https://pkg.pr.new/web-infra-dev/rslib/rsbuild-plugin-dts@fe8ce3e}
+    version: 0.16.1
+    engines: {node: '>=18.12.0'}
+    peerDependencies:
+      '@microsoft/api-extractor': ^7
+      '@rsbuild/core': 1.x
+      '@typescript/native-preview': 7.x
+      typescript: ^5
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      '@typescript/native-preview':
+        optional: true
+      typescript:
+        optional: true
+
   rsbuild-plugin-google-analytics@1.0.4:
     resolution: {integrity: sha512-K7KkgIUJWtoBpcCLBDLnBXezvQWdue5LCDO4NDvSDe/TEFxOlKb8wG6dDtp/A+CwbnZRVeNOZ9cB6vNg/y/Suw==}
     peerDependencies:
@@ -7118,6 +7149,16 @@ snapshots:
     dependencies:
       '@rsbuild/core': 1.6.0-beta.1
       rsbuild-plugin-dts: 0.16.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(@rsbuild/core@1.6.0-beta.1)(typescript@5.9.3)
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.53.3(@types/node@22.18.6)
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@typescript/native-preview'
+
+  '@rslib/core@https://pkg.pr.new/@rslib/core@fe8ce3e(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)':
+    dependencies:
+      '@rsbuild/core': 1.6.0-beta.1
+      rsbuild-plugin-dts: https://pkg.pr.new/web-infra-dev/rslib/rsbuild-plugin-dts@fe8ce3e(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(@rsbuild/core@1.6.0-beta.1)(typescript@5.9.3)
     optionalDependencies:
       '@microsoft/api-extractor': 7.53.3(@types/node@22.18.6)
       typescript: 5.9.3
@@ -11022,6 +11063,14 @@ snapshots:
   rrweb-cssom@0.8.0: {}
 
   rsbuild-plugin-dts@0.16.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(@rsbuild/core@1.6.0-beta.1)(typescript@5.9.3):
+    dependencies:
+      '@ast-grep/napi': 0.37.0
+      '@rsbuild/core': 1.6.0-beta.1
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.53.3(@types/node@22.18.6)
+      typescript: 5.9.3
+
+  rsbuild-plugin-dts@https://pkg.pr.new/web-infra-dev/rslib/rsbuild-plugin-dts@fe8ce3e(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(@rsbuild/core@1.6.0-beta.1)(typescript@5.9.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@rsbuild/core': 1.6.0-beta.1

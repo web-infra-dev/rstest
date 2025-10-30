@@ -9,6 +9,9 @@ export default defineConfig({
       id: 'rstest',
       format: 'esm',
       syntax: ['node 18'],
+      experiments: {
+        advancedEsm: true,
+      },
       dts: {
         bundle: {
           bundledPackages: [
