@@ -120,12 +120,13 @@ export async function runTests(context: Rstest): Promise<void> {
   const run = async ({
     fileFilters,
     mode = 'all',
+    buildStart = Date.now(),
   }: {
     fileFilters?: string[];
     mode?: Mode;
+    buildStart?: number;
   } = {}) => {
     let testStart: number;
-    const buildStart = Date.now();
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
@@ -314,7 +315,10 @@ export async function runTests(context: Rstest): Promise<void> {
       await closeServer();
     });
 
+    let buildStart: number | undefined;
+
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+      buildStart = Date.now();
       if (!isFirstCompile) {
         clearScreen();
       }
@@ -322,7 +326,8 @@ export async function runTests(context: Rstest): Promise<void> {
 
     rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run({ mode: isFirstCompile ? 'all' : 'on-demand' });
+      await run({ buildStart, mode: isFirstCompile ? 'all' : 'on-demand' });
+      buildStart = undefined;
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({

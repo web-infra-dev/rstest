@@ -9,7 +9,7 @@ const REAL_TIMERS: {
 
 // store the original timers
 export const setRealTimers = (): void => {
-  REAL_TIMERS.setTimeout ??= globalThis.setTimeout;
+  REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
