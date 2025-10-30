@@ -65,7 +65,11 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const { rpc } = createRuntimeRpc(createForksRpcOptions());
+  const originalConsole = global.console;
+
+  const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
+    originalConsole,
+  });
   const {
     runtimeConfig: {
       globals,
