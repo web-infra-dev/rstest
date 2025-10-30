@@ -276,8 +276,8 @@ const runInPool = async (
   };
 
   const kill = process.kill.bind(process);
-  process.kill = (pid, signal) => {
-    if (pid === process.pid) {
+  process.kill = (pid: number, signal?: NodeJS.Signals) => {
+    if (pid === -1 || Math.abs(pid) === process.pid) {
       throw new Error(
         `process.kill unexpectedly called with "${pid}" and "${signal}"`,
       );
