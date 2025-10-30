@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
-import { createRsbuild } from '@rsbuild/core';
+import { createRsbuild, rspack } from '@rsbuild/core';
 import { dirname, join, relative, resolve, sep } from 'pathe';
 import type { Rstest } from '../core/rstest';
 import type {
@@ -27,6 +27,14 @@ import type {
 } from './protocol';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+type VirtualModulesPluginInstance = InstanceType<
+  (typeof rspack.experiments)['VirtualModulesPlugin']
+>;
+
+type PlaywrightModule = typeof import('playwright-core');
+type ChromiumLauncher = PlaywrightModule['chromium'];
+type ChromiumBrowserInstance = Awaited<ReturnType<ChromiumLauncher['launch']>>;
 
 type BrowserProjectEntries = {
   project: ProjectContext;
@@ -137,16 +145,13 @@ const resolveBrowserFile = (relativePath: string): string => {
   throw new Error(`Unable to resolve browser client file: ${relativePath}`);
 };
 
-const writeManifestFile = async ({
+const generateManifestModule = ({
   manifestPath,
   entries,
 }: {
   manifestPath: string;
   entries: BrowserProjectEntries[];
-}): Promise<void> => {
-  await fs.mkdir(dirname(manifestPath), { recursive: true });
-
-  const records: BrowserManifestEntry[] = [];
+}): string => {
   const manifestDirPosix = toPosix(dirname(manifestPath));
 
   const toRelativeImport = (filePath: string): string => {
@@ -162,7 +167,7 @@ const writeManifestFile = async ({
   let index = 0;
 
   const lines: string[] = [];
-  lines.push(`export const manifest = [`);
+  lines.push('export const manifest = [');
 
   for (const { project, setupFiles, testFiles } of entries) {
     setupFiles.forEach((filePath) => {
@@ -175,10 +180,9 @@ const writeManifestFile = async ({
         filePath,
         relativePath: toRelativeImport(filePath),
       };
-      records.push(record);
 
       lines.push(
-        `  {`,
+        '  {',
         `    id: ${JSON.stringify(record.id)},`,
         `    type: 'setup',`,
         `    projectName: ${JSON.stringify(record.projectName)},`,
@@ -186,7 +190,7 @@ const writeManifestFile = async ({
         `    filePath: ${JSON.stringify(toPosix(record.filePath))},`,
         `    relativePath: ${JSON.stringify(record.relativePath)},`,
         `    load: () => import(${JSON.stringify(record.relativePath)}),`,
-        `  },`,
+        '  },',
       );
     });
 
@@ -201,9 +205,8 @@ const writeManifestFile = async ({
         relativePath: toRelativeImport(filePath),
         testPath: filePath,
       };
-      records.push(record);
       lines.push(
-        `  {`,
+        '  {',
         `    id: ${JSON.stringify(record.id)},`,
         `    type: 'test',`,
         `    projectName: ${JSON.stringify(record.projectName)},`,
@@ -212,14 +215,14 @@ const writeManifestFile = async ({
         `    testPath: ${JSON.stringify(toPosix(record.testPath!))},`,
         `    relativePath: ${JSON.stringify(record.relativePath)},`,
         `    load: () => import(${JSON.stringify(record.relativePath)}),`,
-        `  },`,
+        '  },',
       );
     });
   }
 
-  lines.push(`] as const;`);
+  lines.push('] as const;');
 
-  await fs.writeFile(manifestPath, lines.join('\n'), 'utf-8');
+  return `${lines.join('\n')}\n`;
 };
 
 const htmlTemplate = `<!DOCTYPE html>
@@ -242,6 +245,7 @@ type BrowserRuntime = {
   port: number;
   manifestPath: string;
   tempDir: string;
+  manifestPlugin: VirtualModulesPluginInstance;
 };
 
 let sharedRuntime: BrowserRuntime | null = null;
@@ -304,14 +308,20 @@ const registerWatchCleanup = () => {
 const createBrowserRuntime = async ({
   context,
   manifestPath,
+  manifestSource,
   tempDir,
   onRecompile,
 }: {
   context: Rstest;
   manifestPath: string;
+  manifestSource: string;
   tempDir: string;
   onRecompile?: () => Promise<void>;
 }): Promise<BrowserRuntime> => {
+  const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
+    [manifestPath]: manifestSource,
+  });
+
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest-browser',
     rsbuildConfig: {
@@ -341,6 +351,8 @@ const createBrowserRuntime = async ({
             rspack: (config) => {
               config.mode = 'development';
               config.devtool = 'source-map';
+              config.plugins = config.plugins || [];
+              config.plugins.push(virtualManifestPlugin);
             },
           },
         },
@@ -400,22 +412,22 @@ const createBrowserRuntime = async ({
 
   const { port } = await devServer.listen();
 
-  let chromiumLauncher;
+  let chromiumLauncher: ChromiumLauncher;
   try {
     ({ chromium: chromiumLauncher } = await import('playwright-core'));
-  } catch (error) {
+  } catch (_error) {
     await devServer.close();
-    throw error;
+    throw _error;
   }
 
-  let browser;
+  let browser: ChromiumBrowserInstance;
   try {
     browser = await chromiumLauncher.launch({
       headless: context.normalizedConfig.browser.headless,
     });
-  } catch (error) {
+  } catch (_error) {
     await devServer.close();
-    throw error;
+    throw _error;
   }
 
   const page = await browser.newPage();
@@ -435,6 +447,7 @@ const createBrowserRuntime = async ({
     port,
     manifestPath,
     tempDir,
+    manifestPlugin: virtualManifestPlugin,
   };
 };
 
@@ -473,10 +486,14 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
           );
   const manifestPath = join(tempDir, 'manifest.ts');
 
-  await writeManifestFile({
+  const manifestSource = generateManifestModule({
     manifestPath,
     entries: projectEntries,
   });
+
+  if (isWatchMode && sharedRuntime) {
+    sharedRuntime.manifestPlugin.writeModule(manifestPath, manifestSource);
+  }
 
   // Track initial test files for watch mode
   if (isWatchMode) {
@@ -493,6 +510,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       runtime = await createBrowserRuntime({
         context,
         manifestPath,
+        manifestSource,
         tempDir,
         onRecompile: isWatchMode
           ? async () => {
@@ -503,7 +521,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
             }
           : undefined,
       });
-    } catch (error) {
+    } catch (_error) {
       logger.error(
         color.red(
           'Failed to load Playwright. Please install "playwright-core" to use browser mode.',
@@ -659,10 +677,11 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         lastTestFiles = currentTestFiles;
 
         // Regenerate manifest only if files changed
-        await writeManifestFile({
+        const newManifestSource = generateManifestModule({
           manifestPath,
           entries: newProjectEntries,
         });
+        runtime!.manifestPlugin.writeModule(manifestPath, newManifestSource);
 
         // Clear flag after a delay to allow manifest compilation
         setTimeout(() => {
