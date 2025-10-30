@@ -22,7 +22,7 @@ describe('browser counter', () => {
     button.click();
     expect(button.textContent).toBe('2');
 
-    await sleep(2000);
+    await sleep(500);
     button.click();
     expect(button.textContent).toBe('3');
   });

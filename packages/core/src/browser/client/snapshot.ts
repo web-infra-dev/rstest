@@ -28,9 +28,7 @@ export class BrowserSnapshotEnvironment {
   }
 
   async readSnapshotFile(filepath: string): Promise<string | null> {
-    return this.storage.has(filepath)
-      ? this.storage.get(filepath)!
-      : null;
+    return this.storage.has(filepath) ? this.storage.get(filepath)! : null;
   }
 
   async removeSnapshotFile(filepath: string): Promise<void> {
