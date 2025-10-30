@@ -353,7 +353,13 @@ export type NormalizedBrowserModeConfig = {
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude' | 'browser'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'exclude'
+    | 'browser'
   >
 > & {
   [key in OptionalKeys]?: RstestConfig[key];
