@@ -279,7 +279,18 @@ const runInPool = async (
     throw new Error(`process.exit unexpectedly called with "${code}"`);
   };
 
+  const kill = process.kill.bind(process);
+  process.kill = (pid: number, signal?: NodeJS.Signals) => {
+    if (pid === -1 || Math.abs(pid) === process.pid) {
+      throw new Error(
+        `process.kill unexpectedly called with "${pid}" and "${signal}"`,
+      );
+    }
+    return kill(pid, signal);
+  };
+
   cleanups.push(() => {
+    process.kill = kill;
     process.exit = exit;
   });
 
