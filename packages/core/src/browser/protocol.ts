@@ -1,9 +1,5 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type {
-  RuntimeConfig,
-  TestFileResult,
-  TestResult,
-} from '../types';
+import type { RuntimeConfig, TestFileResult, TestResult } from '../types';
 
 export type BrowserManifestEntry = {
   id: string;
