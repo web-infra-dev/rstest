@@ -333,7 +333,15 @@ ${packages
   return new WebpackLicensePlugin({
     outputFilename: '../LICENSE.md',
     additionalFiles: {
-      '../LICENSE.md': (packages) => renderLicenses(packages),
+      '../LICENSE.md': (packages) => {
+        const uniquePackages = new Map<string, PackageLicenseMeta>();
+        for (const pkg of packages) {
+          if (!uniquePackages.has(pkg.name)) {
+            uniquePackages.set(pkg.name, pkg);
+          }
+        }
+        return renderLicenses(Array.from(uniquePackages.values()));
+      },
     },
   });
 }
