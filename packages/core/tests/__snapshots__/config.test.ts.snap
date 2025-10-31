@@ -2,7 +2,15 @@
 
 exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
 {
+<<<<<<< HEAD
   "bail": 0,
+=======
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+  },
+>>>>>>> bbdbf8d (isolated pages)
   "clearMocks": false,
   "coverage": {
     "clean": true,

@@ -26,6 +26,7 @@ export type BrowserHostConfig = {
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };
+  testFile?: string; // Optional: if provided, only run this specific test file
 };
 
 export type BrowserClientMessage =
