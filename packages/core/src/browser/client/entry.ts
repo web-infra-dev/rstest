@@ -115,7 +115,16 @@ const run = async () => {
 
   const entries = manifest as unknown as ManifestEntry[];
 
-  for (const entry of entries) {
+  // Filter entries based on testFile option if provided
+  const targetTestFile = options.testFile;
+  const entriesToRun = targetTestFile
+    ? entries.filter((entry) => {
+        // Include all setup files and only the matching test file
+        return entry.type === 'setup' || entry.testPath === targetTestFile;
+      })
+    : entries;
+
+  for (const entry of entriesToRun) {
     const project = projects.get(entry.projectName);
     if (!project) {
       continue;

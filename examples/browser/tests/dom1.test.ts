@@ -5,6 +5,10 @@ const sleep = (ms: number) =>
 
 describe('browser counter', () => {
   it('increments text content when clicked', async () => {
+    const title = document.createElement('h1');
+    title.textContent = 'DOM 1';
+    document.body.appendChild(title);
+
     const button = document.createElement('button');
     button.id = 'counter';
     button.textContent = '0';
