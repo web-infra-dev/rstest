@@ -240,8 +240,7 @@ const htmlTemplate = `<!DOCTYPE html>
 type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
-  browser: any;
-  page: any;
+  browser: ChromiumBrowserInstance;
   port: number;
   manifestPath: string;
   tempDir: string;
@@ -250,20 +249,13 @@ type BrowserRuntime = {
 
 let sharedRuntime: BrowserRuntime | null = null;
 let watchCleanupRegistered = false;
-let currentRunHandler:
-  | ((payload: BrowserClientMessage) => Promise<void>)
-  | null = null;
 let isRerunning = false;
 let lastTestFiles: string[] = [];
+let enableWatchHooks = false; // Flag to control if watch hooks should execute
 
 const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
 ): Promise<void> => {
-  try {
-    await runtime.page?.close?.();
-  } catch {
-    // ignore
-  }
   try {
     await runtime.browser?.close?.();
   } catch {
@@ -310,13 +302,15 @@ const createBrowserRuntime = async ({
   manifestPath,
   manifestSource,
   tempDir,
-  onRecompile,
+  isWatchMode,
+  onTriggerRerun,
 }: {
   context: Rstest;
   manifestPath: string;
   manifestSource: string;
   tempDir: string;
-  onRecompile?: () => Promise<void>;
+  isWatchMode: boolean;
+  onTriggerRerun?: () => Promise<void>;
 }): Promise<BrowserRuntime> => {
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
@@ -360,33 +354,34 @@ const createBrowserRuntime = async ({
     },
   });
 
-  // Register watch mode recompile hook
-  if (onRecompile) {
+  // Register watch plugin if in watch mode
+  if (isWatchMode && onTriggerRerun) {
     rsbuildInstance.addPlugins([
       {
         name: 'rstest:browser-watch',
         setup(api) {
-          api.onAfterEnvironmentCompile(
-            async ({ isFirstCompile, environment }) => {
-              // Skip first compile
-              if (isFirstCompile) {
-                return;
-              }
+          // Use onBeforeDevCompile to show message
+          api.onBeforeDevCompile(() => {
+            if (!enableWatchHooks) {
+              return;
+            }
+            logger.log(color.cyan('\nFile changed, re-running tests...\n'));
+          });
 
-              // Only handle web environment
-              if (environment.name !== 'web') {
-                return;
-              }
+          // Use onAfterDevCompile to trigger test rerun
+          api.onAfterDevCompile(async () => {
+            if (!enableWatchHooks) {
+              return;
+            }
 
-              // Skip if we're currently rerunning (to avoid infinite loop when manifest is regenerated)
-              if (isRerunning) {
-                return;
-              }
+            // Skip if we're currently rerunning
+            if (isRerunning) {
+              return;
+            }
 
-              // Trigger test rerun
-              await onRecompile();
-            },
-          );
+            // Trigger test rerun
+            await onTriggerRerun();
+          });
         },
       },
     ]);
@@ -430,25 +425,145 @@ const createBrowserRuntime = async ({
     throw _error;
   }
 
-  const page = await browser.newPage();
-
-  await page.exposeBinding(
-    '__rstest_dispatch__',
-    async (_source: unknown, payload: BrowserClientMessage) => {
-      await currentRunHandler?.(payload);
-    },
-  );
-
   return {
     rsbuildInstance,
     devServer,
     browser,
-    page,
     port,
     manifestPath,
     tempDir,
     manifestPlugin: virtualManifestPlugin,
   };
+};
+
+/**
+ * Execute a single test file in an isolated browser context
+ */
+const executeSingleTestFile = async ({
+  browser,
+  port,
+  testFile,
+  context,
+}: {
+  browser: ChromiumBrowserInstance;
+  port: number;
+  testFile: string;
+  context: Rstest;
+}): Promise<{
+  reporterResults: TestFileResult[];
+  caseResults: TestResult[];
+  fatalError: Error | null;
+}> => {
+  const reporterResults: TestFileResult[] = [];
+  const caseResults: TestResult[] = [];
+  let fatalError: Error | null = null;
+
+  // Create isolated context and page for this test file
+  const browserContext = await browser.newContext();
+  const page = await browserContext.newPage();
+
+  try {
+    const projectRuntimeConfigs: BrowserProjectRuntime[] =
+      context.projects.map((project: ProjectContext) => ({
+        name: project.name,
+        environmentName: project.environmentName,
+        projectRoot: project.rootPath,
+        runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      }));
+
+    const hostOptions: BrowserHostConfig = {
+      rootPath: context.rootPath,
+      projects: projectRuntimeConfigs,
+      snapshot: {
+        updateSnapshot: context.snapshotManager.options.updateSnapshot,
+      },
+      testFile, // Specify which test file to run
+    };
+
+    await page.addInitScript((options: BrowserHostConfig) => {
+      (window as any).__RSTEST_BROWSER_OPTIONS__ = options;
+    }, hostOptions);
+
+    let resolveRun: (() => void) | undefined;
+    const runPromise = new Promise<void>((resolve) => {
+      resolveRun = resolve;
+    });
+    const completeRun = () => {
+      if (resolveRun) {
+        resolveRun();
+        resolveRun = undefined;
+      }
+    };
+
+    await page.exposeBinding(
+      '__rstest_dispatch__',
+      async (_source: unknown, payload: BrowserClientMessage) => {
+        switch (payload.type) {
+          case 'ready':
+            return;
+          case 'file-start': {
+            await Promise.all(
+              context.reporters.map((reporter) =>
+                (reporter as Reporter).onTestFileStart?.({
+                  testPath: payload.payload.testPath,
+                }),
+              ),
+            );
+            break;
+          }
+          case 'case-result': {
+            caseResults.push(payload.payload);
+            await Promise.all(
+              context.reporters.map((reporter) =>
+                (reporter as Reporter).onTestCaseResult?.(payload.payload),
+              ),
+            );
+            break;
+          }
+          case 'file-complete': {
+            reporterResults.push(payload.payload);
+            if (payload.payload.snapshotResult) {
+              context.snapshotManager.add(payload.payload.snapshotResult);
+            }
+            await Promise.all(
+              context.reporters.map((reporter) =>
+                (reporter as Reporter).onTestFileResult?.(payload.payload),
+              ),
+            );
+            break;
+          }
+          case 'log': {
+            logger.log(payload.payload.message);
+            break;
+          }
+          case 'fatal': {
+            fatalError = new Error(payload.payload.message);
+            fatalError.stack = payload.payload.stack;
+            completeRun();
+            break;
+          }
+          case 'complete':
+            completeRun();
+            break;
+        }
+      },
+    );
+
+    await page.goto(`http://localhost:${port}/runner.html`, {
+      waitUntil: 'load',
+    });
+    await runPromise;
+  } catch (error) {
+    if (!fatalError) {
+      fatalError = error instanceof Error ? error : new Error(String(error));
+    }
+  } finally {
+    // Clean up page and context
+    await page.close().catch(() => {});
+    await browserContext.close().catch(() => {});
+  }
+
+  return { reporterResults, caseResults, fatalError };
 };
 
 export const runBrowserController = async (context: Rstest): Promise<void> => {
@@ -502,8 +617,15 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   let runtime = isWatchMode ? sharedRuntime : null;
 
-  // Define rerun callback for watch mode
+  // Define rerun callback for watch mode (will be populated later)
   let triggerRerun: (() => Promise<void>) | undefined;
+
+  // Create a wrapper that will call triggerRerun when it's available
+  const onTriggerRerun = async () => {
+    if (triggerRerun) {
+      await triggerRerun();
+    }
+  };
 
   if (!runtime || !isWatchMode) {
     try {
@@ -512,14 +634,8 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         manifestPath,
         manifestSource,
         tempDir,
-        onRecompile: isWatchMode
-          ? async () => {
-              if (triggerRerun) {
-                logger.log(color.cyan('\nFile changed, re-running tests...\n'));
-                await triggerRerun();
-              }
-            }
-          : undefined,
+        isWatchMode,
+        onTriggerRerun: isWatchMode ? onTriggerRerun : undefined,
       });
     } catch (_error) {
       logger.error(
@@ -538,115 +654,44 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }
   }
 
-  const { page, port } = runtime!;
+  const { browser, port } = runtime!;
   const buildTime = Date.now() - buildStart;
 
-  // Extracted test execution logic for reuse
+  // Collect all test files from project entries
+  const allTestFiles = projectEntries.flatMap((entry) => entry.testFiles);
+
+  // Extracted test execution logic for reuse - now runs tests in parallel
   const executeTests = async (): Promise<{
     reporterResults: TestFileResult[];
     caseResults: TestResult[];
     fatalError: Error | null;
     testTime: number;
   }> => {
+    const runStart = Date.now();
+
+    // Execute all test files in parallel, each in its own isolated context
+    const results = await Promise.all(
+      allTestFiles.map((testFile) =>
+        executeSingleTestFile({
+          browser,
+          port,
+          testFile,
+          context,
+        }),
+      ),
+    );
+
+    // Aggregate results from all test files
     const reporterResults: TestFileResult[] = [];
     const caseResults: TestResult[] = [];
     let fatalError: Error | null = null;
 
-    const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
-      (project: ProjectContext) => ({
-        name: project.name,
-        environmentName: project.environmentName,
-        projectRoot: project.rootPath,
-        runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
-      }),
-    );
-
-    const hostOptions: BrowserHostConfig = {
-      rootPath: context.rootPath,
-      projects: projectRuntimeConfigs,
-      snapshot: {
-        updateSnapshot: context.snapshotManager.options.updateSnapshot,
-      },
-    };
-    await page.addInitScript((options: BrowserHostConfig) => {
-      (window as any).__RSTEST_BROWSER_OPTIONS__ = options;
-    }, hostOptions);
-
-    let resolveRun: (() => void) | undefined;
-    const runPromise = new Promise<void>((resolve) => {
-      resolveRun = resolve;
-    });
-    const completeRun = () => {
-      if (resolveRun) {
-        resolveRun();
-        resolveRun = undefined;
+    for (const result of results) {
+      reporterResults.push(...result.reporterResults);
+      caseResults.push(...result.caseResults);
+      if (result.fatalError && !fatalError) {
+        fatalError = result.fatalError;
       }
-    };
-
-    currentRunHandler = async (payload: BrowserClientMessage) => {
-      switch (payload.type) {
-        case 'ready':
-          return;
-        case 'file-start': {
-          await Promise.all(
-            context.reporters.map((reporter) =>
-              (reporter as Reporter).onTestFileStart?.({
-                testPath: payload.payload.testPath,
-              }),
-            ),
-          );
-          break;
-        }
-        case 'case-result': {
-          caseResults.push(payload.payload);
-          await Promise.all(
-            context.reporters.map((reporter) =>
-              (reporter as Reporter).onTestCaseResult?.(payload.payload),
-            ),
-          );
-          break;
-        }
-        case 'file-complete': {
-          reporterResults.push(payload.payload);
-          if (payload.payload.snapshotResult) {
-            context.snapshotManager.add(payload.payload.snapshotResult);
-          }
-          await Promise.all(
-            context.reporters.map((reporter) =>
-              (reporter as Reporter).onTestFileResult?.(payload.payload),
-            ),
-          );
-          break;
-        }
-        case 'log': {
-          logger.log(payload.payload.message);
-          break;
-        }
-        case 'fatal': {
-          fatalError = new Error(payload.payload.message);
-          fatalError.stack = payload.payload.stack;
-          completeRun();
-          break;
-        }
-        case 'complete':
-          completeRun();
-          break;
-      }
-    };
-
-    const runStart = Date.now();
-    try {
-      await page.goto(`http://localhost:${port}/runner.html`, {
-        waitUntil: 'load',
-      });
-      await runPromise;
-    } catch (error) {
-      if (!fatalError) {
-        fatalError = error instanceof Error ? error : new Error(String(error));
-        completeRun();
-      }
-    } finally {
-      currentRunHandler = null;
     }
 
     const testTime = Date.now() - runStart;
@@ -683,16 +728,18 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         });
         runtime!.manifestPlugin.writeModule(manifestPath, newManifestSource);
 
-        // Clear flag after a delay to allow manifest compilation
+        // Don't execute tests here - let the onAfterDevCompile hook handle it
+        // after manifest recompilation. Just clear the flag after a delay.
         setTimeout(() => {
           isRerunning = false;
         }, 1000);
-      } else {
-        // No file changes, clear flag immediately
-        isRerunning = false;
+        return;
       }
 
-      // Execute tests (page reload will pick up the new manifest if it changed)
+      // No file list changes, just execute tests
+      isRerunning = false;
+
+      // Execute tests
       const { reporterResults, caseResults, fatalError, testTime } =
         await executeTests();
 
@@ -766,5 +813,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       snapshotSummary: context.snapshotManager.summary,
       getSourcemap: async () => null,
     });
+  }
+
+  // Enable watch hooks AFTER initial test run to avoid duplicate runs
+  if (isWatchMode && triggerRerun) {
+    enableWatchHooks = true;
+    logger.log(
+      color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
+    );
   }
 };
