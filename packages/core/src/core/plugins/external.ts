@@ -24,7 +24,7 @@ const autoExternalNodeModules: (
     callback(
       undefined,
       externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'import',
+      dependencyType === 'commonjs' ? 'commonjs' : 'commonjs-import',
     );
   };
 
@@ -74,7 +74,7 @@ function autoExternalNodeBuiltin(
     callback(
       undefined,
       request,
-      dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+      dependencyType === 'commonjs' ? 'commonjs' : 'commonjs-import',
     );
   } else {
     callback();
