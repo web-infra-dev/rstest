@@ -42,29 +42,29 @@ jobs:
   ecosystem_ci_dispatch:
     name: Dispatch ecosystem CI
     runs-on: ubuntu-latest
-    if: github.repository == 'web-infra-dev/rstets' && github.event_name == 'workflow_dispatch'
+    if: github.repository == 'web-infra-dev/rstest' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Trigger Ecosystem CI
         uses: rspack-contrib/rstack-ecosystem-ci/.github/actions/ecosystem_ci_dispatch@main
         with:
           github-token: ${{ secrets.REPO_RSTEST_ECO_CI_GITHUB_TOKEN_NEXT }}
           ecosystem-owner: web-infra-dev
-          ecosystem-repo: rstets
-          workflow-file: rstets-ecosystem-ci-selected.yml
-          client-payload: '{"ref":"${{ github.event.inputs.branch }}","repo":"web-infra-dev/rstets","suite":"-","suiteRefType":"precoded","suiteRef":"precoded"}'
+          ecosystem-repo: rstest
+          workflow-file: rstest-ecosystem-ci-selected.yml
+          client-payload: '{"ref":"${{ github.event.inputs.branch }}","repo":"web-infra-dev/rstest","suite":"-","suiteRefType":"precoded","suiteRef":"precoded"}'
           branch: ${{ github.event.inputs.branch }}
 
   ecosystem_ci_per_commit:
     name: Run ecosystem CI per commit
     needs: changes
     runs-on: ubuntu-latest
-    if: github.repository == 'web-infra-dev/rstets' && github.event_name != 'workflow_dispatch' && needs.changes.outputs.changed == 'true'
+    if: github.repository == 'web-infra-dev/rstest' && github.event_name != 'workflow_dispatch' && needs.changes.outputs.changed == 'true'
     steps:
       - name: Trigger Ecosystem CI
         uses: rspack-contrib/rstack-ecosystem-ci/.github/actions/ecosystem_ci_per_commit@main
         with:
           github-token: ${{ secrets.REPO_RSTEST_ECO_CI_GITHUB_TOKEN_NEXT }}
           ecosystem-owner: web-infra-dev
-          ecosystem-repo: rstets
-          workflow-file: rstets-ecosystem-ci-from-commit.yml
-          client-payload: '{"commitSHA":"${{ github.sha }}","updateComment":true,"repo":"web-infra-dev/rstets","suite":"-","suiteRefType":"precoded","suiteRef":"precoded"}'
+          ecosystem-repo: rstest
+          workflow-file: rstest-ecosystem-ci-from-commit.yml
+          client-payload: '{"commitSHA":"${{ github.sha }}","updateComment":true,"repo":"web-infra-dev/rstest","suite":"-","suiteRefType":"precoded","suiteRef":"precoded"}'
