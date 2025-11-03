@@ -338,9 +338,6 @@ export class TestRunner {
 
           result = {
             ...currentResult,
-            heap: state.runtimeConfig.logHeapUsage
-              ? process.memoryUsage().heapUsed
-              : undefined,
             errors:
               currentResult.status === 'fail' && result && result.errors
                 ? result.errors.concat(...(currentResult.errors || []))
@@ -352,6 +349,9 @@ export class TestRunner {
 
         result.duration = RealDate.now() - start;
         result.retryCount = retryCount - 1;
+        result.heap = state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
