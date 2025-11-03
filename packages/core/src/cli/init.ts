@@ -26,6 +26,7 @@ export type CommonOptions = {
   coverage?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
+  logHeapUsage?: boolean;
   disableConsoleIntercept?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
@@ -76,6 +77,7 @@ async function resolveConfig(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'logHeapUsage',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

@@ -147,6 +147,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
+  logHeapUsage: false,
   coverage: {
     exclude: [
       '**/node_modules/**',

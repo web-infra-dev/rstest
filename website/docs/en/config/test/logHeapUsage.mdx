@@ -1,0 +1,39 @@
+# logHeapUsage
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--logHeapUsage`
+
+Log heap usage for each test, it can help to find memory leaks in tests.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --logHeapUsage
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  logHeapUsage: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## Example
+
+After setting `logHeapUsage` to `true`, Rstest will log heap usage for each test.
+
+```bash
+ ✓ test/index.test.ts (2) 11 MB heap used
+ ✓ test/index1.test.ts (2) 11 MB heap used
+
+ Test Files 2 passed
+      Tests 2 passed | 2 skipped (4)
+   Duration 233ms (build 175ms, tests 58ms)
+```

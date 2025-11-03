@@ -54,6 +54,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage,
     snapshotFormat,
     env,
+    logHeapUsage,
   } = context.normalizedConfig;
 
   return {
@@ -76,6 +77,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     isolate,
     coverage,
     snapshotFormat,
+    logHeapUsage,
   };
 };
 

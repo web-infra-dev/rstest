@@ -29,6 +29,7 @@
 
   "coverage",
   "reporters",
+  "logHeapUsage",
   "hideSkippedTests",
   "slowTestThreshold",
   "snapshotFormat",

@@ -122,6 +122,7 @@ export type TestResult = {
   errors?: FormattedError[];
   retryCount?: number;
   project: string;
+  heap?: number;
 };
 
 export type TestFileResult = TestResult & {

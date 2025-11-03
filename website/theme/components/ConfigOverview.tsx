@@ -34,10 +34,6 @@ const OVERVIEW_GROUPS: Group[] = [
     items: ['env', 'retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
   },
   {
-    name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
-  },
-  {
     name: 'mock',
     items: [
       'clearMocks',
@@ -48,10 +44,15 @@ const OVERVIEW_GROUPS: Group[] = [
     ],
   },
   {
+    name: 'environment',
+    items: ['pool', 'isolate', 'testEnvironment'],
+  },
+  {
     name: 'output',
     items: [
       'coverage',
       'reporters',
+      'logHeapUsage',
       'hideSkippedTests',
       'slowTestThreshold',
       'snapshotFormat',

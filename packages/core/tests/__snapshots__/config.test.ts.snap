@@ -50,6 +50,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   ],
   "includeSource": [],
   "isolate": true,
+  "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
   "output": undefined,
