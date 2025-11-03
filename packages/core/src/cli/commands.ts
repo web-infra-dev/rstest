@@ -48,6 +48,7 @@ const applyCommonOptions = (cli: CAC) => {
       'Print console traces when calling any console method',
     )
     .option('--disableConsoleIntercept', 'Disable console intercept')
+    .option('--logHeapUsage', 'Log heap usage after each test')
     .option(
       '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',

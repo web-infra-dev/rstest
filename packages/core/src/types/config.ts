@@ -216,6 +216,12 @@ export interface RstestConfig {
   maxConcurrency?: number;
 
   /**
+   * Log heap usage after each test
+   * @default false
+   */
+  logHeapUsage?: boolean;
+
+  /**
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;

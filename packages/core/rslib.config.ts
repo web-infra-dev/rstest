@@ -1,5 +1,6 @@
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
+import { version } from './package.json';
 
 const isBuildWatch = process.argv.includes('--watch');
 
@@ -75,7 +76,7 @@ export default defineConfig({
           worker: './src/runtime/worker/index.ts',
         },
         define: {
-          RSTEST_VERSION: JSON.stringify(require('./package.json').version),
+          RSTEST_VERSION: JSON.stringify(version),
         },
       },
       tools: {

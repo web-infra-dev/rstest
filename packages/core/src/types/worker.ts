@@ -48,6 +48,7 @@ export type RuntimeConfig = Pick<
   | 'coverage'
   | 'snapshotFormat'
   | 'env'
+  | 'logHeapUsage'
 >;
 
 export type WorkerContext = {

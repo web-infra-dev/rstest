@@ -349,6 +349,9 @@ export class TestRunner {
 
         result.duration = RealDate.now() - start;
         result.retryCount = retryCount - 1;
+        result.heap = state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
@@ -373,6 +376,9 @@ export class TestRunner {
         name: '',
         status: 'fail',
         results,
+        heap: state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined,
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -394,6 +400,9 @@ export class TestRunner {
       project,
       testPath,
       name: '',
+      heap: state.runtimeConfig.logHeapUsage
+        ? process.memoryUsage().heapUsed
+        : undefined,
       status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
       results,
       snapshotResult,
