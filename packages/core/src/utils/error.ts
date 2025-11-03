@@ -67,8 +67,11 @@ export async function printError(
       fullStack: error.fullStack,
       getSourcemap,
     });
-
-    if (!stackFrames.length && error.stack.length) {
+    if (
+      !stackFrames.length &&
+      Array.isArray(error.stack) &&
+      error.stack.length
+    ) {
       logger.log(
         color.gray(
           "No error stack found, set 'DEBUG=rstest' to show fullStack.",

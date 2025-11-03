@@ -171,6 +171,23 @@ export const loadModule = ({
       assetFiles,
       interopDefault,
     ),
+    readWasmFile: (
+      wasmPath: string,
+      callback: (err: Error | null, data?: Buffer) => void,
+    ) => {
+      const currentDirectory = path.dirname(distPath);
+      const joinedPath = isRelativePath(wasmPath)
+        ? path.join(currentDirectory, wasmPath)
+        : wasmPath;
+      const content = assetFiles[joinedPath];
+      if (content) {
+        callback(null, Buffer.from(content, 'utf-8'));
+      } else {
+        callback(
+          new Error(`WASM file ${joinedPath} not found in asset files.`),
+        );
+      }
+    },
     __rstest_dynamic_import__: defineRstestDynamicImport({
       testPath,
       interopDefault,
