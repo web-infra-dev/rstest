@@ -345,6 +345,15 @@ const createBrowserRuntime = async ({
             rspack: (config) => {
               config.mode = 'development';
               config.devtool = 'source-map';
+              config.experiments = {
+                ...config.experiments,
+                lazyCompilation: {
+                  // Only compile dynamic imports when they are actually requested
+                  imports: true,
+                  // Don't lazy compile entry modules
+                  entries: false,
+                },
+              };
               config.plugins = config.plugins || [];
               config.plugins.push(virtualManifestPlugin);
             },
@@ -463,13 +472,14 @@ const executeSingleTestFile = async ({
   const page = await browserContext.newPage();
 
   try {
-    const projectRuntimeConfigs: BrowserProjectRuntime[] =
-      context.projects.map((project: ProjectContext) => ({
+    const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
+      (project: ProjectContext) => ({
         name: project.name,
         environmentName: project.environmentName,
         projectRoot: project.rootPath,
         runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
-      }));
+      }),
+    );
 
     const hostOptions: BrowserHostConfig = {
       rootPath: context.rootPath,
