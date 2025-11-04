@@ -80,11 +80,64 @@ const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
 };
 
 const send = (message: BrowserClientMessage): void => {
+  // Send to parent window (container) if in iframe
+  if (window.parent !== window) {
+    window.parent.postMessage(
+      { type: '__rstest_dispatch__', payload: message },
+      '*',
+    );
+  }
+  // Also send via binding if available
   window.__rstest_dispatch__?.(message);
 };
 
+// Wait for configuration if in iframe
+const waitForConfig = (): Promise<void> => {
+  // If not in iframe or already has config, resolve immediately
+  if (window.parent === window || (window as any).__RSTEST_BROWSER_OPTIONS__) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'RSTEST_CONFIG') {
+        (window as any).__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
+        console.log(
+          '[Runner] Received config from container:',
+          event.data.payload,
+        );
+        window.removeEventListener('message', handleMessage);
+        resolve();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      window.removeEventListener('message', handleMessage);
+      resolve();
+    }, 5000);
+  });
+};
+
 const run = async () => {
-  const options = window.__RSTEST_BROWSER_OPTIONS__;
+  // Wait for configuration if in iframe
+  await waitForConfig();
+  let options = window.__RSTEST_BROWSER_OPTIONS__;
+
+  // Support reading testFile from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlTestFile = urlParams.get('testFile');
+
+  if (urlTestFile && options) {
+    // Override testFile from URL parameter
+    options = {
+      ...options,
+      testFile: urlTestFile,
+    };
+  }
+
   if (!options) {
     send({
       type: 'fatal',
