@@ -129,3 +129,8 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: pnpm --filter ./packages/vscode exec vsce publish --target ${{ matrix.vsce-target }}
+
+      - name: Publish OVSX Extension
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: pnpm --filter ./packages/vscode exec ovsx publish --target ${{ matrix.vsce-target }}
