@@ -22,7 +22,14 @@ export type RstestPoolOptions = {
 
 export type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+  | 'projects'
+  | 'reporters'
+  | 'pool'
+  | 'isolate'
+  | 'coverage'
+  | 'resolveSnapshotPath'
+  | 'onConsoleLog'
+  | 'hideSkippedTests'
 >;
 
 type SnapshotFormat = Omit<
