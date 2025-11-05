@@ -3,6 +3,7 @@ import type {
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
+  ProjectConfig,
   RstestConfig,
 } from './types';
 
@@ -31,13 +32,35 @@ export type RstestConfigExport =
 
 /**
  * This function helps you to autocomplete configuration types.
- * It accepts a Rsbuild config object, or a function that returns a config.
+ * It accepts a Rstest config object, or a function that returns a config.
  */
 export function defineConfig(config: RstestConfig): RstestConfig;
 export function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
 export function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
 export function defineConfig(config: RstestConfigExport): RstestConfigExport;
 export function defineConfig(config: RstestConfigExport) {
+  return config;
+}
+
+type ProjectConfigAsyncFn = () => Promise<ProjectConfig>;
+
+type ProjectConfigSyncFn = () => ProjectConfig;
+
+type RstestProjectConfigExport =
+  | ProjectConfig
+  | ProjectConfigSyncFn
+  | ProjectConfigAsyncFn;
+
+/**
+ * This function helps you to autocomplete configuration types.
+ * It accepts a Rstest project config object, or a function that returns a config.
+ */
+export function defineProject(config: ProjectConfig): ProjectConfig;
+export function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
+export function defineProject(
+  config: ProjectConfigAsyncFn,
+): ProjectConfigAsyncFn;
+export function defineProject(config: RstestProjectConfigExport) {
   return config;
 }
 
