@@ -48,6 +48,11 @@
             "debug"
           ],
           "default": "default"
+        },
+        "rstest.rstestPackagePath": {
+          "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
         }
       }
     }
