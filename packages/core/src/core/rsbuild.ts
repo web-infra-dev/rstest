@@ -76,7 +76,7 @@ export const prepareRsbuild = async (
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
-    rsbuildConfig: {
+    config: {
       root: context.rootPath,
       server: {
         printUrls: false,

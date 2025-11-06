@@ -97,9 +97,6 @@ export default defineConfig({
             }),
             isBuildWatch ? null : licensePlugin(),
           ].filter(Boolean),
-          optimization: {
-            splitChunks: false,
-          },
         },
       },
     },
