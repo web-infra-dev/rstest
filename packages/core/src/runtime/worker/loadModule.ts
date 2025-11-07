@@ -175,11 +175,10 @@ export const loadModule = ({
       wasmPath: string,
       callback: (err: Error | null, data?: Buffer) => void,
     ) => {
-      const currentDirectory = path.dirname(distPath);
       const joinedPath = isRelativePath(wasmPath)
-        ? path.join(currentDirectory, wasmPath)
+        ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
-      const content = assetFiles[joinedPath];
+      const content = assetFiles[path.normalize(joinedPath)];
       if (content) {
         callback(null, Buffer.from(content, 'utf-8'));
       } else {
