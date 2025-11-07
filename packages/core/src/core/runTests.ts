@@ -449,7 +449,6 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   } else {
     const unExpectedExit = (code?: number) => {
-      console.trace('Rstest exited unexpectedly', 0);
       logger.log(
         color.red(
           `Rstest exited unexpectedly with code ${code}, terminating test run.`,
