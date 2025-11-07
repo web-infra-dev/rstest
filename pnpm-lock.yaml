@@ -594,8 +594,8 @@ importers:
         specifier: ^22.16.5
         version: 22.18.6
       '@types/vscode':
-        specifier: ^1.100.0
-        version: 1.105.0
+        specifier: 1.97.0
+        version: 1.97.0
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -2491,8 +2491,8 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
-  '@types/vscode@1.105.0':
-    resolution: {integrity: sha512-Lotk3CTFlGZN8ray4VxJE7axIyLZZETQJVWi/lYoUVQuqfRxlQhVOfoejsD2V3dVXPSbS15ov5ZyowMAzgUqcw==}
+  '@types/vscode@1.97.0':
+    resolution: {integrity: sha512-ueE73loeOTe7olaVyqP9mrRI54kVPJifUPjblZo9fYcv1CuVLPOEKEkqW0GkqPC454+nCEoigLWnC2Pp7prZ9w==}
 
   '@types/whatwg-mimetype@3.0.2':
     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
@@ -8282,7 +8282,7 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@types/vscode@1.105.0': {}
+  '@types/vscode@1.97.0': {}
 
   '@types/whatwg-mimetype@3.0.2': {}
 
