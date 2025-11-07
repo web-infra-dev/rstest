@@ -10,6 +10,9 @@ export type ExtensionConfig = {
   testFileGlobPattern: string[];
   // Controls verbosity of extension logging routed to the Output channel.
   logLevel: LogLevel;
+  // The path to a package.json file of a Rstest executable.
+  // Used as a last resort if the extension cannot auto-detect @rstest/core.
+  rstestPackagePath?: string;
 };
 
 export const defaultConfig: ExtensionConfig = {
@@ -44,6 +47,13 @@ export function getConfigValue<K extends keyof ExtensionConfig>(
     return (isLogLevel(v) ? v : defaultConfig[key]) as ExtensionConfig[K];
   }
 
+  if (key === 'rstestPackagePath') {
+    const v = value as unknown;
+    return (
+      typeof v === 'string' && v.trim().length > 0 ? v : undefined
+    ) as ExtensionConfig[K];
+  }
+
   return value as ExtensionConfig[K];
 }
 
@@ -60,5 +70,6 @@ export function getConfig(folder?: vscode.WorkspaceFolder): ExtensionConfig {
   return {
     testFileGlobPattern: getConfigValue('testFileGlobPattern', folder),
     logLevel: getConfigValue('logLevel', folder),
+    rstestPackagePath: getConfigValue('rstestPackagePath', folder),
   } satisfies ExtensionConfig;
 }

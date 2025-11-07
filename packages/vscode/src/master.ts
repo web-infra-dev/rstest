@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import path from 'node:path';
+import path, { dirname } from 'node:path';
 import getPort from 'get-port';
 import vscode from 'vscode';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
+import { getConfigValue } from './config';
 import { logger } from './logger';
 import type {
   WorkerEvent,
@@ -26,17 +27,54 @@ export class RstestApi {
       // TODO: use 0 temporarily.
       const workspace = vscode.workspace.workspaceFolders?.[0];
       if (!workspace) {
-        vscode.window.showErrorMessage('No workspace found');
         throw new Error('No workspace found');
       }
-      const nodeExport = require.resolve('@rstest/core', {
-        paths: [workspace.uri.fsPath],
-      });
+
+      // Check if user configured a custom package path (last resort fix)
+      let configuredPackagePath = getConfigValue(
+        'rstestPackagePath',
+        workspace,
+      );
+
+      if (configuredPackagePath) {
+        // Support ${workspaceFolder} placeholder
+        configuredPackagePath = configuredPackagePath.replace(
+          // biome-ignore lint: This is a VS Code config placeholder string
+          '${workspaceFolder}',
+          workspace.uri.fsPath,
+        );
+        // Validate that the path points to package.json
+        if (!configuredPackagePath.endsWith('package.json')) {
+          const errorMessage = `"rstest.rstestPackagePath" must point to a package.json file, instead got: ${configuredPackagePath}`;
+          throw new Error(errorMessage);
+        }
+
+        // User provided a custom path to package.json
+        configuredPackagePath = path.isAbsolute(configuredPackagePath)
+          ? configuredPackagePath
+          : path.resolve(workspace.uri.fsPath, configuredPackagePath);
+
+        logger.debug(
+          'Using configured rstestPackagePath:',
+          configuredPackagePath,
+        );
+      }
+
+      const nodeExport = require.resolve(
+        configuredPackagePath ? dirname(configuredPackagePath) : '@rstest/core',
+        {
+          paths: [workspace.uri.fsPath],
+        },
+      );
+
       let corePackageJsonPath: string;
       try {
-        corePackageJsonPath = require.resolve('@rstest/core/package.json', {
-          paths: [workspace.uri.fsPath],
-        });
+        corePackageJsonPath = require.resolve(
+          configuredPackagePath || '@rstest/core/package.json',
+          {
+            paths: [workspace.uri.fsPath],
+          },
+        );
       } catch (e) {
         vscode.window.showErrorMessage(
           'Failed to resolve @rstest/core/package.json. Please upgrade @rstest/core to the latest version.',
