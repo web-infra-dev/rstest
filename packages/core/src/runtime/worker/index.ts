@@ -420,7 +420,7 @@ const runInPool = async (
   }
 };
 
-// should be called before worker is terminated
+// Called by Tinypool when terminating the worker
 export const teardown = (): void => {
   // should exit correctly when user's signal listener exists
   process.once('SIGTERM', () => {
