@@ -76,6 +76,7 @@ export const createForksPool = (poolOptions: {
     execArgv,
     maxThreads,
     minThreads,
+    teardown: 'teardown',
     concurrentTasksPerWorker: 1,
     isolateWorkers: isolate,
   };
