@@ -420,12 +420,4 @@ const runInPool = async (
   }
 };
 
-// should be called before worker is terminated
-export const teardown = (): void => {
-  // should exit correctly when user's signal listener exists
-  process.once('SIGTERM', () => {
-    process.exit();
-  });
-};
-
 export default runInPool;

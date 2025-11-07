@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { expect, it } from '@rstest/core';
+import { it } from '@rstest/core';
 import { runRstestCli } from '../../scripts/';
 
-it('should exit correctly when signal listener exists', async () => {
-  const { cli, expectExecSuccess } = await runRstestCli({
+it('should catch signal exit correctly when signal listener exists', async () => {
+  const { expectExecFailed, expectLog } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'signalListener.test.ts'],
     options: {
@@ -12,9 +12,7 @@ it('should exit correctly when signal listener exists', async () => {
       },
     },
   });
-  await expectExecSuccess();
+  await expectExecFailed();
 
-  const logs = cli.stdout.split('\n').filter(Boolean);
-
-  expect(logs.find((log) => log.includes('Test Files 1 passed'))).toBeDefined();
+  expectLog(/Rstest exited unexpectedly with code 0/);
 });
