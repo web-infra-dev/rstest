@@ -49,6 +49,7 @@ export type RuntimeConfig = Pick<
   | 'snapshotFormat'
   | 'env'
   | 'logHeapUsage'
+  | 'chaiConfig'
 >;
 
 export type WorkerContext = {

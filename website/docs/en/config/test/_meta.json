@@ -33,6 +33,7 @@
   "hideSkippedTests",
   "slowTestThreshold",
   "snapshotFormat",
+  "chaiConfig",
   "resolveSnapshotPath",
   "printConsoleTrace",
   "onConsoleLog",

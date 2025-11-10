@@ -31,6 +31,7 @@ import {
 import * as chai from 'chai';
 import type {
   Assertion,
+  ChaiConfig,
   MatcherState,
   RstestExpect,
   TestCase,
@@ -44,6 +45,10 @@ chai.use(JestChaiExpect);
 chai.use(SnapshotPlugin);
 chai.use(JestAsymmetricMatchers);
 export { GLOBAL_EXPECT };
+
+export function setupChaiConfig(config: ChaiConfig): void {
+  Object.assign(chai.config, config);
+}
 
 export function createExpect({
   getCurrentTest,
