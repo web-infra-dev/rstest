@@ -8,7 +8,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
-import { assert, createExpect, GLOBAL_EXPECT } from './expect';
+import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = (
@@ -26,6 +26,10 @@ export const createRstestRuntime = (
   api: Rstest;
 } => {
   const { runner, api: runnerAPI } = createRunner({ workerState });
+
+  if (workerState.runtimeConfig.chaiConfig) {
+    setupChaiConfig(workerState.runtimeConfig.chaiConfig);
+  }
 
   const expect: RstestExpect = createExpect({
     workerState,

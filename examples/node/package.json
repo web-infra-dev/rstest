@@ -5,6 +5,7 @@
   "scripts": {
     "build": "rsbuild build",
     "test": "rstest",
+    "test:coverage": "rstest --coverage",
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
