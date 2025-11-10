@@ -247,10 +247,6 @@ const loadFiles = async ({
   });
 };
 
-const onExit = () => {
-  process.exit();
-};
-
 const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
@@ -294,15 +290,11 @@ const runInPool = async (
     process.exit = exit;
   });
 
-  process.off('SIGTERM', onExit);
-
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
-    // should exit correctly when user's signal listener exists
-    process.once('SIGTERM', onExit);
   };
 
   if (type === 'collect') {

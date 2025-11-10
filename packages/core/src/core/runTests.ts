@@ -448,8 +448,19 @@ export async function runTests(context: Rstest): Promise<void> {
       afterTestsWatchRun();
     });
   } else {
+    const unExpectedExit = (code?: number) => {
+      logger.log(
+        color.red(
+          `Rstest exited unexpectedly with code ${code}, terminating test run.`,
+        ),
+      );
+      process.exitCode = 1;
+    };
+    process.on('exit', unExpectedExit);
+
     await run();
     await pool.close();
     await closeServer();
+    process.off('exit', unExpectedExit);
   }
 }
