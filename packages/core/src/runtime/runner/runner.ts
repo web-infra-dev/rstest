@@ -55,7 +55,7 @@ export class TestRunner {
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: { passWithNoTests, retry, maxConcurrency },
+      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
       project,
       snapshotOptions,
     } = state;
@@ -253,6 +253,11 @@ export class TestRunner {
         afterEachListeners: AfterEachListener[];
       },
     ) => {
+      if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
+        defaultStatus = 'skip';
+        return;
+      }
+
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
           if (['todo', 'skip'].includes(test.runMode)) {

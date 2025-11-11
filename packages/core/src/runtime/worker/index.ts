@@ -264,7 +264,7 @@ const runInPool = async (
     type,
     context: {
       project,
-      runtimeConfig: { isolate },
+      runtimeConfig: { isolate, bail },
     },
   } = options;
 
@@ -351,6 +351,16 @@ const runInPool = async (
       unhandledErrors,
       interopDefault,
     } = await preparePool(options);
+
+    if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
+      return {
+        project,
+        testPath,
+        status: 'skip',
+        name: '',
+        results: [],
+      };
+    }
     // Initialize coverage collector if coverage is enabled
     const coverageProvider = await createCoverageProvider(
       options.context.runtimeConfig.coverage || {},
@@ -382,6 +392,9 @@ const runInPool = async (
       {
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
+        },
+        getCountOfFailedTests: async () => {
+          return rpc.getCountOfFailedTests();
         },
       },
       api,

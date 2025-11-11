@@ -2,6 +2,7 @@
 
 exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
 {
+  "bail": 0,
   "clearMocks": false,
   "coverage": {
     "clean": true,

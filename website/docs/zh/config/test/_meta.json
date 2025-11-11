@@ -12,6 +12,7 @@
   "testNamePattern",
 
   "env",
+  "bail",
   "retry",
   "testTimeout",
   "hookTimeout",

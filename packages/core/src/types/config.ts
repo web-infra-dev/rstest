@@ -35,6 +35,7 @@ export type ProjectConfig = Omit<
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
   | 'hideSkippedTests'
+  | 'bail'
 >;
 
 type SnapshotFormat = Omit<
@@ -132,6 +133,14 @@ export interface RstestConfig {
    * @default 'node'
    */
   testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+
+  /**
+   * Stop running tests after n failures.
+   * Set to 0 to run all tests regardless of failures.
+   *
+   * @default 0
+   */
+  bail?: number;
 
   /**
    * print console traces when calling any console method.

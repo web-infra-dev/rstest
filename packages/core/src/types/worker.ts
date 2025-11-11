@@ -23,6 +23,7 @@ export type RuntimeRPC = {
     sourceMaps: Record<string, string>;
   }>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
+  getCountOfFailedTests: () => Promise<number>;
   onConsoleLog: (log: UserConsoleLog) => void;
   resolveSnapshotPath: (filepath: string) => string;
 };
@@ -49,6 +50,7 @@ export type RuntimeConfig = Pick<
   | 'snapshotFormat'
   | 'env'
   | 'logHeapUsage'
+  | 'bail'
   | 'chaiConfig'
 >;
 

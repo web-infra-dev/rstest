@@ -31,7 +31,14 @@ const OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'runtime',
-    items: ['env', 'retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
+    items: [
+      'env',
+      'bail',
+      'retry',
+      'testTimeout',
+      'hookTimeout',
+      'maxConcurrency',
+    ],
   },
   {
     name: 'mock',

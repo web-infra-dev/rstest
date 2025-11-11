@@ -130,6 +130,8 @@ export async function runTests(context: Rstest): Promise<void> {
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
+    context.stateManager.reset();
+
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {

@@ -55,6 +55,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     snapshotFormat,
     env,
     logHeapUsage,
+    bail,
     chaiConfig,
   } = context.normalizedConfig;
 
@@ -79,6 +80,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage,
     snapshotFormat,
     logHeapUsage,
+    bail,
     chaiConfig,
   };
 };
@@ -199,9 +201,13 @@ export const createPool = async ({
 
   const rpcMethods = {
     onTestCaseResult: async (result: TestResult) => {
+      context.stateManager.onTestCaseResult(result);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
       );
+    },
+    getCountOfFailedTests: async (): Promise<number> => {
+      return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
       await Promise.all(
@@ -209,6 +215,7 @@ export const createPool = async ({
       );
     },
     onTestFileStart: async (test: TestFileInfo) => {
+      context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
       );
@@ -292,6 +299,7 @@ export const createPool = async ({
                 errors: [err],
               } as TestFileResult;
             });
+          context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));
           return result;
         }),
