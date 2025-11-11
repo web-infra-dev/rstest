@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
+import { getProjectItems, getTestItems } from './helpers';
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
@@ -90,10 +91,13 @@ suite('Extension Test Suite', () => {
         'Test controller should have discovered test items',
       );
 
-      const itemsArray: vscode.TestItem[] = [];
-      testController.items.forEach((item) => {
-        itemsArray.push(item);
-      });
+      const workspaceItems = getTestItems(testController.items);
+      assert.equal(workspaceItems[0].label, 'fixtures');
+
+      const projectItems = getTestItems(workspaceItems[0].children);
+      assert.equal(projectItems[0].label, 'rstest.config.ts');
+
+      const itemsArray = getProjectItems(testController);
 
       const foo = itemsArray.find((it) =>
         it.id.endsWith(

@@ -2,17 +2,9 @@ import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { delay } from './helpers';
+import { delay, getProjectItems } from './helpers';
 
 suite('Configuration Integration', () => {
-  function clearController(ctrl: vscode.TestController) {
-    const ids: string[] = [];
-    ctrl.items.forEach((item) => {
-      ids.push(item.id);
-    });
-    for (const id of ids) ctrl.items.delete(id);
-  }
-
   test('respects rstest.testFileGlobPattern (array-only)', async () => {
     const extension = vscode.extensions.getExtension('rstack.rstest');
     assert.ok(extension, 'Extension should be present');
@@ -33,12 +25,9 @@ suite('Configuration Integration', () => {
 
     try {
       await testController.resolveHandler?.(undefined as any);
-      await delay(200);
+      await delay(500);
 
-      const defaultRootsSpec: vscode.TestItem[] = [];
-      testController.items.forEach((it) => {
-        defaultRootsSpec.push(it);
-      });
+      const defaultRootsSpec = getProjectItems(testController);
       assert.equal(
         defaultRootsSpec.length,
         5,
@@ -52,14 +41,10 @@ suite('Configuration Integration', () => {
         vscode.ConfigurationTarget.Workspace,
       );
 
-      clearController(testController);
-      await testController.resolveHandler?.(undefined as any);
+      await testController.refreshHandler?.(undefined as any);
       await delay(500);
 
-      const rootsSpec: vscode.TestItem[] = [];
-      testController.items.forEach((it) => {
-        rootsSpec.push(it);
-      });
+      const rootsSpec = getProjectItems(testController);
       assert.ok(rootsSpec.length >= 1, 'Should discover spec files');
       assert.ok(
         rootsSpec.some((it) =>
@@ -88,14 +73,10 @@ suite('Configuration Integration', () => {
         vscode.ConfigurationTarget.Workspace,
       );
 
-      clearController(testController);
-      await testController.resolveHandler?.(undefined as any);
+      await testController.refreshHandler?.(undefined as any);
       await delay(500);
 
-      const rootsTest: vscode.TestItem[] = [];
-      testController.items.forEach((it) => {
-        rootsTest.push(it);
-      });
+      const rootsTest = getProjectItems(testController);
       assert.ok(rootsTest.length >= 1, 'Should discover test files');
       assert.ok(
         rootsTest.some((it) =>
@@ -134,8 +115,7 @@ suite('Configuration Integration', () => {
         (prev as any) ?? undefined,
         vscode.ConfigurationTarget.Workspace,
       );
-      clearController(testController);
-      await testController.resolveHandler?.(undefined as any);
+      await testController.refreshHandler?.(undefined as any);
       await delay(200);
       // Clean up test artifacts
       const fixturesVscodeDir = path.join(folders[0].uri.fsPath, '.vscode');

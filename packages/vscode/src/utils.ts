@@ -1,37 +1,17 @@
-import vscode from 'vscode';
-import { getConfigValue } from './config';
+import type * as vscode from 'vscode';
 
-export function shouldIgnorePath(path: string) {
+export function shouldIgnoreUri(uri: vscode.Uri) {
   return (
-    path.includes('/node_modules/') ||
-    path.includes('/.git/') ||
-    path.endsWith('.git')
+    uri.scheme !== 'file' ||
+    uri.path.includes('/node_modules/') ||
+    uri.path.includes('/.git/') ||
+    uri.path.endsWith('.git')
   );
 }
 
 export function isTestFile(filename: string): boolean {
   const regex = /.*\.(test|spec)\.(c|m)?[jt]sx?$/;
   return regex.test(filename);
-}
-
-export type WorkspaceTestPattern = {
-  workspaceFolder: vscode.WorkspaceFolder;
-  pattern: vscode.GlobPattern;
-};
-
-export function getWorkspaceTestPatterns(): WorkspaceTestPattern[] {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) {
-    return [];
-  }
-
-  return folders.flatMap((workspaceFolder) => {
-    const globs = getConfigValue('testFileGlobPattern', workspaceFolder);
-    return globs.map((glob) => ({
-      workspaceFolder,
-      pattern: new vscode.RelativePattern(workspaceFolder, glob),
-    }));
-  });
 }
 
 export function promiseWithTimeout<T>(
