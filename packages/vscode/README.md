@@ -15,10 +15,10 @@ The extension activates automatically when your workspace contains Rstest config
 
 ## Configuration
 
-| Setting                      | Type     | Default                          | Description                                                                     |
-| ---------------------------- | -------- | -------------------------------- | ------------------------------------------------------------------------------- |
-| `rstest.testFileGlobPattern` | string[] | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace.                   |
-| `rstest.logLevel`            | string   | `default`                        | Controls Output channel verbosity; set to `debug` for extra diagnostic logging. |
+| Setting                      | Type     | Default                          | Description                                                                                                                                                                                                                                                           |
+| ---------------------------- | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rstest.testFileGlobPattern` | string[] | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace.                                                                                                                                                                                                         |
+| `rstest.rstestPackagePath`   | string   | `undefined`                      | The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder. |
 
 ## How it works
 
