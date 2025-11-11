@@ -119,6 +119,11 @@ export class Rstest implements RstestContext {
             if (existsSync(tsconfigPath)) {
               config.source.tsconfigPath = tsconfigPath;
             }
+          } else {
+            config.source.tsconfigPath = getAbsolutePath(
+              config.root,
+              config.source.tsconfigPath,
+            );
           }
           return {
             configFilePath: project.configFilePath,
