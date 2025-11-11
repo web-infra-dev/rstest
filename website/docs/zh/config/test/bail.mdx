@@ -1,0 +1,28 @@
+# bail
+
+- **类型：** `number`
+- **默认值：** `0`
+- **CLI：** `--bail <times>`
+
+中止测试运行在指定个数的测试失败后。这对于在发生失败时提前停止测试运行非常有用。
+
+将其设置为 `0`（默认值）表示将运行所有测试。将其设置为 `1` 将在第一个测试失败后停止测试运行。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --bail 1
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  bail: 1,
+});
+```
+  </Tab>
+</Tabs>

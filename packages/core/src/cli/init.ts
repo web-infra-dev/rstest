@@ -42,6 +42,7 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  bail?: number;
 };
 
 async function resolveConfig(
@@ -78,6 +79,7 @@ async function resolveConfig(
     'testEnvironment',
     'hideSkippedTests',
     'logHeapUsage',
+    'bail',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

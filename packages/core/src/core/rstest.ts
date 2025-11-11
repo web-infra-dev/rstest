@@ -16,11 +16,11 @@ import type {
   RstestCommand,
   RstestConfig,
   RstestContext,
-  Test,
   TestFileResult,
   TestResult,
 } from '../types';
 import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
+import { TestStateManager } from './stateManager';
 
 /**
  * Only letters, numbers, "-", "_", and "$" are allowed.
@@ -48,7 +48,6 @@ export class Rstest implements RstestContext {
   public rootPath: string;
   public originalConfig: RstestConfig;
   public normalizedConfig: NormalizedConfig;
-  public idMap: Map<string, Test> = new Map();
   public reporterResults: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -56,6 +55,8 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  public stateManager: TestStateManager = new TestStateManager();
+
   public projects: ProjectContext[] = [];
 
   public constructor(
@@ -106,10 +107,12 @@ export class Rstest implements RstestContext {
           const config = withDefaultConfig(
             project.config,
           ) as NormalizedProjectConfig;
+          // some configs are global only
           config.isolate = rstestConfig.isolate;
-          config.source ??= {};
           config.coverage = rstestConfig.coverage;
+          config.bail = rstestConfig.bail;
 
+          config.source ??= {};
           if (!config.source.tsconfigPath) {
             const tsconfigPath = join(config.root, TS_CONFIG_FILE);
 

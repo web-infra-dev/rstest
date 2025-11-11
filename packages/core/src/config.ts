@@ -148,6 +148,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   env: {},
   hideSkippedTests: false,
   logHeapUsage: false,
+  bail: 0,
   coverage: {
     exclude: [
       '**/node_modules/**',
