@@ -19,7 +19,8 @@ const normalizeImportPath = (path: string) => {
 
 export class Worker {
   public rstestPath!: string;
-  public cwd!: string;
+  public root!: string;
+  public configFilePath!: string;
 
   public async runTest(data: WorkerRunTestData) {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
@@ -45,9 +46,10 @@ export class Worker {
 
   public async initRstest(data: WorkerInitData) {
     this.rstestPath = data.rstestPath;
-    this.cwd = data.cwd;
+    this.root = data.root;
+    this.configFilePath = data.configFilePath;
     logger.debug('Initialized worker context', {
-      cwd: this.cwd,
+      root: this.root,
       rstestPath: this.rstestPath,
     });
   }
@@ -62,7 +64,8 @@ export class Worker {
     const { createRstest, initCli } = rstestModule;
 
     const commonOptions: CommonOptions = {
-      root: this.cwd,
+      root: this.root,
+      config: this.configFilePath,
     };
 
     const initializedOptions = await initCli(commonOptions);
