@@ -56,6 +56,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     env,
     logHeapUsage,
     bail,
+    chaiConfig,
   } = context.normalizedConfig;
 
   return {
@@ -80,6 +81,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     snapshotFormat,
     logHeapUsage,
     bail,
+    chaiConfig,
   };
 };
 

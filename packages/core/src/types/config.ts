@@ -1,11 +1,16 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
+import type { config } from 'chai';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+
+export type ChaiConfig = Partial<
+  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+>;
 
 export type RstestPoolType = 'forks';
 
@@ -260,6 +265,11 @@ export interface RstestConfig {
    */
   coverage?: CoverageOptions;
 
+  /**
+   * chai configuration options
+   */
+  chaiConfig?: ChaiConfig;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
@@ -299,6 +309,7 @@ type OptionalKeys =
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
+  | 'chaiConfig'
   | 'resolveSnapshotPath';
 
 export type NormalizedConfig = Required<

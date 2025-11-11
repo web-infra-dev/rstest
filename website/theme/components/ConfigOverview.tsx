@@ -63,6 +63,7 @@ const OVERVIEW_GROUPS: Group[] = [
       'hideSkippedTests',
       'slowTestThreshold',
       'snapshotFormat',
+      'chaiConfig',
       'resolveSnapshotPath',
       'onConsoleLog',
       'printConsoleTrace',

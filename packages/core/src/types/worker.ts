@@ -51,6 +51,7 @@ export type RuntimeConfig = Pick<
   | 'env'
   | 'logHeapUsage'
   | 'bail'
+  | 'chaiConfig'
 >;
 
 export type WorkerContext = {
