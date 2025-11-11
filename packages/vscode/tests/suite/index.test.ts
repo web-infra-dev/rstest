@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
+import { delay, getProjectItems, getTestItems } from './helpers';
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
@@ -35,15 +36,6 @@ suite('Extension Test Suite', () => {
       workspaceFolders[0].uri.path.includes('fixtures'),
       'Should open the fixtures workspace',
     );
-
-    // Open the foo.test.ts file from fixtures
-    const fooTestUri = vscode.Uri.joinPath(
-      workspaceFolders[0].uri,
-      'test',
-      'foo.test.ts',
-    );
-    const document = await vscode.workspace.openTextDocument(fooTestUri);
-    await vscode.window.showTextDocument(document);
 
     // Check if the extension is activated
     const extension = vscode.extensions.getExtension('rstack.rstest');
@@ -90,35 +82,26 @@ suite('Extension Test Suite', () => {
         'Test controller should have discovered test items',
       );
 
-      const itemsArray: vscode.TestItem[] = [];
-      testController.items.forEach((item) => {
-        itemsArray.push(item);
-      });
+      const workspaceItems = getTestItems(testController.items);
+      assert.equal(workspaceItems[0].label, 'workspace-1');
 
-      const foo = itemsArray.find((it) =>
-        it.id.endsWith(
-          '/rstest/packages/vscode/tests/fixtures/test/foo.test.ts',
-        ),
-      );
+      const projectItems = getTestItems(workspaceItems[0].children);
+      assert.equal(projectItems[0].label, 'rstest.config.ts');
+
+      const itemsArray = getProjectItems(testController);
+
+      const foo = itemsArray.find((it) => it.id.endsWith('/test/foo.test.ts'));
       const index = itemsArray.find((it) =>
-        it.id.endsWith(
-          '/rstest/packages/vscode/tests/fixtures/test/index.test.ts',
-        ),
+        it.id.endsWith('/test/index.test.ts'),
       );
       const jsSpec = itemsArray.find((it) =>
-        it.id.endsWith(
-          '/rstest/packages/vscode/tests/fixtures/test/jsFile.spec.js',
-        ),
+        it.id.endsWith('/test/jsFile.spec.js'),
       );
       const jsxFile = itemsArray.find((it) =>
-        it.id.endsWith(
-          '/rstest/packages/vscode/tests/fixtures/test/tsxFile.test.tsx',
-        ),
+        it.id.endsWith('/test/tsxFile.test.tsx'),
       );
       const tsxFile = itemsArray.find((it) =>
-        it.id.endsWith(
-          '/rstest/packages/vscode/tests/fixtures/test/tsxFile.test.tsx',
-        ),
+        it.id.endsWith('/test/tsxFile.test.tsx'),
       );
 
       assert.ok(foo, 'foo.test.ts should be discovered');
@@ -149,15 +132,6 @@ suite('Extension Test Suite', () => {
         ],
       });
 
-      // Open the index.test.ts file from fixtures
-      const indexTestUri = vscode.Uri.joinPath(
-        workspaceFolders[0].uri,
-        'test',
-        'index.test.ts',
-      );
-      const document2 = await vscode.workspace.openTextDocument(indexTestUri);
-      await vscode.window.showTextDocument(document2);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
       assert.ok(index, 'index.test.ts should be discovered');
       const indexTree = toLabelTree(index!);
       assert.deepStrictEqual(indexTree, {

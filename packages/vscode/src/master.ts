@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import path, { dirname } from 'node:path';
 import { createBirpc } from 'birpc';
 import vscode from 'vscode';
@@ -11,21 +11,22 @@ import type { Worker } from './worker';
 
 export class RstestApi {
   public worker: Pick<Worker, 'initRstest' | 'runTest'> | null = null;
+  private childProcess: ChildProcess | null = null;
   private versionMismatchWarned = false;
 
-  public resolveRstestPath(): { cwd: string; rstestPath: string }[] {
+  constructor(
+    private workspace: vscode.WorkspaceFolder,
+    private cwd: string,
+    private configFilePath: string,
+  ) {}
+
+  private resolveRstestPath(): string {
     // TODO: support Yarn PnP
     try {
-      // TODO: use 0 temporarily.
-      const workspace = vscode.workspace.workspaceFolders?.[0];
-      if (!workspace) {
-        throw new Error('No workspace found');
-      }
-
       // Check if user configured a custom package path (last resort fix)
       let configuredPackagePath = getConfigValue(
         'rstestPackagePath',
-        workspace,
+        this.workspace,
       );
 
       if (configuredPackagePath) {
@@ -33,7 +34,7 @@ export class RstestApi {
         configuredPackagePath = configuredPackagePath.replace(
           // biome-ignore lint: This is a VS Code config placeholder string
           '${workspaceFolder}',
-          workspace.uri.fsPath,
+          this.workspace.uri.fsPath,
         );
         // Validate that the path points to package.json
         if (!configuredPackagePath.endsWith('package.json')) {
@@ -44,7 +45,7 @@ export class RstestApi {
         // User provided a custom path to package.json
         configuredPackagePath = path.isAbsolute(configuredPackagePath)
           ? configuredPackagePath
-          : path.resolve(workspace.uri.fsPath, configuredPackagePath);
+          : path.resolve(this.workspace.uri.fsPath, configuredPackagePath);
 
         logger.debug(
           'Using configured rstestPackagePath:',
@@ -55,7 +56,7 @@ export class RstestApi {
       const nodeExport = require.resolve(
         configuredPackagePath ? dirname(configuredPackagePath) : '@rstest/core',
         {
-          paths: [workspace.uri.fsPath],
+          paths: [this.cwd],
         },
       );
 
@@ -64,7 +65,7 @@ export class RstestApi {
         corePackageJsonPath = require.resolve(
           configuredPackagePath || '@rstest/core/package.json',
           {
-            paths: [workspace.uri.fsPath],
+            paths: [this.cwd],
           },
         );
       } catch (e) {
@@ -72,7 +73,7 @@ export class RstestApi {
           'Failed to resolve @rstest/core/package.json. Please upgrade @rstest/core to the latest version.',
         );
         logger.error('Failed to resolve @rstest/core/package.json', e);
-        return [];
+        return '';
       }
       const corePackageJson = require(corePackageJsonPath) as {
         version?: string;
@@ -95,12 +96,7 @@ export class RstestApi {
         );
       }
 
-      return [
-        {
-          cwd: workspace.uri.fsPath,
-          rstestPath: nodeExport,
-        },
-      ];
+      return nodeExport;
     } catch (e) {
       vscode.window.showErrorMessage((e as any).toString());
       throw e;
@@ -141,19 +137,18 @@ export class RstestApi {
   }
 
   public async createChildProcess() {
-    const { cwd, rstestPath } = this.resolveRstestPath()[0];
-    if (!cwd || !rstestPath) {
-      logger.error('Failed to resolve rstest path or cwd');
+    const rstestPath = this.resolveRstestPath();
+    if (!rstestPath) {
+      logger.error('Failed to resolve rstest path');
       return;
     }
-
     const execArgv: string[] = [];
     const workerPath = path.resolve(__dirname, 'worker.js');
     logger.debug('Spawning worker process', {
       workerPath,
     });
     const rstestProcess = spawn('node', [...execArgv, workerPath], {
-      cwd,
+      cwd: this.cwd,
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       serialization: 'advanced',
       env: {
@@ -161,6 +156,7 @@ export class RstestApi {
         TEST: 'true',
       },
     });
+    this.childProcess = rstestProcess;
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
@@ -173,22 +169,34 @@ export class RstestApi {
     });
 
     this.worker = createBirpc<Worker, RstestApi>(this, {
-      post: (data) => rstestProcess.send(data),
+      // use this.childProcess to catch post is called after process killed
+      post: (data) => this.childProcess?.send(data),
       on: (fn) => rstestProcess.on('message', fn),
       bind: 'functions',
     });
 
-    await this.worker.initRstest({ cwd, rstestPath });
-    logger.debug('Sent init payload to worker', { cwd, rstestPath });
+    await this.worker.initRstest({
+      root: this.cwd,
+      rstestPath,
+      configFilePath: this.configFilePath,
+    });
+    logger.debug('Sent init payload to worker', {
+      root: this.cwd,
+      rstestPath,
+      configFilePath: this.configFilePath,
+    });
 
     rstestProcess.on('exit', (code, signal) => {
       logger.debug('Worker process exited', { code, signal });
     });
   }
 
-  public async createRstestWorker() {}
-
   async log(level: LogLevel, message: string) {
     logger[level](message);
+  }
+
+  public dispose() {
+    this.childProcess?.kill();
+    this.childProcess = null;
   }
 }

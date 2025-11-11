@@ -3,7 +3,8 @@ import type { TestFileResult, TestResult } from '@rstest/core';
 //#region master -> worker
 export type WorkerInitData = {
   rstestPath: string;
-  cwd: string;
+  root: string;
+  configFilePath: string;
 };
 
 export type WorkerRunTestData = {
