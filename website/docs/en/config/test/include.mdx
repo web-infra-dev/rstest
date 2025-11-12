@@ -4,7 +4,7 @@
 - **Default:** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
 - **CLI:** `--include '**/*.test.ts' --include '**/*.spec.ts'`
 
-A list of glob patterns that match your test files.
+A list of glob patterns that match your test files. These patterns will be resolved relative to the [root](/config/test/root) (`process.cwd()` by default).
 
 import { Tab, Tabs } from '@theme';
 
@@ -24,3 +24,43 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+You can run `npx rstest list --filesOnly` to see the list of test files that Rstest will include.
+
+```bash
+$ npx rstest list --filesOnly
+
+# the output is shown below:
+a.test.ts
+b.test.ts
+```
+
+## Default behavior
+
+By default, Rstest will include all javascript / typescript files with `.test.` or `.spec.` suffix in the filename.
+
+The following is a visualization of the default pattern:
+
+```bash
+├── __tests__
+│   └── index.test.js # test
+│   └── App.spec.tsx # test
+│   └── helper.ts # not test
+├── src
+│   └── component.ts # not test
+│   └── component.test.tsx # test
+├── bar.spec.jsx # test
+├── index.test.js # test
+└── index.js # not test
+```
+
+It should be noted that if you specify `index.test.ts` as the include pattern, Rstest will only include `index.test.ts` in the root directory. If you want to include `index.test.ts` in all subdirectories, you need to use `**/index.test.ts`.
+
+```diff
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+-  include: ['index.test.ts'],
++  include: ['**/index.test.ts'],
+});
+```

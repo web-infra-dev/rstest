@@ -1,7 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
-import type { ListCommandOptions, RstestContext, Test } from '../types';
+import type {
+  FormattedError,
+  ListCommandOptions,
+  RstestContext,
+  Test,
+} from '../types';
 import {
   color,
   getSetupFiles,
@@ -12,38 +17,13 @@ import {
 } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-export async function listTests(
-  context: RstestContext,
-  { filesOnly, json }: ListCommandOptions,
-): Promise<void> {
-  const { rootPath } = context;
-
-  const testEntries: Record<string, Record<string, string>> = {};
-
-  const globTestSourceEntries = async (
-    name: string,
-  ): Promise<Record<string, string>> => {
-    if (testEntries[name]) {
-      return testEntries[name];
-    }
-    const { include, exclude, includeSource, root } = context.projects.find(
-      (p) => p.environmentName === name,
-    )!.normalizedConfig;
-
-    const entries = await getTestEntries({
-      include,
-      exclude: exclude.patterns,
-      rootPath,
-      projectRoot: root,
-      fileFilters: context.fileFilters || [],
-      includeSource,
-    });
-
-    testEntries[name] = entries;
-
-    return entries;
-  };
-
+const collectTests = async ({
+  context,
+  globTestSourceEntries,
+}: {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+}) => {
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
@@ -70,7 +50,7 @@ export async function listTests(
     },
     setupFiles,
     rsbuildInstance,
-    rootPath,
+    rootPath: context.rootPath,
   });
 
   const pool = await createPool({
@@ -106,7 +86,91 @@ export async function listTests(
     }),
   );
 
-  const list = returns.flatMap((r) => r.list);
+  return {
+    list: returns.flatMap((r) => r.list),
+    getSourceMap: async (name: string) => {
+      const resource = returns.find((r) => r.assetNames.includes(name));
+      return (await resource?.getSourceMaps([name]))?.[name];
+    },
+    close: async () => {
+      await closeServer();
+      await pool.close();
+    },
+  };
+};
+
+const collectTestFiles = async ({
+  context,
+  globTestSourceEntries,
+}: {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+}) => {
+  const list: {
+    tests: Test[];
+    testPath: string;
+    project: string;
+    errors?: FormattedError[];
+  }[] = [];
+  for (const project of context.projects) {
+    const files = await globTestSourceEntries(project.environmentName);
+    list.push(
+      ...Object.values(files).map((testPath) => ({
+        testPath,
+        project: project.name,
+        tests: [],
+        errors: [],
+      })),
+    );
+  }
+  return {
+    close: async () => {},
+    list,
+    getSourceMap: async (_name: string) => null,
+  };
+};
+
+export async function listTests(
+  context: RstestContext,
+  { filesOnly, json }: ListCommandOptions,
+): Promise<void> {
+  const { rootPath } = context;
+
+  const testEntries: Record<string, Record<string, string>> = {};
+
+  const globTestSourceEntries = async (
+    name: string,
+  ): Promise<Record<string, string>> => {
+    if (testEntries[name]) {
+      return testEntries[name];
+    }
+    const { include, exclude, includeSource, root } = context.projects.find(
+      (p) => p.environmentName === name,
+    )!.normalizedConfig;
+
+    const entries = await getTestEntries({
+      include,
+      exclude: exclude.patterns,
+      rootPath,
+      projectRoot: root,
+      fileFilters: context.fileFilters || [],
+      includeSource,
+    });
+
+    testEntries[name] = entries;
+
+    return entries;
+  };
+
+  const { list, close, getSourceMap } = filesOnly
+    ? await collectTestFiles({
+        context,
+        globTestSourceEntries,
+      })
+    : await collectTests({
+        context,
+        globTestSourceEntries,
+      });
 
   const tests: {
     file: string;
@@ -156,9 +220,7 @@ export async function listTests(
           await printError(
             error,
             async (name) => {
-              const resource = returns.find((r) => r.assetNames.includes(name));
-
-              const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
+              const sourceMap = await getSourceMap(name);
               return sourceMap ? JSON.parse(sourceMap) : null;
             },
             rootPath,
@@ -167,9 +229,7 @@ export async function listTests(
       }
     }
 
-    await closeServer();
-
-    await pool.close();
+    await close();
     return;
   }
 
@@ -212,6 +272,5 @@ export async function listTests(
     }
   }
 
-  await closeServer();
-  await pool.close();
+  await close();
 }
