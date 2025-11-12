@@ -15,7 +15,7 @@ const autoExternalNodeModules: (
     return callback();
   }
 
-  if (request.startsWith('@swc/helpers/')) {
+  if (request.startsWith('@swc/helpers/') || request.endsWith('.wasm')) {
     // @swc/helper is a special case (Load by require but resolve to esm)
     return callback();
   }
