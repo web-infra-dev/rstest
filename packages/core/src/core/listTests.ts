@@ -119,7 +119,6 @@ const collectTestFiles = async ({
         testPath,
         project: project.name,
         tests: [],
-        errors: [],
       })),
     );
   }
