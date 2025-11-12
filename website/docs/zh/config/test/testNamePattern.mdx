@@ -8,6 +8,8 @@
 
 如果将 `testNamePattern` 设置为 `bar`，则测试名称中不包含 `bar` 的测试将被跳过。
 
+需要注意的是，测试名称由测试用例名称和包裹它的测试套件名称组成。如果测试套件名称中包含 `bar`，则该测试套件中的所有测试用例都将被运行。
+
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
@@ -36,5 +38,22 @@ test('test foo', () => {
 // run
 test('test bar', () => {
   expect(true).toBe(true);
+});
+
+// run all tests in this suite
+describe('bar', () => {
+  it('should add two numbers correctly', () => {
+    expect(1 + 1).toBe(2);
+  });
+});
+```
+
+如果你希望排除某些测试，可以使用负向正则表达式。例如，`/^(?!.*bar).*$/` 将排除所有名称中包含 `bar` 的测试。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testNamePattern: /^(?!.*bar).*$/,
 });
 ```
