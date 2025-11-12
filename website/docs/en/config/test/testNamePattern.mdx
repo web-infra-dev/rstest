@@ -19,11 +19,11 @@ import { Tab, Tabs } from '@theme';
   ```
   </Tab>
   <Tab label="rstest.config.ts">
-  ```ts
-  import { defineConfig } from '@rstest/core';
+```ts
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-testNamePattern: 'bar',
+  testNamePattern: 'bar',
 });
 
 ````
@@ -33,19 +33,19 @@ testNamePattern: 'bar',
 ```ts
 // skipped
 test('test foo', () => {
-expect(true).toBe(true);
+  expect(true).toBe(true);
 });
 
 // run
 test('test bar', () => {
-expect(true).toBe(true);
+  expect(true).toBe(true);
 });
 
 // run all tests in this suite
 describe('bar', () => {
-it('should add two numbers correctly', () => {
-  expect(1 + 1).toBe(2);
-});
+  it('should add two numbers correctly', () => {
+    expect(1 + 1).toBe(2);
+  });
 });
 ````
 
