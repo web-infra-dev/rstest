@@ -25,8 +25,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testNamePattern: 'bar',
 });
-
-````
+```
 </Tab>
 </Tabs>
 
@@ -47,7 +46,7 @@ describe('bar', () => {
     expect(1 + 1).toBe(2);
   });
 });
-````
+```
 
 If you want to exclude certain tests instead, you can use a negative regex. For example, `/^(?!.*bar).*$/` skips every test whose name contains `bar`.
 
