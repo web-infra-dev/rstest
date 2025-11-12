@@ -1,69 +1,39 @@
-import { inspect } from 'node:util';
+import { formatWithOptions } from 'node:util';
 import vscode from 'vscode';
-import { getConfigValue, type LogLevel } from './config';
 
 function formatValues(values: unknown[]): string {
-  return values
-    .map((value) =>
-      typeof value === 'string'
-        ? value
-        : inspect(value, { depth: 4, colors: false }),
-    )
-    .join(' ');
+  return formatWithOptions({ depth: 4 }, ...values);
 }
 
 export class Logger implements vscode.Disposable {
-  private readonly channel: vscode.OutputChannel;
-  private readonly disposables: vscode.Disposable[] = [];
-  private level: LogLevel;
+  readonly #channel: vscode.LogOutputChannel;
 
   constructor(private readonly name = 'Rstest') {
-    this.channel = vscode.window.createOutputChannel(this.name);
-    this.level = this.readLevel();
-    this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration('rstest.logLevel')) {
-          this.level = this.readLevel();
-        }
-      }),
-    );
+    this.#channel = vscode.window.createOutputChannel(this.name, { log: true });
+  }
+
+  public trace(...values: unknown[]) {
+    this.#channel.trace(formatValues(values));
   }
 
   public debug(...values: unknown[]) {
-    if (this.level !== 'debug') {
-      return;
-    }
-
-    this.write('DEBUG', values);
+    this.#channel.debug(formatValues(values));
   }
 
   public info(...values: unknown[]) {
-    this.write('INFO', values);
+    this.#channel.info(formatValues(values));
   }
 
   public warn(...values: unknown[]) {
-    this.write('WARN', values);
+    this.#channel.warn(formatValues(values));
   }
 
   public error(...values: unknown[]) {
-    this.write('ERROR', values);
+    this.#channel.error(formatValues(values));
   }
 
   public dispose() {
-    this.disposables.forEach((disposable) => {
-      disposable.dispose();
-    });
-    this.channel.dispose();
-  }
-
-  private readLevel(): LogLevel {
-    return getConfigValue('logLevel');
-  }
-
-  private write(tag: string, values: unknown[]) {
-    const timestamp = new Date().toISOString();
-    const message = formatValues(values);
-    this.channel.appendLine(`[${timestamp}] [${tag}] ${message}`);
+    this.#channel.dispose();
   }
 }
 

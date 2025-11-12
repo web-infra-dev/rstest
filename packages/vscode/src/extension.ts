@@ -35,7 +35,7 @@ class Rstest {
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
-    context.subscriptions.push(this.ctrl, logger);
+    context.subscriptions.push(this.ctrl);
 
     this.fileChangedEmitter = new vscode.EventEmitter<vscode.Uri>();
     this.watchingTests = new Map<

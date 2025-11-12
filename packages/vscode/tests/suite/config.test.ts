@@ -2,7 +2,7 @@ import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { delay, waitForConfigValue } from './helpers';
+import { delay } from './helpers';
 
 suite('Configuration Integration', () => {
   function clearController(ctrl: vscode.TestController) {
@@ -123,37 +123,6 @@ suite('Configuration Integration', () => {
       if (fs.existsSync(fixturesVscodeDir)) {
         fs.rmSync(fixturesVscodeDir, { recursive: true, force: true });
       }
-    }
-  });
-
-  test('respects rstest.logLevel', async () => {
-    const config = vscode.workspace.getConfiguration('rstest');
-    const prev = config.get('logLevel');
-
-    try {
-      await config.update(
-        'logLevel',
-        'debug',
-        vscode.ConfigurationTarget.Workspace,
-      );
-      await delay(500);
-
-      let logLevel = config.get('logLevel');
-
-      logLevel = await waitForConfigValue({
-        initialValue: logLevel,
-        read: () => vscode.workspace.getConfiguration('rstest').get('logLevel'),
-        expected: 'debug',
-      });
-
-      assert.strictEqual(logLevel, 'debug');
-    } finally {
-      await config.update(
-        'logLevel',
-        (prev as any) ?? undefined,
-        vscode.ConfigurationTarget.Workspace,
-      );
-      await delay(100);
     }
   });
 });
