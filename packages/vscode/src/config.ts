@@ -12,7 +12,13 @@ export type ExtensionConfig = {
 };
 
 export const defaultConfig: ExtensionConfig = {
-  testFileGlobPattern: ['**/*.test.*', '**/*.spec.*'],
+  // https://code.visualstudio.com/docs/editor/glob-patterns
+  testFileGlobPattern: [
+    '**/*.{test,spec}.[jt]s',
+    '**/*.{test,spec}.[c|m][jt]s',
+    '**/*.{test,spec}.[jt]sx',
+    '**/*.{test,spec}.[c|m][jt]sx',
+  ],
 };
 
 // Type-safe getter for a single config value with priority:

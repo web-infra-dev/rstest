@@ -32,10 +32,23 @@ suite('Configuration Integration', () => {
     const prev = config.get('testFileGlobPattern');
 
     try {
-      // 1) Only discover *.spec.* files
+      await testController.resolveHandler?.(undefined as any);
+      await delay(200);
+
+      const defaultRootsSpec: vscode.TestItem[] = [];
+      testController.items.forEach((it) => {
+        defaultRootsSpec.push(it);
+      });
+      assert.equal(
+        defaultRootsSpec.length,
+        5,
+        'Should discover all test files',
+      );
+
+      // 1) Only discover *.spec.js/ts files
       await config.update(
         'testFileGlobPattern',
-        ['**/*.spec.*'],
+        ['**/*.spec.[jt]s'],
         vscode.ConfigurationTarget.Workspace,
       );
 
@@ -53,6 +66,12 @@ suite('Configuration Integration', () => {
           it.id.endsWith('/tests/fixtures/test/jsFile.spec.js'),
         ),
         'Should include jsFile.spec.js',
+      );
+      assert.ok(
+        !rootsSpec.some((it) =>
+          it.id.endsWith('/tests/fixtures/test/jsFile.spec.js.txt'),
+        ),
+        'Should not include jsFile.spec.js.txt',
       );
       // Ensure no duplicate non-spec-only additions by counting unique suffixes
       assert.ok(

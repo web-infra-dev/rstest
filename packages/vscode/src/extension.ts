@@ -323,7 +323,8 @@ function startWatchingWorkspace(
 
 function isTestFilePath(uri: vscode.Uri): boolean {
   const filename = uri.path.split('/').pop() || uri.path;
-  return filename.includes('.test.') || filename.includes('.spec.');
+  const regex = /.*\.(test|spec)\.?(c|m)?[jt]sx?$/;
+  return regex.test(filename);
 }
 
 class RstestFileCoverage extends vscode.FileCoverage {
