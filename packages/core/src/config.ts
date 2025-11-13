@@ -161,9 +161,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
       // This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
       // not support `?()`: '**/*.{test,spec}.?(c|m)[jt]s?(x)',
       '**/*.{test,spec}.[jt]s',
-      '**/*.{test,spec}.[c|m][jt]s',
+      '**/*.{test,spec}.[cm][jt]s',
       '**/*.{test,spec}.[jt]sx',
-      '**/*.{test,spec}.[c|m][jt]sx',
+      '**/*.{test,spec}.[cm][jt]sx',
     ],
     enabled: false,
     provider: 'istanbul',

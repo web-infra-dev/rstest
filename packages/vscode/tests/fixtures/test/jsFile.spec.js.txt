@@ -1,0 +1,8 @@
+// Test fixture file to verify that non-JS/TS files are excluded from test discovery
+const { describe, it, expect } = require('@rstest/core');
+
+describe('JS', () => {
+  it('should run in JS', () => {
+    expect(1).toBe(1);
+  });
+});

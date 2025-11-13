@@ -35,8 +35,10 @@
             "type": "string"
           },
           "default": [
-            "**/*.test.*",
-            "**/*.spec.*"
+            "**/*.{test,spec}.[jt]s",
+            "**/*.{test,spec}.[cm][jt]s",
+            "**/*.{test,spec}.[jt]sx",
+            "**/*.{test,spec}.[cm][jt]sx"
           ]
         },
         "rstest.rstestPackagePath": {
