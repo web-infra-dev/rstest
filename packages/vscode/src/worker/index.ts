@@ -1,9 +1,16 @@
+import { pathToFileURL } from 'node:url';
 import { WebSocket } from 'ws';
 import type { WorkerInitData, WorkerRunTestData } from '../types';
 import { logger } from './logger';
 import { VscodeReporter } from './reporter';
 
 type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
+
+// fix ESM import path issue on windows
+// Only URLs with a scheme in: file, data, and node are supported by the default ESM loader.
+const normalizeImportPath = (path: string) => {
+  return pathToFileURL(path).toString();
+};
 
 class Worker {
   private ws: WebSocket;
@@ -51,7 +58,7 @@ class Worker {
 
   public async createRstest(data: WorkerRunTestData) {
     const rstestModule = (await import(
-      this.rstestPath
+      normalizeImportPath(this.rstestPath)
     )) as typeof import('@rstest/core');
     logger.debug('Loaded Rstest module');
     const { createRstest, initCli } = rstestModule;
