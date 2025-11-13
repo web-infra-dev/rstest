@@ -50,7 +50,7 @@ export default defineConfig({
   ],
   tools: {
     rspack: {
-      ignoreWarnings: [/Module not found/]
-    }
-  }
+      ignoreWarnings: [/Module not found/],
+    },
+  },
 });
