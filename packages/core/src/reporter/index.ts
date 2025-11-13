@@ -1,6 +1,5 @@
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
-import { isCI } from 'std-env';
 import type {
   DefaultReporterOptions,
   Duration,
@@ -13,7 +12,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger } from '../utils';
+import { color, isTTY, logger } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle } from './utils';
@@ -36,7 +35,7 @@ export class DefaultReporter implements Reporter {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
-    if (!isCI) {
+    if (isTTY()) {
       this.statusRenderer = new StatusRenderer(rootPath);
     }
   }
