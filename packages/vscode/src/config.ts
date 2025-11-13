@@ -15,9 +15,9 @@ export const defaultConfig: ExtensionConfig = {
   // https://code.visualstudio.com/docs/editor/glob-patterns
   testFileGlobPattern: [
     '**/*.{test,spec}.[jt]s',
-    '**/*.{test,spec}.[c|m][jt]s',
+    '**/*.{test,spec}.[cm][jt]s',
     '**/*.{test,spec}.[jt]sx',
-    '**/*.{test,spec}.[c|m][jt]sx',
+    '**/*.{test,spec}.[cm][jt]sx',
   ],
 };
 

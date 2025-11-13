@@ -9,7 +9,11 @@ import {
   TestFile,
   testData,
 } from './testTree';
-import { getWorkspaceTestPatterns, shouldIgnorePath } from './utils';
+import {
+  getWorkspaceTestPatterns,
+  isTestFile,
+  shouldIgnorePath,
+} from './utils';
 
 export async function activate(context: vscode.ExtensionContext) {
   const rstest = new Rstest(context);
@@ -322,9 +326,7 @@ function startWatchingWorkspace(
 }
 
 function isTestFilePath(uri: vscode.Uri): boolean {
-  const filename = uri.path.split('/').pop() || uri.path;
-  const regex = /.*\.(test|spec)\.?(c|m)?[jt]sx?$/;
-  return regex.test(filename);
+  return isTestFile(uri.path.split('/').pop() || uri.path);
 }
 
 class RstestFileCoverage extends vscode.FileCoverage {
