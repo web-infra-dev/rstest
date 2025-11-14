@@ -13,7 +13,7 @@
   },
   "inlcude": ["./tests/suite", "./tests/runTests.ts"],
   "exclude": [
-    "./rslib.config.ts",
+    "./rslib.config.mts",
     "./rstest.config.ts",
     "./src",
     "./sample",
