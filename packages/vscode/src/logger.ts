@@ -1,35 +1,16 @@
-import { formatWithOptions } from 'node:util';
 import vscode from 'vscode';
+import { BaseLogger, type LogLevel } from './shared/logger';
 
-function formatValues(values: unknown[]): string {
-  return formatWithOptions({ depth: 4 }, ...values);
-}
-
-export class Logger implements vscode.Disposable {
+export class MasterLogger extends BaseLogger implements vscode.Disposable {
   readonly #channel: vscode.LogOutputChannel;
 
   constructor(private readonly name = 'Rstest') {
+    super();
     this.#channel = vscode.window.createOutputChannel(this.name, { log: true });
   }
 
-  public trace(...values: unknown[]) {
-    this.#channel.trace(formatValues(values));
-  }
-
-  public debug(...values: unknown[]) {
-    this.#channel.debug(formatValues(values));
-  }
-
-  public info(...values: unknown[]) {
-    this.#channel.info(formatValues(values));
-  }
-
-  public warn(...values: unknown[]) {
-    this.#channel.warn(formatValues(values));
-  }
-
-  public error(...values: unknown[]) {
-    this.#channel.error(formatValues(values));
+  override log(level: LogLevel, message: string) {
+    this.#channel[level](message);
   }
 
   public dispose() {
@@ -37,4 +18,4 @@ export class Logger implements vscode.Disposable {
   }
 }
 
-export const logger = new Logger();
+export const logger = new MasterLogger();

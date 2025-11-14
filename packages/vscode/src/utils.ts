@@ -33,3 +33,14 @@ export function getWorkspaceTestPatterns(): WorkspaceTestPattern[] {
     }));
   });
 }
+
+export function promiseWithTimeout<T>(
+  promise: Promise<T>,
+  timeout: number,
+  error: Error,
+) {
+  return Promise.race<T>([
+    promise,
+    new Promise((_, reject) => setTimeout(reject, timeout, error)),
+  ]);
+}
