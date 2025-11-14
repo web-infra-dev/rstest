@@ -45,6 +45,16 @@
           "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
           "scope": "resource",
           "type": "string"
+        },
+        "rstest.configFileGlobPattern": {
+          "description": "Glob patterns used to discover config fiels. Must be an array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/rstest.config.{mjs,ts,js,cjs,mts,cts}"
+          ]
         }
       }
     }
@@ -54,6 +64,7 @@
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
     "build:local": "SOURCEMAP=true rslib build",
+    "build:watch": "SOURCEMAP=true rslib build --watch",
     "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
     "test": "npm run test:unit && npm run test:e2e",
@@ -77,6 +88,7 @@
     "glob": "^7.2.3",
     "mocha": "^11.7.4",
     "ovsx": "^0.10.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "valibot": "^1.1.0"
   }
 }
