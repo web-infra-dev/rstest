@@ -62,20 +62,20 @@
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.6.0-beta.1",
-    "@rslib/core": "0.17.1",
+    "@rsbuild/core": "1.6.6",
+    "@rslib/core": "0.17.2",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.13.5",
+    "@swc/core": "^1.15.2",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "3.6.2",
-    "birpc": "2.6.1",
+    "@vscode/vsce": "3.7.0",
+    "birpc": "2.8.0",
     "glob": "^7.2.3",
-    "mocha": "^11.7.4",
+    "mocha": "^11.7.5",
     "ovsx": "^0.10.6",
     "typescript": "^5.9.3"
   }
