@@ -140,7 +140,10 @@ export function BuildOverview() {
     name: '',
     items: BUILD_OVERVIEW_GROUPS.map((groupItem) => ({
       text: groupItem.name,
-      link: tUrl(`/config/build/${groupItem.name}`),
+      link:
+        groupItem.name === 'top level'
+          ? ''
+          : tUrl(`/config/build/${groupItem.name}`),
       items: groupItem.items?.map((item) => {
         return {
           link:
