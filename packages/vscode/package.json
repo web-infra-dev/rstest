@@ -53,7 +53,7 @@
     "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rspress-logo-512x512.png --output icon.png",
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
-    "build:local": "SOURCEMAP=true rslib build",
+    "build:local": "cross-env SOURCEMAP=true rslib build",
     "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
     "test": "npm run test:unit && npm run test:e2e",
