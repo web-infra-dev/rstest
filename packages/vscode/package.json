@@ -47,7 +47,7 @@
           "type": "string"
         },
         "rstest.configFileGlobPattern": {
-          "description": "Glob patterns used to discover config fiels. Must be an array of strings.",
+          "description": "Glob patterns used to discover config files. Must be an array of strings.",
           "type": "array",
           "items": {
             "type": "string"
