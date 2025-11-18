@@ -50,7 +50,7 @@
     }
   },
   "scripts": {
-    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rspress-logo-512x512.png --output icon.png",
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
     "build:local": "cross-env SOURCEMAP=true rslib build",
