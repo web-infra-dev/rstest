@@ -302,6 +302,11 @@ export interface RstestUtilities {
   setConfig: (config: RuntimeOptions) => void;
 
   /**
+   * get runtime config for the current test.
+   */
+  getConfig: () => RuntimeOptions;
+
+  /**
    * Reset runtime config that were changed with `rstest.setConfig`.
    */
   resetConfig: () => void;
