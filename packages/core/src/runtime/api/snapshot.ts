@@ -141,7 +141,7 @@ function getTestNames(test: TestCase) {
   return {
     filepath: test.testPath,
     name: getTaskNameWithPrefix(test),
-    testId: `${test.testId}`,
+    testId: test.testId,
   };
 }
 

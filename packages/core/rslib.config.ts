@@ -116,6 +116,9 @@ export default defineConfig({
       },
     },
   ],
+  performance: {
+    printFileSize: !isBuildWatch,
+  },
   tools: {
     rspack: {
       watchOptions: {
