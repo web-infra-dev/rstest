@@ -7,7 +7,7 @@ rs.mock('./services', () => ({
 }));
 
 describe('Mock Module EsModulesLinkingError', () => {
-  it('should return the mocked value', async () => {
+  it('should return the mocked value', () => {
     expect(serviceAPI.value).toBe(42);
   });
 });
