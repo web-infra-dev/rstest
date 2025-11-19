@@ -1,10 +1,10 @@
 # printConsoleTrace
 
-- **类型：** `boolean`
-- **默认值：** `false`
-- **CLI：** `--printConsoleTrace`
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--printConsoleTrace`
 
-console 方法调用时始终打印调用栈，这将有助于调试。
+Print console traces when calling any console method, which is helpful for debugging.
 
 import { Tab, Tabs } from '@theme';
 
@@ -26,5 +26,5 @@ export default defineConfig({
 </Tabs>
 
 :::note
-当 [disableConsoleIntercept](/config/test/disableConsoleIntercept) 为 `true` 时，`printConsoleTrace` 将被忽略。
+When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `printConsoleTrace` will be ignored.
 :::

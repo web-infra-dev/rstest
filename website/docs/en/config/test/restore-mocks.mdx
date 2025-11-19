@@ -1,12 +1,12 @@
 # restoreMocks
 
-- **类型：** `boolean`
-- **默认值：** `false`
-- **CLI：** `--restoreMocks`
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--restoreMocks`
 
-重置所有 mock，并恢复被 mock 的对象的原始描述符。
+Automatically reset mock state before every test.
 
-当启用 `restoreMocks` 时，rstest 将在每个测试用例执行之前调用 [.restoreAllMocks()](/api/rstest/mockFunctions#rstestrestoreallmocks)。
+When `restoreMocks` enabled, rstest will call [.restoreAllMocks()](/api/rstest/mock-functions#rstestrestoreallmocks) before each test.
 
 import { Tab, Tabs } from '@theme';
 

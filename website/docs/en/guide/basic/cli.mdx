@@ -117,23 +117,23 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--exclude <exclude>`           | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                      |
 | `-u, --update`                  | Update snapshot files, see [update](/config/test/update)                                                                                                          |
 | `--coverage`                    | Enable code coverage collection, see [coverage](/config/test/coverage)                                                                                            |
-| `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/passWithNoTests)                                                        |
-| `--printConsoleTrace`           | Print console traces when calling any console method, see [printConsoleTrace](/config/test/printConsoleTrace)                                                     |
+| `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/pass-with-no-tests)                                                     |
+| `--printConsoleTrace`           | Print console traces when calling any console method, see [printConsoleTrace](/config/test/print-console-trace)                                                   |
 | `--project <name>`              | Only run tests for the specified project, see [Filter by project name](/guide/basic/test-filter#filter-by-project-name)                                           |
-| `--disableConsoleIntercept`     | Disable console intercept, see [disableConsoleIntercept](/config/test/disableConsoleIntercept)                                                                    |
-| `--slowTestThreshold <value>`   | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slowTestThreshold)                                |
-| `-t, --testNamePattern <value>` | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/testNamePattern)                                                            |
-| `--testEnvironment <name>`      | The environment that will be used for testing, see [testEnvironment](/config/test/testEnvironment)                                                                |
-| `--testTimeout <value>`         | Timeout of a test in milliseconds, see [testTimeout](/config/test/testTimeout)                                                                                    |
-| `--hookTimeout <value>`         | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hookTimeout)                                                                                      |
+| `--disableConsoleIntercept`     | Disable console intercept, see [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                  |
+| `--slowTestThreshold <value>`   | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slow-test-threshold)                              |
+| `-t, --testNamePattern <value>` | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/test-name-pattern)                                                          |
+| `--testEnvironment <name>`      | The environment that will be used for testing, see [testEnvironment](/config/test/test-environment)                                                               |
+| `--testTimeout <value>`         | Timeout of a test in milliseconds, see [testTimeout](/config/test/test-timeout)                                                                                   |
+| `--hookTimeout <value>`         | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hook-timeout)                                                                                     |
 | `--retry <retry>`               | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                      |
 | `--bail <number>`               | Abort the test run after the specified number of test failures, see [bail](/config/test/bail)                                                                     |
-| `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/maxConcurrency)                                                                             |
-| `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clearMocks)                                      |
-| `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/resetMocks)                                                                       |
-| `--restoreMocks`                | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restoreMocks)                                              |
-| `--unstubGlobals`               | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstubGlobals)                       |
-| `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstubEnvs)                            |
+| `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                            |
+| `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                     |
+| `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                      |
+| `--restoreMocks`                | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                             |
+| `--unstubGlobals`               | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                      |
+| `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                           |
 | `-h, --help`                    | Display help for command                                                                                                                                          |
 | `-v, --version`                 | Display version                                                                                                                                                   |
 
