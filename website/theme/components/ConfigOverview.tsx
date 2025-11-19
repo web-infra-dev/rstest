@@ -71,6 +71,10 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
 ];
 
+function camelToKebab(str: string) {
+  return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
 export default function Overview() {
   const tUrl = useI18nUrl();
 
@@ -81,7 +85,7 @@ export default function Overview() {
       link: '',
       items: item.items?.map((item) => {
         return {
-          link: tUrl(`/config/test/${item}`),
+          link: tUrl(`/config/test/${camelToKebab(item)}`),
           text: item,
         };
       }),
