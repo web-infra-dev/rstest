@@ -47,8 +47,7 @@ export class StatusRenderer {
     // only display running tests if they have been running for more than 2 seconds
     const shouldDisplayRunningTests = (runningTests: TestCaseInfo[]) => {
       return (
-        runningTests[0]!.startTime !== undefined &&
-        now - runningTests[0]!.startTime! > 2000
+        runningTests[0]?.startTime && now - runningTests[0].startTime > 2000
       );
     };
 
@@ -58,15 +57,13 @@ export class StatusRenderer {
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
       );
       if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
+        let caseLog = ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
+
         if (runningTests.length > 1) {
-          summary.push(
-            ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)} ${color.gray(`and ${runningTests.length - 1} more cases`)}`,
-          );
-        } else {
-          summary.push(
-            ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)}`,
-          );
+          caseLog += color.gray(` and ${runningTests.length - 1} more cases`);
         }
+
+        summary.push(caseLog);
       }
     }
 
