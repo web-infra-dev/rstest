@@ -354,7 +354,7 @@ const runInPool = async (
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
-        testId: 0,
+        testId: '0',
         project,
         testPath,
         status: 'skip',
@@ -425,7 +425,7 @@ const runInPool = async (
     return results;
   } catch (err) {
     return {
-      testId: 0,
+      testId: '0',
       project,
       testPath,
       status: 'fail',

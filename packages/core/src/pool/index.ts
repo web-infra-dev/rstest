@@ -297,7 +297,7 @@ export const createPool = async ({
             .catch((err: unknown) => {
               (err as any).fullStack = true;
               return {
-                testId: 0,
+                testId: '0',
                 project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',
