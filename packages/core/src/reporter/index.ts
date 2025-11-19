@@ -71,7 +71,7 @@ export class DefaultReporter implements Reporter {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    this.statusRenderer?.onTestCaseStart?.(test);
+    this.statusRenderer?.onTestCaseStart(test);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
