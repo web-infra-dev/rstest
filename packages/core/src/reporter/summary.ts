@@ -26,6 +26,7 @@ import {
   formatTestPath,
   getTaskNameWithPrefix,
   logger,
+  POINTER,
   prettyTestPath,
   prettyTime,
   TEST_DELIMITER,
@@ -35,7 +36,6 @@ export const getSummaryStatusString = (
   tasks: TestResult[],
   name = 'tests',
   showTotal = true,
-  running = 0,
 ): string => {
   if (tasks.length === 0) {
     return color.dim(`no ${name}`);
@@ -51,14 +51,11 @@ export const getSummaryStatusString = (
     passed.length ? color.bold(color.green(`${passed.length} passed`)) : null,
     skipped.length ? color.yellow(`${skipped.length} skipped`) : null,
     todo.length ? color.gray(`${todo.length} todo`) : null,
-    running ? color.blue(`${running} running`) : null,
   ].filter(Boolean);
 
   return (
     status.join(color.dim(' | ')) +
-    (showTotal && status.length > 1
-      ? color.gray(` (${tasks.length + running})`)
-      : '')
+    (showTotal && status.length > 1 ? color.gray(` (${tasks.length})`) : '')
   );
 };
 
@@ -93,7 +90,6 @@ export const printSnapshotSummaryLog = (
       );
     }
   }
-  const POINTER = '➜';
 
   if (snapshots.filesRemovedList?.length) {
     const [head, ...tail] = snapshots.filesRemovedList;

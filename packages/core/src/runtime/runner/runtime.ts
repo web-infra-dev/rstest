@@ -212,7 +212,7 @@ export class RunnerRuntime {
   ): void {
     const test = {
       ...testInfo,
-      testId: this.testId++,
+      testId: `${this.testId++}`,
     };
     if (this._currentTest.length === 0) {
       this.tests.push(test);

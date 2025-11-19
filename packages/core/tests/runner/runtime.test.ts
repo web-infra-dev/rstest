@@ -32,7 +32,13 @@ describe('RunnerRuntime', () => {
       'test - 2',
     ]);
 
-    expect(tests.map((test) => test.testId)).toEqual([1, 5, 6]);
+    expect(tests.map((test) => test.testId)).toMatchInlineSnapshot(`
+      [
+        "1",
+        "5",
+        "6",
+      ]
+    `);
 
     expect((tests[0] as TestSuite).tests.map((test) => test.name)).toEqual([
       'test - 0',

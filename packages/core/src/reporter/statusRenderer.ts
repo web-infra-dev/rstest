@@ -1,6 +1,12 @@
 import { relative } from 'pathe';
 import type { TestCaseInfo, TestFileResult, TestResult } from '../types';
-import { color, prettyTestPath, prettyTime } from '../utils';
+import {
+  color,
+  getTaskNameWithPrefix,
+  POINTER,
+  prettyTestPath,
+  prettyTime,
+} from '../utils';
 import {
   DurationLabel,
   getSummaryStatusString,
@@ -35,13 +41,35 @@ export class StatusRenderer {
 
   getContent(): string[] {
     this.startTime ??= Date.now();
+    const now = Date.now();
     const summary = [];
-    for (const module of this.runningModules.keys()) {
+
+    // only display running tests if they have been running for more than 2 seconds
+    const shouldDisplayRunningTests = (runningTests: TestCaseInfo[]) => {
+      return (
+        runningTests[0]!.startTime !== undefined &&
+        now - runningTests[0]!.startTime! > 2000
+      );
+    };
+
+    for (const [module, { runningTests }] of this.runningModules.entries()) {
       const relativePath = relative(this.rootPath, module);
       summary.push(
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
       );
+      if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
+        if (runningTests.length > 1) {
+          summary.push(
+            ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)} ${color.gray(`and ${runningTests.length - 1} more cases`)}`,
+          );
+        } else {
+          summary.push(
+            ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)}`,
+          );
+        }
+      }
     }
+
     summary.push('');
 
     if (this.testModules.length === 0) {
@@ -55,13 +83,10 @@ export class StatusRenderer {
     const testResults: TestResult[] = Array.from(this.runningModules.values())
       .flatMap(({ results }) => results)
       .concat(this.testModules.flatMap((mod) => mod.results));
-    const runningCases = Array.from(this.runningModules.values()).flatMap(
-      ({ runningTests }) => runningTests,
-    ).length;
 
     if (testResults.length) {
       summary.push(
-        `${TestSummaryLabel} ${getSummaryStatusString(testResults, '', false, runningCases)}`,
+        `${TestSummaryLabel} ${getSummaryStatusString(testResults, '', false)}`,
       );
     }
 
@@ -94,6 +119,8 @@ export class StatusRenderer {
         results: [...currentModule.results, result],
       });
     }
+
+    this.renderer?.schedule();
   }
 
   onTestCaseStart(test: TestCaseInfo): void {

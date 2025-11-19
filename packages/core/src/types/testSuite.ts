@@ -28,12 +28,13 @@ export interface TaskResult {
 }
 
 export type TestCaseInfo = {
-  testId: number;
+  testId: string;
   testPath: TestPath;
   name: string;
   timeout?: number;
   parentNames?: string[];
   project: string;
+  startTime?: number;
 };
 
 export type TestCase = TestCaseInfo & {
@@ -77,7 +78,7 @@ export type AfterEachListener = (params: {
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {
-  testId: number;
+  testId: string;
   name: string;
   parentNames?: string[];
   runMode: TestRunMode;
@@ -121,7 +122,7 @@ export type FormattedError = {
 };
 
 export type TestResult = {
-  testId: number;
+  testId: string;
   status: TestResultStatus;
   name: string;
   testPath: TestPath;

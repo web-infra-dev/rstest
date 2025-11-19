@@ -281,7 +281,7 @@ export class TestRunner {
 
           errors.push(noTestError);
           const result = {
-            testId: (test as unknown as TestCase).testId || 0,
+            testId: test.testId || '0',
             status: 'fail' as const,
             parentNames: test.parentNames,
             name: test.name,
@@ -348,6 +348,7 @@ export class TestRunner {
         // Call onTestCaseStart hook before running the test
         hooks.onTestCaseStart?.({
           testId: test.testId,
+          startTime: start,
           testPath: test.testPath,
           name: test.name,
           timeout: test.timeout,
@@ -384,7 +385,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
-          testId: 0,
+          testId: '0',
           project,
           testPath,
           name: '',
@@ -394,7 +395,7 @@ export class TestRunner {
       }
 
       return {
-        testId: 0,
+        testId: '0',
         project,
         testPath,
         name: '',
@@ -421,7 +422,7 @@ export class TestRunner {
     const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
-      testId: 0,
+      testId: '0',
       project,
       testPath,
       name: '',
