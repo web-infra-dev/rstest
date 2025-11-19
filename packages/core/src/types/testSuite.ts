@@ -38,8 +38,6 @@ export type TestCaseInfo = {
 };
 
 export type TestCase = TestCaseInfo & {
-  testPath: TestPath;
-  name: string;
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;

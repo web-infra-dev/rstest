@@ -104,6 +104,7 @@ export default defineConfig({
       id: 'rstest_loaders',
       format: 'esm',
       syntax: 'es2021',
+      dts: false,
       source: {
         entry: {
           cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
