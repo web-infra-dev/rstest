@@ -107,7 +107,7 @@ export class StatusRenderer {
         results: [result],
       });
     } else {
-      // Find and remove the test from runningTests by matching test name
+      // Find and remove the test from runningTests by matching testId
       const filteredRunningTests = currentModule.runningTests.filter(
         (t) => t.testId !== result.testId,
       );
