@@ -71,7 +71,12 @@ describe.concurrent('reporters', () => {
     });
 
     await cli.exec;
+    expect(cli.stdout).toContain('[custom reporter] onTestCaseStart');
+    expect(
+      cli.stdout.match(/\[custom reporter\] onTestCaseStart/g)?.length,
+    ).toBe(3);
     expect(cli.stdout).toContain('[custom reporter] onTestFileStart');
+
     expect(
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);

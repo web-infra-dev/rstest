@@ -57,7 +57,7 @@ export class StatusRenderer {
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
       );
       if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
-        let caseLog = ` ${color.gray(POINTER)}  ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
+        let caseLog = ` ${color.gray(POINTER)} ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
 
         if (runningTests.length > 1) {
           caseLog += color.gray(` and ${runningTests.length - 1} more cases`);

@@ -73,6 +73,7 @@ export type {
   RstestCommand,
   RstestExpect as Expect,
   RstestUtilities,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
