@@ -8,6 +8,7 @@ import type {
   RstestContext,
   RuntimeConfig,
   Test,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -200,6 +201,11 @@ export const createPool = async ({
   });
 
   const rpcMethods = {
+    onTestCaseStart: async (test: TestCaseInfo) => {
+      Promise.all(
+        reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
+      );
+    },
     onTestCaseResult: async (result: TestResult) => {
       context.stateManager.onTestCaseResult(result);
       await Promise.all(
@@ -291,6 +297,7 @@ export const createPool = async ({
             .catch((err: unknown) => {
               (err as any).fullStack = true;
               return {
+                testId: 0,
                 project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',

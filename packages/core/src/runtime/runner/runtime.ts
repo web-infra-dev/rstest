@@ -45,6 +45,7 @@ export class RunnerRuntime {
   private currentCollectList: (() => MaybePromise<void>)[] = [];
   private runtimeConfig;
   private project: string;
+  private testId = 1;
 
   constructor({
     testPath,
@@ -142,7 +143,7 @@ export class RunnerRuntime {
     );
   }
 
-  private getDefaultRootSuite(): TestSuite {
+  private getDefaultRootSuite(): Omit<TestSuite, 'testId'> {
     return {
       project: this.project,
       runMode: 'run',
@@ -169,7 +170,7 @@ export class RunnerRuntime {
     sequential?: boolean;
   }): void {
     this.checkStatus(name, 'suite');
-    const currentSuite: TestSuite = {
+    const currentSuite: Omit<TestSuite, 'testId'> = {
       project: this.project,
       name,
       runMode,
@@ -206,7 +207,13 @@ export class RunnerRuntime {
     this._currentTest.pop();
   }
 
-  addTest(test: TestSuite | TestCase): void {
+  addTest(
+    testInfo: Omit<TestSuite, 'testId'> | Omit<TestCase, 'testId'>,
+  ): void {
+    const test = {
+      ...testInfo,
+      testId: this.testId++,
+    };
     if (this._currentTest.length === 0) {
       this.tests.push(test);
     } else {
@@ -253,7 +260,7 @@ export class RunnerRuntime {
     return this.tests;
   }
 
-  addTestCase(test: Omit<TestCase, 'testPath' | 'context'>): void {
+  addTestCase(test: Omit<TestCase, 'testPath' | 'context' | 'testId'>): void {
     if (this.collectStatus === 'lazy') {
       this.currentCollectList.push(() => {
         this.addTest({

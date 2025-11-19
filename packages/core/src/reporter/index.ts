@@ -7,6 +7,7 @@ import type {
   NormalizedConfig,
   Reporter,
   SnapshotSummary,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -67,6 +68,10 @@ export class DefaultReporter implements Reporter {
 
   onTestCaseResult(result: TestResult): void {
     this.statusRenderer?.onTestCaseResult(result);
+  }
+
+  onTestCaseStart(test: TestCaseInfo): void {
+    this.statusRenderer?.onTestCaseStart?.(test);
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
