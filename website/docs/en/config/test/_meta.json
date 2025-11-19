@@ -10,12 +10,14 @@
   "pass-with-no-tests",
   "include-source",
   "test-name-pattern",
+
   "env",
   "bail",
   "retry",
   "test-timeout",
   "hook-timeout",
   "max-concurrency",
+
   "pool",
   "isolate",
   "test-environment",
@@ -24,6 +26,7 @@
   "restore-mocks",
   "unstub-envs",
   "unstub-globals",
+
   "coverage",
   "reporters",
   "log-heap-usage",
