@@ -1,7 +1,12 @@
 import v8 from 'node:v8';
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
-import type { RuntimeRPC, ServerRPC, TestResult } from '../../types';
+import type {
+  RuntimeRPC,
+  ServerRPC,
+  TestCaseInfo,
+  TestResult,
+} from '../../types';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
@@ -55,6 +60,13 @@ export function createRuntimeRpc(
       ...options,
       onTimeoutError: (functionName, error) => {
         switch (functionName) {
+          case 'onTestCaseStart': {
+            const caseTest = error[0] as unknown as TestCaseInfo;
+            console.error(
+              `[Rstest] timeout on calling "onTestCaseStart" rpc method (Case: "${caseTest.name}")`,
+            );
+            return true;
+          }
           case 'onTestCaseResult': {
             const caseResult = error[0] as unknown as TestResult;
             console.error(

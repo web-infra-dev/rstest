@@ -1,5 +1,6 @@
 import type {
   Reporter,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -11,6 +12,10 @@ export const reporterResult: string[] = [];
 class MyReporter implements Reporter {
   onTestFileStart(_file: TestFileInfo) {
     reporterResult.push('[custom reporter] onTestFileStart');
+  }
+
+  onTestCaseStart(_test: TestCaseInfo) {
+    reporterResult.push('[custom reporter] onTestCaseStart');
   }
 
   onTestCaseResult(_result: TestResult) {

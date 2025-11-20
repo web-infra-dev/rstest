@@ -27,13 +27,20 @@ export interface TaskResult {
   errors?: FormattedError[];
 }
 
-export type TestCase = {
+export type TestCaseInfo = {
+  testId: string;
   testPath: TestPath;
   name: string;
+  timeout?: number;
+  parentNames?: string[];
+  project: string;
+  startTime?: number;
+};
+
+export type TestCase = TestCaseInfo & {
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;
-  timeout?: number;
   fails?: boolean;
   each?: boolean;
   fixtures?: NormalizedFixtures;
@@ -45,7 +52,6 @@ export type TestCase = {
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
   type: 'case';
-  parentNames?: string[];
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -54,7 +60,6 @@ export type TestCase = {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
-  project: string;
 };
 
 export type SuiteContext = {
@@ -71,6 +76,7 @@ export type AfterEachListener = (params: {
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
 export type TestSuite = {
+  testId: string;
   name: string;
   parentNames?: string[];
   runMode: TestRunMode;
@@ -114,6 +120,7 @@ export type FormattedError = {
 };
 
 export type TestResult = {
+  testId: string;
   status: TestResultStatus;
   name: string;
   testPath: TestPath;
