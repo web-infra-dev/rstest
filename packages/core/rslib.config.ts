@@ -29,7 +29,6 @@ export default defineConfig({
             '@vitest/pretty-format',
           ],
         },
-        distPath: './dist-types',
       },
       output: {
         externals: {
