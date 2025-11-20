@@ -19,13 +19,13 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist-types/index.d.ts",
+  "types": "./dist/index.d.ts",
   "bin": {
     "rstest": "./bin/rstest.js"
   },
   "exports": {
     ".": {
-      "types": "./dist-types/index.d.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./package.json": {
@@ -41,7 +41,6 @@
   "files": [
     "bin",
     "dist",
-    "dist-types",
     "compiled",
     "globals.d.ts",
     "importMeta.d.ts"
