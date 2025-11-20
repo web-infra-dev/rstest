@@ -65,6 +65,9 @@ export interface DescribeEachFn {
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
+  <T>(
+    cases: readonly T[],
+  ): (description: string, fn: (...args: T[]) => MaybePromise<void>) => void;
 }
 
 export type DescribeForFn = <T>(
