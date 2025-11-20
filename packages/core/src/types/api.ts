@@ -67,7 +67,7 @@ export interface DescribeEachFn {
   ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
   <T>(
     cases: readonly T[],
-  ): (description: string, fn: (...args: T[]) => MaybePromise<void>) => void;
+  ): (description: string, fn: (param: T) => MaybePromise<void>) => void;
 }
 
 export type DescribeForFn = <T>(
