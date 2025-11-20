@@ -1,17 +1,21 @@
 [
   {
+    "type": "section-header",
+    "label": "总览"
+  },
+  {
     "type": "file",
     "name": "index",
-    "label": "Overview"
+    "label": "配置总览"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
     "name": "test",
-    "label": "Test Configurations"
+    "label": "测试配置"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
     "name": "build",
-    "label": "Build Configurations"
+    "label": "构建配置"
   }
 ]

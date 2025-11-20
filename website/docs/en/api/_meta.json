@@ -1,16 +1,20 @@
 [
   {
-    "type": "file",
-    "name": "index",
+    "type": "section-header",
     "label": "Overview"
   },
   {
-    "type": "dir",
+    "type": "file",
+    "name": "index",
+    "label": "API Overview"
+  },
+  {
+    "type": "dir-section-header",
     "name": "test-api",
     "label": "Test API"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
     "name": "rstest",
     "label": "Rstest Utility"
   }
