@@ -402,10 +402,13 @@ export const createRsbuildServer = async ({
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
+      const filteredAssets = e.assets!.filter(
+        (asset) => !asset.name.endsWith('.wasm'),
+      );
 
       const distPath = path.join(
         outputPath!,
-        e.assets![e.assets!.length - 1]!.name,
+        filteredAssets![filteredAssets!.length - 1]!.name,
       );
 
       if (setupFiles[environmentName]![entry]) {
