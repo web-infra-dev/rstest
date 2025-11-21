@@ -196,10 +196,7 @@ export const loadModule = ({
       const content = assetFiles[path.normalize(joinedPath)];
 
       if (content) {
-        callback(
-          null,
-          typeof content === 'string' ? Buffer.from(content) : content,
-        );
+        callback(null, Buffer.from(content, 'base64'));
       } else {
         callback(
           new Error(`WASM file ${joinedPath} not found in asset files.`),
