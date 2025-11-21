@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
-    "@rsbuild/core": "1.6.7",
+    "@rsbuild/core": "1.6.7-canary-57e2a56d-20251120152633",
     "@rsbuild/plugin-babel": "^1.0.6",
     "@rsbuild/plugin-vue": "^1.2.0",
     "@rsbuild/plugin-vue-jsx": "^1.1.1",

@@ -69,9 +69,6 @@
       "nx",
       "simple-git-hooks"
     ],
-    "overrides": {
-      "@rspack/core": "npm:@rspack-canary/core@1.6.5-canary-57e2a56d-20251120152633"
-    },
     "packageExtensions": {
       "@vue/test-utils": {
         "peerDependencies": {
