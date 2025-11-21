@@ -339,7 +339,7 @@ export const createRsbuildServer = async ({
         }
         const content =
           typeof data === 'string'
-            ? (data as string)
+            ? data
             : fileName.endsWith('.wasm')
               ? data!.toString('base64')
               : data!.toString('utf-8');
