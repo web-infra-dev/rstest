@@ -194,8 +194,12 @@ export const loadModule = ({
         ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
       const content = assetFiles[path.normalize(joinedPath)];
+
       if (content) {
-        callback(null, Buffer.from(content, 'utf-8'));
+        callback(
+          null,
+          typeof content === 'string' ? Buffer.from(content) : content,
+        );
       } else {
         callback(
           new Error(`WASM file ${joinedPath} not found in asset files.`),

@@ -337,7 +337,11 @@ export const createRsbuildServer = async ({
         if (err) {
           reject(err);
         }
-        resolve(typeof data === 'string' ? data : data!.toString());
+        const content =
+          typeof data === 'string' || fileName.endsWith('.wasm')
+            ? (data as string)
+            : data!.toString();
+        resolve(content);
       });
     });
   };
