@@ -114,9 +114,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -357,6 +366,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",
@@ -634,9 +652,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -877,6 +904,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",
@@ -1145,9 +1181,18 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -1388,6 +1433,15 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",
@@ -1663,9 +1717,18 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -1906,6 +1969,15 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",
@@ -2183,9 +2255,18 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -2426,6 +2507,15 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",

@@ -30,7 +30,6 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
-  "dev": undefined,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -54,7 +53,6 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
-  "output": undefined,
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
