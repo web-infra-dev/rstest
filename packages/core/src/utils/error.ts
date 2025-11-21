@@ -69,8 +69,8 @@ export async function printError(
     });
     if (
       !stackFrames.length &&
-      Array.isArray(error.stack) &&
-      error.stack.length
+      !(error.fullStack || isDebug()) &&
+      !error.stack.endsWith(error.message)
     ) {
       logger.log(
         color.gray(
