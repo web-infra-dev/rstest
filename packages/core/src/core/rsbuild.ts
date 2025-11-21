@@ -408,7 +408,7 @@ export const createRsbuildServer = async ({
 
       const distPath = path.join(
         outputPath!,
-        filteredAssets![filteredAssets!.length - 1]!.name,
+        filteredAssets[filteredAssets.length - 1]!.name,
       );
 
       if (setupFiles[environmentName]![entry]) {
