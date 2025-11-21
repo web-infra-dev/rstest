@@ -51,7 +51,7 @@ class MockRuntimeRspackPlugin {
 
           if (module.name === 'async_wasm_loading') {
             const finalSource = module.source!.source.toString('utf-8').replace(
-              // Sets the object configurable so that imported properties can be spied
+              // Replace readFile with readWasmFile to use the custom WASM file loader
               // Hard coded in EJS template https://github.com/web-infra-dev/rspack/tree/7df875eb3ca3bb4bcb21836fdf4e6be1f38a057c/crates/rspack_plugin_wasm/src/runtime
               'readFile(',
               'readWasmFile(',
