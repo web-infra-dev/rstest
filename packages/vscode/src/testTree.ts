@@ -4,7 +4,6 @@ import vscode from 'vscode';
 import { logger } from './logger';
 import type { RstestApi } from './master';
 import { parseTestFile } from './parserTest';
-import { getWorkspaceTestPatterns, shouldIgnorePath } from './utils';
 
 const textDecoder = new TextDecoder('utf-8');
 
@@ -22,11 +21,14 @@ export const getContentFromFilesystem = async (uri: vscode.Uri) => {
   }
 };
 
-export function gatherTestItems(collection: vscode.TestItemCollection) {
+export function gatherTestItems(
+  collection: vscode.TestItemCollection,
+  recursive = true,
+) {
   const items: vscode.TestItem[] = [];
   collection.forEach((item) => {
     items.push(item);
-    if (item.children.size > 0) {
+    if (recursive && item.children.size > 0) {
       gatherTestItems(item.children).forEach((child) => {
         items.push(child);
       });
@@ -264,66 +266,10 @@ const applyResultsToTestCases = (
   };
 };
 
-/**
- * Scans the workspace for all test files and ensures they exist as root
- * TestItems on the provided controller. Also parses their contents so the
- * initial tree includes discovered tests without requiring files to open.
- */
-export async function scanAllTestFiles(
-  controller: vscode.TestController,
-): Promise<void> {
-  const patterns = getWorkspaceTestPatterns();
-  if (!patterns.length) return;
-
-  const uris = new Set<string>();
-
-  // Collect and dedupe all matching files across workspace folders
-  for (const { pattern } of patterns) {
-    const found = await vscode.workspace.findFiles(pattern);
-    for (const f of found) {
-      const shouldIgnore = shouldIgnorePath(f.fsPath);
-      if (!shouldIgnore) {
-        uris.add(f.toString());
-      }
-    }
-  }
-
-  const tasks: Promise<void>[] = [];
-
-  for (const uriStr of uris) {
-    const uri = vscode.Uri.parse(uriStr);
-    let item = controller.items.get(uriStr);
-    let fileData: TestFile | undefined;
-
-    if (!item) {
-      item = controller.createTestItem(
-        uriStr,
-        uri.path.split('/').pop() || uriStr,
-        uri,
-      );
-      controller.items.add(item);
-      fileData = new TestFile();
-      testData.set(item, fileData);
-      item.canResolveChildren = true;
-    } else {
-      const data = testData.get(item);
-      if (data instanceof TestFile) {
-        fileData = data;
-      } else {
-        fileData = new TestFile();
-        testData.set(item, fileData);
-      }
-    }
-
-    // Parse immediately so children are available in the tree
-    tasks.push(fileData.updateFromDisk(controller, item));
-  }
-
-  await Promise.all(tasks);
-}
-
 export class TestFile {
   public didResolve = false;
+
+  constructor(private api: RstestApi) {}
 
   public async updateFromDisk(
     controller: vscode.TestController,
@@ -386,6 +332,7 @@ export class TestFile {
           testType,
           vscodeRange,
           name,
+          this.api,
         );
 
         const testItem = controller.createTestItem(
@@ -412,7 +359,6 @@ export class TestFile {
   async run(
     item: vscode.TestItem,
     run: vscode.TestRun,
-    api: RstestApi,
     controller?: vscode.TestController,
   ): Promise<void> {
     if (!this.didResolve && controller) {
@@ -423,7 +369,7 @@ export class TestFile {
     run.appendOutput(`Running all tests in file ${item.id}\r\n`);
 
     try {
-      const rstestResults = await api.runFileTests(item);
+      const rstestResults = await this.api.runFileTests(item);
 
       const results = rstestResults?.testResults ?? [];
       const {
@@ -484,6 +430,7 @@ export class TestCase {
     public testType: string,
     private range: vscode.Range,
     private name: string,
+    private api: RstestApi,
   ) {}
 
   getId() {
@@ -494,16 +441,12 @@ export class TestCase {
     return this.name;
   }
 
-  async run(
-    item: vscode.TestItem,
-    run: vscode.TestRun,
-    api: RstestApi,
-  ): Promise<void> {
+  async run(item: vscode.TestItem, run: vscode.TestRun): Promise<void> {
     // Match messaging and behavior from extension.ts
     run.appendOutput(`Running test case ${item.id}\r\n`);
 
     try {
-      const rstestResults = await api.runTest(item);
+      const rstestResults = await this.api.runTest(item);
 
       if (rstestResults && rstestResults.testResults.length > 0) {
         const {

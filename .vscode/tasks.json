@@ -5,7 +5,7 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "build:local",
+      "script": "watch:local",
       "path": "packages/vscode",
       "problemMatcher": "$tsc-watch",
       "isBackground": true,
