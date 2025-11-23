@@ -1,6 +1,8 @@
-import type { TestCaseInfo, TestResult } from './testSuite';
+import type { TestCaseInfo, TestResult, TestSuiteInfo } from './testSuite';
 
 export type RunnerHooks = {
+  onTestSuiteStart?: (test: TestSuiteInfo) => Promise<void>;
+  onTestSuiteResult?: (result: TestResult) => Promise<void>;
   /**
    * Called before running the test case.
    */

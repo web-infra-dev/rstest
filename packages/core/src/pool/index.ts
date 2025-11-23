@@ -7,11 +7,13 @@ import type {
   ProjectContext,
   RstestContext,
   RuntimeConfig,
+  RuntimeRPC,
   Test,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from '../types';
 import {
@@ -62,6 +64,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    exact,
   } = context.normalizedConfig;
 
   return {
@@ -87,6 +90,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    exact,
   };
 };
 
@@ -204,7 +208,7 @@ export const createPool = async ({
     },
   });
 
-  const rpcMethods = {
+  const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
     onTestCaseStart: async (test: TestCaseInfo) => {
       context.stateManager.onTestCaseStart(test);
       Promise.all(
@@ -229,6 +233,16 @@ export const createPool = async ({
       context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestSuiteStart: async (test: TestSuiteInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),
+      );
+    },
+    onTestSuiteResult: async (result: TestResult) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
       );
     },
     resolveSnapshotPath: (testPath: string): string => {

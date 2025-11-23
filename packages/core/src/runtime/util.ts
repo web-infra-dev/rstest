@@ -43,6 +43,8 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
       errObj.diff = diff(err.expected, err.actual, {
         expand: false,
       })!;
+      errObj.expected = error.expected;
+      errObj.actual = error.actual;
     }
 
     return errObj;
