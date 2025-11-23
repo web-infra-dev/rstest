@@ -2,7 +2,7 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { RstestApi } from './master';
-import { TestFile, testData } from './testTree';
+import { TestFile, testData, testItemType } from './testTree';
 import { shouldIgnoreUri } from './utils';
 
 export class WorkspaceManager implements vscode.Disposable {
@@ -20,6 +20,7 @@ export class WorkspaceManager implements vscode.Disposable {
       workspaceFolder.name,
       workspaceFolder.uri,
     );
+    testItemType.set(this.testItem, 'workspace');
     testController.items.add(this.testItem);
     this.configValueWatcher = this.startWatchingWorkspace();
   }
@@ -127,6 +128,7 @@ export class Project implements vscode.Disposable {
       path.relative(workspaceFolder.uri.path, configFileUri.path),
       configFileUri,
     );
+    testItemType.set(this.projectTestItem, 'project');
     workspaceTestItem.children.add(this.projectTestItem);
     // TODO catch and set error
     this.api.createChildProcess();
@@ -214,6 +216,7 @@ export class Project implements vscode.Disposable {
         path.basename(uri.path),
         uri,
       );
+      testItemType.set(file, 'file');
       this.projectTestItem.children.add(file);
 
       const data = new TestFile(this.api);

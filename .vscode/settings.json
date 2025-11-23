@@ -53,5 +53,10 @@
   "[less]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "rstest.configFileGlobPattern": [
+    "packages/core/rstest.config.ts",
+    "packages/vscode/rstest.config.ts",
+    "e2e/rstest.config.ts"
+  ]
 }

@@ -13,7 +13,10 @@ import {
   TestFileSummaryLabel,
   TestSummaryLabel,
 } from './summary';
-import { WindowRenderer } from './windowedRenderer';
+import {
+  WindowRenderer,
+  type Options as WindowRendererOptions,
+} from './windowedRenderer';
 
 export class StatusRenderer {
   private rootPath: string;
@@ -21,11 +24,15 @@ export class StatusRenderer {
   private startTime: number | undefined = undefined;
   private testState: RstestTestState;
 
-  constructor(rootPath: string, state: RstestTestState) {
+  constructor(
+    rootPath: string,
+    state: RstestTestState,
+    logger?: WindowRendererOptions['logger'],
+  ) {
     this.rootPath = rootPath;
     this.renderer = new WindowRenderer({
       getWindow: () => this.getContent(),
-      logger: {
+      logger: logger ?? {
         outputStream: process.stdout,
         errorStream: process.stderr,
         getColumns: () => {

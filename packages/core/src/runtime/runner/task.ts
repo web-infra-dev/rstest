@@ -7,7 +7,11 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
-import { getTaskNameWithPrefix, ROOT_SUITE_NAME } from '../../utils';
+import {
+  getTaskNameWithPrefix,
+  ROOT_SUITE_NAME,
+  TEST_DELIMITER,
+} from '../../utils';
 import { getRealTimers } from '../util';
 
 export const getTestStatus = (
@@ -36,15 +40,20 @@ const shouldTestSkip = (
   test: TestCase,
   runOnly: boolean,
   testNamePattern?: RegExp | string,
+  exact?: boolean,
 ) => {
   if (runOnly && test.runMode !== 'only') {
     return true;
   }
-  if (
-    testNamePattern &&
-    !getTaskNameWithPrefix(test, '').match(testNamePattern)
-  ) {
-    return true;
+  if (testNamePattern) {
+    const taskNameWithPrefix = getTaskNameWithPrefix(test);
+    if (typeof testNamePattern === 'string' && exact) {
+      return !(
+        taskNameWithPrefix === testNamePattern ||
+        taskNameWithPrefix.startsWith(`${testNamePattern} ${TEST_DELIMITER} `)
+      );
+    }
+    return !getTaskNameWithPrefix(test, '').match(testNamePattern);
   }
 
   return false;
@@ -55,6 +64,7 @@ export const traverseUpdateTestRunMode = (
   parentRunMode: TestRunMode,
   runOnly: boolean,
   testNamePattern?: RegExp | string,
+  exact?: boolean,
 ): void => {
   if (testSuite.tests.length === 0) {
     return;
@@ -80,7 +90,7 @@ export const traverseUpdateTestRunMode = (
       if (['skip', 'todo'].includes(testSuite.runMode)) {
         test.runMode = testSuite.runMode;
       }
-      if (shouldTestSkip(test, runSubOnly, testNamePattern)) {
+      if (shouldTestSkip(test, runSubOnly, testNamePattern, exact)) {
         test.runMode = 'skip';
       }
       return test;
@@ -90,6 +100,7 @@ export const traverseUpdateTestRunMode = (
       testSuite.runMode,
       runSubOnly,
       testNamePattern,
+      exact,
     );
     return test;
   });
@@ -129,13 +140,14 @@ export const traverseUpdateTestRunMode = (
 export const updateTestModes = (
   tests: Test[],
   testNamePattern?: RegExp | string,
+  exact?: boolean,
 ): void => {
   const hasOnly = hasOnlyTest(tests);
 
   for (const test of tests) {
     if (test.type === 'suite') {
-      traverseUpdateTestRunMode(test, 'run', hasOnly, testNamePattern);
-    } else if (shouldTestSkip(test, hasOnly, testNamePattern)) {
+      traverseUpdateTestRunMode(test, 'run', hasOnly, testNamePattern, exact);
+    } else if (shouldTestSkip(test, hasOnly, testNamePattern, exact)) {
       test.runMode = 'skip';
     }
   }
@@ -143,14 +155,13 @@ export const updateTestModes = (
 
 const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
   for (const test of tests) {
+    test.parentNames = parentNames;
     if (test.type === 'suite') {
       const names =
         test.name === ROOT_SUITE_NAME
           ? parentNames
           : parentNames.concat(test.name);
       updateTestParents(test.tests, names);
-    } else {
-      test.parentNames = parentNames;
     }
   }
 };
@@ -158,9 +169,10 @@ const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
 export const traverseUpdateTest = (
   tests: Test[],
   testNamePattern?: RegExp | string,
+  exact?: boolean,
 ): void => {
   updateTestParents(tests);
-  updateTestModes(tests, testNamePattern);
+  updateTestModes(tests, testNamePattern, exact);
 };
 
 export const markAllTestAsSkipped = (test: Test[]): void => {
