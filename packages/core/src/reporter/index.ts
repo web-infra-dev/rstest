@@ -37,8 +37,12 @@ export class DefaultReporter implements Reporter {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
-    if (isTTY()) {
-      this.statusRenderer = new StatusRenderer(rootPath, testState);
+    if (isTTY() || options.logger) {
+      this.statusRenderer = new StatusRenderer(
+        rootPath,
+        testState,
+        options.logger,
+      );
     }
   }
 

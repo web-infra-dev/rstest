@@ -8,9 +8,10 @@ export type WorkerInitData = {
 };
 
 export type WorkerRunTestData = {
-  id: string;
+  runId: string;
   fileFilters: string[];
-  testNamePattern: string;
+  testNamePattern?: string;
+  updateSnapshot?: boolean;
 };
 // #endregion
 

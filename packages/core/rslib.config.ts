@@ -14,23 +14,26 @@ export default defineConfig({
         advancedEsm: true,
       },
       dts: {
-        bundle: {
-          bundledPackages: [
-            '@types/sinonjs__fake-timers',
-            '@types/istanbul-reports',
-            '@types/istanbul-lib-report',
-            '@types/istanbul-lib-coverage',
-            '@jridgewell/trace-mapping',
-            '@vitest/expect',
-            '@vitest/snapshot',
-            '@vitest/utils',
-            '@vitest/spy',
-            'tinyrainbow',
-            '@vitest/pretty-format',
-          ],
-        },
+        bundle: process.env.SOURCEMAP
+          ? false
+          : {
+              bundledPackages: [
+                '@types/sinonjs__fake-timers',
+                '@types/istanbul-reports',
+                '@types/istanbul-lib-report',
+                '@types/istanbul-lib-coverage',
+                '@jridgewell/trace-mapping',
+                '@vitest/expect',
+                '@vitest/snapshot',
+                '@vitest/utils',
+                '@vitest/spy',
+                'tinyrainbow',
+                '@vitest/pretty-format',
+              ],
+            },
       },
       output: {
+        sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
           // Temporary fix: `import * as timers from 'timers'` reassign error
           timers: 'commonjs timers',

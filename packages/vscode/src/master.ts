@@ -1,10 +1,13 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import path, { dirname } from 'node:path';
 import { createBirpc } from 'birpc';
 import vscode from 'vscode';
+import { TEST_DELIMITER } from '../../core/src/utils/constants';
 import { getConfigValue } from './config';
 import { logger } from './logger';
 import type { LogLevel } from './shared/logger';
+import { TestRunReporter } from './testRunReporter';
 import type { WorkerRunTestData } from './types';
 import { promiseWithTimeout } from './utils';
 import type { Worker } from './worker';
@@ -103,36 +106,33 @@ export class RstestApi {
     }
   }
 
-  public async runTest(item: vscode.TestItem) {
+  public async runTest(
+    item: vscode.TestItem,
+    run: vscode.TestRun,
+    updateSnapshot?: boolean,
+  ) {
     if (this.worker) {
+      const testRunReporter = new TestRunReporter(run, item);
+
       const data: WorkerRunTestData = {
-        id: item.id,
+        runId: randomUUID(),
         fileFilters: [item.uri!.fsPath],
-        testNamePattern: item.label,
+        testNamePattern: testRunReporter
+          .getTestItemPath()
+          .join(` ${TEST_DELIMITER} `),
+        updateSnapshot,
       };
 
-      return promiseWithTimeout(
+      this.testRunReporters.set(data.runId, testRunReporter);
+
+      const isTestFile = !data.testNamePattern?.length;
+      await promiseWithTimeout(
         this.worker.runTest(data),
-        10_000,
+        isTestFile ? 30_000 : 10_000, // longer timeout for test file
         new Error(`Test execution timed out for ${item.label}`),
-      ); // 10 seconds timeout
-    }
-  }
-
-  public async runFileTests(fileItem: vscode.TestItem) {
-    if (this.worker) {
-      const fileId = `file_${fileItem.id}`;
-      const data: WorkerRunTestData = {
-        id: fileId,
-        fileFilters: [fileItem.uri!.fsPath],
-        testNamePattern: '', // Empty pattern to run all tests in the file
-      };
-
-      return promiseWithTimeout(
-        this.worker.runTest(data),
-        30_000,
-        new Error(`File test execution timed out for ${fileItem.uri!.fsPath}`),
-      ); // 30 seconds timeout for file-level tests
+      ).finally(() => {
+        this.testRunReporters.delete(data.runId);
+      });
     }
   }
 
@@ -154,6 +154,7 @@ export class RstestApi {
       env: {
         ...process.env,
         TEST: 'true',
+        FORCE_COLOR: '1',
       },
     });
     this.childProcess = rstestProcess;
@@ -198,5 +199,17 @@ export class RstestApi {
   public dispose() {
     this.childProcess?.kill();
     this.childProcess = null;
+  }
+
+  private testRunReporters = new Map<string, TestRunReporter>();
+
+  async onTestProgress<T extends keyof TestRunReporter>(
+    runId: string,
+    event: T,
+    param: Parameters<NonNullable<TestRunReporter[T]>>[0],
+  ) {
+    const reporter = this.testRunReporters.get(runId);
+    // @ts-expect-error
+    reporter?.[event]?.call(reporter, param);
   }
 }

@@ -189,6 +189,10 @@ export interface RstestConfig {
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
+  /**
+   * Match `testNamePattern` exactly, test suite and case names should joined by '>'
+   */
+  exact?: boolean;
 
   /**
    * Timeout of a test in milliseconds.
@@ -305,6 +309,7 @@ export interface RstestConfig {
 
 type OptionalKeys =
   | 'testNamePattern'
+  | 'exact'
   | 'plugins'
   | 'source'
   | 'resolve'
@@ -321,25 +326,23 @@ export type NormalizedConfig = Required<
     RstestConfig,
     OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
   >
-> & {
-  [key in OptionalKeys]?: RstestConfig[key];
-} & {
-  pool: RstestPoolOptions;
-  coverage: NormalizedCoverageOptions;
-  setupFiles: string[];
-  exclude: {
-    patterns: string[];
-    override?: boolean;
+> &
+  Partial<Pick<RstestConfig, OptionalKeys>> & {
+    pool: RstestPoolOptions;
+    coverage: NormalizedCoverageOptions;
+    setupFiles: string[];
+    exclude: {
+      patterns: string[];
+      override?: boolean;
+    };
   };
-};
 
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
     OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
   >
-> & {
-  [key in OptionalKeys]?: NormalizedConfig[key];
-} & {
-  setupFiles: string[];
-};
+> &
+  Pick<NormalizedConfig, OptionalKeys> & {
+    setupFiles: string[];
+  };
