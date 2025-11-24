@@ -69,7 +69,9 @@ Rstest 暴露了一些选项来配置 `builtin:swc-loader`：
 - [source.exclude](/config/build/source#sourceexclude)：用于排除不需要被 SWC 编译的文件。
 
 ```ts
-export default {
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
   tools: {
     swc: {
       jsc: {
@@ -84,7 +86,7 @@ export default {
       },
     },
   },
-};
+});
 ```
 
 ### SWC 插件版本

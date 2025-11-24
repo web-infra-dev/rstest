@@ -69,7 +69,9 @@ Rstest exposes some options to configure `builtin:swc-loader`:
 - [source.exclude](/config/build/source#sourceexclude): Used to exclude files that do not need to be compiled by SWC.
 
 ```ts
-export default {
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
   tools: {
     swc: {
       jsc: {
@@ -84,10 +86,10 @@ export default {
       },
     },
   },
-};
+});
 ```
 
-### SWC Plugin Version
+### SWC plugin version
 
 Please note that SWC's plugins are still an experimental feature. Currently, SWC's Wasm plugins are not backward compatible, and the version of SWC plugins is strongly coupled with the `swc_core` version that Rspack depends on.
 
