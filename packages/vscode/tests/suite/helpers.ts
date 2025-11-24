@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import path from 'node:path';
 import type * as vscode from 'vscode';
 
 export async function delay(ms: number) {
@@ -84,11 +85,9 @@ export function toLabelTree(
   const nodes: { label: string; children?: any[] }[] = [];
   collection.forEach((child) => {
     const children = toLabelTree(child.children, maxDepth - 1);
-    nodes.push(
-      children.length
-        ? { label: child.label, children }
-        : { label: child.label },
-    );
+    // normalize to linux path style
+    const label = child.label.replaceAll(path.sep, '/');
+    nodes.push(children.length ? { label, children } : { label });
   });
   nodes.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
   return nodes;
