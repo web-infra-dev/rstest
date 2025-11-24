@@ -58,6 +58,41 @@ Rstest 底层使用 Rspack 进行构建，因此你可以直接使用 Rspack 的
 
 详情可参考 [配置 Rspack](https://rsbuild.rs/zh/guide/configuration/rspack)。
 
+## 配置 SWC
+
+Rstest 默认通过 Rspack 的 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 来转换 JavaScript 和 TypeScript 代码，它是 [swc-loader](https://github.com/swc-project/pkgs/tree/main/packages/swc-loader) 的 Rust 版本。
+
+Rstest 暴露了一些选项来配置 `builtin:swc-loader`：
+
+- [tools.swc](/config/build/tools#toolsswc)：用于配置 `builtin:swc-loader` 的选项。
+- [source.include](/config/build/source#sourceinclude)：用于指定需要被 SWC 编译的文件。
+- [source.exclude](/config/build/source#sourceexclude)：用于排除不需要被 SWC 编译的文件。
+
+```ts
+export default {
+  tools: {
+    swc: {
+      jsc: {
+        transform: {
+          react: {
+            runtime: 'automatic',
+          },
+        },
+        experimental: {
+          plugins: [['@swc/plugin-emotion', {}]],
+        },
+      },
+    },
+  },
+};
+```
+
+### SWC 插件版本
+
+请注意，SWC 的插件仍然是一个实验性功能，目前 SWC 的 Wasm 插件是不向后兼容的，SWC 插件的版本与 Rspack 依赖的 `swc_core` 版本存在强耦合关系。
+
+这意味着，你需要选择和当前 `swc_core` 版本匹配的 SWC 插件，才能使它正常执行。如果你使用的 SWC 插件版本与 Rspack 依赖的 `swc_core` 版本不匹配，Rspack 在执行构建时会抛出错误，请参考 [Rspack 常见问题 - SWC 插件版本不匹配](https://rspack.rs/zh/errors/swc-plugin-version) 进行处理。
+
 ## 检测 Rstest 环境
 
 你可以使用 `process.env.RSTEST` 来检测是否是 Rstest 测试环境以应用不同的配置 / 代码在你的测试中。
