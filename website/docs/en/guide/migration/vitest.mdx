@@ -1,8 +1,8 @@
-# Migrating from Vitest
+# Migrating from vitest
 
 If you are using the Rstack (Rsbuild / Rslib / Rspack, etc.) toolchain, migrating to Rstest will bring you a consistent development experience.
 
-## Install Dependencies
+## Install dependencies
 
 First, you need to install the Rstest dependency.
 
@@ -19,7 +19,7 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 }
 ```
 
-## Configuration Migration
+## Configuration migration
 
 Update your Vitest configuration file (e.g., `vite.config.ts` or `vitest.config.ts`) to an `rstest.config.ts` file:
 
@@ -31,7 +31,7 @@ export default defineConfig({
 });
 ```
 
-### Test Configuration
+### Test configuration
 
 Rstest test configuration is basically the same as Vitest, but note that you don't need to put test configuration under the `test` field.
 
@@ -51,13 +51,13 @@ export default defineConfig({
 });
 ```
 
-### Build Configuration
+### Build configuration
 
 Rstest uses Rsbuild as the default test build tool instead of Vite. Therefore, you need to migrate your build configuration from Vite configuration to Rstest configuration. You can view all available build configuration options through [Build Configurations](/config/#build-configurations).
 
 If you need more information about Vite build configuration migration, please refer to [Rsbuild - Vite Migration Documentation](https://rsbuild.dev/guide/migration/vite#migrate-configuration).
 
-## Update Test APIs
+## Update test APIs
 
 ### Test APIs
 
@@ -77,7 +77,7 @@ Rstest provides the `rstest` API, which you can use to access Rstest's utility f
 fn.mockResolvedValue('foo');
 ```
 
-### Mock Async Modules
+### Mock async modules
 
 When you need to mock a module's return value, Rstest does not support returning an async function.
 
