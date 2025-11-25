@@ -49,6 +49,8 @@ class Rstest {
       return this.startTestRun(request);
     };
 
+    this.ctrl.refreshHandler = () => this.startScanWorkspaces();
+
     const _runProfile = this.ctrl.createRunProfile(
       'Run Tests',
       vscode.TestRunProfileKind.Run,
