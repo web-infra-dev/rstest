@@ -82,7 +82,11 @@ export const createRstestUtilities: (
     },
     resetModules: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
-      return rstest;
+      return {} as any;
+    },
+    hoisted: () => {
+      // The actual implementation is managed by the built-in Rstest plugin.
+      return {} as any;
     },
 
     setConfig: (config) => {
