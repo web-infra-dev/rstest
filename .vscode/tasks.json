@@ -5,9 +5,18 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "build:local",
+      "script": "watch:local",
       "path": "packages/vscode",
-      "problemMatcher": "$tsc-watch",
+      "problemMatcher": {
+        // tells vscode when the build task is running
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started|building",
+          "endsPattern": "built in|build complete"
+        },
+        // although we don't care about it, pattern is required to implement problemMatcher
+        "pattern": { "regexp": "build failed in" }
+      },
       "isBackground": true,
       "presentation": {
         "reveal": "never"

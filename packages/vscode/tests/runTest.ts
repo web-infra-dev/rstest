@@ -13,7 +13,10 @@ async function main() {
 
     // Open this folder as the workspace in the Extension Host during tests
     // Note: __dirname points to tests-dist at runtime, so resolve back to tests/fixtures
-    const workspacePath = path.resolve(__dirname, '../tests/fixtures');
+    const workspacePath = path.resolve(
+      __dirname,
+      '../tests/fixtures/fixtures.code-workspace',
+    );
 
     // Download VS Code, unzip it and run the integration test
     await runTests({
