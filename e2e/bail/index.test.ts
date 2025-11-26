@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test bail option', () => {
-  it('should not run all tests when `--bail <number>`', async () => {
+  it('should not run all tests when `--bail [number]`', async () => {
     const { expectExecFailed, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/index.test.ts', '--bail', '1'],
