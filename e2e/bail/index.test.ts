@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test bail option', () => {
   it('should not run all tests when `--bail [number]`', async () => {
-    const { expectExecFailed, cli } = await runRstestCli({
+    const { expectExecFailed, cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/index.test.ts', '--bail', '1'],
       options: {
@@ -19,6 +19,8 @@ describe('test bail option', () => {
     });
 
     await expectExecFailed();
+
+    expectLog(/Test run aborted/);
 
     const logs = cli.stdout.split('\n').filter((log) => log.includes('Tests'));
     // `Tests 1 failed | 1 passed (2)` => 2
