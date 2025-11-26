@@ -288,6 +288,18 @@ export async function runTests(context: Rstest): Promise<void> {
 
       await generateCoverage(context, results, coverageProvider);
     }
+
+    if (isFailure) {
+      const bail = context.normalizedConfig.bail;
+
+      if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+        logger.log(
+          color.yellow(
+            `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
+          ),
+        );
+      }
+    }
   };
 
   if (command === 'watch') {

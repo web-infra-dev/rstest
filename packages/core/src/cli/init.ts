@@ -42,7 +42,7 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
-  bail?: number;
+  bail?: number | boolean;
 };
 
 async function resolveConfig(
@@ -79,7 +79,6 @@ async function resolveConfig(
     'testEnvironment',
     'hideSkippedTests',
     'logHeapUsage',
-    'bail',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -89,6 +88,13 @@ async function resolveConfig(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (
+    options.bail !== undefined &&
+    (typeof options.bail === 'number' || typeof options.bail === 'boolean')
+  ) {
+    config.bail = Number(options.bail);
   }
 
   if (options.coverage !== undefined) {
