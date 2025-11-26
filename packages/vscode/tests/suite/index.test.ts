@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
-import { delay, getProjectItems, getTestItems } from './helpers';
+import { getProjectItems, getTestItems } from './helpers';
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
