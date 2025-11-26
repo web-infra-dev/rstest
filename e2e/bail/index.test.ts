@@ -26,7 +26,7 @@ describe('test bail option', () => {
     expect(totalCount).toBe(2);
   });
 
-  it('should not run all tests when `--bail`', async () => {
+  it('should not run all tests when `--bail` (default 1)', async () => {
     const { expectExecFailed, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/index.test.ts', '--bail'],
