@@ -305,18 +305,28 @@ export const createPool = async ({
                 if (err.message.includes('Worker exited unexpectedly')) {
                   delete err.stack;
                 }
-                const module = context.stateManager.runningModules.get(
+                const runningModule = context.stateManager.runningModules.get(
                   entryInfo.testPath,
                 );
-                if (module?.runningTests.length) {
+                if (runningModule?.runningTests.length) {
                   const getCaseName = (test: TestCaseInfo) =>
                     `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
-                  if (module?.runningTests.length === 1) {
-                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(module.runningTests[0]!)} which is running when the error occurs.`)}`;
+                  if (runningModule?.runningTests.length === 1) {
+                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
                   } else {
-                    err.message += `\n\n${color.white(`Maybe relevant the below test cases which are running when the error occurs:\n  - ${module.runningTests.map((t) => `${getCaseName(t)}`).join('\n  - ')}`)}`;
+                    err.message += `\n\n${color.white(`Maybe relevant the below test cases which are running when the error occurs:\n  - ${runningModule.runningTests.map((t) => `${getCaseName(t)}`).join('\n  - ')}`)}`;
                   }
                 }
+
+                return {
+                  testId: '0',
+                  project: projectName,
+                  testPath: entryInfo.testPath,
+                  status: 'fail',
+                  name: '',
+                  results: runningModule?.results || [],
+                  errors: [err],
+                } as TestFileResult;
               }
 
               return {
