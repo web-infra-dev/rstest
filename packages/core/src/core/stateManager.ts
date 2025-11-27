@@ -54,10 +54,8 @@ export class TestStateManager {
   }
 
   getCountOfFailedTests(): number {
-    const testResults: TestResult[] = Array.from(
-      this.runningModules.values().map(({ results }) => results),
-    )
-      .flat()
+    const testResults: TestResult[] = Array.from(this.runningModules.values())
+      .flatMap(({ results }) => results)
       .concat(this.testModules.flatMap((mod) => mod.results));
 
     return testResults.filter((t) => t.status === 'fail').length;
