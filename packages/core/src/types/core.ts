@@ -1,4 +1,5 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
+import type { TestStateManager } from '../core/stateManager';
 import type {
   NormalizedConfig,
   NormalizedProjectConfig,
@@ -48,6 +49,7 @@ export type RstestContext = {
   command: RstestCommand;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
+  stateManager: TestStateManager;
 };
 
 export type ListCommandOptions = {

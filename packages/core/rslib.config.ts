@@ -1,5 +1,6 @@
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
+import { version } from './package.json';
 
 const isBuildWatch = process.argv.includes('--watch');
 
@@ -9,6 +10,9 @@ export default defineConfig({
       id: 'rstest',
       format: 'esm',
       syntax: ['node 18'],
+      experiments: {
+        advancedEsm: true,
+      },
       dts: {
         bundle: {
           bundledPackages: [
@@ -25,7 +29,6 @@ export default defineConfig({
             '@vitest/pretty-format',
           ],
         },
-        distPath: './dist-types',
       },
       output: {
         externals: {
@@ -72,7 +75,7 @@ export default defineConfig({
           worker: './src/runtime/worker/index.ts',
         },
         define: {
-          RSTEST_VERSION: JSON.stringify(require('./package.json').version),
+          RSTEST_VERSION: JSON.stringify(version),
         },
       },
       tools: {
@@ -100,6 +103,7 @@ export default defineConfig({
       id: 'rstest_loaders',
       format: 'esm',
       syntax: 'es2021',
+      dts: false,
       source: {
         entry: {
           cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
@@ -112,6 +116,9 @@ export default defineConfig({
       },
     },
   ],
+  performance: {
+    printFileSize: !isBuildWatch,
+  },
   tools: {
     rspack: {
       watchOptions: {

@@ -5,8 +5,8 @@
   "scripts": {
     "build": "rsbuild build",
     "test": "rstest",
-    "test:watch": "rstest --watch",
-    "test:coverage": "rstest --coverage"
+    "test:coverage": "rstest --coverage",
+    "test:watch": "rstest --watch"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",

@@ -35,7 +35,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "module": {
     "parser": {
       "javascript": {
-        "exportsPresence": "error",
+        "exportsPresence": "warn",
         "importDynamic": false,
         "inlineConst": false,
         "requireAsExpression": false,
@@ -555,7 +555,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "module": {
     "parser": {
       "javascript": {
-        "exportsPresence": "error",
+        "exportsPresence": "warn",
         "importDynamic": false,
         "inlineConst": false,
         "requireAsExpression": false,
@@ -1066,7 +1066,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "module": {
     "parser": {
       "javascript": {
-        "exportsPresence": "error",
+        "exportsPresence": "warn",
         "importDynamic": false,
         "inlineConst": false,
         "requireAsExpression": false,
@@ -1584,7 +1584,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "module": {
     "parser": {
       "javascript": {
-        "exportsPresence": "error",
+        "exportsPresence": "warn",
         "importDynamic": false,
         "inlineConst": false,
         "requireAsExpression": false,
@@ -2104,7 +2104,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "module": {
     "parser": {
       "javascript": {
-        "exportsPresence": "error",
+        "exportsPresence": "warn",
         "importDynamic": false,
         "inlineConst": false,
         "requireAsExpression": false,

@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.6.1",
+  "version": "0.6.7",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -19,13 +19,13 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist-types/index.d.ts",
+  "types": "./dist/index.d.ts",
   "bin": {
     "rstest": "./bin/rstest.js"
   },
   "exports": {
     ".": {
-      "types": "./dist-types/index.d.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./package.json": {
@@ -41,7 +41,6 @@
   "files": [
     "bin",
     "dist",
-    "dist-types",
     "compiled",
     "globals.d.ts",
     "importMeta.d.ts"
@@ -66,7 +65,7 @@
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.53.3",
-    "@rslib/core": "0.16.1",
+    "@rslib/core": "0.17.1",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^14.0.0",
     "@types/babel__code-frame": "^7.0.6",

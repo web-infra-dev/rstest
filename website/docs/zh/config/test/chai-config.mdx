@@ -1,0 +1,34 @@
+# chaiConfig
+
+- **类型：**
+
+```ts
+type ChaiConfig = {
+  /**
+   * @default false
+   */
+  includeStack: boolean;
+  /**
+   * @default true
+   */
+  showDiff: boolean;
+  /**
+   * @default 40
+   */
+  truncateThreshold: number;
+};
+```
+
+- **默认值：** `undefined`
+
+自定义 [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js)。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    truncateThreshold: 100,
+  },
+});
+```

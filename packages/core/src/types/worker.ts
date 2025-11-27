@@ -1,7 +1,12 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { ProjectContext, RstestContext } from './core';
-import type { TestFileInfo, TestResult, UserConsoleLog } from './testSuite';
+import type {
+  TestCaseInfo,
+  TestFileInfo,
+  TestResult,
+  UserConsoleLog,
+} from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
@@ -22,7 +27,9 @@ export type RuntimeRPC = {
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, string>;
   }>;
+  onTestCaseStart: (test: TestCaseInfo) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
+  getCountOfFailedTests: () => Promise<number>;
   onConsoleLog: (log: UserConsoleLog) => void;
   resolveSnapshotPath: (filepath: string) => string;
 };
@@ -48,6 +55,9 @@ export type RuntimeConfig = Pick<
   | 'coverage'
   | 'snapshotFormat'
   | 'env'
+  | 'logHeapUsage'
+  | 'bail'
+  | 'chaiConfig'
 >;
 
 export type WorkerContext = {

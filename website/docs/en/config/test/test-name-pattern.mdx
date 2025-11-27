@@ -1,0 +1,59 @@
+# testNamePattern
+
+- **Type:** `string | RegExp`
+- **Default:** `undefined`
+- **CLI:** `-t=<value>`, `--testNamePattern=<value>`
+
+Run only tests with a name that matches the regex / string.
+
+If you set `testNamePattern` to `bar`, tests not containing the word `bar` in the test name will be skipped.
+
+It should be noted that the test name consists of the test case name and the name of the test suite that wraps it. If a test suite name contains `bar`, all test cases in that test suite will be run.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest -t=bar
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testNamePattern: 'bar',
+});
+```
+</Tab>
+</Tabs>
+
+```ts
+// skipped
+test('test foo', () => {
+  expect(true).toBe(true);
+});
+
+// run
+test('test bar', () => {
+  expect(true).toBe(true);
+});
+
+// run all tests in this suite
+describe('bar', () => {
+  it('should add two numbers correctly', () => {
+    expect(1 + 1).toBe(2);
+  });
+});
+```
+
+If you want to exclude certain tests instead, you can use a negative regex. For example, `/^(?!.*bar).*$/` skips every test whose name contains `bar`.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testNamePattern: /^(?!.*bar).*$/,
+});
+```

@@ -2,6 +2,7 @@
 
 exports[`rstest context > should generate rstest context correctly 1`] = `
 {
+  "bail": 0,
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -15,9 +16,9 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
       "**/__mocks__/**",
       "**/*.d.ts",
       "**/*.{test,spec}.[jt]s",
-      "**/*.{test,spec}.[c|m][jt]s",
+      "**/*.{test,spec}.[cm][jt]s",
       "**/*.{test,spec}.[jt]sx",
-      "**/*.{test,spec}.[c|m][jt]sx",
+      "**/*.{test,spec}.[cm][jt]sx",
     ],
     "provider": "istanbul",
     "reportOnFailure": false,
@@ -49,6 +50,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   ],
   "includeSource": [],
   "isolate": true,
+  "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
   "output": undefined,
@@ -77,6 +79,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
 
 exports[`rstest context > should generate rstest context correctly with multiple projects 1`] = `
 {
+  "bail": 0,
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -90,9 +93,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/__mocks__/**",
       "**/*.d.ts",
       "**/*.{test,spec}.[jt]s",
-      "**/*.{test,spec}.[c|m][jt]s",
+      "**/*.{test,spec}.[cm][jt]s",
       "**/*.{test,spec}.[jt]sx",
-      "**/*.{test,spec}.[c|m][jt]sx",
+      "**/*.{test,spec}.[cm][jt]sx",
     ],
     "provider": "istanbul",
     "reportOnFailure": false,
@@ -124,6 +127,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   ],
   "includeSource": [],
   "isolate": true,
+  "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project",
   "output": undefined,
@@ -155,6 +159,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
 
 exports[`rstest context > should generate rstest context correctly with multiple projects 2`] = `
 {
+  "bail": 0,
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -168,9 +173,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/__mocks__/**",
       "**/*.d.ts",
       "**/*.{test,spec}.[jt]s",
-      "**/*.{test,spec}.[c|m][jt]s",
+      "**/*.{test,spec}.[cm][jt]s",
       "**/*.{test,spec}.[jt]sx",
-      "**/*.{test,spec}.[c|m][jt]sx",
+      "**/*.{test,spec}.[cm][jt]sx",
     ],
     "provider": "istanbul",
     "reportOnFailure": false,
@@ -202,6 +207,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   ],
   "includeSource": [],
   "isolate": true,
+  "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project1",
   "output": undefined,

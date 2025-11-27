@@ -26,6 +26,7 @@ export type CommonOptions = {
   coverage?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
+  logHeapUsage?: boolean;
   disableConsoleIntercept?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
@@ -41,6 +42,7 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  bail?: number | boolean;
 };
 
 async function resolveConfig(
@@ -76,6 +78,7 @@ async function resolveConfig(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'logHeapUsage',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -85,6 +88,13 @@ async function resolveConfig(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (
+    options.bail !== undefined &&
+    (typeof options.bail === 'number' || typeof options.bail === 'boolean')
+  ) {
+    config.bail = Number(options.bail);
   }
 
   if (options.coverage !== undefined) {

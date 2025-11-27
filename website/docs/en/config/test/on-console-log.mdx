@@ -1,0 +1,20 @@
+# onConsoleLog
+
+- **Type:** `(content: string) => boolean | void`
+- **Default:** `undefined`
+
+Custom handler for console log in tests, which is helpful for filtering out logs from third-party libraries.
+
+If you return `false`, Rstest will not print the log to the console.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  onConsoleLog: (log) => log.includes('test'),
+});
+```
+
+:::note
+When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `onConsoleLog` will be ignored.
+:::

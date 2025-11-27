@@ -1,11 +1,16 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
+import type { config } from 'chai';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+
+export type ChaiConfig = Partial<
+  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+>;
 
 export type RstestPoolType = 'forks';
 
@@ -22,7 +27,15 @@ export type RstestPoolOptions = {
 
 export type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+  | 'projects'
+  | 'reporters'
+  | 'pool'
+  | 'isolate'
+  | 'coverage'
+  | 'resolveSnapshotPath'
+  | 'onConsoleLog'
+  | 'hideSkippedTests'
+  | 'bail'
 >;
 
 type SnapshotFormat = Omit<
@@ -122,6 +135,14 @@ export interface RstestConfig {
   testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
 
   /**
+   * Stop running tests after n failures.
+   * Set to 0 to run all tests regardless of failures.
+   *
+   * @default 0
+   */
+  bail?: number;
+
+  /**
    * print console traces when calling any console method.
    *
    * @default false
@@ -216,6 +237,12 @@ export interface RstestConfig {
   maxConcurrency?: number;
 
   /**
+   * Log heap usage after each test
+   * @default false
+   */
+  logHeapUsage?: boolean;
+
+  /**
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;
@@ -237,6 +264,11 @@ export interface RstestConfig {
    * Coverage options
    */
   coverage?: CoverageOptions;
+
+  /**
+   * chai configuration options
+   */
+  chaiConfig?: ChaiConfig;
 
   // Rsbuild configs
 
@@ -277,6 +309,7 @@ type OptionalKeys =
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
+  | 'chaiConfig'
   | 'resolveSnapshotPath';
 
 export type NormalizedConfig = Required<

@@ -64,7 +64,11 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const { rpc } = createRuntimeRpc(createForksRpcOptions());
+  const originalConsole = global.console;
+
+  const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
+    originalConsole,
+  });
   const {
     runtimeConfig: {
       globals,
@@ -248,10 +252,6 @@ const loadFiles = async ({
   });
 };
 
-const onExit = () => {
-  process.exit();
-};
-
 const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
@@ -269,7 +269,7 @@ const runInPool = async (
     type,
     context: {
       project,
-      runtimeConfig: { isolate },
+      runtimeConfig: { isolate, bail },
     },
   } = options;
 
@@ -280,19 +280,26 @@ const runInPool = async (
     throw new Error(`process.exit unexpectedly called with "${code}"`);
   };
 
+  const kill = process.kill.bind(process);
+  process.kill = (pid: number, signal?: NodeJS.Signals) => {
+    if (pid === -1 || Math.abs(pid) === process.pid) {
+      throw new Error(
+        `process.kill unexpectedly called with "${pid}" and "${signal}"`,
+      );
+    }
+    return kill(pid, signal);
+  };
+
   cleanups.push(() => {
+    process.kill = kill;
     process.exit = exit;
   });
-
-  process.off('SIGTERM', onExit);
 
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
-    // should exit correctly when user's signal listener exists
-    process.once('SIGTERM', onExit);
   };
 
   if (type === 'collect') {
@@ -350,6 +357,17 @@ const runInPool = async (
       unhandledErrors,
       interopDefault,
     } = await preparePool(options);
+
+    if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
+      return {
+        testId: '0',
+        project,
+        testPath,
+        status: 'skip',
+        name: '',
+        results: [],
+      };
+    }
     // Initialize coverage collector if coverage is enabled
     const coverageProvider = await createCoverageProvider(
       options.context.runtimeConfig.coverage || {},
@@ -380,8 +398,14 @@ const runInPool = async (
     const results = await runner.runTests(
       testPath,
       {
+        onTestCaseStart: async (test) => {
+          await rpc.onTestCaseStart(test);
+        },
         onTestCaseResult: async (result) => {
           await rpc.onTestCaseResult(result);
+        },
+        getCountOfFailedTests: async () => {
+          return rpc.getCountOfFailedTests();
         },
       },
       api,
@@ -408,6 +432,7 @@ const runInPool = async (
     return results;
   } catch (err) {
     return {
+      testId: '0',
       project,
       testPath,
       status: 'fail',

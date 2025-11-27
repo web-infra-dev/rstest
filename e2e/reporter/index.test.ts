@@ -71,7 +71,12 @@ describe.concurrent('reporters', () => {
     });
 
     await cli.exec;
+    expect(cli.stdout).toContain('[custom reporter] onTestCaseStart');
+    expect(
+      cli.stdout.match(/\[custom reporter\] onTestCaseStart/g)?.length,
+    ).toBe(3);
     expect(cli.stdout).toContain('[custom reporter] onTestFileStart');
+
     expect(
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);
@@ -92,5 +97,22 @@ describe.concurrent('reporters', () => {
 
     await cli.exec;
     expect(cli.stdout).not.toContain('✗ basic > b');
+  });
+
+  it('logHeapUsage', async ({ onTestFinished }) => {
+    const { cli, expectLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'index', '--logHeapUsage'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expectLog(/fixtures\/index.test.ts.*\d+ MB heap used/);
+    expectLog(/✗ basic > b.*\d+ MB heap used/);
   });
 });

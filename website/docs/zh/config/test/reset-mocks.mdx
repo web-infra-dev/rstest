@@ -1,0 +1,28 @@
+# resetMocks
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--resetMocks`
+
+清除所有 mock 属性，并将每个 mock 的实现重置为其原始实现。
+
+当启用 `resetMocks` 时，rstest 将在每个测试用例执行之前调用 [.resetAllMocks()](/api/rstest/mock-functions#rstestresetallmocks)。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --resetMocks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resetMocks: true,
+});
+```
+  </Tab>
+</Tabs>

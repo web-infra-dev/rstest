@@ -55,7 +55,7 @@ export class TestRunner {
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: { passWithNoTests, retry, maxConcurrency },
+      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
       project,
       snapshotOptions,
     } = state;
@@ -77,6 +77,7 @@ export class TestRunner {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
         const result = {
+          testId: test.testId,
           status: 'skip' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -87,6 +88,7 @@ export class TestRunner {
       }
       if (test.runMode === 'todo') {
         const result = {
+          testId: test.testId,
           status: 'todo' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -109,6 +111,7 @@ export class TestRunner {
         }
       } catch (error) {
         result = {
+          testId: test.testId,
           status: 'fail' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -130,6 +133,7 @@ export class TestRunner {
             this.afterRunTest(test);
 
             result = {
+              testId: test.testId,
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
@@ -143,6 +147,7 @@ export class TestRunner {
             };
           } catch (_err) {
             result = {
+              testId: test.testId,
               project,
               status: 'pass' as const,
               parentNames: test.parentNames,
@@ -160,6 +165,7 @@ export class TestRunner {
             await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
+              testId: test.testId,
               project,
               parentNames: test.parentNames,
               name: test.name,
@@ -168,6 +174,7 @@ export class TestRunner {
             };
           } catch (error) {
             result = {
+              testId: test.testId,
               project,
               status: 'fail' as const,
               parentNames: test.parentNames,
@@ -253,6 +260,11 @@ export class TestRunner {
         afterEachListeners: AfterEachListener[];
       },
     ) => {
+      if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
+        defaultStatus = 'skip';
+        return;
+      }
+
       if (test.type === 'suite') {
         if (test.tests.length === 0) {
           if (['todo', 'skip'].includes(test.runMode)) {
@@ -269,6 +281,7 @@ export class TestRunner {
 
           errors.push(noTestError);
           const result = {
+            testId: test.testId || '0',
             status: 'fail' as const,
             parentNames: test.parentNames,
             name: test.name,
@@ -332,6 +345,16 @@ export class TestRunner {
         const start = RealDate.now();
         let result: TestResult | undefined;
         let retryCount = 0;
+        // Call onTestCaseStart hook before running the test
+        hooks.onTestCaseStart?.({
+          testId: test.testId,
+          startTime: start,
+          testPath: test.testPath,
+          name: test.name,
+          timeout: test.timeout,
+          parentNames: test.parentNames,
+          project: test.project,
+        });
 
         do {
           const currentResult = await runTestsCase(test, parentHooks);
@@ -349,6 +372,9 @@ export class TestRunner {
 
         result.duration = RealDate.now() - start;
         result.retryCount = retryCount - 1;
+        result.heap = state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
@@ -359,6 +385,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
+          testId: '0',
           project,
           testPath,
           name: '',
@@ -368,11 +395,15 @@ export class TestRunner {
       }
 
       return {
+        testId: '0',
         project,
         testPath,
         name: '',
         status: 'fail',
         results,
+        heap: state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined,
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -391,9 +422,13 @@ export class TestRunner {
     const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
+      testId: '0',
       project,
       testPath,
       name: '',
+      heap: state.runtimeConfig.logHeapUsage
+        ? process.memoryUsage().heapUsed
+        : undefined,
       status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
       results,
       snapshotResult,

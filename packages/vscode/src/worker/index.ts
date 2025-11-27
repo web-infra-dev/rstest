@@ -1,33 +1,35 @@
-import { WebSocket } from 'ws';
-import type { WorkerInitData, WorkerRunTestData } from '../types';
+import { pathToFileURL } from 'node:url';
+import { createBirpc } from 'birpc';
+import type { RstestApi } from '../master';
+import type {
+  WorkerEventFinish,
+  WorkerInitData,
+  WorkerRunTestData,
+} from '../types';
 import { logger } from './logger';
 import { VscodeReporter } from './reporter';
 
 type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
 
-class Worker {
-  private ws: WebSocket;
-  public rstestPath!: string;
-  public cwd!: string;
+// fix ESM import path issue on windows
+// Only URLs with a scheme in: file, data, and node are supported by the default ESM loader.
+const normalizeImportPath = (path: string) => {
+  return pathToFileURL(path).toString();
+};
 
-  constructor() {
-    this.ws = new WebSocket(process.env.RSTEST_WS_ADDRESS!);
-    this.ws.on('message', (bufferData) => {
-      const _data = JSON.parse(bufferData.toString());
-      if (_data.type === 'init') {
-        const data: WorkerInitData = _data;
-        this.initRstest(data);
-      } else if (_data.type === 'runTest') {
-        const data: WorkerRunTestData = _data;
-        this.runTest(data);
-      }
-    });
-  }
+export class Worker {
+  public rstestPath!: string;
+  public root!: string;
+  public configFilePath!: string;
 
   public async runTest(data: WorkerRunTestData) {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
+    let resolve!: (value: WorkerEventFinish) => void;
+    const promise = new Promise<WorkerEventFinish>((res) => {
+      resolve = res;
+    });
     try {
-      const rstest = await this.createRstest(data);
+      const rstest = await this.createRstest(resolve);
       rstest.context.fileFilters = data.fileFilters;
       rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
       const res = await rstest.runTests();
@@ -37,27 +39,33 @@ class Worker {
       );
     } catch (error) {
       logger.error('Test run failed', error);
+      throw error;
     }
+    return promise;
   }
 
   public async initRstest(data: WorkerInitData) {
     this.rstestPath = data.rstestPath;
-    this.cwd = data.cwd;
+    this.root = data.root;
+    this.configFilePath = data.configFilePath;
     logger.debug('Initialized worker context', {
-      cwd: this.cwd,
+      root: this.root,
       rstestPath: this.rstestPath,
     });
   }
 
-  public async createRstest(data: WorkerRunTestData) {
+  public async createRstest(
+    onTestRunEndCallback: (data: WorkerEventFinish) => void,
+  ) {
     const rstestModule = (await import(
-      this.rstestPath
+      normalizeImportPath(this.rstestPath)
     )) as typeof import('@rstest/core');
     logger.debug('Loaded Rstest module');
     const { createRstest, initCli } = rstestModule;
 
     const commonOptions: CommonOptions = {
-      root: this.cwd,
+      root: this.root,
+      config: this.configFilePath,
     };
 
     const initializedOptions = await initCli(commonOptions);
@@ -72,20 +80,7 @@ class Worker {
       {
         config: {
           ...config,
-          reporters: [
-            new VscodeReporter({
-              onTestRunEndCallback: ({ testFileResults, testResults }) => {
-                this.ws.send(
-                  JSON.stringify({
-                    type: 'finish',
-                    id: data.id,
-                    testResults,
-                    testFileResults,
-                  }),
-                );
-              },
-            }),
-          ],
+          reporters: [new VscodeReporter({ onTestRunEndCallback })],
         },
         configFilePath,
         projects,
@@ -98,6 +93,11 @@ class Worker {
   }
 }
 
-(async () => {
-  const _worker = new Worker();
-})();
+export const masterApi = createBirpc<Pick<RstestApi, 'log'>, Worker>(
+  new Worker(),
+  {
+    post: (data) => process.send?.(data),
+    on: (fn) => process.on('message', fn),
+    bind: 'functions',
+  },
+);

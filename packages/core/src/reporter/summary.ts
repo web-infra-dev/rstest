@@ -26,6 +26,7 @@ import {
   formatTestPath,
   getTaskNameWithPrefix,
   logger,
+  POINTER,
   prettyTestPath,
   prettyTime,
   TEST_DELIMITER,
@@ -89,7 +90,6 @@ export const printSnapshotSummaryLog = (
       );
     }
   }
-  const POINTER = '➜';
 
   if (snapshots.filesRemovedList?.length) {
     const [head, ...tail] = snapshots.filesRemovedList;

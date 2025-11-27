@@ -2,6 +2,7 @@ import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { BuiltInReporterNames } from '../core/rstest';
 import type {
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -54,6 +55,10 @@ export interface Reporter {
    * Called when the test has finished running or was just skipped.
    */
   onTestCaseResult?: (result: TestResult) => void;
+  /**
+   * Called before running the test case.
+   */
+  onTestCaseStart?: (test: TestCaseInfo) => void;
   /**
    * Called after all tests have finished running.
    */

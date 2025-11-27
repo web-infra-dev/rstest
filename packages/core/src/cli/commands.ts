@@ -48,6 +48,7 @@ const applyCommonOptions = (cli: CAC) => {
       'Print console traces when calling any console method',
     )
     .option('--disableConsoleIntercept', 'Disable console intercept')
+    .option('--logHeapUsage', 'Log heap usage after each test')
     .option(
       '--slowTestThreshold <value>',
       'The number of milliseconds after which a test or suite is considered slow',
@@ -65,6 +66,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
     .option('--hideSkippedTests', 'Hide skipped tests from the output')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
+    .option(
+      '--bail [number]',
+      'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
+    )
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(
       '--clearMocks',

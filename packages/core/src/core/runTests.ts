@@ -130,6 +130,8 @@ export async function runTests(context: Rstest): Promise<void> {
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
+    context.stateManager.reset();
+
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {
@@ -285,6 +287,18 @@ export async function runTests(context: Rstest): Promise<void> {
       const { generateCoverage } = await import('../coverage/generate');
 
       await generateCoverage(context, results, coverageProvider);
+    }
+
+    if (isFailure) {
+      const bail = context.normalizedConfig.bail;
+
+      if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+        logger.log(
+          color.yellow(
+            `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
+          ),
+        );
+      }
     }
   };
 
@@ -448,8 +462,19 @@ export async function runTests(context: Rstest): Promise<void> {
       afterTestsWatchRun();
     });
   } else {
+    const unExpectedExit = (code?: number) => {
+      logger.log(
+        color.red(
+          `Rstest exited unexpectedly with code ${code}, terminating test run.`,
+        ),
+      );
+      process.exitCode = 1;
+    };
+    process.on('exit', unExpectedExit);
+
     await run();
     await pool.close();
     await closeServer();
+    process.off('exit', unExpectedExit);
   }
 }

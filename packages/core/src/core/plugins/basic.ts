@@ -118,6 +118,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   // Keep require.resolve expressions.
                   requireResolve: false,
                   ...(config.module.parser.javascript || {}),
+                  // suppress ESModulesLinkingError for exports that might be implemented in mock
+                  exportsPresence: 'warn',
                 };
 
                 config.resolve ??= {};

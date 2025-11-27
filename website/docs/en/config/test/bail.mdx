@@ -1,0 +1,28 @@
+# bail
+
+- **Type:** `number`
+- **Default:** `0`
+- **CLI:** `--bail [number]` (default: `1`)
+
+Abort the test run after the specified number of test failures. This is useful for stopping test runs early when failures occur.
+
+Setting this to `0` (the default) means to run all tests regardless of failures. Setting this to `1` will stop the test run after the first test failure.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --bail 1
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  bail: 1,
+});
+```
+  </Tab>
+</Tabs>

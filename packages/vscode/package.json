@@ -4,7 +4,7 @@
   "displayName": "Rstest",
   "publisher": "rstack",
   "description": "VS Code extension for Rstest",
-  "version": "0.6.1",
+  "version": "0.6.7",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -13,7 +13,7 @@
     "directory": "packages/vscode"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.97.0"
   },
   "categories": [
     "Testing"
@@ -35,52 +35,60 @@
             "type": "string"
           },
           "default": [
-            "**/*.test.*",
-            "**/*.spec.*"
+            "**/*.{test,spec}.[jt]s",
+            "**/*.{test,spec}.[cm][jt]s",
+            "**/*.{test,spec}.[jt]sx",
+            "**/*.{test,spec}.[cm][jt]sx"
           ]
         },
-        "rstest.logLevel": {
-          "markdownDescription": "Controls how much diagnostic output the Rstest extension emits to the Output view.",
-          "scope": "window",
-          "type": "string",
-          "enum": [
-            "default",
-            "debug"
-          ],
-          "default": "default"
+        "rstest.rstestPackagePath": {
+          "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.configFileGlobPattern": {
+          "description": "Glob patterns used to discover config files. Must be an array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/rstest.config.{mjs,ts,js,cjs,mts,cts}"
+          ]
         }
       }
     }
   },
   "scripts": {
-    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rspress-logo-512x512.png --output icon.png",
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
     "build": "rslib build",
     "lint": "biome check . --diagnostic-level=warn",
-    "build:local": "SOURCEMAP=true rslib build",
+    "build:local": "cross-env SOURCEMAP=true rslib build",
     "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
     "test": "npm run test:unit && npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "watch": "rslib build --watch",
+    "watch:local": "cross-env SOURCEMAP=true rslib build --watch",
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
     "@rsbuild/core": "1.6.0-beta.1",
-    "@rslib/core": "0.16.1",
+    "@rslib/core": "0.17.1",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.13.5",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
-    "@types/vscode": "^1.100.0",
-    "@types/ws": "^8.18.1",
+    "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.6.2",
-    "get-port": "^7.1.0",
+    "birpc": "2.6.1",
     "glob": "^7.2.3",
     "mocha": "^11.7.4",
+    "ovsx": "^0.10.6",
     "typescript": "^5.9.3",
-    "ws": "^8.18.3"
+    "valibot": "^1.2.0"
   }
 }

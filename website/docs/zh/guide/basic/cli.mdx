@@ -116,23 +116,24 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                           |
 | `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                                                             |
 | `--coverage`                    | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                   |
-| `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/passWithNoTests)                                                         |
-| `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/printConsoleTrace)                                                      |
+| `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                      |
+| `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                    |
 | `--project <name>`              | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                                                     |
-| `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disableConsoleIntercept)                                                      |
-| `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slowTestThreshold)                                               |
-| `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/testNamePattern)                                                               |
-| `--testEnvironment <name>`      | 指定测试环境，详见 [testEnvironment](/config/test/testEnvironment)                                                                           |
-| `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/testTimeout)                                                                 |
-| `--hookTimeout <value>`         | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hookTimeout)                                                           |
+| `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                    |
+| `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                             |
+| `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                             |
+| `--testEnvironment <name>`      | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                          |
+| `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                |
+| `--hookTimeout <value>`         | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                                                          |
 | `--retry <retry>`               | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                         |
+| `--bail [number]`               | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                                                                 |
 | `--reporter <reporter>`         | 指定测试报告器，详见 [reporters](/config/test/reporters)                                                                                     |
-| `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/maxConcurrency)                                                                           |
-| `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clearMocks)                                                 |
-| `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/resetMocks)                                                                     |
-| `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restoreMocks)                                                           |
-| `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstubGlobals)                                        |
-| `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstubEnvs)                                           |
+| `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                          |
+| `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                |
+| `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                    |
+| `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                          |
+| `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                       |
+| `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                          |
 | `-h, --help`                    | 显示帮助信息                                                                                                                                 |
 | `-v, --version`                 | 显示版本号                                                                                                                                   |
 

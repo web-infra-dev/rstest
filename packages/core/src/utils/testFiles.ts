@@ -158,9 +158,10 @@ export const getSetupFiles = (
         const relativePath = pathe.relative(rootPath, setupFilePath);
         return [formatTestEntryName(relativePath), setupFilePath];
       } catch (err) {
+        const resolvedPath = tryResolve(setupFile, rootPath);
         // support use package name as setupFiles value
-        if (tryResolve(setupFile, rootPath)) {
-          return [formatTestEntryName(setupFile), setupFile];
+        if (resolvedPath) {
+          return [formatTestEntryName(setupFile), resolvedPath];
         }
         throw err;
       }

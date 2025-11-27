@@ -1,0 +1,28 @@
+# clearMocks
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--clearMocks`
+
+Automatically clear mock calls, instances, contexts and results before every test.
+
+When `clearMocks` enabled, rstest will call [.clearAllMocks()](/api/rstest/mock-functions#rstestclearallmocks) before each test.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --clearMocks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  clearMocks: true,
+});
+```
+  </Tab>
+</Tabs>

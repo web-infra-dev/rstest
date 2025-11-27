@@ -1,5 +1,4 @@
-import { Link } from '@rspress/core/theme';
-import styles from './ConfigOverview.module.scss';
+import { type Group, OverviewGroup } from '@rspress/core/theme';
 import { useI18nUrl } from './utils';
 
 export interface GroupItem {
@@ -7,12 +6,12 @@ export interface GroupItem {
   link: string;
 }
 
-export interface Group {
+export interface BasicGroup {
   name: string;
   items?: string[];
 }
 
-const OVERVIEW_GROUPS: Group[] = [
+const OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'basic',
     items: [
@@ -31,11 +30,14 @@ const OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'runtime',
-    items: ['env', 'retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
-  },
-  {
-    name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
+    items: [
+      'env',
+      'bail',
+      'retry',
+      'testTimeout',
+      'hookTimeout',
+      'maxConcurrency',
+    ],
   },
   {
     name: 'mock',
@@ -48,13 +50,19 @@ const OVERVIEW_GROUPS: Group[] = [
     ],
   },
   {
+    name: 'environment',
+    items: ['pool', 'isolate', 'testEnvironment'],
+  },
+  {
     name: 'output',
     items: [
       'coverage',
       'reporters',
+      'logHeapUsage',
       'hideSkippedTests',
       'slowTestThreshold',
       'snapshotFormat',
+      'chaiConfig',
       'resolveSnapshotPath',
       'onConsoleLog',
       'printConsoleTrace',
@@ -63,29 +71,34 @@ const OVERVIEW_GROUPS: Group[] = [
   },
 ];
 
-export default function Overview() {
-  const tUrl = useI18nUrl();
-  const Nodes = OVERVIEW_GROUPS.map((group) => (
-    <div key={group.name} className={styles.overviewGroups}>
-      <div className={styles.group}>
-        <div className={styles.title}>{group.name}</div>
-        <ul>
-          {group.items?.map((item) => (
-            <li key={item}>
-              <Link href={tUrl(`/config/test/${item}`)}>{item}</Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  ));
-
-  return <div className={styles.root}>{Nodes}</div>;
+function camelToKebab(str: string) {
+  return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 }
 
-const BUILD_OVERVIEW_GROUPS: Group[] = [
+export default function Overview() {
+  const tUrl = useI18nUrl();
+
+  const group: Group = {
+    name: '',
+    items: OVERVIEW_GROUPS.map((item) => ({
+      text: item.name,
+      link: '',
+      items: item.items?.map((item) => {
+        return {
+          link: tUrl(`/config/test/${camelToKebab(item)}`),
+          text: item,
+        };
+      }),
+    })),
+  };
+
+  return <OverviewGroup group={group} />;
+}
+
+const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
-    name: 'plugins',
+    name: 'top level',
+    items: ['plugins'],
   },
   {
     name: 'source',
@@ -126,28 +139,28 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
 
 export function BuildOverview() {
   const tUrl = useI18nUrl();
-  const Nodes = BUILD_OVERVIEW_GROUPS.map((group) => (
-    <div key={group.name} className={styles.overviewGroups}>
-      <div className={styles.group}>
-        <div className={styles.title}>
-          <Link href={tUrl(`/config/build/${group.name}`)}>{group.name}</Link>
-        </div>
-        <ul>
-          {group.items?.map((item) => (
-            <li key={item}>
-              <Link
-                href={tUrl(
-                  `/config/build/${group.name}#${item.replace('.', '')}`,
-                )}
-              >
-                {item}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  ));
 
-  return <div className={styles.root}>{Nodes}</div>;
+  const group: Group = {
+    name: '',
+    items: BUILD_OVERVIEW_GROUPS.map((groupItem) => ({
+      text: groupItem.name,
+      link:
+        groupItem.name === 'top level'
+          ? ''
+          : tUrl(`/config/build/${groupItem.name}`),
+      items: groupItem.items?.map((item) => {
+        return {
+          link:
+            groupItem.name === 'top level'
+              ? tUrl(`/config/build/${item}`)
+              : tUrl(
+                  `/config/build/${groupItem.name}#${item.replace('.', '')}`,
+                ),
+          text: item,
+        };
+      }),
+    })),
+  };
+
+  return <OverviewGroup group={group} />;
 }

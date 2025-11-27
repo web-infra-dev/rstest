@@ -4,6 +4,8 @@ export const DEFAULT_CONFIG_NAME = 'rstest.config';
 
 export const TEST_DELIMITER = '>';
 
+export const POINTER = '➜';
+
 export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
