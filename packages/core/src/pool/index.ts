@@ -314,7 +314,7 @@ export const createPool = async ({
                   if (runningModule?.runningTests.length === 1) {
                     err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
                   } else {
-                    err.message += `\n\n${color.white(`Maybe relevant the below test cases which are running when the error occurs:\n  - ${runningModule.runningTests.map((t) => `${getCaseName(t)}`).join('\n  - ')}`)}`;
+                    err.message += `\n\n${color.white(`Maybe relevant the below test cases which are running when the error occurs:\n  - ${runningModule.runningTests.map((t) => getCaseName(t)).join('\n  - ')}`)}`;
                   }
                 }
 
