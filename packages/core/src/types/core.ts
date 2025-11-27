@@ -53,7 +53,7 @@ export type RstestContext = {
   projects: ProjectContext[];
 
   /**
-   * The state of test
+   * The test state
    */
   testState: RstestTestState;
   /**
