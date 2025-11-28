@@ -56,7 +56,6 @@ export default defineConfig({
 
 - project 配置并不会继承全局配置，如果你的子项目间存在共享配置，可以抽取 shared 配置，并在子项目中引入
 - 一些全局配置，如 `reporters`、`pool`、`isolate` 等，在 project 配置中是无效的
-- 不支持嵌套的 `projects`
 
 ```ts title='packages/pkg-a/rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -84,6 +83,34 @@ export default defineConfig({
     {
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+## 嵌套 Projects
+
+Rstest 支持在子项目的 rstest config 中嵌套定义 projects。这允许你在子项目中定义更多的测试项目，而无需在根项目中定义所有项目。
+
+这尤其适用于你的子项目需要同时支持多个测试环境或多份配置的情况。
+
+### 示例
+
+为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
       testEnvironment: 'jsdom',
     },
   ],

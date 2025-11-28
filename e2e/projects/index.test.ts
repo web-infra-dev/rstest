@@ -29,6 +29,9 @@ describe('test projects', () => {
       expect(
         logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
       ).toBeTruthy();
+      expect(
+        logs.find((log) => log.includes('packages/client/test/node.test.ts')),
+      ).toBeTruthy();
     });
 
     it('should not inherit projects config and run projects failed ', async () => {
