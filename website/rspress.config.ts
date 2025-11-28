@@ -62,14 +62,7 @@ export default defineConfig({
       {
         lang: 'zh',
         label: '简体中文',
-        prevPageText: '上一页',
-        nextPageText: '下一页',
         description: '由 Rspack 驱动的测试框架',
-        editLink: {
-          docRepoBaseUrl:
-            'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
-          text: '📝 在 GitHub 上编辑此页',
-        },
       },
     ],
   },
