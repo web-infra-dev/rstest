@@ -5,7 +5,7 @@ import { logCase, logFileTitle } from './utils';
 
 export class VerboseReporter extends DefaultReporter {
   override onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.onTestFileResult(test);
+    this.statusRenderer?.onTestFileResult();
 
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
