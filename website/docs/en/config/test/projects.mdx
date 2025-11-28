@@ -56,7 +56,6 @@ export default defineConfig({
 
 - Project configuration does not inherit root configuration. If there is shared configuration between your sub-projects, you can extract the shared configuration and import it in the sub-project.
 - Some root-level options such as `reporters`, `pool`, and `isolate` are not valid in a project configuration.
-- `projects` does not support nesting.
 
 ```ts title='packages/pkg-a/rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -84,6 +83,47 @@ export default defineConfig({
     {
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+## Nested projects
+
+Rstest supports nested project definitions within the rstest config of subprojects. This allows you to define more test projects in subprojects without having to define all projects in the root project.
+
+This is especially useful when your subprojects need to support multiple test environments or multiple configurations.
+
+### 示例
+
+在 monorepo 中定义每个子项目为一个 project：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+  ],
+});
+```
+
+为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
       testEnvironment: 'jsdom',
     },
   ],
