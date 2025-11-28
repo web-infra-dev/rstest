@@ -91,22 +91,11 @@ export default defineConfig({
 
 ## 嵌套 Projects
 
-Rstest 支持在子项目的 rstest config 中嵌套定义 projects。这允许你在子项目中定义更多的测试项目，而无需在根项目中定义所有项目。这尤其适用于你的子项目需要同时支持多个测试环境或多份配置的情况。
+Rstest 支持在子项目的 rstest config 中嵌套定义 projects。这允许你在子项目中定义更多的测试项目，而无需在根项目中定义所有项目。
+
+这尤其适用于你的子项目需要同时支持多个测试环境或多份配置的情况。
 
 ### 示例
-
-在 monorepo 中定义每个子项目为一个 project：
-
-```ts title='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: [
-    // A monorepo: each package directory is a project
-    'packages/*',
-  ],
-});
-```
 
 为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
 

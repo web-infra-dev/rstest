@@ -95,22 +95,9 @@ Rstest supports nested project definitions within the rstest config of subprojec
 
 This is especially useful when your subprojects need to support multiple test environments or multiple configurations.
 
-### 示例
+### Example
 
-在 monorepo 中定义每个子项目为一个 project：
-
-```ts title='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: [
-    // A monorepo: each package directory is a project
-    'packages/*',
-  ],
-});
-```
-
-为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
+Define Node.js and browser test environments for `packages/pkg-a`:
 
 ```ts title='packages/pkg-a/rstest.config.ts'
 import { defineConfig } from '@rstest/core';
