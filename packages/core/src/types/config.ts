@@ -190,7 +190,7 @@ export interface RstestConfig {
    */
   testNamePattern?: string | RegExp;
   /**
-   * Match `testNamePattern` exactly, test suite and case names should joined by '>'
+   * Match `testNamePattern` exactly, test suite and case names should be joined by ' > ' (with spaces)
    */
   exact?: boolean;
 

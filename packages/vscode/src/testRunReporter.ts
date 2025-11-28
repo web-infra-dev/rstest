@@ -117,7 +117,7 @@ export class TestRunReporter implements Reporter {
 
     const testItem = this.findTestItem(result);
     if (!testItem) {
-      logger.error('Cannot find testItem', test);
+      logger.error('Cannot find testItem', result);
       return;
     }
 
