@@ -95,5 +95,12 @@ export default defineConfig({
         },
       }),
     ],
+    performance: {
+      printFileSize: {
+        total: true,
+        detail: false,
+        compressed: false,
+      },
+    },
   },
 });
