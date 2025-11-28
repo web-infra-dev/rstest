@@ -2,8 +2,8 @@ import * as assert from 'node:assert';
 import * as vscode from 'vscode';
 import { getTestItems, waitFor } from './helpers';
 
-suite('Configuration Integration', () => {
-  test('respects rstest.testFileGlobPattern (array-only)', async () => {
+suite('Test Progress Reporting', () => {
+  test('reports test progress with error details and snapshots', async () => {
     const extension = vscode.extensions.getExtension('rstack.rstest');
     assert.ok(extension, 'Extension should be present');
     if (extension && !extension.isActive) {
