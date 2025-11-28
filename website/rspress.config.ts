@@ -18,7 +18,9 @@ export default defineConfig({
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
   markdown: {
-    checkDeadLinks: true,
+    link: {
+      checkDeadLinks: true,
+    },
   },
   search: {
     codeBlocks: true,
@@ -47,21 +49,19 @@ export default defineConfig({
         content: 'https://discord.gg/XsaKEEk4mW',
       },
     ],
+    editLink: {
+      docRepoBaseUrl:
+        'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
+    },
     locales: [
       {
         lang: 'en',
         label: 'English',
         description,
-        editLink: {
-          docRepoBaseUrl:
-            'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
-          text: '📝 Edit this page on GitHub',
-        },
       },
       {
         lang: 'zh',
         label: '简体中文',
-        outlineTitle: '目录',
         prevPageText: '上一页',
         nextPageText: '下一页',
         description: '由 Rspack 驱动的测试框架',
