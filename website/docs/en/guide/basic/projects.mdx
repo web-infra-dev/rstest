@@ -1,0 +1,156 @@
+# Test projects
+
+Rstest supports running multiple test projects simultaneously within a single Rstest process. These projects can have different test configurations and test environments.
+
+## Use cases
+
+- **Monorepo projects**: When your codebase contains multiple sub-packages or modules, each sub-project might have different test configuration requirements.
+- **Different test environments**: Different sub-projects (or even the same sub-project) might need to run in different environments (e.g., Node environment and browser environment).
+- **File-specific testing**: You can specify different test or build configurations for specific test files/directories.
+
+## Example
+
+Define each sub-project in a monorepo as a project through the [projects](/config/test/projects) field, where each sub-project has its own test configuration.
+
+Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-files) file (if present) in the subdirectory.
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+  ],
+});
+```
+
+## Configuration description
+
+You can define multiple test projects through the [projects](/config/test/projects) field. Rstest will run the corresponding tests according to the configurations defined by each project, and all test results will be merged and displayed.
+
+If there is no `projects` field, `rstest` will treat the current directory as a single project.
+
+### Configuration syntax
+
+The `projects` field supports the following configuration methods:
+
+- **Directory path**: Specify a directory, and Rstest will automatically recognize all subdirectories under that directory as projects.
+- **Configuration file path**: Specify a configuration file path, and Rstest will run tests according to that file's configuration.
+- **Glob pattern**: Use glob patterns to match multiple directories or files, and Rstest will use the matching results as projects.
+- **Inline configuration object**: Directly define project configuration objects in the `projects` field. This allows you to define multiple test projects within a single project without creating separate configuration files for each test project.
+- **Nested projects**: Define projects nested within the rstest config of sub-projects.
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+
+    // All projects under the apps directory that provide an rstest config file
+    'apps/**/rstest.config.ts',
+
+    // A specific project directory
+    '<rootDir>/services/auth',
+
+    // A specific project's config file
+    './projects/web/rstest.config.ts',
+
+    // inline project configs
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+### Root configuration
+
+When the `projects` field exists in the root directory's rstest config file, Rstest will not treat it as a test project. In this case, the root directory's rstest.config file is only used to define `projects` and [global configuration](#global-configuration).
+
+If you want to treat the root directory as a project as well, you can define the test configuration for the root directory in `projects`.
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'root',
+      include: ['<rootDir>/tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    'packages/*',
+  ],
+});
+```
+
+#### Global configuration
+
+The following configurations are global configurations and are invalid when configured in projects. If you need to modify global configuration, you need to configure it in the root project's rstest config or override it through CLI options.
+
+- `reporters`: Global reporters configuration.
+- `pool`: Global pool configuration.
+- `isolate`: Global isolate configuration.
+- `coverage`: Global coverage configuration.
+- `bail`: Global bail configuration.
+
+### Project configuration
+
+Project configuration does not inherit the configuration from the root directory. Only the `projects` field and [global configuration](#global-configuration) in the root directory are effective.
+
+If there are reusable configuration items between your sub-projects, you can extract shared configurations and introduce them in sub-projects respectively:
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig, mergeRstestConfig } from '@rstest/core';
+import sharedConfig from '../shared/rstest.config';
+
+export default mergeRstestConfig(sharedConfig, {
+  name: 'pkg-a',
+});
+```
+
+You can override all project configurations through [CLI options](/guide/basic/cli#cli-options).
+
+### Nested projects
+
+Rstest supports defining nested projects in sub-project rstest config files. This allows you to define more test projects in sub-projects without defining all projects in the root project.
+
+This is especially useful when your sub-projects need to support multiple test environments or multiple configurations.
+
+For example, define Node.js and browser test environments for `packages/pkg-a`:
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+### Inspect configuration
+
+If you want to view the final effective configuration of Rstest, you can enable [debug mode](/guide/advanced/debugging#debug-mode) through the `DEBUG=rstest` environment variable. Rstest will write the final effective Rstest configuration and build configuration to the output directory.
+
+## Filtering projects
+
+You can filter projects through the [--project](/guide/basic/test-filter#filter-by-project-name) CLI option, or you can filter specific files under projects by directly filtering file names or file paths.
+
+For more information, please refer to the [Test Filtering](/guide/basic/test-filter) chapter.
