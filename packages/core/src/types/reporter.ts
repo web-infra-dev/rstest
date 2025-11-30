@@ -1,11 +1,13 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { BuiltInReporterNames } from '../core/rstest';
+import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type {
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from './testSuite';
 import type { MaybePromise } from './utils';
@@ -30,6 +32,11 @@ export type DefaultReporterOptions = {
    * @default true
    */
   summary?: boolean;
+  /**
+   * logger which write messages to
+   * @default process.stdout/process.stderr
+   */
+  logger?: WindowRendererOptionsOptions['logger'];
 };
 
 type BuiltinReporterOptions = {
@@ -51,6 +58,16 @@ export interface Reporter {
    * Called when the test file has finished running.
    */
   onTestFileResult?: (test: TestFileResult) => void;
+  /**
+   * Called before running the test suite.
+   */
+  onTestSuiteStart?: (test: TestSuiteInfo) => void;
+  /**
+   * Called when the suite has finished running or was just skipped.
+   *
+   * `result.errors` contains only suite hooks errors
+   */
+  onTestSuiteResult?: (result: TestResult) => void;
   /**
    * Called when the test has finished running or was just skipped.
    */

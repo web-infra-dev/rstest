@@ -81,7 +81,7 @@ export const parseTestFile = (
       range: Range,
       name: string,
       testType: 'test' | 'it' | 'describe' | 'suite',
-    ): void;
+    ): (() => void) | void;
   },
 ) => {
   const compiler = new Compiler();
@@ -148,6 +148,8 @@ export const parseTestFile = (
       return;
     }
 
+    let exit: (() => void) | void | undefined;
+
     // Check for call expressions that might be test functions
     if (isCallExpression(node)) {
       let functionName: string | null = null;
@@ -174,7 +176,7 @@ export const parseTestFile = (
         const range = spanToRange(node.span);
 
         type TestFn = 'test' | 'it' | 'describe' | 'suite';
-        events.onTest(
+        exit = events.onTest(
           range,
           testName || 'unnamed test',
           functionName as TestFn,
@@ -199,6 +201,8 @@ export const parseTestFile = (
         walkNode(value);
       }
     }
+
+    exit?.();
   };
 
   // Start walking from the root
