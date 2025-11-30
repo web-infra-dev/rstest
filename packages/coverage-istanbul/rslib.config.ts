@@ -6,6 +6,9 @@ export default defineConfig({
       format: 'esm',
       syntax: ['node 18'],
       dts: true,
+      output: {
+        sourceMap: process.env.SOURCE_MAP === 'true',
+      },
     },
   ],
 });

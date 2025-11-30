@@ -1,19 +1,17 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import path, { dirname } from 'node:path';
-import { createBirpc } from 'birpc';
+import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
 import { logger } from './logger';
-import type { LogLevel } from './shared/logger';
+import type { Project } from './project';
 import { TestRunReporter } from './testRunReporter';
-import type { WorkerRunTestData } from './types';
-import { promiseWithTimeout } from './utils';
 import type { Worker } from './worker';
 
+export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
+
 export class RstestApi {
-  public worker: Pick<Worker, 'initRstest' | 'runTest'> | null = null;
   private childProcess: ChildProcess | null = null;
   private versionMismatchWarned = false;
 
@@ -21,6 +19,7 @@ export class RstestApi {
     private workspace: vscode.WorkspaceFolder,
     private cwd: string,
     private configFilePath: string,
+    private project: Project,
   ) {}
 
   private resolveRstestPath(): string {
@@ -106,46 +105,81 @@ export class RstestApi {
     }
   }
 
-  public async runTest(
-    item: vscode.TestItem,
-    run: vscode.TestRun,
-    updateSnapshot?: boolean,
-  ) {
-    if (this.worker) {
-      const testRunReporter = new TestRunReporter(run, item);
-
-      const testNamePattern = regexpEscape(
-        testRunReporter.getTestItemPath().join('  '),
-      );
-      const data: WorkerRunTestData = {
-        runId: randomUUID(),
-        fileFilters: [item.uri!.fsPath],
-        testNamePattern: testNamePattern
-          ? new RegExp(`^${testNamePattern}$`)
-          : undefined,
-        updateSnapshot,
-      };
-
-      this.testRunReporters.set(data.runId, testRunReporter);
-
-      const isTestFile = !testNamePattern?.length;
-      await promiseWithTimeout(
-        this.worker.runTest(data),
-        isTestFile ? 30_000 : 10_000, // longer timeout for test file
-        new Error(`Test execution timed out for ${item.label}`),
-      ).finally(() => {
-        this.testRunReporters.delete(data.runId);
-      });
-    }
+  public async getNormalizedConfig() {
+    const worker = await this.createChildProcess();
+    const config = await worker.getNormalizedConfig({
+      rstestPath: this.resolveRstestPath(),
+      configFilePath: this.configFilePath,
+    });
+    worker.$close();
+    return config;
   }
 
-  public async createChildProcess() {
+  public async runTest({
+    run,
+    token,
+    updateSnapshot,
+    fileFilter,
+    testCaseNamePath,
+    isSuite,
+    kind,
+  }: {
+    run: vscode.TestRun;
+    token: vscode.CancellationToken;
+    updateSnapshot?: boolean;
+    fileFilter?: string;
+    testCaseNamePath?: string[];
+    isSuite?: boolean;
+    kind?: vscode.TestRunProfileKind;
+  }) {
+    const testRunReporter = new TestRunReporter(
+      run,
+      this.project,
+      testCaseNamePath,
+    );
+
+    const worker = await this.createChildProcess(
+      testRunReporter,
+      kind === vscode.TestRunProfileKind.Debug,
+      run,
+    );
+    token.onCancellationRequested(() => worker.$close());
+
+    await worker
+      .runTest({
+        fileFilters: fileFilter ? [fileFilter] : undefined,
+        testNamePattern: testCaseNamePath
+          ? new RegExp(
+              `^${regexpEscape(testCaseNamePath.join('  '))}${isSuite ? '  ' : '$'}`,
+            )
+          : undefined,
+        update: updateSnapshot,
+        configFilePath: this.configFilePath,
+        rstestPath: this.resolveRstestPath(),
+        coverage:
+          kind === vscode.TestRunProfileKind.Coverage
+            ? { enabled: true }
+            : undefined,
+      })
+      .finally(() => {
+        worker.$close();
+      });
+  }
+
+  public async createChildProcess(
+    testRunReporter = new TestRunReporter(),
+    startDebugging?: boolean,
+    testRun?: vscode.TestRun,
+  ) {
     const rstestPath = this.resolveRstestPath();
     if (!rstestPath) {
       logger.error('Failed to resolve rstest path');
-      return;
+      throw new Error();
     }
     const execArgv: string[] = [];
+    if (startDebugging) {
+      execArgv.push('--inspect-wait');
+    }
     const workerPath = path.resolve(__dirname, 'worker.js');
     logger.debug('Spawning worker process', {
       workerPath,
@@ -155,12 +189,33 @@ export class RstestApi {
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       serialization: 'advanced',
       env: {
+        // same as packages/core/src/cli/prepare.ts
+        // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
+        NODE_ENV: 'test',
         ...process.env,
-        TEST: 'true',
+        // process.env.RSTEST = 'true';
+        RSTEST: 'true',
         FORCE_COLOR: '1',
       },
     });
     this.childProcess = rstestProcess;
+
+    if (startDebugging) {
+      const startedDebugging = await vscode.debug.startDebugging(
+        this.workspace,
+        {
+          type: 'node',
+          name: 'Rstest Debug',
+          request: 'attach',
+          processId: rstestProcess.pid,
+        },
+        { testRun },
+      );
+      if (!startedDebugging) {
+        rstestProcess.kill();
+        throw new Error('start debugging failed');
+      }
+    }
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
@@ -172,18 +227,20 @@ export class RstestApi {
       logger.error('[worker stderr]', content.trimEnd());
     });
 
-    this.worker = createBirpc<Worker, RstestApi>(this, {
+    const worker = createBirpc<Worker, TestRunReporter>(testRunReporter, {
       // use this.childProcess to catch post is called after process killed
       post: (data) => this.childProcess?.send(data),
       on: (fn) => rstestProcess.on('message', fn),
       bind: 'functions',
+      timeout: 600_000,
+      off: () => {
+        rstestProcess.kill();
+        runningWorkers.delete(worker);
+      },
     });
 
-    await this.worker.initRstest({
-      root: this.cwd,
-      rstestPath,
-      configFilePath: this.configFilePath,
-    });
+    runningWorkers.add(worker);
+
     logger.debug('Sent init payload to worker', {
       root: this.cwd,
       rstestPath,
@@ -193,26 +250,12 @@ export class RstestApi {
     rstestProcess.on('exit', (code, signal) => {
       logger.debug('Worker process exited', { code, signal });
     });
-  }
 
-  async log(level: LogLevel, message: string) {
-    logger[level](message);
+    return worker;
   }
 
   public dispose() {
     this.childProcess?.kill();
     this.childProcess = null;
-  }
-
-  private testRunReporters = new Map<string, TestRunReporter>();
-
-  async onTestProgress<T extends keyof TestRunReporter>(
-    runId: string,
-    event: T,
-    param: Parameters<NonNullable<TestRunReporter[T]>>[0],
-  ) {
-    const reporter = this.testRunReporters.get(runId);
-    // @ts-expect-error
-    reporter?.[event]?.call(reporter, param);
   }
 }

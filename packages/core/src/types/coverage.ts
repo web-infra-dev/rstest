@@ -5,6 +5,7 @@ import type {
   FileCoverageData,
   Totals,
 } from 'istanbul-lib-coverage';
+import type { ReportBase } from 'istanbul-lib-report';
 import type { ReportOptions } from 'istanbul-reports';
 
 type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
@@ -83,7 +84,7 @@ export type CoverageOptions = {
    * The reporters to use for coverage collection.
    * @default ['text', 'html', 'clover', 'json']
    */
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: (keyof ReportOptions | ReportWithOptions | ReportBase)[];
 
   /**
    * The directory to store coverage reports.

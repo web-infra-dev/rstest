@@ -1,23 +1,9 @@
-import type { TestFileResult, TestResult } from '@rstest/core';
+import type { RstestConfig } from '@rstest/core';
 
 //#region master -> worker
-export type WorkerInitData = {
-  rstestPath: string;
-  root: string;
+export type WorkerInitOptions = RstestConfig & {
   configFilePath: string;
+  fileFilters?: string[];
+  rstestPath: string;
+  command?: 'run' | 'list';
 };
-
-export type WorkerRunTestData = {
-  runId: string;
-  fileFilters: string[];
-  testNamePattern?: string | RegExp;
-  updateSnapshot?: boolean;
-};
-// #endregion
-
-//#region worker -> master
-export type WorkerEventFinish = {
-  testResults: TestResult[];
-  testFileResults?: TestFileResult[];
-};
-//#endregion
