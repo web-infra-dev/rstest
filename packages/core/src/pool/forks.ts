@@ -82,6 +82,10 @@ export const createForksPool = (poolOptions: {
 
   const pool = new Tinypool(options);
 
+  const destroy = pool.destroy.bind(pool);
+
+  process.on('SIGTERM', destroy);
+
   return {
     name: 'forks',
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
@@ -100,6 +104,9 @@ export const createForksPool = (poolOptions: {
         cleanup();
       }
     },
-    close: () => pool.destroy(),
+    close: () => {
+      process.off('SIGTERM', destroy);
+      return destroy();
+    },
   };
 };

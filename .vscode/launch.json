@@ -15,7 +15,7 @@
         "${workspaceFolder}/packages/vscode/sample"
       ],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
-      "preLaunchTask": "npm: watch:local",
+      "preLaunchTask": "vscode dev",
       "autoAttachChildProcesses": true
     }
   ]

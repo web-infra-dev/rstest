@@ -3,10 +3,14 @@ import vscode from 'vscode';
 import { logger } from './logger';
 import type { RstestApi } from './master';
 import { parseTestFile } from './parserTest';
+import type { Project, WorkspaceManager } from './project';
 
 const textDecoder = new TextDecoder('utf-8');
 
-export const testData = new WeakMap<vscode.TestItem, TestFile | TestCase>();
+export const testData = new WeakMap<
+  vscode.TestItem,
+  WorkspaceManager | Project | TestFolder | TestFile | TestCase
+>();
 
 export const testItemType = new WeakMap<
   vscode.TestItem,
@@ -39,22 +43,31 @@ export function gatherTestItems(
   return items;
 }
 
+export class TestFolder {
+  constructor(
+    public api: RstestApi,
+    public uri: vscode.Uri,
+  ) {}
+}
+
 export class TestFile {
   public didResolve = false;
+  public testItem?: vscode.TestItem;
+  private children: vscode.TestItem[] = [];
 
-  constructor(private api: RstestApi) {}
+  constructor(
+    public api: RstestApi,
+    public uri: vscode.Uri,
+  ) {}
 
-  public async updateFromDisk(
-    controller: vscode.TestController,
-    item: vscode.TestItem,
-  ) {
-    try {
-      const content = await getContentFromFilesystem(item.uri!);
-      item.error = undefined;
-      this.updateFromContents(controller, content, item);
-    } catch (e) {
-      item.error = (e as Error).stack;
-    }
+  public setTestItem(item: vscode.TestItem) {
+    this.testItem = item;
+    item.children.replace(this.children);
+  }
+
+  public async updateFromDisk(controller: vscode.TestController) {
+    const content = await getContentFromFilesystem(this.uri);
+    this.updateFromContents(controller, content);
   }
 
   /**
@@ -64,10 +77,11 @@ export class TestFile {
   public updateFromContents(
     controller: vscode.TestController,
     content: string,
-    item: vscode.TestItem,
   ) {
     // Maintain a stack of ancestors to build a hierarchical tree
-    const ancestors = [{ item, children: [] as vscode.TestItem[] }];
+    const ancestors: { name: string; children: vscode.TestItem[] }[] = [
+      { name: 'ROOT', children: [] },
+    ];
     this.didResolve = true;
 
     parseTestFile(content, {
@@ -79,8 +93,6 @@ export class TestFile {
 
         const parent = ancestors[ancestors.length - 1];
 
-        const testCase = new TestCase(this.api);
-
         const siblingsCount = parent.children.filter(
           (child) => child.label === name,
         ).length;
@@ -89,7 +101,18 @@ export class TestFile {
         let id = name;
         if (siblingsCount) id = [name, siblingsCount].join('@@@@@@');
 
-        const testItem = controller.createTestItem(id, name, item.uri);
+        const isSuite = testType === 'describe' || testType === 'suite';
+
+        const testItem = controller.createTestItem(id, name, this.uri);
+        testData.set(
+          testItem,
+          new TestCase(
+            this.api,
+            this.uri,
+            ancestors.slice(1).map((item) => item.name),
+            isSuite ? 'suite' : 'case',
+          ),
+        );
 
         testItem.range = vscodeRange;
 
@@ -97,18 +120,17 @@ export class TestFile {
         if (siblingsCount) testItem.error = `Duplicated ${testType} name`;
 
         // Set TestCase data for both describe blocks and leaf tests
-        testData.set(testItem, testCase);
         parent.children.push(testItem);
 
-        if (testType === 'describe' || testType === 'suite') {
+        if (isSuite) {
           testItemType.set(testItem, 'suite');
 
-          const suite = { item: testItem, children: [] };
+          const children: vscode.TestItem[] = [];
           // This becomes the new parent for subsequently discovered children
-          ancestors.push(suite);
+          ancestors.push({ name, children: children });
           return () => {
             // Assign children to suite and pop from stack
-            suite.item.children.replace(suite.children);
+            testItem.children.replace(children);
             ancestors.pop();
           };
         }
@@ -116,58 +138,16 @@ export class TestFile {
         testItemType.set(testItem, 'case');
       },
     });
-
-    // Assign children to root item
-    ancestors[0].item.children.replace(ancestors[0].children);
-  }
-
-  async run(
-    item: vscode.TestItem,
-    run: vscode.TestRun,
-    updateSnapshot?: boolean,
-    controller?: vscode.TestController,
-  ): Promise<void> {
-    if (!this.didResolve && controller) {
-      await this.updateFromDisk(controller, item);
-    }
-
-    // Match messaging and behavior from extension.ts
-    // run.appendOutput(`Running all tests in file ${item.id}\r\n`);
-
-    try {
-      await this.api.runTest(item, run, updateSnapshot);
-    } catch (error: any) {
-      run.failed(
-        item,
-        new vscode.TestMessage(
-          `Error running file tests: ${error.message || String(error)}`,
-        ),
-      );
-      // Skip all child tests in case of error
-      for (const child of gatherTestItems(item.children)) {
-        run.skipped(child);
-      }
-    }
+    this.children = ancestors[0].children;
+    this.testItem?.children.replace(this.children);
   }
 }
 
 export class TestCase {
-  constructor(private api: RstestApi) {}
-
-  async run(
-    item: vscode.TestItem,
-    run: vscode.TestRun,
-    updateSnapshot?: boolean,
-  ): Promise<void> {
-    try {
-      await this.api.runTest(item, run, updateSnapshot);
-    } catch (error: any) {
-      run.failed(
-        item,
-        new vscode.TestMessage(
-          `Error running test: ${error.message || String(error)}`,
-        ),
-      );
-    }
-  }
+  constructor(
+    public api: RstestApi,
+    public uri: vscode.Uri,
+    public parentNames: string[],
+    public type: 'suite' | 'case',
+  ) {}
 }
