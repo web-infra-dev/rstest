@@ -73,6 +73,9 @@ const getRuntimeConfigFromProject = (
     coverage,
     snapshotFormat,
     env,
+    bail,
+    logHeapUsage,
+    chaiConfig,
   } = project.normalizedConfig;
 
   return {
@@ -95,6 +98,9 @@ const getRuntimeConfigFromProject = (
     isolate,
     coverage,
     snapshotFormat,
+    bail,
+    logHeapUsage,
+    chaiConfig,
   };
 };
 
@@ -870,8 +876,9 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   }
 
   // Wait for all tests to complete
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const testTimeout = new Promise<void>((resolve) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       logger.log(
         color.yellow(
           `\nTest execution timeout after 60s. Completed: ${completedTests}/${allTestFiles.length}\n`,
@@ -881,9 +888,15 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }, 60000);
   });
 
+  const testStart = Date.now();
   await Promise.race([allTestsPromise, testTimeout]);
 
-  const testTime = Date.now() - buildTime;
+  // Clear timeout to allow process to exit
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  const testTime = Date.now() - testStart;
 
   // Define rerun logic for watch mode
   if (isWatchMode) {
