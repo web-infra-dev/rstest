@@ -80,14 +80,15 @@ const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
 };
 
 const send = (message: BrowserClientMessage): void => {
-  // Send to parent window (container) if in iframe
+  // If in iframe, send to parent window (container) which will forward to host
   if (window.parent !== window) {
     window.parent.postMessage(
       { type: '__rstest_dispatch__', payload: message },
       '*',
     );
+    return;
   }
-  // Also send via binding if available
+  // Otherwise, send directly via binding
   window.__rstest_dispatch__?.(message);
 };
 
@@ -208,13 +209,19 @@ const run = async () => {
 
     const runtime = createRstestRuntime(workerState);
 
+    let failedTestsCount = 0;
+
     const runnerHooks: RunnerHooks = {
       onTestCaseResult: async (result) => {
+        if (result.status === 'fail') {
+          failedTestsCount++;
+        }
         send({
           type: 'case-result',
           payload: result,
         });
       },
+      getCountOfFailedTests: async () => failedTestsCount,
     };
 
     send({
