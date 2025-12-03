@@ -2,6 +2,7 @@
   "cli",
   "configure-rstest",
   "test-filter",
+  "snapshot",
   "projects",
   "vscode-extension",
   "upgrade-rstest"
