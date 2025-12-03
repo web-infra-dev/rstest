@@ -85,7 +85,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.6.2",
     "birpc": "2.6.1",
-    "glob": "^7.2.3",
+    "glob": "^11.0.0",
     "mocha": "^11.7.4",
     "ovsx": "^0.10.6",
     "typescript": "^5.9.3",
