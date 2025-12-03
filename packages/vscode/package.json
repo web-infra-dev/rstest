@@ -114,6 +114,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.6.2",
     "birpc": "2.6.1",
+    "core-js-pure": "^3.47.0",
     "glob": "^7.2.3",
     "mocha": "^11.7.4",
     "ovsx": "^0.10.6",

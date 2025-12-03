@@ -2,8 +2,8 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path, { dirname } from 'node:path';
 import { createBirpc } from 'birpc';
+import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
-import { TEST_DELIMITER } from '../../core/src/utils/constants';
 import { getConfigValue } from './config';
 import { logger } from './logger';
 import type { LogLevel } from './shared/logger';
@@ -114,18 +114,21 @@ export class RstestApi {
     if (this.worker) {
       const testRunReporter = new TestRunReporter(run, item);
 
+      const testNamePattern = regexpEscape(
+        testRunReporter.getTestItemPath().join('  '),
+      );
       const data: WorkerRunTestData = {
         runId: randomUUID(),
         fileFilters: [item.uri!.fsPath],
-        testNamePattern: testRunReporter
-          .getTestItemPath()
-          .join(` ${TEST_DELIMITER} `),
+        testNamePattern: testNamePattern
+          ? new RegExp(`^${testNamePattern}$`)
+          : undefined,
         updateSnapshot,
       };
 
       this.testRunReporters.set(data.runId, testRunReporter);
 
-      const isTestFile = !data.testNamePattern?.length;
+      const isTestFile = !testNamePattern?.length;
       await promiseWithTimeout(
         this.worker.runTest(data),
         isTestFile ? 30_000 : 10_000, // longer timeout for test file

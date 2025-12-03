@@ -24,7 +24,6 @@ export class Worker {
       const rstest = await this.createRstest(data.runId, data.updateSnapshot);
       rstest.context.fileFilters = data.fileFilters;
       rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
-      rstest.context.normalizedConfig.exact = true;
       const res = await rstest.runTests();
       logger.debug(
         'Test run completed',

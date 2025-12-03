@@ -41,7 +41,6 @@ export type RuntimeConfig = Pick<
   RstestContext['normalizedConfig'],
   | 'testTimeout'
   | 'testNamePattern'
-  | 'exact'
   | 'globals'
   | 'passWithNoTests'
   | 'retry'

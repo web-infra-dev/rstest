@@ -10,7 +10,7 @@ export type WorkerInitData = {
 export type WorkerRunTestData = {
   runId: string;
   fileFilters: string[];
-  testNamePattern?: string;
+  testNamePattern?: string | RegExp;
   updateSnapshot?: boolean;
 };
 // #endregion
