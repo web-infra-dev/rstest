@@ -120,8 +120,8 @@ export type FormattedError = {
   name?: string;
   stack?: string;
   diff?: string;
-  expected?: any;
-  actual?: any;
+  expected?: string;
+  actual?: string;
 };
 
 export type TestResult = {
