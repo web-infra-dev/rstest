@@ -1,12 +1,12 @@
-# Snapshot Testing
+# Snapshot testing
 
 Snapshot Testing is a powerful testing method used to capture and compare serialized representations of component output. When your UI or data structures change, snapshot testing helps you detect these changes promptly.
 
-## Basic Usage
+## Basic usage
 
 Rstest provides a simple snapshot testing API that allows you to easily create and use snapshots.
 
-### Creating Snapshots
+### Creating snapshots
 
 ```ts
 import { test, expect } from '@rstest/core';
@@ -17,7 +17,7 @@ test('component snapshot', () => {
 });
 ```
 
-### Inline Snapshots
+### Inline snapshots
 
 For simple values, you can use inline snapshots:
 
@@ -28,7 +28,7 @@ test('inline snapshot', () => {
 });
 ```
 
-### File Snapshots
+### File snapshots
 
 By default, Rstest stores all snapshots for the current test in `.snap` files with the format `exports['testName index'] = ${snapshotContent}`.
 
@@ -41,7 +41,7 @@ test('file snapshot', async () => {
 });
 ```
 
-### Configuration Options
+### Configuration options
 
 Rstest provides various snapshot-related configuration options that allow you to customize snapshot behavior.
 
@@ -49,7 +49,7 @@ Rstest provides various snapshot-related configuration options that allow you to
 - [snapshotFormat](/config/test/snapshot-format): Snapshot formatting options
 - [resolveSnapshotPath](/config/test/resolve-snapshot-path): Custom snapshot file path resolution function
 
-## Updating Snapshots
+## Updating snapshots
 
 When test runs encounter snapshot mismatches, Rstest will mark the test as failed and output difference information.
 
@@ -74,7 +74,7 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-## Serialization Output
+## Serialization output
 
 Rstest supports adding custom serialization tools for snapshot testing via the [addSnapshotSerializer](/api/test-api/expect#expectaddsnapshotserializer) method to handle specific types of data structures.
 
@@ -107,7 +107,7 @@ test('serialized snapshot', () => {
 });
 ```
 
-## Snapshot Output Path
+## Snapshot output path
 
 Snapshot files are saved with the `.snap` extension by default, in the `__snapshots__` folder in the same directory as the test file.
 
@@ -132,9 +132,9 @@ export default defineConfig({
 });
 ```
 
-## Best Practices
+## Best practices
 
-### Keep Snapshots Concise
+### Keep snapshots concise
 
 Snapshots should be readable and easy to understand, avoiding containing too much irrelevant information:
 
@@ -161,7 +161,7 @@ test('complete user object snapshot', () => {
 });
 ```
 
-### Use Descriptive Snapshot Names
+### Use descriptive snapshot names
 
 When using multiple snapshots, provide descriptive names for each snapshot:
 
@@ -176,7 +176,7 @@ test('component state changes', () => {
 });
 ```
 
-### Regularly Review Snapshots
+### Regularly review snapshots
 
 As code evolves, snapshots may become outdated. Regularly reviewing and updating snapshots is necessary:
 
