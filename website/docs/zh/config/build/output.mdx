@@ -7,8 +7,8 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 配置代码中的某些 `import` 的依赖不被打包，而是由 Rstest 在运行时去获取这些依赖。
 
 - 在 Node.js 测试环境中，默认打包：
-  - 任意目录下的 TypeScript 和 JSX 文件，匹配的文件后缀为 .ts、.tsx、.jsx、.mts、.cts。
-  - 非 node_modules 目录下的 JavaScript 文件，匹配的文件后缀为 .js、.mjs、.cjs。
+  - 任意目录下的 TypeScript 和 JSX 文件，匹配的文件后缀为 `.ts`、`.tsx`、`.jsx`、`.mts`、`.cts`。
+  - 非 `node_modules` 目录下的 JavaScript 文件，匹配的文件后缀为 `.js`、`.mjs`、`.cjs`。
 - 在类浏览器（jsdom 等）测试环境中，默认打包所有依赖。
 
 如果你想某个依赖不被打包，可以在 `output.externals` 中进行配置。
