@@ -118,7 +118,6 @@
     "glob": "^7.2.3",
     "mocha": "^11.7.4",
     "ovsx": "^0.10.6",
-    "pretty-format": "^30.2.0",
     "typescript": "^5.9.3",
     "valibot": "^1.2.0"
   }

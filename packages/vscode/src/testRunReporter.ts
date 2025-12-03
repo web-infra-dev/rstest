@@ -6,17 +6,11 @@ import type {
   TestResult,
   TestSuiteInfo,
 } from '@rstest/core';
-import { format, plugins } from 'pretty-format';
 import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
 import { logger } from './logger';
 import { testItemType } from './testTree';
-
-function prettyFormat(value?: any) {
-  if (typeof value === 'string') return value;
-  return format(value, { plugins: Object.values(plugins) });
-}
 
 export class TestRunReporter implements Reporter {
   private fileItem: vscode.TestItem;
@@ -150,13 +144,10 @@ export class TestRunReporter implements Reporter {
     error: NonNullable<TestResult['errors']>[number],
     testPath: string,
   ) {
-    const message = error.diff
-      ? vscode.TestMessage.diff(
-          error.message,
-          prettyFormat(error.expected),
-          prettyFormat(error.actual),
-        )
-      : new vscode.TestMessage(error.message);
+    const message =
+      error.diff && error.expected !== undefined && error.actual !== undefined
+        ? vscode.TestMessage.diff(error.message, error.expected, error.actual)
+        : new vscode.TestMessage(error.message);
 
     if (
       error.diff &&
