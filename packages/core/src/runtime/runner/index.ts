@@ -26,7 +26,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
   const {
     testPath,
     project,
-    runtimeConfig: { testNamePattern, exact },
+    runtimeConfig: { testNamePattern },
   } = workerState;
   const runtime = createRuntimeAPI({
     project,
@@ -48,7 +48,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const tests = await runtime.instance.getTests();
-        traverseUpdateTest(tests, testNamePattern, exact);
+        traverseUpdateTest(tests, testNamePattern);
         runtime.instance.updateStatus('running');
 
         const results = await testRunner.runTests({
@@ -63,7 +63,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       },
       collectTests: async () => {
         const tests = await runtime.instance.getTests();
-        traverseUpdateTest(tests, testNamePattern, exact);
+        traverseUpdateTest(tests, testNamePattern);
 
         return tests;
       },

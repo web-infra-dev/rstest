@@ -189,10 +189,6 @@ export interface RstestConfig {
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
-  /**
-   * Match `testNamePattern` exactly, test suite and case names should be joined by ' > ' (with spaces)
-   */
-  exact?: boolean;
 
   /**
    * Timeout of a test in milliseconds.
@@ -309,7 +305,6 @@ export interface RstestConfig {
 
 type OptionalKeys =
   | 'testNamePattern'
-  | 'exact'
   | 'plugins'
   | 'source'
   | 'resolve'
