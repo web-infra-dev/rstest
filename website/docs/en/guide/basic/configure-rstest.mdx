@@ -58,6 +58,43 @@ Rstest uses Rspack for building, so you can directly use Rspack's configuration 
 
 More details can be referred to [Configure Rspack](https://rsbuild.rs/guide/configuration/rspack).
 
+## Configure SWC
+
+Rstest uses Rspack's [builtin:swc-loader](https://rspack.rs/guide/features/builtin-swc-loader) to transform JavaScript and TypeScript code by default, which is the Rust version of [swc-loader](https://github.com/swc-project/pkgs/tree/main/packages/swc-loader).
+
+Rstest exposes some options to configure `builtin:swc-loader`:
+
+- [tools.swc](/config/build/tools#toolsswc): Used to configure the options of `builtin:swc-loader`.
+- [source.include](/config/build/source#sourceinclude): Used to specify the files that need to be compiled by SWC.
+- [source.exclude](/config/build/source#sourceexclude): Used to exclude files that do not need to be compiled by SWC.
+
+```ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  tools: {
+    swc: {
+      jsc: {
+        transform: {
+          react: {
+            runtime: 'automatic',
+          },
+        },
+        experimental: {
+          plugins: [['@swc/plugin-emotion', {}]],
+        },
+      },
+    },
+  },
+});
+```
+
+### SWC plugin version
+
+Please note that SWC's plugins are still an experimental feature. Currently, SWC's Wasm plugins are not backward compatible, and the version of SWC plugins is strongly coupled with the `swc_core` version that Rspack depends on.
+
+This means that you need to choose SWC plugins that match the current `swc_core` version to make them work properly. If the SWC plugin version you use does not match the `swc_core` version that Rspack depends on, Rspack will throw errors during the build. Please refer to [Rspack FAQ - SWC plugin version mismatch](https://rspack.rs/errors/swc-plugin-version) for handling.
+
 ## Detect Rstest environment
 
 You can use `process.env.RSTEST` to detect whether it is an Rstest test environment to apply different configurations/codes in your tests.

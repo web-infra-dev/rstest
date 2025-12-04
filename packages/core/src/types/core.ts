@@ -6,6 +6,7 @@ import type {
   RstestConfig,
 } from './config';
 import type { Reporter } from './reporter';
+import type { TestCaseInfo, TestFileResult, TestResult } from './testSuite';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
@@ -18,6 +19,19 @@ export type ProjectContext = {
   rootPath: string;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
+};
+
+type RunningModules = Map<
+  string,
+  {
+    runningTests: TestCaseInfo[];
+    results: TestResult[];
+  }
+>;
+
+export type RstestTestState = {
+  getRunningModules: () => RunningModules;
+  getTestModules: () => TestFileResult[];
 };
 
 export type RstestContext = {
@@ -37,6 +51,11 @@ export type RstestContext = {
    * Run tests from one or more projects.
    */
   projects: ProjectContext[];
+
+  /**
+   * The test state
+   */
+  testState: RstestTestState;
   /**
    * The command type.
    *

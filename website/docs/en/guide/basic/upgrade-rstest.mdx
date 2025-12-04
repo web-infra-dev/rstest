@@ -1,0 +1,66 @@
+# Upgrade Rstest
+
+This section explains how to upgrade the project's Rstest dependencies to the latest version.
+
+:::info
+
+Rstest is still in 0.x version stage, and the API may change frequently. We recommend upgrading to the latest version to access new features and bug fixes.
+
+:::
+
+## Using taze
+
+We recommend using [Taze](https://github.com/antfu-collective/taze) to upgrade the Rstest version. Taze is a CLI tool for updating npm dependencies.
+
+### Usage
+
+Run the following command to upgrade all dependencies that include `rstest` and `rsbuild` in their names:
+
+```bash
+npx taze major --include "/(rstest|rsbuild)/" -w
+```
+
+:::tip
+Rstest has not yet reached version 1.0.0, so you need to add the `major` parameter when updating.
+:::
+
+The result will look similar to:
+
+```bash
+rstest-example - 1 patch
+
+  devDependencies
+    @rstest/core    ~29d  ^0.6.0  →  ^0.6.6  ~5d
+
+ℹ changes written to package.json, run pnpm i to install updates.
+```
+
+You can also adjust the `include` pattern to match specific packages, for example, to upgrade only packages under the `@rstest` scope:
+
+```bash
+npx taze --include /@rstest/ -w
+```
+
+### Options
+
+Here are some examples of using taze options.
+
+- In a monorepo, you can add the `-r` option to upgrade recursively:
+
+```bash
+npx taze --include /(rstest|rsbuild)/ -w -r
+```
+
+- Add `-l` to upgrade locked versions:
+
+```bash
+npx taze --include /(rstest|rsbuild)/ -w -l
+```
+
+- To upgrade to a major version:
+
+```bash
+npx taze major --include /(rstest|rsbuild)/ -w
+```
+
+> For more options, please refer to the [taze documentation](https://github.com/antfu-collective/taze).

@@ -40,7 +40,11 @@ const autoExternalNodeModules: (
       return callback();
     }
 
-    if (resolvePath && /node_modules/.test(resolvePath)) {
+    if (
+      resolvePath &&
+      resolvePath.includes('node_modules') &&
+      !/\.(?:ts|tsx|jsx|mts|cts)$/.test(resolvePath)
+    ) {
       return doExternal(resolvePath);
     }
     return callback();

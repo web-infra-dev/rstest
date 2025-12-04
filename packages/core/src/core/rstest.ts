@@ -16,6 +16,7 @@ import type {
   RstestCommand,
   RstestConfig,
   RstestContext,
+  RstestTestState,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -57,6 +58,11 @@ export class Rstest implements RstestContext {
   };
   public stateManager: TestStateManager = new TestStateManager();
 
+  public testState: RstestTestState = {
+    getRunningModules: () => this.stateManager.runningModules,
+    getTestModules: () => this.stateManager.testModules,
+  };
+
   public projects: ProjectContext[] = [];
 
   public constructor(
@@ -88,6 +94,7 @@ export class Rstest implements RstestContext {
         ? createReporters(rstestConfig.reporters, {
             rootPath,
             config: rstestConfig,
+            testState: this.testState,
           })
         : [];
     const snapshotManager = new SnapshotManager({

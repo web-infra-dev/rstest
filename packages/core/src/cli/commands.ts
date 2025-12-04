@@ -67,7 +67,7 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--hideSkippedTests', 'Hide skipped tests from the output')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option(
-      '--bail <number>',
+      '--bail [number]',
       'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
     )
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')

@@ -23,7 +23,7 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
     const error =
       typeof rawError === 'string' ? { message: rawError } : rawError;
     const errObj: FormattedError = {
-      ...error,
+      fullStack: error.fullStack,
       // Some error attributes cannot be enumerated
       message: error.message,
       name: error.name,
@@ -43,16 +43,6 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
       errObj.diff = diff(err.expected, err.actual, {
         expand: false,
       })!;
-    }
-
-    for (const key of ['actual', 'expected'] as const) {
-      if (typeof err[key] !== 'string') {
-        (errObj as Record<string, any>)[key] = JSON.stringify(
-          err[key],
-          null,
-          10,
-        );
-      }
     }
 
     return errObj;
