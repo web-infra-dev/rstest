@@ -43,7 +43,7 @@ After running the above commands, Rstest will automatically register the Rsdocto
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
-## Using Samply
+## Using samply
 
 > Note: In order to be able to profiling the Node.js side code in macOS, Node.js v22.16+ is required.
 
@@ -72,3 +72,9 @@ node --heap-prof --heap-prof-dir=./heap-prof ./node_modules/@rstest/core/bin/rst
 ```
 
 The heap profile files will be generated in the `./heap-prof` directory. You can analyze these files using tools like [Visual Studio Code](https://code.visualstudio.com/docs/nodejs/profiling#_analyzing-a-profile) or [Chrome DevTools](https://developer.chrome.com/docs/devtools/memory-problems/heap-snapshots).
+
+You can also use the `--inspect` flag to enable [Node.js inspector](https://nodejs.org/en/learn/getting-started/debugging).
+
+```bash
+node --inspect ./node_modules/@rstest/core/bin/rstest.js watch
+```

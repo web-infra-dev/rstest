@@ -72,3 +72,9 @@ node --heap-prof --heap-prof-dir=./heap-prof ./node_modules/@rstest/core/bin/rst
 ```
 
 堆内存分析文件将生成在 `./heap-prof` 目录中。你可以使用 [Visual Studio Code](https://code.visualstudio.com/docs/nodejs/profiling#_analyzing-a-profile) 或 [Chrome DevTools](https://developer.chrome.com/docs/devtools/memory-problems/heap-snapshots) 等工具来分析这些文件。
+
+你也可以使用 `--inspect` 标志来启用 [Node.js 调试器](https://nodejs.org/en/learn/getting-started/debugging)。
+
+```bash
+node --inspect ./node_modules/@rstest/core/bin/rstest.js watch
+```
