@@ -244,4 +244,48 @@ describe('prepareRsbuild', () => {
 
     expect(bundlerConfigs[0]).toMatchSnapshot();
   });
+
+  it('should generate rspack config correctly (esm output)', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {},
+          tools: {},
+          testEnvironment: 'node',
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            outputModule: true,
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {
+                module: true,
+              },
+              tools: {},
+              testEnvironment: 'node',
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+    );
+    expect(rsbuildInstance).toBeDefined();
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]).toMatchSnapshot();
+  });
 });

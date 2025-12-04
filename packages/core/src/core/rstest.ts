@@ -129,7 +129,9 @@ export class Rstest implements RstestContext {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
-            outputModule: process.env.RSTEST_OUTPUT_MODULE === 'true',
+            outputModule:
+              config.output?.module ??
+              process.env.RSTEST_OUTPUT_MODULE === 'true',
             environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
@@ -139,7 +141,9 @@ export class Rstest implements RstestContext {
             configFilePath,
             rootPath,
             name: rstestConfig.name,
-            outputModule: process.env.RSTEST_OUTPUT_MODULE === 'true',
+            outputModule:
+              rstestConfig.output?.module ??
+              process.env.RSTEST_OUTPUT_MODULE === 'true',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },

@@ -62,6 +62,19 @@ const defineRstestDynamicImport =
       delete importAttributes.with.rstest;
     }
 
+    if (modulePath.endsWith('.json')) {
+      const importedModule = await import(modulePath, {
+        with: { type: 'json' },
+      });
+
+      return returnModule
+        ? asModule(importedModule.default)
+        : {
+            ...importedModule.default,
+            default: importedModule.default,
+          };
+    }
+
     const importedModule = await import(modulePath, importAttributes);
 
     if (
