@@ -103,6 +103,7 @@ export const parseTestFile = (
 
   // Helper function to convert SWC span to VS Code range
   const spanToRange = (span: { start: number; end: number }): Range => {
+    // Convert byte offset to character index (SWC uses UTF-8 byte offsets)
     const startSlice = codeBuffer.subarray(0, span.start - offset);
     const startCharIndex = startSlice.toString('utf8').length;
 
