@@ -124,4 +124,19 @@ describe('Test Edge Cases', () => {
       logs.find((log) => log.includes('Test Files 1 skipped')),
     ).toBeTruthy();
   });
+
+  it('should handle circular reference in error object correctly', async () => {
+    const { expectExecFailed, expectLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/circularReference.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectLog(/AssertionError: expected .* to deeply equal undefined/);
+  });
 });

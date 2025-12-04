@@ -6,9 +6,8 @@ import type {
   GetSourcemap,
   NormalizedConfig,
   Reporter,
+  RstestTestState,
   SnapshotSummary,
-  TestCaseInfo,
-  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -28,25 +27,27 @@ export class DefaultReporter implements Reporter {
     rootPath,
     options,
     config,
+    testState,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: DefaultReporterOptions;
+    testState: RstestTestState;
   }) {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
     if (isTTY()) {
-      this.statusRenderer = new StatusRenderer(rootPath);
+      this.statusRenderer = new StatusRenderer(rootPath, testState);
     }
   }
 
-  onTestFileStart(test: TestFileInfo): void {
-    this.statusRenderer?.onTestFileStart(test.testPath);
+  onTestFileStart(): void {
+    this.statusRenderer?.onTestFileStart();
   }
 
   onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.onTestFileResult(test);
+    this.statusRenderer?.onTestFileResult();
 
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
@@ -66,12 +67,8 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onTestCaseResult(result: TestResult): void {
-    this.statusRenderer?.onTestCaseResult(result);
-  }
-
-  onTestCaseStart(test: TestCaseInfo): void {
-    this.statusRenderer?.onTestCaseStart(test);
+  onTestCaseResult(): void {
+    this.statusRenderer?.onTestCaseResult();
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {

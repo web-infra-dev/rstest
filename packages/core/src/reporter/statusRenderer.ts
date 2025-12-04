@@ -1,5 +1,5 @@
 import { relative } from 'pathe';
-import type { TestCaseInfo, TestFileResult, TestResult } from '../types';
+import type { RstestTestState, TestCaseInfo, TestResult } from '../types';
 import {
   color,
   getTaskNameWithPrefix,
@@ -18,14 +18,10 @@ import { WindowRenderer } from './windowedRenderer';
 export class StatusRenderer {
   private rootPath: string;
   private renderer: WindowRenderer;
-  private runningModules = new Map<
-    string,
-    { runningTests: TestCaseInfo[]; results: TestResult[] }
-  >();
-  private testModules: TestFileResult[] = [];
   private startTime: number | undefined = undefined;
+  private testState: RstestTestState;
 
-  constructor(rootPath: string) {
+  constructor(rootPath: string, state: RstestTestState) {
     this.rootPath = rootPath;
     this.renderer = new WindowRenderer({
       getWindow: () => this.getContent(),
@@ -37,12 +33,15 @@ export class StatusRenderer {
         },
       },
     });
+    this.testState = state;
   }
 
   getContent(): string[] {
     this.startTime ??= Date.now();
     const now = Date.now();
     const summary = [];
+    const runningModules = this.testState.getRunningModules();
+    const testModules = this.testState.getTestModules();
 
     // only display running tests if they have been running for more than 2 seconds
     const shouldDisplayRunningTests = (runningTests: TestCaseInfo[]) => {
@@ -51,7 +50,7 @@ export class StatusRenderer {
       );
     };
 
-    for (const [module, { runningTests }] of this.runningModules.entries()) {
+    for (const [module, { runningTests }] of runningModules.entries()) {
       const relativePath = relative(this.rootPath, module);
       summary.push(
         `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
@@ -69,17 +68,17 @@ export class StatusRenderer {
 
     summary.push('');
 
-    if (this.testModules.length === 0) {
-      summary.push(`${TestFileSummaryLabel} ${this.runningModules.size} total`);
+    if (testModules.length === 0) {
+      summary.push(`${TestFileSummaryLabel} ${runningModules.size} total`);
     } else {
       summary.push(
-        `${TestFileSummaryLabel} ${getSummaryStatusString(this.testModules, '', false)} ${color.dim('|')} ${this.runningModules.size + this.testModules.length} total`,
+        `${TestFileSummaryLabel} ${getSummaryStatusString(testModules, '', false)} ${color.dim('|')} ${runningModules.size + testModules.length} total`,
       );
     }
 
-    const testResults: TestResult[] = Array.from(this.runningModules.values())
+    const testResults: TestResult[] = Array.from(runningModules.values())
       .flatMap(({ results }) => results)
-      .concat(this.testModules.flatMap((mod) => mod.results));
+      .concat(testModules.flatMap((mod) => mod.results));
 
     if (testResults.length) {
       summary.push(
@@ -94,60 +93,19 @@ export class StatusRenderer {
     return summary;
   }
 
-  onTestFileStart(testPath: string): void {
-    this.runningModules.set(testPath, { runningTests: [], results: [] });
+  onTestFileStart(): void {
     this.renderer?.schedule();
   }
 
-  onTestCaseResult(result: TestResult): void {
-    const currentModule = this.runningModules.get(result.testPath);
-    if (!currentModule) {
-      this.runningModules.set(result.testPath, {
-        runningTests: [],
-        results: [result],
-      });
-    } else {
-      // Find and remove the test from runningTests by matching testId
-      const filteredRunningTests = currentModule.runningTests.filter(
-        (t) => t.testId !== result.testId,
-      );
-      this.runningModules.set(result.testPath, {
-        runningTests: filteredRunningTests,
-        results: [...currentModule.results, result],
-      });
-    }
-
+  onTestCaseResult(): void {
     this.renderer?.schedule();
   }
 
-  onTestCaseStart(test: TestCaseInfo): void {
-    const currentModule = this.runningModules.get(test.testPath);
-    if (!currentModule) {
-      this.runningModules.set(test.testPath, {
-        runningTests: [test],
-        results: [],
-      });
-    } else {
-      // Remove from runningTests if it exists (for restart scenarios)
-      const filteredRunningTests = currentModule.runningTests.filter(
-        (t) => t.testId !== test.testId,
-      );
-      this.runningModules.set(test.testPath, {
-        runningTests: [...filteredRunningTests, test],
-        results: currentModule.results,
-      });
-    }
-  }
-
-  onTestFileResult(test: TestFileResult): void {
-    this.runningModules.delete(test.testPath);
-    this.testModules.push(test);
+  onTestFileResult(): void {
     this.renderer?.schedule();
   }
 
   clear(): void {
-    this.testModules.length = 0;
-    this.runningModules.clear();
     this.startTime = undefined;
     this.renderer?.finish();
   }

@@ -42,12 +42,17 @@ export function defineConfig(config: RstestConfigExport) {
   return config;
 }
 
-type ProjectConfigAsyncFn = () => Promise<ProjectConfig>;
+type NestedProjectConfig = {
+  projects: (ProjectConfig | string)[];
+};
 
-type ProjectConfigSyncFn = () => ProjectConfig;
+type ProjectConfigAsyncFn = () => Promise<ProjectConfig | NestedProjectConfig>;
+
+type ProjectConfigSyncFn = () => ProjectConfig | NestedProjectConfig;
 
 type RstestProjectConfigExport =
   | ProjectConfig
+  | NestedProjectConfig
   | ProjectConfigSyncFn
   | ProjectConfigAsyncFn;
 
@@ -55,7 +60,9 @@ type RstestProjectConfigExport =
  * This function helps you to autocomplete configuration types.
  * It accepts a Rstest project config object, or a function that returns a config.
  */
-export function defineProject(config: ProjectConfig): ProjectConfig;
+export function defineProject(
+  config: ProjectConfig | NestedProjectConfig,
+): ProjectConfig | NestedProjectConfig;
 export function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
 export function defineProject(
   config: ProjectConfigAsyncFn,

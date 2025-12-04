@@ -1,1 +1,9 @@
-["cli", "configure-rstest", "test-filter", "vscode-extension", "upgrade-rstest"]
+[
+  "cli",
+  "configure-rstest",
+  "test-filter",
+  "snapshot",
+  "projects",
+  "vscode-extension",
+  "upgrade-rstest"
+]

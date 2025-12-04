@@ -48,7 +48,11 @@ type SnapshotFormat = Omit<
  *
  * eg. ['packages/*', 'examples/node/rstest.config.ts']
  */
-type TestProject = string | ProjectConfig;
+/**
+ * Inline project config must include a name.
+ */
+type InlineProjectConfig = ProjectConfig & { name: string };
+type TestProject = string | InlineProjectConfig;
 
 export interface RstestConfig {
   /**

@@ -14,7 +14,11 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { needFlagExperimentalDetectModule, serializableConfig } from '../utils';
+import {
+  color,
+  needFlagExperimentalDetectModule,
+  serializableConfig,
+} from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
 
@@ -202,6 +206,7 @@ export const createPool = async ({
 
   const rpcMethods = {
     onTestCaseStart: async (test: TestCaseInfo) => {
+      context.stateManager.onTestCaseStart(test);
       Promise.all(
         reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
       );
@@ -297,6 +302,34 @@ export const createPool = async ({
             })
             .catch((err: unknown) => {
               (err as any).fullStack = true;
+              if (err instanceof Error) {
+                if (err.message.includes('Worker exited unexpectedly')) {
+                  delete err.stack;
+                }
+                const runningModule = context.stateManager.runningModules.get(
+                  entryInfo.testPath,
+                );
+                if (runningModule?.runningTests.length) {
+                  const getCaseName = (test: TestCaseInfo) =>
+                    `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
+                  if (runningModule?.runningTests.length === 1) {
+                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
+                  } else {
+                    err.message += `\n\n${color.white(`The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningModule.runningTests.map((t) => getCaseName(t)).join('\n  - ')}`)}`;
+                  }
+                }
+
+                return {
+                  testId: '0',
+                  project: projectName,
+                  testPath: entryInfo.testPath,
+                  status: 'fail',
+                  name: '',
+                  results: runningModule?.results || [],
+                  errors: [err],
+                } as TestFileResult;
+              }
+
               return {
                 testId: '0',
                 project: projectName,

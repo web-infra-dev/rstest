@@ -1,0 +1,156 @@
+# 多项目测试
+
+Rstest 支持在单个 Rstest 进程中同时运行多个测试项目，这些项目可以有不同的测试配置和环境。
+
+## 适用场景
+
+- Monorepo 项目：当你的代码库包含多个子包或模块时，每个子项目可能有不同的测试配置需求。
+- 不同环境：不同 / 同一个子项目可能需要在不同的环境下运行（例如，Node 环境和浏览器环境）。
+- 针对特定文件的测试：你可以为特定的测试文件 / 目录指定不同的测试或构建配置。
+
+## 示例
+
+通过 [projects](/config/test/projects) 字段在 monorepo 中将每个子项目定义为一个 project，每个子项目有自己的测试配置。
+
+Rstest 会自动识别 `packages` 目录下的每个子目录作为一个独立的测试项目，并根据子目录中的 [rstest.config.ts](/guide/basic/configure-rstest#配置文件) 文件（如果存在）配置进行测试。
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+  ],
+});
+```
+
+## 配置说明
+
+你可以通过 [projects](/config/test/projects) 字段定义多个测试项目。Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
+
+如果没有 `projects` 字段，`rstest` 会将当前目录视为单个项目。
+
+### 配置语法
+
+`projects` 字段支持以下几种配置方式：
+
+- 目录路径：指定一个目录，Rstest 会自动识别该目录下的所有子目录作为项目。
+- 配置文件路径：指定一个配置文件路径，Rstest 会根据该文件的配置运行测试。
+- glob 模式：使用 glob 模式匹配多个目录或文件，Rstest 会根据匹配结果作为项目。
+- 内联配置对象：直接在 `projects` 字段中定义项目的配置对象。这允许你在单个项目下定义多个测试项目，而无需为每个测试项目创建单独的配置文件
+- 嵌套 projects：在子项目的 rstest config 中嵌套定义 projects。
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    // A monorepo: each package directory is a project
+    'packages/*',
+
+    // All projects under the apps directory that provide an rstest config file
+    'apps/**/rstest.config.ts',
+
+    // A specific project directory
+    '<rootDir>/services/auth',
+
+    // A specific project's config file
+    './projects/web/rstest.config.ts',
+
+    // inline project configs
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+### 根目录配置
+
+当根目录的 rstest config 文件中存在 projects 字段时，Rstest 不会将其视为一个测试项目，此时，根目录的 rstest.config 文件仅用于定义 `projects` 和[全局配置](#全局配置)。
+
+如果你希望将根目录也视为一个项目，可以在 `projects` 中定义根目录下的测试配置。
+
+```ts name='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'root',
+      include: ['<rootDir>/tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+    },
+    'packages/*',
+  ],
+});
+```
+
+#### 全局配置
+
+以下配置为全局配置，在 project 中配置无效。如果你需要修改全局配置，需要在根项目的 rstest config 中配置或通过 CLI 选项覆盖。
+
+- `reporters`：全局 reporters 配置。
+- `pool`：全局 pool 配置。
+- `isolate`：全局 isolate 配置。
+- `coverage`：全局 coverage 配置。
+- `bail`：全局 bail 配置。
+
+### Project 配置
+
+Project 配置并不会继承根目录下的配置，根目录下仅 projects 字段和[全局配置](#全局配置)生效。
+
+如果你的子项目间存在可复用的配置项，可以抽取 shared 配置，并分别在子项目中引入：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig, mergeRstestConfig } from '@rstest/core';
+import sharedConfig from '../shared/rstest.config';
+
+export default mergeRstestConfig(sharedConfig, {
+  name: 'pkg-a',
+});
+```
+
+可通过 [CLI 选项](/guide/basic/cli#cli-选项) 覆盖所有项目配置。
+
+### 嵌套 projects
+
+Rstest 支持在子项目的 rstest config 中嵌套定义 projects。这允许你在子项目中定义更多的测试项目，而无需在根项目中定义所有项目。
+
+这尤其适用于你的子项目需要同时支持多个测试环境或多份配置的情况。
+
+如，为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+    {
+      name: 'react',
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+### 查看配置
+
+如果你希望查看 Rstest 最终生效的配置，可以通过 `DEBUG=rstest` 环境变量开启[调试模式](/guide/advanced/debugging#开启调试模式)，Rstest 会将最终生效的 Rstest 配置及构建配置写入到产物目录下。
+
+## 过滤项目
+
+你可以通过 [--project](/guide/basic/test-filter#根据项目名称过滤) CLI 选项来过滤项目，也可以直接通过过滤文件名或文件路径的方式来过滤运行项目下的特定文件。
+
+更多介绍请参考 [测试过滤](/guide/basic/test-filter) 章节。
