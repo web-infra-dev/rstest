@@ -23,7 +23,7 @@
     "@rstest/core": "workspace:~"
   },
   "dependencies": {
-    "swc-plugin-coverage-instrument": "^0.0.31",
+    "swc-plugin-coverage-instrument": "0.0.32",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
