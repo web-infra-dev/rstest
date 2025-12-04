@@ -78,8 +78,8 @@ importers:
         version: 1.2.32
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rslib/core':
         specifier: 0.17.1
         version: 0.17.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
@@ -143,11 +143,11 @@ importers:
         version: 19.2.0(react@19.2.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rsbuild/plugin-react':
         specifier: ^1.4.1
-        version: 1.4.2(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.4.2(@rsbuild/core@1.6.12-canary-20251204065915)
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -245,11 +245,11 @@ importers:
         version: 19.2.0(react@19.2.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rsbuild/plugin-react':
         specifier: ^1.4.1
-        version: 1.4.2(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.4.2(@rsbuild/core@1.6.12-canary-20251204065915)
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -303,7 +303,7 @@ importers:
     devDependencies:
       '@rsbuild/plugin-react':
         specifier: ^1.4.1
-        version: 1.4.2(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.4.2(@rsbuild/core@1.6.12-canary-20251204065915)
       '@types/react':
         specifier: ^19.2.2
         version: 19.2.2
@@ -330,17 +330,17 @@ importers:
         version: 3.5.22(typescript@5.9.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rsbuild/plugin-babel':
         specifier: ^1.0.6
-        version: 1.0.6(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.0.6(@rsbuild/core@1.6.12-canary-20251204065915)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.0
-        version: 1.2.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)(@swc/core@1.13.5(@swc/helpers@0.5.17))(vue@3.5.22(typescript@5.9.3))
+        version: 1.2.0(@rsbuild/core@1.6.12-canary-20251204065915)(@swc/core@1.13.5(@swc/helpers@0.5.17))(vue@3.5.22(typescript@5.9.3))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^1.1.1
-        version: 1.1.1(@babel/core@7.28.3)(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.1.1(@babel/core@7.28.3)(@rsbuild/core@1.6.12-canary-20251204065915)
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -385,11 +385,11 @@ importers:
         version: 19.2.0(react@19.2.0)
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rsbuild/plugin-react':
         specifier: ^1.4.1
-        version: 1.4.2(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.4.2(@rsbuild/core@1.6.12-canary-20251204065915)
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -415,8 +415,8 @@ importers:
   packages/core:
     dependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
@@ -573,8 +573,8 @@ importers:
   packages/vscode:
     devDependencies:
       '@rsbuild/core':
-        specifier: 1.6.12-canary-63b4dae2-20251204065915
-        version: 1.6.12-canary-63b4dae2-20251204065915
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
       '@rslib/core':
         specifier: 0.17.1
         version: 0.17.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
@@ -630,7 +630,7 @@ importers:
     devDependencies:
       '@rsbuild/plugin-sass':
         specifier: ^1.4.0
-        version: 1.4.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.4.0(@rsbuild/core@1.6.12-canary-20251204065915)
       '@rspress/core':
         specifier: 2.0.0-rc.1
         version: 2.0.0-rc.1(@types/react@19.2.2)
@@ -663,10 +663,10 @@ importers:
         version: 19.2.0(react@19.2.0)
       rsbuild-plugin-google-analytics:
         specifier: ^1.0.4
-        version: 1.0.4(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.0.4(@rsbuild/core@1.6.12-canary-20251204065915)
       rsbuild-plugin-open-graph:
         specifier: ^1.1.0
-        version: 1.1.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+        version: 1.1.0(@rsbuild/core@1.6.12-canary-20251204065915)
       rspress-plugin-font-open-sans:
         specifier: ^1.0.3
         version: 1.0.3(@rspress/core@2.0.0-rc.1(@types/react@19.2.2))
@@ -1665,8 +1665,8 @@ packages:
     resolution: {integrity: sha512-vDbaOzF7yT2Qs4vO6XV1MHcJv+3dgR1sT+l3B8xxOVhUC336prMvqrvsLL/9Dnw2xr6Qhz4J0dmS0llNAbnUmQ==}
     engines: {node: '>=14.0.0'}
 
-  '@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915':
-    resolution: {integrity: sha512-aP2D8W29YQTARU1h3P2H+eZiRenkZLklNyWyzCgzd8X4E42ikAUnm/Ruu5t6BI/qOpXFNNGLgJQZV23iGh4okA==}
+  '@rsbuild/core@1.6.12-canary-20251204065915':
+    resolution: {integrity: sha512-QzGd/tO151QBJonmkN8PauSkUot9N5Jms3B+iGaiFRDaJ6SDc0hbbJ0iONXR3QwNuiMUbewonkcaiTAh19thfw==}
     engines: {node: '>=18.12.0'}
     hasBin: true
 
@@ -7168,7 +7168,7 @@ snapshots:
 
   '@remix-run/router@1.23.1': {}
 
-  '@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915':
+  '@rsbuild/core@1.6.12-canary-20251204065915':
     dependencies:
       '@rspack/core': '@rspack-canary/core@1.6.7-canary-63b4dae2-20251204065915(@swc/helpers@0.5.17)'
       '@rspack/lite-tapable': 1.1.0
@@ -7184,13 +7184,13 @@ snapshots:
       core-js: 3.46.0
       jiti: 2.6.1
 
-  '@rsbuild/plugin-babel@1.0.6(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)':
+  '@rsbuild/plugin-babel@1.0.6(@rsbuild/core@1.6.12-canary-20251204065915)':
     dependencies:
       '@babel/core': 7.28.3
       '@babel/plugin-proposal-decorators': 7.28.0(@babel/core@7.28.3)
       '@babel/plugin-transform-class-properties': 7.27.1(@babel/core@7.28.3)
       '@babel/preset-typescript': 7.27.1(@babel/core@7.28.3)
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
       '@types/babel__core': 7.20.5
       deepmerge: 4.3.1
       reduce-configs: 1.1.1
@@ -7208,9 +7208,9 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 1.6.7
 
-  '@rsbuild/plugin-react@1.4.2(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)':
+  '@rsbuild/plugin-react@1.4.2(@rsbuild/core@1.6.12-canary-20251204065915)':
     dependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
       '@rspack/plugin-react-refresh': 1.5.2(react-refresh@0.18.0)
       react-refresh: 0.18.0
     transitivePeerDependencies:
@@ -7224,29 +7224,29 @@ snapshots:
     transitivePeerDependencies:
       - webpack-hot-middleware
 
-  '@rsbuild/plugin-sass@1.4.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)':
+  '@rsbuild/plugin-sass@1.4.0(@rsbuild/core@1.6.12-canary-20251204065915)':
     dependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
       deepmerge: 4.3.1
       loader-utils: 2.0.4
       postcss: 8.5.6
       reduce-configs: 1.1.1
       sass-embedded: 1.90.0
 
-  '@rsbuild/plugin-vue-jsx@1.1.1(@babel/core@7.28.3)(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)':
+  '@rsbuild/plugin-vue-jsx@1.1.1(@babel/core@7.28.3)(@rsbuild/core@1.6.12-canary-20251204065915)':
     dependencies:
-      '@rsbuild/plugin-babel': 1.0.6(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)
+      '@rsbuild/plugin-babel': 1.0.6(@rsbuild/core@1.6.12-canary-20251204065915)
       '@vue/babel-plugin-jsx': 1.5.0(@babel/core@7.28.3)
       babel-plugin-vue-jsx-hmr: 1.0.0
     optionalDependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
 
-  '@rsbuild/plugin-vue@1.2.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915)(@swc/core@1.13.5(@swc/helpers@0.5.17))(vue@3.5.22(typescript@5.9.3))':
+  '@rsbuild/plugin-vue@1.2.0(@rsbuild/core@1.6.12-canary-20251204065915)(@swc/core@1.13.5(@swc/helpers@0.5.17))(vue@3.5.22(typescript@5.9.3))':
     dependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
       rspack-vue-loader: 17.4.4(vue@3.5.22(typescript@5.9.3))(webpack@5.102.1(@swc/core@1.13.5(@swc/helpers@0.5.17)))
       webpack: 5.102.1(@swc/core@1.13.5(@swc/helpers@0.5.17))
     transitivePeerDependencies:
@@ -11313,13 +11313,13 @@ snapshots:
       '@microsoft/api-extractor': 7.53.3(@types/node@22.18.6)
       typescript: 5.9.3
 
-  rsbuild-plugin-google-analytics@1.0.4(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915):
+  rsbuild-plugin-google-analytics@1.0.4(@rsbuild/core@1.6.12-canary-20251204065915):
     optionalDependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
 
-  rsbuild-plugin-open-graph@1.1.0(@rsbuild/core@1.6.12-canary-63b4dae2-20251204065915):
+  rsbuild-plugin-open-graph@1.1.0(@rsbuild/core@1.6.12-canary-20251204065915):
     optionalDependencies:
-      '@rsbuild/core': 1.6.12-canary-63b4dae2-20251204065915
+      '@rsbuild/core': 1.6.12-canary-20251204065915
 
   rslog@1.3.0: {}
 

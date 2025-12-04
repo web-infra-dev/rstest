@@ -82,7 +82,7 @@ describe('Test Edge Cases', () => {
   });
 
   it('should log build error message correctly', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/lessError.test.ts'],
       options: {
@@ -99,9 +99,7 @@ describe('Test Edge Cases', () => {
 
     // no `× [object Object]`
     expect(logs.find((log) => log.includes('[object Object]'))).toBeFalsy();
-    expect(
-      logs.find((log) => log.includes('To enable support for Less')),
-    ).toBeTruthy();
+    expectLog(/To enable support for Less/, logs);
   });
 
   it('only in skip suite', async () => {
