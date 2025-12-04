@@ -15,6 +15,7 @@ const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const defineRstestDynamicImport =
   ({
+    distPath,
     testPath,
     assetFiles,
     interopDefault,
@@ -24,11 +25,12 @@ const defineRstestDynamicImport =
     esmMode: EsmMode;
     assetFiles: Record<string, string>;
     returnModule?: boolean;
+    distPath: string;
     testPath: string;
     interopDefault: boolean;
   }) =>
   async (specifier: string, importAttributes: ImportCallOptions) => {
-    const currentDirectory = path.dirname(testPath);
+    const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(specifier)
       ? path.join(currentDirectory, specifier)
@@ -40,7 +42,7 @@ const defineRstestDynamicImport =
       try {
         return await loadModule({
           codeContent: content,
-          testPath: joinedPath,
+          testPath,
           distPath: joinedPath,
           rstestContext: {},
           assetFiles,
@@ -57,7 +59,8 @@ const defineRstestDynamicImport =
 
     const resolvedPath = isAbsolute(specifier)
       ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(testPath));
+      : // TODO: use module path instead of testPath
+        import.meta.resolve(specifier, pathToFileURL(testPath));
 
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
@@ -198,6 +201,7 @@ export const loadModule = async ({
         meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
           assetFiles,
           testPath,
+          distPath: distPath || testPath,
           interopDefault,
           returnModule: false,
           esmMode: EsmMode.Unknown,
@@ -207,6 +211,7 @@ export const loadModule = async ({
         return defineRstestDynamicImport({
           assetFiles,
           testPath,
+          distPath: distPath || testPath,
           interopDefault,
           returnModule: true,
           esmMode: EsmMode.Unlinked,
@@ -222,7 +227,8 @@ export const loadModule = async ({
     await esm.link(async (specifier, referencingModule) => {
       const result = await defineRstestDynamicImport({
         assetFiles,
-        testPath: distPath,
+        testPath,
+        distPath: distPath || testPath,
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
