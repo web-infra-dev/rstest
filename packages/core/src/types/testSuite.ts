@@ -75,17 +75,20 @@ export type AfterEachListener = (params: {
 }) => MaybePromise<void>;
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
-export type TestSuite = {
+export type TestSuiteInfo = {
   testId: string;
   name: string;
   parentNames?: string[];
+  testPath: TestPath;
+  project: string;
+};
+
+export type TestSuite = TestSuiteInfo & {
   runMode: TestRunMode;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
   sequential?: boolean;
-  testPath: TestPath;
-  project: string;
   /** nested cases and suite could in a suite */
   tests: (TestSuite | TestCase)[];
   type: 'suite';
@@ -117,6 +120,8 @@ export type FormattedError = {
   name?: string;
   stack?: string;
   diff?: string;
+  expected?: string;
+  actual?: string;
 };
 
 export type TestResult = {

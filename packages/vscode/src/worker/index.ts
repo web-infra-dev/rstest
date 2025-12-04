@@ -1,13 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import { createBirpc } from 'birpc';
 import type { RstestApi } from '../master';
-import type {
-  WorkerEventFinish,
-  WorkerInitData,
-  WorkerRunTestData,
-} from '../types';
+import type { WorkerInitData, WorkerRunTestData } from '../types';
 import { logger } from './logger';
-import { VscodeReporter } from './reporter';
+import { ProgressLogger, ProgressReporter } from './reporter';
 
 type CommonOptions = Parameters<typeof import('@rstest/core').initCli>[0];
 
@@ -24,24 +20,19 @@ export class Worker {
 
   public async runTest(data: WorkerRunTestData) {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
-    let resolve!: (value: WorkerEventFinish) => void;
-    const promise = new Promise<WorkerEventFinish>((res) => {
-      resolve = res;
-    });
     try {
-      const rstest = await this.createRstest(resolve);
+      const rstest = await this.createRstest(data.runId, data.updateSnapshot);
       rstest.context.fileFilters = data.fileFilters;
       rstest.context.normalizedConfig.testNamePattern = data.testNamePattern;
       const res = await rstest.runTests();
       logger.debug(
         'Test run completed',
-        JSON.stringify({ id: data.id, result: res }, null, 2),
+        JSON.stringify({ runId: data.runId, result: res }, null, 2),
       );
     } catch (error) {
       logger.error('Test run failed', error);
       throw error;
     }
-    return promise;
   }
 
   public async initRstest(data: WorkerInitData) {
@@ -54,9 +45,7 @@ export class Worker {
     });
   }
 
-  public async createRstest(
-    onTestRunEndCallback: (data: WorkerEventFinish) => void,
-  ) {
+  public async createRstest(runId: string, updateSnapshot?: boolean) {
     const rstestModule = (await import(
       normalizeImportPath(this.rstestPath)
     )) as typeof import('@rstest/core');
@@ -80,7 +69,11 @@ export class Worker {
       {
         config: {
           ...config,
-          reporters: [new VscodeReporter({ onTestRunEndCallback })],
+          update: updateSnapshot,
+          reporters: [
+            new ProgressReporter(runId),
+            ['default', { logger: new ProgressLogger(runId) }],
+          ],
         },
         configFilePath,
         projects,
@@ -93,11 +86,11 @@ export class Worker {
   }
 }
 
-export const masterApi = createBirpc<Pick<RstestApi, 'log'>, Worker>(
-  new Worker(),
-  {
-    post: (data) => process.send?.(data),
-    on: (fn) => process.on('message', fn),
-    bind: 'functions',
-  },
-);
+export const masterApi = createBirpc<
+  Pick<RstestApi, 'log' | 'onTestProgress'>,
+  Worker
+>(new Worker(), {
+  post: (data) => process.send?.(data),
+  on: (fn) => process.on('message', fn),
+  bind: 'functions',
+});

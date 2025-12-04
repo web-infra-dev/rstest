@@ -5,6 +5,7 @@ import type {
   TestCaseInfo,
   TestFileInfo,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from './testSuite';
 import type { DistPath, TestPath } from './utils';
@@ -27,6 +28,8 @@ export type RuntimeRPC = {
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, string>;
   }>;
+  onTestSuiteStart: (test: TestSuiteInfo) => Promise<void>;
+  onTestSuiteResult: (result: TestResult) => Promise<void>;
   onTestCaseStart: (test: TestCaseInfo) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
   getCountOfFailedTests: () => Promise<number>;

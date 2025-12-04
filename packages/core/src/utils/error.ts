@@ -156,7 +156,7 @@ export async function parseErrorStacktrace({
 }: {
   fullStack?: boolean;
   stack: string;
-  getSourcemap: GetSourcemap;
+  getSourcemap?: GetSourcemap;
 }): Promise<StackFrame[]> {
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
@@ -167,7 +167,7 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = await getSourcemap(frame.file!);
+        const sourcemap = await getSourcemap?.(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
           const { line, column, source, name } = originalPositionFor(traceMap, {

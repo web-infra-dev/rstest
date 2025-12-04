@@ -1,39 +1,40 @@
+import { Writable } from 'node:stream';
 import type { Reporter } from '@rstest/core';
-import { logger } from './logger';
+import { masterApi } from '.';
 
-export class VscodeReporter implements Reporter {
-  private onTestRunEndCallback?: (data: {
-    testFileResults: any;
-    testResults: any;
-  }) => void;
-
-  constructor({
-    onTestRunEndCallback,
-  }: {
-    onTestRunEndCallback?: (data: {
-      testResults: any;
-      testFileResults: any;
-    }) => void;
-  }) {
-    this.onTestRunEndCallback = onTestRunEndCallback;
-  }
-
-  onTestRunEnd: Reporter['onTestRunEnd'] = ({ results, testResults }) => {
-    if (this.onTestRunEndCallback) {
-      const fileCount = Array.isArray(results)
-        ? results.length
-        : results
-          ? Object.keys(results).length
-          : 0;
-      const testCount = Array.isArray(testResults) ? testResults.length : 0;
-      logger.debug('Forwarding test results', {
-        fileCount,
-        testCount,
-      });
-      this.onTestRunEndCallback({
-        testFileResults: results,
-        testResults: testResults,
-      });
-    }
+export class ProgressReporter implements Reporter {
+  constructor(private runId: string) {}
+  onTestFileStart: Reporter['onTestFileStart'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestFileStart', param);
   };
+  onTestFileResult: Reporter['onTestFileResult'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestFileResult', param);
+  };
+  onTestSuiteStart: Reporter['onTestSuiteStart'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestSuiteStart', param);
+  };
+  onTestSuiteResult: Reporter['onTestSuiteResult'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestSuiteResult', param);
+  };
+  onTestCaseStart: Reporter['onTestCaseStart'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestCaseStart', param);
+  };
+  onTestCaseResult: Reporter['onTestCaseResult'] = (param) => {
+    masterApi.onTestProgress(this.runId, 'onTestCaseResult', param);
+  };
+}
+
+export class ProgressLogger {
+  constructor(private runId: string) {}
+  outputStream = new Writable({
+    decodeStrings: false,
+    write: (chunk, _encoding, cb) => {
+      masterApi.onTestProgress(this.runId, 'onOutput', chunk);
+      cb(null);
+    },
+  });
+  errorStream = new Writable({
+    write: (_chunk, _encoding, cb) => cb(null),
+  });
+  getColumns = () => Number.POSITIVE_INFINITY;
 }

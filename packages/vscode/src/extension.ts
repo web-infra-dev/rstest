@@ -18,6 +18,8 @@ class Rstest {
   private ctrl: vscode.TestController;
   private workspaces = new Map<string, WorkspaceManager>();
   private workspaceWatcher?: vscode.Disposable;
+  private runProfile!: vscode.TestRunProfile;
+  private coverageProfile!: vscode.TestRunProfile;
 
   // Add getter to access the test controller for testing
   get testController() {
@@ -33,41 +35,36 @@ class Rstest {
   }
 
   private setupTestController() {
-    const runHandler = (
-      request: vscode.TestRunRequest,
-      _cancellation: vscode.CancellationToken,
-    ) => {
-      if (request.continuous) {
-        vscode.window.showInformationMessage(
-          'Continuous run is not implemented yet.',
-        );
-        return; // Early return; do nothing for continuous run
-      }
-
-      return this.startTestRun(request);
-    };
-
     this.ctrl.refreshHandler = () => this.startScanWorkspaces();
 
-    const _runProfile = this.ctrl.createRunProfile(
+    this.runProfile = this.ctrl.createRunProfile(
       'Run Tests',
       vscode.TestRunProfileKind.Run,
-      runHandler,
+      (request) => this.startTestRun(request),
       true,
       undefined,
       false,
     );
 
-    const coverageProfile = this.ctrl.createRunProfile(
+    vscode.commands.registerCommand(
+      'rstest.updateSnapshot',
+      (params: { test: vscode.TestItem; message: vscode.TestMessage }) =>
+        this.startTestRun(
+          new vscode.TestRunRequest([params.test], undefined, this.runProfile),
+          true,
+        ),
+    );
+
+    this.coverageProfile = this.ctrl.createRunProfile(
       'Run with Coverage',
       vscode.TestRunProfileKind.Coverage,
-      runHandler,
+      (request) => this.startTestRun(request),
       true,
       undefined,
       false,
     );
 
-    coverageProfile.loadDetailedCoverage = async (_testRun, coverage) => {
+    this.coverageProfile.loadDetailedCoverage = async (_testRun, coverage) => {
       if (coverage instanceof RstestFileCoverage) {
         return coverage.coveredLines.filter(
           (l): l is vscode.StatementCoverage => !!l,
@@ -121,16 +118,30 @@ class Rstest {
     this.workspaces.delete(workspaceFolder.uri.toString());
   }
 
-  private startTestRun = (request: vscode.TestRunRequest) => {
-    // const queue: { test: vscode.TestItem; data: TestCase }[] = [];
-    const run = this.ctrl.createTestRun(request);
+  private startTestRun = (
+    request: vscode.TestRunRequest,
+    updateSnapshot?: boolean,
+    run = this.ctrl.createTestRun(request),
+  ) => {
     // map of file uris to statements on each line:
     const coveredLines = new Map<
       /* file uri */ string,
       (vscode.StatementCoverage | undefined)[]
     >();
 
-    const discoverTests = async (tests: Iterable<vscode.TestItem>) => {
+    const enqueuedTests = (tests: readonly vscode.TestItem[]) => {
+      for (const test of tests) {
+        if (request.exclude?.includes(test)) {
+          continue;
+        }
+        run.enqueued(test);
+        enqueuedTests(gatherTestItems(test.children, false));
+      }
+    };
+
+    enqueuedTests(request.include ?? gatherTestItems(this.ctrl.items, false));
+
+    const discoverTests = async (tests: readonly vscode.TestItem[]) => {
       for (const test of tests) {
         if (request.exclude?.includes(test)) {
           continue;
@@ -138,19 +149,17 @@ class Rstest {
 
         const data = testData.get(test);
         if (data instanceof TestCase) {
-          run.enqueued(test);
           run.started(test);
-          await data.run(test, run);
-          run.appendOutput(`Completed ${test.id}\r\n`);
+          await data.run(test, run, updateSnapshot);
         } else if (data instanceof TestFile) {
           if (!data.didResolve) {
             await data.updateFromDisk(this.ctrl, test);
+            enqueuedTests(gatherTestItems(test.children, false));
           }
 
           // Run all tests for this file at once
-          run.enqueued(test);
           run.started(test);
-          await data.run(test, run, this.ctrl);
+          await data.run(test, run, updateSnapshot, this.ctrl);
         } else {
           // Process child tests
           await discoverTests(gatherTestItems(test.children, false));
@@ -184,11 +193,10 @@ class Rstest {
     };
 
     discoverTests(request.include ?? gatherTestItems(this.ctrl.items, false))
-      .then(() => run.end())
       .catch((error) => {
         logger.error('Error running tests:', error);
-        run.end();
-      });
+      })
+      .finally(() => run.end());
   };
 }
 
