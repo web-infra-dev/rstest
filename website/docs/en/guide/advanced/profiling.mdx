@@ -43,9 +43,7 @@ After running the above commands, Rstest will automatically register the Rsdocto
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
-## CPU profiling
-
-### Samply
+## Using samply
 
 > Note: In order to be able to profiling the Node.js side code in macOS, Node.js v22.16+ is required.
 
@@ -62,3 +60,21 @@ After the command execution, the analysis results will automatically open in the
 Rstest’s JavaScript typically runs in the Node.js thread. Select the Node.js thread to view the time distribution on the Node.js side.
 
 ![rstest-samply-profiling](https://assets.rspack.rs/rstest/assets/rstest-samply-profiling.png)
+
+## Node.js profiling
+
+You can also use Node.js built-in profiling tools to analyze Rstest's performance.
+
+For example, you can use the `--heap-prof` flag to enable heap profiling:
+
+```bash
+node --heap-prof --heap-prof-dir=./heap-prof ./node_modules/@rstest/core/bin/rstest.js
+```
+
+The heap profile files will be generated in the `./heap-prof` directory. You can analyze these files using tools like [Visual Studio Code](https://code.visualstudio.com/docs/nodejs/profiling#_analyzing-a-profile) or [Chrome DevTools](https://developer.chrome.com/docs/devtools/memory-problems/heap-snapshots).
+
+You can also use the `--inspect` flag to enable [Node.js inspector](https://nodejs.org/en/learn/getting-started/debugging).
+
+```bash
+node --inspect ./node_modules/@rstest/core/bin/rstest.js watch
+```
