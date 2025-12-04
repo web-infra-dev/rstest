@@ -15,7 +15,6 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 class Rstest {
-  private context: vscode.ExtensionContext;
   private ctrl: vscode.TestController;
   private workspaces = new Map<string, WorkspaceManager>();
   private workspaceWatcher?: vscode.Disposable;
@@ -26,7 +25,6 @@ class Rstest {
   }
 
   constructor(context: vscode.ExtensionContext) {
-    this.context = context;
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
 
