@@ -196,7 +196,9 @@ export const loadModule = async ({
       lineOffset: 0,
       columnOffset: 0,
       initializeImportMeta: (meta) => {
-        meta.url = pathToFileURL(testPath).toString();
+        meta.url = pathToFileURL(
+          distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
+        ).toString();
         // @ts-expect-error
         meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
           assetFiles,
@@ -206,6 +208,25 @@ export const loadModule = async ({
           returnModule: false,
           esmMode: EsmMode.Unknown,
         });
+        // @ts-expect-error
+        meta.readWasmFile = (
+          wasmPath: URL,
+          callback: (err: Error | null, data?: Buffer) => void,
+        ) => {
+          const joinedPath = isRelativePath(wasmPath.pathname)
+            ? path.join(path.dirname(distPath), wasmPath.pathname)
+            : wasmPath.pathname;
+
+          const content = assetFiles[path.normalize(joinedPath)];
+
+          if (content) {
+            callback(null, Buffer.from(content, 'base64'));
+          } else {
+            callback(
+              new Error(`WASM file ${joinedPath} not found in asset files.`),
+            );
+          }
+        };
       },
       importModuleDynamically: (specifier, _referencer, importAttributes) => {
         return defineRstestDynamicImport({

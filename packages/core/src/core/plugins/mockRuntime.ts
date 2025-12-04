@@ -6,6 +6,8 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 class MockRuntimeRspackPlugin {
+  constructor(private readonly outputModule: boolean) {}
+
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
 
@@ -64,7 +66,7 @@ class MockRuntimeRspackPlugin {
               // Replace readFile with readWasmFile to use the custom WASM file loader
               // Hard coded in EJS template https://github.com/web-infra-dev/rspack/tree/7df875eb3ca3bb4bcb21836fdf4e6be1f38a057c/crates/rspack_plugin_wasm/src/runtime
               'readFile(',
-              'readWasmFile(',
+              this.outputModule ? 'import.meta.readWasmFile(' : 'readWasmFile(',
             );
 
             module.source!.source = Buffer.from(finalSource);
@@ -88,7 +90,9 @@ export const pluginMockRuntime: RsbuildPlugin = {
   name: 'rstest:mock-runtime',
   setup: (api) => {
     api.modifyRspackConfig(async (config) => {
-      config.plugins.push(new MockRuntimeRspackPlugin());
+      config.plugins.push(
+        new MockRuntimeRspackPlugin(Boolean(config.output.module)),
+      );
     });
   },
 };

@@ -116,9 +116,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
-              "importLoaders": 0,
+              "importLoaders": 1,
               "modules": false,
               "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 16",
+              ],
             },
           },
         ],
@@ -359,6 +368,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
         ],
         "test": /\\\\\\.\\(\\?:woff\\|woff2\\|eot\\|ttf\\|otf\\|ttc\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+        ],
+        "test": /\\\\\\.json\\$/i,
       },
       {
         "dependency": "url",
