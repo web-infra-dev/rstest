@@ -99,14 +99,14 @@ export const parseTestFile = (
 
   const ast: Program = astUnknown as unknown as Program;
   const offset = ast.span.start - 1;
-  const codebBuffer = Buffer.from(code, 'utf8');
+  const codeBuffer = Buffer.from(code, 'utf8');
 
   // Helper function to convert SWC span to VS Code range
   const spanToRange = (span: { start: number; end: number }): Range => {
-    const startSlice = codebBuffer.subarray(0, span.start - offset);
+    const startSlice = codeBuffer.subarray(0, span.start - offset);
     const startCharIndex = startSlice.toString('utf8').length;
 
-    const endSlice = codebBuffer.subarray(0, span.end - offset);
+    const endSlice = codeBuffer.subarray(0, span.end - offset);
     const endCharIndex = endSlice.toString('utf8').length;
 
     const lines = code.substring(0, startCharIndex).split('\n');
