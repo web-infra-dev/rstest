@@ -482,7 +482,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": true,
+    },
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -1037,7 +1039,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": false,
+    },
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -1564,7 +1568,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": false,
+    },
     RstestPlugin {
       "_args": [
         {
@@ -2093,7 +2099,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": false,
+    },
     TestFileWatchPlugin {
       "contextToWatch": "<ROOT>/packages/core",
     },
@@ -2640,7 +2648,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": false,
+    },
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
@@ -3178,7 +3188,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
     },
     IgnoreModuleNotFoundErrorPlugin {},
-    MockRuntimeRspackPlugin {},
+    MockRuntimeRspackPlugin {
+      "outputModule": false,
+    },
     RstestCacheControlPlugin {},
     RstestPlugin {
       "_args": [
