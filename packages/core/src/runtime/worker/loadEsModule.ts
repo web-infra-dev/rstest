@@ -5,6 +5,12 @@ import path from 'pathe';
 import { logger } from '../../utils/logger';
 import { interopModule, shouldInterop } from './interop';
 
+export enum EsmMode {
+  Unknown = 0,
+  Evaluated = 1,
+  Unlinked = 2,
+}
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const defineRstestDynamicImport =
@@ -161,12 +167,6 @@ export const asModule = async (
 };
 
 const esmCache = new Map<string, SourceTextModule>();
-
-export enum EsmMode {
-  Unknown = 0,
-  Evaluated = 1,
-  Unlinked = 2,
-}
 
 // setup and rstest module should not be cached
 export const loadModule = async ({
