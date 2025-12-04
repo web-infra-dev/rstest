@@ -169,3 +169,8 @@ __webpack_require__.rstest_reset_modules = () => {
   });
 };
 //#endregion
+
+//#region rs.hoisted
+__webpack_require__.rstest_hoisted = (fn) => {
+  return fn();
+};
