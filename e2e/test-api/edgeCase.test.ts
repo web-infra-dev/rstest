@@ -95,11 +95,11 @@ describe('Test Edge Cases', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(1);
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
+    const logsErr = cli.stderr.split('\n').filter(Boolean);
 
     // no `× [object Object]`
-    expect(logs.find((log) => log.includes('[object Object]'))).toBeFalsy();
-    expectLog(/To enable support for Less/, logs);
+    expect(logsErr.find((log) => log.includes('[object Object]'))).toBeFalsy();
+    expectLog(/To enable support for Less/, logsErr);
   });
 
   it('only in skip suite', async () => {
