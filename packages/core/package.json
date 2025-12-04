@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@types/chai": "^5.2.3",
-    "@rsbuild/core": "1.6.7-canary-57e2a56d-20251120152633",
+    "@rsbuild/core": "1.6.12-canary-63b4dae2-20251204065915",
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
