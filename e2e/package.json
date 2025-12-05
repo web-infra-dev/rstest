@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "test": "rstest run",
+    "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

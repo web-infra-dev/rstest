@@ -268,6 +268,7 @@ export const createPool = async ({
               options: {
                 entryInfo,
                 context: {
+                  outputModule: project.outputModule,
                   taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
@@ -377,6 +378,7 @@ export const createPool = async ({
                 context: {
                   taskId: index + 1,
                   project: projectName,
+                  outputModule: project.outputModule,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),

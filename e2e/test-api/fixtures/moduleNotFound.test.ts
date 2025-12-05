@@ -21,6 +21,6 @@ it('test expectNotFound error', async () => {
 
 it('test expectNotFound error', async () => {
   await expect(unexpectNotFound()).rejects.toThrowError(
-    '[Rstest] Cannot find module "aaa"',
+    /Cannot find module 'aaa'/,
   );
 });

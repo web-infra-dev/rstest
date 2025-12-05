@@ -2,6 +2,22 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # output
 
+## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
+
+是否以 ES 模块格式输出 JavaScript 文件。
+
+Rstest 默认会以 CommonJS 格式输出并执行测试代码。如果你希望以 ES 模块格式输出测试代码，可以通过如下配置项开启：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    module: true,
+  },
+});
+```
+
 ## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
 
 配置代码中的某些 `import` 的依赖不被打包，而是由 Rstest 在运行时去获取这些依赖。
