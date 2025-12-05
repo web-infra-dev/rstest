@@ -9,15 +9,14 @@ const __dirname = path.dirname(__filename);
 
 describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
-      fixturesTargetPath: `${__dirname}/fixtures-test-1`,
+      fixturesTargetPath,
     });
 
-    const configFile = path.join(
-      __dirname,
-      'fixtures-test-1/rstest-1.config.mjs',
-    );
+    const configFile = path.join(fixturesTargetPath, 'rstest-1.config.mjs');
     await remove(configFile);
 
     fs.create(
@@ -32,7 +31,7 @@ export default defineConfig({});
       args: ['watch', '--disableConsoleIntercept', '-c', configFile],
       options: {
         nodeOptions: {
-          cwd: `${__dirname}/fixtures-test-1`,
+          cwd: fixturesTargetPath,
         },
       },
     });
