@@ -44,8 +44,9 @@ const autoExternalNodeModules: (
 
     resolver(context!, request, (err, resolvePath) => {
       if (err) {
-        // ignore resolve error
-        return callback();
+        // ignore resolve error and external it as commonjs （it may be mocked）
+        // however, we will lose the code frame info if module not found
+        return callback(undefined, request, 'node-commonjs');
       }
 
       if (
@@ -122,7 +123,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
 
               config.externalsPresets ??= {};
               config.externalsPresets.node = false;
-              config.externals.push(autoExternalNodeBuiltin);
+              config.externals.unshift(autoExternalNodeBuiltin);
             },
           },
         });
