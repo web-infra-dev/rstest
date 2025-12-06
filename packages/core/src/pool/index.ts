@@ -231,6 +231,11 @@ export const createPool = async ({
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
       );
     },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
+      );
+    },
     resolveSnapshotPath: (testPath: string): string => {
       const snapExtension = '.snap';
       const resolver =

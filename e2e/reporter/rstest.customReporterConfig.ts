@@ -14,6 +14,10 @@ class MyReporter implements Reporter {
     reporterResult.push('[custom reporter] onTestFileStart');
   }
 
+  onTestFileReady(_file: TestFileInfo) {
+    reporterResult.push('[custom reporter] onTestFileReady');
+  }
+
   onTestCaseStart(_test: TestCaseInfo) {
     reporterResult.push('[custom reporter] onTestCaseStart');
   }
