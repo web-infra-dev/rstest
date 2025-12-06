@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   AfterAllListener,
   AfterEachListener,
@@ -7,6 +9,7 @@ import type {
   DescribeEachFn,
   DescribeForFn,
   Fixtures,
+  Location,
   MaybePromise,
   NormalizedFixtures,
   RunnerAPI,
@@ -161,6 +164,7 @@ export class RunnerRuntime {
     each = false,
     concurrent,
     sequential,
+    location,
   }: {
     name: string;
     fn?: () => MaybePromise<void>;
@@ -168,6 +172,7 @@ export class RunnerRuntime {
     each?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): void {
     this.checkStatus(name, 'suite');
     const currentSuite: Omit<TestSuite, 'testId'> = {
@@ -180,6 +185,7 @@ export class RunnerRuntime {
       testPath: this.testPath,
       concurrent,
       sequential,
+      location,
     };
 
     if (!fn) {
@@ -301,6 +307,7 @@ export class RunnerRuntime {
     each = false,
     concurrent,
     sequential,
+    location,
   }: {
     name: string;
     fixtures?: NormalizedFixtures;
@@ -312,6 +319,7 @@ export class RunnerRuntime {
     fails?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): void {
     this.checkStatus(name, 'case');
     this.addTestCase({
@@ -330,6 +338,7 @@ export class RunnerRuntime {
       fails,
       onFinished: [],
       onFailed: [],
+      location,
     });
   }
 
@@ -341,6 +350,7 @@ export class RunnerRuntime {
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): ReturnType<DescribeEachFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
@@ -366,6 +376,7 @@ export class RunnerRuntime {
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): ReturnType<DescribeForFn> {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
@@ -391,6 +402,7 @@ export class RunnerRuntime {
     fails?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
@@ -419,6 +431,7 @@ export class RunnerRuntime {
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
+    location?: Location;
   }): ReturnType<TestEachFn> {
     return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
@@ -469,6 +482,24 @@ export const createRuntimeAPI = ({
     runtimeConfig,
   });
 
+  // TODO allow disable get location via config
+  const getLocation = (): Location | undefined => {
+    const stack = new Error().stack;
+    if (stack) {
+      const frames = stackTraceParse(stack);
+      for (const frame of frames) {
+        let filename = frame.file;
+        if (filename?.startsWith('file://')) filename = fileURLToPath(filename);
+        if (filename === testPath) {
+          const line = frame.lineNumber;
+          const column = frame.column;
+          if (line != null && column != null) return { line, column };
+        }
+      }
+    }
+    return undefined;
+  };
+
   const createTestAPI = (
     options: {
       concurrent?: boolean;
@@ -476,6 +507,7 @@ export const createRuntimeAPI = ({
       fails?: boolean;
       fixtures?: NormalizedFixtures;
       runMode?: 'skip' | 'only' | 'todo';
+      location?: Location;
     } = {},
   ): TestAPI => {
     const testFn = ((name, fn, timeout) =>
@@ -484,6 +516,7 @@ export const createRuntimeAPI = ({
         fn,
         timeout,
         ...options,
+        location: options.location ?? getLocation(),
       })) as TestAPI;
 
     for (const { name, overrides } of [
@@ -502,20 +535,32 @@ export const createRuntimeAPI = ({
       });
     }
 
-    testFn.runIf = (condition: boolean) => (condition ? testFn : testFn.skip);
+    testFn.runIf = (condition: boolean) =>
+      createTestAPI({
+        ...options,
+        location: getLocation(),
+        runMode: condition ? options.runMode : 'skip',
+      });
 
-    testFn.skipIf = (condition: boolean) => (condition ? testFn.skip : testFn);
+    testFn.skipIf = (condition: boolean) =>
+      createTestAPI({
+        ...options,
+        location: getLocation(),
+        runMode: condition ? 'skip' : options.runMode,
+      });
 
     testFn.each = ((cases: any) =>
       runtimeInstance.each({
         cases,
         ...options,
+        location: getLocation(),
       })) as TestEachFn;
 
     testFn.for = ((cases: any) =>
       runtimeInstance.for({
         cases,
         ...options,
+        location: getLocation(),
       })) as TestForFn;
 
     return testFn;
@@ -544,6 +589,7 @@ export const createRuntimeAPI = ({
       sequential?: boolean;
       concurrent?: boolean;
       runMode?: 'skip' | 'only' | 'todo';
+      location?: Location;
     } = {},
   ): DescribeAPI => {
     const describeFn = ((name, fn) =>
@@ -551,6 +597,7 @@ export const createRuntimeAPI = ({
         name,
         fn,
         ...options,
+        location: options.location ?? getLocation(),
       })) as DescribeAPI;
 
     for (const { name, overrides } of [
@@ -569,20 +616,30 @@ export const createRuntimeAPI = ({
     }
 
     describeFn.skipIf = (condition: boolean) =>
-      condition ? describeFn.skip : describeFn;
+      createDescribeAPI({
+        ...options,
+        location: getLocation(),
+        runMode: condition ? 'skip' : options.runMode,
+      });
     describeFn.runIf = (condition: boolean) =>
-      condition ? describeFn : describeFn.skip;
+      createDescribeAPI({
+        ...options,
+        location: getLocation(),
+        runMode: condition ? options.runMode : 'skip',
+      });
 
     describeFn.each = ((cases: any) =>
       runtimeInstance.describeEach({
         cases,
         ...options,
+        location: getLocation(),
       })) as DescribeEachFn;
 
     describeFn.for = ((cases: any) =>
       runtimeInstance.describeFor({
         cases,
         ...options,
+        location: getLocation(),
       })) as DescribeForFn;
 
     return describeFn;

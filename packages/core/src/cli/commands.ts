@@ -176,6 +176,7 @@ export function setupCommands(): void {
     .command('list [...filters]', 'lists all test files that Rstest will run')
     .option('--filesOnly', 'only list the test files')
     .option('--json [boolean/path]', 'print tests as JSON or write to a file')
+    .option('--printLocation', 'print test case location')
     .action(
       async (
         filters: string[],
@@ -193,6 +194,7 @@ export function setupCommands(): void {
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,
+            printLocation: options.printLocation,
           });
         } catch (err) {
           logger.error('Failed to run Rstest list.');

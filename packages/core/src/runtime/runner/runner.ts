@@ -301,6 +301,7 @@ export class TestRunner {
           testPath,
           project: test.project,
           testId: test.testId,
+          type: 'suite',
         });
 
         if (test.tests.length === 0) {
@@ -390,6 +391,7 @@ export class TestRunner {
           timeout: test.timeout,
           parentNames: test.parentNames,
           project: test.project,
+          type: 'case',
         });
 
         do {

@@ -233,6 +233,11 @@ export const createPool = async ({
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
       );
     },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
+      );
+    },
     onTestSuiteStart: async (test: TestSuiteInfo) => {
       await Promise.all(
         reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),

@@ -27,6 +27,11 @@ export interface TaskResult {
   errors?: FormattedError[];
 }
 
+export type Location = {
+  line: number;
+  column: number;
+};
+
 export type TestCaseInfo = {
   testId: string;
   testPath: TestPath;
@@ -35,6 +40,8 @@ export type TestCaseInfo = {
   parentNames?: string[];
   project: string;
   startTime?: number;
+  location?: Location;
+  type: 'case';
 };
 
 export type TestCase = TestCaseInfo & {
@@ -51,7 +58,6 @@ export type TestCase = TestCaseInfo & {
   only?: boolean;
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
-  type: 'case';
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -85,6 +91,7 @@ export type TestSuiteInfo = {
   parentNames?: string[];
   testPath: TestPath;
   project: string;
+  type: 'suite';
 };
 
 export type TestSuite = TestSuiteInfo & {
@@ -94,12 +101,12 @@ export type TestSuite = TestSuiteInfo & {
   concurrent?: boolean;
   sequential?: boolean;
   /** nested cases and suite could in a suite */
-  tests: (TestSuite | TestCase)[];
-  type: 'suite';
+  tests: Test[];
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];
   afterEachListeners?: AfterEachListener[];
   beforeEachListeners?: BeforeEachListener[];
+  location?: Location;
 };
 
 export type TestSuiteListeners = keyof Pick<
@@ -110,8 +117,11 @@ export type TestSuiteListeners = keyof Pick<
   | 'beforeEachListeners'
 >;
 
+export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
+
 export type TestFileInfo = {
   testPath: TestPath;
+  tests: TestInfo[];
 };
 
 export type Test = TestSuite | TestCase;

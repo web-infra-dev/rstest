@@ -24,6 +24,7 @@ export type ServerRPC = {};
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
+  onTestFileReady: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: () => Promise<{
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, string>;

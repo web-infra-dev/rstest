@@ -92,7 +92,7 @@ export class TestRunReporter implements Reporter {
     this.onTestCaseResult(result);
   }
 
-  onTestCaseStart(test: TestCaseInfo) {
+  onTestCaseStart(test: TestCaseInfo | TestSuiteInfo) {
     // ignore reported item not belongs current testItem
     if (!this.contains(test)) return;
 
