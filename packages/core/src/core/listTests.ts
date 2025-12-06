@@ -2,8 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
 import type {
-  FormattedError,
   ListCommandOptions,
+  ListCommandResult,
+  Location,
   RstestContext,
   Test,
 } from '../types';
@@ -14,6 +15,7 @@ import {
   getTestEntries,
   logger,
   prettyTestPath,
+  ROOT_SUITE_NAME,
 } from '../utils';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -106,12 +108,7 @@ const collectTestFiles = async ({
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
-  const list: {
-    tests: Test[];
-    testPath: string;
-    project: string;
-    errors?: FormattedError[];
-  }[] = [];
+  const list: ListCommandResult[] = [];
   for (const project of context.projects) {
     const files = await globTestSourceEntries(project.environmentName);
     list.push(
@@ -131,8 +128,8 @@ const collectTestFiles = async ({
 
 export async function listTests(
   context: RstestContext,
-  { filesOnly, json }: ListCommandOptions,
-): Promise<void> {
+  { filesOnly, json, printLocation }: ListCommandOptions,
+): Promise<ListCommandResult[]> {
   const { rootPath } = context;
 
   const testEntries: Record<string, Record<string, string>> = {};
@@ -175,6 +172,8 @@ export async function listTests(
     file: string;
     name?: string;
     project?: string;
+    location?: Location;
+    type: 'file' | 'suite' | 'case';
   }[] = [];
 
   const traverseTests = (test: Test) => {
@@ -182,20 +181,16 @@ export async function listTests(
       return;
     }
 
-    if (test.type === 'case') {
-      if (showProject) {
-        tests.push({
-          file: test.testPath,
-          name: getTaskNameWithPrefix(test),
-          project: test.project,
-        });
-      } else {
-        tests.push({
-          file: test.testPath,
-          name: getTaskNameWithPrefix(test),
-        });
-      }
-    } else {
+    if (test.name !== ROOT_SUITE_NAME)
+      tests.push({
+        file: test.testPath,
+        name: getTaskNameWithPrefix(test),
+        location: test.location,
+        type: test.type,
+        project: showProject ? test.project : undefined,
+      });
+
+    if (test.type === 'suite') {
       for (const child of test.tests) {
         traverseTests(child);
       }
@@ -229,7 +224,6 @@ export async function listTests(
     }
 
     await close();
-    return;
   }
 
   for (const file of list) {
@@ -238,10 +232,12 @@ export async function listTests(
         tests.push({
           file: file.testPath,
           project: file.project,
+          type: 'file',
         });
       } else {
         tests.push({
           file: file.testPath,
+          type: 'file',
         });
       }
       continue;
@@ -262,7 +258,10 @@ export async function listTests(
     }
   } else {
     for (const test of tests) {
-      const shortPath = relative(rootPath, test.file);
+      let shortPath = relative(rootPath, test.file);
+      if (test.location && printLocation) {
+        shortPath = `${shortPath}:${test.location.line}:${test.location.column}`;
+      }
       logger.log(
         test.name
           ? `${color.dim(`${shortPath} > `)}${test.name}`
@@ -272,4 +271,6 @@ export async function listTests(
   }
 
   await close();
+
+  return list;
 }

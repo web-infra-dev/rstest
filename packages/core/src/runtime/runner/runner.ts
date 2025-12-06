@@ -354,6 +354,7 @@ export class TestRunner {
           timeout: test.timeout,
           parentNames: test.parentNames,
           project: test.project,
+          type: 'case',
         });
 
         do {

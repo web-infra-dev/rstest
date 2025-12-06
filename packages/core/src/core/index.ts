@@ -38,9 +38,9 @@ export function createRstest(
     await runTests(context);
   };
 
-  const listTests = async (options: ListCommandOptions): Promise<void> => {
+  const listTests = async (options: ListCommandOptions) => {
     const { listTests } = await import('./listTests');
-    await listTests(context, options);
+    return listTests(context, options);
   };
 
   return {
