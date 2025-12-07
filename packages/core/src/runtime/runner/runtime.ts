@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
@@ -488,8 +489,10 @@ export const createRuntimeAPI = ({
     if (stack) {
       const frames = stackTraceParse(stack);
       for (const frame of frames) {
-        let filename = frame.file;
-        if (filename?.startsWith('file://')) filename = fileURLToPath(filename);
+        let filename = frame.file ?? '';
+        if (filename.startsWith('file://')) filename = fileURLToPath(filename);
+        // testPath is always unix path style, so convert filename with same way
+        filename = filename.replaceAll(path.sep, '/');
         if (filename === testPath) {
           const line = frame.lineNumber;
           const column = frame.column;
