@@ -92,6 +92,7 @@ export type TestSuiteInfo = {
   testPath: TestPath;
   project: string;
   type: 'suite';
+  location?: Location;
 };
 
 export type TestSuite = TestSuiteInfo & {
@@ -106,7 +107,6 @@ export type TestSuite = TestSuiteInfo & {
   beforeAllListeners?: BeforeAllListener[];
   afterEachListeners?: AfterEachListener[];
   beforeEachListeners?: BeforeEachListener[];
-  location?: Location;
 };
 
 export type TestSuiteListeners = keyof Pick<
