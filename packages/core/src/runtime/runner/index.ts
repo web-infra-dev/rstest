@@ -64,6 +64,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
               testPath: test.testPath,
               project: test.project,
               type: test.type,
+              location: test.location,
               tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
             };
           }),
