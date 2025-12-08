@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { TestInfo } from '@rstest/core';
 import picomatch from 'picomatch';
 import { glob } from 'tinyglobby';
 import * as vscode from 'vscode';
@@ -212,68 +213,118 @@ export class Project implements vscode.Disposable {
       return matchInclude(relativePath) && !matchExclude(relativePath);
     };
 
-    const files = await glob(this.include, {
-      cwd: root.fsPath,
-      ignore: this.exclude,
-      absolute: true,
-      dot: true,
-      expandDirectories: false,
-    }).then((files) => files.map((file) => vscode.Uri.file(file)));
+    const watcher = watchConfigValue(
+      'testCaseCollectMethod',
+      this.workspaceFolder,
+      async (method, token) => {
+        if (this.testItem) {
+          this.testItem.busy = true;
+        }
+        const files: { uri: vscode.Uri; tests?: TestInfo[] }[] =
+          method === 'ast'
+            ? // ast
+              await glob(this.include, {
+                cwd: root.fsPath,
+                ignore: this.exclude,
+                absolute: true,
+                dot: true,
+                expandDirectories: false,
+              }).then((files) =>
+                files.map((file) => ({ uri: vscode.Uri.file(file) })),
+              )
+            : // runtime
+              await this.api.listTests().then((files) =>
+                files.map((file) => ({
+                  uri: vscode.Uri.file(file.testPath),
+                  tests: file.tests,
+                })),
+              );
 
-    if (this.cancellationSource.token.isCancellationRequested) return;
+        if (token.isCancellationRequested) return;
 
-    const visited = new Set<string>();
-    for (const uri of files) {
-      if (matchExclude(uri.fsPath)) continue;
-      this.updateOrCreateFile(uri);
-      visited.add(uri.toString());
-    }
+        if (this.testItem) {
+          this.testItem.busy = false;
+        }
 
-    // remove outdated items after glob configuration changed
-    for (const file of this.testFiles.keys()) {
-      if (!visited.has(file)) {
-        this.testFiles.delete(file);
-      }
-    }
-    this.buildTree();
+        const visited = new Set<string>();
+        for (const { uri, tests } of files) {
+          this.updateOrCreateFile(uri, tests);
+          visited.add(uri.toString());
+        }
 
-    // start watching test file change
-    // while createFileSystemWatcher don't support same glob syntax with tinyglobby
-    // we can watch all files and filter with picomatch later
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(root, '**'),
+        // remove outdated items after glob configuration changed
+        for (const file of this.testFiles.keys()) {
+          if (!visited.has(file)) {
+            this.testFiles.delete(file);
+          }
+        }
+        this.buildTree();
+
+        // start watching test file change
+        // while createFileSystemWatcher don't support same glob syntax with tinyglobby
+        // we can watch all files and filter with picomatch later
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(root, '**'),
+        );
+        this.cancellationSource.token.onCancellationRequested(() =>
+          watcher.dispose(),
+        );
+
+        // TODO delay and batch run multiple files
+        const updateOrCreateByRuntime = (uri: vscode.Uri) => {
+          this.api.listTests([uri.fsPath]).then((files) => {
+            if (token.isCancellationRequested) return;
+            for (const { testPath, tests } of files) {
+              const uri = vscode.Uri.file(testPath);
+              this.updateOrCreateFile(uri, tests);
+            }
+            this.buildTree();
+          });
+        };
+
+        watcher.onDidCreate((uri) => {
+          if (isInclude(uri)) {
+            if (method === 'ast') {
+              this.updateOrCreateFile(uri);
+              this.buildTree();
+            } else {
+              updateOrCreateByRuntime(uri);
+            }
+          }
+        });
+        watcher.onDidChange((uri) => {
+          if (isInclude(uri)) {
+            if (method === 'ast') {
+              this.updateOrCreateFile(uri);
+              this.buildTree();
+            } else {
+              updateOrCreateByRuntime(uri);
+            }
+          }
+        });
+        watcher.onDidDelete((uri) => {
+          if (isInclude(uri)) {
+            this.testFiles.delete(uri.toString());
+            this.buildTree();
+          }
+        });
+      },
     );
     this.cancellationSource.token.onCancellationRequested(() =>
       watcher.dispose(),
     );
-    watcher.onDidCreate((uri) => {
-      if (isInclude(uri)) {
-        this.updateOrCreateFile(uri);
-        this.buildTree();
-      }
-    });
-    watcher.onDidChange((uri) => {
-      if (isInclude(uri)) {
-        this.updateOrCreateFile(uri);
-        this.buildTree();
-      }
-    });
-    watcher.onDidDelete((uri) => {
-      if (isInclude(uri)) {
-        this.testFiles.delete(uri.toString());
-        this.buildTree();
-      }
-    });
   }
   // TODO pass cancellation token to updateFromDisk
-  private updateOrCreateFile(uri: vscode.Uri) {
-    const existing = this.testFiles.get(uri.toString());
-    if (existing) {
-      existing.updateFromDisk(this.testController);
-    } else {
-      const data = new TestFile(this.api, uri);
+  private updateOrCreateFile(uri: vscode.Uri, tests?: TestInfo[]) {
+    let data = this.testFiles.get(uri.toString());
+    if (!data) {
+      data = new TestFile(this.api, uri, this.testController);
       this.testFiles.set(uri.toString(), data);
-      data.updateFromDisk(this.testController);
+    }
+    if (tests) {
+      data.updateFromList(tests);
+    } else {
+      data.updateFromDisk();
     }
   }
 

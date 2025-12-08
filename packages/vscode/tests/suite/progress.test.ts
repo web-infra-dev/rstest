@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
-import { getTestItems, waitFor } from './helpers';
+import { getTestItemByLabels, waitFor } from './helpers';
 
 suite('Test Progress Reporting', () => {
   test('reports test progress with error details and snapshots', async () => {
@@ -15,18 +15,9 @@ suite('Test Progress Reporting', () => {
       rstestInstance?.testController;
     assert.ok(testController, 'Test controller should be exported');
 
-    const item = await waitFor(() => {
-      const item = ['test', 'progress.test.ts'].reduce(
-        (item, label) =>
-          item &&
-          getTestItems(item.children).find((child) => child.label === label),
-        {
-          children: testController.items,
-        } as vscode.TestItem | undefined,
-      );
-      assert.ok(item);
-      return item;
-    });
+    const item = await waitFor(() =>
+      getTestItemByLabels(testController.items, ['test', 'progress.test.ts']),
+    );
 
     const { promise, resolve } = Promise.withResolvers();
 
