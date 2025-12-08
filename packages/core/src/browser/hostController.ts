@@ -11,6 +11,7 @@ import type {
   Frame,
   Page,
 } from 'playwright-core';
+import sirv from 'sirv';
 import type { Rstest } from '../core/rstest';
 import type {
   ProjectContext,
@@ -158,6 +159,18 @@ const resolveBrowserFile = (relativePath: string): string => {
   throw new Error(`Unable to resolve browser client file: ${relativePath}`);
 };
 
+const resolveContainerDist = (): string => {
+  const packageRoot = resolve(__dirname, '..');
+  const distPath = resolve(packageRoot, 'dist/browser-container');
+  if (existsSync(distPath)) {
+    return distPath;
+  }
+
+  throw new Error(
+    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/core build:container".`,
+  );
+};
+
 const generateManifestModule = ({
   manifestPath,
   entries,
@@ -250,130 +263,6 @@ const htmlTemplate = `<!DOCTYPE html>
 </html>
 `;
 
-const containerHtmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rstest Browser Test Runner</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        height: 100vh;
-        overflow: hidden;
-      }
-      
-      .container {
-        display: flex;
-        height: 100vh;
-      }
-      
-      .sidebar {
-        width: 280px;
-        background: #f5f5f5;
-        border-right: 1px solid #ddd;
-        display: flex;
-        flex-direction: column;
-      }
-      
-      .header {
-        padding: 16px;
-        border-bottom: 1px solid #ddd;
-        background: #fff;
-      }
-      
-      .header h2 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 12px;
-        color: #333;
-      }
-      
-      .rerun-btn {
-        width: 100%;
-        padding: 8px 16px;
-        background: #0066cc;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-      }
-      
-      .rerun-btn:hover {
-        background: #0052a3;
-      }
-      
-      .rerun-btn:active {
-        background: #003d7a;
-      }
-      
-      .test-file-list {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-      }
-      
-      .test-file-tab {
-        padding: 10px 12px;
-        margin-bottom: 4px;
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 13px;
-        color: #333;
-        word-break: break-all;
-        transition: all 0.15s;
-      }
-      
-      .test-file-tab:hover {
-        background: #e8f4ff;
-        border-color: #0066cc;
-      }
-      
-      .test-file-tab.active {
-        background: #0066cc;
-        color: white;
-        border-color: #0066cc;
-        font-weight: 500;
-      }
-      
-      .main {
-        flex: 1;
-        position: relative;
-        background: #fff;
-      }
-      
-      .iframe-container {
-        width: 100%;
-        height: 100%;
-        position: relative;
-      }
-      
-      .test-runner-iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-    </style>
-  </head>
-  <body>
-    <script type="module" src="/static/js/container.js"></script>
-  </body>
-</html>
-`;
-
 type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
@@ -384,6 +273,7 @@ type BrowserRuntime = {
   manifestPlugin: VirtualModulesPluginInstance;
   containerPage?: Page;
   containerContext?: BrowserContext;
+  containerDistPath: string;
 };
 
 type HostRpcMethods = {
@@ -465,6 +355,7 @@ const createBrowserRuntime = async ({
   tempDir,
   isWatchMode,
   onTriggerRerun,
+  containerDistPath,
 }: {
   context: Rstest;
   manifestPath: string;
@@ -472,6 +363,7 @@ const createBrowserRuntime = async ({
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
+  containerDistPath: string;
 }): Promise<BrowserRuntime> => {
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
@@ -490,7 +382,6 @@ const createBrowserRuntime = async ({
           source: {
             entry: {
               runner: resolveBrowserFile('client/entry.ts'),
-              container: resolveBrowserFile('client/containerEntry.ts'),
             },
             alias: {
               '@rstest/browser-manifest': manifestPath,
@@ -563,15 +454,24 @@ const createBrowserRuntime = async ({
     getPortSilently: true,
   });
 
+  // Serve prebuilt container assets (SPA) via sirv, scoped to avoid clashing with runner assets
+  const serveContainer = sirv(containerDistPath, {
+    dev: false,
+    single: 'container.html',
+  });
+
   devServer.middlewares.use((req, res, next) => {
     if (!req.url) {
       next();
       return;
     }
     const url = new URL(req.url, 'http://localhost');
-    if (url.pathname === '/' || url.pathname === '/container.html') {
-      res.setHeader('Content-Type', 'text/html');
-      res.end(containerHtmlTemplate);
+    if (
+      url.pathname === '/' ||
+      url.pathname === '/container.html' ||
+      url.pathname.startsWith('/container-static/')
+    ) {
+      serveContainer(req, res, next);
       return;
     }
     if (url.pathname === '/runner.html') {
@@ -615,11 +515,20 @@ const createBrowserRuntime = async ({
     manifestPath,
     tempDir,
     manifestPlugin: virtualManifestPlugin,
+    containerDistPath,
   };
 };
 
 export const runBrowserController = async (context: Rstest): Promise<void> => {
   const buildStart = Date.now();
+  let containerDistPath: string;
+  try {
+    containerDistPath = resolveContainerDist();
+  } catch (error) {
+    logger.error(color.red(String(error)));
+    ensureProcessExitCode(1);
+    return;
+  }
   const projectEntries = await collectProjectEntries(context);
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -688,6 +597,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode ? onTriggerRerun : undefined,
+        containerDistPath,
       });
     } catch (_error) {
       logger.error(
@@ -892,6 +802,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       snapshot: {
         updateSnapshot: context.snapshotManager.options.updateSnapshot,
       },
+      runnerUrl: `http://localhost:${port}`,
     };
 
     await containerPage.addInitScript((options: BrowserHostConfig) => {
