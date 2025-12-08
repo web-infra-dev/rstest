@@ -359,7 +359,7 @@ export class TestRunner {
             result.errors?.push(...formatTestError(error));
           }
         }
-        result.duration = Date.now() - start;
+        result.duration = RealDate.now() - start;
         result.status = result.errors?.length
           ? 'fail'
           : getTestStatus(results, defaultStatus);
