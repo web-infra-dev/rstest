@@ -36,7 +36,7 @@ const autoExternalNodeModules: (
 
   resolver(context!, request, (err, resolvePath) => {
     if (err) {
-      // ignore resolve error and external it as commonjs （it may be mocked）
+      // ignore resolve error and external it as commonjs (it may be mocked)
       // however, we will lose the code frame info if module not found
       return callback(undefined, request, 'node-commonjs');
     }
