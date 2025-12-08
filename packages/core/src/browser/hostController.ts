@@ -280,6 +280,7 @@ type BrowserRuntime = {
   containerPage?: Page;
   containerContext?: BrowserContext;
   containerDistPath: string;
+  setContainerOptions: (options: BrowserHostConfig) => void;
 };
 
 type HostRpcMethods = {
@@ -374,6 +375,19 @@ const createBrowserRuntime = async ({
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
   });
+
+  const containerHtmlPath = join(containerDistPath, 'container.html');
+  const containerHtmlTemplate = await fs.readFile(containerHtmlPath, 'utf-8');
+  const optionsPlaceholder = '__RSTEST_OPTIONS_PLACEHOLDER__';
+  let injectedContainerHtml: string | null = null;
+
+  const setContainerOptions = (options: BrowserHostConfig): void => {
+    const serialized = JSON.stringify(options).replace(/</g, '\\u003c');
+    injectedContainerHtml = containerHtmlTemplate.replace(
+      optionsPlaceholder,
+      serialized,
+    );
+  };
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest-browser',
@@ -472,11 +486,15 @@ const createBrowserRuntime = async ({
       return;
     }
     const url = new URL(req.url, 'http://localhost');
-    if (
-      url.pathname === '/' ||
-      url.pathname === '/container.html' ||
-      url.pathname.startsWith('/container-static/')
-    ) {
+    if (url.pathname === '/' || url.pathname === '/container.html') {
+      const html =
+        injectedContainerHtml ??
+        containerHtmlTemplate.replace(optionsPlaceholder, 'null');
+      res.setHeader('Content-Type', 'text/html');
+      res.end(html);
+      return;
+    }
+    if (url.pathname.startsWith('/container-static/')) {
       serveContainer(req, res, next);
       return;
     }
@@ -522,6 +540,7 @@ const createBrowserRuntime = async ({
     tempDir,
     manifestPlugin: virtualManifestPlugin,
     containerDistPath,
+    setContainerOptions,
   };
 };
 
@@ -627,6 +646,27 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Collect all test files from project entries
   const allTestFiles = projectEntries.flatMap((entry) => entry.testFiles);
+
+  const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
+    (project: ProjectContext) => ({
+      name: project.name,
+      environmentName: project.environmentName,
+      projectRoot: project.rootPath,
+      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+    }),
+  );
+
+  let hostOptions: BrowserHostConfig = {
+    rootPath: context.rootPath,
+    projects: projectRuntimeConfigs,
+    snapshot: {
+      updateSnapshot: context.snapshotManager.options.updateSnapshot,
+    },
+    runnerUrl: `http://localhost:${port}`,
+    testFiles: allTestFiles,
+  };
+
+  runtime!.setContainerOptions(hostOptions);
 
   // Track test results from iframes
   const reporterResults: TestFileResult[] = [];
@@ -792,30 +832,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Only navigate and setup on first creation (new page)
   if (isNewPage) {
-    // Inject test configuration for runner pages
-    const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
-      (project: ProjectContext) => ({
-        name: project.name,
-        environmentName: project.environmentName,
-        projectRoot: project.rootPath,
-        runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
-      }),
-    );
-
-    const hostOptions: BrowserHostConfig = {
-      rootPath: context.rootPath,
-      projects: projectRuntimeConfigs,
-      snapshot: {
-        updateSnapshot: context.snapshotManager.options.updateSnapshot,
-      },
-      runnerUrl: `http://localhost:${port}`,
-    };
-
-    await containerPage.addInitScript((options: BrowserHostConfig) => {
-      (window as unknown as ContainerWindow).__RSTEST_BROWSER_OPTIONS__ =
-        options;
-    }, hostOptions);
-
     // Navigate to container page
     await containerPage.goto(`http://localhost:${port}/container.html`, {
       waitUntil: 'load',
@@ -870,6 +886,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       if (filesChanged) {
         // Update last test files
         lastTestFiles = currentTestFiles;
+
+        hostOptions = {
+          ...hostOptions,
+          testFiles: currentTestFiles,
+        };
+
+        runtime!.setContainerOptions(hostOptions);
 
         // Notify container of test file changes
         if (containerRpc?.onTestFileUpdate) {
