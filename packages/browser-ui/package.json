@@ -6,6 +6,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
+    "dev": "rsbuild dev --config ./rsbuild.config.ts",
     "build": "rsbuild build --config ./rsbuild.config.ts",
     "typecheck": "tsc --noEmit"
   },
