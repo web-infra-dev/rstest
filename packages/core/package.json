@@ -46,7 +46,8 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build && npx prettier ./LICENSE.md --write",
+    "build": "rslib build && pnpm run build:container && npx prettier ./LICENSE.md --write",
+    "build:container": "rsbuild build --config ./rsbuild.container.config.ts",
     "typecheck": "tsc --noEmit",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "npx rstest --globals"
@@ -55,7 +56,8 @@
     "@types/chai": "^5.2.3",
     "@rsbuild/core": "1.6.12-canary-20251204065915",
     "tinypool": "^1.1.1",
-    "playwright-core": "^1.49.1"
+    "playwright-core": "^1.49.1",
+    "sirv": "^2.0.4"
   },
   "devDependencies": {
     "chai": "^5.3.3",
