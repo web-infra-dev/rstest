@@ -107,7 +107,7 @@ body {
 }
 
 .divider {
-  background: var(--divider);
+  background: transparent;
 }
 
 .sidebar {
@@ -135,11 +135,10 @@ body {
 }
 
 .brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-  border: 1px solid var(--divider);
-  padding: 4px;
+  padding: 2px;
 }
 
 .brand-text {
@@ -156,10 +155,7 @@ body {
 }
 
 .brand-subtitle {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
+  display: none;
 }
 
 .actions {
@@ -169,6 +165,7 @@ body {
 }
 
 .sidebar-stats {
+  position: relative;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -176,6 +173,15 @@ body {
   border-bottom: 1px solid var(--divider);
   background: var(--panel-alt);
   font-size: 12px;
+}
+
+.sidebar-progress-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border: none;
+  border-radius: 0;
+  pointer-events: none;
 }
 
 .stat {
@@ -234,26 +240,53 @@ body {
 }
 
 .file-row {
+  position: relative;
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--divider);
   background: transparent;
-  color: var(--foreground);
-  cursor: pointer;
-  text-align: left;
+  border-bottom: 1px solid var(--divider);
+  padding-left: 8px;
+}
+.file-row::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--divider);
 }
 
-.file-row:hover {
+.file-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 52px 12px 18px;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  width: 100%;
+  border-left: 2px solid transparent;
+}
+
+.file-row-header:hover {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.file-row-active {
+.file-row-active .file-row-header {
   background: rgba(255, 255, 255, 0.08);
   border-left: 2px solid var(--foreground);
-  padding-left: 8px;
+  padding-left: 12px;
+}
+
+.file-row-actions {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .file-status {
@@ -262,7 +295,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--divider);
+  border: none;
+  background: transparent;
   flex-shrink: 0;
 }
 
@@ -289,12 +323,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.file-status-label {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .file-path-row {
@@ -329,20 +357,22 @@ body {
 
 .file-path-icon {
   opacity: 0.6;
+  width: 16px;
+  height: 16px;
 }
 
-.file-row:hover .file-path-icon {
+.file-row-header:hover .file-path-icon {
   opacity: 1;
 }
 
 .file-rerun {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1px solid var(--divider);
+  border: none;
   color: var(--muted-foreground);
   cursor: pointer;
 }
@@ -350,6 +380,81 @@ body {
 .file-rerun:hover {
   color: var(--foreground);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.file-chevron {
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.file-row-header[data-state='open'] .file-chevron {
+  transform: rotate(90deg);
+  color: var(--foreground);
+}
+
+.case-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 12px 36px;
+  background: var(--panel);
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  border-left: 1px solid var(--divider);
+}
+
+.case-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--foreground);
+  cursor: default;
+  user-select: none;
+  border-bottom: 1px solid var(--divider);
+  padding: 6px 0;
+}
+
+.case-status {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  flex-shrink: 0;
+}
+
+.case-label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.case-open-editor {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.case-open-editor:hover {
+  color: var(--foreground);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.case-empty {
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 .main-pane {
