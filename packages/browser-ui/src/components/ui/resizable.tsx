@@ -22,13 +22,13 @@ const ResizablePanel = ({ className, ...props }: PanelProps) => (
 const ResizableHandle = ({ className, ...props }: PanelResizeHandleProps) => (
   <PanelResizeHandle
     className={cn(
-      'relative flex w-4 cursor-col-resize items-center justify-center bg-[#1e2230] hover:bg-[#2a3042] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0',
+      'group relative flex w-2 cursor-col-resize items-center justify-center bg-transparent transition-colors duration-200 hover:bg-[color:var(--muted)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0',
       className,
     )}
     {...props}
   >
     <span
-      className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-[#2a3042]"
+      className="pointer-events-none h-9 w-px rounded-full bg-[color:var(--foreground)]/30 transition-all duration-200 group-hover:scale-y-110 group-hover:bg-[color:var(--foreground)]/60"
       aria-hidden="true"
     />
   </PanelResizeHandle>

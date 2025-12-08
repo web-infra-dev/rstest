@@ -32,3 +32,34 @@ describe('browser counter', () => {
     expect(button.textContent).toBe('3');
   });
 });
+
+describe('DOM element creation', () => {
+  it('creates paragraph with correct text', () => {
+    const p = document.createElement('p');
+    p.textContent = 'Hello World';
+    expect(p.textContent).toBe('Hello World');
+  });
+
+  it('sets element attributes correctly', () => {
+    const div = document.createElement('div');
+    div.setAttribute('data-test', 'example');
+    expect(div.getAttribute('data-test')).toBe('example');
+  });
+});
+
+describe('DOM manipulation', () => {
+  it('appends child elements', () => {
+    const parent = document.createElement('div');
+    const child = document.createElement('span');
+    parent.appendChild(child);
+    expect(parent.children.length).toBe(1);
+  });
+
+  it('removes elements from DOM', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('p');
+    container.appendChild(element);
+    element.remove();
+    expect(container.children.length).toBe(0);
+  });
+});

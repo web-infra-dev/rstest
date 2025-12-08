@@ -13,6 +13,24 @@ export type BrowserHostConfig = {
   };
   testFile?: string;
   runnerUrl?: string;
+  testFiles?: string[];
+};
+
+export type BrowserClientTestResult = {
+  testId: string;
+  status: 'skip' | 'pass' | 'fail' | 'todo';
+  name: string;
+  testPath: string;
+  parentNames?: string[];
+  location?: {
+    line: number;
+    column?: number;
+    file?: string;
+  };
+};
+
+export type BrowserClientFileResult = BrowserClientTestResult & {
+  results: BrowserClientTestResult[];
 };
 
 export type BrowserClientMessage =
@@ -22,8 +40,12 @@ export type BrowserClientMessage =
       payload: { testPath: string; projectName: string };
     }
   | {
+      type: 'case-result';
+      payload: BrowserClientTestResult;
+    }
+  | {
       type: 'file-complete';
-      payload: { testPath: string; status: 'pass' | 'fail' | 'skip' };
+      payload: BrowserClientFileResult;
     }
   | {
       type: 'fatal';

@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'sm' | 'md';
+  asChild?: boolean;
 };
 
 export const Button: React.ForwardRefExoticComponent<
@@ -11,6 +12,7 @@ export const Button: React.ForwardRefExoticComponent<
 > = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
+      asChild = false,
       className,
       variant = 'default',
       size = 'md',
@@ -19,8 +21,17 @@ export const Button: React.ForwardRefExoticComponent<
     },
     ref,
   ) => {
+    const Comp: React.ElementType = asChild && React.isValidElement(props.children)
+      ? (props.children as React.ReactElement).type
+      : 'button';
+
+    const childProps =
+      asChild && React.isValidElement(props.children)
+        ? (props.children as React.ReactElement).props
+        : {};
+
     return (
-      <button
+      <Comp
         ref={ref}
         type={type}
         className={cn(
@@ -32,8 +43,10 @@ export const Button: React.ForwardRefExoticComponent<
           variant === 'ghost' && 'hover:bg-muted text-foreground',
           size === 'md' && 'px-3 py-2 text-sm',
           size === 'sm' && 'px-2.5 py-1.5 text-xs',
+          childProps?.className,
           className,
         )}
+        {...childProps}
         {...props}
       />
     );
