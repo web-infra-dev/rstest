@@ -1,10 +1,11 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import {
-  Check,
+  CheckCircle2,
+  ChevronRight,
   ExternalLink,
-  File,
   Globe,
   Loader2,
+  Minus,
   Moon,
   Play,
   RefreshCw,
@@ -13,9 +14,16 @@ import {
   Sun,
   XCircle,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Button } from './components/ui/button';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from './components/ui/accordion';
+import { Progress } from './components/ui/progress';
 import { ScrollArea } from './components/ui/scroll-area';
 import {
   ResizableHandle,
@@ -29,7 +37,12 @@ import {
   TooltipTrigger,
 } from './components/ui/tooltip';
 import { cn } from './lib/utils';
-import type { BrowserClientMessage, BrowserHostConfig } from './types';
+import type {
+  BrowserClientFileResult,
+  BrowserClientMessage,
+  BrowserClientTestResult,
+  BrowserHostConfig,
+} from './types';
 import './index.css';
 
 type HostRPC = {
@@ -76,13 +89,48 @@ const statusMeta: Record<
     label: 'Pass',
     accentBg: 'rgba(74,222,128,0.14)',
     accentColor: '#4ade80',
-    icon: <Check size={16} strokeWidth={2.1} />,
+    icon: <CheckCircle2 size={16} strokeWidth={2.1} />,
   },
   fail: {
     label: 'Fail',
     accentBg: 'rgba(248,113,113,0.16)',
     accentColor: '#f87171',
     icon: <XCircle size={16} strokeWidth={2.1} />,
+  },
+};
+
+type CaseStatus = TestStatus | 'skip';
+
+type CaseInfo = {
+  id: string;
+  label: string;
+  status: CaseStatus;
+  filePath: string;
+  location?: {
+    line: number;
+    column?: number;
+    file?: string;
+  };
+};
+
+const caseStatusMeta: Record<
+  CaseStatus,
+  {
+    label: string;
+    accentBg: string;
+    accentColor: string;
+    icon: React.ReactNode;
+  }
+> = {
+  idle: statusMeta.idle,
+  running: statusMeta.running,
+  pass: statusMeta.pass,
+  fail: statusMeta.fail,
+  skip: {
+    label: 'Skip',
+    accentBg: 'rgba(148,163,184,0.14)',
+    accentColor: '#9ca3af',
+    icon: <Minus size={16} strokeWidth={2.1} />,
   },
 };
 
@@ -153,6 +201,16 @@ const getDisplayName = (testFile: string) => {
   return parts[parts.length - 1] || testFile;
 };
 
+const formatOpenTarget = (
+  file: string,
+  location?: { line: number; column?: number; file?: string },
+) => {
+  if (!location?.line) return file;
+  const base = location.file || file;
+  const suffix = location.column ? `${location.line}:${location.column}` : `${location.line}`;
+  return `${base}:${suffix}`;
+};
+
 const iframeUrlFor = (testFile: string, runnerBase?: string) => {
   const base = runnerBase || window.location.origin;
   const url = new URL('/runner.html', base);
@@ -168,6 +226,10 @@ const App: React.FC = () => {
   const [testFiles, setTestFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
+  const [caseMap, setCaseMap] = useState<Record<string, Record<string, CaseInfo>>>(
+    {},
+  );
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const rpc = useRpc(setTestFiles, options?.testFiles || [], canUseRpc);
 
@@ -206,14 +268,74 @@ const App: React.FC = () => {
   }, [testFiles]);
 
   useEffect(() => {
+    setCaseMap((prev) => {
+      const next = { ...prev };
+      for (const file of testFiles) {
+        next[file] = next[file] ?? {};
+      }
+      return next;
+    });
+  }, [testFiles]);
+
+  useEffect(() => {
+    setOpenFiles((prev) => prev.filter((file) => testFiles.includes(file)));
+  }, [testFiles]);
+
+  useEffect(() => {
     if (!active && testFiles.length > 0) {
       setActive(testFiles[0]!);
     }
   }, [active, testFiles]);
 
+  useEffect(() => {
+    if (active) {
+      setOpenFiles((prev) =>
+        prev.includes(active) ? prev : [...prev, active],
+      );
+    }
+  }, [active]);
+
+  const mapCaseStatus = useCallback(
+    (status?: BrowserClientTestResult['status']): CaseStatus => {
+      if (status === 'pass') return 'pass';
+      if (status === 'fail') return 'fail';
+      if (status === 'skip' || status === 'todo') return 'skip';
+      return 'running';
+    },
+    [],
+  );
+
   const handleSelect = (file: string) => {
     setActive(file);
   };
+
+  const upsertCase = useCallback(
+    (
+      filePath: string,
+      payload: BrowserClientTestResult,
+      statusOverride?: CaseStatus,
+    ) => {
+      const labelParts = [...(payload.parentNames ?? []), payload.name].filter(Boolean);
+      const label = labelParts.join(' / ') || payload.name;
+      setCaseMap((prev) => {
+        const prevFile = prev[filePath] ?? {};
+        return {
+          ...prev,
+          [filePath]: {
+            ...prevFile,
+          [payload.testId]: {
+            id: payload.testId,
+            label,
+            status: statusOverride ?? mapCaseStatus(payload.status),
+            filePath: payload.testPath || filePath,
+            location: payload.location,
+          },
+        },
+      };
+    });
+  },
+    [mapCaseStatus],
+  );
 
   const handleRerunFile = async (file: string) => {
     if (rpc) {
@@ -236,19 +358,27 @@ const App: React.FC = () => {
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
             setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
+            setCaseMap((prev) => ({ ...prev, [testPath]: {} }));
+          }
+        } else if (message?.type === 'case-result') {
+          const payload = message.payload as BrowserClientTestResult;
+          if (payload?.testPath) {
+            upsertCase(payload.testPath, payload);
           }
         } else if (message?.type === 'file-complete') {
-          const payload = message.payload as {
-            testPath?: string;
-            status?: 'pass' | 'fail' | 'skip';
-          };
+          const payload = message.payload as BrowserClientFileResult;
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
-            const passed = payload.status === 'pass';
+            const passed = payload.status === 'pass' || payload.status === 'skip';
             setStatusMap((prev) => ({
               ...prev,
               [testPath]: passed ? 'pass' : 'fail',
             }));
+            (payload.results ?? []).forEach((result) => {
+              if (result?.testPath) {
+                upsertCase(result.testPath, result);
+              }
+            });
           }
         } else if (message?.type === 'fatal') {
           if (active) {
@@ -260,7 +390,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active]);
+  }, [active, upsertCase]);
 
   if (!options) {
     return (
@@ -271,10 +401,10 @@ const App: React.FC = () => {
   }
 
   const counts = {
-    total: testFiles.length,
     pass: Object.values(statusMap).filter((s) => s === 'pass').length,
     fail: Object.values(statusMap).filter((s) => s === 'fail').length,
   };
+  const completedTotal = counts.pass + counts.fail;
 
   return (
     <TooltipProvider delayDuration={120}>
@@ -295,7 +425,7 @@ const App: React.FC = () => {
                   />
                   <div className="brand-text">
                     <span className="brand-title">Browser Tests</span>
-                    <span className="brand-subtitle">Live runner</span>
+                    <span className="brand-subtitle" aria-hidden="true" />
                   </div>
                 </div>
                 <div className="actions">
@@ -310,7 +440,7 @@ const App: React.FC = () => {
                         {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>切换主题</TooltipContent>
+                    <TooltipContent>Toggle theme</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -324,17 +454,22 @@ const App: React.FC = () => {
                         <RefreshCw size={14} />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>重新运行当前文件</TooltipContent>
+                    <TooltipContent>Re-run active file</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
 
-              <div className="sidebar-stats">
+              <div
+                className="sidebar-stats"
+              >
+                <Progress
+                  className="sidebar-progress-bar"
+                  value={completedTotal === 0 ? 0 : counts.pass}
+                  max={completedTotal}
+                />
                 <div className="stat">
-                  <File size={14} /> <span>{counts.total} files</span>
-                </div>
-                <div className="stat">
-                  <Check size={14} color="#4ade80" /> <span>{counts.pass} passed</span>
+                  <CheckCircle2 size={14} color="#4ade80" />{' '}
+                  <span>{counts.pass} passed</span>
                 </div>
                 <div className="stat">
                   <XCircle size={14} color="#f87171" /> <span>{counts.fail} failed</span>
@@ -359,77 +494,158 @@ const App: React.FC = () => {
                 {testFiles.length === 0 ? (
                   <div className="empty">No test files detected</div>
                 ) : (
-                  <div className="file-list">
+                  <Accordion
+                    type="multiple"
+                    className="file-list"
+                    value={openFiles}
+                    onValueChange={(value) =>
+                      setOpenFiles(
+                        Array.isArray(value)
+                          ? value
+                          : value
+                            ? [value]
+                            : [],
+                      )
+                    }
+                  >
                     {testFiles.map((file) => {
                       const status = statusMap[file] ?? 'idle';
                       const meta = statusMeta[status];
                       const relativePath = toRelativePath(file, options.rootPath);
+                      const cases = Object.values(caseMap[file] ?? {});
                       return (
-                        <button
-                          key={file}
-                          type="button"
-                          className={cn(
-                            'file-row',
-                            active === file && 'file-row-active',
-                          )}
-                          onClick={() => handleSelect(file)}
-                          aria-pressed={active === file}
-                        >
+                        <AccordionItem value={file} key={file}>
                           <div
-                            className="file-status"
-                            style={{
-                              background: meta.accentBg,
-                              color: meta.accentColor,
-                            }}
-                            aria-hidden="true"
+                            className={cn(
+                              'file-row',
+                              active === file && 'file-row-active',
+                            )}
                           >
-                            {meta.icon}
-                          </div>
-                          <div className="file-content">
-                            <div className="file-title-row">
-                              <span className="file-name">{getDisplayName(file)}</span>
-                              <span
-                                className="file-status-label"
-                                style={{ color: meta.accentColor }}
-                              >
-                                {meta.label}
-                              </span>
-                            </div>
-                            <div className="file-path-row">
-                              <button
-                                type="button"
-                                className="file-path-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openInEditor(file);
+                            <AccordionTrigger asChild value={file}>
+                              <div
+                                className="file-row-header"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => handleSelect(file)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    handleSelect(file);
+                                  }
                                 }}
-                                title={relativePath}
                               >
-                                <span className="truncate">{relativePath}</span>
-                              </button>
-                              <ExternalLink size={12} className="file-path-icon" />
+                                <ChevronRight
+                                  size={14}
+                                  className="file-chevron"
+                                  aria-hidden="true"
+                                />
+                              <div
+                                className="file-status"
+                                style={{
+                                    background: 'transparent',
+                                    color: meta.accentColor,
+                                }}
+                                aria-hidden="true"
+                              >
+                                {meta.icon}
+                              </div>
+                                <div className="file-content">
+                                  <div className="file-title-row">
+                                    <span className="file-name">{getDisplayName(file)}</span>
+                                  </div>
+                                  <div className="file-path-row">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                    className="file-path-link"
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openInEditor(file);
+                                    }}
+                                    title={relativePath}
+                                  >
+                                    <span className="truncate">{relativePath}</span>
+                                  </Button>
+                                    <ExternalLink size={14} className="file-path-icon" />
+                                  </div>
+                                </div>
+                              </div>
+                            </AccordionTrigger>
+                            <div className="file-row-actions">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                  className="file-rerun p-0"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleRerunFile(file);
+                                  }}
+                                  aria-label={`Rerun ${getDisplayName(file)}`}
+                                  >
+                                    <RotateCw size={20} />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Re-run this file</TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                className="file-rerun"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleRerunFile(file);
-                                }}
-                                aria-label={`Rerun ${getDisplayName(file)}`}
-                              >
-                                <RotateCw size={14} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>重新运行该文件</TooltipContent>
-                          </Tooltip>
-                        </button>
+                          <AccordionContent value={file}>
+                            <div className="case-list">
+                              {cases.length === 0 ? (
+                                <div className="case-empty">No test cases reported yet</div>
+                              ) : (
+                                cases.map((testCase) => {
+                                  const caseMeta = caseStatusMeta[testCase.status];
+                                  return (
+                                    <div className="case-row" key={testCase.id}>
+                                      <div
+                                        className="case-status"
+                                        style={{
+                                          background: 'transparent',
+                                          color: caseMeta.accentColor,
+                                        }}
+                                        aria-hidden="true"
+                                      >
+                                        {caseMeta.icon}
+                                      </div>
+                                      <div className="case-label">{testCase.label}</div>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="case-open-editor p-0"
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              openInEditor(
+                                                formatOpenTarget(
+                                                  testCase.filePath,
+                                                  testCase.location,
+                                                ),
+                                              );
+                                            }}
+                                            aria-label={`Open ${testCase.label} in editor`}
+                                          >
+                                            <ExternalLink size={20} />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Open in editor</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
                       );
                     })}
-                  </div>
+                  </Accordion>
                 )}
               </ScrollArea>
             </div>
@@ -464,7 +680,9 @@ const App: React.FC = () => {
                 <div className="iframe-shell">
                   {!active && (
                     <div className="placeholder">
-                      <p className="placeholder-text">请选择左侧的测试文件以查看运行画面</p>
+                      <p className="placeholder-text">
+                        Select a test file on the left to view its run output
+                      </p>
                     </div>
                   )}
                   <div className="iframe-stack">
