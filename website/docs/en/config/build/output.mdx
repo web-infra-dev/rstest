@@ -37,6 +37,38 @@ export default defineConfig({
 });
 ```
 
+### Specify external type
+
+You can use `${externalsType} ${libraryName}` syntax to specify the external type of a dependency.
+
+For example, you can use `commonjs lodash` to specify that `lodash` should be externalized as a CommonJS module:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: {
+      lodash: 'commonjs lodash',
+    },
+  },
+});
+```
+
+You can also specify the default external type for all dependencies through the [`externalsType` configuration option](https://rspack.rs/config/externals#externalstype).
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      externalsType: 'commonjs',
+    },
+  },
+});
+```
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 For custom CSS Modules configuration.
