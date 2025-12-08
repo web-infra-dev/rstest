@@ -56,7 +56,8 @@
     "@rsbuild/core": "1.6.12-canary-20251204065915",
     "tinypool": "^1.1.1",
     "playwright-core": "^1.49.1",
-    "sirv": "^2.0.4"
+    "sirv": "^2.0.4",
+    "open-editor": "^4.0.0"
   },
   "devDependencies": {
     "@rstest/browser-ui": "workspace:*",
