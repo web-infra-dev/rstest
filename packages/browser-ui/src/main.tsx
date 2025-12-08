@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { createBirpc } from 'birpc';
+import { createBirpc, type BirpcReturn } from 'birpc';
 import {
   CheckCircle2,
   File,
@@ -37,8 +37,16 @@ type ContainerWindow = Window &
 
 type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
 
-const useRpc = (setTestFiles: (files: string[]) => void) => {
+const useRpc = (
+  setTestFiles: (files: string[]) => void,
+  initialTestFiles: string[],
+  enabled: boolean,
+): BirpcReturn<HostRPC, ContainerRPC> | null => {
   const rpc = useMemo(() => {
+    if (!enabled) {
+      return null;
+    }
+
     const methods: ContainerRPC = {
       onTestFileUpdate(files: string[]) {
         setTestFiles(files);
@@ -53,11 +61,21 @@ const useRpc = (setTestFiles: (files: string[]) => void) => {
         (window as ContainerWindow).__rstest_container_on__ = fn;
       },
     });
-  }, [setTestFiles]);
+  }, [enabled, setTestFiles]);
 
   useEffect(() => {
-    rpc.getTestFiles().then((files) => setTestFiles(files));
-  }, [rpc, setTestFiles]);
+    if (!rpc) {
+      if (initialTestFiles.length > 0) {
+        setTestFiles(initialTestFiles);
+      }
+      return;
+    }
+
+    rpc
+      .getTestFiles()
+      .then((files) => setTestFiles(files))
+      .catch(() => setTestFiles(initialTestFiles));
+  }, [initialTestFiles, rpc, setTestFiles]);
 
   return rpc;
 };
@@ -76,10 +94,17 @@ const iframeUrlFor = (testFile: string, runnerBase?: string) => {
 
 const App: React.FC = () => {
   const options = (window as ContainerWindow).__RSTEST_BROWSER_OPTIONS__;
+  const canUseRpc = Boolean(
+    (window as ContainerWindow).__rstest_container_dispatch__,
+  );
   const [testFiles, setTestFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
-  const rpc = useRpc(setTestFiles);
+  const rpc = useRpc(
+    setTestFiles,
+    options?.testFiles || [],
+    canUseRpc,
+  );
 
   useEffect(() => {
     console.log('[Container] __RSTEST_BROWSER_OPTIONS__', options);
@@ -106,7 +131,7 @@ const App: React.FC = () => {
   };
 
   const handleRerun = async () => {
-    if (active) {
+    if (active && rpc) {
       await rpc.rerunTest(active);
     }
   };
@@ -170,7 +195,13 @@ const App: React.FC = () => {
                 <Globe size={18} /> Browser Tests
               </span>
             </CardTitle>
-            <Button onClick={handleRerun} size="sm" variant="outline" className="border-border text-foreground">
+            <Button
+              onClick={handleRerun}
+              size="sm"
+              variant="outline"
+              className="border-border text-foreground"
+              disabled={!rpc}
+            >
               <RefreshCw size={14} /> Re-run
             </Button>
           </div>
