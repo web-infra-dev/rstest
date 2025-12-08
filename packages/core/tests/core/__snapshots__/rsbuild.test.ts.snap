@@ -17,10 +17,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "typeReexportsPresence": true,
   },
   "externals": [
+    [Function],
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
   ],
   "externalsPresets": {
     "node": false,
@@ -554,10 +554,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "typeReexportsPresence": true,
   },
   "externals": [
+    [Function],
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
     [Function],
   ],
   "externalsPresets": {
@@ -1083,10 +1083,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     "typeReexportsPresence": true,
   },
   "externals": [
+    [Function],
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
     [Function],
   ],
   "externalsPresets": {
@@ -1620,10 +1620,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "typeReexportsPresence": true,
   },
   "externals": [
+    [Function],
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
   ],
   "externalsPresets": {
     "node": false,
@@ -2157,10 +2157,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "typeReexportsPresence": true,
   },
   "externals": [
+    [Function],
     {
       "@rstest/core": "global @rstest/core",
     },
-    [Function],
     [Function],
   ],
   "externalsPresets": {
