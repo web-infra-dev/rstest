@@ -23,7 +23,7 @@ export type BrowserClientMessage =
     }
   | {
       type: 'file-complete';
-      payload: { testPath: string; status: string; [key: string]: unknown };
+      payload: { testPath: string; status: 'pass' | 'fail' | 'skip' };
     }
   | {
       type: 'fatal';
