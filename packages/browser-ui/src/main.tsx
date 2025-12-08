@@ -1,42 +1,23 @@
+import {
+  App as AntdApp,
+  theme as antdTheme,
+  ConfigProvider,
+  Tree,
+  Typography,
+} from 'antd';
+import type { DataNode } from 'antd/es/tree';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import {
   CheckCircle2,
-  ChevronRight,
-  ExternalLink,
-  Globe,
+  ChevronDown,
   Loader2,
   Minus,
-  Moon,
-  Play,
-  RefreshCw,
-  RotateCw,
   Sparkles,
-  Sun,
   XCircle,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Button } from './components/ui/button';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from './components/ui/accordion';
-import { Progress } from './components/ui/progress';
-import { ScrollArea } from './components/ui/scroll-area';
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from './components/ui/resizable';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from './components/ui/tooltip';
-import { cn } from './lib/utils';
+import { ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
 import type {
   BrowserClientFileResult,
   BrowserClientMessage,
@@ -44,6 +25,15 @@ import type {
   BrowserHostConfig,
 } from './types';
 import './index.css';
+import { EmptyPreviewOverlay } from './components/browser/EmptyPreviewOverlay';
+import { PreviewHeader } from './components/browser/PreviewHeader';
+import { SidebarHeader } from './components/browser/SidebarHeader';
+import { StatsBar } from './components/browser/StatsBar';
+import { TestCaseTitle } from './components/browser/TestCaseTitle';
+import { TestFilesHeader } from './components/browser/TestFilesHeader';
+import { TestFileTitle } from './components/browser/TestFileTitle';
+
+const { Text } = Typography;
 
 type HostRPC = {
   rerunTest: (testFile: string) => Promise<void>;
@@ -68,33 +58,28 @@ const statusMeta: Record<
   TestStatus,
   {
     label: string;
-    accentBg: string;
-    accentColor: string;
+    color: string;
     icon: React.ReactNode;
   }
 > = {
   idle: {
     label: 'Idle',
-    accentBg: 'rgba(255,255,255,0.06)',
-    accentColor: '#d1d5db',
+    color: '#d1d5db',
     icon: <Sparkles size={16} strokeWidth={2.1} />,
   },
   running: {
     label: 'Running',
-    accentBg: 'rgba(227,179,65,0.16)',
-    accentColor: '#f2c94c',
+    color: '#f2c94c',
     icon: <Loader2 size={16} className="animate-spin" strokeWidth={2.1} />,
   },
   pass: {
     label: 'Pass',
-    accentBg: 'rgba(74,222,128,0.14)',
-    accentColor: '#4ade80',
+    color: '#4ade80',
     icon: <CheckCircle2 size={16} strokeWidth={2.1} />,
   },
   fail: {
     label: 'Fail',
-    accentBg: 'rgba(248,113,113,0.16)',
-    accentColor: '#f87171',
+    color: '#f87171',
     icon: <XCircle size={16} strokeWidth={2.1} />,
   },
 };
@@ -117,8 +102,7 @@ const caseStatusMeta: Record<
   CaseStatus,
   {
     label: string;
-    accentBg: string;
-    accentColor: string;
+    color: string;
     icon: React.ReactNode;
   }
 > = {
@@ -128,8 +112,7 @@ const caseStatusMeta: Record<
   fail: statusMeta.fail,
   skip: {
     label: 'Skip',
-    accentBg: 'rgba(148,163,184,0.14)',
-    accentColor: '#9ca3af',
+    color: '#9ca3af',
     icon: <Minus size={16} strokeWidth={2.1} />,
   },
 };
@@ -207,7 +190,9 @@ const formatOpenTarget = (
 ) => {
   if (!location?.line) return file;
   const base = location.file || file;
-  const suffix = location.column ? `${location.line}:${location.column}` : `${location.line}`;
+  const suffix = location.column
+    ? `${location.line}:${location.column}`
+    : `${location.line}`;
   return `${base}:${suffix}`;
 };
 
@@ -218,44 +203,23 @@ const iframeUrlFor = (testFile: string, runnerBase?: string) => {
   return url.toString();
 };
 
-const App: React.FC = () => {
-  const options = (window as ContainerWindow).__RSTEST_BROWSER_OPTIONS__;
+const BrowserRunner: React.FC<{
+  options: BrowserHostConfig;
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
+}> = ({ options, theme, setTheme }) => {
+  const { token } = antdTheme.useToken();
   const canUseRpc = Boolean(
     (window as ContainerWindow).__rstest_container_dispatch__,
   );
   const [testFiles, setTestFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
-  const [caseMap, setCaseMap] = useState<Record<string, Record<string, CaseInfo>>>(
-    {},
-  );
+  const [caseMap, setCaseMap] = useState<
+    Record<string, Record<string, CaseInfo>>
+  >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const rpc = useRpc(setTestFiles, options?.testFiles || [], canUseRpc);
-
-  useEffect(() => {
-    console.log('[Container] __RSTEST_BROWSER_OPTIONS__', options);
-  }, [options]);
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem('rstest-theme');
-      if (stored === 'light' || stored === 'dark') {
-        setTheme(stored);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-    try {
-      window.localStorage.setItem('rstest-theme', theme);
-    } catch {
-      // ignore
-    }
-  }, [theme]);
 
   useEffect(() => {
     setStatusMap((prev) => {
@@ -315,7 +279,9 @@ const App: React.FC = () => {
       payload: BrowserClientTestResult,
       statusOverride?: CaseStatus,
     ) => {
-      const labelParts = [...(payload.parentNames ?? []), payload.name].filter(Boolean);
+      const labelParts = [...(payload.parentNames ?? []), payload.name].filter(
+        Boolean,
+      );
       const label = labelParts.join(' / ') || payload.name;
       setCaseMap((prev) => {
         const prevFile = prev[filePath] ?? {};
@@ -323,31 +289,45 @@ const App: React.FC = () => {
           ...prev,
           [filePath]: {
             ...prevFile,
-          [payload.testId]: {
-            id: payload.testId,
-            label,
-            status: statusOverride ?? mapCaseStatus(payload.status),
-            filePath: payload.testPath || filePath,
-            location: payload.location,
+            [payload.testId]: {
+              id: payload.testId,
+              label,
+              status: statusOverride ?? mapCaseStatus(payload.status),
+              filePath: payload.testPath || filePath,
+              location: payload.location,
+            },
           },
-        },
-      };
-    });
-  },
+        };
+      });
+    },
     [mapCaseStatus],
   );
 
-  const handleRerunFile = async (file: string) => {
-    if (rpc) {
-      await rpc.rerunTest(file);
-    }
-  };
+  const handleRerunFile = useCallback(
+    async (file: string) => {
+      if (rpc) {
+        await rpc.rerunTest(file);
+      }
+    },
+    [rpc],
+  );
 
-  const handleRerun = async () => {
+  const handleRerunTestCase = useCallback(
+    async (file: string) => {
+      // For now, rerun the entire file
+      // TODO: support rerunning a single test case
+      if (rpc) {
+        await rpc.rerunTest(file);
+      }
+    },
+    [rpc],
+  );
+
+  const handleRerun = useCallback(async () => {
     if (active && rpc) {
       await rpc.rerunTest(active);
     }
-  };
+  }, [active, rpc]);
 
   useEffect(() => {
     const listener = (event: MessageEvent) => {
@@ -369,7 +349,8 @@ const App: React.FC = () => {
           const payload = message.payload as BrowserClientFileResult;
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
-            const passed = payload.status === 'pass' || payload.status === 'skip';
+            const passed =
+              payload.status === 'pass' || payload.status === 'skip';
             setStatusMap((prev) => ({
               ...prev,
               [testPath]: passed ? 'pass' : 'fail',
@@ -392,332 +373,303 @@ const App: React.FC = () => {
     return () => window.removeEventListener('message', listener);
   }, [active, upsertCase]);
 
-  if (!options) {
-    return (
-      <div className="app-shell" style={{ color: 'white' }}>
-        Missing browser options
-      </div>
-    );
-  }
-
   const counts = {
     pass: Object.values(statusMap).filter((s) => s === 'pass').length,
     fail: Object.values(statusMap).filter((s) => s === 'fail').length,
   };
   const completedTotal = counts.pass + counts.fail;
+  const successPercent =
+    completedTotal === 0 ? 0 : (counts.pass / completedTotal) * 100;
+  const progressPercent = completedTotal === 0 ? 0 : 100;
+  const isDark = theme === 'dark';
+  const themeSwitchLabel = isDark
+    ? 'Switch to light theme'
+    : 'Switch to dark theme';
+
+  const treeData: DataNode[] = useMemo(
+    () =>
+      testFiles.map((file) => {
+        const status = statusMap[file] ?? 'idle';
+        const meta = statusMeta[status];
+        const relativePath = toRelativePath(file, options.rootPath);
+        const cases = Object.values(caseMap[file] ?? {});
+        const children: DataNode[] =
+          cases.length === 0
+            ? [
+                {
+                  key: `${file}::__empty`,
+                  title: (
+                    <Text type="secondary" className="text-xs">
+                      No test cases reported yet
+                    </Text>
+                  ),
+                  isLeaf: true,
+                  selectable: false,
+                },
+              ]
+            : cases.map((testCase) => {
+                const caseMeta = caseStatusMeta[testCase.status];
+                return {
+                  key: `${file}::${testCase.id}`,
+                  title: (
+                    <TestCaseTitle
+                      icon={caseMeta.icon}
+                      iconColor={caseMeta.color}
+                      label={testCase.label}
+                      onRerun={() => {
+                        void handleRerunTestCase(file);
+                      }}
+                      buttonTextColor={token.colorTextSecondary}
+                    />
+                  ),
+                  isLeaf: true,
+                  selectable: false,
+                };
+              });
+
+        return {
+          key: file,
+          title: (
+            <TestFileTitle
+              icon={meta.icon}
+              iconColor={meta.color}
+              relativePath={relativePath}
+              onOpen={() => openInEditor(file)}
+              onRerun={() => {
+                void handleRerunFile(file);
+              }}
+              textColor={token.colorTextSecondary}
+            />
+          ),
+          children,
+        };
+      }),
+    [
+      caseMap,
+      handleRerunFile,
+      handleRerunTestCase,
+      options.rootPath,
+      statusMap,
+      testFiles,
+      token,
+    ],
+  );
 
   return (
-    <TooltipProvider delayDuration={120}>
-      <div className="app-shell">
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="h-full w-full"
-          autoSaveId="rstest-split"
-        >
-          <ResizablePanel defaultSize={32} minSize={20} maxSize={50}>
-            <div className="sidebar">
-              <div className="sidebar-top">
-                <div className="brand">
-                  <img
-                    src="https://assets.rspack.rs/rstest/rstest-logo-512x512.png"
-                    alt="rstest logo"
-                    className="brand-logo"
-                  />
-                  <div className="brand-text">
-                    <span className="brand-title">Browser Tests</span>
-                    <span className="brand-subtitle" aria-hidden="true" />
-                  </div>
-                </div>
-                <div className="actions">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                        aria-label="Toggle theme"
-                      >
-                        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Toggle theme</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRerun}
-                        disabled={!rpc}
-                        aria-label="Re-run active file"
-                      >
-                        <RefreshCw size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Re-run active file</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
+    <div
+      className="m-0 h-screen w-full overflow-hidden p-0"
+      style={{ background: token.colorBgContainer }}
+    >
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="h-full w-full"
+        autoSaveId="rstest-split"
+      >
+        <ResizablePanel defaultSize={32} minSize={20} maxSize={50}>
+          <div
+            className="m-0 flex h-full flex-col overflow-hidden"
+            style={{
+              borderRight: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorBgContainer,
+            }}
+          >
+            <div
+              className="p-0"
+              style={{
+                background: token.colorBgContainer,
+              }}
+            >
+              <SidebarHeader
+                themeSwitchLabel={themeSwitchLabel}
+                isDark={isDark}
+                onThemeToggle={(checked: boolean) =>
+                  setTheme(checked ? 'dark' : 'light')
+                }
+                onRerun={handleRerun}
+                canUseRpc={Boolean(rpc)}
+                token={token}
+                progressPercent={progressPercent}
+                successPercent={successPercent}
+              />
+            </div>
 
-              <div
-                className="sidebar-stats"
-              >
-                <Progress
-                  className="sidebar-progress-bar"
-                  value={completedTotal === 0 ? 0 : counts.pass}
-                  max={completedTotal}
-                />
-                <div className="stat">
-                  <CheckCircle2 size={14} color="#4ade80" />{' '}
-                  <span>{counts.pass} passed</span>
-                </div>
-                <div className="stat">
-                  <XCircle size={14} color="#f87171" /> <span>{counts.fail} failed</span>
-                </div>
-              </div>
+            <StatsBar
+              passCount={counts.pass}
+              failCount={counts.fail}
+              borderColor={token.colorBorderSecondary}
+              background={token.colorFillQuaternary}
+            />
 
-              <div className="sidebar-section">
-                <span className="section-title">Test files</span>
-                <div className="live">
-                  {canUseRpc ? (
-                    <>
-                      <span className="live-dot" />
-                      Live
-                    </>
-                  ) : (
-                    'Static'
-                  )}
-                </div>
-              </div>
+            <TestFilesHeader canUseRpc={canUseRpc} token={token} />
 
-              <ScrollArea className="sidebar-list">
-                {testFiles.length === 0 ? (
-                  <div className="empty">No test files detected</div>
-                ) : (
-                  <Accordion
-                    type="multiple"
-                    className="file-list"
-                    value={openFiles}
-                    onValueChange={(value) =>
-                      setOpenFiles(
-                        Array.isArray(value)
-                          ? value
-                          : value
-                            ? [value]
-                            : [],
-                      )
+            <div
+              className="m-0 flex-1 overflow-x-hidden overflow-y-auto p-0"
+              style={{
+                background: token.colorBgContainer,
+              }}
+            >
+              {testFiles.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <Text type="secondary">No test files detected</Text>
+                </div>
+              ) : (
+                <Tree
+                  blockNode
+                  showLine={false}
+                  switcherIcon={<ChevronDown size={12} />}
+                  showIcon
+                  expandAction="click"
+                  expandedKeys={openFiles}
+                  selectedKeys={active ? [active] : []}
+                  onExpand={(keys) =>
+                    setOpenFiles(
+                      (keys as React.Key[]).filter(
+                        (key): key is string => typeof key === 'string',
+                      ),
+                    )
+                  }
+                  onSelect={(_keys, info) => {
+                    const key = info.node.key;
+                    if (typeof key === 'string' && testFiles.includes(key)) {
+                      handleSelect(key);
                     }
-                  >
-                    {testFiles.map((file) => {
-                      const status = statusMap[file] ?? 'idle';
-                      const meta = statusMeta[status];
-                      const relativePath = toRelativePath(file, options.rootPath);
-                      const cases = Object.values(caseMap[file] ?? {});
-                      return (
-                        <AccordionItem value={file} key={file}>
-                          <div
-                            className={cn(
-                              'file-row',
-                              active === file && 'file-row-active',
-                            )}
-                          >
-                            <AccordionTrigger asChild value={file}>
-                              <div
-                                className="file-row-header"
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => handleSelect(file)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault();
-                                    handleSelect(file);
-                                  }
-                                }}
-                              >
-                                <ChevronRight
-                                  size={14}
-                                  className="file-chevron"
-                                  aria-hidden="true"
-                                />
-                              <div
-                                className="file-status"
-                                style={{
-                                    background: 'transparent',
-                                    color: meta.accentColor,
-                                }}
-                                aria-hidden="true"
-                              >
-                                {meta.icon}
-                              </div>
-                                <div className="file-content">
-                                  <div className="file-title-row">
-                                    <span className="file-name">{getDisplayName(file)}</span>
-                                  </div>
-                                  <div className="file-path-row">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                    className="file-path-link"
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      openInEditor(file);
-                                    }}
-                                    title={relativePath}
-                                  >
-                                    <span className="truncate">{relativePath}</span>
-                                  </Button>
-                                    <ExternalLink size={14} className="file-path-icon" />
-                                  </div>
-                                </div>
-                              </div>
-                            </AccordionTrigger>
-                            <div className="file-row-actions">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                  className="file-rerun p-0"
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleRerunFile(file);
-                                  }}
-                                  aria-label={`Rerun ${getDisplayName(file)}`}
-                                  >
-                                    <RotateCw size={20} />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Re-run this file</TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                          <AccordionContent value={file}>
-                            <div className="case-list">
-                              {cases.length === 0 ? (
-                                <div className="case-empty">No test cases reported yet</div>
-                              ) : (
-                                cases.map((testCase) => {
-                                  const caseMeta = caseStatusMeta[testCase.status];
-                                  return (
-                                    <div className="case-row" key={testCase.id}>
-                                      <div
-                                        className="case-status"
-                                        style={{
-                                          background: 'transparent',
-                                          color: caseMeta.accentColor,
-                                        }}
-                                        aria-hidden="true"
-                                      >
-                                        {caseMeta.icon}
-                                      </div>
-                                      <div className="case-label">{testCase.label}</div>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="case-open-editor p-0"
-                                            type="button"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              openInEditor(
-                                                formatOpenTarget(
-                                                  testCase.filePath,
-                                                  testCase.location,
-                                                ),
-                                              );
-                                            }}
-                                            aria-label={`Open ${testCase.label} in editor`}
-                                          >
-                                            <ExternalLink size={20} />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Open in editor</TooltipContent>
-                                      </Tooltip>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
+                  }}
+                  treeData={treeData}
+                  className="m-1! bg-transparent"
+                />
+              )}
+            </div>
+          </div>
+        </ResizablePanel>
+
+        <ResizablePanel defaultSize={68} minSize={40}>
+          <div
+            className="m-0 flex h-full flex-col overflow-hidden"
+            style={{
+              background: token.colorBgLayout,
+            }}
+          >
+            <div
+              className="p-0"
+              style={{
+                background: token.colorBgContainer,
+              }}
+            >
+              <PreviewHeader
+                token={token}
+                activeDisplayName={
+                  active ? getDisplayName(active) : 'Select a test file'
+                }
+                statusLabel={
+                  active
+                    ? statusMeta[statusMap[active] ?? 'idle'].label
+                    : undefined
+                }
+                statusColor={
+                  active
+                    ? statusMeta[statusMap[active] ?? 'idle'].color
+                    : undefined
+                }
+              />
+            </div>
+
+            <div
+              className="relative m-0 min-h-0 flex-1 p-0"
+              style={{
+                background: token.colorBgContainer,
+              }}
+            >
+              {!active && (
+                <EmptyPreviewOverlay message="Select a test file on the left to view its run output" />
+              )}
+              {testFiles.map((file) => (
+                <iframe
+                  key={file}
+                  data-test-file={file}
+                  title={`Test runner for ${getDisplayName(file)}`}
+                  src={iframeUrlFor(file, options.runnerUrl)}
+                  className="h-full w-full border-0"
+                  style={{
+                    display: file === active ? 'block' : 'none',
+                    background: token.colorBgContainer,
+                  }}
+                  onLoad={(event) => {
+                    const frame = event.currentTarget;
+                    if (frame.contentWindow) {
+                      frame.contentWindow.postMessage(
+                        {
+                          type: 'RSTEST_CONFIG',
+                          payload: {
+                            ...options,
+                            testFile: file,
+                          },
+                        },
+                        '*',
                       );
-                    })}
-                  </Accordion>
-                )}
-              </ScrollArea>
+                    }
+                  }}
+                />
+              ))}
             </div>
-          </ResizablePanel>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
+  );
+};
 
-          <ResizableHandle className="divider" />
+const App: React.FC = () => {
+  const options = (window as ContainerWindow).__RSTEST_BROWSER_OPTIONS__;
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-          <ResizablePanel defaultSize={68} minSize={40}>
-            <div className="main-pane">
-              <div className="main-header">
-                <div className="main-title">
-                  <div className="main-icon">
-                    <Play size={16} strokeWidth={2.2} />
-                  </div>
-                  <div className="main-text">
-                    <span className="main-eyebrow">Preview</span>
-                    <span className="main-name">
-                      {active ? getDisplayName(active) : 'Select a test file'}
-                    </span>
-                  </div>
-                </div>
-                {active && (
-                  <span
-                    className="main-status"
-                    style={{ color: statusMeta[statusMap[active] ?? 'idle'].accentColor }}
-                  >
-                    {statusMeta[statusMap[active] ?? 'idle'].label}
-                  </span>
-                )}
-              </div>
-              <div className="main-body">
-                <div className="iframe-shell">
-                  {!active && (
-                    <div className="placeholder">
-                      <p className="placeholder-text">
-                        Select a test file on the left to view its run output
-                      </p>
-                    </div>
-                  )}
-                  <div className="iframe-stack">
-                    {testFiles.map((file) => (
-                      <iframe
-                        key={file}
-                        className="test-runner-iframe"
-                        data-test-file={file}
-                        src={iframeUrlFor(file, options.runnerUrl)}
-                        style={{ display: file === active ? 'block' : 'none' }}
-                        onLoad={(event) => {
-                          const frame = event.currentTarget;
-                          if (frame.contentWindow) {
-                            frame.contentWindow.postMessage(
-                              {
-                                type: 'RSTEST_CONFIG',
-                                payload: {
-                                  ...options,
-                                  testFile: file,
-                                },
-                              },
-                              '*',
-                            );
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('rstest-theme');
+      if (stored === 'light' || stored === 'dark') {
+        setTheme(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    document.body.dataset.theme = theme;
+    try {
+      window.localStorage.setItem('rstest-theme', theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
+
+  if (!options) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-white">
+        Missing browser options
       </div>
-    </TooltipProvider>
+    );
+  }
+
+  const isDark = theme === 'dark';
+
+  return (
+    <ConfigProvider
+      componentSize="small"
+      theme={{
+        algorithm: isDark
+          ? antdTheme.darkAlgorithm
+          : antdTheme.defaultAlgorithm,
+        token: {
+          fontFamily:
+            '"Space Grotesk","Inter",system-ui,-apple-system,"Segoe UI",sans-serif',
+          colorInfo: isDark ? '#ffffff' : '#0f0f0f',
+        },
+      }}
+    >
+      <AntdApp>
+        <BrowserRunner options={options} theme={theme} setTheme={setTheme} />
+      </AntdApp>
+    </ConfigProvider>
   );
 };
 

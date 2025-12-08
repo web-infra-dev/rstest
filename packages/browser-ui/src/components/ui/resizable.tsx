@@ -1,37 +1,84 @@
 'use client';
 
+import { Splitter, type SplitterProps } from 'antd';
 import * as React from 'react';
-import {
-  PanelGroup,
-  Panel,
-  PanelResizeHandle,
-  type PanelGroupProps,
-  type PanelProps,
-  type PanelResizeHandleProps,
-} from 'react-resizable-panels';
-import { cn } from '../../lib/utils';
 
-const ResizablePanelGroup = ({ className, ...props }: PanelGroupProps) => (
-  <PanelGroup className={cn('h-full w-full', className)} {...props} />
-);
+type ResizablePanelGroupProps = Omit<SplitterProps, 'children'> & {
+  children: React.ReactNode;
+  direction?: 'horizontal' | 'vertical';
+  autoSaveId?: string;
+  className?: string;
+};
 
-const ResizablePanel = ({ className, ...props }: PanelProps) => (
-  <Panel className={cn('h-full', className)} {...props} />
-);
+type ResizablePanelProps = {
+  defaultSize?: number;
+  minSize?: number;
+  maxSize?: number;
+  className?: string;
+  children?: React.ReactNode;
+};
 
-const ResizableHandle = ({ className, ...props }: PanelResizeHandleProps) => (
-  <PanelResizeHandle
-    className={cn(
-      'group relative flex w-2 cursor-col-resize items-center justify-center bg-transparent transition-colors duration-200 hover:bg-[color:var(--muted)]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0',
-      className,
-    )}
-    {...props}
-  >
-    <span
-      className="pointer-events-none h-9 w-px rounded-full bg-[color:var(--foreground)]/30 transition-all duration-200 group-hover:scale-y-110 group-hover:bg-[color:var(--foreground)]/60"
-      aria-hidden="true"
-    />
-  </PanelResizeHandle>
-);
+const ResizablePanelGroup = ({
+  className,
+  style,
+  direction = 'horizontal',
+  children,
+  autoSaveId,
+  ...props
+}: ResizablePanelGroupProps): React.ReactElement => {
+  const panels = React.Children.toArray(children).filter(
+    (child): child is React.ReactElement<ResizablePanelProps> =>
+      React.isValidElement(child) && child.type === ResizablePanel,
+  );
+
+  const items = panels.map((panel) => {
+    const {
+      defaultSize,
+      minSize,
+      maxSize,
+      children: panelChildren,
+    } = panel.props;
+    return {
+      defaultSize: defaultSize ? `${defaultSize}%` : undefined,
+      min: minSize ? `${minSize}%` : undefined,
+      max: maxSize ? `${maxSize}%` : undefined,
+      children: panelChildren,
+    };
+  });
+
+  return (
+    <Splitter
+      layout={direction === 'horizontal' ? 'horizontal' : 'vertical'}
+      className={className}
+      style={{
+        height: '100%',
+        width: '100%',
+        padding: 0,
+        margin: 0,
+        ...style,
+      }}
+      {...props}
+    >
+      {items.map((item) => (
+        <Splitter.Panel
+          key={`panel-${item.defaultSize}-${item.min}-${item.max}`}
+          {...item}
+        >
+          {item.children}
+        </Splitter.Panel>
+      ))}
+    </Splitter>
+  );
+};
+
+const ResizablePanel = ({
+  children,
+}: ResizablePanelProps): React.ReactElement => {
+  return <>{children}</>;
+};
+
+const ResizableHandle = (): null => {
+  return null;
+};
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle };
