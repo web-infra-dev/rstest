@@ -17,6 +17,8 @@ export type ProjectContext = {
   environmentName: string;
   /** The root path of current project. */
   rootPath: string;
+  /** Whether to output es module. */
+  outputModule: boolean;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
 };

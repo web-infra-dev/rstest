@@ -66,6 +66,7 @@ export type WorkerContext = {
   project: string;
   runtimeConfig: RuntimeConfig;
   taskId: number;
+  outputModule: boolean;
 };
 
 export type RunWorkerOptions = {

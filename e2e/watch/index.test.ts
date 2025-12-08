@@ -14,9 +14,11 @@ rs.setConfig({
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
   it('test files should be ran when create / update / delete', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-0${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
-      fixturesTargetPath: `${__dirname}/fixtures-test-0`,
+      fixturesTargetPath,
     });
 
     const { cli } = await runRstestCli({
@@ -25,7 +27,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
       options: {
         nodeOptions: {
           env: { DEBUG: 'rstest' },
-          cwd: `${__dirname}/fixtures-test-0`,
+          cwd: fixturesTargetPath,
         },
       },
     });
@@ -36,10 +38,12 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     expect(cli.stdout).not.toMatch('Test files to re-run:');
     expect(cli.stdout).toMatch('Run all tests in project');
 
+    const testFilePath = path.join(fixturesTargetPath, 'bar.test.ts');
+
     // create
     cli.resetStd();
     fs.create(
-      './fixtures-test-0/bar.test.ts',
+      testFilePath,
       `import { describe, expect, it } from '@rstest/core';
        describe('bar', () => {
          it('bar should be to bar', () => {
@@ -54,7 +58,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
 
     // update
     cli.resetStd();
-    fs.update('./fixtures-test-0/bar.test.ts', (content) => {
+    fs.update(testFilePath, (content) => {
       return content.replace("toBe('bar')", "toBe('BAR')");
     });
 
@@ -65,7 +69,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
 
     // delete
     cli.resetStd();
-    fs.delete('./fixtures-test-0/bar.test.ts');
+    fs.delete(testFilePath);
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('No test files need re-run.');
     expect(cli.stdout).toMatch('Test Files 1 passed');

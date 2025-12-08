@@ -292,7 +292,7 @@ export interface RstestConfig {
 
   output?: Pick<
     NonNullable<RsbuildConfig['output']>,
-    'cssModules' | 'externals' | 'cleanDistPath'
+    'cssModules' | 'externals' | 'cleanDistPath' | 'module'
   >;
 
   resolve?: RsbuildConfig['resolve'];

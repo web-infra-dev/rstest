@@ -112,7 +112,12 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'output',
-    items: ['output.externals', 'output.cssModules', 'output.cleanDistPath'],
+    items: [
+      'output.module',
+      'output.externals',
+      'output.cssModules',
+      'output.cleanDistPath',
+    ],
   },
   {
     name: 'resolve',
