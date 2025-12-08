@@ -41,6 +41,22 @@
           "default": [
             "**/rstest.config.{mjs,ts,js,cjs,mts,cts}"
           ]
+        },
+        "rstest.testCaseCollectMethod": {
+          "type": "string",
+          "default": "ast",
+          "enum": [
+            "ast",
+            "runtime"
+          ],
+          "enumItemLabels": [
+            "Static AST Analyze",
+            "Run Test File"
+          ],
+          "enumDescriptions": [
+            "Fast, only supports basic test cases.",
+            "Slow, supports all test cases, including each/for/extend."
+          ]
         }
       }
     },

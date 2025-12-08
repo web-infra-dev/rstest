@@ -10,6 +10,10 @@ const configSchema = v.object({
   configFileGlobPattern: v.fallback(v.array(v.string()), [
     '**/rstest.config.{mjs,ts,js,cjs,mts,cts}',
   ]),
+  testCaseCollectMethod: v.fallback(
+    v.union([v.literal('ast'), v.literal('runtime')]),
+    'ast',
+  ),
 });
 
 export type ExtensionConfig = v.InferOutput<typeof configSchema>;

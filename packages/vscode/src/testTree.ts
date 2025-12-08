@@ -1,5 +1,7 @@
 import { TextDecoder } from 'node:util';
+import type { TestInfo } from '@rstest/core';
 import vscode from 'vscode';
+import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { logger } from './logger';
 import type { RstestApi } from './master';
 import { parseTestFile } from './parserTest';
@@ -53,6 +55,7 @@ export class TestFile {
   constructor(
     public api: RstestApi,
     public uri: vscode.Uri,
+    private controller: vscode.TestController,
   ) {}
 
   public setTestItem(item: vscode.TestItem) {
@@ -60,19 +63,16 @@ export class TestFile {
     item.children.replace(this.children);
   }
 
-  public async updateFromDisk(controller: vscode.TestController) {
+  public async updateFromDisk() {
     const content = await getContentFromFilesystem(this.uri);
-    this.updateFromContents(controller, content);
+    this.updateFromContents(content);
   }
 
   /**
    * Parses the tests from the input text, and updates the tests contained
    * by this file to be those from the text,
    */
-  public updateFromContents(
-    controller: vscode.TestController,
-    content: string,
-  ) {
+  public updateFromContents(content: string) {
     // Maintain a stack of ancestors to build a hierarchical tree
     const ancestors: { name: string; children: vscode.TestItem[] }[] = [
       { name: 'ROOT', children: [] },
@@ -88,34 +88,27 @@ export class TestFile {
 
         const parent = ancestors[ancestors.length - 1];
 
-        const siblingsCount = parent.children.filter(
-          (child) => child.label === name,
-        ).length;
+        const parentNames = ancestors.slice(1).map((item) => item.name);
 
-        // generate unique id to duplicated item
-        let id = name;
-        if (siblingsCount) id = [name, siblingsCount].join('@@@@@@');
+        const testItem = this.onTest(
+          vscodeRange,
+          name,
+          testType,
+          parent.children,
+          parentNames,
+        );
 
         const isSuite = testType === 'describe' || testType === 'suite';
 
-        const testItem = controller.createTestItem(id, name, this.uri);
         testData.set(
           testItem,
           new TestCase(
             this.api,
             this.uri,
-            ancestors.slice(1).map((item) => item.name),
+            parentNames,
             isSuite ? 'suite' : 'case',
           ),
         );
-
-        testItem.range = vscodeRange;
-
-        // warn about duplicated name
-        if (siblingsCount) testItem.error = `Duplicated ${testType} name`;
-
-        // Set TestCase data for both describe blocks and leaf tests
-        parent.children.push(testItem);
 
         if (isSuite) {
           const children: vscode.TestItem[] = [];
@@ -131,6 +124,74 @@ export class TestFile {
     });
     this.children = ancestors[0].children;
     this.testItem?.children.replace(this.children);
+  }
+
+  public updateFromRuntime(tests: TestInfo[]) {
+    const handleChild = (
+      test: TestInfo,
+      parent: vscode.TestItem[],
+      parentNames: string[],
+    ) => {
+      const line = (test.location?.line ?? 1) - 1;
+      const column = (test.location?.column ?? 1) - 1;
+      const range = new vscode.Range(line, column, line, column);
+      const testItem = this.onTest(
+        range,
+        test.name,
+        test.type === 'suite' ? 'suite' : 'test',
+        parent,
+        parentNames,
+      );
+      if (test.type === 'suite') {
+        const children: vscode.TestItem[] = [];
+        test.tests.forEach((child) => {
+          handleChild(child, children, [...parentNames, test.name]);
+        });
+        testItem.children.replace(children);
+      }
+    };
+    const children: vscode.TestItem[] = [];
+    const realTests =
+      tests[0].type === 'suite' && tests[0].name === ROOT_SUITE_NAME
+        ? tests[0].tests
+        : tests;
+    realTests.forEach((test) => {
+      handleChild(test, children, []);
+    });
+    this.children = children;
+    this.testItem?.children.replace(this.children);
+  }
+
+  private onTest(
+    range: vscode.Range,
+    name: string,
+    testType: 'test' | 'it' | 'suite' | 'describe',
+    parent: vscode.TestItem[],
+    parentName: string[],
+  ) {
+    const siblingsCount = parent.filter((child) => child.label === name).length;
+
+    // generate unique id to duplicated item
+    let id = name;
+    if (siblingsCount) id = [name, siblingsCount].join('@@@@@@');
+
+    const isSuite = testType === 'describe' || testType === 'suite';
+
+    const testItem = this.controller.createTestItem(id, name, this.uri);
+    testData.set(
+      testItem,
+      new TestCase(this.api, this.uri, parentName, isSuite ? 'suite' : 'case'),
+    );
+
+    testItem.range = range;
+
+    // warn about duplicated name
+    if (siblingsCount) testItem.error = `Duplicated ${testType} name`;
+
+    // Set TestCase data for both describe blocks and leaf tests
+    parent.push(testItem);
+
+    return testItem;
   }
 }
 

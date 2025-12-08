@@ -115,6 +115,17 @@ export class RstestApi {
     return config;
   }
 
+  public async listTests(include?: string[]) {
+    const worker = await this.createChildProcess();
+    const tests = await worker.listTests({
+      rstestPath: this.resolveRstestPath(),
+      configFilePath: this.configFilePath,
+      include,
+    });
+    worker.$close();
+    return tests;
+  }
+
   public async runTest({
     run,
     token,
