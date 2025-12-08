@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
+// import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
@@ -57,6 +58,12 @@ const ensureProcessExitCode = (code: number) => {
 };
 
 const toPosix = (path: string): string => path.split(sep).join('/');
+
+// const resolvePackageRoot = (pkgName: string): string => {
+//   const require = createRequire(import.meta.url);
+//   const pkgJsonPath = require.resolve(`${pkgName}/package.json`);
+//   return dirname(pkgJsonPath);
+// };
 
 const getRuntimeConfigFromProject = (
   project: ProjectContext,
@@ -160,14 +167,13 @@ const resolveBrowserFile = (relativePath: string): string => {
 };
 
 const resolveContainerDist = (): string => {
-  const packageRoot = resolve(__dirname, '..');
-  const distPath = resolve(packageRoot, 'dist/browser-container');
+  const distPath = resolve(__dirname, '../dist/browser-container');
   if (existsSync(distPath)) {
     return distPath;
   }
 
   throw new Error(
-    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/core build:container".`,
+    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/core build".`,
   );
 };
 
