@@ -24,12 +24,12 @@ export const Button: React.ForwardRefExoticComponent<
         ref={ref}
         type={type}
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed',
+          'inline-flex items-center justify-center gap-2 rounded-none font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer',
           variant === 'default' &&
-            'bg-primary text-primary-foreground hover:bg-primary/90',
+            'bg-[color:var(--surface)] text-foreground border border-[color:var(--border)] hover:bg-[color:var(--muted)]',
           variant === 'outline' &&
-            'border border-border bg-card hover:bg-accent hover:text-accent-foreground',
-          variant === 'ghost' && 'hover:bg-accent hover:text-accent-foreground',
+            'border border-border bg-card text-foreground hover:bg-muted',
+          variant === 'ghost' && 'hover:bg-muted text-foreground',
           size === 'md' && 'px-3 py-2 text-sm',
           size === 'sm' && 'px-2.5 py-1.5 text-xs',
           className,

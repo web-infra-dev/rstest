@@ -20,6 +20,7 @@
   "devDependencies": {
     "@rsbuild/core": "1.6.12-canary-20251204065915",
     "@rstest/tsconfig": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.17",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "tailwindcss": "^4.1.17",

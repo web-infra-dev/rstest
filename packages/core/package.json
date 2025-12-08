@@ -56,7 +56,8 @@
     "@rsbuild/core": "1.7.0-beta.1",
     "tinypool": "^1.1.1",
     "playwright-core": "^1.49.1",
-    "sirv": "^2.0.4"
+    "sirv": "^2.0.4",
+    "open-editor": "^4.0.0"
   },
   "devDependencies": {
     "@rstest/browser-ui": "workspace:*",

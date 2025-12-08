@@ -1,0 +1,14 @@
+{
+  "style": "default",
+  "rsc": false,
+  "tailwind": {
+    "config": "tailwind.config.cjs",
+    "css": "packages/browser-ui/src/index.css",
+    "baseColor": "slate",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "packages/browser-ui/src/components/ui",
+    "utils": "packages/browser-ui/src/lib/utils"
+  }
+}

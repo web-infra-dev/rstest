@@ -1,11 +1,13 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 // import { createRequire } from 'node:module';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
 import type { BirpcReturn } from 'birpc';
 import { dirname, join, relative, resolve, sep } from 'pathe';
+import openEditor from 'open-editor';
 import type {
   BrowserContext,
   ConsoleMessage,
@@ -279,7 +281,8 @@ type BrowserRuntime = {
   manifestPlugin: VirtualModulesPluginInstance;
   containerPage?: Page;
   containerContext?: BrowserContext;
-  containerDistPath: string;
+  containerDistPath?: string;
+  containerDevServer?: string;
   setContainerOptions: (options: BrowserHostConfig) => void;
 };
 
@@ -363,6 +366,7 @@ const createBrowserRuntime = async ({
   isWatchMode,
   onTriggerRerun,
   containerDistPath,
+  containerDevServer,
 }: {
   context: Rstest;
   manifestPath: string;
@@ -370,23 +374,29 @@ const createBrowserRuntime = async ({
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
-  containerDistPath: string;
+  containerDistPath?: string;
+  containerDevServer?: string;
 }): Promise<BrowserRuntime> => {
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
   });
 
-  const containerHtmlPath = join(containerDistPath, 'container.html');
-  const containerHtmlTemplate = await fs.readFile(containerHtmlPath, 'utf-8');
   const optionsPlaceholder = '__RSTEST_OPTIONS_PLACEHOLDER__';
+  const containerHtmlTemplate = containerDistPath
+    ? await fs.readFile(join(containerDistPath, 'container.html'), 'utf-8')
+    : null;
+
   let injectedContainerHtml: string | null = null;
+  let serializedOptions = 'null';
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
-    const serialized = JSON.stringify(options).replace(/</g, '\\u003c');
-    injectedContainerHtml = containerHtmlTemplate.replace(
-      optionsPlaceholder,
-      serialized,
-    );
+    serializedOptions = JSON.stringify(options).replace(/</g, '\\u003c');
+    if (containerHtmlTemplate) {
+      injectedContainerHtml = containerHtmlTemplate.replace(
+        optionsPlaceholder,
+        serializedOptions,
+      );
+    }
   };
 
   const rsbuildInstance = await createRsbuild({
@@ -475,27 +485,147 @@ const createBrowserRuntime = async ({
   });
 
   // Serve prebuilt container assets (SPA) via sirv, scoped to avoid clashing with runner assets
-  const serveContainer = sirv(containerDistPath, {
-    dev: false,
-    single: 'container.html',
-  });
+  const serveContainer = containerDistPath
+    ? sirv(containerDistPath, {
+        dev: false,
+        single: 'container.html',
+      })
+    : null;
 
-  devServer.middlewares.use((req, res, next) => {
+  const containerDevBase = containerDevServer
+    ? new URL(containerDevServer)
+    : null;
+
+  const respondWithDevServerHtml = async (
+    url: URL,
+    res: ServerResponse,
+  ): Promise<boolean> => {
+    if (!containerDevBase) {
+      return false;
+    }
+
+    try {
+      const target = new URL(url.pathname + url.search, containerDevBase);
+      const response = await fetch(target);
+      if (!response.ok) {
+        return false;
+      }
+
+      let html = await response.text();
+      html = html.replace(optionsPlaceholder, serializedOptions);
+
+      res.statusCode = response.status;
+      response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'content-length') {
+          return;
+        }
+        res.setHeader(key, value);
+      });
+      res.setHeader('Content-Type', 'text/html');
+      res.end(html);
+      return true;
+    } catch (error) {
+      logger.log(
+        color.yellow(
+          `[Browser UI] Failed to fetch container HTML from dev server: ${String(error)}`,
+        ),
+      );
+      return false;
+    }
+  };
+
+  const proxyDevServerAsset = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> => {
+    if (!containerDevBase || !req.url) {
+      return false;
+    }
+
+    try {
+      const target = new URL(req.url, containerDevBase);
+      const response = await fetch(target);
+      if (!response.ok) {
+        return false;
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.statusCode = response.status;
+      response.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'content-length') {
+          return;
+        }
+        res.setHeader(key, value);
+      });
+      res.end(buffer);
+      return true;
+    } catch (error) {
+      logger.log(
+        color.yellow(
+          `[Browser UI] Failed to proxy asset from dev server: ${String(error)}`,
+        ),
+      );
+      return false;
+    }
+  };
+
+  devServer.middlewares.use(async (req, res, next) => {
     if (!req.url) {
       next();
       return;
     }
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/__open-in-editor') {
+      const file = url.searchParams.get('file');
+      if (!file) {
+        res.statusCode = 400;
+        res.end('Missing file');
+        return;
+      }
+      try {
+        await openEditor([{ file }]);
+        res.statusCode = 204;
+        res.end();
+      } catch (error) {
+        logger.log(
+          color.yellow(`[Browser UI] Failed to open editor: ${String(error)}`),
+        );
+        res.statusCode = 500;
+        res.end('Failed to open editor');
+      }
+      return;
+    }
     if (url.pathname === '/' || url.pathname === '/container.html') {
+      if (await respondWithDevServerHtml(url, res)) {
+        return;
+      }
+
       const html =
-        injectedContainerHtml ??
-        containerHtmlTemplate.replace(optionsPlaceholder, 'null');
-      res.setHeader('Content-Type', 'text/html');
-      res.end(html);
+        injectedContainerHtml ||
+        containerHtmlTemplate?.replace(optionsPlaceholder, 'null');
+
+      if (html) {
+        res.setHeader('Content-Type', 'text/html');
+        res.end(html);
+        return;
+      }
+
+      res.statusCode = 502;
+      res.end('Container UI is not available.');
       return;
     }
     if (url.pathname.startsWith('/container-static/')) {
-      serveContainer(req, res, next);
+      if (await proxyDevServerAsset(req, res)) {
+        return;
+      }
+
+      if (serveContainer) {
+        serveContainer(req, res, next);
+        return;
+      }
+
+      res.statusCode = 502;
+      res.end('Container assets are not available.');
       return;
     }
     if (url.pathname === '/runner.html') {
@@ -540,19 +670,44 @@ const createBrowserRuntime = async ({
     tempDir,
     manifestPlugin: virtualManifestPlugin,
     containerDistPath,
+    containerDevServer,
     setContainerOptions,
   };
 };
 
 export const runBrowserController = async (context: Rstest): Promise<void> => {
   const buildStart = Date.now();
-  let containerDistPath: string;
-  try {
-    containerDistPath = resolveContainerDist();
-  } catch (error) {
-    logger.error(color.red(String(error)));
-    ensureProcessExitCode(1);
-    return;
+  const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
+  let containerDevServer: string | undefined;
+  let containerDistPath: string | undefined;
+
+  if (containerDevServerEnv) {
+    try {
+      containerDevServer = new URL(containerDevServerEnv).toString();
+      logger.log(
+        color.gray(
+          `[Browser UI] Using dev server for container: ${containerDevServer}`,
+        ),
+      );
+    } catch (error) {
+      logger.error(
+        color.red(
+          `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${String(error)}`,
+        ),
+      );
+      ensureProcessExitCode(1);
+      return;
+    }
+  }
+
+  if (!containerDevServer) {
+    try {
+      containerDistPath = resolveContainerDist();
+    } catch (error) {
+      logger.error(color.red(String(error)));
+      ensureProcessExitCode(1);
+      return;
+    }
   }
   const projectEntries = await collectProjectEntries(context);
   const totalTests = projectEntries.reduce(
@@ -623,6 +778,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         isWatchMode,
         onTriggerRerun: isWatchMode ? onTriggerRerun : undefined,
         containerDistPath,
+        containerDevServer,
       });
     } catch (_error) {
       logger.error(

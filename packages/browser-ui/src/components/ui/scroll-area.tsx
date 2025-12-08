@@ -14,12 +14,12 @@ export const ScrollArea: React.ForwardRefExoticComponent<
         ref={ref}
         className={cn(
           'relative overflow-hidden',
-          'scroll-area rounded-lg border border-border/50 bg-muted/40',
+          'scroll-area',
           className,
         )}
         {...props}
       >
-        <div className="h-full w-full overflow-auto pr-2">{children}</div>
+        <div className="h-full w-full overflow-auto">{children}</div>
       </div>
     );
   },
