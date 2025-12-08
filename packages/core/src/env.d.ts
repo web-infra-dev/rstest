@@ -1,5 +1,7 @@
-declare const RSTEST_VERSION: string;
-declare const RSTEST_SELF_CI: boolean;
+import type {
+  BrowserClientMessage,
+  BrowserHostConfig,
+} from './browser/protocol';
 
 declare module '@rstest/browser-manifest' {
   export const manifest: Array<{
@@ -14,10 +16,16 @@ declare module '@rstest/browser-manifest' {
   }>;
 }
 
-declare module 'playwright-core' {
-  export const chromium: {
-    launch: (options?: any) => Promise<any>;
-  };
-  export type Browser = any;
-  export type Page = any;
+declare global {
+  const RSTEST_VERSION: string;
+  const RSTEST_SELF_CI: boolean;
+
+  interface Window {
+    __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
+    __rstest_dispatch__?: (message: BrowserClientMessage) => void;
+    __rstest_container_dispatch__?: (data: unknown) => void;
+    __rstest_container_on__?: (data: unknown) => void;
+    __RSTEST_DONE__?: boolean;
+    __RSTEST_TEST_FILES__?: string[];
+  }
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from '@rstest/core';
+import { value } from './dom3';
 
 const sleep = (ms: number) =>
   new Promise((res) => globalThis.setTimeout(res, ms));
@@ -7,7 +8,7 @@ describe('browser counter', () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <div>
-        <span id="count">0</span>
+        <span id="count">${value}</span>
         <button id="button">button</button>
       </div>
     `;

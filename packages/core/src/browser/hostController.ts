@@ -3,7 +3,14 @@ import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
+import type { BirpcReturn } from 'birpc';
 import { dirname, join, relative, resolve, sep } from 'pathe';
+import type {
+  BrowserContext,
+  ConsoleMessage,
+  Frame,
+  Page,
+} from 'playwright-core';
 import type { Rstest } from '../core/rstest';
 import type {
   ProjectContext,
@@ -375,15 +382,37 @@ type BrowserRuntime = {
   manifestPath: string;
   tempDir: string;
   manifestPlugin: VirtualModulesPluginInstance;
-  containerPage?: any; // Playwright Page instance
-  containerContext?: any; // Playwright BrowserContext instance
+  containerPage?: Page;
+  containerContext?: BrowserContext;
+};
+
+type HostRpcMethods = {
+  rerunTest: (testFile: string) => Promise<void>;
+  getTestFiles: () => Promise<string[]>;
+};
+
+type ContainerRpcClient = {
+  onTestFileUpdate: (testFiles: string[]) => Promise<void>;
+};
+
+type ContainerRpc = BirpcReturn<ContainerRpcClient, HostRpcMethods>;
+
+type ContainerWindow = {
+  __rstest_container_on__?: (payload: unknown) => void;
+  __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
+};
+
+type BindingSource = {
+  context: BrowserContext;
+  page: Page;
+  frame: Frame;
 };
 
 let sharedRuntime: BrowserRuntime | null = null;
 let watchCleanupRegistered = false;
-let isRerunning = false;
 let lastTestFiles: string[] = [];
 let enableWatchHooks = false; // Flag to control if watch hooks should execute
+let pendingManifestUpdate = 0; // Counter to track manifest updates that will trigger recompilation
 
 const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
@@ -516,8 +545,9 @@ const createBrowserRuntime = async ({
               return;
             }
 
-            // Skip if we're currently rerunning
-            if (isRerunning) {
+            // Skip if this compile was triggered by our manifest update
+            if (pendingManifestUpdate > 0) {
+              pendingManifestUpdate--;
               return;
             }
 
@@ -695,8 +725,8 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   });
 
   // Open a container page for user to view (reuse in watch mode)
-  let containerContext: any;
-  let containerPage: any;
+  let containerContext: BrowserContext;
+  let containerPage: Page;
   let isNewPage = false; // Track if we created a new page
 
   if (isWatchMode && runtime!.containerPage && runtime!.containerContext) {
@@ -711,12 +741,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     containerPage = await containerContext.newPage();
 
     // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: any) => {
+    containerPage.on('popup', async (popup: Page) => {
       await popup.close().catch(() => {});
     });
 
     // Also prevent popups from the context level
-    containerContext.on('page', async (page: any) => {
+    containerContext.on('page', async (page: Page) => {
       // Close any new pages that aren't the container page
       if (page !== containerPage) {
         await page.close().catch(() => {});
@@ -732,7 +762,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     // Setup communication to receive test results from iframes (only on first creation)
     await containerPage.exposeBinding(
       '__rstest_dispatch__',
-      async (_source: unknown, payload: BrowserClientMessage) => {
+      async (_source: BindingSource, payload: BrowserClientMessage) => {
         switch (payload.type) {
           case 'ready':
             return;
@@ -794,13 +824,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     // Setup birpc for container control
     await containerPage.exposeBinding(
       '__rstest_container_dispatch__',
-      async (_source: unknown, data: any) => {
+      async (_source: BindingSource, data: unknown) => {
         postToContainer?.(data);
       },
     );
 
     // Forward browser console to terminal
-    containerPage.on('console', (msg: any) => {
+    containerPage.on('console', (msg: ConsoleMessage) => {
       const text = msg.text();
       if (text.includes('[Container]') || text.includes('[Runner]')) {
         logger.log(color.gray(`[Browser Console] ${text}`));
@@ -809,10 +839,10 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   }
 
   // Birpc setup (need to recreate on each run to capture current context)
-  let containerRpc: any = null;
-  let postToContainer: ((data: any) => void) | null = null;
+  let containerRpc: ContainerRpc | null = null;
+  let postToContainer: ((data: unknown) => void) | null = null;
 
-  const containerMethods = {
+  const containerMethods: HostRpcMethods = {
     async rerunTest(testFile: string) {
       logger.log(color.cyan(`\nRe-running test: ${testFile}\n`));
       // TODO: Implement rerun by reloading the specific iframe
@@ -826,18 +856,23 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   const { createBirpc } = await import('birpc');
 
-  containerRpc = createBirpc(containerMethods, {
-    post: (data) => {
-      containerPage
-        ?.evaluate((msg: any) => {
-          (window as any).__rstest_container_on__?.(msg);
-        }, data)
-        .catch(() => {});
+  containerRpc = createBirpc<ContainerRpcClient, HostRpcMethods>(
+    containerMethods,
+    {
+      post: (data) => {
+        containerPage
+          ?.evaluate((msg: unknown) => {
+            (window as unknown as ContainerWindow).__rstest_container_on__?.(
+              msg,
+            );
+          }, data)
+          .catch(() => {});
+      },
+      on: (fn: (data: unknown) => void) => {
+        postToContainer = fn;
+      },
     },
-    on: (fn) => {
-      postToContainer = fn;
-    },
-  });
+  );
 
   // Only navigate and setup on first creation (new page)
   if (isNewPage) {
@@ -860,7 +895,8 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     };
 
     await containerPage.addInitScript((options: BrowserHostConfig) => {
-      (window as any).__RSTEST_BROWSER_OPTIONS__ = options;
+      (window as unknown as ContainerWindow).__RSTEST_BROWSER_OPTIONS__ =
+        options;
     }, hostOptions);
 
     // Navigate to container page
@@ -901,9 +937,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   // Define rerun logic for watch mode
   if (isWatchMode) {
     triggerRerun = async () => {
-      // Set flag to prevent infinite loop
-      isRerunning = true;
-
       // Re-collect test entries (may have new/deleted files)
       const newProjectEntries = await collectProjectEntries(context);
 
@@ -931,18 +964,19 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
           manifestPath,
           entries: newProjectEntries,
         });
+
+        // Increment counter before updating manifest - the update will trigger
+        // a recompilation, and we need to skip that compile event
+        pendingManifestUpdate++;
         runtime!.manifestPlugin.writeModule(manifestPath, newManifestSource);
 
-        // Don't execute tests here - let the onAfterDevCompile hook handle it
-        // after manifest recompilation. Just clear the flag after a delay.
-        setTimeout(() => {
-          isRerunning = false;
-        }, 1000);
+        // The manifest update will trigger onAfterDevCompile, which will be
+        // skipped due to pendingManifestUpdate counter. Tests in iframes will
+        // automatically reload with the new manifest.
         return;
       }
 
       // No file list changes, iframes will automatically rerun tests
-      isRerunning = false;
       logger.log(color.cyan('Tests will be re-executed automatically\n'));
     };
   }

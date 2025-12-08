@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
+import { value } from './dom1';
 
 const sleep = (ms: number) =>
   new Promise((res) => globalThis.setTimeout(res, ms));
@@ -11,7 +12,7 @@ describe('browser counter', () => {
 
     const button = document.createElement('button');
     button.id = 'counter';
-    button.textContent = '0';
+    button.textContent = `${value}`;
 
     button.addEventListener('click', () => {
       button.textContent = String(Number(button.textContent) + 1);
