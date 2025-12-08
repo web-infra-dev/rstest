@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBirpc } from 'birpc';
-import type { BrowserClientMessage, BrowserHostConfig } from '../protocol';
+import type { BrowserClientMessage, BrowserHostConfig } from './types';
 import './index.css';
 
 type HostRPC = {
@@ -101,7 +101,7 @@ const App: React.FC = () => {
           const testPath = message.payload.testPath;
           setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
         } else if (message?.type === 'file-complete') {
-          const testPath = message.payload.testPath;
+          const testPath = message.payload.testPath as string;
           const passed = message.payload.status === 'pass';
           setStatusMap((prev) => ({
             ...prev,
@@ -117,7 +117,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, []);
+  }, [active]);
 
   if (!options) {
     return <div>Missing browser options</div>;
