@@ -20,6 +20,8 @@ let sourceMaps: Record<string, string> = {};
 
 // provides source map support for stack traces
 install({
+  environment: 'node',
+  handleUncaughtExceptions: false,
   retrieveSourceMap: (source) => {
     if (sourceMaps[source]) {
       return {
