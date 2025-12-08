@@ -1,8 +1,15 @@
+import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
+import { dirname, resolve } from 'pathe';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
 const isBuildWatch = process.argv.includes('--watch');
+const require = createRequire(import.meta.url);
+const browserUiRoot = dirname(
+  require.resolve('@rstest/browser-ui/package.json'),
+);
+const browserUiDist = resolve(browserUiRoot, 'dist');
 
 export default defineConfig({
   lib: [
@@ -95,6 +102,14 @@ export default defineConfig({
                 {
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
+                },
+                {
+                  from: browserUiDist,
+                  to: 'browser-container',
+                  context: browserUiDist,
+                  globOptions: {
+                    ignore: ['**/*.LICENSE.txt'],
+                  },
                 },
               ],
             }),

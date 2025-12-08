@@ -46,8 +46,7 @@
     "importMeta.d.ts"
   ],
   "scripts": {
-    "build": "rslib build && pnpm run build:container && npx prettier ./LICENSE.md --write",
-    "build:container": "rsbuild build --config ./rsbuild.container.config.ts",
+    "build": "rslib build && npx prettier ./LICENSE.md --write",
     "typecheck": "tsc --noEmit",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "npx rstest --globals"
@@ -60,6 +59,7 @@
     "sirv": "^2.0.4"
   },
   "devDependencies": {
+    "@rstest/browser-ui": "workspace:*",
     "chai": "^5.3.3",
     "pathe": "^2.0.3",
     "birpc": "2.9.0",

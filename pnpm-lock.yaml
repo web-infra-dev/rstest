@@ -432,6 +432,34 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/browser-ui:
+    dependencies:
+      birpc:
+        specifier: 2.6.1
+        version: 2.6.1
+      react:
+        specifier: ^19.0.0
+        version: 19.2.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.0(react@19.2.0)
+    devDependencies:
+      '@rsbuild/core':
+        specifier: 1.6.12-canary-20251204065915
+        version: 1.6.12-canary-20251204065915
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.2(@types/react@19.2.2)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@rsbuild/core':
@@ -460,8 +488,16 @@ importers:
         specifier: ^7.53.3
         version: 7.53.3(@types/node@22.18.6)
       '@rslib/core':
+<<<<<<< HEAD
         specifier: 0.18.3
         version: 0.18.3(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
+=======
+        specifier: 0.17.1
+        version: 0.17.1(@microsoft/api-extractor@7.53.3(@types/node@22.18.6))(typescript@5.9.3)
+      '@rstest/browser-ui':
+        specifier: workspace:*
+        version: link:../browser-ui
+>>>>>>> 9b824a7 (@rstest/browser-ui)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -486,12 +522,6 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.2
         version: 4.0.2
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.2
-      '@types/react-dom':
-        specifier: ^19.0.0
-        version: 19.2.2(@types/react@19.2.2)
       '@types/sinonjs__fake-timers':
         specifier: ^8.1.5
         version: 8.1.5
@@ -535,6 +565,7 @@ importers:
         specifier: ^4.0.3
         version: 4.0.3
 <<<<<<< HEAD
+<<<<<<< HEAD
       pretty-format:
         specifier: ^30.2.0
         version: 30.2.0
@@ -546,6 +577,8 @@ importers:
         specifier: ^19.0.0
         version: 19.2.0(react@19.2.0)
 >>>>>>> c021c07 (react)
+=======
+>>>>>>> 9b824a7 (@rstest/browser-ui)
       rslog:
         specifier: ^1.3.2
         version: 1.3.2
