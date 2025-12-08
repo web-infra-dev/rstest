@@ -1,19 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import ReactDOM from 'react-dom/client';
-import { createBirpc, type BirpcReturn } from 'birpc';
+import { type BirpcReturn, createBirpc } from 'birpc';
 import {
-  CheckCircle2,
+  Check,
+  ExternalLink,
   File,
   Globe,
   Loader2,
+  Moon,
   Play,
   RefreshCw,
+  RotateCw,
+  Sparkles,
+  Sun,
   XCircle,
 } from 'lucide-react';
-import { Badge } from './components/ui/badge';
+import React, { useEffect, useMemo, useState } from 'react';
+import ReactDOM from 'react-dom/client';
 import { Button } from './components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { ScrollArea } from './components/ui/scroll-area';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from './components/ui/resizable';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
 import { cn } from './lib/utils';
 import type { BrowserClientMessage, BrowserHostConfig } from './types';
 import './index.css';
@@ -36,6 +50,60 @@ type ContainerWindow = Window &
   };
 
 type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
+
+const statusMeta: Record<
+  TestStatus,
+  {
+    label: string;
+    accentBg: string;
+    accentColor: string;
+    icon: React.ReactNode;
+  }
+> = {
+  idle: {
+    label: 'Idle',
+    accentBg: 'rgba(255,255,255,0.06)',
+    accentColor: '#d1d5db',
+    icon: <Sparkles size={16} strokeWidth={2.1} />,
+  },
+  running: {
+    label: 'Running',
+    accentBg: 'rgba(227,179,65,0.16)',
+    accentColor: '#f2c94c',
+    icon: <Loader2 size={16} className="animate-spin" strokeWidth={2.1} />,
+  },
+  pass: {
+    label: 'Pass',
+    accentBg: 'rgba(74,222,128,0.14)',
+    accentColor: '#4ade80',
+    icon: <Check size={16} strokeWidth={2.1} />,
+  },
+  fail: {
+    label: 'Fail',
+    accentBg: 'rgba(248,113,113,0.16)',
+    accentColor: '#f87171',
+    icon: <XCircle size={16} strokeWidth={2.1} />,
+  },
+};
+
+const toRelativePath = (file: string, rootPath?: string) => {
+  if (!rootPath) return file;
+  const normalizedRoot = rootPath.endsWith('/')
+    ? rootPath.slice(0, -1)
+    : rootPath;
+  if (file.startsWith(normalizedRoot)) {
+    const sliced = file.slice(normalizedRoot.length);
+    return sliced.startsWith('/') ? sliced.slice(1) : sliced;
+  }
+  return file;
+};
+
+const openInEditor = (file: string) => {
+  const payload = { type: 'open-in-editor', payload: { file } };
+  (window as ContainerWindow).__rstest_dispatch__?.(payload as unknown);
+  window.parent?.postMessage(payload, '*');
+  fetch(`/__open-in-editor?file=${encodeURIComponent(file)}`).catch(() => {});
+};
 
 const useRpc = (
   setTestFiles: (files: string[]) => void,
@@ -100,15 +168,32 @@ const App: React.FC = () => {
   const [testFiles, setTestFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
-  const rpc = useRpc(
-    setTestFiles,
-    options?.testFiles || [],
-    canUseRpc,
-  );
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const rpc = useRpc(setTestFiles, options?.testFiles || [], canUseRpc);
 
   useEffect(() => {
     console.log('[Container] __RSTEST_BROWSER_OPTIONS__', options);
   }, [options]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('rstest-theme');
+      if (stored === 'light' || stored === 'dark') {
+        setTheme(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    document.body.dataset.theme = theme;
+    try {
+      window.localStorage.setItem('rstest-theme', theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
 
   useEffect(() => {
     setStatusMap((prev) => {
@@ -128,6 +213,12 @@ const App: React.FC = () => {
 
   const handleSelect = (file: string) => {
     setActive(file);
+  };
+
+  const handleRerunFile = async (file: string) => {
+    if (rpc) {
+      await rpc.rerunTest(file);
+    }
   };
 
   const handleRerun = async () => {
@@ -186,112 +277,229 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="app-shell">
-      <Card className="h-[calc(100vh-32px)] rounded-2xl border border-border bg-card shadow-xl">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle>
-              <span className="inline-flex items-center gap-2">
-                <Globe size={18} /> Browser Tests
-              </span>
-            </CardTitle>
-            <Button
-              onClick={handleRerun}
-              size="sm"
-              variant="outline"
-              className="border-border text-foreground"
-              disabled={!rpc}
-            >
-              <RefreshCw size={14} /> Re-run
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1">
-              <File size={14} /> {counts.total} files
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1">
-              <CheckCircle2 size={14} className="text-success" /> {counts.pass} pass
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1">
-              <XCircle size={14} className="text-destructive" /> {counts.fail} fail
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent style={{ flex: 1, paddingTop: 0 }}>
-          <ScrollArea className="h-full">
-            <div className="flex flex-col gap-2">
-              {testFiles.map((file) => {
-                const status = statusMap[file] ?? 'idle';
-                return (
-                  <div
-                    key={file}
-                    className={cn(
-                      'flex items-center gap-3 rounded-xl border border-border/60 bg-card/80 px-3 py-2 transition hover:border-primary/60 hover:bg-card',
-                      active === file && 'border-primary bg-card',
-                    )}
-                    onClick={() => handleSelect(file)}
-                    title={file}
-                  >
-                    {status === 'pass' && (
-                      <CheckCircle2 size={18} className="text-success" />
-                    )}
-                    {status === 'fail' && (
-                      <XCircle size={18} className="text-destructive" />
-                    )}
-                    {status === 'running' && (
-                      <Loader2 size={18} className="text-primary animate-spin" />
-                    )}
-                    {(status === 'idle' || status === undefined) && (
-                      <Play size={18} className="text-primary" />
-                    )}
-                    <div className="flex-1 min-w-0 text-sm text-foreground">
-                      {getDisplayName(file)}
-                    </div>
-                    <Badge variant="muted" className="max-w-[220px] truncate">
-                      {file}
-                    </Badge>
+    <TooltipProvider delayDuration={120}>
+      <div className="app-shell">
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="h-full w-full"
+          autoSaveId="rstest-split"
+        >
+          <ResizablePanel defaultSize={32} minSize={20} maxSize={50}>
+            <div className="sidebar">
+              <div className="sidebar-top">
+                <div className="brand">
+                  <img
+                    src="https://assets.rspack.rs/rstest/rstest-logo-512x512.png"
+                    alt="rstest logo"
+                    className="brand-logo"
+                  />
+                  <div className="brand-text">
+                    <span className="brand-title">Browser Tests</span>
+                    <span className="brand-subtitle">Live runner</span>
                   </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+                </div>
+                <div className="actions">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        aria-label="Toggle theme"
+                      >
+                        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>切换主题</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRerun}
+                        disabled={!rpc}
+                        aria-label="Re-run active file"
+                      >
+                        <RefreshCw size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>重新运行当前文件</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
 
-      <Card className="h-[calc(100vh-32px)] rounded-2xl border border-border bg-card shadow-xl">
-        <CardHeader className="pb-2">
-          <CardTitle>Preview</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[calc(100%-72px)] pt-0">
-          <div className="iframe-shell">
-            {testFiles.map((file) => (
-              <iframe
-                key={file}
-                className="test-runner-iframe"
-                data-test-file={file}
-                src={iframeUrlFor(file, options.runnerUrl)}
-                style={{ display: file === active ? 'block' : 'none' }}
-                onLoad={(event) => {
-                  const frame = event.currentTarget;
-                  if (frame.contentWindow) {
-                    frame.contentWindow.postMessage(
-                      {
-                        type: 'RSTEST_CONFIG',
-                        payload: {
-                          ...options,
-                          testFile: file,
-                        },
-                      },
-                      '*',
-                    );
-                  }
-                }}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              <div className="sidebar-stats">
+                <div className="stat">
+                  <File size={14} /> <span>{counts.total} files</span>
+                </div>
+                <div className="stat">
+                  <Check size={14} color="#4ade80" /> <span>{counts.pass} passed</span>
+                </div>
+                <div className="stat">
+                  <XCircle size={14} color="#f87171" /> <span>{counts.fail} failed</span>
+                </div>
+              </div>
+
+              <div className="sidebar-section">
+                <span className="section-title">Test files</span>
+                <div className="live">
+                  {canUseRpc ? (
+                    <>
+                      <span className="live-dot" />
+                      Live
+                    </>
+                  ) : (
+                    'Static'
+                  )}
+                </div>
+              </div>
+
+              <ScrollArea className="sidebar-list">
+                {testFiles.length === 0 ? (
+                  <div className="empty">No test files detected</div>
+                ) : (
+                  <div className="file-list">
+                    {testFiles.map((file) => {
+                      const status = statusMap[file] ?? 'idle';
+                      const meta = statusMeta[status];
+                      const relativePath = toRelativePath(file, options.rootPath);
+                      return (
+                        <button
+                          key={file}
+                          type="button"
+                          className={cn(
+                            'file-row',
+                            active === file && 'file-row-active',
+                          )}
+                          onClick={() => handleSelect(file)}
+                          aria-pressed={active === file}
+                        >
+                          <div
+                            className="file-status"
+                            style={{
+                              background: meta.accentBg,
+                              color: meta.accentColor,
+                            }}
+                            aria-hidden="true"
+                          >
+                            {meta.icon}
+                          </div>
+                          <div className="file-content">
+                            <div className="file-title-row">
+                              <span className="file-name">{getDisplayName(file)}</span>
+                              <span
+                                className="file-status-label"
+                                style={{ color: meta.accentColor }}
+                              >
+                                {meta.label}
+                              </span>
+                            </div>
+                            <div className="file-path-row">
+                              <button
+                                type="button"
+                                className="file-path-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openInEditor(file);
+                                }}
+                                title={relativePath}
+                              >
+                                <span className="truncate">{relativePath}</span>
+                              </button>
+                              <ExternalLink size={12} className="file-path-icon" />
+                            </div>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="file-rerun"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleRerunFile(file);
+                                }}
+                                aria-label={`Rerun ${getDisplayName(file)}`}
+                              >
+                                <RotateCw size={14} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>重新运行该文件</TooltipContent>
+                          </Tooltip>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle className="divider" />
+
+          <ResizablePanel defaultSize={68} minSize={40}>
+            <div className="main-pane">
+              <div className="main-header">
+                <div className="main-title">
+                  <div className="main-icon">
+                    <Play size={16} strokeWidth={2.2} />
+                  </div>
+                  <div className="main-text">
+                    <span className="main-eyebrow">Preview</span>
+                    <span className="main-name">
+                      {active ? getDisplayName(active) : 'Select a test file'}
+                    </span>
+                  </div>
+                </div>
+                {active && (
+                  <span
+                    className="main-status"
+                    style={{ color: statusMeta[statusMap[active] ?? 'idle'].accentColor }}
+                  >
+                    {statusMeta[statusMap[active] ?? 'idle'].label}
+                  </span>
+                )}
+              </div>
+              <div className="main-body">
+                <div className="iframe-shell">
+                  {!active && (
+                    <div className="placeholder">
+                      <p className="placeholder-text">请选择左侧的测试文件以查看运行画面</p>
+                    </div>
+                  )}
+                  <div className="iframe-stack">
+                    {testFiles.map((file) => (
+                      <iframe
+                        key={file}
+                        className="test-runner-iframe"
+                        data-test-file={file}
+                        src={iframeUrlFor(file, options.runnerUrl)}
+                        style={{ display: file === active ? 'block' : 'none' }}
+                        onLoad={(event) => {
+                          const frame = event.currentTarget;
+                          if (frame.contentWindow) {
+                            frame.contentWindow.postMessage(
+                              {
+                                type: 'RSTEST_CONFIG',
+                                payload: {
+                                  ...options,
+                                  testFile: file,
+                                },
+                              },
+                              '*',
+                            );
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    </TooltipProvider>
   );
 };
 

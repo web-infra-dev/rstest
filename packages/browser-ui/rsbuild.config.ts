@@ -4,6 +4,15 @@ import { defineConfig } from '@rsbuild/core';
 const root = __dirname;
 
 export default defineConfig({
+  server: {
+    port: 7392,
+  },
+  dev: {
+    client: {
+      port: 7392,
+    },
+    assetPrefix: 'http://localhost:7392/',
+  },
   source: {
     entry: {
       container: './src/main.tsx',
