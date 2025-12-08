@@ -21,6 +21,11 @@ type ManifestEntry = BrowserManifestEntry & {
   load: () => Promise<unknown>;
 };
 
+type GlobalWithProcess = typeof globalThis & {
+  global?: typeof globalThis;
+  process?: NodeJS.Process;
+};
+
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
 const unwrapRegex = (value: string): string | RegExp => {
@@ -49,21 +54,25 @@ const restoreRuntimeConfig = (
 };
 
 const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
-  const globalRef: any = globalThis as any;
+  const globalRef = globalThis as GlobalWithProcess;
   if (!globalRef.global) {
     globalRef.global = globalRef;
   }
 
   if (!globalRef.process) {
-    globalRef.process = {
+    const processShim: Partial<NodeJS.Process> & {
+      env: Record<string, string | undefined>;
+    } = {
       env: {},
       argv: [],
       version: 'browser',
       cwd: () => '/',
-      platform: 'browser',
-      nextTick: (cb: (...args: any[]) => void, ...args: any[]) =>
+      platform: 'linux',
+      nextTick: (cb: (...args: unknown[]) => void, ...args: unknown[]) =>
         queueMicrotask(() => cb(...args)),
     };
+
+    globalRef.process = processShim as unknown as NodeJS.Process;
   }
 
   globalRef.process.env ??= {};
@@ -95,14 +104,14 @@ const send = (message: BrowserClientMessage): void => {
 // Wait for configuration if in iframe
 const waitForConfig = (): Promise<void> => {
   // If not in iframe or already has config, resolve immediately
-  if (window.parent === window || (window as any).__RSTEST_BROWSER_OPTIONS__) {
+  if (window.parent === window || window.__RSTEST_BROWSER_OPTIONS__) {
     return Promise.resolve();
   }
 
   return new Promise((resolve) => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'RSTEST_CONFIG') {
-        (window as any).__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
+        window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
         console.log(
           '[Runner] Received config from container:',
           event.data.payload,
@@ -146,7 +155,7 @@ const run = async () => {
         message: 'Browser test runtime is not configured.',
       },
     });
-    (window as any).__RSTEST_DONE__ = true;
+    window.__RSTEST_DONE__ = true;
     return;
   }
 
@@ -254,13 +263,13 @@ const run = async () => {
           stack: error.stack,
         },
       });
-      (window as any).__RSTEST_DONE__ = true;
+      window.__RSTEST_DONE__ = true;
       return;
     }
   }
 
   send({ type: 'complete' });
-  (window as any).__RSTEST_DONE__ = true;
+  window.__RSTEST_DONE__ = true;
 };
 
 void run().catch((error) => {
@@ -272,5 +281,5 @@ void run().catch((error) => {
       stack: err.stack,
     },
   });
-  (window as any).__RSTEST_DONE__ = true;
+  window.__RSTEST_DONE__ = true;
 });

@@ -27,10 +27,10 @@ const containerMethods: ContainerRPC = {
 // First generic is local methods, second is remote methods
 const rpc = createBirpc<HostRPC, ContainerRPC>(containerMethods, {
   post: (data) => {
-    (window as any).__rstest_container_dispatch__?.(data);
+    window.__rstest_container_dispatch__?.(data);
   },
   on: (fn) => {
-    (window as any).__rstest_container_on__ = fn;
+    window.__rstest_container_on__ = fn;
   },
 });
 
@@ -97,7 +97,7 @@ const renderIframes = () => {
 
     // When iframe loads, send configuration via postMessage
     iframe.onload = () => {
-      const options = (window as any).__RSTEST_BROWSER_OPTIONS__;
+      const options = window.__RSTEST_BROWSER_OPTIONS__;
       if (options && iframe.contentWindow) {
         iframe.contentWindow.postMessage(
           {
@@ -201,6 +201,6 @@ if (document.readyState === 'loading') {
 window.addEventListener('message', (event) => {
   if (event.data?.type === '__rstest_dispatch__') {
     // Forward test results to host via binding
-    (window as any).__rstest_dispatch__?.(event.data.payload);
+    window.__rstest_dispatch__?.(event.data.payload);
   }
 });
