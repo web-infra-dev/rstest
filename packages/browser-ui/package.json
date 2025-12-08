@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "birpc": "2.6.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -19,6 +21,7 @@
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.1.17",
     "typescript": "^5.6.3"
   }
 }
