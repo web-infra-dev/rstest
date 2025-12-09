@@ -225,8 +225,9 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-    ) => {
+    ): Promise<TestResult[]> => {
       const tests = [...allTest];
+      const results: TestResult[] = [];
 
       while (tests.length) {
         const suite = tests.shift()!;
@@ -237,7 +238,7 @@ export class TestRunner {
             cases.push(tests.shift()!);
           }
 
-          await Promise.all(
+          const result = await Promise.all(
             cases.map((test) => {
               if (test.type === 'suite') {
                 return runTest(test, parentHooks);
@@ -245,12 +246,15 @@ export class TestRunner {
               return limitMaxConcurrency(() => runTest(test, parentHooks));
             }),
           );
+          results.push(...result);
 
           continue;
         }
 
-        await runTest(suite, parentHooks);
+        const result = await runTest(suite, parentHooks);
+        results.push(result);
       }
+      return results;
     };
 
     const runTest = async (
@@ -259,37 +263,51 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-    ) => {
+    ): Promise<TestResult> => {
+      let result: TestResult = {
+        testId: test.testId,
+        status: 'skip',
+        parentNames: test.parentNames,
+        name: test.name,
+        testPath,
+        project,
+        duration: 0,
+        errors: [],
+      };
+
       if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
         defaultStatus = 'skip';
-        return;
+        return result;
       }
 
       if (test.type === 'suite') {
+        const start = RealDate.now();
+
+        hooks.onTestSuiteStart?.({
+          parentNames: test.parentNames,
+          name: test.name,
+          testPath,
+          project: test.project,
+          testId: test.testId,
+        });
+
         if (test.tests.length === 0) {
           if (['todo', 'skip'].includes(test.runMode)) {
             defaultStatus = 'skip';
-            return;
+            hooks.onTestSuiteResult?.(result);
+            return result;
           }
           if (passWithNoTests) {
-            return;
+            result.status = 'pass';
+            hooks.onTestSuiteResult?.(result);
+            return result;
           }
           const noTestError = {
             message: `No test found in suite: ${test.name}`,
             name: 'No tests',
           };
 
-          errors.push(noTestError);
-          const result = {
-            testId: test.testId || '0',
-            status: 'fail' as const,
-            parentNames: test.parentNames,
-            name: test.name,
-            testPath,
-            errors: [noTestError],
-            project,
-          };
-          hooks.onTestCaseResult?.(result);
+          result.errors?.push(noTestError);
         }
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
@@ -307,7 +325,7 @@ export class TestRunner {
           } catch (error) {
             hasBeforeAllError = true;
 
-            errors.push(...formatTestError(error));
+            result.errors?.push(...formatTestError(error));
           }
         }
 
@@ -316,7 +334,7 @@ export class TestRunner {
           markAllTestAsSkipped(test.tests);
         }
 
-        await runTests(test.tests, {
+        const results = await runTests(test.tests, {
           beforeEachListeners: parentHooks.beforeEachListeners.concat(
             test.beforeEachListeners || [],
           ),
@@ -338,12 +356,18 @@ export class TestRunner {
             }
           } catch (error) {
             // AfterAll failed does not affect test case results
-            errors.push(...formatTestError(error));
+            result.errors?.push(...formatTestError(error));
           }
         }
+        result.duration = RealDate.now() - start;
+        result.status = result.errors?.length
+          ? 'fail'
+          : getTestStatus(results, defaultStatus);
+        hooks.onTestSuiteResult?.(result);
+
+        errors.push(...(result.errors || []));
       } else {
         const start = RealDate.now();
-        let result: TestResult | undefined;
         let retryCount = 0;
         // Call onTestCaseStart hook before running the test
         hooks.onTestCaseStart?.({
@@ -378,6 +402,7 @@ export class TestRunner {
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
+      return result;
     };
 
     const start = RealDate.now();

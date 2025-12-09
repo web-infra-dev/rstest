@@ -1,6 +1,10 @@
 import { createRequire } from 'node:module';
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
+import {
+  format as prettyFormat,
+  plugins as prettyFormatPlugins,
+} from 'pretty-format';
 import type { FormattedError, Test } from '../types';
 
 const REAL_TIMERS: {
@@ -43,6 +47,18 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
       errObj.diff = diff(err.expected, err.actual, {
         expand: false,
       })!;
+      errObj.expected =
+        typeof error.expected === 'string'
+          ? error.expected
+          : prettyFormat(error.expected, {
+              plugins: Object.values(prettyFormatPlugins),
+            });
+      errObj.actual =
+        typeof error.actual === 'string'
+          ? error.actual
+          : prettyFormat(error.actual, {
+              plugins: Object.values(prettyFormatPlugins),
+            });
     }
 
     return errObj;

@@ -321,25 +321,23 @@ export type NormalizedConfig = Required<
     RstestConfig,
     OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
   >
-> & {
-  [key in OptionalKeys]?: RstestConfig[key];
-} & {
-  pool: RstestPoolOptions;
-  coverage: NormalizedCoverageOptions;
-  setupFiles: string[];
-  exclude: {
-    patterns: string[];
-    override?: boolean;
+> &
+  Partial<Pick<RstestConfig, OptionalKeys>> & {
+    pool: RstestPoolOptions;
+    coverage: NormalizedCoverageOptions;
+    setupFiles: string[];
+    exclude: {
+      patterns: string[];
+      override?: boolean;
+    };
   };
-};
 
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
     OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
   >
-> & {
-  [key in OptionalKeys]?: NormalizedConfig[key];
-} & {
-  setupFiles: string[];
-};
+> &
+  Pick<NormalizedConfig, OptionalKeys> & {
+    setupFiles: string[];
+  };
