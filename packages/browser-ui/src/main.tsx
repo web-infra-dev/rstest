@@ -7,7 +7,7 @@ import {
 } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { type BirpcReturn, createBirpc } from 'birpc';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/browser/EmptyPreviewOverlay';
@@ -17,6 +17,7 @@ import { StatsBar } from './components/browser/StatsBar';
 import { TestCaseTitle } from './components/browser/TestCaseTitle';
 import { TestFilesHeader } from './components/browser/TestFilesHeader';
 import { TestFileTitle } from './components/browser/TestFileTitle';
+import { TestSuiteTitle } from './components/browser/TestSuiteTitle';
 import { ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
 import {
   CASE_STATUS_META,
@@ -266,12 +267,10 @@ const BrowserRunner: React.FC<{
       payload: BrowserClientTestResult,
       statusOverride?: CaseStatus,
     ) => {
-      const labelParts = [...(payload.parentNames ?? []), payload.name].filter(
-        Boolean,
-      );
-      const label = labelParts.join(' > ') || payload.name;
+      const parentNames = (payload.parentNames ?? []).filter(Boolean);
       // fullName uses empty delimiter to match task.ts getTaskNameWithPrefix(test, '')
-      const fullName = labelParts.join('  ') || payload.name;
+      const fullName =
+        [...parentNames, payload.name].join('  ') || payload.name;
       setCaseMap((prev) => {
         const prevFile = prev[filePath] ?? {};
         return {
@@ -280,7 +279,8 @@ const BrowserRunner: React.FC<{
             ...prevFile,
             [payload.testId]: {
               id: payload.testId,
-              label,
+              name: payload.name,
+              parentNames,
               fullName,
               status: statusOverride ?? mapCaseStatus(payload.status),
               filePath: payload.testPath || filePath,
@@ -382,6 +382,145 @@ const BrowserRunner: React.FC<{
     ? 'Switch to light theme'
     : 'Switch to dark theme';
 
+  // Build nested tree structure from flat cases
+  const buildNestedTree = useCallback(
+    (file: string, cases: CaseInfo[]): DataNode[] => {
+      if (cases.length === 0) {
+        return [
+          {
+            key: `${file}::__empty`,
+            title: (
+              <Text type="secondary" className="text-xs">
+                No test cases reported yet
+              </Text>
+            ),
+            isLeaf: true,
+            selectable: false,
+          },
+        ];
+      }
+
+      // Group cases by their parentNames path
+      type TreeNode = {
+        name: string;
+        fullPath: string[];
+        children: Map<string, TreeNode>;
+        cases: CaseInfo[];
+        status: CaseStatus;
+      };
+
+      const root: TreeNode = {
+        name: '',
+        fullPath: [],
+        children: new Map(),
+        cases: [],
+        status: 'idle',
+      };
+
+      // Insert each case into the tree
+      for (const testCase of cases) {
+        let current = root;
+        const path = testCase.parentNames;
+
+        // Navigate/create nodes for each parent
+        for (let i = 0; i < path.length; i++) {
+          const name = path[i]!;
+          const fullPath = path.slice(0, i + 1);
+          if (!current.children.has(name)) {
+            current.children.set(name, {
+              name,
+              fullPath,
+              children: new Map(),
+              cases: [],
+              status: 'idle',
+            });
+          }
+          current = current.children.get(name)!;
+        }
+
+        // Add the test case to the deepest node
+        current.cases.push(testCase);
+      }
+
+      // Calculate aggregate status for each suite
+      const calcStatus = (node: TreeNode): CaseStatus => {
+        const childStatuses: CaseStatus[] = [];
+
+        for (const child of node.children.values()) {
+          childStatuses.push(calcStatus(child));
+        }
+
+        for (const c of node.cases) {
+          childStatuses.push(c.status);
+        }
+
+        if (childStatuses.some((s) => s === 'fail')) return 'fail';
+        if (childStatuses.some((s) => s === 'running')) return 'running';
+        if (childStatuses.every((s) => s === 'pass')) return 'pass';
+        if (childStatuses.every((s) => s === 'skip')) return 'skip';
+        if (childStatuses.some((s) => s === 'pass')) return 'pass';
+        return 'idle';
+      };
+
+      // Convert tree to DataNode[]
+      const toDataNodes = (node: TreeNode, keyPrefix: string): DataNode[] => {
+        const result: DataNode[] = [];
+
+        // Add suite nodes (children)
+        for (const child of node.children.values()) {
+          const suiteStatus = calcStatus(child);
+          const suiteMeta = CASE_STATUS_META[suiteStatus];
+          const suiteKey = `${keyPrefix}::suite::${child.fullPath.join('::')}`;
+          // fullName for rerun: join with empty delimiter to match task.ts
+          const suiteFullName = child.fullPath.join('  ');
+
+          result.push({
+            key: suiteKey,
+            title: (
+              <TestSuiteTitle
+                icon={suiteMeta.icon}
+                iconColor={suiteMeta.color}
+                name={child.name}
+                onRerun={() => {
+                  void handleRerunTestCase(file, suiteFullName);
+                }}
+                buttonTextColor={token.colorTextSecondary}
+              />
+            ),
+            children: toDataNodes(child, suiteKey),
+            selectable: false,
+          });
+        }
+
+        // Add test case nodes
+        for (const testCase of node.cases) {
+          const caseMeta = CASE_STATUS_META[testCase.status];
+          result.push({
+            key: `${keyPrefix}::case::${testCase.id}`,
+            title: (
+              <TestCaseTitle
+                icon={caseMeta.icon}
+                iconColor={caseMeta.color}
+                label={testCase.name}
+                onRerun={() => {
+                  void handleRerunTestCase(file, testCase.fullName);
+                }}
+                buttonTextColor={token.colorTextSecondary}
+              />
+            ),
+            isLeaf: true,
+            selectable: false,
+          });
+        }
+
+        return result;
+      };
+
+      return toDataNodes(root, file);
+    },
+    [handleRerunTestCase, token.colorTextSecondary],
+  );
+
   const treeData: DataNode[] = useMemo(
     () =>
       testFiles.map((file) => {
@@ -389,39 +528,6 @@ const BrowserRunner: React.FC<{
         const meta = STATUS_META[status];
         const relativePath = toRelativePath(file, options.rootPath);
         const cases = Object.values(caseMap[file] ?? {});
-        const children: DataNode[] =
-          cases.length === 0
-            ? [
-                {
-                  key: `${file}::__empty`,
-                  title: (
-                    <Text type="secondary" className="text-xs">
-                      No test cases reported yet
-                    </Text>
-                  ),
-                  isLeaf: true,
-                  selectable: false,
-                },
-              ]
-            : cases.map((testCase) => {
-                const caseMeta = CASE_STATUS_META[testCase.status];
-                return {
-                  key: `${file}::${testCase.id}`,
-                  title: (
-                    <TestCaseTitle
-                      icon={caseMeta.icon}
-                      iconColor={caseMeta.color}
-                      label={testCase.label}
-                      onRerun={() => {
-                        void handleRerunTestCase(file, testCase.fullName);
-                      }}
-                      buttonTextColor={token.colorTextSecondary}
-                    />
-                  ),
-                  isLeaf: true,
-                  selectable: false,
-                };
-              });
 
         return {
           key: file,
@@ -437,13 +543,13 @@ const BrowserRunner: React.FC<{
               textColor={token.colorTextSecondary}
             />
           ),
-          children,
+          children: buildNestedTree(file, cases),
         };
       }),
     [
+      buildNestedTree,
       caseMap,
       handleRerunFile,
-      handleRerunTestCase,
       options.rootPath,
       statusMap,
       testFiles,
@@ -503,7 +609,13 @@ const BrowserRunner: React.FC<{
                 <Tree
                   blockNode
                   showLine={false}
-                  switcherIcon={<ChevronDown size={12} />}
+                  switcherIcon={(props: { expanded?: boolean }) =>
+                    props.expanded ? (
+                      <ChevronDown size={12} />
+                    ) : (
+                      <ChevronRight size={12} />
+                    )
+                  }
                   showIcon
                   expandAction="click"
                   expandedKeys={openFiles}
