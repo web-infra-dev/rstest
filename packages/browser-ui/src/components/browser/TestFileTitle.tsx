@@ -1,5 +1,5 @@
-import { Button, Tooltip, Typography } from 'antd';
-import { ExternalLink, RotateCw } from 'lucide-react';
+import { Button, Tooltip } from 'antd';
+import { RotateCw, SquareArrowOutUpRight } from 'lucide-react';
 import React from 'react';
 
 type TestFileTitleProps = {
@@ -11,8 +11,6 @@ type TestFileTitleProps = {
   textColor: string;
 };
 
-const { Text } = Typography;
-
 export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   icon,
   iconColor,
@@ -22,36 +20,34 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   textColor,
 }) => {
   return (
-    <div
-      className="grid w-full items-center gap-2"
-      style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto' }}
-    >
+    <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       <span className="flex w-[18px] shrink-0" style={{ color: iconColor }}>
         {icon}
       </span>
       <Tooltip
         title={relativePath}
         overlayInnerStyle={{ whiteSpace: 'nowrap', maxWidth: 'none' }}
+        mouseLeaveDelay={0}
       >
-        <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold">
+        <span className="truncate text-[13px] font-semibold">
           {relativePath}
         </span>
       </Tooltip>
       <div className="flex items-center gap-1">
-        <Tooltip title="Open in editor">
+        <Tooltip title="Open in editor" mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
-            icon={<ExternalLink size={14} />}
+            icon={<SquareArrowOutUpRight size={14} />}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onOpen();
             }}
-            className="inline-flex h-5 w-5 items-center justify-center p-0"
+            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
             style={{ color: textColor }}
           />
         </Tooltip>
-        <Tooltip title="Re-run this file">
+        <Tooltip title="Re-run this file" mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
@@ -60,7 +56,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
               e.stopPropagation();
               onRerun();
             }}
-            className="inline-flex h-5 w-5 items-center justify-center p-0"
+            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
             style={{ color: textColor }}
           />
         </Tooltip>

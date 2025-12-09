@@ -18,21 +18,16 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
   buttonTextColor,
 }) => {
   return (
-    <div
-      className="grid w-full items-center gap-2"
-      style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto' }}
-    >
+    <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       {icon && (
         <span className="flex shrink-0" style={{ color: iconColor }}>
           {icon}
         </span>
       )}
-      <Tooltip title={label}>
-        <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px]">
-          {label}
-        </span>
+      <Tooltip title={label} mouseLeaveDelay={0}>
+        <span className="truncate text-[13px]">{label}</span>
       </Tooltip>
-      <Tooltip title="Re-run this test">
+      <Tooltip title="Re-run this test" mouseLeaveDelay={0}>
         <Button
           type="text"
           size="small"
@@ -41,7 +36,7 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
             e.stopPropagation();
             onRerun();
           }}
-          className="inline-flex h-5 w-5 items-center justify-center p-0"
+          className="inline-flex! h-5! w-5! items-center justify-center p-0!"
           style={{ color: buttonTextColor }}
         />
       </Tooltip>

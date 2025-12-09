@@ -19,30 +19,21 @@ export const StatsBar: React.FC<StatsBarProps> = ({
 }) => {
   return (
     <div
-      className="flex flex-col"
+      className="flex flex-col px-3 py-2"
       style={{
         borderTop: `1px solid ${borderColor}`,
         borderBottom: `1px solid ${borderColor}`,
         background,
-        padding: '8px 12px',
       }}
     >
-      <div className="flex gap-4 text-[12px]">
-        <div className="inline-flex items-center gap-2 leading-none">
-          <span className="inline-flex items-center justify-center">
-            <CheckCircle2 size={14} color="#4ade80" className="shrink-0" />
-          </span>
-          <Text className="leading-none" style={{ lineHeight: 1 }}>
-            {passCount} passed
-          </Text>
+      <div className="flex gap-4 text-xs">
+        <div className="inline-flex items-center gap-2">
+          <CheckCircle2 size={14} className="shrink-0 text-[#4ade80]" />
+          <Text className="leading-none!">{passCount} passed</Text>
         </div>
-        <div className="inline-flex items-center gap-2 leading-none">
-          <span className="inline-flex items-center justify-center">
-            <XCircle size={14} color="#f87171" className="shrink-0" />
-          </span>
-          <Text className="leading-none" style={{ lineHeight: 1 }}>
-            {failCount} failed
-          </Text>
+        <div className="inline-flex items-center gap-2">
+          <XCircle size={14} className="shrink-0 text-[#f87171]" />
+          <Text className="leading-none!">{failCount} failed</Text>
         </div>
       </div>
     </div>
