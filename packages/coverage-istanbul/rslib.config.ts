@@ -7,7 +7,7 @@ export default defineConfig({
       syntax: ['node 18'],
       dts: true,
       output: {
-        sourceMap: process.env.SOURCE_MAP === 'true',
+        sourceMap: process.env.SOURCEMAP === 'true',
       },
     },
   ],

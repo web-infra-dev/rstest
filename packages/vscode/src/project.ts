@@ -22,7 +22,7 @@ export class WorkspaceManager implements vscode.Disposable {
   public refresh(isOnlyOne: boolean) {
     if (isOnlyOne) {
       if (this.testItem) {
-        delete this.testItem;
+        this.testItem = undefined;
       }
     } else {
       if (!this.testItem) {
@@ -182,7 +182,7 @@ export class Project implements vscode.Disposable {
       isOnlyOne && configFileName.match(/^rstest\.config\.[mc]?[tj]s$/);
     if (skipCreateTestItem) {
       if (this.testItem) {
-        delete this.testItem;
+        this.testItem = undefined;
       }
     } else {
       if (!this.testItem) {
@@ -255,7 +255,7 @@ export class Project implements vscode.Disposable {
       }
     });
     watcher.onDidDelete((uri) => {
-      if (isInclude(uri.path) && !isExclude(uri.fsPath)) {
+      if (isInclude(uri.fsPath) && !isExclude(uri.fsPath)) {
         this.testFiles.delete(uri.toString());
         this.buildTree();
       }

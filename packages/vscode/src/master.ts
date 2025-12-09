@@ -173,8 +173,7 @@ export class RstestApi {
   ) {
     const rstestPath = this.resolveRstestPath();
     if (!rstestPath) {
-      logger.error('Failed to resolve rstest path');
-      throw new Error();
+      throw new Error('Failed to resolve rstest path');
     }
     const execArgv: string[] = [];
     if (startDebugging) {
@@ -213,7 +212,9 @@ export class RstestApi {
       );
       if (!startedDebugging) {
         rstestProcess.kill();
-        throw new Error('start debugging failed');
+        throw new Error(
+          `Failed to attach debugger to test worker process (PID: ${rstestProcess.pid})`,
+        );
       }
     }
 

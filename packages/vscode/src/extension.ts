@@ -154,7 +154,6 @@ class Rstest {
           continue;
         }
         const data = testData.get(test);
-        // TODO 这啥来着？
         if (data instanceof TestFile || data instanceof TestCase) {
           run.enqueued(test);
         }
@@ -181,7 +180,7 @@ class Rstest {
         if (data instanceof WorkspaceManager) {
           if (data.projects.size === 1) {
             const project = data.projects.values().next().value!;
-            project.api.runTest({
+            await project.api.runTest({
               ...commonOptions,
             });
           } else {

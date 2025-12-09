@@ -154,14 +154,13 @@ export class TestRunReporter implements Reporter {
         branchCoverage,
         declarationCoverage,
         details?.map((detail) => {
-          const range = detail.location as vscode.Range;
           const mapLocation = (location: vscode.Position | vscode.Range) => {
             if ('start' in location)
               return new vscode.Range(
-                range.start.line,
-                range.start.character,
-                range.end.line,
-                range.end.character,
+                location.start.line,
+                location.start.character,
+                location.end.line,
+                location.end.character,
               );
             return new vscode.Position(location.line, location.character);
           };
