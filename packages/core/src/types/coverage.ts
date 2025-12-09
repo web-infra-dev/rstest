@@ -29,16 +29,19 @@ export type { CoverageMap, CoverageMapData, CoverageSummary };
 
 export type CoverageThresholds =
   | CoverageThreshold
-  | (CoverageThreshold & {
-      /** check thresholds for matched files */
-      [glob: string]: CoverageThreshold & {
-        /**
-         * check thresholds per file
-         * @default false
-         */
-        perFile?: boolean;
-      };
-    });
+  | (CoverageThreshold & ThresholdGlobRecord);
+
+/** check thresholds for matched files */
+type ThresholdGlobRecord = Record<
+  string,
+  CoverageThreshold & {
+    /**
+     * check thresholds per file
+     * @default false
+     */
+    perFile?: boolean;
+  }
+>;
 
 export type CoverageOptions = {
   /**

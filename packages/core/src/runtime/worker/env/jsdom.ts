@@ -8,7 +8,7 @@ type JSDOMOptions = ConstructorOptions & {
   console?: boolean;
 };
 
-export const environment = <TestEnvironment<typeof globalThis>>{
+export const environment: TestEnvironment<typeof globalThis> = {
   name: 'jsdom',
   async setup(global, { jsdom = {} }) {
     checkPkgInstalled('jsdom');
