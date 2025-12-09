@@ -327,6 +327,12 @@ const destroyBrowserRuntime = async (
   } catch {
     // ignore
   }
+  try {
+    // Close WebSocket server to allow process to exit
+    runtime.wss?.close();
+  } catch {
+    // ignore
+  }
   await fs
     .rm(runtime.tempDir, { recursive: true, force: true })
     .catch(() => {});
@@ -406,6 +412,8 @@ const createBrowserRuntime = async ({
       mode: 'development',
       server: {
         printUrls: false,
+        port: context.normalizedConfig.browser.port,
+        strictPort: context.normalizedConfig.browser.port !== undefined,
       },
       environments: {
         web: {
