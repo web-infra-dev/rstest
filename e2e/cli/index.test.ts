@@ -41,7 +41,7 @@ describe.concurrent('test exit code', () => {
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'success.test.ts', '-c', 'fixtures/error.config.ts'],
       onTestFinished,
@@ -51,14 +51,9 @@ describe.concurrent('test exit code', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(
-      logs.find((log) => log.includes('Invalid pool configuration')),
-    ).toBeDefined();
+    expectStderrLog(/Invalid pool configuration/);
   });
 
   it('should get RSTEST flag correctly in config', async ({

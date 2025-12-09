@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 
 describe('test config load', () => {
   it('should throw error when custom test config not found', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'success.test.ts', '-c', 'a.config.ts'],
       options: {
@@ -18,18 +18,13 @@ describe('test config load', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(
-      logs.find((log) => log.includes('Cannot find config file')),
-    ).toBeDefined();
+    expectStderrLog(/Cannot find config file/);
   });
 
   it('should throw error when plugin setup error', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'success.test.ts', '-c', 'fixtures/plugin.error.config.ts'],
       options: {
@@ -38,18 +33,13 @@ describe('test config load', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(
-      logs.find((log) => log.includes('plugin setup error')),
-    ).toBeDefined();
+    expectStderrLog(/plugin setup error/);
   });
 
   it('should throw error when plugin setup error in watch mode', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: [
         'watch',
@@ -63,13 +53,8 @@ describe('test config load', () => {
         },
       },
     });
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(
-      logs.find((log) => log.includes('plugin setup error')),
-    ).toBeDefined();
+    expectStderrLog(/plugin setup error/);
   });
 });
