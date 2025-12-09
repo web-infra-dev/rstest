@@ -4,6 +4,7 @@ export default defineConfig({
   browser: {
     enabled: true,
     headless: true,
+    port: 5194,
   },
   include: ['tests/**/*.test.ts'],
   testTimeout: 30000,
