@@ -16,16 +16,9 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
   return (
     <div
       className="flex items-center justify-between px-3 py-2"
-      style={{
-        padding: '8px 12px',
-        borderBottom: `1px solid ${token.colorBorderSecondary}`,
-      }}
+      style={{ borderBottom: `1px solid ${token.colorBorderSecondary}` }}
     >
-      <Text
-        type="secondary"
-        style={{ fontSize: 11, letterSpacing: '0.05em' }}
-        strong
-      >
+      <Text type="secondary" className="text-[11px]! tracking-wide" strong>
         TEST FILES
       </Text>
       <Badge

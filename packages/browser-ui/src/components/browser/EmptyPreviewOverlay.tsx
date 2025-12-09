@@ -11,10 +11,7 @@ export const EmptyPreviewOverlay: React.FC<EmptyPreviewOverlayProps> = ({
   message,
 }) => {
   return (
-    <div
-      className="absolute inset-0 z-10 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.02)' }}
-    >
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/[0.02]">
       <Text type="secondary">{message}</Text>
     </div>
   );

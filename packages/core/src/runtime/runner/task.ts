@@ -41,6 +41,7 @@ const shouldTestSkip = (
   if (runOnly && test.runMode !== 'only') {
     return true;
   }
+
   if (
     testNamePattern &&
     !getTaskNameWithPrefix(test, '').match(testNamePattern)

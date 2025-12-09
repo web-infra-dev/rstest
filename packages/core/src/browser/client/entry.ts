@@ -136,15 +136,30 @@ const run = async () => {
   await waitForConfig();
   let options = window.__RSTEST_BROWSER_OPTIONS__;
 
-  // Support reading testFile from URL parameter
+  // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
+  const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
     // Override testFile from URL parameter
     options = {
       ...options,
       testFile: urlTestFile,
+    };
+  }
+
+  // Override testNamePattern from URL parameter if provided
+  if (urlTestNamePattern && options) {
+    options = {
+      ...options,
+      projects: options.projects.map((project) => ({
+        ...project,
+        runtimeConfig: {
+          ...project.runtimeConfig,
+          testNamePattern: urlTestNamePattern,
+        },
+      })),
     };
   }
 
