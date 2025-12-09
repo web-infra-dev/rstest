@@ -60,6 +60,12 @@ export type BrowserModeConfig = {
    * @default true
    */
   headless?: boolean;
+  /**
+   * Port for the browser mode dev server.
+   *
+   * If not specified, a random available port will be used.
+   */
+  port?: number;
 };
 
 type SnapshotFormat = Omit<
@@ -380,6 +386,7 @@ export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   browser: 'chromium';
   headless: boolean;
+  port?: number;
 };
 
 export type NormalizedConfig = Required<
