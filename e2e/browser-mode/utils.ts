@@ -15,7 +15,6 @@ export const runBrowserCli = async (
     env?: Record<string, string>;
   },
 ) => {
-  console.log('🧟‍♀️', join(__dirname, 'fixtures', fixtureName));
   return await runRstestCli({
     command: 'rstest',
     args: ['run', ...(extra?.args || [])],

@@ -1,6 +1,7 @@
 import { manifest } from '@rstest/browser-manifest';
 import { createRstestRuntime } from '../../runtime/api';
 import { setRealTimers } from '../../runtime/util';
+import { globalApis } from '../../utils/constants';
 import type { RunnerHooks, RuntimeConfig, WorkerState } from '../../types';
 import type {
   BrowserClientMessage,
@@ -233,6 +234,13 @@ const run = async () => {
     };
 
     const runtime = createRstestRuntime(workerState);
+
+    // Register global APIs if globals config is enabled
+    if (project.runtimeConfig.globals) {
+      for (const key of globalApis) {
+        (globalThis as any)[key] = (runtime.api as any)[key];
+      }
+    }
 
     let failedTestsCount = 0;
 
