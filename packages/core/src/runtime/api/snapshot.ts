@@ -329,13 +329,15 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin =
             'toThrowErrorMatchingInlineSnapshot cannot be used with "not"',
           );
         }
-        const test = getTestOrThrow('toThrowErrorMatchingInlineSnapshot', this);
+        const test = getTest(this);
 
-        const isInsideEach = test.each || test.inTestEach;
-        if (isInsideEach) {
-          throw new Error(
-            'InlineSnapshot cannot be used inside of test.each or describe.each',
-          );
+        if (test) {
+          const isInsideEach = test.each || test.inTestEach;
+          if (isInsideEach) {
+            throw new Error(
+              'InlineSnapshot cannot be used inside of test.each or describe.each',
+            );
+          }
         }
         const expected = utils.flag(this, 'object');
         const error = utils.flag(this, 'error');
@@ -354,7 +356,13 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin =
           isInline: true,
           error,
           errorMessage,
-          ...getTestMeta(test),
+          ...(test
+            ? getTestMeta(test)
+            : {
+                name: 'toThrowErrorMatchingInlineSnapshot',
+                filepath: workerState.testPath,
+                testId: String(workerState.taskId),
+              }),
         });
       },
     );
