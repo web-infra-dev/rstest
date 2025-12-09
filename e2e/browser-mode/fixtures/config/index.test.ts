@@ -1,5 +1,3 @@
-// import { describe, expect, it } from '@rstest/core';
-
 // This test uses globals: true config
 describe('globals config', () => {
   it('should have global describe and it', () => {
