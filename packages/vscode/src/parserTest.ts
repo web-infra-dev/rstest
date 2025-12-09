@@ -81,7 +81,7 @@ export const parseTestFile = (
       range: Range,
       name: string,
       testType: 'test' | 'it' | 'describe' | 'suite',
-    ): void;
+    ): (() => void) | void;
   },
 ) => {
   const compiler = new Compiler();
@@ -99,16 +99,24 @@ export const parseTestFile = (
 
   const ast: Program = astUnknown as unknown as Program;
   const offset = ast.span.start - 1;
+  const codeBuffer = Buffer.from(code, 'utf8');
 
   // Helper function to convert SWC span to VS Code range
   const spanToRange = (span: { start: number; end: number }): Range => {
-    const lines = code.substring(0, span.start - offset).split('\n');
-    const startLine = lines.length - 1;
-    const startChar = lines[startLine].length;
+    // Convert byte offset to character index (SWC uses UTF-8 byte offsets)
+    const startSlice = codeBuffer.subarray(0, span.start - offset);
+    const startCharIndex = startSlice.toString('utf8').length;
 
-    const endLines = code.substring(0, span.end - offset).split('\n');
-    const endLine = endLines.length - 1;
-    const endChar = endLines[endLine].length;
+    const endSlice = codeBuffer.subarray(0, span.end - offset);
+    const endCharIndex = endSlice.toString('utf8').length;
+
+    const lines = code.substring(0, startCharIndex).split('\n');
+    const startLine = Math.max(0, lines.length - 1);
+    const startChar = lines[startLine]?.length || 0;
+
+    const endLines = code.substring(0, endCharIndex).split('\n');
+    const endLine = Math.max(0, endLines.length - 1);
+    const endChar = endLines[endLine]?.length || 0;
 
     return new Range(startLine, endLine, startChar, endChar);
   };
@@ -148,6 +156,8 @@ export const parseTestFile = (
       return;
     }
 
+    let exit: (() => void) | void | undefined;
+
     // Check for call expressions that might be test functions
     if (isCallExpression(node)) {
       let functionName: string | null = null;
@@ -174,7 +184,7 @@ export const parseTestFile = (
         const range = spanToRange(node.span);
 
         type TestFn = 'test' | 'it' | 'describe' | 'suite';
-        events.onTest(
+        exit = events.onTest(
           range,
           testName || 'unnamed test',
           functionName as TestFn,
@@ -199,6 +209,8 @@ export const parseTestFile = (
         walkNode(value);
       }
     }
+
+    exit?.();
   };
 
   // Start walking from the root

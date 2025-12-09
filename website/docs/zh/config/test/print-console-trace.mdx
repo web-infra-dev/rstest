@@ -1,0 +1,30 @@
+# printConsoleTrace
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--printConsoleTrace`
+
+console 方法调用时始终打印调用栈，这将有助于调试。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --printConsoleTrace
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  printConsoleTrace: true,
+});
+```
+  </Tab>
+</Tabs>
+
+:::note
+当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`printConsoleTrace` 将被忽略。
+:::

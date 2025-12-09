@@ -31,6 +31,7 @@ import {
 import * as chai from 'chai';
 import type {
   Assertion,
+  ChaiConfig,
   MatcherState,
   RstestExpect,
   TestCase,
@@ -39,11 +40,11 @@ import type {
 import { createExpectPoll } from './poll';
 import { SnapshotPlugin } from './snapshot';
 
-chai.use(JestExtend);
-chai.use(JestChaiExpect);
-chai.use(SnapshotPlugin);
-chai.use(JestAsymmetricMatchers);
 export { GLOBAL_EXPECT };
+
+export function setupChaiConfig(config: ChaiConfig): void {
+  Object.assign(chai.config, config);
+}
 
 export function createExpect({
   getCurrentTest,
@@ -52,6 +53,11 @@ export function createExpect({
   workerState: WorkerState;
   getCurrentTest: () => TestCase | undefined;
 }): RstestExpect {
+  chai.use(JestExtend);
+  chai.use(JestChaiExpect);
+  chai.use(SnapshotPlugin(workerState));
+  chai.use(JestAsymmetricMatchers);
+
   const expect = ((value: any, message?: string): Assertion => {
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);

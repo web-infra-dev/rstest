@@ -1,0 +1,94 @@
+# 从 Vitest 迁移
+
+如果你正在使用 Rstack (Rsbuild / Rslib / Rspack 等)工具链，迁移到 Rstest 将会为你带来一致的开发体验。
+
+## 安装依赖
+
+首先，你需要安装 Rstest 依赖。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core -D" />
+
+接下来，更新 `package.json` 中的测试脚本，使用 [rstest](/guide/basic/cli) 替代 `vitest`。例如：
+
+```diff
+"scripts": {
+-  "test": "vitest run"
++  "test": "rstest"
+}
+```
+
+## 配置迁移
+
+将你的 vitest 配置文件（例如 `vite.config.ts` 或 `vitest.config.ts`）更新为 `rstest.config.ts` 文件：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+});
+```
+
+### 测试配置
+
+Rstest 测试配置与 Vitest 基本相同，需要注意的是，你不需要将测试配置放在 `test` 字段下。
+
+此外，有一些配置变化需要注意，如 `test.environment` 需要更改为 `testEnvironment`。
+
+你可以通过 [Test Configurations](/config/#test-configurations) 查看所有可用的测试配置选项。
+
+```diff
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+-  test: {
+     include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+-    environment: 'node',
++    testEnvironment: 'node',
+-  }
+});
+```
+
+### 编译配置
+
+Rstest 使用 Rsbuild 作为默认的测试编译工具，而不是 Vite。因此，你需要将编译配置从 Vite 配置迁移到 Rstest 配置中。你可以通过 [Build Configurations](/config/#build-configurations) 查看所有可用的编译配置选项。
+
+如果你需要了解更多关于 Vite 编译配置迁移的信息，请参考 [Rsbuild - Vite 迁移文档](https://rsbuild.rs/zh/guide/migration/vite#%E9%85%8D%E7%BD%AE%E8%BF%81%E7%A7%BB)。
+
+## 更新测试 API
+
+### 测试 API
+
+Rstest 提供了与 Vitest 兼容的 API。因此，你只需将导入从 Vitest 更改为 Rstest：
+
+```diff
+- import { describe, expect, it, test } from 'vitest';
++ import { describe, expect, it, test } from '@rstest/core';
+```
+
+Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Vitest 的 `vi.fn()` 和 `vi.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
+
+```diff
+- const fn = vi.fn();
++ const fn = rstest.fn();
+
+fn.mockResolvedValue('foo');
+```
+
+### Mock 异步模块
+
+当你需要 mock 一个模块返回值时，Rstest 不支持返回一个异步函数。
+
+作为替代方案，Rstest 提供了同步的 [importActual](/api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
+
+```ts
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+// Partially mock the './api' module
+rs.mock('./api', () => ({
+  ...apiActual,
+  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
+}));
+```

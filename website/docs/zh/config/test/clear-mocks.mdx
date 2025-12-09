@@ -1,0 +1,28 @@
+# clearMocks
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--clearMocks`
+
+清除所有 mock 的 `mock.calls`、`mock.instances`、`mock.contexts` 和 `mock.results` 属性。
+
+当启用 `clearMocks` 时，rstest 将在每个测试用例执行之前调用 [.clearAllMocks()](/api/rstest/mock-functions#rstestclearallmocks)。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --clearMocks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  clearMocks: true,
+});
+```
+  </Tab>
+</Tabs>

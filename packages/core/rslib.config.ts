@@ -1,5 +1,6 @@
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
+import { version } from './package.json';
 
 const isBuildWatch = process.argv.includes('--watch');
 
@@ -9,25 +10,30 @@ export default defineConfig({
       id: 'rstest',
       format: 'esm',
       syntax: ['node 18'],
+      experiments: {
+        advancedEsm: true,
+      },
       dts: {
-        bundle: {
-          bundledPackages: [
-            '@types/sinonjs__fake-timers',
-            '@types/istanbul-reports',
-            '@types/istanbul-lib-report',
-            '@types/istanbul-lib-coverage',
-            '@jridgewell/trace-mapping',
-            '@vitest/expect',
-            '@vitest/snapshot',
-            '@vitest/utils',
-            '@vitest/spy',
-            'tinyrainbow',
-            '@vitest/pretty-format',
-          ],
-        },
-        distPath: './dist-types',
+        bundle: process.env.SOURCEMAP
+          ? false
+          : {
+              bundledPackages: [
+                '@types/sinonjs__fake-timers',
+                '@types/istanbul-reports',
+                '@types/istanbul-lib-report',
+                '@types/istanbul-lib-coverage',
+                '@jridgewell/trace-mapping',
+                '@vitest/expect',
+                '@vitest/snapshot',
+                '@vitest/utils',
+                '@vitest/spy',
+                'tinyrainbow',
+                '@vitest/pretty-format',
+              ],
+            },
       },
       output: {
+        sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
           // Temporary fix: `import * as timers from 'timers'` reassign error
           timers: 'commonjs timers',
@@ -72,7 +78,7 @@ export default defineConfig({
           worker: './src/runtime/worker/index.ts',
         },
         define: {
-          RSTEST_VERSION: JSON.stringify(require('./package.json').version),
+          RSTEST_VERSION: JSON.stringify(version),
         },
       },
       tools: {
@@ -100,6 +106,7 @@ export default defineConfig({
       id: 'rstest_loaders',
       format: 'esm',
       syntax: 'es2021',
+      dts: false,
       source: {
         entry: {
           cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
@@ -112,6 +119,9 @@ export default defineConfig({
       },
     },
   ],
+  performance: {
+    printFileSize: !isBuildWatch,
+  },
   tools: {
     rspack: {
       watchOptions: {

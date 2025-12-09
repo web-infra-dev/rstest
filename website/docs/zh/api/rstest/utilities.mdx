@@ -124,3 +124,18 @@ rstest.resetConfig(); // 恢复默认配置
 - **类型：** `() => void`
 
 将通过 `rstest.setConfig` 修改的运行时配置重置为默认值。
+
+## rstest.getConfig
+
+- **别名：** `rs.getConfig`
+
+- **类型：** `() => RuntimeConfig`
+
+获取当前测试文件的运行时配置。
+
+**示例：**
+
+```ts
+const config = rstest.getConfig();
+console.log(config);
+```

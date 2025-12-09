@@ -76,7 +76,7 @@ export const prepareRsbuild = async (
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
-    rsbuildConfig: {
+    config: {
       root: context.rootPath,
       server: {
         printUrls: false,
@@ -337,7 +337,14 @@ export const createRsbuildServer = async ({
         if (err) {
           reject(err);
         }
-        resolve(typeof data === 'string' ? data : data!.toString());
+        const content =
+          typeof data === 'string'
+            ? data
+            : fileName.endsWith('.wasm')
+              ? data!.toString('base64')
+              : data!.toString('utf-8');
+
+        resolve(content);
       });
     });
   };
@@ -395,10 +402,13 @@ export const createRsbuildServer = async ({
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
+      const filteredAssets = e.assets!.filter(
+        (asset) => !asset.name.endsWith('.wasm'),
+      );
 
       const distPath = path.join(
         outputPath!,
-        e.assets![e.assets!.length - 1]!.name,
+        filteredAssets[filteredAssets.length - 1]!.name,
       );
 
       if (setupFiles[environmentName]![entry]) {

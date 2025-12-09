@@ -2,11 +2,29 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # output
 
+## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
+
+是否以 ES 模块格式输出 JavaScript 文件。
+
+Rstest 默认会以 CommonJS 格式输出并执行测试代码。如果你希望以 ES 模块格式输出测试代码，可以通过如下配置项开启：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    module: true,
+  },
+});
+```
+
 ## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
 
 配置代码中的某些 `import` 的依赖不被打包，而是由 Rstest 在运行时去获取这些依赖。
 
-- 在 Node.js 测试环境中，默认将 `node_modules` 下的所有包都进行 external。
+- 在 Node.js 测试环境中，默认打包：
+  - 任意目录下的 TypeScript 和 JSX 文件，匹配的文件后缀为 `.ts`、`.tsx`、`.jsx`、`.mts`、`.cts`。
+  - 非 `node_modules` 目录下的 JavaScript 文件，匹配的文件后缀为 `.js`、`.mjs`、`.cjs`。
 - 在类浏览器（jsdom 等）测试环境中，默认打包所有依赖。
 
 如果你想某个依赖不被打包，可以在 `output.externals` 中进行配置。
@@ -30,6 +48,36 @@ export default defineConfig({
   tools: {
     rspack: (config) => {
       config.externals = [];
+    },
+  },
+});
+```
+
+### 指定 external 类型
+
+你可以通过 `${externalsType} ${libraryName}` 语法来指定某个依赖的 external 类型。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: {
+      lodash: 'commonjs lodash', // 将 lodash 作为 CommonJS 模块进行 external
+    },
+  },
+});
+```
+
+你也可以通过 [`externalsType` 配置项](https://rspack.rs/config/externals#externalstype) 来指定所有依赖的默认 external 类型。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      externalsType: 'commonjs',
     },
   },
 });

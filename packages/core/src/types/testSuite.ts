@@ -27,13 +27,20 @@ export interface TaskResult {
   errors?: FormattedError[];
 }
 
-export type TestCase = {
+export type TestCaseInfo = {
+  testId: string;
   testPath: TestPath;
   name: string;
+  timeout?: number;
+  parentNames?: string[];
+  project: string;
+  startTime?: number;
+};
+
+export type TestCase = TestCaseInfo & {
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
   runMode: TestRunMode;
-  timeout?: number;
   fails?: boolean;
   each?: boolean;
   fixtures?: NormalizedFixtures;
@@ -45,7 +52,6 @@ export type TestCase = {
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
   type: 'case';
-  parentNames?: string[];
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -54,7 +60,6 @@ export type TestCase = {
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;
-  project: string;
 };
 
 export type SuiteContext = {
@@ -70,16 +75,20 @@ export type AfterEachListener = (params: {
 }) => MaybePromise<void>;
 export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
 
-export type TestSuite = {
+export type TestSuiteInfo = {
+  testId: string;
   name: string;
   parentNames?: string[];
+  testPath: TestPath;
+  project: string;
+};
+
+export type TestSuite = TestSuiteInfo & {
   runMode: TestRunMode;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
   sequential?: boolean;
-  testPath: TestPath;
-  project: string;
   /** nested cases and suite could in a suite */
   tests: (TestSuite | TestCase)[];
   type: 'suite';
@@ -111,9 +120,12 @@ export type FormattedError = {
   name?: string;
   stack?: string;
   diff?: string;
+  expected?: string;
+  actual?: string;
 };
 
 export type TestResult = {
+  testId: string;
   status: TestResultStatus;
   name: string;
   testPath: TestPath;
@@ -122,6 +134,7 @@ export type TestResult = {
   errors?: FormattedError[];
   retryCount?: number;
   project: string;
+  heap?: number;
 };
 
 export type TestFileResult = TestResult & {

@@ -1,5 +1,11 @@
 # 快速上手
 
+## 在线示例
+
+你可以通过以下示例在线尝试 Rstest，无需任何设置：
+
+- [StackBlitz 示例](https://stackblitz.com/~/github.com/rspack-contrib/rstest-stackblitz-example)
+
 ## 环境准备
 
 开始之前，需要先安装 [Node.js](https://nodejs.org/) >= 18 版本，推荐使用 Node.js LTS 版本。
@@ -45,7 +51,7 @@ Rstest 内置了 `watch`、`run` 等命令，请参考 [CLI 工具](/guide/basic
 
 ## 编写测试
 
-作为一个简单的例子，我们有一个 `sayHi` 方法。为了对它进行测试，你可以创建一个名为 `index.test.ts` 的测试文件或使用与 [Rust 测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest) 类似的 [In-Source 测试](/config/test/includeSource)。
+作为一个简单的例子，我们有一个 `sayHi` 方法。为了对它进行测试，你可以创建一个名为 `index.test.ts` 的测试文件或使用与 [Rust 测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest) 类似的 [In-Source 测试](/config/test/include-source)。
 
 ```ts title=index.ts
 export const sayHi = () => 'hi';

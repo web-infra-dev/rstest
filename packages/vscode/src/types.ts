@@ -2,25 +2,21 @@ import type { TestFileResult, TestResult } from '@rstest/core';
 
 //#region master -> worker
 export type WorkerInitData = {
-  type: 'init';
   rstestPath: string;
-  cwd: string;
+  root: string;
+  configFilePath: string;
 };
 
 export type WorkerRunTestData = {
-  id: string;
-  type: 'runTest';
+  runId: string;
   fileFilters: string[];
-  testNamePattern: string;
+  testNamePattern?: string | RegExp;
+  updateSnapshot?: boolean;
 };
 // #endregion
 
 //#region worker -> master
-export type WorkerEvent = WorkerEventFinish;
-
 export type WorkerEventFinish = {
-  type: 'finish';
-  id: string;
   testResults: TestResult[];
   testFileResults?: TestFileResult[];
 };

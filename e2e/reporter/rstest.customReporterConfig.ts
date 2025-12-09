@@ -1,8 +1,10 @@
 import type {
   Reporter,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestSuiteInfo,
 } from '@rstest/core';
 import { defineConfig } from '@rstest/core';
 
@@ -11,6 +13,18 @@ export const reporterResult: string[] = [];
 class MyReporter implements Reporter {
   onTestFileStart(_file: TestFileInfo) {
     reporterResult.push('[custom reporter] onTestFileStart');
+  }
+
+  onTestSuiteStart(_test: TestSuiteInfo) {
+    reporterResult.push('[custom reporter] onTestSuiteStart');
+  }
+
+  onTestSuiteResult(_result: TestResult) {
+    reporterResult.push('[custom reporter] onTestSuiteResult');
+  }
+
+  onTestCaseStart(_test: TestCaseInfo) {
+    reporterResult.push('[custom reporter] onTestCaseStart');
   }
 
   onTestCaseResult(_result: TestResult) {

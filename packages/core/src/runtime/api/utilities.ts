@@ -92,6 +92,27 @@ export const createRstestUtilities: (
       Object.assign(workerState.runtimeConfig, config);
     },
 
+    getConfig: () => {
+      const {
+        testTimeout,
+        hookTimeout,
+        clearMocks,
+        resetMocks,
+        restoreMocks,
+        maxConcurrency,
+        retry,
+      } = workerState.runtimeConfig;
+      return {
+        testTimeout,
+        hookTimeout,
+        clearMocks,
+        resetMocks,
+        restoreMocks,
+        maxConcurrency,
+        retry,
+      };
+    },
+
     resetConfig: () => {
       if (originalConfig) {
         Object.assign(workerState.runtimeConfig, originalConfig);

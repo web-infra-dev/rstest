@@ -280,6 +280,7 @@ describe('traverseUpdateTest', () => {
       [
         {
           "name": "testA",
+          "parentNames": [],
           "runMode": "run",
           "tests": [
             {
@@ -300,6 +301,9 @@ describe('traverseUpdateTest', () => {
             },
             {
               "name": "test-2",
+              "parentNames": [
+                "testA",
+              ],
               "runMode": "run",
               "tests": [
                 {

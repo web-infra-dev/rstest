@@ -23,9 +23,9 @@ See [Documentation](https://rstest.rs).
 
 ## 🔥 Roadmap
 
-Rstest is currently under active development and we plan to release the first stable version in late 2025.
+Rstest now supports core testing scenarios including Node.js testing, DOM testing, mocking, multi-project testing, and coverage collection. It is already in active use across the Rstack ecosystem, including projects like Rspack, Rsbuild and Rslib.
 
-More details can be found on [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
+The project is currently in active development, and we will continue to refine functionality and enhance the user experience based on community feedback. For future development plans, please refer to the [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
 
 ## 🦀 Rstack
 

@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   WorkerState,
 } from '../../types';
-
+import { getSnapshotClient } from '../api/snapshot';
 import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
@@ -47,6 +47,10 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
+        const snapshotClient = getSnapshotClient();
+
+        await snapshotClient.setup(testPath, workerState.snapshotOptions);
+
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
         runtime.instance.updateStatus('running');
@@ -57,6 +61,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
           state: workerState,
           hooks,
           api,
+          snapshotClient,
         });
 
         return results;

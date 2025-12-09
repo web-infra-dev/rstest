@@ -1,11 +1,16 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
+import type { config } from 'chai';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+
+export type ChaiConfig = Partial<
+  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+>;
 
 export type RstestPoolType = 'forks';
 
@@ -22,7 +27,15 @@ export type RstestPoolOptions = {
 
 export type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+  | 'projects'
+  | 'reporters'
+  | 'pool'
+  | 'isolate'
+  | 'coverage'
+  | 'resolveSnapshotPath'
+  | 'onConsoleLog'
+  | 'hideSkippedTests'
+  | 'bail'
 >;
 
 type SnapshotFormat = Omit<
@@ -35,7 +48,11 @@ type SnapshotFormat = Omit<
  *
  * eg. ['packages/*', 'examples/node/rstest.config.ts']
  */
-type TestProject = string | ProjectConfig;
+/**
+ * Inline project config must include a name.
+ */
+type InlineProjectConfig = ProjectConfig & { name: string };
+type TestProject = string | InlineProjectConfig;
 
 export interface RstestConfig {
   /**
@@ -120,6 +137,14 @@ export interface RstestConfig {
    * @default 'node'
    */
   testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+
+  /**
+   * Stop running tests after n failures.
+   * Set to 0 to run all tests regardless of failures.
+   *
+   * @default 0
+   */
+  bail?: number;
 
   /**
    * print console traces when calling any console method.
@@ -216,6 +241,12 @@ export interface RstestConfig {
   maxConcurrency?: number;
 
   /**
+   * Log heap usage after each test
+   * @default false
+   */
+  logHeapUsage?: boolean;
+
+  /**
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;
@@ -238,6 +269,11 @@ export interface RstestConfig {
    */
   coverage?: CoverageOptions;
 
+  /**
+   * chai configuration options
+   */
+  chaiConfig?: ChaiConfig;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
@@ -256,7 +292,7 @@ export interface RstestConfig {
 
   output?: Pick<
     NonNullable<RsbuildConfig['output']>,
-    'cssModules' | 'externals' | 'cleanDistPath'
+    'cssModules' | 'externals' | 'cleanDistPath' | 'module'
   >;
 
   resolve?: RsbuildConfig['resolve'];
@@ -277,6 +313,7 @@ type OptionalKeys =
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
+  | 'chaiConfig'
   | 'resolveSnapshotPath';
 
 export type NormalizedConfig = Required<
@@ -284,25 +321,23 @@ export type NormalizedConfig = Required<
     RstestConfig,
     OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
   >
-> & {
-  [key in OptionalKeys]?: RstestConfig[key];
-} & {
-  pool: RstestPoolOptions;
-  coverage: NormalizedCoverageOptions;
-  setupFiles: string[];
-  exclude: {
-    patterns: string[];
-    override?: boolean;
+> &
+  Partial<Pick<RstestConfig, OptionalKeys>> & {
+    pool: RstestPoolOptions;
+    coverage: NormalizedCoverageOptions;
+    setupFiles: string[];
+    exclude: {
+      patterns: string[];
+      override?: boolean;
+    };
   };
-};
 
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
     OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
   >
-> & {
-  [key in OptionalKeys]?: NormalizedConfig[key];
-} & {
-  setupFiles: string[];
-};
+> &
+  Pick<NormalizedConfig, OptionalKeys> & {
+    setupFiles: string[];
+  };

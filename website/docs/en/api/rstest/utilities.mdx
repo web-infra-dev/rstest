@@ -124,3 +124,18 @@ rstest.resetConfig(); // Restore to default config
 - **Type:** `() => void`
 
 Resets the runtime configuration that was changed using `rstest.setConfig` back to the default values.
+
+## rstest.getConfig
+
+- **Alias:** `rs.getConfig`
+
+- **Type:** `() => RuntimeConfig`
+
+Retrieves the current runtime configuration for the test file. Useful for inspecting or logging the current settings.
+
+**Example:**
+
+```ts
+const config = rstest.getConfig();
+console.log(config);
+```

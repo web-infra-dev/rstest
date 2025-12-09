@@ -5,7 +5,7 @@
 ```ts
 type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage'
+  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage' | 'bail'
 >;
 
 type Projects = (string | ProjectConfig)[];
@@ -16,10 +16,6 @@ type Projects = (string | ProjectConfig)[];
 Define multiple test projects. It can be an array of directories, configuration files, or glob patterns, or an object.
 
 Rstest will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
-
-You can filter the specified projects to run by using the [--project](/guide/basic/test-filter#filter-by-project-name) option.
-
-If there is no `projects` field, `rstest` will treat current directory as a single project.
 
 ```ts name='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -52,40 +48,4 @@ export default defineConfig({
 });
 ```
 
-## Configuration notes
-
-- Project configuration does not inherit root configuration. If there is shared configuration between your sub-projects, you can extract the shared configuration and import it in the sub-project.
-- Some root-level options such as `reporters`, `pool`, and `isolate` are not valid in a project configuration.
-- `projects` does not support nesting.
-
-```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-import sharedConfig from '../shared/rstest.config';
-
-export default defineConfig({
-  ...sharedConfig,
-});
-```
-
-## Inline configuration
-
-`rstest` supports configuring projects inline in the `projects` field. This lets you define multiple test projects in a single root without creating separate config files for each test project.
-
-```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: [
-    // inline project configs
-    {
-      name: 'node',
-      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    },
-    {
-      name: 'react',
-      include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-      testEnvironment: 'jsdom',
-    },
-  ],
-});
-```
+More information about projects can be found in [Test projects](/guide/basic/projects).

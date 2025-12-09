@@ -26,13 +26,9 @@ import type { WorkerRPC } from './rpc';
 
 const RealDate = Date;
 
-export type LogCounters = {
-  [label: string]: number;
-};
+export type LogCounters = Record<string, number>;
 
-export type LogTimers = {
-  [label: string]: Date;
-};
+export type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
   rpc,

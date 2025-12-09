@@ -2,6 +2,7 @@
 
 exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
 {
+  "bail": 0,
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -15,9 +16,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/__mocks__/**",
       "**/*.d.ts",
       "**/*.{test,spec}.[jt]s",
-      "**/*.{test,spec}.[c|m][jt]s",
+      "**/*.{test,spec}.[cm][jt]s",
       "**/*.{test,spec}.[jt]sx",
-      "**/*.{test,spec}.[c|m][jt]sx",
+      "**/*.{test,spec}.[cm][jt]sx",
     ],
     "provider": "istanbul",
     "reportOnFailure": false,
@@ -29,7 +30,6 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
-  "dev": undefined,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -50,9 +50,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   ],
   "includeSource": [],
   "isolate": true,
+  "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
-  "output": undefined,
   "passWithNoTests": false,
   "pool": {
     "type": "forks",

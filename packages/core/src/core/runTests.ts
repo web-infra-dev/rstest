@@ -120,14 +120,17 @@ export async function runTests(context: Rstest): Promise<void> {
   const run = async ({
     fileFilters,
     mode = 'all',
+    buildStart = Date.now(),
   }: {
     fileFilters?: string[];
     mode?: Mode;
+    buildStart?: number;
   } = {}) => {
     let testStart: number;
-    const buildStart = Date.now();
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
+
+    context.stateManager.reset();
 
     const returns = await Promise.all(
       context.projects.map(async (p) => {
@@ -285,6 +288,18 @@ export async function runTests(context: Rstest): Promise<void> {
 
       await generateCoverage(context, results, coverageProvider);
     }
+
+    if (isFailure) {
+      const bail = context.normalizedConfig.bail;
+
+      if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+        logger.log(
+          color.yellow(
+            `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
+          ),
+        );
+      }
+    }
   };
 
   if (command === 'watch') {
@@ -314,7 +329,10 @@ export async function runTests(context: Rstest): Promise<void> {
       await closeServer();
     });
 
+    let buildStart: number | undefined;
+
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+      buildStart = Date.now();
       if (!isFirstCompile) {
         clearScreen();
       }
@@ -322,7 +340,8 @@ export async function runTests(context: Rstest): Promise<void> {
 
     rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
       snapshotManager.clear();
-      await run({ mode: isFirstCompile ? 'all' : 'on-demand' });
+      await run({ buildStart, mode: isFirstCompile ? 'all' : 'on-demand' });
+      buildStart = undefined;
 
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
@@ -443,8 +462,30 @@ export async function runTests(context: Rstest): Promise<void> {
       afterTestsWatchRun();
     });
   } else {
+    let isTeardown = false;
+
+    const unExpectedExit = (code?: number) => {
+      if (isTeardown) {
+        logger.log(
+          color.yellow(
+            `Rstest exited unexpectedly with code ${code}, this is likely caused by test environment teardown.`,
+          ),
+        );
+      } else {
+        logger.log(
+          color.red(
+            `Rstest exited unexpectedly with code ${code}, terminating test run.`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    };
+    process.on('exit', unExpectedExit);
+
     await run();
+    isTeardown = true;
     await pool.close();
     await closeServer();
+    process.off('exit', unExpectedExit);
   }
 }

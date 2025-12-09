@@ -43,9 +43,7 @@ import { PackageManagerTabs } from '@theme';
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
-## CPU profiling
-
-### Samply
+## 使用 Samply
 
 > 注意：为了能在 macOS 中对 Node.js 侧代码进行 profiling 需要 22.16+ 版本。
 
@@ -62,3 +60,21 @@ samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-
 Rstest 的 JavaScript 代码通常执行在 Node.js 线程里，选择 Node.js 线程查看 Node.js 侧的耗时分布。
 
 ![rstest-samply-profiling](https://assets.rspack.rs/rstest/assets/rstest-samply-profiling.png)
+
+## Node.js profiling
+
+你也可以使用 Node.js 内置的性能分析工具来分析 Rstest 的性能。
+
+例如，你可以使用 `--heap-prof` 标志来启用堆内存分析：
+
+```bash
+node --heap-prof --heap-prof-dir=./heap-prof ./node_modules/@rstest/core/bin/rstest.js
+```
+
+堆内存分析文件将生成在 `./heap-prof` 目录中。你可以使用 [Visual Studio Code](https://code.visualstudio.com/docs/nodejs/profiling#_analyzing-a-profile) 或 [Chrome DevTools](https://developer.chrome.com/docs/devtools/memory-problems/heap-snapshots) 等工具来分析这些文件。
+
+你也可以使用 `--inspect` 标志来启用 [Node.js 调试器](https://nodejs.org/en/learn/getting-started/debugging)。
+
+```bash
+node --inspect ./node_modules/@rstest/core/bin/rstest.js watch
+```

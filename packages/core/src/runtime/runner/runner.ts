@@ -1,5 +1,5 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import type { SnapshotState } from '@vitest/snapshot';
+import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
@@ -22,7 +22,6 @@ import type {
 } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils';
 import { createExpect } from '../api/expect';
-import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
 import {
@@ -45,27 +44,24 @@ export class TestRunner {
     state,
     hooks,
     api,
+    snapshotClient,
   }: {
     tests: Test[];
     testPath: string;
     state: WorkerState;
     hooks: RunnerHooks;
+    snapshotClient: SnapshotClient;
     api: Rstest;
     coverageProvider?: CoverageProvider;
   }): Promise<TestFileResult> {
     this.workerState = state;
     const {
-      runtimeConfig: { passWithNoTests, retry, maxConcurrency },
+      runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
       project,
-      snapshotOptions,
     } = state;
     const results: TestResult[] = [];
     const errors: FormattedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
-
-    const snapshotClient = getSnapshotClient();
-
-    await snapshotClient.setup(testPath, snapshotOptions);
 
     const runTestsCase = async (
       test: TestCase,
@@ -77,6 +73,7 @@ export class TestRunner {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
         const result = {
+          testId: test.testId,
           status: 'skip' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -87,6 +84,7 @@ export class TestRunner {
       }
       if (test.runMode === 'todo') {
         const result = {
+          testId: test.testId,
           status: 'todo' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -109,6 +107,7 @@ export class TestRunner {
         }
       } catch (error) {
         result = {
+          testId: test.testId,
           status: 'fail' as const,
           parentNames: test.parentNames,
           name: test.name,
@@ -130,6 +129,7 @@ export class TestRunner {
             this.afterRunTest(test);
 
             result = {
+              testId: test.testId,
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
@@ -143,6 +143,7 @@ export class TestRunner {
             };
           } catch (_err) {
             result = {
+              testId: test.testId,
               project,
               status: 'pass' as const,
               parentNames: test.parentNames,
@@ -160,6 +161,7 @@ export class TestRunner {
             await test.fn?.(test.context);
             this.afterRunTest(test);
             result = {
+              testId: test.testId,
               project,
               parentNames: test.parentNames,
               name: test.name,
@@ -168,6 +170,7 @@ export class TestRunner {
             };
           } catch (error) {
             result = {
+              testId: test.testId,
               project,
               status: 'fail' as const,
               parentNames: test.parentNames,
@@ -218,8 +221,9 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-    ) => {
+    ): Promise<TestResult[]> => {
       const tests = [...allTest];
+      const results: TestResult[] = [];
 
       while (tests.length) {
         const suite = tests.shift()!;
@@ -230,7 +234,7 @@ export class TestRunner {
             cases.push(tests.shift()!);
           }
 
-          await Promise.all(
+          const result = await Promise.all(
             cases.map((test) => {
               if (test.type === 'suite') {
                 return runTest(test, parentHooks);
@@ -238,12 +242,15 @@ export class TestRunner {
               return limitMaxConcurrency(() => runTest(test, parentHooks));
             }),
           );
+          results.push(...result);
 
           continue;
         }
 
-        await runTest(suite, parentHooks);
+        const result = await runTest(suite, parentHooks);
+        results.push(result);
       }
+      return results;
     };
 
     const runTest = async (
@@ -252,31 +259,51 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
-    ) => {
+    ): Promise<TestResult> => {
+      let result: TestResult = {
+        testId: test.testId,
+        status: 'skip',
+        parentNames: test.parentNames,
+        name: test.name,
+        testPath,
+        project,
+        duration: 0,
+        errors: [],
+      };
+
+      if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
+        defaultStatus = 'skip';
+        return result;
+      }
+
       if (test.type === 'suite') {
+        const start = RealDate.now();
+
+        hooks.onTestSuiteStart?.({
+          parentNames: test.parentNames,
+          name: test.name,
+          testPath,
+          project: test.project,
+          testId: test.testId,
+        });
+
         if (test.tests.length === 0) {
           if (['todo', 'skip'].includes(test.runMode)) {
             defaultStatus = 'skip';
-            return;
+            hooks.onTestSuiteResult?.(result);
+            return result;
           }
           if (passWithNoTests) {
-            return;
+            result.status = 'pass';
+            hooks.onTestSuiteResult?.(result);
+            return result;
           }
           const noTestError = {
             message: `No test found in suite: ${test.name}`,
             name: 'No tests',
           };
 
-          errors.push(noTestError);
-          const result = {
-            status: 'fail' as const,
-            parentNames: test.parentNames,
-            name: test.name,
-            testPath,
-            errors: [noTestError],
-            project,
-          };
-          hooks.onTestCaseResult?.(result);
+          result.errors?.push(noTestError);
         }
 
         // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
@@ -294,7 +321,7 @@ export class TestRunner {
           } catch (error) {
             hasBeforeAllError = true;
 
-            errors.push(...formatTestError(error));
+            result.errors?.push(...formatTestError(error));
           }
         }
 
@@ -303,7 +330,7 @@ export class TestRunner {
           markAllTestAsSkipped(test.tests);
         }
 
-        await runTests(test.tests, {
+        const results = await runTests(test.tests, {
           beforeEachListeners: parentHooks.beforeEachListeners.concat(
             test.beforeEachListeners || [],
           ),
@@ -325,13 +352,29 @@ export class TestRunner {
             }
           } catch (error) {
             // AfterAll failed does not affect test case results
-            errors.push(...formatTestError(error));
+            result.errors?.push(...formatTestError(error));
           }
         }
+        result.duration = RealDate.now() - start;
+        result.status = result.errors?.length
+          ? 'fail'
+          : getTestStatus(results, defaultStatus);
+        hooks.onTestSuiteResult?.(result);
+
+        errors.push(...(result.errors || []));
       } else {
         const start = RealDate.now();
-        let result: TestResult | undefined;
         let retryCount = 0;
+        // Call onTestCaseStart hook before running the test
+        hooks.onTestCaseStart?.({
+          testId: test.testId,
+          startTime: start,
+          testPath: test.testPath,
+          name: test.name,
+          timeout: test.timeout,
+          parentNames: test.parentNames,
+          project: test.project,
+        });
 
         do {
           const currentResult = await runTestsCase(test, parentHooks);
@@ -349,9 +392,13 @@ export class TestRunner {
 
         result.duration = RealDate.now() - start;
         result.retryCount = retryCount - 1;
+        result.heap = state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined;
         hooks.onTestCaseResult?.(result);
         results.push(result);
       }
+      return result;
     };
 
     const start = RealDate.now();
@@ -359,6 +406,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
+          testId: '0',
           project,
           testPath,
           name: '',
@@ -368,11 +416,15 @@ export class TestRunner {
       }
 
       return {
+        testId: '0',
         project,
         testPath,
         name: '',
         status: 'fail',
         results,
+        heap: state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined,
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -391,9 +443,13 @@ export class TestRunner {
     const snapshotResult = await snapshotClient.finish(testPath);
 
     return {
+      testId: '0',
       project,
       testPath,
       name: '',
+      heap: state.runtimeConfig.logHeapUsage
+        ? process.memoryUsage().heapUsed
+        : undefined,
       status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
       results,
       snapshotResult,

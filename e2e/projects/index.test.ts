@@ -29,10 +29,13 @@ describe('test projects', () => {
       expect(
         logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
       ).toBeTruthy();
+      expect(
+        logs.find((log) => log.includes('packages/client/test/node.test.ts')),
+      ).toBeTruthy();
     });
 
     it('should not inherit projects config and run projects failed ', async () => {
-      const { cli } = await runRstestCli({
+      const { cli, expectExecFailed } = await runRstestCli({
         command: 'rstest',
         args: ['run'],
         options: {
@@ -42,19 +45,18 @@ describe('test projects', () => {
         },
       });
 
-      await cli.exec;
-      expect(cli.exec.process?.exitCode).toBe(1);
+      await expectExecFailed();
       const logs = cli.stdout.split('\n').filter(Boolean);
 
       // test log print
       expect(
         logs.find((log) => log.includes('it is not defined')),
       ).toBeTruthy();
-    });
+    }, 15_000);
   });
 
   it('should run projects fail when project not found', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.404.config.ts'],
       options: {
@@ -64,14 +66,9 @@ describe('test projects', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    const logs = cli.stdout.split('\n').filter(Boolean);
+    await expectExecFailed();
 
-    // test log print
-    expect(
-      logs.find((log) => log.includes(`Can't resolve project "404"`)),
-    ).toBeTruthy();
+    expectStderrLog(/Can't resolve project "404"/);
   });
 
   it('should run test failed when test file not found', async () => {

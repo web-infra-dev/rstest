@@ -4,24 +4,25 @@
   "version": "1.0.0",
   "scripts": {
     "test": "rstest run",
+    "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.6.0-beta.1",
-    "@rslib/core": "0.16.1",
+    "@rsbuild/core": "1.6.12-canary-20251204065915",
+    "@rslib/core": "0.18.3",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
-    "axios": "^1.13.0",
+    "axios": "^1.13.2",
     "is-url": "^1.2.4",
     "@types/is-url": "^1.2.32",
     "jest-image-snapshot": "^6.5.1",
-    "memfs": "^4.49.0",
+    "memfs": "^4.51.1",
     "pathe": "^2.0.3",
-    "react": "^19.2.0",
+    "react": "^19.2.1",
     "redux": "^5.0.1",
     "strip-ansi": "^7.1.2",
-    "tinyexec": "^1.0.1",
+    "tinyexec": "^1.0.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {

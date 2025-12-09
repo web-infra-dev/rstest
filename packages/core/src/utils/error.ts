@@ -67,8 +67,11 @@ export async function printError(
       fullStack: error.fullStack,
       getSourcemap,
     });
-
-    if (!stackFrames.length && error.stack.length) {
+    if (
+      !stackFrames.length &&
+      !(error.fullStack || isDebug()) &&
+      !error.stack.endsWith(error.message)
+    ) {
       logger.log(
         color.gray(
           "No error stack found, set 'DEBUG=rstest' to show fullStack.",
@@ -141,6 +144,7 @@ const stackIgnores: (RegExp | string)[] = [
   /node_modules\/@vitest\/snapshot/,
   /node:\w+/,
   /webpack\/runtime/,
+  /rstest runtime/,
   // windows path
   /webpack\\runtime/,
   '<anonymous>',
@@ -153,7 +157,7 @@ export async function parseErrorStacktrace({
 }: {
   fullStack?: boolean;
   stack: string;
-  getSourcemap: GetSourcemap;
+  getSourcemap?: GetSourcemap;
 }): Promise<StackFrame[]> {
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
@@ -164,7 +168,7 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = await getSourcemap(frame.file!);
+        const sourcemap = await getSourcemap?.(frame.file!);
         if (sourcemap) {
           const traceMap = new TraceMap(sourcemap);
           const { line, column, source, name } = originalPositionFor(traceMap, {

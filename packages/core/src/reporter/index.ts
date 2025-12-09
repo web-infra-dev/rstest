@@ -1,19 +1,18 @@
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
-import { isCI } from 'std-env';
 import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
   NormalizedConfig,
   Reporter,
+  RstestTestState,
   SnapshotSummary,
-  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger } from '../utils';
+import { color, isTTY, logger } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle } from './utils';
@@ -28,25 +27,31 @@ export class DefaultReporter implements Reporter {
     rootPath,
     options,
     config,
+    testState,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: DefaultReporterOptions;
+    testState: RstestTestState;
   }) {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
-    if (!isCI) {
-      this.statusRenderer = new StatusRenderer(rootPath);
+    if (isTTY() || options.logger) {
+      this.statusRenderer = new StatusRenderer(
+        rootPath,
+        testState,
+        options.logger,
+      );
     }
   }
 
-  onTestFileStart(test: TestFileInfo): void {
-    this.statusRenderer?.onTestFileStart(test.testPath);
+  onTestFileStart(): void {
+    this.statusRenderer?.onTestFileStart();
   }
 
   onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.onTestFileResult(test);
+    this.statusRenderer?.onTestFileResult();
 
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
@@ -66,8 +71,8 @@ export class DefaultReporter implements Reporter {
     }
   }
 
-  onTestCaseResult(result: TestResult): void {
-    this.statusRenderer?.onTestCaseResult(result);
+  onTestCaseResult(): void {
+    this.statusRenderer?.onTestCaseResult();
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {

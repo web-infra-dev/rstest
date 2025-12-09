@@ -5,6 +5,11 @@ import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
 export const RUNTIME_CHUNK_NAME = 'runtime';
 
+const requireShim = `// Rstest ESM shims
+import __rstest_shim_module__ from 'node:module';
+const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+`;
+
 export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
   context,
 ) => ({
@@ -22,6 +27,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             dev,
             testEnvironment,
           },
+          outputModule,
           rootPath,
         } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(
@@ -47,6 +53,12 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               sourceMap: {
                 js: 'source-map',
               },
+              module: outputModule,
+              filename: outputModule
+                ? {
+                    js: '[name].mjs',
+                  }
+                : undefined,
               distPath: {
                 root:
                   context.projects.length > 1
@@ -62,7 +74,9 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.output ??= {};
                 config.output.iife = false;
                 // polyfill interop
-                config.output.importFunctionName = '__rstest_dynamic_import__';
+                config.output.importFunctionName = outputModule
+                  ? 'import.meta.__rstest_dynamic_import__'
+                  : '__rstest_dynamic_import__';
                 config.output.devtoolModuleFilenameTemplate =
                   '[absolute-resource-path]';
 
@@ -79,6 +93,19 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   }),
                 );
 
+                if (outputModule) {
+                  config.plugins.push(
+                    new rspack.BannerPlugin({
+                      banner: requireShim,
+                      // Just before minify stage, to perform tree shaking.
+                      stage:
+                        rspack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE - 1,
+                      raw: true,
+                      include: /\.(js|mjs)$/,
+                    }),
+                  );
+                }
+
                 config.module.parser ??= {};
                 config.module.parser.javascript = {
                   // Keep dynamic import expressions.
@@ -91,6 +118,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   // Keep require.resolve expressions.
                   requireResolve: false,
                   ...(config.module.parser.javascript || {}),
+                  // suppress ESModulesLinkingError for exports that might be implemented in mock
+                  exportsPresence: 'warn',
                 };
 
                 config.resolve ??= {};

@@ -1,6 +1,6 @@
 import path, { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from '@rstest/core';
+import { beforeAll, describe, expect, it } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 import { runRstestCli } from '../scripts';
 
@@ -8,6 +8,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test snapshot', () => {
+  beforeAll(() => {
+    expect('hi').toMatchInlineSnapshot(`"hi"`);
+  });
+
   it('test toMatchInlineSnapshot API', () => {
     expect('hello world').toMatchInlineSnapshot(`"hello world"`);
     expect({ a: 1, b: 2 }).toMatchInlineSnapshot(`

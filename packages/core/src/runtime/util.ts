@@ -1,6 +1,10 @@
 import { createRequire } from 'node:module';
 import { format } from 'node:util';
 import { diff } from 'jest-diff';
+import {
+  format as prettyFormat,
+  plugins as prettyFormatPlugins,
+} from 'pretty-format';
 import type { FormattedError, Test } from '../types';
 
 const REAL_TIMERS: {
@@ -9,7 +13,7 @@ const REAL_TIMERS: {
 
 // store the original timers
 export const setRealTimers = (): void => {
-  REAL_TIMERS.setTimeout ??= globalThis.setTimeout;
+  REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
@@ -23,7 +27,7 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
     const error =
       typeof rawError === 'string' ? { message: rawError } : rawError;
     const errObj: FormattedError = {
-      ...error,
+      fullStack: error.fullStack,
       // Some error attributes cannot be enumerated
       message: error.message,
       name: error.name,
@@ -43,16 +47,18 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
       errObj.diff = diff(err.expected, err.actual, {
         expand: false,
       })!;
-    }
-
-    for (const key of ['actual', 'expected'] as const) {
-      if (typeof err[key] !== 'string') {
-        (errObj as Record<string, any>)[key] = JSON.stringify(
-          err[key],
-          null,
-          10,
-        );
-      }
+      errObj.expected =
+        typeof error.expected === 'string'
+          ? error.expected
+          : prettyFormat(error.expected, {
+              plugins: Object.values(prettyFormatPlugins),
+            });
+      errObj.actual =
+        typeof error.actual === 'string'
+          ? error.actual
+          : prettyFormat(error.actual, {
+              plugins: Object.values(prettyFormatPlugins),
+            });
     }
 
     return errObj;

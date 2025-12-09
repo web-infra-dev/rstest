@@ -79,7 +79,7 @@ export function checkThresholds({
     }
 
     thresholdGroup.push({
-      ...(<CoverageThreshold>thresholds[key as keyof CoverageThresholds]),
+      ...(thresholds[key as keyof CoverageThresholds] as CoverageThreshold),
       name: key,
       coverageMap: globCoverageMap,
     });

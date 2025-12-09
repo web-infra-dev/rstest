@@ -4,48 +4,62 @@ import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
 const autoExternalNodeModules: (
+  outputModule: boolean,
+) => (
   data: Rspack.ExternalItemFunctionData,
   callback: (
     err?: Error,
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = ({ context, request, dependencyType, getResolve }, callback) => {
-  if (!request) {
-    return callback();
-  }
-
-  if (request.startsWith('@swc/helpers/')) {
-    // @swc/helper is a special case (Load by require but resolve to esm)
-    return callback();
-  }
-
-  const doExternal = (externalPath: string = request) => {
-    callback(
-      undefined,
-      externalPath,
-      dependencyType === 'commonjs' ? 'commonjs' : 'import',
-    );
-  };
-
-  const resolver = getResolve?.();
-
-  if (!resolver) {
-    return callback();
-  }
-
-  resolver(context!, request, (err, resolvePath) => {
-    if (err) {
-      // ignore resolve error
+) => void =
+  (outputModule) =>
+  ({ context, request, dependencyType, getResolve }, callback) => {
+    if (!request) {
       return callback();
     }
 
-    if (resolvePath && /node_modules/.test(resolvePath)) {
-      return doExternal(resolvePath);
+    if (request.startsWith('@swc/helpers/') || request.endsWith('.wasm')) {
+      // @swc/helper is a special case (Load by require but resolve to esm)
+      return callback();
     }
-    return callback();
-  });
-};
+
+    const doExternal = (externalPath: string = request) => {
+      callback(
+        undefined,
+        externalPath,
+        dependencyType === 'commonjs'
+          ? 'commonjs'
+          : outputModule
+            ? 'module-import'
+            : 'import',
+      );
+    };
+
+    const resolver = getResolve?.();
+
+    if (!resolver) {
+      return callback();
+    }
+
+    resolver(context!, request, (err, resolvePath) => {
+      if (err) {
+        // ignore resolve error and external it as commonjs （it may be mocked）
+        // however, we will lose the code frame info if module not found
+        return callback(undefined, request, 'node-commonjs');
+      }
+
+      if (
+        // biome-ignore lint/complexity/useOptionalChain: type error
+        resolvePath &&
+        resolvePath.includes('node_modules') &&
+        !/\.(?:ts|tsx|jsx|mts|cts)$/.test(resolvePath)
+      ) {
+        return doExternal(resolvePath);
+      }
+      return callback();
+    });
+  };
 
 function autoExternalNodeBuiltin(
   { request, dependencyType }: Rspack.ExternalItemFunctionData,
@@ -90,12 +104,13 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
       async (config, { mergeEnvironmentConfig, name }) => {
         const {
           normalizedConfig: { testEnvironment },
+          outputModule,
         } = context.projects.find((p) => p.environmentName === name)!;
         return mergeEnvironmentConfig(config, {
           output: {
             externals:
               testEnvironment === 'node'
-                ? [autoExternalNodeModules]
+                ? [autoExternalNodeModules(outputModule)]
                 : undefined,
           },
           tools: {
@@ -109,7 +124,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
 
               config.externalsPresets ??= {};
               config.externalsPresets.node = false;
-              config.externals.push(autoExternalNodeBuiltin);
+              config.externals.unshift(autoExternalNodeBuiltin);
             },
           },
         });

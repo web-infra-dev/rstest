@@ -10,7 +10,6 @@ import {
   filterProjects,
   formatRootStr,
   getAbsolutePath,
-  logger,
 } from '../utils';
 
 export type CommonOptions = {
@@ -26,6 +25,7 @@ export type CommonOptions = {
   coverage?: boolean;
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
+  logHeapUsage?: boolean;
   disableConsoleIntercept?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
@@ -41,20 +41,13 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  bail?: number | boolean;
 };
 
-async function resolveConfig(
-  options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
-): Promise<{
-  config: RstestConfig;
-  configFilePath?: string;
-}> {
-  const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: options.root,
-    path: options.config,
-    configLoader: options.configLoader,
-  });
-
+function mergeWithCLIOptions(
+  config: RstestConfig,
+  options: CommonOptions,
+): RstestConfig {
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',
@@ -76,6 +69,7 @@ async function resolveConfig(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'logHeapUsage',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -85,6 +79,13 @@ async function resolveConfig(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (
+    options.bail !== undefined &&
+    (typeof options.bail === 'number' || typeof options.bail === 'boolean')
+  ) {
+    config.bail = Number(options.bail);
   }
 
   if (options.coverage !== undefined) {
@@ -99,9 +100,23 @@ async function resolveConfig(
   if (options.include) {
     config.include = castArray(options.include);
   }
+  return config;
+}
+
+async function resolveConfig(
+  options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
+): Promise<{
+  config: RstestConfig;
+  configFilePath?: string;
+}> {
+  const { content: config, filePath: configFilePath } = await loadConfig({
+    cwd: options.root,
+    path: options.config,
+    configLoader: options.configLoader,
+  });
 
   return {
-    config,
+    config: mergeWithCLIOptions(config, options),
     configFilePath: configFilePath ?? undefined,
   };
 }
@@ -131,7 +146,7 @@ export async function resolveProjects({
     return name;
   };
 
-  const globProjects = async (patterns: string[]) => {
+  const globProjects = async (patterns: string[], root: string) => {
     const globOptions: GlobOptions = {
       absolute: true,
       dot: true,
@@ -144,73 +159,95 @@ export async function resolveProjects({
     return glob(patterns, globOptions);
   };
 
-  const { projectPaths, projectPatterns, projectConfigs } = (
-    config.projects || []
-  ).reduce(
-    (total, p) => {
-      if (typeof p === 'object') {
-        const projectRoot = p.root ? formatRootStr(p.root, root) : root;
-        total.projectConfigs.push({
-          config: {
-            root: projectRoot,
-            name: p.name ? p.name : getDefaultProjectName(projectRoot),
-            ...p,
-          },
-          configFilePath: undefined,
-        });
-        return total;
-      }
-      const projectStr = formatRootStr(p, root);
+  const resolvedProjectPaths = new Set<string>();
 
-      if (isDynamicPattern(projectStr)) {
-        total.projectPatterns.push(projectStr);
-      } else {
-        const absolutePath = getAbsolutePath(root, projectStr);
-
-        if (!existsSync(absolutePath)) {
-          throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
+  const getProjects = async (rstestConfig: RstestConfig, root: string) => {
+    const { projectPaths, projectPatterns, projectConfigs } = (
+      rstestConfig.projects || []
+    ).reduce(
+      (total, p) => {
+        if (typeof p === 'object') {
+          const projectRoot = p.root ? formatRootStr(p.root, root) : root;
+          total.projectConfigs.push({
+            config: mergeWithCLIOptions(
+              {
+                root: projectRoot,
+                ...p,
+                name: p.name ? p.name : getDefaultProjectName(projectRoot),
+              },
+              options,
+            ),
+            configFilePath: undefined,
+          });
+          return total;
         }
-        total.projectPaths.push(absolutePath);
-      }
-      return total;
-    },
-    {
-      projectPaths: [] as string[],
-      projectPatterns: [] as string[],
-      projectConfigs: [] as {
-        config: RstestConfig;
-        configFilePath: string | undefined;
-      }[],
-    },
-  );
+        const projectStr = formatRootStr(p, root);
 
-  projectPaths.push(...(await globProjects(projectPatterns)));
+        if (isDynamicPattern(projectStr)) {
+          total.projectPatterns.push(projectStr);
+        } else {
+          const absolutePath = getAbsolutePath(root, projectStr);
 
-  const projects = await Promise.all(
-    projectPaths.map(async (project) => {
-      const isDirectory = statSync(project).isDirectory();
-      const root = isDirectory ? project : dirname(project);
-      const { config, configFilePath } = await resolveConfig({
-        ...options,
-        config: isDirectory ? undefined : project,
-        root,
-      });
+          if (!existsSync(absolutePath)) {
+            throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
+          }
+          total.projectPaths.push(absolutePath);
+        }
+        return total;
+      },
+      {
+        projectPaths: [] as string[],
+        projectPatterns: [] as string[],
+        projectConfigs: [] as {
+          config: RstestConfig;
+          configFilePath: string | undefined;
+        }[],
+      },
+    );
 
-      config.name ??= getDefaultProjectName(root);
+    projectPaths.push(...(await globProjects(projectPatterns, root)));
 
-      if (config.projects?.length && config.root !== root) {
-        logger.warn(
-          `Projects cannot have nested projects, the "projects" field in project "${config.name}" will be ignored.`,
-        );
-      }
+    const projects: {
+      config: RstestConfig;
+      configFilePath?: string;
+    }[] = [];
 
-      return {
-        config,
-        configFilePath,
-      };
-    }),
-  ).then((projects) =>
-    filterProjects(projects.concat(projectConfigs), options),
+    await Promise.all(
+      projectPaths.map(async (project) => {
+        const isDirectory = statSync(project).isDirectory();
+        const projectRoot = isDirectory ? project : dirname(project);
+        const { config, configFilePath } = await resolveConfig({
+          ...options,
+          config: isDirectory ? undefined : project,
+          root: projectRoot,
+        });
+
+        if (configFilePath) {
+          if (resolvedProjectPaths.has(configFilePath)) {
+            return;
+          }
+          resolvedProjectPaths.add(configFilePath);
+        }
+
+        config.name ??= getDefaultProjectName(projectRoot);
+
+        if (config.projects?.length) {
+          const childProjects = await getProjects(config, projectRoot);
+          projects.push(...childProjects);
+        } else {
+          projects.push({
+            config,
+            configFilePath,
+          });
+        }
+      }),
+    );
+
+    return projects.concat(projectConfigs);
+  };
+
+  const projects = await getProjects(config, root).then((p) =>
+    filterProjects(p, options),
   );
 
   if (!projects.length) {

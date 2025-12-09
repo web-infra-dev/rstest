@@ -51,13 +51,21 @@ export const logCase = (
   const retry = result.retryCount
     ? color.yellow(` (retry x${result.retryCount})`)
     : '';
-  logger.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}`);
+  const heap = result.heap
+    ? ` ${color.magenta(formatHeapUsed(result.heap))}`
+    : '';
+
+  logger.log(`  ${icon} ${nameStr}${color.gray(duration)}${retry}${heap}`);
 
   if (result.errors) {
     for (const error of result.errors) {
       console.error(color.red(`    ${error.message}`));
     }
   }
+};
+
+const formatHeapUsed = (heap: number) => {
+  return `${Math.floor(heap / 1024 / 1024)} MB heap used`;
 };
 
 export const logFileTitle = (
@@ -75,6 +83,10 @@ export const logFileTitle = (
 
   if (alwaysShowTime) {
     title += ` ${formatDuration(test.duration!)}`;
+  }
+
+  if (test.heap) {
+    title += ` ${color.magenta(formatHeapUsed(test.heap))}`;
   }
 
   logger.log(title);

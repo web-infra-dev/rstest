@@ -105,7 +105,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     try {
       const context = createContext({
         dir: this.options.reportsDirectory,
-        defaultSummarizer: 'nested',
         coverageMap: createCoverageMap(coverageMap.toJSON()),
       });
       const reportersList = this.options.reporters;

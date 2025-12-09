@@ -27,7 +27,7 @@ describe('test setup file', async () => {
   });
 
   it('should test error when run setup file failed', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -41,10 +41,8 @@ describe('test setup file', async () => {
     expect(cli.exec.process?.exitCode).toBe(1);
     const logs = cli.stdout.split('\n').filter(Boolean);
     // test error log
-    expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('rstest.setup.ts:1:7')),
-    ).toBeTruthy();
+    expectLog(/Rstest setup error/, logs);
+    expectLog(/rstest.setup.ts:1:7/, logs);
   });
 
   it('should run setup file correctly when setupFiles value is package name', async () => {

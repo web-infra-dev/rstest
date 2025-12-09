@@ -7,13 +7,20 @@ import type {
   ProjectContext,
   RstestContext,
   RuntimeConfig,
+  RuntimeRPC,
   Test,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from '../types';
-import { needFlagExperimentalDetectModule, serializableConfig } from '../utils';
+import {
+  color,
+  needFlagExperimentalDetectModule,
+  serializableConfig,
+} from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
 
@@ -54,6 +61,9 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage,
     snapshotFormat,
     env,
+    logHeapUsage,
+    bail,
+    chaiConfig,
   } = context.normalizedConfig;
 
   return {
@@ -76,6 +86,9 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     isolate,
     coverage,
     snapshotFormat,
+    logHeapUsage,
+    bail,
+    chaiConfig,
   };
 };
 
@@ -193,11 +206,21 @@ export const createPool = async ({
     },
   });
 
-  const rpcMethods = {
+  const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
+    onTestCaseStart: async (test: TestCaseInfo) => {
+      context.stateManager.onTestCaseStart(test);
+      Promise.all(
+        reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
+      );
+    },
     onTestCaseResult: async (result: TestResult) => {
+      context.stateManager.onTestCaseResult(result);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
       );
+    },
+    getCountOfFailedTests: async (): Promise<number> => {
+      return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
       await Promise.all(
@@ -205,8 +228,19 @@ export const createPool = async ({
       );
     },
     onTestFileStart: async (test: TestFileInfo) => {
+      context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestSuiteStart: async (test: TestSuiteInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),
+      );
+    },
+    onTestSuiteResult: async (result: TestResult) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
       );
     },
     resolveSnapshotPath: (testPath: string): string => {
@@ -246,6 +280,7 @@ export const createPool = async ({
               options: {
                 entryInfo,
                 context: {
+                  outputModule: project.outputModule,
                   taskId: index + 1,
                   project: projectName,
                   rootPath: context.rootPath,
@@ -279,7 +314,36 @@ export const createPool = async ({
             })
             .catch((err: unknown) => {
               (err as any).fullStack = true;
+              if (err instanceof Error) {
+                if (err.message.includes('Worker exited unexpectedly')) {
+                  delete err.stack;
+                }
+                const runningModule = context.stateManager.runningModules.get(
+                  entryInfo.testPath,
+                );
+                if (runningModule?.runningTests.length) {
+                  const getCaseName = (test: TestCaseInfo) =>
+                    `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
+                  if (runningModule?.runningTests.length === 1) {
+                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
+                  } else {
+                    err.message += `\n\n${color.white(`The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningModule.runningTests.map((t) => getCaseName(t)).join('\n  - ')}`)}`;
+                  }
+                }
+
+                return {
+                  testId: '0',
+                  project: projectName,
+                  testPath: entryInfo.testPath,
+                  status: 'fail',
+                  name: '',
+                  results: runningModule?.results || [],
+                  errors: [err],
+                } as TestFileResult;
+              }
+
               return {
+                testId: '0',
                 project: projectName,
                 testPath: entryInfo.testPath,
                 status: 'fail',
@@ -288,6 +352,7 @@ export const createPool = async ({
                 errors: [err],
               } as TestFileResult;
             });
+          context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));
           return result;
         }),
@@ -325,6 +390,7 @@ export const createPool = async ({
                 context: {
                   taskId: index + 1,
                   project: projectName,
+                  outputModule: project.outputModule,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
                   runtimeConfig: serializableConfig(runtimeConfig),

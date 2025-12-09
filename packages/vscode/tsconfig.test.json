@@ -6,14 +6,14 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "outDir": "tests-dist",
-    "sourceMap": false,
+    "sourceMap": true,
     "strict": true,
     "rootDir": "tests",
     "skipLibCheck": true
   },
   "inlcude": ["./tests/suite", "./tests/runTests.ts"],
   "exclude": [
-    "./rslib.config.ts",
+    "./rslib.config.mts",
     "./rstest.config.ts",
     "./src",
     "./sample",

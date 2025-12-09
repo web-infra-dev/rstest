@@ -1,10 +1,12 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
+import type { TestStateManager } from '../core/stateManager';
 import type {
   NormalizedConfig,
   NormalizedProjectConfig,
   RstestConfig,
 } from './config';
 import type { Reporter } from './reporter';
+import type { TestCaseInfo, TestFileResult, TestResult } from './testSuite';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
@@ -15,8 +17,23 @@ export type ProjectContext = {
   environmentName: string;
   /** The root path of current project. */
   rootPath: string;
+  /** Whether to output es module. */
+  outputModule: boolean;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
+};
+
+type RunningModules = Map<
+  string,
+  {
+    runningTests: TestCaseInfo[];
+    results: TestResult[];
+  }
+>;
+
+export type RstestTestState = {
+  getRunningModules: () => RunningModules;
+  getTestModules: () => TestFileResult[];
 };
 
 export type RstestContext = {
@@ -36,6 +53,11 @@ export type RstestContext = {
    * Run tests from one or more projects.
    */
   projects: ProjectContext[];
+
+  /**
+   * The test state
+   */
+  testState: RstestTestState;
   /**
    * The command type.
    *
@@ -46,6 +68,7 @@ export type RstestContext = {
   command: RstestCommand;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
+  stateManager: TestStateManager;
 };
 
 export type ListCommandOptions = {

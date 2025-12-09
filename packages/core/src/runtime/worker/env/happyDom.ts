@@ -5,9 +5,10 @@ import { addDefaultErrorHandler, installGlobal } from './utils';
 
 type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
 
-export const environment = <
-  TestEnvironment<typeof globalThis, { happyDom?: HappyDOMOptions }>
->{
+export const environment: TestEnvironment<
+  typeof globalThis,
+  { happyDom?: HappyDOMOptions }
+> = {
   name: 'happy-dom',
   async setup(global, { happyDom = {} }) {
     checkPkgInstalled('happy-dom');

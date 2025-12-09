@@ -50,7 +50,16 @@ describe('test interop', () => {
   it('should interop invalid named exports correctly', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', './fixtures/interopLodash', '--testEnvironment=node'],
+      args:
+        process.env.RSTEST_OUTPUT_MODULE === 'true'
+          ? [
+              'run',
+              './fixtures/interopLodash',
+              '--testEnvironment=node',
+              '-c',
+              './fixtures/rstest.lodash.config.ts',
+            ]
+          : ['run', './fixtures/interopLodash', '--testEnvironment=node'],
       options: {
         nodeOptions: {
           cwd: __dirname,

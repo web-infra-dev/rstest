@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { parseTestFile, type Range } from '../../src/parserTest';
 
@@ -241,6 +243,22 @@ describe('parseTestFile', () => {
     const byName = Object.fromEntries(results.map((r) => [r.name, r]));
     expect(byName.top.range.startLine).toBe(0);
     expect(byName.child.range.startLine).toBe(1);
+  });
+
+  it('should compute range correctly with chinese characters', () => {
+    const code = fs.readFileSync(join(__dirname, './test.txt'), 'utf-8');
+
+    const results: { name: string; type: string; range: Range }[] = [];
+    parseTestFile(code, {
+      onTest: (range: Range, name: string, testType) => {
+        results.push({ name, type: testType, range });
+      },
+    });
+
+    const byName = Object.fromEntries(results.map((r) => [r.name, r]));
+    expect(byName.outer.range.startLine).toBe(5);
+    expect(byName.outer.range.endLine).toBe(8);
+    expect(byName.inner.range.startLine).toBe(6);
   });
 
   it('should handle quotes and escaped characters', () => {

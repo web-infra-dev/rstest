@@ -1,0 +1,68 @@
+# 升级 Rstest
+
+本节介绍如何将项目中的 Rstest 依赖升级到最新版本。
+
+:::info
+
+Rstest 仍处于 0.x 版本，API 可能会频繁变化。我们建议升级到最新版本以使用新功能和已修复的 bug。
+
+:::
+
+## 使用 Taze
+
+我们推荐使用 [Taze](https://github.com/antfu-collective/taze) 来升级 Rstest 版本。Taze 是一个用于更新 npm 依赖的 CLI 工具。
+
+### 使用方法
+
+运行以下命令以升级所有名称中包含 `rstest` 和 `rsbuild` 的依赖项：
+
+```bash
+npx taze major --include "/(rstest|rsbuild)/" -w
+```
+
+:::tip
+
+Rstest 尚未达到 1.0.0 版本，因此你需要在更新时添加 `major` 参数。
+
+:::
+
+结果将类似于：
+
+```bash
+rstest-example - 1 patch
+
+  devDependencies
+    @rstest/core    ~29d  ^0.6.0  →  ^0.6.6  ~5d
+
+ℹ changes written to package.json, run pnpm i to install updates.
+```
+
+你可以调整 `include` 模式以匹配特定包，例如，仅升级 `@rstest` 范围内的包：
+
+```bash
+npx taze --include /@rstest/ -w
+```
+
+### 选项
+
+以下是一些使用 taze 选项的示例。
+
+- 在 monorepo 中，你可以添加 `-r` 选项以递归升级：
+
+```bash
+npx taze --include /(rstest|rsbuild)/ -w -r
+```
+
+- 添加 `-l` 选项以升级锁定版本：
+
+```bash
+npx taze --include /(rstest|rsbuild)/ -w -l
+```
+
+- 升级到 major 版本：
+
+```bash
+npx taze major --include /(rstest|rsbuild)/ -w
+```
+
+> 更多选项请参考 [taze 文档](https://github.com/antfu-collective/taze)。
