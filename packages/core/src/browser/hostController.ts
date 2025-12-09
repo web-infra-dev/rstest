@@ -287,12 +287,13 @@ type BrowserRuntime = {
 };
 
 type HostRpcMethods = {
-  rerunTest: (testFile: string) => Promise<void>;
+  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<string[]>;
 };
 
 type ContainerRpcClient = {
   onTestFileUpdate: (testFiles: string[]) => Promise<void>;
+  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcClient, HostRpcMethods>;
@@ -849,7 +850,9 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   } else {
     // Create new container page
     isNewPage = true;
-    containerContext = await browser.newContext();
+    containerContext = await browser.newContext({
+      viewport: null,
+    });
     containerPage = await containerContext.newPage();
 
     // Prevent popup windows from being created
@@ -955,10 +958,14 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   let postToContainer: ((data: unknown) => void) | null = null;
 
   const containerMethods: HostRpcMethods = {
-    async rerunTest(testFile: string) {
-      logger.log(color.cyan(`\nRe-running test: ${testFile}\n`));
-      // TODO: Implement rerun by reloading the specific iframe
-      logger.log(color.yellow('Re-run functionality not yet implemented'));
+    async rerunTest(testFile: string, testNamePattern?: string) {
+      logger.log(
+        color.cyan(
+          `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
+        ),
+      );
+      // Notify container to reload the specific iframe
+      await containerRpc?.reloadTestFile(testFile, testNamePattern);
     },
 
     async getTestFiles() {

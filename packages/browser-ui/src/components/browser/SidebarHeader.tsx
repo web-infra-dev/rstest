@@ -27,9 +27,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   return (
     <div
       className="relative flex h-[52px] items-center justify-between px-3"
-      style={{
-        background: token.colorBgContainer,
-      }}
+      style={{ background: token.colorBgContainer }}
     >
       <div className="flex items-center gap-3">
         <Avatar
@@ -37,14 +35,12 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           size={32}
           shape="square"
         />
-        <div className="flex flex-col gap-0">
-          <span className="text-base font-semibold leading-tight text-[color:var(--ant-color-text)]">
-            Browser Tests
-          </span>
-        </div>
+        <span className="text-base font-semibold leading-tight text-[color:var(--ant-color-text)]">
+          Browser Tests
+        </span>
       </div>
       <div className="flex items-center gap-2">
-        <Tooltip title={themeSwitchLabel}>
+        <Tooltip title={themeSwitchLabel} mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
@@ -53,7 +49,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             onClick={() => onThemeToggle(!isDark)}
           />
         </Tooltip>
-        <Tooltip title="Re-run active file">
+        <Tooltip title="Re-run active file" mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
@@ -72,8 +68,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
         size="small"
         strokeLinecap="square"
         strokeColor="#f87171"
-        className="absolute! bottom-0 left-0 right-0 m-0"
-        style={{ transform: 'translateY(calc(50% - 2px))' }}
+        className="absolute! inset-x-0 bottom-0 m-0! translate-y-[calc(50%-2px)]"
       />
     </div>
   );

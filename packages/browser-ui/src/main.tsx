@@ -7,24 +7,9 @@ import {
 } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { type BirpcReturn, createBirpc } from 'birpc';
-import {
-  CheckCircle2,
-  ChevronDown,
-  Loader2,
-  Minus,
-  Sparkles,
-  XCircle,
-} from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
-import type {
-  BrowserClientFileResult,
-  BrowserClientMessage,
-  BrowserClientTestResult,
-  BrowserHostConfig,
-} from './types';
-import './index.css';
 import { EmptyPreviewOverlay } from './components/browser/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/browser/PreviewHeader';
 import { SidebarHeader } from './components/browser/SidebarHeader';
@@ -32,89 +17,33 @@ import { StatsBar } from './components/browser/StatsBar';
 import { TestCaseTitle } from './components/browser/TestCaseTitle';
 import { TestFilesHeader } from './components/browser/TestFilesHeader';
 import { TestFileTitle } from './components/browser/TestFileTitle';
+import { ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
+import {
+  CASE_STATUS_META,
+  type CaseInfo,
+  type CaseStatus,
+  type ContainerWindow,
+  STATUS_META,
+  type TestStatus,
+} from './constants';
+import type {
+  BrowserClientFileResult,
+  BrowserClientMessage,
+  BrowserClientTestResult,
+  BrowserHostConfig,
+} from './types';
+import './index.css';
 
 const { Text } = Typography;
 
 type HostRPC = {
-  rerunTest: (testFile: string) => Promise<void>;
+  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<string[]>;
 };
 
 type ContainerRPC = {
   onTestFileUpdate: (testFiles: string[]) => void;
-};
-
-type ContainerWindow = Window &
-  typeof globalThis & {
-    __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-    __rstest_container_dispatch__?: (data: unknown) => void;
-    __rstest_container_on__?: (cb: (data: unknown) => void) => void;
-    __rstest_dispatch__?: (payload: unknown) => void;
-  };
-
-type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
-
-const statusMeta: Record<
-  TestStatus,
-  {
-    label: string;
-    color: string;
-    icon: React.ReactNode;
-  }
-> = {
-  idle: {
-    label: 'Idle',
-    color: '#d1d5db',
-    icon: <Sparkles size={16} strokeWidth={2.1} />,
-  },
-  running: {
-    label: 'Running',
-    color: '#f2c94c',
-    icon: <Loader2 size={16} className="animate-spin" strokeWidth={2.1} />,
-  },
-  pass: {
-    label: 'Pass',
-    color: '#4ade80',
-    icon: <CheckCircle2 size={16} strokeWidth={2.1} />,
-  },
-  fail: {
-    label: 'Fail',
-    color: '#f87171',
-    icon: <XCircle size={16} strokeWidth={2.1} />,
-  },
-};
-
-type CaseStatus = TestStatus | 'skip';
-
-type CaseInfo = {
-  id: string;
-  label: string;
-  status: CaseStatus;
-  filePath: string;
-  location?: {
-    line: number;
-    column?: number;
-    file?: string;
-  };
-};
-
-const caseStatusMeta: Record<
-  CaseStatus,
-  {
-    label: string;
-    color: string;
-    icon: React.ReactNode;
-  }
-> = {
-  idle: statusMeta.idle,
-  running: statusMeta.running,
-  pass: statusMeta.pass,
-  fail: statusMeta.fail,
-  skip: {
-    label: 'Skip',
-    color: '#9ca3af',
-    icon: <Minus size={16} strokeWidth={2.1} />,
-  },
+  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
 };
 
 const toRelativePath = (file: string, rootPath?: string) => {
@@ -140,6 +69,7 @@ const useRpc = (
   setTestFiles: (files: string[]) => void,
   initialTestFiles: string[],
   enabled: boolean,
+  onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
 ): BirpcReturn<HostRPC, ContainerRPC> | null => {
   const rpc = useMemo(() => {
     if (!enabled) {
@@ -149,6 +79,9 @@ const useRpc = (
     const methods: ContainerRPC = {
       onTestFileUpdate(files: string[]) {
         setTestFiles(files);
+      },
+      reloadTestFile(testFile: string, testNamePattern?: string) {
+        onReloadTestFile?.(testFile, testNamePattern);
       },
     };
 
@@ -160,7 +93,7 @@ const useRpc = (
         (window as ContainerWindow).__rstest_container_on__ = fn;
       },
     });
-  }, [enabled, setTestFiles]);
+  }, [enabled, setTestFiles, onReloadTestFile]);
 
   useEffect(() => {
     if (!rpc) {
@@ -184,22 +117,17 @@ const getDisplayName = (testFile: string) => {
   return parts[parts.length - 1] || testFile;
 };
 
-const formatOpenTarget = (
-  file: string,
-  location?: { line: number; column?: number; file?: string },
+const iframeUrlFor = (
+  testFile: string,
+  runnerBase?: string,
+  testNamePattern?: string,
 ) => {
-  if (!location?.line) return file;
-  const base = location.file || file;
-  const suffix = location.column
-    ? `${location.line}:${location.column}`
-    : `${location.line}`;
-  return `${base}:${suffix}`;
-};
-
-const iframeUrlFor = (testFile: string, runnerBase?: string) => {
   const base = runnerBase || window.location.origin;
   const url = new URL('/runner.html', base);
   url.searchParams.set('testFile', testFile);
+  if (testNamePattern) {
+    url.searchParams.set('testNamePattern', testNamePattern);
+  }
   return url.toString();
 };
 
@@ -219,7 +147,37 @@ const BrowserRunner: React.FC<{
     Record<string, Record<string, CaseInfo>>
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
-  const rpc = useRpc(setTestFiles, options?.testFiles || [], canUseRpc);
+
+  const handleReloadTestFile = useCallback(
+    (testFile: string, testNamePattern?: string) => {
+      const iframe = document.querySelector<HTMLIFrameElement>(
+        `iframe[data-test-file="${testFile}"]`,
+      );
+      if (iframe) {
+        // Set file status to running
+        setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
+        // Set all cases in this file to running status, preserving existing data
+        setCaseMap((prev) => {
+          const prevFile = prev[testFile] ?? {};
+          const updatedCases: Record<string, CaseInfo> = {};
+          for (const [key, caseInfo] of Object.entries(prevFile)) {
+            updatedCases[key] = { ...caseInfo, status: 'running' };
+          }
+          return { ...prev, [testFile]: updatedCases };
+        });
+        // Reload iframe with new URL
+        iframe.src = iframeUrlFor(testFile, options.runnerUrl, testNamePattern);
+      }
+    },
+    [options.runnerUrl],
+  );
+
+  const rpc = useRpc(
+    setTestFiles,
+    options?.testFiles || [],
+    canUseRpc,
+    handleReloadTestFile,
+  );
 
   useEffect(() => {
     setStatusMap((prev) => {
@@ -282,7 +240,9 @@ const BrowserRunner: React.FC<{
       const labelParts = [...(payload.parentNames ?? []), payload.name].filter(
         Boolean,
       );
-      const label = labelParts.join(' / ') || payload.name;
+      const label = labelParts.join(' > ') || payload.name;
+      // fullName uses empty delimiter to match task.ts getTaskNameWithPrefix(test, '')
+      const fullName = labelParts.join('  ') || payload.name;
       setCaseMap((prev) => {
         const prevFile = prev[filePath] ?? {};
         return {
@@ -292,6 +252,7 @@ const BrowserRunner: React.FC<{
             [payload.testId]: {
               id: payload.testId,
               label,
+              fullName,
               status: statusOverride ?? mapCaseStatus(payload.status),
               filePath: payload.testPath || filePath,
               location: payload.location,
@@ -313,11 +274,9 @@ const BrowserRunner: React.FC<{
   );
 
   const handleRerunTestCase = useCallback(
-    async (file: string) => {
-      // For now, rerun the entire file
-      // TODO: support rerunning a single test case
+    async (file: string, testName: string) => {
       if (rpc) {
-        await rpc.rerunTest(file);
+        await rpc.rerunTest(file, testName);
       }
     },
     [rpc],
@@ -338,7 +297,15 @@ const BrowserRunner: React.FC<{
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
             setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
-            setCaseMap((prev) => ({ ...prev, [testPath]: {} }));
+            // Set all cases to running status instead of clearing them
+            setCaseMap((prev) => {
+              const prevFile = prev[testPath] ?? {};
+              const updatedCases: Record<string, CaseInfo> = {};
+              for (const [key, caseInfo] of Object.entries(prevFile)) {
+                updatedCases[key] = { ...caseInfo, status: 'running' };
+              }
+              return { ...prev, [testPath]: updatedCases };
+            });
           }
         } else if (message?.type === 'case-result') {
           const payload = message.payload as BrowserClientTestResult;
@@ -390,7 +357,7 @@ const BrowserRunner: React.FC<{
     () =>
       testFiles.map((file) => {
         const status = statusMap[file] ?? 'idle';
-        const meta = statusMeta[status];
+        const meta = STATUS_META[status];
         const relativePath = toRelativePath(file, options.rootPath);
         const cases = Object.values(caseMap[file] ?? {});
         const children: DataNode[] =
@@ -408,7 +375,7 @@ const BrowserRunner: React.FC<{
                 },
               ]
             : cases.map((testCase) => {
-                const caseMeta = caseStatusMeta[testCase.status];
+                const caseMeta = CASE_STATUS_META[testCase.status];
                 return {
                   key: `${file}::${testCase.id}`,
                   title: (
@@ -417,7 +384,7 @@ const BrowserRunner: React.FC<{
                       iconColor={caseMeta.color}
                       label={testCase.label}
                       onRerun={() => {
-                        void handleRerunTestCase(file);
+                        void handleRerunTestCase(file, testCase.fullName);
                       }}
                       buttonTextColor={token.colorTextSecondary}
                     />
@@ -467,31 +434,24 @@ const BrowserRunner: React.FC<{
       >
         <ResizablePanel defaultSize={32} minSize={20} maxSize={50}>
           <div
-            className="m-0 flex h-full flex-col overflow-hidden"
+            className="flex h-full flex-col overflow-hidden"
             style={{
               borderRight: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorBgContainer,
             }}
           >
-            <div
-              className="p-0"
-              style={{
-                background: token.colorBgContainer,
-              }}
-            >
-              <SidebarHeader
-                themeSwitchLabel={themeSwitchLabel}
-                isDark={isDark}
-                onThemeToggle={(checked: boolean) =>
-                  setTheme(checked ? 'dark' : 'light')
-                }
-                onRerun={handleRerun}
-                canUseRpc={Boolean(rpc)}
-                token={token}
-                progressPercent={progressPercent}
-                successPercent={successPercent}
-              />
-            </div>
+            <SidebarHeader
+              themeSwitchLabel={themeSwitchLabel}
+              isDark={isDark}
+              onThemeToggle={(checked: boolean) =>
+                setTheme(checked ? 'dark' : 'light')
+              }
+              onRerun={handleRerun}
+              canUseRpc={Boolean(rpc)}
+              token={token}
+              progressPercent={progressPercent}
+              successPercent={successPercent}
+            />
 
             <StatsBar
               passCount={counts.pass}
@@ -503,10 +463,8 @@ const BrowserRunner: React.FC<{
             <TestFilesHeader canUseRpc={canUseRpc} token={token} />
 
             <div
-              className="m-0 flex-1 overflow-x-hidden overflow-y-auto p-0"
-              style={{
-                background: token.colorBgContainer,
-              }}
+              className="flex-1 overflow-x-hidden overflow-y-auto"
+              style={{ background: token.colorBgContainer }}
             >
               {testFiles.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
@@ -544,40 +502,29 @@ const BrowserRunner: React.FC<{
 
         <ResizablePanel defaultSize={68} minSize={40}>
           <div
-            className="m-0 flex h-full flex-col overflow-hidden"
-            style={{
-              background: token.colorBgLayout,
-            }}
+            className="flex h-full flex-col overflow-hidden"
+            style={{ background: token.colorBgLayout }}
           >
-            <div
-              className="p-0"
-              style={{
-                background: token.colorBgContainer,
-              }}
-            >
-              <PreviewHeader
-                token={token}
-                activeDisplayName={
-                  active ? getDisplayName(active) : 'Select a test file'
-                }
-                statusLabel={
-                  active
-                    ? statusMeta[statusMap[active] ?? 'idle'].label
-                    : undefined
-                }
-                statusColor={
-                  active
-                    ? statusMeta[statusMap[active] ?? 'idle'].color
-                    : undefined
-                }
-              />
-            </div>
+            <PreviewHeader
+              token={token}
+              activeDisplayName={
+                active ? getDisplayName(active) : 'Select a test file'
+              }
+              statusLabel={
+                active
+                  ? STATUS_META[statusMap[active] ?? 'idle'].label
+                  : undefined
+              }
+              statusColor={
+                active
+                  ? STATUS_META[statusMap[active] ?? 'idle'].color
+                  : undefined
+              }
+            />
 
             <div
-              className="relative m-0 min-h-0 flex-1 p-0"
-              style={{
-                background: token.colorBgContainer,
-              }}
+              className="relative min-h-0 flex-1"
+              style={{ background: token.colorBgContainer }}
             >
               {!active && (
                 <EmptyPreviewOverlay message="Select a test file on the left to view its run output" />
