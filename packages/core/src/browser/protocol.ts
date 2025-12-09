@@ -32,6 +32,10 @@ export type BrowserHostConfig = {
    * Base URL for runner (iframe) pages.
    */
   runnerUrl?: string;
+  /**
+   * WebSocket port for container RPC.
+   */
+  wsPort?: number;
 };
 
 export type BrowserClientMessage =

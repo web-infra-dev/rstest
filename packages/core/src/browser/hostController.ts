@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
 import type { BirpcReturn } from 'birpc';
-import { dirname, join, relative, resolve, sep } from 'pathe';
 import openEditor from 'open-editor';
+import { dirname, join, relative, resolve, sep } from 'pathe';
 import type {
   BrowserContext,
   ConsoleMessage,
@@ -15,6 +15,7 @@ import type {
   Page,
 } from 'playwright-core';
 import sirv from 'sirv';
+import { type WebSocket, WebSocketServer } from 'ws';
 import type { Rstest } from '../core/rstest';
 import type {
   ProjectContext,
@@ -276,6 +277,7 @@ type BrowserRuntime = {
   devServer: RsbuildDevServer;
   browser: ChromiumBrowserInstance;
   port: number;
+  wsPort: number;
   manifestPath: string;
   tempDir: string;
   manifestPlugin: VirtualModulesPluginInstance;
@@ -284,6 +286,8 @@ type BrowserRuntime = {
   containerDistPath?: string;
   containerDevServer?: string;
   setContainerOptions: (options: BrowserHostConfig) => void;
+  wss: WebSocketServer;
+  containerWs?: WebSocket;
 };
 
 type HostRpcMethods = {
@@ -297,11 +301,6 @@ type ContainerRpcClient = {
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcClient, HostRpcMethods>;
-
-type ContainerWindow = {
-  __rstest_container_on__?: (payload: unknown) => void;
-  __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-};
 
 type BindingSource = {
   context: BrowserContext;
@@ -639,6 +638,13 @@ const createBrowserRuntime = async ({
 
   const { port } = await devServer.listen();
 
+  // Create WebSocket server on a different port
+  const wsPort = port + 1;
+  const wss = new WebSocketServer({ port: wsPort });
+  logger.log(
+    color.gray(`[Browser UI] WebSocket server started on port ${wsPort}`),
+  );
+
   let chromiumLauncher: ChromiumLauncher;
   try {
     ({ chromium: chromiumLauncher } = await import('playwright-core'));
@@ -667,12 +673,14 @@ const createBrowserRuntime = async ({
     devServer,
     browser,
     port,
+    wsPort,
     manifestPath,
     tempDir,
     manifestPlugin: virtualManifestPlugin,
     containerDistPath,
     containerDevServer,
     setContainerOptions,
+    wss,
   };
 };
 
@@ -798,7 +806,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }
   }
 
-  const { browser, port } = runtime!;
+  const { browser, port, wsPort, wss } = runtime!;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries
@@ -821,6 +829,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     },
     runnerUrl: `http://localhost:${port}`,
     testFiles: allTestFiles,
+    wsPort,
   };
 
   runtime!.setContainerOptions(hostOptions);
@@ -936,14 +945,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       },
     );
 
-    // Setup birpc for container control
-    await containerPage.exposeBinding(
-      '__rstest_container_dispatch__',
-      async (_source: BindingSource, data: unknown) => {
-        postToContainer?.(data);
-      },
-    );
-
     // Forward browser console to terminal
     containerPage.on('console', (msg: ConsoleMessage) => {
       const text = msg.text();
@@ -955,7 +956,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Birpc setup (need to recreate on each run to capture current context)
   let containerRpc: ContainerRpc | null = null;
-  let postToContainer: ((data: unknown) => void) | null = null;
+  let containerWs: WebSocket | null = null;
 
   const containerMethods: HostRpcMethods = {
     async rerunTest(testFile: string, testNamePattern?: string) {
@@ -975,23 +976,49 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   const { createBirpc } = await import('birpc');
 
-  containerRpc = createBirpc<ContainerRpcClient, HostRpcMethods>(
-    containerMethods,
-    {
-      post: (data) => {
-        containerPage
-          ?.evaluate((msg: unknown) => {
-            (window as unknown as ContainerWindow).__rstest_container_on__?.(
-              msg,
-            );
-          }, data)
-          .catch(() => {});
+  // Setup WebSocket-based birpc for container control
+  const setupContainerRpc = (ws: WebSocket) => {
+    containerWs = ws;
+    runtime!.containerWs = ws;
+
+    containerRpc = createBirpc<ContainerRpcClient, HostRpcMethods>(
+      containerMethods,
+      {
+        post: (data) => {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(data));
+          }
+        },
+        on: (fn) => {
+          ws.on('message', (message) => {
+            try {
+              const data = JSON.parse(message.toString());
+              fn(data);
+            } catch {
+              // ignore invalid messages
+            }
+          });
+        },
       },
-      on: (fn: (data: unknown) => void) => {
-        postToContainer = fn;
-      },
-    },
-  );
+    );
+
+    ws.on('close', () => {
+      containerWs = null;
+      containerRpc = null;
+    });
+  };
+
+  // Reuse existing WebSocket connection in watch mode
+  if (isWatchMode && runtime!.containerWs) {
+    containerWs = runtime!.containerWs;
+    setupContainerRpc(containerWs);
+  }
+
+  // Handle new WebSocket connections
+  wss.on('connection', (ws: WebSocket) => {
+    logger.log(color.gray('[Browser UI] Container WebSocket connected'));
+    setupContainerRpc(ws);
+  });
 
   // Only navigate and setup on first creation (new page)
   if (isNewPage) {

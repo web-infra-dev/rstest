@@ -221,6 +221,7 @@ const run = async () => {
       rootPath: options.rootPath,
       runtimeConfig: project.runtimeConfig,
       taskId: 0,
+      outputModule: false,
       environment: 'browser',
       testPath: entry.testPath!,
       distPath: entry.testPath!,
