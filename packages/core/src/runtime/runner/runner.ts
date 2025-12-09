@@ -1,5 +1,5 @@
 import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
-import type { SnapshotState } from '@vitest/snapshot';
+import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
@@ -22,7 +22,6 @@ import type {
 } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils';
 import { createExpect } from '../api/expect';
-import { getSnapshotClient } from '../api/snapshot';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';
 import {
@@ -45,11 +44,13 @@ export class TestRunner {
     state,
     hooks,
     api,
+    snapshotClient,
   }: {
     tests: Test[];
     testPath: string;
     state: WorkerState;
     hooks: RunnerHooks;
+    snapshotClient: SnapshotClient;
     api: Rstest;
     coverageProvider?: CoverageProvider;
   }): Promise<TestFileResult> {
@@ -57,15 +58,10 @@ export class TestRunner {
     const {
       runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
       project,
-      snapshotOptions,
     } = state;
     const results: TestResult[] = [];
     const errors: FormattedError[] = [];
     let defaultStatus: TestResultStatus = 'pass';
-
-    const snapshotClient = getSnapshotClient();
-
-    await snapshotClient.setup(testPath, snapshotOptions);
 
     const runTestsCase = async (
       test: TestCase,
