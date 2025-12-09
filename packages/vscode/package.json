@@ -57,6 +57,35 @@
           ]
         }
       }
+    },
+    "commands": [
+      {
+        "command": "rstest.updateSnapshot",
+        "title": "Update Snapshot",
+        "category": "Testing",
+        "icon": "$(merge)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "rstest.updateSnapshot",
+          "when": "false"
+        }
+      ],
+      "testing/message/content": [
+        {
+          "command": "rstest.updateSnapshot",
+          "when": "testMessage == canUpdateSnapshot"
+        }
+      ],
+      "testing/message/context": [
+        {
+          "command": "rstest.updateSnapshot",
+          "group": "inline@1",
+          "when": "testMessage == canUpdateSnapshot"
+        }
+      ]
     }
   },
   "scripts": {
@@ -85,6 +114,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.7.1",
     "birpc": "2.9.0",
+    "core-js-pure": "^3.47.0",
     "glob": "^7.2.3",
     "mocha": "^11.7.5",
     "ovsx": "^0.10.7",

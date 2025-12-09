@@ -27,7 +27,7 @@ suite('Configuration Integration', () => {
         const defaultRootsSpec = getProjectItems(testController);
         assert.equal(
           defaultRootsSpec.length,
-          5,
+          6,
           'Should discover all test files',
         );
       });

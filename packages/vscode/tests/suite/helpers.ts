@@ -40,7 +40,7 @@ export function waitFor<T = void>(
     pollMs?: number;
   } = {},
 ) {
-  return new Promise((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     const start = Date.now();
     const interval = setInterval(() => {
       try {

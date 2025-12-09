@@ -400,6 +400,12 @@ const runInPool = async (
     const results = await runner.runTests(
       testPath,
       {
+        onTestSuiteStart: async (test) => {
+          await rpc.onTestSuiteStart(test);
+        },
+        onTestSuiteResult: async (result) => {
+          await rpc.onTestSuiteResult(result);
+        },
         onTestCaseStart: async (test) => {
           await rpc.onTestCaseStart(test);
         },

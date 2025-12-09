@@ -143,14 +143,13 @@ export const updateTestModes = (
 
 const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
   for (const test of tests) {
+    test.parentNames = parentNames;
     if (test.type === 'suite') {
       const names =
         test.name === ROOT_SUITE_NAME
           ? parentNames
           : parentNames.concat(test.name);
       updateTestParents(test.tests, names);
-    } else {
-      test.parentNames = parentNames;
     }
   }
 };
