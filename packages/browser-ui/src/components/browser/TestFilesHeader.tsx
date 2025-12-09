@@ -3,14 +3,14 @@ import type { GlobalToken } from 'antd/es/theme/interface';
 import React from 'react';
 
 type TestFilesHeaderProps = {
-  canUseRpc: boolean;
+  isConnected: boolean;
   token: GlobalToken;
 };
 
 const { Text } = Typography;
 
 export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
-  canUseRpc,
+  isConnected,
   token,
 }) => {
   return (
@@ -22,8 +22,8 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
         TEST FILES
       </Text>
       <Badge
-        status={canUseRpc ? 'success' : 'default'}
-        text={canUseRpc ? 'Live' : 'Static'}
+        status={isConnected ? 'success' : 'default'}
+        text={isConnected ? 'Connected' : 'Connecting...'}
         styles={{
           root: { color: token.colorTextSecondary, fontSize: 12 },
         }}

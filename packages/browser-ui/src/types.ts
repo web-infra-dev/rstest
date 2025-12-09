@@ -14,6 +14,7 @@ export type BrowserHostConfig = {
   testFile?: string;
   runnerUrl?: string;
   testFiles?: string[];
+  wsPort?: number;
 };
 
 export type BrowserClientTestResult = {
