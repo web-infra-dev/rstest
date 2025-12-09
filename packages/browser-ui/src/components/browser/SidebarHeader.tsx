@@ -8,7 +8,7 @@ type SidebarHeaderProps = {
   isDark: boolean;
   onThemeToggle: (checked: boolean) => void;
   onRerun: () => void;
-  canUseRpc: boolean;
+  isConnected: boolean;
   token: GlobalToken;
   progressPercent: number;
   successPercent: number;
@@ -19,7 +19,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   isDark,
   onThemeToggle,
   onRerun,
-  canUseRpc,
+  isConnected,
   token,
   progressPercent,
   successPercent,
@@ -55,7 +55,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             size="small"
             shape="circle"
             onClick={onRerun}
-            disabled={!canUseRpc}
+            disabled={!isConnected}
             icon={<RefreshCw size={14} />}
           />
         </Tooltip>
