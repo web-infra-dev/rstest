@@ -51,7 +51,8 @@ export const CASE_STATUS_META: Record<CaseStatus, StatusMeta> = {
 
 export type CaseInfo = {
   id: string;
-  label: string;
+  name: string;
+  parentNames: string[];
   fullName: string;
   status: CaseStatus;
   filePath: string;
