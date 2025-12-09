@@ -2,15 +2,13 @@
 
 exports[`rstest context > should generate rstest context correctly 1`] = `
 {
-<<<<<<< HEAD
   "bail": 0,
-=======
   "browser": {
     "browser": "chromium",
     "enabled": false,
     "headless": false,
+    "port": undefined,
   },
->>>>>>> bbdbf8d (isolated pages)
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -87,15 +85,13 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
 
 exports[`rstest context > should generate rstest context correctly with multiple projects 1`] = `
 {
-<<<<<<< HEAD
   "bail": 0,
-=======
   "browser": {
     "browser": "chromium",
     "enabled": false,
     "headless": false,
+    "port": undefined,
   },
->>>>>>> bbdbf8d (isolated pages)
   "clearMocks": false,
   "coverage": {
     "clean": true,
@@ -175,15 +171,13 @@ exports[`rstest context > should generate rstest context correctly with multiple
 
 exports[`rstest context > should generate rstest context correctly with multiple projects 2`] = `
 {
-<<<<<<< HEAD
   "bail": 0,
-=======
   "browser": {
     "browser": "chromium",
     "enabled": false,
     "headless": false,
+    "port": undefined,
   },
->>>>>>> bbdbf8d (isolated pages)
   "clearMocks": false,
   "coverage": {
     "clean": true,

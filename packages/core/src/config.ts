@@ -224,6 +224,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     enabled: merged.browser?.enabled ?? false,
     browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? false,
+    port: merged.browser?.port,
   };
 
   return {

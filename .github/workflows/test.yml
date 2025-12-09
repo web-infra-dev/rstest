@@ -111,6 +111,10 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm install
 
+      - name: Install Playwright Browsers
+        if: steps.changes.outputs.changed == 'true'
+        run: npx playwright install chromium --with-deps
+
       - name: E2E Test
         if: steps.changes.outputs.changed == 'true'
         run: pnpm run e2e
