@@ -65,7 +65,5 @@ export type CaseInfo = {
 export type ContainerWindow = Window &
   typeof globalThis & {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-    __rstest_container_dispatch__?: (data: unknown) => void;
-    __rstest_container_on__?: (cb: (data: unknown) => void) => void;
     __rstest_dispatch__?: (payload: unknown) => void;
   };

@@ -68,13 +68,26 @@ const openInEditor = (file: string) => {
 const useRpc = (
   setTestFiles: (files: string[]) => void,
   initialTestFiles: string[],
-  enabled: boolean,
+  wsPort: number | undefined,
   onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
 ): BirpcReturn<HostRPC, ContainerRPC> | null => {
-  const rpc = useMemo(() => {
-    if (!enabled) {
-      return null;
+  const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!wsPort) {
+      // No WebSocket port, fall back to static mode
+      if (initialTestFiles.length > 0) {
+        setTestFiles(initialTestFiles);
+      }
+      return;
     }
+
+    // Connect to WebSocket server
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+    const ws = new WebSocket(wsUrl);
 
     const methods: ContainerRPC = {
       onTestFileUpdate(files: string[]) {
@@ -85,29 +98,48 @@ const useRpc = (
       },
     };
 
-    return createBirpc<HostRPC, ContainerRPC>(methods, {
-      post: (data) => {
-        (window as ContainerWindow).__rstest_container_dispatch__?.(data);
-      },
-      on: (fn) => {
-        (window as ContainerWindow).__rstest_container_on__ = fn;
-      },
-    });
-  }, [enabled, setTestFiles, onReloadTestFile]);
+    ws.onopen = () => {
+      console.log('[Container] WebSocket connected');
+      const birpc = createBirpc<HostRPC, ContainerRPC>(methods, {
+        post: (data) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+          }
+        },
+        on: (fn) => {
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              fn(data);
+            } catch {
+              // ignore invalid messages
+            }
+          };
+        },
+      });
+      setRpc(birpc);
 
-  useEffect(() => {
-    if (!rpc) {
-      if (initialTestFiles.length > 0) {
-        setTestFiles(initialTestFiles);
-      }
-      return;
-    }
+      // Fetch test files once connected
+      birpc
+        .getTestFiles()
+        .then((files) => setTestFiles(files))
+        .catch(() => setTestFiles(initialTestFiles));
+    };
 
-    rpc
-      .getTestFiles()
-      .then((files) => setTestFiles(files))
-      .catch(() => setTestFiles(initialTestFiles));
-  }, [initialTestFiles, rpc, setTestFiles]);
+    ws.onclose = () => {
+      console.log('[Container] WebSocket disconnected');
+      setRpc(null);
+    };
+
+    ws.onerror = () => {
+      console.log('[Container] WebSocket error, falling back to static mode');
+      setTestFiles(initialTestFiles);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [initialTestFiles, onReloadTestFile, setTestFiles, wsPort]);
 
   return rpc;
 };
@@ -137,9 +169,6 @@ const BrowserRunner: React.FC<{
   setTheme: (theme: 'dark' | 'light') => void;
 }> = ({ options, theme, setTheme }) => {
   const { token } = antdTheme.useToken();
-  const canUseRpc = Boolean(
-    (window as ContainerWindow).__rstest_container_dispatch__,
-  );
   const [testFiles, setTestFiles] = useState<string[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
@@ -175,7 +204,7 @@ const BrowserRunner: React.FC<{
   const rpc = useRpc(
     setTestFiles,
     options?.testFiles || [],
-    canUseRpc,
+    options?.wsPort,
     handleReloadTestFile,
   );
 
@@ -447,7 +476,7 @@ const BrowserRunner: React.FC<{
                 setTheme(checked ? 'dark' : 'light')
               }
               onRerun={handleRerun}
-              canUseRpc={Boolean(rpc)}
+              isConnected={Boolean(rpc)}
               token={token}
               progressPercent={progressPercent}
               successPercent={successPercent}
@@ -460,7 +489,7 @@ const BrowserRunner: React.FC<{
               background={token.colorFillQuaternary}
             />
 
-            <TestFilesHeader canUseRpc={canUseRpc} token={token} />
+            <TestFilesHeader isConnected={Boolean(rpc)} token={token} />
 
             <div
               className="flex-1 overflow-x-hidden overflow-y-auto"
