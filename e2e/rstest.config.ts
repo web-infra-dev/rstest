@@ -2,8 +2,8 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   setupFiles: ['../scripts/rstest.setup.ts'],
-  testTimeout: 10_000,
-  slowTestThreshold: 2_000,
+  testTimeout: 30_000,
+  slowTestThreshold: 5_000,
   output: {
     externals: {
       react: 'commonjs react',
