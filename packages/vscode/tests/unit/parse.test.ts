@@ -256,9 +256,9 @@ describe('parseTestFile', () => {
     });
 
     const byName = Object.fromEntries(results.map((r) => [r.name, r]));
-    expect(byName.outer.range.startLine).toBe(5);
-    expect(byName.outer.range.endLine).toBe(8);
-    expect(byName.inner.range.startLine).toBe(6);
+    expect(byName.outer.range.startLine).toBe(7);
+    expect(byName.outer.range.endLine).toBe(10);
+    expect(byName.inner.range.startLine).toBe(8);
   });
 
   it('should handle quotes and escaped characters', () => {
