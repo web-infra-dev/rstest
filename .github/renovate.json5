@@ -60,6 +60,8 @@
     },
   ],
   ignoreDeps: [
+    // manually update rsbuild core package until v1.7
+    '@rsbuild/core',
     // manually update some packages
     'pnpm',
     '@rspack/core',
