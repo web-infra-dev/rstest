@@ -199,8 +199,7 @@ function filterOutComments(s: string): string {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// biome-ignore lint/complexity/noBannedTypes: Function type
-export function getFixtureUsedProps(fn: Function): string[] {
+export function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const text = filterOutComments(fn.toString());
   const match = text.match(/(?:async)?(?:\s+function)?[^(]*\(([^)]*)/);
   if (!match) return [];

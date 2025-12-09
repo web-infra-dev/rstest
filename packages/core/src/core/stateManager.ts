@@ -7,7 +7,13 @@ export class TestStateManager {
       runningTests: TestCaseInfo[];
       results: TestResult[];
     }
-  > = new Map();
+  > = new Map<
+    string,
+    {
+      runningTests: TestCaseInfo[];
+      results: TestResult[];
+    }
+  >();
 
   public testModules: TestFileResult[] = [];
 

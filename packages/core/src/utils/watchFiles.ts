@@ -14,7 +14,7 @@ export async function createChokidar(
 ): Promise<FSWatcher> {
   const chokidar = await import('chokidar');
 
-  const watchFiles: Set<string> = new Set();
+  const watchFiles = new Set<string>();
 
   const globPatterns = pathOrGlobs.filter((pathOrGlob) => {
     if (isGlob(pathOrGlob)) {

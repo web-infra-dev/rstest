@@ -135,7 +135,20 @@ export async function runRstestCli({
     }
   };
 
-  return { cli, expectExecSuccess, expectExecFailed, expectLog };
+  const expectStderrLog = (
+    msg: string | RegExp,
+    logs: string[] = cli.stderr.split('\n').filter(Boolean),
+  ) => {
+    expectLog(msg, logs);
+  };
+
+  return {
+    cli,
+    expectExecSuccess,
+    expectExecFailed,
+    expectLog,
+    expectStderrLog,
+  };
 }
 
 export async function prepareFixtures({

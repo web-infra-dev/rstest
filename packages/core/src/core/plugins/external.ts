@@ -50,6 +50,7 @@ const autoExternalNodeModules: (
       }
 
       if (
+        // biome-ignore lint/complexity/useOptionalChain: type error
         resolvePath &&
         resolvePath.includes('node_modules') &&
         !/\.(?:ts|tsx|jsx|mts|cts)$/.test(resolvePath)

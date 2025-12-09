@@ -21,7 +21,7 @@ export type WorkerRpcOptions = Pick<
 >;
 
 export function createForksRpcOptions(
-  nodeV8: typeof import('v8') = v8,
+  nodeV8: typeof v8 = v8,
 ): WorkerRpcOptions {
   return {
     serialize: nodeV8.serialize,

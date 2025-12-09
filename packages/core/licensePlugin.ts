@@ -1,12 +1,13 @@
 import WebpackLicensePlugin from 'webpack-license-plugin';
 
-type PackageLicenseMeta = NonNullable<
-  ConstructorParameters<typeof WebpackLicensePlugin>[0]
-> extends Partial<{
-  additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
-}>
-  ? Meta
-  : never;
+type PackageLicenseMeta =
+  NonNullable<
+    ConstructorParameters<typeof WebpackLicensePlugin>[0]
+  > extends Partial<{
+    additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
+  }>
+    ? Meta
+    : never;
 
 export function licensePlugin() {
   const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {

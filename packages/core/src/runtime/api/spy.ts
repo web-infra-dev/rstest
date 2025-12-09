@@ -10,7 +10,7 @@ import type {
 
 let callOrder = 0;
 
-export const mocks: Set<MockInstance> = new Set();
+export const mocks: Set<MockInstance> = new Set<MockInstance>();
 
 const wrapSpy = <T extends FunctionLike>(
   obj: Record<string, any>,

@@ -86,9 +86,7 @@ export const getTestEntries = async ({
   includeSource: string[];
   fileFilters: string[];
   projectRoot: string;
-}): Promise<{
-  [name: string]: string;
-}> => {
+}): Promise<Record<string, string>> => {
   const testFiles = await glob(include, {
     cwd: projectRoot,
     absolute: true,
