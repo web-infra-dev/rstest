@@ -60,6 +60,9 @@
     },
   ],
   ignoreDeps: [
+    // TODO: Remove this ignore rule for @rsbuild/core after v1.7 is released.
+    // manually update rsbuild core package until v1.7
+    '@rsbuild/core',
     // manually update some packages
     'pnpm',
     '@rspack/core',
