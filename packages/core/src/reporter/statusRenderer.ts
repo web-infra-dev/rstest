@@ -1,6 +1,7 @@
 import { relative } from 'pathe';
 import type { RstestTestState, TestCaseInfo, TestResult } from '../types';
 import {
+  bgColor,
   color,
   getTaskNameWithPrefix,
   POINTER,
@@ -60,7 +61,7 @@ export class StatusRenderer {
     for (const [module, { runningTests }] of runningModules.entries()) {
       const relativePath = relative(this.rootPath, module);
       summary.push(
-        `${color.bgYellow(color.bold(' RUNS '))} ${prettyTestPath(relativePath)}`,
+        `${bgColor('bgYellow', ' RUNS ')} ${prettyTestPath(relativePath)}`,
       );
       if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
         let caseLog = ` ${color.gray(POINTER)} ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;

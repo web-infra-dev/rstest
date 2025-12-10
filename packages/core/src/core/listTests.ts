@@ -8,6 +8,7 @@ import type {
   Test,
 } from '../types';
 import {
+  bgColor,
   color,
   getSetupFiles,
   getTaskNameWithPrefix,
@@ -213,7 +214,7 @@ export async function listTests(
 
       if (file.errors?.length) {
         //  FAIL  tests/index.test.ts
-        logger.log(`${color.bgRed(' FAIL ')} ${relativePath}`);
+        logger.log(`${bgColor('bgRed', ' FAIL ')} ${relativePath}`);
 
         for (const error of file.errors) {
           await printError(

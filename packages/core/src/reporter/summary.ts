@@ -22,6 +22,7 @@ import type {
   TestResult,
 } from '../types';
 import {
+  bgColor,
   color,
   formatTestPath,
   getTaskNameWithPrefix,
@@ -198,7 +199,7 @@ export const printSummaryErrorLogs = async ({
 
     //  FAIL  tests/index.test.ts > suite name > test case name
     logger.log(
-      `${color.bgRed(' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
+      `${bgColor('bgRed', ' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {
