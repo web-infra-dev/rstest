@@ -139,6 +139,10 @@ export async function runTests(context: Rstest): Promise<void> {
     mode?: Mode;
     buildStart?: number;
   } = {}) => {
+    for (const reporter of reporters) {
+      await reporter.onTestRunStart?.();
+    }
+
     let testStart: number;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];

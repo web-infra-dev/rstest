@@ -19,6 +19,8 @@ export class TestRunReporter implements Reporter {
     private run?: vscode.TestRun,
     private project?: Project,
     private path: string[] = [],
+    private onFinish?: () => void,
+    private createTestRun?: () => vscode.TestRun,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -150,6 +152,22 @@ export class TestRunReporter implements Reporter {
         break;
       }
     }
+  }
+
+  private isFirstRun = true;
+
+  async onTestRunStart() {
+    if (!this.isFirstRun) {
+      this.run = this.createTestRun?.();
+    }
+  }
+
+  async onTestRunEnd() {
+    this.onFinish?.();
+    if (!this.isFirstRun) {
+      this.run?.end();
+    }
+    this.isFirstRun = false;
   }
 
   async onCoverage(
