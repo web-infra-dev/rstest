@@ -31,7 +31,7 @@ export function readInitialCoverage(
   let remainOpenBraceCount = 1;
   while (remainOpenBraceCount > 0) {
     openBraceIndex--;
-    if (openBraceIndex < 0) throw new Error('');
+    if (openBraceIndex < 0) throw new Error('cannot find open brace');
     const char = code[openBraceIndex];
     if (char === '}') remainOpenBraceCount++;
     else if (char === '{') remainOpenBraceCount--;
@@ -41,7 +41,8 @@ export function readInitialCoverage(
   let remainCloseBraceCount = 1;
   while (remainCloseBraceCount > 0) {
     closeBraceIndex++;
-    if (closeBraceIndex >= code.length) throw new Error('');
+    if (closeBraceIndex >= code.length)
+      throw new Error('cannot find close brace');
     const char = code[closeBraceIndex];
     if (char === '{') remainCloseBraceCount++;
     else if (char === '}') remainCloseBraceCount--;
