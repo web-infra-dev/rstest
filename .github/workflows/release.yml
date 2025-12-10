@@ -78,11 +78,11 @@ jobs:
             vsce-target: linux-arm64
             platform: linux
             arch: arm64
-          - runner: macos-13
+          - runner: macos-15
             vsce-target: darwin-x64
             platform: darwin
             arch: x64
-          - runner: macos-14
+          - runner: macos-15
             vsce-target: darwin-arm64
             platform: darwin
             arch: arm64
