@@ -177,6 +177,23 @@ export const ADDITIONAL_NODE_BUILTINS: (string | RegExp)[] = [
   'pnpapi',
 ];
 
+type BackgroundColor =
+  | 'bgBlack'
+  | 'bgRed'
+  | 'bgGreen'
+  | 'bgYellow'
+  | 'bgBlue'
+  | 'bgMagenta'
+  | 'bgCyan'
+  | 'bgWhite';
+
+export const bgColor = (bgColor: BackgroundColor, str: string): string => {
+  if (['bgRed', 'bgBlack'].includes(bgColor)) {
+    return color[bgColor](color.white(color.bold(str)));
+  }
+  return color[bgColor](color.blackBright(color.bold(str)));
+};
+
 export { color };
 
 /**
