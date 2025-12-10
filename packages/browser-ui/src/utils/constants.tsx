@@ -6,7 +6,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import React from 'react';
-import type { BrowserHostConfig } from './types';
+import type { BrowserHostConfig } from '../types';
 
 export type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
 export type CaseStatus = TestStatus | 'skip';

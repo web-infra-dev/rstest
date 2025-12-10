@@ -7,7 +7,7 @@ type SidebarHeaderProps = {
   themeSwitchLabel: string;
   isDark: boolean;
   onThemeToggle: (checked: boolean) => void;
-  onRerun: () => void;
+  onRerun?: () => void;
   isConnected: boolean;
   token: GlobalToken;
   progressPercent: number;
