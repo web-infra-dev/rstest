@@ -1,12 +1,16 @@
-import { manifest } from '@rstest/browser-manifest';
+import {
+  getTestKeys,
+  loadTest,
+  projectConfig,
+  setupLoaders,
+} from '@rstest/browser-manifest';
 import { createRstestRuntime } from '../../runtime/api';
 import { setRealTimers } from '../../runtime/util';
-import { globalApis } from '../../utils/constants';
 import type { RunnerHooks, RuntimeConfig, WorkerState } from '../../types';
+import { globalApis } from '../../utils/constants';
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
-  BrowserManifestEntry,
   BrowserProjectRuntime,
 } from '../protocol';
 import { BrowserSnapshotEnvironment } from './snapshot';
@@ -17,10 +21,6 @@ declare global {
     __rstest_dispatch__?: (message: BrowserClientMessage) => void;
   }
 }
-
-type ManifestEntry = BrowserManifestEntry & {
-  load: () => Promise<unknown>;
-};
 
 type GlobalWithProcess = typeof globalThis & {
   global?: typeof globalThis;
@@ -132,6 +132,27 @@ const waitForConfig = (): Promise<void> => {
   });
 };
 
+/**
+ * Convert absolute path to context key (relative path)
+ * e.g., '/project/src/foo.test.ts' -> './src/foo.test.ts'
+ */
+const toContextKey = (absolutePath: string, projectRoot: string): string => {
+  let relative = absolutePath;
+  if (absolutePath.startsWith(projectRoot)) {
+    relative = absolutePath.slice(projectRoot.length);
+  }
+  return relative.startsWith('/') ? `.${relative}` : `./${relative}`;
+};
+
+/**
+ * Convert context key to absolute path
+ * e.g., './src/foo.test.ts' -> '/project/src/foo.test.ts'
+ */
+const toAbsolutePath = (key: string, projectRoot: string): string => {
+  // key format: ./src/foo.test.ts
+  return projectRoot + key.slice(1);
+};
+
 const run = async () => {
   // Wait for configuration if in iframe
   await waitForConfig();
@@ -179,66 +200,67 @@ const run = async () => {
 
   setRealTimers();
 
-  const projects = new Map<
-    string,
-    BrowserProjectRuntime & { runtimeConfig: RuntimeConfig }
-  >(
-    options.projects.map((project) => [
-      project.name,
-      {
-        ...project,
-        runtimeConfig: restoreRuntimeConfig(project.runtimeConfig),
+  // Find the project matching projectConfig
+  const project = options.projects.find((p) => p.name === projectConfig.name);
+  if (!project) {
+    send({
+      type: 'fatal',
+      payload: {
+        message: `Project ${projectConfig.name} not found in options`,
       },
-    ]),
-  );
+    });
+    window.__RSTEST_DONE__ = true;
+    return;
+  }
 
-  const entries = manifest as unknown as ManifestEntry[];
+  const runtimeConfig = restoreRuntimeConfig(project.runtimeConfig);
+  ensureProcessEnv(runtimeConfig.env);
 
-  // Filter entries based on testFile option if provided
+  // 1. Load setup files (static imports)
+  for (const loadSetup of setupLoaders) {
+    await loadSetup();
+  }
+
+  // 2. Determine which test files to run
   const targetTestFile = options.testFile;
-  const entriesToRun = targetTestFile
-    ? entries.filter((entry) => {
-        // Include all setup files and only the matching test file
-        return entry.type === 'setup' || entry.testPath === targetTestFile;
-      })
-    : entries;
+  let testKeysToRun: string[];
 
-  for (const entry of entriesToRun) {
-    const project = projects.get(entry.projectName);
-    if (!project) {
-      continue;
-    }
+  if (targetTestFile) {
+    // Single file mode: convert absolute path to context key
+    const key = toContextKey(targetTestFile, projectConfig.projectRoot);
+    testKeysToRun = [key];
+  } else {
+    // Full run mode: get all test keys from context
+    testKeysToRun = getTestKeys();
+  }
 
-    ensureProcessEnv(project.runtimeConfig.env);
-
-    if (entry.type === 'setup') {
-      await entry.load();
-      continue;
-    }
+  // 3. Run tests for each file
+  for (const key of testKeysToRun) {
+    const testPath = toAbsolutePath(key, projectConfig.projectRoot);
 
     const workerState: WorkerState = {
       project: project.name,
       projectRoot: project.projectRoot,
       rootPath: options.rootPath,
-      runtimeConfig: project.runtimeConfig,
+      runtimeConfig,
       taskId: 0,
       outputModule: false,
       environment: 'browser',
-      testPath: entry.testPath!,
-      distPath: entry.testPath!,
+      testPath,
+      distPath: testPath,
       snapshotOptions: {
         updateSnapshot: options.snapshot.updateSnapshot,
         snapshotEnvironment: new BrowserSnapshotEnvironment(),
-        snapshotFormat: project.runtimeConfig.snapshotFormat,
+        snapshotFormat: runtimeConfig.snapshotFormat,
       },
     };
 
     const runtime = createRstestRuntime(workerState);
 
     // Register global APIs if globals config is enabled
-    if (project.runtimeConfig.globals) {
-      for (const key of globalApis) {
-        (globalThis as any)[key] = (runtime.api as any)[key];
+    if (runtimeConfig.globals) {
+      for (const apiKey of globalApis) {
+        (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
       }
     }
 
@@ -260,15 +282,16 @@ const run = async () => {
     send({
       type: 'file-start',
       payload: {
-        testPath: entry.testPath!,
+        testPath,
         projectName: project.name,
       },
     });
 
     try {
-      await entry.load();
+      // Load the test file dynamically using context
+      await loadTest(key);
       const result = await runtime.runner.runTests(
-        entry.testPath!,
+        testPath,
         runnerHooks,
         runtime.api,
       );
