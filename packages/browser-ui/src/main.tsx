@@ -1,155 +1,34 @@
-import {
-  App as AntdApp,
-  theme as antdTheme,
-  ConfigProvider,
-  Skeleton,
-  Tree,
-  Typography,
-} from 'antd';
-import type { DataNode } from 'antd/es/tree';
-import { type BirpcReturn, createBirpc } from 'birpc';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { EmptyPreviewOverlay } from './components/browser/EmptyPreviewOverlay';
-import { PreviewHeader } from './components/browser/PreviewHeader';
-import { SidebarHeader } from './components/browser/SidebarHeader';
-import { StatsBar } from './components/browser/StatsBar';
-import { TestCaseTitle } from './components/browser/TestCaseTitle';
-import { TestFilesHeader } from './components/browser/TestFilesHeader';
-import { TestFileTitle } from './components/browser/TestFileTitle';
-import { TestSuiteTitle } from './components/browser/TestSuiteTitle';
-import { ResizablePanel, ResizablePanelGroup } from './components/ui/resizable';
-import {
-  CASE_STATUS_META,
-  type CaseInfo,
-  type CaseStatus,
-  type ContainerWindow,
-  STATUS_META,
-  type TestStatus,
-} from './constants';
+import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
+import { PreviewHeader } from './components/PreviewHeader';
+import { ResizablePanel, ResizablePanelGroup } from './components/ResizePanel';
+import { SidebarHeader } from './components/SidebarHeader';
+import { StatsBar } from './components/StatsBar';
+import { TestFilesHeader } from './components/TestFilesHeader';
+import { TestFilesTree } from './components/TestFilesTree';
+import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
 } from './types';
+import {
+  type CaseInfo,
+  type CaseStatus,
+  type ContainerWindow,
+  STATUS_META,
+  type TestStatus,
+} from './utils/constants';
 import './index.css';
 
-const { Text } = Typography;
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
-type HostRPC = {
-  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<string[]>;
-};
-
-type ContainerRPC = {
-  onTestFileUpdate: (testFiles: string[]) => void;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
-};
-
-const toRelativePath = (file: string, rootPath?: string) => {
-  if (!rootPath) return file;
-  const normalizedRoot = rootPath.endsWith('/')
-    ? rootPath.slice(0, -1)
-    : rootPath;
-  if (file.startsWith(normalizedRoot)) {
-    const sliced = file.slice(normalizedRoot.length);
-    return sliced.startsWith('/') ? sliced.slice(1) : sliced;
-  }
-  return file;
-};
-
-const openInEditor = (file: string) => {
-  const payload = { type: 'open-in-editor', payload: { file } };
-  (window as ContainerWindow).__rstest_dispatch__?.(payload as unknown);
-  window.parent?.postMessage(payload, '*');
-  fetch(`/__open-in-editor?file=${encodeURIComponent(file)}`).catch(() => {});
-};
-
-const useRpc = (
-  setTestFiles: (files: string[]) => void,
-  wsPort: number | undefined,
-  onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
-): { rpc: BirpcReturn<HostRPC, ContainerRPC> | null; loading: boolean } => {
-  const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!wsPort) {
-      // No WebSocket port, cannot fetch test files
-      setLoading(false);
-      return;
-    }
-
-    // Connect to WebSocket server
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
-    const ws = new WebSocket(wsUrl);
-
-    const methods: ContainerRPC = {
-      onTestFileUpdate(files: string[]) {
-        setTestFiles(files);
-      },
-      reloadTestFile(testFile: string, testNamePattern?: string) {
-        onReloadTestFile?.(testFile, testNamePattern);
-      },
-    };
-
-    ws.onopen = () => {
-      console.log('[Container] WebSocket connected');
-      const birpc = createBirpc<HostRPC, ContainerRPC>(methods, {
-        post: (data) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
-          }
-        },
-        on: (fn) => {
-          ws.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              fn(data);
-            } catch {
-              // ignore invalid messages
-            }
-          };
-        },
-      });
-      setRpc(birpc);
-
-      // Fetch test files once connected
-      birpc
-        .getTestFiles()
-        .then((files) => {
-          setTestFiles(files);
-          setLoading(false);
-        })
-        .catch(() => {
-          setLoading(false);
-        });
-    };
-
-    ws.onclose = () => {
-      console.log('[Container] WebSocket disconnected');
-      setRpc(null);
-    };
-
-    ws.onerror = () => {
-      console.log('[Container] WebSocket error');
-      setLoading(false);
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [onReloadTestFile, setTestFiles, wsPort]);
-
-  return { rpc, loading };
-};
-
-const getDisplayName = (testFile: string) => {
+const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
 };
@@ -158,7 +37,7 @@ const iframeUrlFor = (
   testFile: string,
   runnerBase?: string,
   testNamePattern?: string,
-) => {
+): string => {
   const base = runnerBase || window.location.origin;
   const url = new URL('/runner.html', base);
   url.searchParams.set('testFile', testFile);
@@ -167,6 +46,10 @@ const iframeUrlFor = (
   }
   return url.toString();
 };
+
+// ============================================================================
+// BrowserRunner Component
+// ============================================================================
 
 const BrowserRunner: React.FC<{
   options: BrowserHostConfig;
@@ -188,9 +71,7 @@ const BrowserRunner: React.FC<{
         `iframe[data-test-file="${testFile}"]`,
       );
       if (iframe) {
-        // Set file status to running
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
-        // Set all cases in this file to running status, preserving existing data
         setCaseMap((prev) => {
           const prevFile = prev[testFile] ?? {};
           const updatedCases: Record<string, CaseInfo> = {};
@@ -199,20 +80,22 @@ const BrowserRunner: React.FC<{
           }
           return { ...prev, [testFile]: updatedCases };
         });
-        // Reload iframe with new URL
         iframe.src = iframeUrlFor(testFile, options.runnerUrl, testNamePattern);
       }
     },
     [options.runnerUrl],
   );
 
-  const { rpc, loading } = useRpc(
+  const { rpc, loading, connected } = useRpc(
     setTestFiles,
     options?.wsPort,
     handleReloadTestFile,
   );
 
+  // Consolidated effect for handling testFiles changes
+  // Handles statusMap, caseMap, openFiles initialization and cleanup
   useEffect(() => {
+    // Update statusMap: preserve existing status, set new files to 'idle'
     setStatusMap((prev) => {
       const next: Record<string, TestStatus> = {};
       for (const file of testFiles) {
@@ -220,27 +103,31 @@ const BrowserRunner: React.FC<{
       }
       return next;
     });
-  }, [testFiles]);
 
-  useEffect(() => {
+    // Update caseMap: preserve existing cases, initialize new files with empty object
     setCaseMap((prev) => {
-      const next = { ...prev };
+      const next: Record<string, Record<string, CaseInfo>> = {};
       for (const file of testFiles) {
-        next[file] = next[file] ?? {};
+        next[file] = prev[file] ?? {};
       }
       return next;
     });
-  }, [testFiles]);
 
-  useEffect(() => {
+    // Clean up openFiles: remove files that no longer exist
     setOpenFiles((prev) => prev.filter((file) => testFiles.includes(file)));
-  }, [testFiles]);
 
-  useEffect(() => {
-    if (!active && testFiles.length > 0) {
-      setActive(testFiles[0]!);
-    }
-  }, [active, testFiles]);
+    // Auto-select first file if none selected
+    setActive((prev) => {
+      if (!prev && testFiles.length > 0) {
+        return testFiles[0]!;
+      }
+      // If current active file was removed, select first file
+      if (prev && !testFiles.includes(prev) && testFiles.length > 0) {
+        return testFiles[0]!;
+      }
+      return prev;
+    });
+  }, [testFiles]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -252,18 +139,13 @@ const BrowserRunner: React.FC<{
     [],
   );
 
-  const handleSelect = (file: string) => {
+  const handleSelect = useCallback((file: string) => {
     setActive(file);
-  };
+  }, []);
 
   const upsertCase = useCallback(
-    (
-      filePath: string,
-      payload: BrowserClientTestResult,
-      statusOverride?: CaseStatus,
-    ) => {
+    (filePath: string, payload: BrowserClientTestResult) => {
       const parentNames = (payload.parentNames ?? []).filter(Boolean);
-      // fullName uses empty delimiter to match task.ts getTaskNameWithPrefix(test, '')
       const fullName =
         [...parentNames, payload.name].join('  ') || payload.name;
       setCaseMap((prev) => {
@@ -277,7 +159,7 @@ const BrowserRunner: React.FC<{
               name: payload.name,
               parentNames,
               fullName,
-              status: statusOverride ?? mapCaseStatus(payload.status),
+              status: mapCaseStatus(payload.status),
               filePath: payload.testPath || filePath,
               location: payload.location,
             },
@@ -289,29 +171,30 @@ const BrowserRunner: React.FC<{
   );
 
   const handleRerunFile = useCallback(
-    async (file: string) => {
-      if (rpc) {
-        await rpc.rerunTest(file);
+    (file: string) => {
+      if (rpc && connected) {
+        void rpc.rerunTest(file);
       }
     },
-    [rpc],
+    [rpc, connected],
   );
 
   const handleRerunTestCase = useCallback(
-    async (file: string, testName: string) => {
-      if (rpc) {
-        await rpc.rerunTest(file, testName);
+    (file: string, testName: string) => {
+      if (rpc && connected) {
+        void rpc.rerunTest(file, testName);
       }
     },
-    [rpc],
+    [rpc, connected],
   );
 
-  const handleRerun = useCallback(async () => {
-    if (active && rpc) {
-      await rpc.rerunTest(active);
+  const handleRerun = useCallback(() => {
+    if (active && rpc && connected) {
+      void rpc.rerunTest(active);
     }
-  }, [active, rpc]);
+  }, [active, rpc, connected]);
 
+  // Handle messages from test runner iframes
   useEffect(() => {
     const listener = (event: MessageEvent) => {
       if (event.data?.type === '__rstest_dispatch__') {
@@ -321,7 +204,6 @@ const BrowserRunner: React.FC<{
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
             setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
-            // Set all cases to running status instead of clearing them
             setCaseMap((prev) => {
               const prevFile = prev[testPath] ?? {};
               const updatedCases: Record<string, CaseInfo> = {};
@@ -364,10 +246,15 @@ const BrowserRunner: React.FC<{
     return () => window.removeEventListener('message', listener);
   }, [active, upsertCase]);
 
-  const counts = {
-    pass: Object.values(statusMap).filter((s) => s === 'pass').length,
-    fail: Object.values(statusMap).filter((s) => s === 'fail').length,
-  };
+  // Computed values
+  const counts = useMemo(
+    () => ({
+      pass: Object.values(statusMap).filter((s) => s === 'pass').length,
+      fail: Object.values(statusMap).filter((s) => s === 'fail').length,
+    }),
+    [statusMap],
+  );
+
   const completedTotal = counts.pass + counts.fail;
   const successPercent =
     completedTotal === 0 ? 0 : (counts.pass / completedTotal) * 100;
@@ -376,181 +263,6 @@ const BrowserRunner: React.FC<{
   const themeSwitchLabel = isDark
     ? 'Switch to light theme'
     : 'Switch to dark theme';
-
-  // Build nested tree structure from flat cases
-  const buildNestedTree = useCallback(
-    (file: string, cases: CaseInfo[]): DataNode[] => {
-      if (cases.length === 0) {
-        return [
-          {
-            key: `${file}::__empty`,
-            title: (
-              <Text type="secondary" className="text-xs">
-                No test cases reported yet
-              </Text>
-            ),
-            isLeaf: true,
-            selectable: false,
-          },
-        ];
-      }
-
-      // Group cases by their parentNames path
-      type TreeNode = {
-        name: string;
-        fullPath: string[];
-        children: Map<string, TreeNode>;
-        cases: CaseInfo[];
-        status: CaseStatus;
-      };
-
-      const root: TreeNode = {
-        name: '',
-        fullPath: [],
-        children: new Map(),
-        cases: [],
-        status: 'idle',
-      };
-
-      // Insert each case into the tree
-      for (const testCase of cases) {
-        let current = root;
-        const path = testCase.parentNames;
-
-        // Navigate/create nodes for each parent
-        for (let i = 0; i < path.length; i++) {
-          const name = path[i]!;
-          const fullPath = path.slice(0, i + 1);
-          if (!current.children.has(name)) {
-            current.children.set(name, {
-              name,
-              fullPath,
-              children: new Map(),
-              cases: [],
-              status: 'idle',
-            });
-          }
-          current = current.children.get(name)!;
-        }
-
-        // Add the test case to the deepest node
-        current.cases.push(testCase);
-      }
-
-      // Calculate aggregate status for each suite
-      const calcStatus = (node: TreeNode): CaseStatus => {
-        const childStatuses: CaseStatus[] = [];
-
-        for (const child of node.children.values()) {
-          childStatuses.push(calcStatus(child));
-        }
-
-        for (const c of node.cases) {
-          childStatuses.push(c.status);
-        }
-
-        if (childStatuses.some((s) => s === 'fail')) return 'fail';
-        if (childStatuses.some((s) => s === 'running')) return 'running';
-        if (childStatuses.every((s) => s === 'pass')) return 'pass';
-        if (childStatuses.every((s) => s === 'skip')) return 'skip';
-        if (childStatuses.some((s) => s === 'pass')) return 'pass';
-        return 'idle';
-      };
-
-      // Convert tree to DataNode[]
-      const toDataNodes = (node: TreeNode, keyPrefix: string): DataNode[] => {
-        const result: DataNode[] = [];
-
-        // Add suite nodes (children)
-        for (const child of node.children.values()) {
-          const suiteStatus = calcStatus(child);
-          const suiteMeta = CASE_STATUS_META[suiteStatus];
-          const suiteKey = `${keyPrefix}::suite::${child.fullPath.join('::')}`;
-          // fullName for rerun: join with empty delimiter to match task.ts
-          const suiteFullName = child.fullPath.join('  ');
-
-          result.push({
-            key: suiteKey,
-            title: (
-              <TestSuiteTitle
-                icon={suiteMeta.icon}
-                iconColor={suiteMeta.color}
-                name={child.name}
-                onRerun={() => {
-                  void handleRerunTestCase(file, suiteFullName);
-                }}
-                buttonTextColor={token.colorTextSecondary}
-              />
-            ),
-            children: toDataNodes(child, suiteKey),
-            selectable: false,
-          });
-        }
-
-        // Add test case nodes
-        for (const testCase of node.cases) {
-          const caseMeta = CASE_STATUS_META[testCase.status];
-          result.push({
-            key: `${keyPrefix}::case::${testCase.id}`,
-            title: (
-              <TestCaseTitle
-                icon={caseMeta.icon}
-                iconColor={caseMeta.color}
-                label={testCase.name}
-                onRerun={() => {
-                  void handleRerunTestCase(file, testCase.fullName);
-                }}
-                buttonTextColor={token.colorTextSecondary}
-              />
-            ),
-            isLeaf: true,
-            selectable: false,
-          });
-        }
-
-        return result;
-      };
-
-      return toDataNodes(root, file);
-    },
-    [handleRerunTestCase, token.colorTextSecondary],
-  );
-
-  const treeData: DataNode[] = useMemo(
-    () =>
-      testFiles.map((file) => {
-        const status = statusMap[file] ?? 'idle';
-        const meta = STATUS_META[status];
-        const relativePath = toRelativePath(file, options.rootPath);
-        const cases = Object.values(caseMap[file] ?? {});
-
-        return {
-          key: file,
-          title: (
-            <TestFileTitle
-              icon={meta.icon}
-              iconColor={meta.color}
-              relativePath={relativePath}
-              onOpen={() => openInEditor(file)}
-              onRerun={() => {
-                void handleRerunFile(file);
-              }}
-              textColor={token.colorTextSecondary}
-            />
-          ),
-          children: buildNestedTree(file, cases),
-        };
-      }),
-    [
-      buildNestedTree,
-      caseMap,
-      handleRerunFile,
-      options.rootPath,
-      statusMap,
-      testFiles,
-      token,
-    ],
-  );
 
   return (
     <div
@@ -576,8 +288,8 @@ const BrowserRunner: React.FC<{
               onThemeToggle={(checked: boolean) =>
                 setTheme(checked ? 'dark' : 'light')
               }
-              onRerun={handleRerun}
-              isConnected={Boolean(rpc)}
+              onRerun={connected ? handleRerun : undefined}
+              isConnected={connected}
               token={token}
               progressPercent={progressPercent}
               successPercent={successPercent}
@@ -590,61 +302,27 @@ const BrowserRunner: React.FC<{
               background={token.colorFillQuaternary}
             />
 
-            <TestFilesHeader isConnected={Boolean(rpc)} token={token} />
+            <TestFilesHeader isConnected={connected} token={token} />
 
             <div
               className="flex-1 overflow-x-hidden overflow-y-auto"
               style={{ background: token.colorBgContainer }}
             >
-              {loading ? (
-                <div className="space-y-2 p-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Skeleton.Avatar active size="small" shape="circle" />
-                      <Skeleton.Input
-                        active
-                        size="small"
-                        style={{ width: `${60 + i * 10}%` }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : testFiles.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <Text type="secondary">No test files detected</Text>
-                </div>
-              ) : (
-                <Tree
-                  blockNode
-                  showLine={false}
-                  switcherIcon={(props: { expanded?: boolean }) =>
-                    props.expanded ? (
-                      <ChevronDown size={12} />
-                    ) : (
-                      <ChevronRight size={12} />
-                    )
-                  }
-                  showIcon
-                  expandAction="click"
-                  expandedKeys={openFiles}
-                  selectedKeys={active ? [active] : []}
-                  onExpand={(keys) =>
-                    setOpenFiles(
-                      (keys as React.Key[]).filter(
-                        (key): key is string => typeof key === 'string',
-                      ),
-                    )
-                  }
-                  onSelect={(_keys, info) => {
-                    const key = info.node.key;
-                    if (typeof key === 'string' && testFiles.includes(key)) {
-                      handleSelect(key);
-                    }
-                  }}
-                  treeData={treeData}
-                  className="m-1! bg-transparent"
-                />
-              )}
+              <TestFilesTree
+                testFiles={testFiles}
+                statusMap={statusMap}
+                caseMap={caseMap}
+                rootPath={options.rootPath}
+                loading={loading}
+                connected={connected}
+                openFiles={openFiles}
+                activeFile={active}
+                token={token}
+                onExpandChange={setOpenFiles}
+                onSelect={handleSelect}
+                onRerunFile={handleRerunFile}
+                onRerunTestCase={handleRerunTestCase}
+              />
             </div>
           </div>
         </ResizablePanel>
@@ -714,6 +392,10 @@ const BrowserRunner: React.FC<{
   );
 };
 
+// ============================================================================
+// App Component
+// ============================================================================
+
 const App: React.FC = () => {
   const options = (window as ContainerWindow).__RSTEST_BROWSER_OPTIONS__;
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -768,6 +450,10 @@ const App: React.FC = () => {
     </ConfigProvider>
   );
 };
+
+// ============================================================================
+// Mount
+// ============================================================================
 
 const mount = () => {
   const rootElement = document.getElementById('root');
