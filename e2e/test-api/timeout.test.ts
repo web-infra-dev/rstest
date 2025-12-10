@@ -25,7 +25,7 @@ describe('Test timeout', () => {
     expectLog(/timeout.test.ts:5:5/, logs);
 
     expectLog(
-      /Error: test timed out in 5000ms.*completed 1 expect assertions/,
+      /Error: test timed out in 5000ms.*completed 1 expect assertion[^s]/,
       logs,
     );
 
