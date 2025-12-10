@@ -187,11 +187,11 @@ type BackgroundColor =
   | 'bgCyan'
   | 'bgWhite';
 
-export const bgColor = (bgColor: BackgroundColor, str: string): string => {
-  if (['bgRed', 'bgBlack'].includes(bgColor)) {
-    return color[bgColor](color.white(color.bold(str)));
+export const bgColor = (background: BackgroundColor, str: string): string => {
+  if (['bgRed', 'bgBlack'].includes(background)) {
+    return color[background](color.white(color.bold(str)));
   }
-  return color[bgColor](color.blackBright(color.bold(str)));
+  return color[background](color.blackBright(color.bold(str)));
 };
 
 export { color };
