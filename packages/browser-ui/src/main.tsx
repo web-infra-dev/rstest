@@ -2,6 +2,7 @@ import {
   App as AntdApp,
   theme as antdTheme,
   ConfigProvider,
+  Skeleton,
   Tree,
   Typography,
 } from 'antd';
@@ -68,20 +69,18 @@ const openInEditor = (file: string) => {
 
 const useRpc = (
   setTestFiles: (files: string[]) => void,
-  initialTestFiles: string[],
   wsPort: number | undefined,
   onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
-): BirpcReturn<HostRPC, ContainerRPC> | null => {
+): { rpc: BirpcReturn<HostRPC, ContainerRPC> | null; loading: boolean } => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
   );
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!wsPort) {
-      // No WebSocket port, fall back to static mode
-      if (initialTestFiles.length > 0) {
-        setTestFiles(initialTestFiles);
-      }
+      // No WebSocket port, cannot fetch test files
+      setLoading(false);
       return;
     }
 
@@ -123,8 +122,13 @@ const useRpc = (
       // Fetch test files once connected
       birpc
         .getTestFiles()
-        .then((files) => setTestFiles(files))
-        .catch(() => setTestFiles(initialTestFiles));
+        .then((files) => {
+          setTestFiles(files);
+          setLoading(false);
+        })
+        .catch(() => {
+          setLoading(false);
+        });
     };
 
     ws.onclose = () => {
@@ -133,16 +137,16 @@ const useRpc = (
     };
 
     ws.onerror = () => {
-      console.log('[Container] WebSocket error, falling back to static mode');
-      setTestFiles(initialTestFiles);
+      console.log('[Container] WebSocket error');
+      setLoading(false);
     };
 
     return () => {
       ws.close();
     };
-  }, [initialTestFiles, onReloadTestFile, setTestFiles, wsPort]);
+  }, [onReloadTestFile, setTestFiles, wsPort]);
 
-  return rpc;
+  return { rpc, loading };
 };
 
 const getDisplayName = (testFile: string) => {
@@ -202,9 +206,8 @@ const BrowserRunner: React.FC<{
     [options.runnerUrl],
   );
 
-  const rpc = useRpc(
+  const { rpc, loading } = useRpc(
     setTestFiles,
-    options?.testFiles || [],
     options?.wsPort,
     handleReloadTestFile,
   );
@@ -238,14 +241,6 @@ const BrowserRunner: React.FC<{
       setActive(testFiles[0]!);
     }
   }, [active, testFiles]);
-
-  useEffect(() => {
-    if (active) {
-      setOpenFiles((prev) =>
-        prev.includes(active) ? prev : [...prev, active],
-      );
-    }
-  }, [active]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -601,7 +596,20 @@ const BrowserRunner: React.FC<{
               className="flex-1 overflow-x-hidden overflow-y-auto"
               style={{ background: token.colorBgContainer }}
             >
-              {testFiles.length === 0 ? (
+              {loading ? (
+                <div className="space-y-2 p-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Skeleton.Avatar active size="small" shape="circle" />
+                      <Skeleton.Input
+                        active
+                        size="small"
+                        style={{ width: `${60 + i * 10}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : testFiles.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
                   <Text type="secondary">No test files detected</Text>
                 </div>

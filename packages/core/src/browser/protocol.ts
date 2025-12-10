@@ -27,7 +27,6 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
-  testFiles?: string[];
   /**
    * Base URL for runner (iframe) pages.
    */
