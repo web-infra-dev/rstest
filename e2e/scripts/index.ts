@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { onTestFinished as onRstestFinished } from '@rstest/core';
+import { expect, onTestFinished as onRstestFinished } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
 import type { Options, Result } from 'tinyexec';
 import { x } from 'tinyexec';
@@ -106,6 +106,7 @@ export async function runRstestCli({
         `Test failed with exit code ${exitCode}. Logs:\n\n${logs.join('\n')}`,
       );
     }
+    expect(exitCode).toBe(0);
   };
 
   const expectExecFailed = async () => {
@@ -117,6 +118,7 @@ export async function runRstestCli({
         `expect test failed but passed. Logs:\n\n${logs.join('\n')}`,
       );
     }
+    expect(exitCode).not.toBe(0);
   };
 
   const expectLog = (
