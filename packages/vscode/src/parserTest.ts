@@ -74,6 +74,10 @@ const isTemplateLiteral = (v: unknown): v is TemplateLiteral =>
   Array.isArray((v as Record<string, unknown>).quasis as unknown[]) &&
   Array.isArray((v as Record<string, unknown>).expressions as unknown[]);
 
+const compiler = new Compiler();
+
+let offset = 0;
+
 export const parseTestFile = (
   code: string,
   events: {
@@ -84,8 +88,6 @@ export const parseTestFile = (
     ): (() => void) | void;
   },
 ) => {
-  const compiler = new Compiler();
-
   // Parse the code using SWC
   const astUnknown = compiler.parseSync(code, {
     syntax: 'typescript',
@@ -98,7 +100,6 @@ export const parseTestFile = (
   }
 
   const ast: Program = astUnknown as unknown as Program;
-  const offset = ast.span.start - 1;
   const codeBuffer = Buffer.from(code, 'utf8');
 
   // Helper function to convert SWC span to VS Code range
@@ -215,4 +216,6 @@ export const parseTestFile = (
 
   // Start walking from the root
   walkNode(ast);
+
+  offset = ast.span.end;
 };
