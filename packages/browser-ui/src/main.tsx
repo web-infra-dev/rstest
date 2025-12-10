@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
-import { ResizablePanel, ResizablePanelGroup } from './components/ResizePanel';
+import { ResizablePanel, ResizablePanelGroup } from './components/Resizable';
 import { SidebarHeader } from './components/SidebarHeader';
 import { StatsBar } from './components/StatsBar';
 import { TestFilesHeader } from './components/TestFilesHeader';
