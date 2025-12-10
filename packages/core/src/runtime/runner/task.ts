@@ -198,12 +198,14 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
   timeout,
+  getAssertionCalls,
   stackTraceError,
 }: {
   name: string;
   fn: T;
-  timeout: number;
-  stackTraceError?: Error;
+  timeout?: number;
+  getAssertionCalls?: () => number;
+  stackTraceError: Error;
 }): T {
   if (!timeout) {
     return fn;
@@ -212,13 +214,17 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
   return (async (...args: Parameters<T>) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = getRealTimers().setTimeout!(
-        () =>
-          reject(
-            makeError(`${name} timed out in ${timeout}ms`, stackTraceError),
-          ),
-        timeout,
-      );
+      timeoutId = getRealTimers().setTimeout!(() => {
+        const assertionCalls = getAssertionCalls?.() || 0;
+        const assertionInfo =
+          assertionCalls > 0
+            ? ` (completed ${assertionCalls} expect assertions)`
+            : ' (no expect assertions completed)';
+        const message = `${name} timed out in ${timeout}ms${getAssertionCalls ? assertionInfo : ''}`;
+
+        // Create timeout error with the provided stack trace from test registration
+        reject(makeError(message, stackTraceError));
+      }, timeout);
     });
 
     try {

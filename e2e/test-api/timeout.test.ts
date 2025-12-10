@@ -3,7 +3,7 @@ import { runRstestCli } from '../scripts';
 
 describe('Test timeout', () => {
   it('should throw timeout error when test timeout', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/timeout.test'],
       options: {
@@ -17,18 +17,20 @@ describe('Test timeout', () => {
     expect(cli.exec.process?.exitCode).toBe(1);
     const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expect(
-      logs.find((log) => log.includes('Error: test timed out in 50ms')),
-    ).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('timeout.test.ts:5:5')),
-    ).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('Error: test timed out in 5000ms')),
-    ).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('timeout.test.ts:10:5')),
-    ).toBeTruthy();
-    expect(logs.find((log) => log.includes('Tests 2 failed'))).toBeTruthy();
+    expectLog(
+      /Error: test timed out in 50ms.*no expect assertions completed/,
+      logs,
+    );
+
+    expectLog(/timeout.test.ts:5:5/, logs);
+
+    expectLog(
+      /Error: test timed out in 5000ms.*completed 1 expect assertions/,
+      logs,
+    );
+
+    expectLog(/timeout.test.ts:10:5/, logs);
+
+    expectLog(/Tests 2 failed/, logs);
   }, 10000);
 });
