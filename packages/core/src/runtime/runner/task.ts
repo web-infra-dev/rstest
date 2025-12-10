@@ -218,7 +218,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
         const assertionCalls = getAssertionCalls?.() || 0;
         const assertionInfo =
           assertionCalls > 0
-            ? ` (completed ${assertionCalls} expect assertions)`
+            ? ` (completed ${assertionCalls} expect assertion${assertionCalls === 1 ? '' : 's'})`
             : ' (no expect assertions completed)';
         const message = `${name} timed out in ${timeout}ms${getAssertionCalls ? assertionInfo : ''}`;
 
