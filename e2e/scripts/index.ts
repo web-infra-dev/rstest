@@ -39,7 +39,7 @@ class Cli {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stderr += processStd ?? '';
       this.log += processStd ?? '';
-      for (const listener of this.stdoutListeners) {
+      for (const listener of this.stderrListeners) {
         listener();
       }
     });
