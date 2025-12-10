@@ -19,7 +19,10 @@ describe('file2 isolation', () => {
 
   it('should have clean DOM', () => {
     // Body should be empty or only contain elements added by this test
-    const children = document.body.children.length;
-    expect(children).toBe(0);
+    const children = document.body.children;
+    expect(children.length).toBe(1);
+    expect(children[0]).toBeInstanceOf(HTMLDivElement);
+    expect(children[0]!.id).toBe('root');
+    expect(children[0]!.children.length).toBe(0);
   });
 });

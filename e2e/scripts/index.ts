@@ -32,7 +32,7 @@ class Cli {
     this.exec.process?.stderr?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stderr += processStd ?? '';
-      for (const listener of this.stdoutListeners) {
+      for (const listener of this.stderrListeners) {
         listener();
       }
     });
