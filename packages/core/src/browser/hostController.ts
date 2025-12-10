@@ -1,11 +1,10 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
-// import { createRequire } from 'node:module';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
-import type { BirpcReturn } from 'birpc';
+import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { dirname, join, relative, resolve, sep } from 'pathe';
 import * as picomatch from 'picomatch';
@@ -40,6 +39,10 @@ import type {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
 type VirtualModulesPluginInstance = InstanceType<
   (typeof rspack.experiments)['VirtualModulesPlugin']
 >;
@@ -54,7 +57,152 @@ type BrowserProjectEntries = {
   testFiles: string[];
 };
 
-const ensureProcessExitCode = (code: number) => {
+type BindingSource = {
+  context: BrowserContext;
+  page: Page;
+  frame: Frame;
+};
+
+/** RPC methods exposed by the host (server) to the container (client) */
+type HostRpcMethods = {
+  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
+  getTestFiles: () => Promise<string[]>;
+};
+
+/** RPC methods exposed by the container (client) to the host (server) */
+type ContainerRpcMethods = {
+  onTestFileUpdate: (testFiles: string[]) => Promise<void>;
+  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
+};
+
+type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
+
+// ============================================================================
+// RPC Manager - Encapsulates WebSocket and birpc management
+// ============================================================================
+
+/**
+ * Manages the WebSocket connection and birpc communication with the container UI.
+ * Provides a clean interface for sending RPC calls and handling connections.
+ */
+class ContainerRpcManager {
+  private wss: WebSocketServer;
+  private ws: WebSocket | null = null;
+  private rpc: ContainerRpc | null = null;
+  private methods: HostRpcMethods;
+
+  constructor(wss: WebSocketServer, methods: HostRpcMethods) {
+    this.wss = wss;
+    this.methods = methods;
+    this.setupConnectionHandler();
+  }
+
+  private setupConnectionHandler(): void {
+    this.wss.on('connection', (ws: WebSocket) => {
+      logger.log(color.gray('[Browser UI] Container WebSocket connected'));
+      this.attachWebSocket(ws);
+    });
+  }
+
+  private attachWebSocket(ws: WebSocket): void {
+    this.ws = ws;
+
+    this.rpc = createBirpc<ContainerRpcMethods, HostRpcMethods>(this.methods, {
+      post: (data) => {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify(data));
+        }
+      },
+      on: (fn) => {
+        ws.on('message', (message) => {
+          try {
+            const data = JSON.parse(message.toString());
+            fn(data);
+          } catch {
+            // ignore invalid messages
+          }
+        });
+      },
+    });
+
+    ws.on('close', () => {
+      this.ws = null;
+      this.rpc = null;
+    });
+  }
+
+  /** Check if a container is currently connected */
+  get isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === this.ws.OPEN;
+  }
+
+  /** Get the current WebSocket instance (for reuse in watch mode) */
+  get currentWebSocket(): WebSocket | null {
+    return this.ws;
+  }
+
+  /** Reattach an existing WebSocket (for watch mode reuse) */
+  reattach(ws: WebSocket): void {
+    this.attachWebSocket(ws);
+  }
+
+  /** Notify container of test file changes */
+  async notifyTestFileUpdate(files: string[]): Promise<void> {
+    await this.rpc?.onTestFileUpdate(files);
+  }
+
+  /** Request container to reload a specific test file */
+  async reloadTestFile(
+    testFile: string,
+    testNamePattern?: string,
+  ): Promise<void> {
+    await this.rpc?.reloadTestFile(testFile, testNamePattern);
+  }
+}
+
+// ============================================================================
+// Browser Runtime - Core runtime state
+// ============================================================================
+
+type BrowserRuntime = {
+  rsbuildInstance: RsbuildInstance;
+  devServer: RsbuildDevServer;
+  browser: ChromiumBrowserInstance;
+  port: number;
+  wsPort: number;
+  manifestPath: string;
+  tempDir: string;
+  manifestPlugin: VirtualModulesPluginInstance;
+  containerPage?: Page;
+  containerContext?: BrowserContext;
+  setContainerOptions: (options: BrowserHostConfig) => void;
+  wss: WebSocketServer;
+  rpcManager?: ContainerRpcManager;
+};
+
+// ============================================================================
+// Watch Mode Context - Encapsulates all watch mode state
+// ============================================================================
+
+type WatchContext = {
+  runtime: BrowserRuntime | null;
+  lastTestFiles: string[];
+  hooksEnabled: boolean;
+  cleanupRegistered: boolean;
+};
+
+const watchContext: WatchContext = {
+  runtime: null,
+  lastTestFiles: [],
+  hooksEnabled: false,
+  cleanupRegistered: false,
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const ensureProcessExitCode = (code: number): void => {
   if (process.exitCode === undefined || process.exitCode === 0) {
     process.exitCode = code;
   }
@@ -157,12 +305,6 @@ const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
   // Use [\\/] to match both forward and back slashes
   return new RegExp(`[\\\\/](${keywords.join('|')})[\\\\/]`);
 };
-
-// const resolvePackageRoot = (pkgName: string): string => {
-//   const require = createRequire(import.meta.url);
-//   const pkgJsonPath = require.resolve(`${pkgName}/package.json`);
-//   return dirname(pkgJsonPath);
-// };
 
 const getRuntimeConfigFromProject = (
   project: ProjectContext,
@@ -276,6 +418,10 @@ const resolveContainerDist = (): string => {
   );
 };
 
+// ============================================================================
+// Manifest Generation
+// ============================================================================
+
 const generateManifestModule = ({
   manifestPath,
   entries,
@@ -356,46 +502,9 @@ const htmlTemplate = `<!DOCTYPE html>
 </html>
 `;
 
-type BrowserRuntime = {
-  rsbuildInstance: RsbuildInstance;
-  devServer: RsbuildDevServer;
-  browser: ChromiumBrowserInstance;
-  port: number;
-  wsPort: number;
-  manifestPath: string;
-  tempDir: string;
-  manifestPlugin: VirtualModulesPluginInstance;
-  containerPage?: Page;
-  containerContext?: BrowserContext;
-  containerDistPath?: string;
-  containerDevServer?: string;
-  setContainerOptions: (options: BrowserHostConfig) => void;
-  wss: WebSocketServer;
-  containerWs?: WebSocket;
-};
-
-type HostRpcMethods = {
-  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<string[]>;
-};
-
-type ContainerRpcClient = {
-  onTestFileUpdate: (testFiles: string[]) => Promise<void>;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
-};
-
-type ContainerRpc = BirpcReturn<ContainerRpcClient, HostRpcMethods>;
-
-type BindingSource = {
-  context: BrowserContext;
-  page: Page;
-  frame: Frame;
-};
-
-let sharedRuntime: BrowserRuntime | null = null;
-let watchCleanupRegistered = false;
-let lastTestFiles: string[] = [];
-let enableWatchHooks = false; // Flag to control if watch hooks should execute
+// ============================================================================
+// Browser Runtime Lifecycle
+// ============================================================================
 
 const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
@@ -411,7 +520,6 @@ const destroyBrowserRuntime = async (
     // ignore
   }
   try {
-    // Close WebSocket server to allow process to exit
     runtime.wss?.close();
   } catch {
     // ignore
@@ -421,17 +529,17 @@ const destroyBrowserRuntime = async (
     .catch(() => {});
 };
 
-const registerWatchCleanup = () => {
-  if (watchCleanupRegistered) {
+const registerWatchCleanup = (): void => {
+  if (watchContext.cleanupRegistered) {
     return;
   }
 
   const cleanup = async () => {
-    if (!sharedRuntime) {
+    if (!watchContext.runtime) {
       return;
     }
-    await destroyBrowserRuntime(sharedRuntime);
-    sharedRuntime = null;
+    await destroyBrowserRuntime(watchContext.runtime);
+    watchContext.runtime = null;
   };
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -444,7 +552,7 @@ const registerWatchCleanup = () => {
     void cleanup();
   });
 
-  watchCleanupRegistered = true;
+  watchContext.cleanupRegistered = true;
 };
 
 const createBrowserRuntime = async ({
@@ -522,9 +630,7 @@ const createBrowserRuntime = async ({
               config.experiments = {
                 ...config.experiments,
                 lazyCompilation: {
-                  // Only compile dynamic imports when they are actually requested
                   imports: true,
-                  // Don't lazy compile entry modules
                   entries: false,
                 },
               };
@@ -543,22 +649,17 @@ const createBrowserRuntime = async ({
       {
         name: 'rstest:browser-watch',
         setup(api) {
-          // Use onBeforeDevCompile to show message
           api.onBeforeDevCompile(() => {
-            if (!enableWatchHooks) {
+            if (!watchContext.hooksEnabled) {
               return;
             }
             logger.log(color.cyan('\nFile changed, re-running tests...\n'));
           });
 
-          // Use onAfterDevCompile to trigger test rerun
           api.onAfterDevCompile(async () => {
-            if (!enableWatchHooks) {
+            if (!watchContext.hooksEnabled) {
               return;
             }
-
-            // Trigger test rerun
-            // import.meta.webpackContext handles file watching automatically
             await onTriggerRerun();
           });
         },
@@ -570,7 +671,7 @@ const createBrowserRuntime = async ({
     getPortSilently: true,
   });
 
-  // Serve prebuilt container assets (SPA) via sirv, scoped to avoid clashing with runner assets
+  // Serve prebuilt container assets (SPA) via sirv
   const serveContainer = containerDistPath
     ? sirv(containerDistPath, {
         dev: false,
@@ -763,12 +864,14 @@ const createBrowserRuntime = async ({
     manifestPath,
     tempDir,
     manifestPlugin: virtualManifestPlugin,
-    containerDistPath,
-    containerDevServer,
     setContainerOptions,
     wss,
   };
 };
+
+// ============================================================================
+// Main Entry Point
+// ============================================================================
 
 export const runBrowserController = async (context: Rstest): Promise<void> => {
   const buildStart = Date.now();
@@ -804,6 +907,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       return;
     }
   }
+
   const projectEntries = await collectProjectEntries(context);
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -825,8 +929,8 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   const isWatchMode = context.command === 'watch';
   const tempDir =
-    isWatchMode && sharedRuntime
-      ? sharedRuntime.tempDir
+    isWatchMode && watchContext.runtime
+      ? watchContext.runtime.tempDir
       : isWatchMode
         ? join(context.rootPath, TEMP_RSTEST_OUTPUT_DIR, 'browser', 'watch')
         : join(
@@ -844,22 +948,17 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Track initial test files for watch mode
   if (isWatchMode) {
-    lastTestFiles = projectEntries.flatMap((entry) => entry.testFiles).sort();
+    watchContext.lastTestFiles = projectEntries
+      .flatMap((entry) => entry.testFiles)
+      .sort();
   }
 
-  let runtime = isWatchMode ? sharedRuntime : null;
+  let runtime = isWatchMode ? watchContext.runtime : null;
 
   // Define rerun callback for watch mode (will be populated later)
   let triggerRerun: (() => Promise<void>) | undefined;
 
-  // Create a wrapper that will call triggerRerun when it's available
-  const onTriggerRerun = async () => {
-    if (triggerRerun) {
-      await triggerRerun();
-    }
-  };
-
-  if (!runtime || !isWatchMode) {
+  if (!runtime) {
     try {
       runtime = await createBrowserRuntime({
         context,
@@ -867,7 +966,11 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         manifestSource,
         tempDir,
         isWatchMode,
-        onTriggerRerun: isWatchMode ? onTriggerRerun : undefined,
+        onTriggerRerun: isWatchMode
+          ? async () => {
+              await triggerRerun?.();
+            }
+          : undefined,
         containerDistPath,
         containerDevServer,
       });
@@ -883,12 +986,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }
 
     if (isWatchMode) {
-      sharedRuntime = runtime;
+      watchContext.runtime = runtime;
       registerWatchCleanup();
     }
   }
 
-  const { browser, port, wsPort, wss } = runtime!;
+  const { browser, port, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries
@@ -903,7 +1006,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }),
   );
 
-  let hostOptions: BrowserHostConfig = {
+  const hostOptions: BrowserHostConfig = {
     rootPath: context.rootPath,
     projects: projectRuntimeConfigs,
     snapshot: {
@@ -913,7 +1016,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     wsPort,
   };
 
-  runtime!.setContainerOptions(hostOptions);
+  runtime.setContainerOptions(hostOptions);
 
   // Track test results from iframes
   const reporterResults: TestFileResult[] = [];
@@ -930,15 +1033,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   // Open a container page for user to view (reuse in watch mode)
   let containerContext: BrowserContext;
   let containerPage: Page;
-  let isNewPage = false; // Track if we created a new page
+  let isNewPage = false;
 
-  if (isWatchMode && runtime!.containerPage && runtime!.containerContext) {
-    // Reuse existing container page in watch mode
-    containerContext = runtime!.containerContext;
-    containerPage = runtime!.containerPage;
+  if (isWatchMode && runtime.containerPage && runtime.containerContext) {
+    containerContext = runtime.containerContext;
+    containerPage = runtime.containerPage;
     logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
   } else {
-    // Create new container page
     isNewPage = true;
     containerContext = await browser.newContext({
       viewport: null,
@@ -950,21 +1051,18 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       await popup.close().catch(() => {});
     });
 
-    // Also prevent popups from the context level
     containerContext.on('page', async (page: Page) => {
-      // Close any new pages that aren't the container page
       if (page !== containerPage) {
         await page.close().catch(() => {});
       }
     });
 
-    // Save to runtime for reuse in watch mode
     if (isWatchMode) {
-      runtime!.containerPage = containerPage;
-      runtime!.containerContext = containerContext;
+      runtime.containerPage = containerPage;
+      runtime.containerContext = containerContext;
     }
 
-    // Setup communication to receive test results from iframes (only on first creation)
+    // Setup communication to receive test results from iframes
     await containerPage.exposeBinding(
       '__rstest_dispatch__',
       async (_source: BindingSource, payload: BrowserClientMessage) => {
@@ -1020,7 +1118,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
             break;
           }
           case 'complete':
-            // Individual iframe completed, not all tests
             break;
         }
       },
@@ -1035,75 +1132,38 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     });
   }
 
-  // Birpc setup (need to recreate on each run to capture current context)
-  let containerRpc: ContainerRpc | null = null;
-  let containerWs: WebSocket | null = null;
+  // Setup RPC manager
+  let rpcManager: ContainerRpcManager;
 
-  const containerMethods: HostRpcMethods = {
-    async rerunTest(testFile: string, testNamePattern?: string) {
-      logger.log(
-        color.cyan(
-          `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
-        ),
-      );
-      // Notify container to reload the specific iframe
-      await containerRpc?.reloadTestFile(testFile, testNamePattern);
-    },
-
-    async getTestFiles() {
-      return allTestFiles;
-    },
-  };
-
-  const { createBirpc } = await import('birpc');
-
-  // Setup WebSocket-based birpc for container control
-  const setupContainerRpc = (ws: WebSocket) => {
-    containerWs = ws;
-    runtime!.containerWs = ws;
-
-    containerRpc = createBirpc<ContainerRpcClient, HostRpcMethods>(
-      containerMethods,
-      {
-        post: (data) => {
-          if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify(data));
-          }
-        },
-        on: (fn) => {
-          ws.on('message', (message) => {
-            try {
-              const data = JSON.parse(message.toString());
-              fn(data);
-            } catch {
-              // ignore invalid messages
-            }
-          });
-        },
+  if (isWatchMode && runtime.rpcManager) {
+    rpcManager = runtime.rpcManager;
+    // Reattach if we have an existing WebSocket
+    const existingWs = rpcManager.currentWebSocket;
+    if (existingWs) {
+      rpcManager.reattach(existingWs);
+    }
+  } else {
+    rpcManager = new ContainerRpcManager(wss, {
+      async rerunTest(testFile: string, testNamePattern?: string) {
+        logger.log(
+          color.cyan(
+            `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
+          ),
+        );
+        await rpcManager.reloadTestFile(testFile, testNamePattern);
       },
-    );
-
-    ws.on('close', () => {
-      containerWs = null;
-      containerRpc = null;
+      async getTestFiles() {
+        return allTestFiles;
+      },
     });
-  };
 
-  // Reuse existing WebSocket connection in watch mode
-  if (isWatchMode && runtime!.containerWs) {
-    containerWs = runtime!.containerWs;
-    setupContainerRpc(containerWs);
+    if (isWatchMode) {
+      runtime.rpcManager = rpcManager;
+    }
   }
 
-  // Handle new WebSocket connections
-  wss.on('connection', (ws: WebSocket) => {
-    logger.log(color.gray('[Browser UI] Container WebSocket connected'));
-    setupContainerRpc(ws);
-  });
-
-  // Only navigate and setup on first creation (new page)
+  // Only navigate on first creation
   if (isNewPage) {
-    // Navigate to container page
     await containerPage.goto(`http://localhost:${port}/container.html`, {
       waitUntil: 'load',
     });
@@ -1131,7 +1191,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   const testStart = Date.now();
   await Promise.race([allTestsPromise, testTimeout]);
 
-  // Clear timeout to allow process to exit
   if (timeoutId) {
     clearTimeout(timeoutId);
   }
@@ -1141,36 +1200,28 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   // Define rerun logic for watch mode
   if (isWatchMode) {
     triggerRerun = async () => {
-      // Re-collect test entries to get current file list (for UI display)
       const newProjectEntries = await collectProjectEntries(context);
-
-      // Get current test file list
       const currentTestFiles = newProjectEntries
         .flatMap((entry) => entry.testFiles)
         .sort();
 
-      // Check if test file list changed
       const filesChanged =
-        currentTestFiles.length !== lastTestFiles.length ||
-        currentTestFiles.some((file, index) => file !== lastTestFiles[index]);
+        currentTestFiles.length !== watchContext.lastTestFiles.length ||
+        currentTestFiles.some(
+          (file, index) => file !== watchContext.lastTestFiles[index],
+        );
 
       if (filesChanged) {
-        // Update last test files
-        lastTestFiles = currentTestFiles;
-
-        // Notify container of test file changes via RPC
-        if (containerRpc?.onTestFileUpdate) {
-          await containerRpc.onTestFileUpdate(currentTestFiles);
-        }
+        watchContext.lastTestFiles = currentTestFiles;
+        await rpcManager.notifyTestFileUpdate(currentTestFiles);
       }
 
-      // Tests in iframes will automatically rerun after rspack recompilation
       logger.log(color.cyan('Tests will be re-executed automatically\n'));
     };
   }
 
   if (!isWatchMode) {
-    await destroyBrowserRuntime(runtime!);
+    await destroyBrowserRuntime(runtime);
   }
 
   if (fatalError) {
@@ -1208,7 +1259,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
   if (isWatchMode && triggerRerun) {
-    enableWatchHooks = true;
+    watchContext.hooksEnabled = true;
     logger.log(
       color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
     );

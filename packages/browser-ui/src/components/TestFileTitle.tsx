@@ -7,7 +7,7 @@ type TestFileTitleProps = {
   iconColor: string;
   relativePath: string;
   onOpen: () => void;
-  onRerun: () => void;
+  onRerun?: () => void;
   textColor: string;
 };
 
@@ -52,9 +52,10 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
             type="text"
             size="small"
             icon={<RotateCw size={14} />}
+            disabled={!onRerun}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
-              onRerun();
+              onRerun?.();
             }}
             className="inline-flex! h-5! w-5! items-center justify-center p-0!"
             style={{ color: textColor }}

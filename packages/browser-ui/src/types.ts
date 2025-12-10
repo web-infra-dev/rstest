@@ -1,3 +1,10 @@
+/**
+ * Browser UI types
+ *
+ * These types are derived from @rstest/core's protocol types but simplified
+ * for the browser UI's needs. The UI only needs a subset of the full config.
+ */
+
 export type BrowserProjectRuntime = {
   name: string;
   environmentName: string;
@@ -11,9 +18,11 @@ export type BrowserHostConfig = {
   snapshot: {
     updateSnapshot: unknown;
   };
+  /** If provided, only run this specific test file */
   testFile?: string;
+  /** Base URL for runner (iframe) pages */
   runnerUrl?: string;
-  testFiles?: string[];
+  /** WebSocket port for container RPC */
   wsPort?: number;
 };
 

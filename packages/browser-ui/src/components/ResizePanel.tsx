@@ -1,5 +1,3 @@
-'use client';
-
 import { Splitter, type SplitterProps } from 'antd';
 import * as React from 'react';
 

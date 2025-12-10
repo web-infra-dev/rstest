@@ -1,0 +1,331 @@
+import { Skeleton, Tree, Typography } from 'antd';
+import type { GlobalToken } from 'antd/es/theme/interface';
+import type { DataNode } from 'antd/es/tree';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useCallback, useMemo } from 'react';
+import {
+  CASE_STATUS_META,
+  type CaseInfo,
+  type CaseStatus,
+  STATUS_META,
+  type TestStatus,
+} from '../utils/constants';
+import { TestCaseTitle } from './TestCaseTitle';
+import { TestFileTitle } from './TestFileTitle';
+import { TestSuiteTitle } from './TestSuiteTitle';
+
+const { Text } = Typography;
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const toRelativePath = (file: string, rootPath?: string): string => {
+  if (!rootPath) return file;
+  const normalizedRoot = rootPath.endsWith('/')
+    ? rootPath.slice(0, -1)
+    : rootPath;
+  if (file.startsWith(normalizedRoot)) {
+    const sliced = file.slice(normalizedRoot.length);
+    return sliced.startsWith('/') ? sliced.slice(1) : sliced;
+  }
+  return file;
+};
+
+const openInEditor = (file: string): void => {
+  const payload = { type: 'open-in-editor', payload: { file } };
+  (
+    window as Window & { __rstest_dispatch__?: (payload: unknown) => void }
+  ).__rstest_dispatch__?.(payload);
+  window.parent?.postMessage(payload, '*');
+  fetch(`/__open-in-editor?file=${encodeURIComponent(file)}`).catch(() => {});
+};
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export type TestFilesTreeProps = {
+  testFiles: string[];
+  statusMap: Record<string, TestStatus>;
+  caseMap: Record<string, Record<string, CaseInfo>>;
+  rootPath?: string;
+  loading: boolean;
+  connected: boolean;
+  openFiles: string[];
+  activeFile: string | null;
+  token: GlobalToken;
+  onExpandChange: (keys: string[]) => void;
+  onSelect: (file: string) => void;
+  onRerunFile: (file: string) => void;
+  onRerunTestCase: (file: string, testName: string) => void;
+};
+
+// ============================================================================
+// Internal Tree Node Type
+// ============================================================================
+
+type TreeNode = {
+  name: string;
+  fullPath: string[];
+  children: Map<string, TreeNode>;
+  cases: CaseInfo[];
+  status: CaseStatus;
+};
+
+// ============================================================================
+// TestFilesTree Component
+// ============================================================================
+
+export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
+  testFiles,
+  statusMap,
+  caseMap,
+  rootPath,
+  loading,
+  connected,
+  openFiles,
+  activeFile,
+  token,
+  onExpandChange,
+  onSelect,
+  onRerunFile,
+  onRerunTestCase,
+}) => {
+  // Build nested tree structure from flat cases
+  const buildNestedTree = useCallback(
+    (file: string, cases: CaseInfo[]): DataNode[] => {
+      if (cases.length === 0) {
+        return [
+          {
+            key: `${file}::__empty`,
+            title: (
+              <Text type="secondary" className="text-xs">
+                No test cases reported yet
+              </Text>
+            ),
+            isLeaf: true,
+            selectable: false,
+          },
+        ];
+      }
+
+      const root: TreeNode = {
+        name: '',
+        fullPath: [],
+        children: new Map(),
+        cases: [],
+        status: 'idle',
+      };
+
+      for (const testCase of cases) {
+        let current = root;
+        const path = testCase.parentNames;
+
+        for (let i = 0; i < path.length; i++) {
+          const name = path[i]!;
+          const fullPath = path.slice(0, i + 1);
+          if (!current.children.has(name)) {
+            current.children.set(name, {
+              name,
+              fullPath,
+              children: new Map(),
+              cases: [],
+              status: 'idle',
+            });
+          }
+          current = current.children.get(name)!;
+        }
+
+        current.cases.push(testCase);
+      }
+
+      const calcStatus = (node: TreeNode): CaseStatus => {
+        const childStatuses: CaseStatus[] = [];
+
+        for (const child of node.children.values()) {
+          childStatuses.push(calcStatus(child));
+        }
+
+        for (const c of node.cases) {
+          childStatuses.push(c.status);
+        }
+
+        if (childStatuses.some((s) => s === 'fail')) return 'fail';
+        if (childStatuses.some((s) => s === 'running')) return 'running';
+        if (childStatuses.every((s) => s === 'pass')) return 'pass';
+        if (childStatuses.every((s) => s === 'skip')) return 'skip';
+        if (childStatuses.some((s) => s === 'pass')) return 'pass';
+        return 'idle';
+      };
+
+      const toDataNodes = (node: TreeNode, keyPrefix: string): DataNode[] => {
+        const result: DataNode[] = [];
+
+        for (const child of node.children.values()) {
+          const suiteStatus = calcStatus(child);
+          const suiteMeta = CASE_STATUS_META[suiteStatus];
+          const suiteKey = `${keyPrefix}::suite::${child.fullPath.join('::')}`;
+          const suiteFullName = child.fullPath.join('  ');
+
+          result.push({
+            key: suiteKey,
+            title: (
+              <TestSuiteTitle
+                icon={suiteMeta.icon}
+                iconColor={suiteMeta.color}
+                name={child.name}
+                onRerun={
+                  connected
+                    ? () => {
+                        onRerunTestCase(file, suiteFullName);
+                      }
+                    : undefined
+                }
+                buttonTextColor={token.colorTextSecondary}
+              />
+            ),
+            children: toDataNodes(child, suiteKey),
+            selectable: false,
+          });
+        }
+
+        for (const testCase of node.cases) {
+          const caseMeta = CASE_STATUS_META[testCase.status];
+          result.push({
+            key: `${keyPrefix}::case::${testCase.id}`,
+            title: (
+              <TestCaseTitle
+                icon={caseMeta.icon}
+                iconColor={caseMeta.color}
+                label={testCase.name}
+                onRerun={
+                  connected
+                    ? () => {
+                        onRerunTestCase(file, testCase.fullName);
+                      }
+                    : undefined
+                }
+                buttonTextColor={token.colorTextSecondary}
+              />
+            ),
+            isLeaf: true,
+            selectable: false,
+          });
+        }
+
+        return result;
+      };
+
+      return toDataNodes(root, file);
+    },
+    [connected, onRerunTestCase, token.colorTextSecondary],
+  );
+
+  const treeData: DataNode[] = useMemo(
+    () =>
+      testFiles.map((file) => {
+        const status = statusMap[file] ?? 'idle';
+        const meta = STATUS_META[status];
+        const relativePath = toRelativePath(file, rootPath);
+        const cases = Object.values(caseMap[file] ?? {});
+
+        return {
+          key: file,
+          title: (
+            <TestFileTitle
+              icon={meta.icon}
+              iconColor={meta.color}
+              relativePath={relativePath}
+              onOpen={() => openInEditor(file)}
+              onRerun={
+                connected
+                  ? () => {
+                      onRerunFile(file);
+                    }
+                  : undefined
+              }
+              textColor={token.colorTextSecondary}
+            />
+          ),
+          children: buildNestedTree(file, cases),
+        };
+      }),
+    [
+      buildNestedTree,
+      caseMap,
+      connected,
+      onRerunFile,
+      rootPath,
+      statusMap,
+      testFiles,
+      token,
+    ],
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-2 p-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Skeleton.Avatar active size="small" shape="circle" />
+            <Skeleton.Input
+              active
+              size="small"
+              style={{ width: `${60 + i * 10}%` }}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Disconnected state
+  if (!connected) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2">
+        <Text type="warning">Reconnecting...</Text>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (testFiles.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Text type="secondary">No test files detected</Text>
+      </div>
+    );
+  }
+
+  // Normal tree view
+  return (
+    <Tree
+      blockNode
+      showLine={false}
+      switcherIcon={(props: { expanded?: boolean }) =>
+        props.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+      }
+      showIcon
+      expandAction="click"
+      expandedKeys={openFiles}
+      selectedKeys={activeFile ? [activeFile] : []}
+      onExpand={(keys) =>
+        onExpandChange(
+          (keys as React.Key[]).filter(
+            (key): key is string => typeof key === 'string',
+          ),
+        )
+      }
+      onSelect={(_keys, info) => {
+        const key = info.node.key;
+        if (typeof key === 'string' && testFiles.includes(key)) {
+          onSelect(key);
+        }
+      }}
+      treeData={treeData}
+      className="m-1! bg-transparent"
+    />
+  );
+};
