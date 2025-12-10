@@ -1,16 +1,6 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { RuntimeConfig, TestFileResult, TestResult } from '../types';
 
-export type BrowserManifestEntry = {
-  id: string;
-  type: 'setup' | 'test';
-  projectName: string;
-  projectRoot: string;
-  filePath: string;
-  relativePath: string;
-  testPath?: string;
-};
-
 export type SerializedRuntimeConfig = RuntimeConfig;
 
 export type BrowserProjectRuntime = {
