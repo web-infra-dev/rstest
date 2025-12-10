@@ -8,6 +8,7 @@ import { createRsbuild, rspack } from '@rsbuild/core';
 import type { BirpcReturn } from 'birpc';
 import openEditor from 'open-editor';
 import { dirname, join, relative, resolve, sep } from 'pathe';
+import * as picomatch from 'picomatch';
 import type {
   BrowserContext,
   ConsoleMessage,
@@ -34,7 +35,6 @@ import { getSetupFiles, getTestEntries } from '../utils/testFiles';
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
-  BrowserManifestEntry,
   BrowserProjectRuntime,
 } from './protocol';
 
@@ -61,6 +61,102 @@ const ensureProcessExitCode = (code: number) => {
 };
 
 const toPosix = (path: string): string => path.split(sep).join('/');
+
+/**
+ * Convert a single glob pattern to RegExp using picomatch
+ * Based on Storybook's implementation
+ */
+const globToRegexp = (glob: string): RegExp => {
+  const regex = picomatch.makeRe(glob, {
+    fastpaths: false,
+    noglobstar: false,
+    bash: false,
+  });
+
+  if (!regex) {
+    throw new Error(`Invalid glob pattern: ${glob}`);
+  }
+
+  // picomatch generates regex starting with ^
+  // For patterns starting with ./, we need special handling
+  if (!glob.startsWith('./')) {
+    return regex;
+  }
+
+  // makeRe is sort of funny. If you pass it a directory starting with `./` it
+  // creates a matcher that expects files with no prefix (e.g. `src/file.js`)
+  // but if you pass it a directory that starts with `../` it expects files that
+  // start with `../`. Let's make it consistent.
+  // Globs starting `**` need special treatment due to the regex they produce
+  return new RegExp(
+    [
+      '^\\.',
+      glob.startsWith('./**') ? '' : '[\\\\/]',
+      regex.source.substring(1),
+    ].join(''),
+  );
+};
+
+/**
+ * Convert rstest include glob patterns to RegExp for import.meta.webpackContext
+ * Uses picomatch for robust glob-to-regexp conversion
+ */
+const globPatternsToRegExp = (patterns: string[]): RegExp => {
+  const regexParts = patterns.map((pattern) => {
+    const regex = globToRegexp(pattern);
+    // Remove ^ anchor and $ anchor to allow combining patterns
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
+    }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
+    return source;
+  });
+
+  return new RegExp(`(?:${regexParts.join('|')})$`);
+};
+
+/**
+ * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
+ * This is used at compile time to filter out files during bundling
+ *
+ * Example:
+ *   Input: ['**\/node_modules\/**', '**\/dist\/**']
+ *   Output: /[\\/](node_modules|dist)[\\/]/
+ */
+const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
+  const keywords: string[] = [];
+  for (const pattern of patterns) {
+    // Extract the core part between ** wildcards
+    // e.g., '**/node_modules/**' -> 'node_modules'
+    // e.g., '**/dist/**' -> 'dist'
+    // e.g., '**/.{idea,git,cache,output,temp}/**' -> extract each part
+    const match = pattern.match(
+      /\*\*\/\.?\{?([^/*{}]+(?:,[^/*{}]+)*)\}?\/?\*?\*?/,
+    );
+    if (match) {
+      // Handle {a,b,c} patterns
+      const parts = match[1]!.split(',');
+      for (const part of parts) {
+        // Clean up the part (remove leading dots for hidden dirs)
+        const cleaned = part.replace(/^\./, '');
+        if (cleaned && !keywords.includes(cleaned)) {
+          keywords.push(cleaned);
+        }
+      }
+    }
+  }
+
+  if (keywords.length === 0) {
+    return null;
+  }
+
+  // Create regex that matches paths containing these directory names
+  // Use [\\/] to match both forward and back slashes
+  return new RegExp(`[\\\\/](${keywords.join('|')})[\\\\/]`);
+};
 
 // const resolvePackageRoot = (pkgName: string): string => {
 //   const require = createRequire(import.meta.url);
@@ -199,63 +295,51 @@ const generateManifestModule = ({
     return relativePath.split(sep).join('/');
   };
 
-  let index = 0;
-
   const lines: string[] = [];
-  lines.push('export const manifest = [');
 
-  for (const { project, setupFiles, testFiles } of entries) {
-    setupFiles.forEach((filePath) => {
-      const id = `${project.environmentName}-setup-${index++}`;
-      const record: BrowserManifestEntry = {
-        id,
-        type: 'setup',
-        projectName: project.name,
-        projectRoot: project.rootPath,
-        filePath,
-        relativePath: toRelativeImport(filePath),
-      };
+  // Currently only handle the first project (multi-project support later)
+  const { project, setupFiles } = entries[0]!;
 
-      lines.push(
-        '  {',
-        `    id: ${JSON.stringify(record.id)},`,
-        `    type: 'setup',`,
-        `    projectName: ${JSON.stringify(record.projectName)},`,
-        `    projectRoot: ${JSON.stringify(toPosix(record.projectRoot))},`,
-        `    filePath: ${JSON.stringify(toPosix(record.filePath))},`,
-        `    relativePath: ${JSON.stringify(record.relativePath)},`,
-        `    load: () => import(${JSON.stringify(record.relativePath)}),`,
-        '  },',
-      );
-    });
+  // 1. Project config
+  lines.push('export const projectConfig = {');
+  lines.push(`  name: ${JSON.stringify(project.name)},`);
+  lines.push(`  environmentName: ${JSON.stringify(project.environmentName)},`);
+  lines.push(`  projectRoot: ${JSON.stringify(toPosix(project.rootPath))},`);
+  lines.push('};');
+  lines.push('');
 
-    testFiles.forEach((filePath) => {
-      const id = `${project.environmentName}-test-${index++}`;
-      const record: BrowserManifestEntry = {
-        id,
-        type: 'test',
-        projectName: project.name,
-        projectRoot: project.rootPath,
-        filePath,
-        relativePath: toRelativeImport(filePath),
-        testPath: filePath,
-      };
-      lines.push(
-        '  {',
-        `    id: ${JSON.stringify(record.id)},`,
-        `    type: 'test',`,
-        `    projectName: ${JSON.stringify(record.projectName)},`,
-        `    projectRoot: ${JSON.stringify(toPosix(record.projectRoot))},`,
-        `    filePath: ${JSON.stringify(toPosix(record.filePath))},`,
-        `    testPath: ${JSON.stringify(toPosix(record.testPath!))},`,
-        `    relativePath: ${JSON.stringify(record.relativePath)},`,
-        `    load: () => import(${JSON.stringify(record.relativePath)}),`,
-        '  },',
-      );
-    });
+  // 2. Setup files - static imports (small number, determined at startup)
+  lines.push('export const setupLoaders = [');
+  for (const filePath of setupFiles) {
+    const relativePath = toRelativeImport(filePath);
+    lines.push(`  () => import(${JSON.stringify(relativePath)}),`);
   }
+  lines.push('];');
+  lines.push('');
 
-  lines.push('] as const;');
+  // 3. Test files context - using import.meta.webpackContext with lazy mode
+  // Use absolute path for clarity and reliability
+  const projectRootPosix = toPosix(project.rootPath);
+  const includeRegExp = globPatternsToRegExp(project.normalizedConfig.include);
+  const excludePatterns = project.normalizedConfig.exclude.patterns;
+  const excludeRegExp = excludePatternsToRegExp(excludePatterns);
+
+  lines.push('// Test files context with lazy loading');
+  lines.push(
+    `const testContext = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+  );
+  lines.push('  recursive: true,');
+  lines.push(`  regExp: ${includeRegExp.toString()},`);
+  if (excludeRegExp) {
+    lines.push(`  exclude: ${excludeRegExp.toString()},`);
+  }
+  lines.push("  mode: 'lazy',");
+  lines.push('});');
+  lines.push('');
+
+  // 4. Export APIs
+  lines.push('export const getTestKeys = () => testContext.keys();');
+  lines.push('export const loadTest = (key) => testContext(key);');
 
   return `${lines.join('\n')}\n`;
 };
@@ -312,7 +396,6 @@ let sharedRuntime: BrowserRuntime | null = null;
 let watchCleanupRegistered = false;
 let lastTestFiles: string[] = [];
 let enableWatchHooks = false; // Flag to control if watch hooks should execute
-let pendingManifestUpdate = 0; // Counter to track manifest updates that will trigger recompilation
 
 const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
@@ -474,13 +557,8 @@ const createBrowserRuntime = async ({
               return;
             }
 
-            // Skip if this compile was triggered by our manifest update
-            if (pendingManifestUpdate > 0) {
-              pendingManifestUpdate--;
-              return;
-            }
-
             // Trigger test rerun
+            // import.meta.webpackContext handles file watching automatically
             await onTriggerRerun();
           });
         },
@@ -764,10 +842,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     entries: projectEntries,
   });
 
-  if (isWatchMode && sharedRuntime) {
-    sharedRuntime.manifestPlugin.writeModule(manifestPath, manifestSource);
-  }
-
   // Track initial test files for watch mode
   if (isWatchMode) {
     lastTestFiles = projectEntries.flatMap((entry) => entry.testFiles).sort();
@@ -836,7 +910,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
     },
     runnerUrl: `http://localhost:${port}`,
-    testFiles: allTestFiles,
     wsPort,
   };
 
@@ -1068,7 +1141,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   // Define rerun logic for watch mode
   if (isWatchMode) {
     triggerRerun = async () => {
-      // Re-collect test entries (may have new/deleted files)
+      // Re-collect test entries to get current file list (for UI display)
       const newProjectEntries = await collectProjectEntries(context);
 
       // Get current test file list
@@ -1085,36 +1158,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         // Update last test files
         lastTestFiles = currentTestFiles;
 
-        hostOptions = {
-          ...hostOptions,
-          testFiles: currentTestFiles,
-        };
-
-        runtime!.setContainerOptions(hostOptions);
-
-        // Notify container of test file changes
+        // Notify container of test file changes via RPC
         if (containerRpc?.onTestFileUpdate) {
           await containerRpc.onTestFileUpdate(currentTestFiles);
         }
-
-        // Regenerate manifest only if files changed
-        const newManifestSource = generateManifestModule({
-          manifestPath,
-          entries: newProjectEntries,
-        });
-
-        // Increment counter before updating manifest - the update will trigger
-        // a recompilation, and we need to skip that compile event
-        pendingManifestUpdate++;
-        runtime!.manifestPlugin.writeModule(manifestPath, newManifestSource);
-
-        // The manifest update will trigger onAfterDevCompile, which will be
-        // skipped due to pendingManifestUpdate counter. Tests in iframes will
-        // automatically reload with the new manifest.
-        return;
       }
 
-      // No file list changes, iframes will automatically rerun tests
+      // Tests in iframes will automatically rerun after rspack recompilation
       logger.log(color.cyan('Tests will be re-executed automatically\n'));
     };
   }
