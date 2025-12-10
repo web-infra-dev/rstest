@@ -1,3 +1,0 @@
-{
-  "extends": "./packages/browser-ui/tsconfig.json"
-}
