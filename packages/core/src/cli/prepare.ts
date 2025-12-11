@@ -18,7 +18,7 @@ export function prepareCli(): void {
     npm_execpath.includes('npx-cli.js') ||
     npm_execpath.includes('.bun')
   ) {
-    console.log();
+    logger.log();
   }
 }
 

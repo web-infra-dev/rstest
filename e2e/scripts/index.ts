@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { onTestFinished as onRstestFinished } from '@rstest/core';
+import {
+  expect,
+  onTestFailed as onRstestFailed,
+  onTestFinished as onRstestFinished,
+} from '@rstest/core';
 import stripAnsi from 'strip-ansi';
 import type { Options, Result } from 'tinyexec';
 import { x } from 'tinyexec';
@@ -10,6 +14,7 @@ class Cli {
   public exec: Result;
   public stdout = '';
   public stderr = '';
+  public log = '';
   private stdoutListeners: Array<() => void> = [];
   private stderrListeners: Array<() => void> = [];
 
@@ -24,6 +29,7 @@ class Cli {
     this.exec.process?.stdout?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stdout += processStd ?? '';
+      this.log += processStd ?? '';
       for (const listener of this.stdoutListeners) {
         listener();
       }
@@ -32,6 +38,7 @@ class Cli {
     this.exec.process?.stderr?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stderr += processStd ?? '';
+      this.log += processStd ?? '';
       for (const listener of this.stdoutListeners) {
         listener();
       }
@@ -75,11 +82,13 @@ export async function runRstestCli({
   options,
   args = [],
   onTestFinished = onRstestFinished,
+  onTestFailed = onRstestFailed,
 }: {
   command: string;
   options?: Partial<Options>;
   args?: string[];
   onTestFinished?: (fn: () => void | Promise<void>) => void;
+  onTestFailed?: typeof onRstestFailed;
 }) {
   const process = x(command, args, {
     ...options,
@@ -97,6 +106,13 @@ export async function runRstestCli({
     !cli.exec.killed && cli.exec.kill();
   });
 
+  onTestFailed?.(({ task }) => {
+    if (task.result.errors?.[0]) {
+      task.result.errors![0]!.message +=
+        `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
+    }
+  });
+
   const expectExecSuccess = async () => {
     await cli.exec;
     const exitCode = cli.exec.process?.exitCode;
@@ -106,6 +122,7 @@ export async function runRstestCli({
         `Test failed with exit code ${exitCode}. Logs:\n\n${logs.join('\n')}`,
       );
     }
+    expect(exitCode).toBe(0);
   };
 
   const expectExecFailed = async () => {
@@ -117,6 +134,7 @@ export async function runRstestCli({
         `expect test failed but passed. Logs:\n\n${logs.join('\n')}`,
       );
     }
+    expect(exitCode).not.toBe(0);
   };
 
   const expectLog = (

@@ -24,3 +24,11 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+Rstest determines the hook timeout based on the following priority order:
+
+1. [timeout](/api/test-api/hooks) configuration in each test case
+2. Timeout configured in the test file via [`rstest.setConfig({ hookTimeout })`](/api/rstest/utilities#rstestsetconfig)
+3. `--hookTimeout` option in CLI
+4. `hookTimeout` option in the configuration file
+5. Default value of `10_000` milliseconds

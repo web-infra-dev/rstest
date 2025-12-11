@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "The Rsbuild-based test tool.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
@@ -67,7 +67,7 @@
     "@microsoft/api-extractor": "^7.53.3",
     "@rslib/core": "0.18.3",
     "@rstest/tsconfig": "workspace:*",
-    "@sinonjs/fake-timers": "^14.0.0",
+    "@sinonjs/fake-timers": "^15.0.0",
     "@types/babel__code-frame": "^7.0.6",
     "@types/istanbul-reports": "^3.0.4",
     "@types/istanbul-lib-coverage": "^2.0.6",

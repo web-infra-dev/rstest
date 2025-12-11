@@ -440,8 +440,8 @@ importers:
         specifier: workspace:*
         version: link:../../scripts/tsconfig
       '@sinonjs/fake-timers':
-        specifier: ^14.0.0
-        version: 14.0.0
+        specifier: ^15.0.0
+        version: 15.0.0
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
@@ -532,9 +532,6 @@ importers:
       istanbul-lib-coverage:
         specifier: ^3.2.2
         version: 3.2.2
-      istanbul-lib-instrument:
-        specifier: 6.0.3
-        version: 6.0.3
       istanbul-lib-report:
         specifier: ^3.0.1
         version: 3.0.1
@@ -557,9 +554,6 @@ importers:
       '@types/istanbul-lib-coverage':
         specifier: ^2.0.6
         version: 2.0.6
-      '@types/istanbul-lib-instrument':
-        specifier: ^1.7.8
-        version: 1.7.8
       '@types/istanbul-lib-report':
         specifier: ^3.0.3
         version: 3.0.3
@@ -2101,8 +2095,8 @@ packages:
   '@sinonjs/commons@3.0.1':
     resolution: {integrity: sha512-K3mCHKQ9sVh8o1C9cxkwxaOmXoAMlDxC1mYyHrjqOWEcBjYr76t96zL2zlj5dUGZ3HSw240X1qgH3Mjf1yJWpQ==}
 
-  '@sinonjs/fake-timers@14.0.0':
-    resolution: {integrity: sha512-QfoXRaUTjMVVn/ZbnD4LS3TPtqOkOdKIYCKldIVPnuClcwRKat6LI2mRZ2s5qiBfO6Fy03An35dSls/2/FEc0Q==}
+  '@sinonjs/fake-timers@15.0.0':
+    resolution: {integrity: sha512-dlUB2oL+hDIYkIq/OWFBDhQAuU6kDey3eeMiYpVb7UXHhkMq/r1HloKXAbJwJZpYWkFWsydLjMqDpueMUEOjXQ==}
 
   '@socket.io/component-emitter@3.1.2':
     resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
@@ -2238,12 +2232,6 @@ packages:
   '@types/aria-query@5.0.4':
     resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
 
-  '@types/babel-generator@6.25.8':
-    resolution: {integrity: sha512-f5l89J0UpYhTE6TFCxy3X+8pJVru1eig1fcvF9qHmOk9h1VxZimd+++tu5GShntCOdhE/MoZZ0SlpGTyh4XrKg==}
-
-  '@types/babel-types@7.0.16':
-    resolution: {integrity: sha512-5QXs9GBFTNTmilLlWBhnsprqpjfrotyrnzUdwDrywEL/DA4LuCWQT300BTOXA3Y9ngT9F2uvmCoIxI6z8DlJEA==}
-
   '@types/babel__code-frame@7.0.6':
     resolution: {integrity: sha512-Anitqkl3+KrzcW2k77lRlg/GfLZLWXBuNgbEcIOU6M92yw42vsd3xV/Z/yAHEj8m+KUjL6bWOVOFqX8PFPJ4LA==}
 
@@ -2303,9 +2291,6 @@ packages:
 
   '@types/istanbul-lib-coverage@2.0.6':
     resolution: {integrity: sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w==}
-
-  '@types/istanbul-lib-instrument@1.7.8':
-    resolution: {integrity: sha512-y8t6GUkn5bTXry7Zu/2HjTakxLNtvKbIQnAiGR2M3orrdZF+zp1J9ZAKfj3VM1k3sJodkjEcWfdCJ0bEAKp6CA==}
 
   '@types/istanbul-lib-report@3.0.3':
     resolution: {integrity: sha512-NQn7AHQnk/RSLOxrBbGyJM/aVQ+pjj5HCgasFxc0K/KhoATfQ/47AyUl15I2yBUpihjmas+a+VJBOqecrFH+uA==}
@@ -3953,10 +3938,6 @@ packages:
   istanbul-lib-coverage@3.2.2:
     resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
     engines: {node: '>=8'}
-
-  istanbul-lib-instrument@6.0.3:
-    resolution: {integrity: sha512-Vtgk7L/R2JHyyGW07spoFlB8/lpjiOLTjMdms6AFMraYt3BaJauod/NGrfnVG/y4Ix1JEuMRPDPEj2ua+zz1/Q==}
-    engines: {node: '>=10'}
 
   istanbul-lib-report@3.0.1:
     resolution: {integrity: sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==}
@@ -7779,7 +7760,7 @@ snapshots:
     dependencies:
       type-detect: 4.0.8
 
-  '@sinonjs/fake-timers@14.0.0':
+  '@sinonjs/fake-timers@15.0.0':
     dependencies:
       '@sinonjs/commons': 3.0.1
 
@@ -7916,12 +7897,6 @@ snapshots:
 
   '@types/aria-query@5.0.4': {}
 
-  '@types/babel-generator@6.25.8':
-    dependencies:
-      '@types/babel-types': 7.0.16
-
-  '@types/babel-types@7.0.16': {}
-
   '@types/babel__code-frame@7.0.6': {}
 
   '@types/babel__core@7.20.5':
@@ -7999,13 +7974,6 @@ snapshots:
   '@types/is-url@1.2.32': {}
 
   '@types/istanbul-lib-coverage@2.0.6': {}
-
-  '@types/istanbul-lib-instrument@1.7.8':
-    dependencies:
-      '@types/babel-generator': 6.25.8
-      '@types/babel-types': 7.0.16
-      '@types/istanbul-lib-coverage': 2.0.6
-      source-map: 0.6.1
 
   '@types/istanbul-lib-report@3.0.3':
     dependencies:
@@ -9790,16 +9758,6 @@ snapshots:
   isobject@3.0.1: {}
 
   istanbul-lib-coverage@3.2.2: {}
-
-  istanbul-lib-instrument@6.0.3:
-    dependencies:
-      '@babel/core': 7.28.3
-      '@babel/parser': 7.28.5
-      '@istanbuljs/schema': 0.1.3
-      istanbul-lib-coverage: 3.2.2
-      semver: 7.7.3
-    transitivePeerDependencies:
-      - supports-color
 
   istanbul-lib-report@3.0.1:
     dependencies:

@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('test timeout', () => {
   it('should throw timeout error when hook timeout', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'timeout.test'],
       options: {
@@ -17,9 +17,8 @@ describe('test timeout', () => {
         },
       },
     });
+    await expectExecFailed();
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expect(logs.filter((log) => log.startsWith('['))).toMatchInlineSnapshot(`
@@ -29,12 +28,12 @@ describe('test timeout', () => {
     `);
 
     expect(
-      logs.find((log) =>
-        log.includes('Error: beforeAll hook timed out in 10ms'),
-      ),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: beforeAll hook timed out in 10ms')),
     ).toBeTruthy();
     expect(
-      logs.find((log) => log.includes('timeout.test.ts:4:1')),
+      cli.stderr.split('\n').find((log) => log.includes('timeout.test.ts:4:1')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),

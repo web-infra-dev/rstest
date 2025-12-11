@@ -22,6 +22,7 @@ import type {
   TestResult,
 } from '../types';
 import {
+  bgColor,
   color,
   formatTestPath,
   getTaskNameWithPrefix,
@@ -188,17 +189,17 @@ export const printSummaryErrorLogs = async ({
     return;
   }
 
-  logger.log('');
-  logger.log(color.bold('Summary of all failing tests:'));
-  logger.log('');
+  logger.stderr('');
+  logger.stderr(color.bold('Summary of all failing tests:'));
+  logger.stderr('');
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
     const nameStr = getTaskNameWithPrefix(test);
 
     //  FAIL  tests/index.test.ts > suite name > test case name
-    logger.log(
-      `${color.bgRed(' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
+    logger.stderr(
+      `${bgColor('bgRed', ' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {

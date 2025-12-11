@@ -57,6 +57,10 @@ export type TestCase = TestCaseInfo & {
    */
   promises?: Promise<any>[];
   /**
+   * Store stack trace error created when test is registered, used for trace original position
+   */
+  stackTraceError: Error;
+  /**
    * Result of the task. if `expect.soft()` failed multiple times or `retry` was triggered.
    */
   result?: TaskResult;

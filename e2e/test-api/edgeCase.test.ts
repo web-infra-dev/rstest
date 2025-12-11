@@ -26,7 +26,7 @@ describe('Test Edge Cases', () => {
   });
 
   it('should handle error string correctly', async () => {
-    const { expectExecFailed, expectLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/errorString.test.ts'],
       options: {
@@ -37,7 +37,7 @@ describe('Test Edge Cases', () => {
     });
     await expectExecFailed();
 
-    expectLog('Unknown Error: aaaa');
+    expectStderrLog('Unknown Error: aaaa');
   });
 
   it('test module not found', async () => {
@@ -125,7 +125,7 @@ describe('Test Edge Cases', () => {
   });
 
   it('should handle circular reference in error object correctly', async () => {
-    const { expectExecFailed, expectLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/circularReference.test.ts'],
       options: {
@@ -136,6 +136,6 @@ describe('Test Edge Cases', () => {
     });
     await expectExecFailed();
 
-    expectLog(/AssertionError: expected .* to deeply equal undefined/);
+    expectStderrLog(/AssertionError: expected .* to deeply equal undefined/);
   });
 });

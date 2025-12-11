@@ -30,7 +30,9 @@ describe('before hooks error', () => {
     `);
 
     expect(
-      logs.find((log) => log.includes('Error: beforeAll error')),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: beforeAll error')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),
@@ -60,7 +62,9 @@ describe('before hooks error', () => {
     `);
 
     expect(
-      logs.find((log) => log.includes('Error: beforeAll error')),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: beforeAll error')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),
@@ -93,7 +97,9 @@ describe('before hooks error', () => {
     `);
 
     expect(
-      logs.find((log) => log.includes('Error: beforeEach error')),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: beforeEach error')),
     ).toBeTruthy();
     expect(logs.find((log) => log.includes('Tests 1 failed'))).toBeTruthy();
   });

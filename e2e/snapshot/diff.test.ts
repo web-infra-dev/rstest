@@ -20,7 +20,7 @@ it('should show diff as expected', async () => {
   await cli.exec;
   expect(cli.exec.process?.exitCode).toBe(1);
 
-  const logs = cli.stdout.split('\n').filter(Boolean);
+  const logs = cli.stderr.split('\n').filter(Boolean);
 
   expect(logs.length).toBeLessThan(100);
   expect(logs.find((log) => log.includes('-     99"'))).toBeTruthy();

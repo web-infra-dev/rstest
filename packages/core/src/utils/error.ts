@@ -44,7 +44,7 @@ export async function printError(
       '  - Enable `globals` configuration and use global API.',
     ];
 
-    logger.log(`${color.red(tips.join('\n'))}\n`);
+    logger.stderr(`${color.red(tips.join('\n'))}\n`);
     return;
   }
 
@@ -52,13 +52,13 @@ export async function printError(
     error.message = hintNotDefinedError(error.message);
   }
 
-  logger.log(
+  logger.stderr(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {
-    logger.log(error.diff);
-    logger.log();
+    logger.stderr(error.diff);
+    logger.stderr('');
   }
 
   if (error.stack) {
@@ -72,7 +72,7 @@ export async function printError(
       !(error.fullStack || isDebug()) &&
       !error.stack.endsWith(error.message)
     ) {
-      logger.log(
+      logger.stderr(
         color.gray(
           "No error stack found, set 'DEBUG=rstest' to show fullStack.",
         ),
@@ -118,8 +118,8 @@ async function printCodeFrame(frame: StackFrame) {
     },
   );
 
-  logger.log(result);
-  logger.log('');
+  logger.stderr(result);
+  logger.stderr('');
 }
 
 export function formatStack(frame: StackFrame, rootPath: string): string {
@@ -130,9 +130,9 @@ export function formatStack(frame: StackFrame, rootPath: string): string {
 
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    logger.log(color.gray(`        ${formatStack(frame, rootPath)}`));
+    logger.stderr(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.log();
+  stackFrames.length && logger.stderr('');
 }
 
 const stackIgnores: (RegExp | string)[] = [
