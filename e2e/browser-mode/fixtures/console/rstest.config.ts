@@ -1,13 +1,11 @@
-import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  plugins: [pluginReact()],
   browser: {
     enabled: true,
     headless: true,
-    port: 5194,
+    port: 5192,
   },
-  include: ['tests/**/*.test.tsx'],
+  include: ['tests/**/*.test.ts'],
   testTimeout: 30000,
 });

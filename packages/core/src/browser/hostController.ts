@@ -23,6 +23,7 @@ import type {
   RuntimeConfig,
   TestFileResult,
   TestResult,
+  UserConsoleLog,
 } from '../types';
 import {
   color,
@@ -1112,7 +1113,25 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
             break;
           }
           case 'log': {
-            logger.log(payload.payload.message);
+            const log: UserConsoleLog = {
+              content: payload.payload.content,
+              name: payload.payload.level,
+              testPath: payload.payload.testPath,
+              type: payload.payload.type,
+              trace: payload.payload.trace,
+            };
+
+            // Check onConsoleLog filter
+            const shouldLog =
+              context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
+
+            if (shouldLog) {
+              await Promise.all(
+                context.reporters.map((reporter) =>
+                  (reporter as Reporter).onUserConsoleLog?.(log),
+                ),
+              );
+            }
             break;
           }
           case 'fatal': {
