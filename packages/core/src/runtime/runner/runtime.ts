@@ -318,14 +318,8 @@ export class RunnerRuntime {
       project: this.project,
       name,
       originalFn,
-      fn: fn
-        ? wrapTimeout({
-            name: 'test',
-            fn,
-            timeout,
-            stackTraceError: new Error('STACK_TRACE_ERROR'),
-          })
-        : fn,
+      fn,
+      stackTraceError: new Error('STACK_TRACE_ERROR'),
       runMode,
       type: 'case',
       timeout,

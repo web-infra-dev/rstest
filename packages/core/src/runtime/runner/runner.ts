@@ -158,7 +158,23 @@ export class TestRunner {
               snapshotClient.getSnapshotState(testPath),
             );
             cleanups.push(...fixtureCleanups);
-            await test.fn?.(test.context);
+            if (test.fn) {
+              const fn = wrapTimeout({
+                name: 'test',
+                fn: test.fn,
+                timeout: test.timeout,
+                stackTraceError: test.stackTraceError,
+                getAssertionCalls: () => {
+                  const expect = (test.context as any)._useLocalExpect
+                    ? test.context.expect
+                    : (globalThis as any)[GLOBAL_EXPECT];
+                  const { assertionCalls } = getState(expect);
+
+                  return assertionCalls;
+                },
+              });
+              await fn(test.context);
+            }
             this.afterRunTest(test);
             result = {
               testId: test.testId,
