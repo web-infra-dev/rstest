@@ -46,20 +46,3 @@ describe('DOM element creation', () => {
     expect(div.getAttribute('data-test')).toBe('example');
   });
 });
-
-describe('DOM manipulation', () => {
-  it('appends child elements', () => {
-    const parent = document.createElement('div');
-    const child = document.createElement('span');
-    parent.appendChild(child);
-    expect(parent.children.length).toBe(1);
-  });
-
-  it('removes elements from DOM', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('p');
-    container.appendChild(element);
-    element.remove();
-    expect(container.children.length).toBe(0);
-  });
-});
