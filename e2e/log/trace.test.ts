@@ -19,13 +19,20 @@ describe('console trace', () => {
     });
 
     await cli.exec;
-    const logs = cli.log.split('\n').filter(Boolean);
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    const errLogs = cli.stderr.split('\n').filter(Boolean);
+
+    expect(errLogs.filter((log) => log.startsWith('I'))).toMatchInlineSnapshot(`
+      [
+        "I'm warn",
+        "I'm error",
+      ]
+    `);
 
     expect(logs.filter((log) => log.startsWith('I'))).toMatchInlineSnapshot(`
       [
         "I'm log",
-        "I'm warn",
-        "I'm error",
         "I'm info",
       ]
     `);
