@@ -596,11 +596,17 @@ const createBrowserRuntime = async ({
     }
   };
 
+  // Collect plugins from all projects (e.g., pluginReact for JSX support)
+  const userPlugins = context.projects.flatMap(
+    (project) => project.normalizedConfig.plugins || [],
+  );
+
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest-browser',
     rsbuildConfig: {
       root: context.rootPath,
       mode: 'development',
+      plugins: userPlugins,
       server: {
         printUrls: false,
         port: context.normalizedConfig.browser.port,
