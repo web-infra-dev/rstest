@@ -67,9 +67,15 @@ const BrowserRunner: React.FC<{
 
   const handleReloadTestFile = useCallback(
     (testFile: string, testNamePattern?: string) => {
+      console.log(
+        '[Container] handleReloadTestFile called:',
+        testFile,
+        testNamePattern,
+      );
       const iframe = document.querySelector<HTMLIFrameElement>(
         `iframe[data-test-file="${testFile}"]`,
       );
+      console.log('[Container] Found iframe:', iframe);
       if (iframe) {
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
@@ -80,7 +86,13 @@ const BrowserRunner: React.FC<{
           }
           return { ...prev, [testFile]: updatedCases };
         });
-        iframe.src = iframeUrlFor(testFile, options.runnerUrl, testNamePattern);
+        const newSrc = iframeUrlFor(
+          testFile,
+          options.runnerUrl,
+          testNamePattern,
+        );
+        console.log('[Container] Setting iframe.src to:', newSrc);
+        iframe.src = newSrc;
       }
     },
     [options.runnerUrl],
@@ -228,10 +240,29 @@ const BrowserRunner: React.FC<{
               ...prev,
               [testPath]: passed ? 'pass' : 'fail',
             }));
-            (payload.results ?? []).forEach((result) => {
-              if (result?.testPath) {
-                upsertCase(result.testPath, result);
+            // Replace the caseMap for this file with only the cases that exist in the results
+            // This ensures deleted test cases are removed from the UI
+            setCaseMap((prev) => {
+              const newCases: Record<string, CaseInfo> = {};
+              for (const result of payload.results ?? []) {
+                if (result?.testId) {
+                  const parentNames = (result.parentNames ?? []).filter(
+                    Boolean,
+                  );
+                  const fullName =
+                    [...parentNames, result.name].join('  ') || result.name;
+                  newCases[result.testId] = {
+                    id: result.testId,
+                    name: result.name,
+                    parentNames,
+                    fullName,
+                    status: mapCaseStatus(result.status),
+                    filePath: result.testPath || testPath,
+                    location: result.location,
+                  };
+                }
               }
+              return { ...prev, [testPath]: newCases };
             });
           }
         } else if (message?.type === 'fatal') {
@@ -244,7 +275,7 @@ const BrowserRunner: React.FC<{
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase]);
+  }, [active, upsertCase, mapCaseStatus]);
 
   // Computed values
   const counts = useMemo(
