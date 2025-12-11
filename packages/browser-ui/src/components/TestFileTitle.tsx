@@ -20,7 +20,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   textColor,
 }) => {
   return (
-    <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       <span className="flex w-[18px] shrink-0" style={{ color: iconColor }}>
         {icon}
       </span>
@@ -33,7 +33,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
           {relativePath}
         </span>
       </Tooltip>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <Tooltip title="Open in editor" mouseLeaveDelay={0}>
           <Button
             type="text"

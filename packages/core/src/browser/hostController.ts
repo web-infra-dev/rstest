@@ -101,6 +101,11 @@ class ContainerRpcManager {
   private setupConnectionHandler(): void {
     this.wss.on('connection', (ws: WebSocket) => {
       logger.log(color.gray('[Browser UI] Container WebSocket connected'));
+      logger.log(
+        color.gray(
+          `[Browser UI] Current ws: ${this.ws ? 'exists' : 'null'}, new ws: ${ws ? 'exists' : 'null'}`,
+        ),
+      );
       this.attachWebSocket(ws);
     });
   }
@@ -127,8 +132,13 @@ class ContainerRpcManager {
     });
 
     ws.on('close', () => {
-      this.ws = null;
-      this.rpc = null;
+      // Only clear if this is still the active connection
+      // This prevents a race condition when a new connection is established
+      // before the old one's close event fires
+      if (this.ws === ws) {
+        this.ws = null;
+        this.rpc = null;
+      }
     });
   }
 
@@ -157,7 +167,19 @@ class ContainerRpcManager {
     testFile: string,
     testNamePattern?: string,
   ): Promise<void> {
-    await this.rpc?.reloadTestFile(testFile, testNamePattern);
+    logger.log(
+      color.gray(
+        `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
+      ),
+    );
+    if (!this.rpc) {
+      logger.log(
+        color.yellow('[Browser UI] RPC not available, skipping reloadTestFile'),
+      );
+      return;
+    }
+    logger.log(color.gray(`[Browser UI] Calling reloadTestFile: ${testFile}`));
+    await this.rpc.reloadTestFile(testFile, testNamePattern);
   }
 }
 

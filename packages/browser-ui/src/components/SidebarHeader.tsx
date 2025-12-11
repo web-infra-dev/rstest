@@ -1,7 +1,8 @@
-import { Avatar, Button, Progress, Tooltip } from 'antd';
+import { Button, Progress, Tooltip } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
 import { Moon, RefreshCw, Sun } from 'lucide-react';
 import React from 'react';
+import Logo from '../rstest-logo.svg?react';
 
 type SidebarHeaderProps = {
   themeSwitchLabel: string;
@@ -30,11 +31,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
       style={{ background: token.colorBgContainer }}
     >
       <div className="flex items-center gap-3">
-        <Avatar
-          src="https://assets.rspack.rs/rstest/rstest-logo-512x512.png"
-          size={32}
-          shape="square"
-        />
+        <Logo className="h-7" />
         <span className="text-base font-semibold leading-tight text-[color:var(--ant-color-text)]">
           Browser Tests
         </span>
