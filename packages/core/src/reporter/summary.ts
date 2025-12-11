@@ -189,16 +189,16 @@ export const printSummaryErrorLogs = async ({
     return;
   }
 
-  logger.log('');
-  logger.log(color.bold('Summary of all failing tests:'));
-  logger.log('');
+  console.error('');
+  console.error(color.bold('Summary of all failing tests:'));
+  console.error('');
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
     const nameStr = getTaskNameWithPrefix(test);
 
     //  FAIL  tests/index.test.ts > suite name > test case name
-    logger.log(
+    console.error(
       `${bgColor('bgRed', ' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 

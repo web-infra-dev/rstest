@@ -3,7 +3,7 @@ import { runRstestCli } from '../scripts';
 
 describe('Test timeout', () => {
   it('should throw timeout error when test timeout', async () => {
-    const { cli, expectLog } = await runRstestCli({
+    const { cli, expectLog, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/timeout.test'],
       options: {
@@ -17,19 +17,17 @@ describe('Test timeout', () => {
     expect(cli.exec.process?.exitCode).toBe(1);
     const logs = cli.stdout.split('\n').filter(Boolean);
 
-    expectLog(
+    expectStderrLog(
       /Error: test timed out in 50ms.*no expect assertions completed/,
-      logs,
     );
 
-    expectLog(/timeout.test.ts:5:5/, logs);
+    expectStderrLog(/timeout.test.ts:5:5/);
 
-    expectLog(
+    expectStderrLog(
       /Error: test timed out in 5000ms.*completed 1 expect assertion[^s]/,
-      logs,
     );
 
-    expectLog(/timeout.test.ts:10:5/, logs);
+    expectStderrLog(/timeout.test.ts:10:5/);
 
     expectLog(/Tests 2 failed/, logs);
   }, 10000);

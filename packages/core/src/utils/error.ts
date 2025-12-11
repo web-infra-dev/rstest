@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
+import { color, formatTestPath, globalApis, isDebug } from '../utils';
 
 const hintNotDefinedError = (message: string): string => {
   const [, varName] = message.match(/(\w+) is not defined/) || [];
@@ -44,7 +44,7 @@ export async function printError(
       '  - Enable `globals` configuration and use global API.',
     ];
 
-    logger.log(`${color.red(tips.join('\n'))}\n`);
+    console.error(`${color.red(tips.join('\n'))}\n`);
     return;
   }
 
@@ -52,13 +52,13 @@ export async function printError(
     error.message = hintNotDefinedError(error.message);
   }
 
-  logger.log(
+  console.error(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {
-    logger.log(error.diff);
-    logger.log();
+    console.error(error.diff);
+    console.log();
   }
 
   if (error.stack) {
@@ -72,7 +72,7 @@ export async function printError(
       !(error.fullStack || isDebug()) &&
       !error.stack.endsWith(error.message)
     ) {
-      logger.log(
+      console.warn(
         color.gray(
           "No error stack found, set 'DEBUG=rstest' to show fullStack.",
         ),
@@ -118,8 +118,8 @@ async function printCodeFrame(frame: StackFrame) {
     },
   );
 
-  logger.log(result);
-  logger.log('');
+  console.error(result);
+  console.error('');
 }
 
 export function formatStack(frame: StackFrame, rootPath: string): string {
@@ -130,9 +130,9 @@ export function formatStack(frame: StackFrame, rootPath: string): string {
 
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    logger.log(color.gray(`        ${formatStack(frame, rootPath)}`));
+    console.error(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.log();
+  stackFrames.length && console.error('');
 }
 
 const stackIgnores: (RegExp | string)[] = [

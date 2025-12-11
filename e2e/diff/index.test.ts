@@ -21,7 +21,7 @@ describe('diff', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(1);
 
-    const logs = cli.stdout
+    const logs = cli.stderr
       .split('\n')
       .map((log) => log.replace(/\s/g, ''))
       .filter(Boolean);
