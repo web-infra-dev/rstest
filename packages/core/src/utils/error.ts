@@ -58,7 +58,7 @@ export async function printError(
 
   if (error.diff) {
     logger.stderr(error.diff);
-    logger.log();
+    logger.stderr('');
   }
 
   if (error.stack) {
