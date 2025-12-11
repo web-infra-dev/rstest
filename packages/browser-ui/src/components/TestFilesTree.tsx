@@ -34,9 +34,6 @@ const toRelativePath = (file: string, rootPath?: string): string => {
 
 const openInEditor = (file: string): void => {
   const payload = { type: 'open-in-editor', payload: { file } };
-  (
-    window as Window & { __rstest_dispatch__?: (payload: unknown) => void }
-  ).__rstest_dispatch__?.(payload);
   window.parent?.postMessage(payload, '*');
   fetch(`/__open-in-editor?file=${encodeURIComponent(file)}`).catch(() => {});
 };

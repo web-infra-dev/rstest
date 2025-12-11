@@ -8,12 +8,7 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { dirname, join, relative, resolve, sep } from 'pathe';
 import * as picomatch from 'picomatch';
-import type {
-  BrowserContext,
-  ConsoleMessage,
-  Frame,
-  Page,
-} from 'playwright-core';
+import type { BrowserContext, ConsoleMessage, Page } from 'playwright-core';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type { Rstest } from '../core/rstest';
@@ -32,11 +27,7 @@ import {
   TEMP_RSTEST_OUTPUT_DIR,
 } from '../utils';
 import { getSetupFiles, getTestEntries } from '../utils/testFiles';
-import type {
-  BrowserClientMessage,
-  BrowserHostConfig,
-  BrowserProjectRuntime,
-} from './protocol';
+import type { BrowserHostConfig, BrowserProjectRuntime } from './protocol';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -58,16 +49,37 @@ type BrowserProjectEntries = {
   testFiles: string[];
 };
 
-type BindingSource = {
-  context: BrowserContext;
-  page: Page;
-  frame: Frame;
+/** Payload for test file start event */
+type TestFileStartPayload = {
+  testPath: string;
+  projectName: string;
+};
+
+/** Payload for log event */
+type LogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
+
+/** Payload for fatal error event */
+type FatalPayload = {
+  message: string;
+  stack?: string;
 };
 
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<string[]>;
+  // Test result callbacks from container
+  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
+  onTestCaseResult: (payload: TestResult) => Promise<void>;
+  onTestFileComplete: (payload: TestFileResult) => Promise<void>;
+  onLog: (payload: LogPayload) => Promise<void>;
+  onFatal: (payload: FatalPayload) => Promise<void>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
@@ -96,6 +108,15 @@ class ContainerRpcManager {
     this.wss = wss;
     this.methods = methods;
     this.setupConnectionHandler();
+  }
+
+  /** Update the RPC methods (used when starting a new test run) */
+  updateMethods(methods: HostRpcMethods): void {
+    this.methods = methods;
+    // Re-create birpc with new methods if already connected
+    if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      this.attachWebSocket(this.ws);
+    }
   }
 
   private setupConnectionHandler(): void {
@@ -1091,85 +1112,6 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       runtime.containerContext = containerContext;
     }
 
-    // Setup communication to receive test results from iframes
-    await containerPage.exposeBinding(
-      '__rstest_dispatch__',
-      async (_source: BindingSource, payload: BrowserClientMessage) => {
-        switch (payload.type) {
-          case 'ready':
-            return;
-          case 'file-start': {
-            await Promise.all(
-              context.reporters.map((reporter) =>
-                (reporter as Reporter).onTestFileStart?.({
-                  testPath: payload.payload.testPath,
-                }),
-              ),
-            );
-            break;
-          }
-          case 'case-result': {
-            caseResults.push(payload.payload);
-            await Promise.all(
-              context.reporters.map((reporter) =>
-                (reporter as Reporter).onTestCaseResult?.(payload.payload),
-              ),
-            );
-            break;
-          }
-          case 'file-complete': {
-            reporterResults.push(payload.payload);
-            if (payload.payload.snapshotResult) {
-              context.snapshotManager.add(payload.payload.snapshotResult);
-            }
-            await Promise.all(
-              context.reporters.map((reporter) =>
-                (reporter as Reporter).onTestFileResult?.(payload.payload),
-              ),
-            );
-
-            completedTests++;
-            if (completedTests >= allTestFiles.length && resolveAllTests) {
-              resolveAllTests();
-            }
-            break;
-          }
-          case 'log': {
-            const log: UserConsoleLog = {
-              content: payload.payload.content,
-              name: payload.payload.level,
-              testPath: payload.payload.testPath,
-              type: payload.payload.type,
-              trace: payload.payload.trace,
-            };
-
-            // Check onConsoleLog filter
-            const shouldLog =
-              context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-
-            if (shouldLog) {
-              await Promise.all(
-                context.reporters.map((reporter) =>
-                  (reporter as Reporter).onUserConsoleLog?.(log),
-                ),
-              );
-            }
-            break;
-          }
-          case 'fatal': {
-            fatalError = new Error(payload.payload.message);
-            fatalError.stack = payload.payload.stack;
-            if (resolveAllTests) {
-              resolveAllTests();
-            }
-            break;
-          }
-          case 'complete':
-            break;
-        }
-      },
-    );
-
     // Forward browser console to terminal
     containerPage.on('console', (msg: ConsoleMessage) => {
       const text = msg.text();
@@ -1179,30 +1121,96 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     });
   }
 
+  // Create RPC methods that can access test state variables
+  const createRpcMethods = (): HostRpcMethods => ({
+    async rerunTest(testFile: string, testNamePattern?: string) {
+      logger.log(
+        color.cyan(
+          `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
+        ),
+      );
+      await rpcManager.reloadTestFile(testFile, testNamePattern);
+    },
+    async getTestFiles() {
+      return allTestFiles;
+    },
+    async onTestFileStart(payload: TestFileStartPayload) {
+      await Promise.all(
+        context.reporters.map((reporter) =>
+          (reporter as Reporter).onTestFileStart?.({
+            testPath: payload.testPath,
+          }),
+        ),
+      );
+    },
+    async onTestCaseResult(payload: TestResult) {
+      caseResults.push(payload);
+      await Promise.all(
+        context.reporters.map((reporter) =>
+          (reporter as Reporter).onTestCaseResult?.(payload),
+        ),
+      );
+    },
+    async onTestFileComplete(payload: TestFileResult) {
+      reporterResults.push(payload);
+      if (payload.snapshotResult) {
+        context.snapshotManager.add(payload.snapshotResult);
+      }
+      await Promise.all(
+        context.reporters.map((reporter) =>
+          (reporter as Reporter).onTestFileResult?.(payload),
+        ),
+      );
+
+      completedTests++;
+      if (completedTests >= allTestFiles.length && resolveAllTests) {
+        resolveAllTests();
+      }
+    },
+    async onLog(payload: LogPayload) {
+      const log: UserConsoleLog = {
+        content: payload.content,
+        name: payload.level,
+        testPath: payload.testPath,
+        type: payload.type,
+        trace: payload.trace,
+      };
+
+      // Check onConsoleLog filter
+      const shouldLog =
+        context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
+
+      if (shouldLog) {
+        await Promise.all(
+          context.reporters.map((reporter) =>
+            (reporter as Reporter).onUserConsoleLog?.(log),
+          ),
+        );
+      }
+    },
+    async onFatal(payload: FatalPayload) {
+      fatalError = new Error(payload.message);
+      fatalError.stack = payload.stack;
+      if (resolveAllTests) {
+        resolveAllTests();
+      }
+    },
+  });
+
   // Setup RPC manager
   let rpcManager: ContainerRpcManager;
 
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
+    // Update methods with new test state (caseResults, completedTests, etc.)
+    rpcManager.updateMethods(createRpcMethods());
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
       rpcManager.reattach(existingWs);
     }
   } else {
-    rpcManager = new ContainerRpcManager(wss, {
-      async rerunTest(testFile: string, testNamePattern?: string) {
-        logger.log(
-          color.cyan(
-            `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
-          ),
-        );
-        await rpcManager.reloadTestFile(testFile, testNamePattern);
-      },
-      async getTestFiles() {
-        return allTestFiles;
-      },
-    });
+    rpcManager = new ContainerRpcManager(wss, createRpcMethods());
 
     if (isWatchMode) {
       runtime.rpcManager = rpcManager;

@@ -1,13 +1,44 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
+import type {
+  BrowserClientFileResult,
+  BrowserClientTestResult,
+} from '../types';
 
 // ============================================================================
 // RPC Types
 // ============================================================================
 
+/** Payload for test file start event */
+export type TestFileStartPayload = {
+  testPath: string;
+  projectName: string;
+};
+
+/** Payload for log event */
+export type LogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
+
+/** Payload for fatal error event */
+export type FatalPayload = {
+  message: string;
+  stack?: string;
+};
+
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<string[]>;
+  // Test result callbacks from container
+  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
+  onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
+  onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
+  onLog: (payload: LogPayload) => Promise<void>;
+  onFatal: (payload: FatalPayload) => Promise<void>;
 };
 
 export type ContainerRPC = {
