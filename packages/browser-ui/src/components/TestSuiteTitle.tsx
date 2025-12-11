@@ -18,7 +18,7 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
   buttonTextColor,
 }) => {
   return (
-    <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       {icon && (
         <span className="flex shrink-0" style={{ color: iconColor }}>
           {icon}
@@ -27,20 +27,22 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
       <Tooltip title={name} mouseLeaveDelay={0}>
         <span className="truncate text-[13px] font-medium">{name}</span>
       </Tooltip>
-      <Tooltip title="Re-run this suite" mouseLeaveDelay={0}>
-        <Button
-          type="text"
-          size="small"
-          icon={<RotateCw size={14} />}
-          disabled={!onRerun}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            onRerun?.();
-          }}
-          className="inline-flex! h-5! w-5! items-center justify-center p-0!"
-          style={{ color: buttonTextColor }}
-        />
-      </Tooltip>
+      <div className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <Tooltip title="Re-run this suite" mouseLeaveDelay={0}>
+          <Button
+            type="text"
+            size="small"
+            icon={<RotateCw size={14} />}
+            disabled={!onRerun}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onRerun?.();
+            }}
+            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            style={{ color: buttonTextColor }}
+          />
+        </Tooltip>
+      </div>
     </div>
   );
 };

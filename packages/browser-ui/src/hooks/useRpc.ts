@@ -41,6 +41,8 @@ export const useRpc = (
   // Use refs to avoid triggering reconnect on callback changes
   const setTestFilesRef = useRef(setTestFiles);
   const onReloadTestFileRef = useRef(onReloadTestFile);
+  // Track the current active WebSocket to handle StrictMode double-mount
+  const activeWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     setTestFilesRef.current = setTestFiles;
@@ -67,12 +69,19 @@ export const useRpc = (
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
       ws = new WebSocket(wsUrl);
+      activeWsRef.current = ws;
 
       const methods: ContainerRPC = {
         onTestFileUpdate(files: string[]) {
+          console.log('[Container RPC] onTestFileUpdate called:', files);
           setTestFilesRef.current(files);
         },
         reloadTestFile(testFile: string, testNamePattern?: string) {
+          console.log(
+            '[Container RPC] reloadTestFile called:',
+            testFile,
+            testNamePattern,
+          );
           onReloadTestFileRef.current?.(testFile, testNamePattern);
         },
       };
@@ -121,6 +130,13 @@ export const useRpc = (
       };
 
       ws.onclose = () => {
+        // Only handle close if this is still the active connection
+        // This prevents race conditions in StrictMode where the old connection's
+        // close event fires after a new connection has been established
+        if (activeWsRef.current !== ws) {
+          return;
+        }
+
         if (!isMounted) return;
 
         console.log('[Container] WebSocket disconnected');

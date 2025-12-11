@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "antd": "^5.29.1",
-    "birpc": "2.6.1",
+    "birpc": "2.9.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
@@ -20,6 +20,8 @@
   },
   "devDependencies": {
     "@rsbuild/core": "1.6.12-canary-20251204065915",
+    "@rsbuild/plugin-react": "^1.4.2",
+    "@rsbuild/plugin-svgr": "^1.2.3",
     "@rstest/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/react": "^19.0.0",
