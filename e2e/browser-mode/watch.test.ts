@@ -8,17 +8,11 @@ const __dirname = path.dirname(__filename);
 
 describe('browser mode - watch', () => {
   it('test files should be ran when create / update / rename / delete', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-browser-watch`;
+    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch`;
 
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures/watch`,
       fixturesTargetPath,
-    });
-
-    // Update port to avoid conflicts with other watch tests
-    const configPath = path.join(fixturesTargetPath, 'rstest.config.ts');
-    fs.update(configPath, (content) => {
-      return content.replace('port: 5186', 'port: 5196');
     });
 
     const { cli } = await runRstestCli({
