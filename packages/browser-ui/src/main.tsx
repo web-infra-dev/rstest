@@ -212,7 +212,10 @@ const BrowserRunner: React.FC<{
       if (event.data?.type === '__rstest_dispatch__') {
         const message = event.data.payload as BrowserClientMessage | undefined;
         if (message?.type === 'file-start') {
-          const payload = message.payload as { testPath?: string };
+          const payload = message.payload as {
+            testPath?: string;
+            projectName?: string;
+          };
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
             setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
@@ -224,11 +227,18 @@ const BrowserRunner: React.FC<{
               }
               return { ...prev, [testPath]: updatedCases };
             });
+            // Forward to host via RPC
+            rpc?.onTestFileStart({
+              testPath,
+              projectName: payload.projectName ?? '',
+            });
           }
         } else if (message?.type === 'case-result') {
           const payload = message.payload as BrowserClientTestResult;
           if (payload?.testPath) {
             upsertCase(payload.testPath, payload);
+            // Forward to host via RPC
+            rpc?.onTestCaseResult(payload);
           }
         } else if (message?.type === 'file-complete') {
           const payload = message.payload as BrowserClientFileResult;
@@ -264,18 +274,35 @@ const BrowserRunner: React.FC<{
               }
               return { ...prev, [testPath]: newCases };
             });
+            // Forward to host via RPC
+            rpc?.onTestFileComplete(payload);
           }
         } else if (message?.type === 'fatal') {
           if (active) {
             setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
           }
+          const payload = message.payload as {
+            message: string;
+            stack?: string;
+          };
+          // Forward to host via RPC
+          rpc?.onFatal(payload);
+        } else if (message?.type === 'log') {
+          const payload = message.payload as {
+            level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+            content: string;
+            testPath: string;
+            type: 'stdout' | 'stderr';
+            trace?: string;
+          };
+          // Forward to host via RPC
+          rpc?.onLog(payload);
         }
-        (window as ContainerWindow).__rstest_dispatch__?.(event.data.payload);
       }
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase, mapCaseStatus]);
+  }, [active, upsertCase, mapCaseStatus, rpc]);
 
   // Computed values
   const counts = useMemo(
