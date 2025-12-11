@@ -1,49 +1,79 @@
-# Repository guidelines
+# Rstest VS Code Extension
 
-Concise contributor guide for the Rstest VS Code extension package.
+VS Code extension providing integrated testing experience for Rstest.
 
-## Project structure & module organization
+## Architecture
 
-- `src/` — TypeScript sources. Key modules: `extension.ts` (entry/TestController), `testTree.ts` (builds TestItem tree), `parserTest.ts` (SWC-based parser), `master.ts` (spawns worker), `worker/` (runner + reporter).
-- `tests/` — E2E tests under `tests/suite/**`. Compiled to `tests-dist/` for the Extension Host.
-- `tests/unit/**` — Unit tests executed by `@rstest/core` with fixtures in `tests/unit/fixtures`.
-- `dist/` — Built extension output. Do not edit.
-- Config: `tsconfig.json`, `tsconfig.test.json`, `rslib.config.ts`, `rstest.config.ts`.
+Two-process design:
 
-## Build, test, and development commands
+- Extension (`extension.ts`) — TestController, manages test tree
+- Worker (`worker/index.ts`) — Runs tests via WebSocket communication
 
-- `npm run build` — Build with `rslib` (use `build:local` for sourcemaps).
-- `npm run watch` — Rebuild on change.
-- `npm run typecheck` — TypeScript `--noEmit` check.
-- `npm run test:unit` — Run unit tests via `rstest`.
-- `npm run test:e2e` — Compile tests and run VS Code Extension Host E2E (downloads VS Code on first run).
-- `npm run lint` — Run Biome checks.
+## Module structure
 
-## Coding style & naming conventions
+- `src/extension.ts` — Entry point, TestController setup
+- `src/testTree.ts` — Builds TestItem tree from test files
+- `src/parserTest.ts` — SWC-based test parser
+- `src/master.ts` — Spawns and manages worker process
+- `src/worker/` — Test runner and reporter
+- `tests/suite/` — E2E tests (VS Code Extension Host)
+- `tests/unit/` — Unit tests (rstest)
 
-- Language: TypeScript, 2-space indentation. Keep changes minimal and focused.
-- Naming: camelCase for files and symbols; PascalCase for classes; follow existing patterns (e.g., `testTree.ts`, `parserTest.ts`).
-- Linting: Biome (`npm run lint`). Prefer simple, readable logic over cleverness.
+## Commands
 
-## Testing guidelines
+```bash
+npm run build                 # Build with rslib
+npm run build:local           # Build with sourcemaps
+npm run watch                 # Watch mode
+npm run typecheck             # Type check
+npm run test:unit             # Unit tests via rstest
+npm run test:e2e              # E2E tests (downloads VS Code)
+npm run lint                  # Biome check
+```
 
-- Name tests `*.test.ts`. Place parser/unit tests in `tests/unit/**`; E2E tests in `tests/suite/**` (loaded by the E2E runner only).
-- E2E opens `tests/fixtures` workspace automatically; use `toLabelTree()` from `tests/suite/index.test.ts` for stable tree assertions.
-- Typical loop: `npm run typecheck` → `npm run test:unit` → `npm run test:e2e`.
+## Do
 
-## Commit & pull request guidelines
+- Use camelCase for files (e.g., `testTree.ts`, `parserTest.ts`)
+- Use PascalCase for classes
+- Place unit tests in `tests/unit/`, E2E in `tests/suite/`
+- Use `toLabelTree()` from `tests/suite/index.test.ts` for stable tree assertions
+- Keep changes minimal and focused
+- Follow existing patterns in the codebase
 
-- Write clear, imperative commit messages; keep PRs small and scoped. Reference issues (e.g., `Fixes #123`).
-- Include rationale, testing notes, and screenshots/logs if relevant (e.g., label trees, error output).
-- Avoid unrelated refactors; update or add tests with behavior changes.
+## Don't
 
-## Architecture overview
+- Don't edit `dist/` directly
+- Don't add dependencies without discussion
+- Don't mix unit and E2E test patterns
+- Don't modify worker protocol without updating both sides
 
-- Two-process design: VS Code extension (`extension.ts`) communicates with a worker (`worker/index.ts`) via WebSocket. Main sends `WorkerInitData`/`WorkerRunTestData`; worker emits `WorkerEventFinish`.
+## Testing loop
+
+1. `npm run typecheck`
+2. `npm run test:unit`
+3. `npm run test:e2e`
+
+## Key files
+
+- `src/extension.ts` — Extension entry, TestController
+- `src/testTree.ts` — Test tree builder
+- `src/parserTest.ts` — Test file parser
+- `src/master.ts` — Worker manager
+- `src/worker/index.ts` — Worker entry
+- `src/types.ts` — Shared type definitions
+
+## Safety
+
+Allowed: read files, typecheck, lint, unit tests
+
+Ask first: E2E tests (slow), install dependencies, modify extension manifest
+
+## When stuck
+
+Ask a clarifying question or propose a plan before making large changes.
 
 ## References
 
-- VS Code Testing Guide: https://code.visualstudio.com/api/extension-guides/testing
-- VS Code Test API: https://code.visualstudio.com/api/references/vscode-api#tests
-- VS Code `TestController` API: https://code.visualstudio.com/api/references/vscode-api#TestController
-- VS Code `TestItem` API: https://code.visualstudio.com/api/references/vscode-api#TestItem
+- [VS Code Testing Guide](https://code.visualstudio.com/api/extension-guides/testing)
+- [TestController API](https://code.visualstudio.com/api/references/vscode-api#TestController)
+- [TestItem API](https://code.visualstudio.com/api/references/vscode-api#TestItem)
