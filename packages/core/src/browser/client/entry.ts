@@ -173,7 +173,7 @@ const interceptConsole = (
 };
 
 const send = (message: BrowserClientMessage): void => {
-  // If in iframe, send to parent window (container) which will forward to host
+  // If in iframe, send to parent window (container) which will forward to host via RPC
   if (window.parent !== window) {
     window.parent.postMessage(
       { type: '__rstest_dispatch__', payload: message },
@@ -181,7 +181,8 @@ const send = (message: BrowserClientMessage): void => {
     );
     return;
   }
-  // Otherwise, send directly via binding
+  // Fallback: direct call if running outside iframe (not typical)
+  // Note: This binding may not exist if not using Playwright
   window.__rstest_dispatch__?.(message);
 };
 
