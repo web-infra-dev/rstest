@@ -24,3 +24,11 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+Rstest 会根据以下优先级顺序确定测试超时时间：
+
+1. 每个测试用例中的 [timeout](/api/test-api/test#test-1) 配置
+2. 测试文件中通过 [`rstest.setConfig({ testTimeout })`](/api/rstest/utilities#rstestsetconfig) 配置的超时时间
+3. CLI 中的 `--testTimeout` 选项
+4. 配置文件中的 `testTimeout` 选项
+5. 默认值 `5000` 毫秒
