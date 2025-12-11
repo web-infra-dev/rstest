@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('Test error hints', () => {
   it('should show jest error hint', async () => {
-    const { expectExecFailed, expectLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/jestError.test.ts'],
       options: {
@@ -18,6 +18,6 @@ describe('Test error hints', () => {
       },
     });
     await expectExecFailed();
-    expectLog('jest is not defined. Did you mean rstest?');
+    expectStderrLog('jest is not defined. Did you mean rstest?');
   });
 });

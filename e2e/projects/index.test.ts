@@ -35,7 +35,7 @@ describe('test projects', () => {
     });
 
     it('should not inherit projects config and run projects failed ', async () => {
-      const { cli, expectExecFailed } = await runRstestCli({
+      const { expectExecFailed, expectStderrLog } = await runRstestCli({
         command: 'rstest',
         args: ['run'],
         options: {
@@ -46,12 +46,8 @@ describe('test projects', () => {
       });
 
       await expectExecFailed();
-      const logs = cli.stdout.split('\n').filter(Boolean);
-
       // test log print
-      expect(
-        logs.find((log) => log.includes('it is not defined')),
-      ).toBeTruthy();
+      expectStderrLog('it is not defined');
     }, 15_000);
   });
 

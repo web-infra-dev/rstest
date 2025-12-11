@@ -20,7 +20,7 @@ describe('Expect Soft API', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(1);
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
+    const logs = cli.stderr.split('\n').filter(Boolean);
 
     expect(
       logs.find((log) => log.includes('AssertionError: expected 2 to be 3')),

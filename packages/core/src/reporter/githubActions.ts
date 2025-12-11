@@ -6,7 +6,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix, TEST_DELIMITER } from '../utils';
+import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
   private onWritePath: (path: string) => string;
@@ -24,7 +24,7 @@ export class GithubActionsReporter {
   }
 
   private log(message: string): void {
-    console.log(`${message}\n`);
+    logger.log(`${message}\n`);
   }
 
   async onTestRunEnd({
