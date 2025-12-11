@@ -8,7 +8,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { getTaskNameWithPrefix } from '../utils';
+import { getTaskNameWithPrefix, logger } from '../utils';
 import { formatStack, parseErrorStacktrace } from '../utils/error';
 
 interface JUnitTestCase {
@@ -251,19 +251,19 @@ export class JUnitReporter implements Reporter {
     if (this.outputPath) {
       try {
         await writeFile(this.outputPath, xmlContent, 'utf-8');
-        console.log(`JUnit XML report written to: ${this.outputPath}`);
+        logger.log(`JUnit XML report written to: ${this.outputPath}`);
       } catch (error) {
-        console.error(
+        logger.stderr(
           `Failed to write JUnit XML report to ${this.outputPath}:`,
           error,
         );
         // Fallback to console output
-        console.log('JUnit XML Report:');
-        console.log(xmlContent);
+        logger.log('JUnit XML Report:');
+        logger.log(xmlContent);
       }
     } else {
       // Output to console by default
-      console.log(xmlContent);
+      logger.log(xmlContent);
     }
   }
 }

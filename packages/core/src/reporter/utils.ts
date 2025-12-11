@@ -59,7 +59,7 @@ export const logCase = (
 
   if (result.errors) {
     for (const error of result.errors) {
-      console.log(color.red(`    ${error.message}`));
+      logger.log(color.red(`    ${error.message}`));
     }
   }
 };

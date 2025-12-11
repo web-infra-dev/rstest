@@ -12,7 +12,7 @@
  * This convention helps distinguish between normal operations
  * and important alerts that require attention.
  */
-import { type Logger, logger } from 'rslog';
+import { type Logger, logger as rslog } from 'rslog';
 import { color } from './helper';
 
 export const isDebug = (): boolean => {
@@ -28,7 +28,7 @@ export const isDebug = (): boolean => {
 
 // setup the logger level
 if (isDebug()) {
-  logger.level = 'verbose';
+  rslog.level = 'verbose';
 }
 
 function getTime() {
@@ -40,9 +40,9 @@ function getTime() {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-logger.override({
+rslog.override({
   debug: (message, ...args) => {
-    if (logger.level !== 'verbose') {
+    if (rslog.level !== 'verbose') {
       return;
     }
     const time = color.gray(getTime());
@@ -55,6 +55,13 @@ export const clearScreen = (force = false): void => {
     // clear screen
     console.log('\x1Bc');
   }
+};
+
+const logger: Logger & { stderr: (message: string, ...args: any[]) => void } = {
+  ...rslog,
+  stderr: (message: string, ...args: any[]) => {
+    console.error(message, ...args);
+  },
 };
 
 export { logger };

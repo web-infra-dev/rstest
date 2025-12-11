@@ -19,7 +19,7 @@ describe('console trace', () => {
     });
 
     await cli.exec;
-    const logs = cli.stdout.split('\n').filter(Boolean);
+    const logs = cli.log.split('\n').filter(Boolean);
 
     expect(logs.filter((log) => log.startsWith('I'))).toMatchInlineSnapshot(`
       [
@@ -67,7 +67,7 @@ describe('console trace', () => {
     });
 
     await cli.exec;
-    const logs = cli.stdout.split('\n').filter(Boolean);
+    const logs = cli.stderr.split('\n').filter(Boolean);
 
     expect(logs.some((log) => log.includes('trace.test.ts:4:11'))).toBeTruthy();
   });

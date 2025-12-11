@@ -97,14 +97,14 @@ export class DefaultReporter implements Reporter {
     } else {
       titles.push(testPath);
     }
+    const logOutput = log.type === 'stdout' ? logger.log : logger.stderr;
 
-    logger.log('');
-    // TODO: output to stdout or stderr
-    logger.log(
+    logOutput('');
+    logOutput(
       `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
     );
-    logger.log(log.content);
-    logger.log('');
+    logOutput(log.content);
+    logOutput('');
   }
 
   async onExit(): Promise<void> {
