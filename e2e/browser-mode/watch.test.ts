@@ -18,7 +18,7 @@ describe('browser mode - watch', () => {
     // Update port to avoid conflicts with other watch tests
     const configPath = path.join(fixturesTargetPath, 'rstest.config.ts');
     fs.update(configPath, (content) => {
-      return content.replace('port: 5186', 'port: 5192');
+      return content.replace('port: 5186', 'port: 5196');
     });
 
     const { cli } = await runRstestCli({
@@ -97,5 +97,8 @@ describe('new test', () => {
     expect(cli.stdout).not.toMatch('renamed.test.ts');
 
     cli.exec.kill();
+
+    // Clean up fixtures folder
+    fs.delete(fixturesTargetPath);
   });
 });

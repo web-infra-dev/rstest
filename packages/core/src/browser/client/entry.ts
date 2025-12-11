@@ -89,6 +89,89 @@ const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
   }
 };
 
+/**
+ * Format an argument for console output.
+ */
+const formatArg = (arg: unknown): string => {
+  if (arg === null) return 'null';
+  if (arg === undefined) return 'undefined';
+  if (typeof arg === 'string') return arg;
+  if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+  if (arg instanceof Error) {
+    return arg.stack || `${arg.name}: ${arg.message}`;
+  }
+  try {
+    return JSON.stringify(arg, null, 2);
+  } catch {
+    return String(arg);
+  }
+};
+
+/**
+ * Intercept console methods and forward to host via send().
+ * Returns a restore function to revert console to original.
+ */
+const interceptConsole = (
+  testPath: string,
+  printConsoleTrace: boolean,
+  disableConsoleIntercept: boolean,
+): (() => void) => {
+  if (disableConsoleIntercept) {
+    return () => {};
+  }
+
+  const originalConsole = {
+    log: console.log.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    info: console.info.bind(console),
+    debug: console.debug.bind(console),
+  };
+
+  const getConsoleTrace = (): string | undefined => {
+    if (!printConsoleTrace) return undefined;
+    const stack = new Error('STACK_TRACE').stack;
+    // Skip: Error, getConsoleTrace, createLogger wrapper, console.log call
+    return stack?.split('\n').slice(4).join('\n');
+  };
+
+  const createLogger = (level: 'log' | 'warn' | 'error' | 'info' | 'debug') => {
+    return (...args: unknown[]) => {
+      // Call original for browser DevTools
+      originalConsole[level](...args);
+
+      // Format message
+      const content = args.map(formatArg).join(' ');
+
+      // Send to host
+      send({
+        type: 'log',
+        payload: {
+          level,
+          content,
+          testPath,
+          type: level === 'error' || level === 'warn' ? 'stderr' : 'stdout',
+          trace: getConsoleTrace(),
+        },
+      });
+    };
+  };
+
+  console.log = createLogger('log');
+  console.warn = createLogger('warn');
+  console.error = createLogger('error');
+  console.info = createLogger('info');
+  console.debug = createLogger('debug');
+
+  return () => {
+    console.log = originalConsole.log;
+    console.warn = originalConsole.warn;
+    console.error = originalConsole.error;
+    console.info = originalConsole.info;
+    console.debug = originalConsole.debug;
+  };
+};
+
 const send = (message: BrowserClientMessage): void => {
   // If in iframe, send to parent window (container) which will forward to host
   if (window.parent !== window) {
@@ -238,6 +321,13 @@ const run = async () => {
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, projectConfig.projectRoot);
 
+    // Intercept console methods to forward logs to host
+    const restoreConsole = interceptConsole(
+      testPath,
+      runtimeConfig.printConsoleTrace ?? false,
+      runtimeConfig.disableConsoleIntercept ?? false,
+    );
+
     const workerState: WorkerState = {
       project: project.name,
       projectRoot: project.projectRoot,
@@ -312,6 +402,9 @@ const run = async () => {
       });
       window.__RSTEST_DONE__ = true;
       return;
+    } finally {
+      // Restore original console methods
+      restoreConsole();
     }
   }
 

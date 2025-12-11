@@ -37,7 +37,13 @@ export type BrowserClientMessage =
   | { type: 'file-complete'; payload: TestFileResult }
   | {
       type: 'log';
-      payload: { level: 'log' | 'warn' | 'error'; message: string };
+      payload: {
+        level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+        content: string;
+        testPath: string;
+        type: 'stdout' | 'stderr';
+        trace?: string;
+      };
     }
   | {
       type: 'fatal';
