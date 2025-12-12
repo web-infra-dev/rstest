@@ -239,6 +239,11 @@ export interface RstestUtilities {
   ) => void;
 
   /**
+   * Hoisted mock function.
+   */
+  hoisted: <T = unknown>(fn: () => T) => T;
+
+  /**
    * Removes module from the mocked registry.
    */
   unmock: (path: string) => void;

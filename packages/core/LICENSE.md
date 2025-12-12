@@ -943,7 +943,7 @@ Licensed under MIT license in the repository at https://github.com/chaijs/loupe.
 
 ### magic-string
 
-Licensed under MIT license in the repository at git+https://github.com/Rich-Harris/magic-string.git.
+Licensed under MIT license in the repository at https://github.com/rich-harris/magic-string.git.
 
 > Copyright 2018 Rich Harris
 >
