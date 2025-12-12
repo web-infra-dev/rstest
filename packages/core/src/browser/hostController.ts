@@ -640,10 +640,18 @@ const createBrowserRuntime = async ({
     }
   };
 
-  // Collect plugins from all projects (e.g., pluginReact for JSX support)
-  const userPlugins = context.projects.flatMap(
-    (project) => project.normalizedConfig.plugins || [],
-  );
+  // Get user Rsbuild config from the first project
+  // (multi-project browser mode support will be added later)
+  const firstProject = context.projects[0];
+  const userPlugins = firstProject?.normalizedConfig.plugins || [];
+  const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
+
+  // Rstest internal aliases that must not be overridden by user config
+  const rstestInternalAliases = {
+    '@rstest/browser-manifest': manifestPath,
+    '@rstest/core': resolveBrowserFile('client/public.ts'),
+    '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
+  };
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest-browser',
@@ -657,41 +665,52 @@ const createBrowserRuntime = async ({
         strictPort: context.normalizedConfig.browser.port !== undefined,
       },
       environments: {
-        web: {
-          source: {
-            entry: {
-              runner: resolveBrowserFile('client/entry.ts'),
-            },
-            alias: {
-              '@rstest/browser-manifest': manifestPath,
-              '@rstest/core': resolveBrowserFile('client/public.ts'),
-              '@sinonjs/fake-timers': resolveBrowserFile(
-                'client/fakeTimersStub.ts',
-              ),
-            },
-          },
-          output: {
-            target: 'web',
-          },
-          tools: {
-            rspack: (config) => {
-              config.mode = 'development';
-              config.devtool = 'source-map';
-              config.experiments = {
-                ...config.experiments,
-                lazyCompilation: {
-                  imports: true,
-                  entries: false,
-                },
-              };
-              config.plugins = config.plugins || [];
-              config.plugins.push(virtualManifestPlugin);
-            },
-          },
-        },
+        web: {},
       },
     },
   });
+
+  // Add plugin to merge user Rsbuild config with rstest required config
+  rsbuildInstance.addPlugins([
+    {
+      name: 'rstest:browser-user-config',
+      setup(api) {
+        api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig }) => {
+          // Merge order: current config -> userConfig -> rstest required config (highest priority)
+          const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
+            source: {
+              entry: {
+                runner: resolveBrowserFile('client/entry.ts'),
+              },
+            },
+            resolve: {
+              alias: rstestInternalAliases,
+            },
+            output: {
+              target: 'web',
+            },
+            tools: {
+              rspack: (rspackConfig) => {
+                rspackConfig.mode = 'development';
+                rspackConfig.devtool = 'source-map';
+                rspackConfig.experiments = {
+                  ...rspackConfig.experiments,
+                  lazyCompilation: {
+                    imports: true,
+                    entries: false,
+                  },
+                };
+                rspackConfig.plugins = rspackConfig.plugins || [];
+                rspackConfig.plugins.push(virtualManifestPlugin);
+              },
+            },
+          });
+
+          return merged;
+        });
+      },
+    },
+  ]);
 
   // Register watch plugin if in watch mode
   if (isWatchMode && onTriggerRerun) {
