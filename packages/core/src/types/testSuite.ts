@@ -40,6 +40,7 @@ export type TestCaseInfo = {
   parentNames?: string[];
   project: string;
   startTime?: number;
+  /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
   type: 'case';
 };
@@ -92,6 +93,7 @@ export type TestSuiteInfo = {
   testPath: TestPath;
   project: string;
   type: 'suite';
+  /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
 };
 

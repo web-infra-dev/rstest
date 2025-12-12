@@ -274,6 +274,9 @@ export interface RstestConfig {
    */
   chaiConfig?: ChaiConfig;
 
+  /**
+   * Include `location` property in `TestInfo` received by reporters
+   */
   includeTaskLocation?: boolean;
 
   // Rsbuild configs
