@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 describe('CLI shortcuts', () => {
   it('CLI shortcuts should display and work as expected', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
     await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures-shortcuts`,
       fixturesTargetPath,
@@ -57,7 +57,7 @@ describe('CLI shortcuts', () => {
   });
 
   it('shortcut `f` should work as expected', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
     await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures-shortcuts`,
       fixturesTargetPath,
