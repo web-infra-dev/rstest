@@ -104,6 +104,23 @@ export default defineConfig({
 
 ### Project 配置
 
+#### 配置定义
+
+Project 配置是 Rstest 配置对象的一个子集，支持大部分配置选项，但不支持 `reporters` 等[全局配置](#全局配置)。
+
+你可以通过 `defineProject` 辅助函数来定义 Project 配置：
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  name: 'pkg-a',
+  include: ['tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+});
+```
+
+#### 配置复用
+
 Project 配置并不会继承根目录下的配置，根目录下仅 projects 字段和[全局配置](#全局配置)生效。
 
 如果你的子项目间存在可复用的配置项，可以抽取 shared 配置，并分别在子项目中引入：
