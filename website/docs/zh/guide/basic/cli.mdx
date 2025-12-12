@@ -102,6 +102,32 @@ $ npx rstest list --json
 $ npx rstest list --json=./output.json
 ```
 
+您可以使用 `--includeSuites` 选项，在打印测试用例的同时输出测试套件信息：
+
+```bash
+$ npx rstest list
+
+# 输出如下：
+a.test.ts > test a
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+```
+
+您可以使用 `--printLocation` 选项来打印测试的位置信息：
+
+```bash
+$ npx rstest list
+
+# 输出如下：
+a.test.ts:4:5 > test a > test a-1
+a.test.ts:9:3 > test a-2
+b.test.ts:4:5 > test b > test b-1
+b.test.ts:9:3 > test b-2
+```
+
 ## CLI 选项
 
 Rstest CLI 支持以下常用参数，所有命令均可使用：
