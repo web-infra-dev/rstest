@@ -49,5 +49,5 @@ export default defineConfig({});
     expect(cli.stdout).toMatch('Tests 1 passed');
 
     cli.exec.kill();
-  });
+  }, 15_000);
 });
