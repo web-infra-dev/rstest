@@ -10,4 +10,14 @@ export default defineConfig({
   include: ['./*.test.ts'],
   testTimeout: 30000,
   globals: true,
+  source: {
+    define: {
+      __TEST_DEFINE__: JSON.stringify('define-value'),
+    },
+  },
+  resolve: {
+    alias: {
+      '@test-alias': './aliased-module.ts',
+    },
+  },
 });
