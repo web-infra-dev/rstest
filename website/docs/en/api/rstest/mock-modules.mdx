@@ -108,6 +108,39 @@ Similar to `rs.mock`, `rs.doMock` also mocks modules, but it is not hoisted to t
     })
     ```
 
+## rs.hoisted
+
+- **Type**: `<T = unknown>(fn: () => T) => T`
+
+`rs.hoisted` is a helper function that allows you to create values that can be accessed in hoisted functions like `rs.mock` factory functions. Like `rs.mock`, `rs.hoisted` is also hoisted to the top of the module, and it provides access to the `rs` utilities within the hoisted scope.
+
+This is useful when you need to create mock functions or values that should be shared between the mock factory function and your test code.
+
+```ts title="src/sum.test.ts"
+import { expect, it, rs } from '@rstest/core';
+import { foo } from './sum';
+
+// `rs` utilities can be accessed in hoisted function.
+const mocks = rs.hoisted(() => {
+  return {
+    hoistedFn: rs.fn(),
+  };
+});
+
+rs.mock('./sum', () => {
+  return { foo: mocks.hoistedFn };
+});
+
+it('hoisted', () => {
+  mocks.hoistedFn(42);
+  expect(mocks.hoistedFn).toHaveBeenCalledOnce();
+  expect(mocks.hoistedFn).toHaveBeenCalledWith(42);
+  expect(foo).toBe(mocks.hoistedFn);
+});
+```
+
+In this example, `rs.hoisted` allows you to create a mock function using `rs.fn()` that can be used both in the `rs.mock` factory function and in your test assertions. Without `rs.hoisted`, you would not be able to access `rs` utilities in the scope where `rs.mock` factory functions are evaluated.
+
 {/* ## TODO: rs.mocked */}
 
 ## rs.importActual
