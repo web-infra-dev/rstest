@@ -115,7 +115,7 @@
     "@vscode/vsce": "3.7.1",
     "birpc": "2.9.0",
     "core-js-pure": "^3.47.0",
-    "glob": "^7.2.3",
+    "glob": "^11.0.0",
     "mocha": "^11.7.5",
     "ovsx": "^0.10.7",
     "typescript": "^5.9.3",
