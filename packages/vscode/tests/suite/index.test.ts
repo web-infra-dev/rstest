@@ -1,25 +1,9 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
-import { getProjectItems, getTestItems } from './helpers';
+import { getProjectItems, toLabelTree } from './helpers';
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
-
-  // Helper: recursively transform a TestItem into a label-only tree.
-  // Children are sorted by label for stable comparisons.
-  function toLabelTree(item: vscode.TestItem): {
-    label: string;
-    children?: { label: string; children?: any[] }[];
-  } {
-    const nodes: { label: string; children?: any[] }[] = [];
-    item.children.forEach((child) => {
-      nodes.push(toLabelTree(child));
-    });
-    nodes.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
-    return nodes.length
-      ? { label: item.label, children: nodes }
-      : { label: item.label };
-  }
 
   test('Extension should discover test items', async () => {
     // Wait for the extension to activate and discover tests
@@ -82,12 +66,6 @@ suite('Extension Test Suite', () => {
         'Test controller should have discovered test items',
       );
 
-      const workspaceItems = getTestItems(testController.items);
-      assert.equal(workspaceItems[0].label, 'workspace-1');
-
-      const projectItems = getTestItems(workspaceItems[0].children);
-      assert.equal(projectItems[0].label, 'rstest.config.ts');
-
       const itemsArray = getProjectItems(testController);
 
       const foo = itemsArray.find((it) => it.id.endsWith('/test/foo.test.ts'));
@@ -106,46 +84,40 @@ suite('Extension Test Suite', () => {
 
       assert.ok(foo, 'foo.test.ts should be discovered');
       // Validate foo.test.ts structure via label-only tree
-      const fooTree = toLabelTree(foo!);
-      assert.deepStrictEqual(fooTree, {
-        label: 'foo.test.ts',
-        children: [
-          {
-            label: 'l1',
-            children: [
-              {
-                label: 'l2',
-                children: [
-                  {
-                    label: 'l3',
-                    children: [
-                      { label: 'should also return "foo1"' },
-                      { label: 'should return "foo1"' },
-                    ],
-                  },
-                  { label: 'should also return "foo"' },
-                  { label: 'should return "foo"' },
-                ],
-              },
-            ],
-          },
-        ],
-      });
+      const fooTree = toLabelTree(foo.children);
+      assert.deepStrictEqual(fooTree, [
+        {
+          label: 'l1',
+          children: [
+            {
+              label: 'l2',
+              children: [
+                {
+                  label: 'l3',
+                  children: [
+                    { label: 'should also return "foo1"' },
+                    { label: 'should return "foo1"' },
+                  ],
+                },
+                { label: 'should also return "foo"' },
+                { label: 'should return "foo"' },
+              ],
+            },
+          ],
+        },
+      ]);
 
       assert.ok(index, 'index.test.ts should be discovered');
-      const indexTree = toLabelTree(index!);
-      assert.deepStrictEqual(indexTree, {
-        label: 'index.test.ts',
-        children: [
-          {
-            label: 'Index',
-            children: [
-              { label: 'should add two numbers correctly' },
-              { label: 'should test source code correctly' },
-            ],
-          },
-        ],
-      });
+      const indexTree = toLabelTree(index.children);
+      assert.deepStrictEqual(indexTree, [
+        {
+          label: 'Index',
+          children: [
+            { label: 'should add two numbers correctly' },
+            { label: 'should test source code correctly' },
+          ],
+        },
+      ]);
 
       assert.ok(jsSpec, 'jsFile.spec.js should be discovered');
       assert.ok(jsxFile, 'tsxFile.test.tsx should be discovered');

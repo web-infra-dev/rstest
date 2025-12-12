@@ -4,20 +4,16 @@ import vscode from 'vscode';
 // Centralized configuration types for the extension.
 // Add new keys here to extend configuration in a type-safe way.
 const configSchema = v.object({
-  // Glob patterns that determine which files are considered tests.
-  // Must be an array of strings.
-  testFileGlobPattern: v.fallback(v.array(v.string()), [
-    '**/*.{test,spec}.[jt]s',
-    '**/*.{test,spec}.[cm][jt]s',
-    '**/*.{test,spec}.[jt]sx',
-    '**/*.{test,spec}.[cm][jt]sx',
-  ]),
   // The path to a package.json file of a Rstest executable.
   // Used as a last resort if the extension cannot auto-detect @rstest/core.
   rstestPackagePath: v.fallback(v.optional(v.string()), undefined),
   configFileGlobPattern: v.fallback(v.array(v.string()), [
     '**/rstest.config.{mjs,ts,js,cjs,mts,cts}',
   ]),
+  testCaseCollectMethod: v.fallback(
+    v.union([v.literal('ast'), v.literal('runtime')]),
+    'ast',
+  ),
 });
 
 export type ExtensionConfig = v.InferOutput<typeof configSchema>;

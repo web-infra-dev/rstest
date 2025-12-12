@@ -84,7 +84,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     disableConsoleIntercept,
     testEnvironment,
     isolate,
-    coverage,
+    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
     bail,
@@ -231,6 +231,11 @@ export const createPool = async ({
       context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
       );
     },
     onTestSuiteStart: async (test: TestSuiteInfo) => {

@@ -6,7 +6,13 @@ import type {
   RstestConfig,
 } from './config';
 import type { Reporter } from './reporter';
-import type { TestCaseInfo, TestFileResult, TestResult } from './testSuite';
+import type {
+  FormattedError,
+  Test,
+  TestCaseInfo,
+  TestFileResult,
+  TestResult,
+} from './testSuite';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
@@ -74,10 +80,18 @@ export type RstestContext = {
 export type ListCommandOptions = {
   filesOnly?: boolean;
   json?: boolean | string;
+  printLocation?: boolean;
+};
+
+export type ListCommandResult = {
+  tests: Test[];
+  testPath: string;
+  project: string;
+  errors?: FormattedError[];
 };
 
 export type RstestInstance = {
   context: RstestContext;
   runTests: () => Promise<void>;
-  listTests: (options: ListCommandOptions) => Promise<void>;
+  listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
 };

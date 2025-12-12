@@ -4,6 +4,7 @@ import type {
   RunnerHooks,
   Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import { getSnapshotClient } from '../api/snapshot';
@@ -53,6 +54,21 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
 
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
+        hooks.onTestFileReady?.({
+          testPath,
+          tests: tests.map(function toTestInfo(test: Test): TestInfo {
+            return {
+              testId: test.testId,
+              name: test.name,
+              parentNames: test.parentNames,
+              testPath: test.testPath,
+              project: test.project,
+              type: test.type,
+              location: test.location,
+              tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
+            };
+          }),
+        });
         runtime.instance.updateStatus('running');
 
         const results = await testRunner.runTests({

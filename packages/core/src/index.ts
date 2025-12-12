@@ -83,6 +83,7 @@ export type {
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
   TestSuiteInfo,
 } from './types';
