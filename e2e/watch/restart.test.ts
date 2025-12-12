@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
