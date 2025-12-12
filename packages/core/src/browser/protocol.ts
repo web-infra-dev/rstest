@@ -10,6 +10,15 @@ export type BrowserProjectRuntime = {
   runtimeConfig: SerializedRuntimeConfig;
 };
 
+/**
+ * Test file info with associated project name.
+ * Used to track which project a test file belongs to.
+ */
+export type TestFileInfo = {
+  testPath: string;
+  projectName: string;
+};
+
 export type BrowserHostConfig = {
   rootPath: string;
   projects: BrowserProjectRuntime[];
