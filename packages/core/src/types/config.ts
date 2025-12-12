@@ -274,6 +274,8 @@ export interface RstestConfig {
    */
   chaiConfig?: ChaiConfig;
 
+  includeTaskLocation?: boolean;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];

@@ -24,16 +24,10 @@ describe('test list command', () => {
 
     expect(logs).toMatchInlineSnapshot(`
       [
-        "a.test.ts > test a",
         "a.test.ts > test a > test a-1",
         "a.test.ts > test a-2",
-        "b.test.ts > test b",
         "b.test.ts > test b > test b-1",
         "b.test.ts > test b-2",
-        "c.test.ts > test c describe each 0",
-        "c.test.ts > test c describe for 0",
-        "c.test.ts > test c describe runIf",
-        "c.test.ts > test c describe skipIf",
         "c.test.ts > test c it each 0",
         "c.test.ts > test c it for 0",
         "c.test.ts > test c it runIf",
@@ -60,7 +54,6 @@ describe('test list command', () => {
 
     expect(logs).toMatchInlineSnapshot(`
       [
-        "a.test.ts > test a",
         "a.test.ts > test a > test a-1",
         "a.test.ts > test a-2",
       ]
@@ -84,13 +77,8 @@ describe('test list command', () => {
 
     expect(logs).toMatchInlineSnapshot(`
       [
-        "a.test.ts > test a",
         "a.test.ts > test a > test a-1",
         "a.test.ts > test a-2",
-        "c.test.ts > test c describe each 0",
-        "c.test.ts > test c describe for 0",
-        "c.test.ts > test c describe runIf",
-        "c.test.ts > test c describe skipIf",
         "c.test.ts > test c it each 0",
       ]
     `);
@@ -121,10 +109,45 @@ describe('test list command', () => {
     `);
   });
 
-  it('should list tests correctly with printLocation', async () => {
+  it('should list tests and suites correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['list', '--printLocation'],
+      args: ['list', '--includeSuites'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts > test a",
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+        "b.test.ts > test b",
+        "b.test.ts > test b > test b-1",
+        "b.test.ts > test b-2",
+        "c.test.ts > test c describe each 0",
+        "c.test.ts > test c describe for 0",
+        "c.test.ts > test c describe runIf",
+        "c.test.ts > test c describe skipIf",
+        "c.test.ts > test c it each 0",
+        "c.test.ts > test c it for 0",
+        "c.test.ts > test c it runIf",
+        "c.test.ts > test c it skipIf",
+      ]
+    `);
+  });
+
+  it('should list tests and suites with location correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--includeSuites', '--printLocation'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

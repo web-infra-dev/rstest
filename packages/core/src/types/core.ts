@@ -80,6 +80,7 @@ export type RstestContext = {
 export type ListCommandOptions = {
   filesOnly?: boolean;
   json?: boolean | string;
+  includeSuites?: boolean;
   printLocation?: boolean;
 };
 

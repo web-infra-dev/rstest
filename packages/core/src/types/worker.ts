@@ -62,6 +62,7 @@ export type RuntimeConfig = Pick<
   | 'logHeapUsage'
   | 'bail'
   | 'chaiConfig'
+  | 'includeTaskLocation'
 >;
 
 export type WorkerContext = {

@@ -129,7 +129,7 @@ const collectTestFiles = async ({
 
 export async function listTests(
   context: RstestContext,
-  { filesOnly, json, printLocation }: ListCommandOptions,
+  { filesOnly, json, printLocation, includeSuites }: ListCommandOptions,
 ): Promise<ListCommandResult[]> {
   const { rootPath } = context;
 
@@ -182,7 +182,10 @@ export async function listTests(
       return;
     }
 
-    if (test.name !== ROOT_SUITE_NAME)
+    if (
+      test.type === 'case' ||
+      (includeSuites && test.type === 'suite' && test.name !== ROOT_SUITE_NAME)
+    )
       tests.push({
         file: test.testPath,
         name: getTaskNameWithPrefix(test),

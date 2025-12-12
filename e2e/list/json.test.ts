@@ -28,6 +28,219 @@ describe('test list command with --json', () => {
         "[",
         "  {",
         "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "name": "test a > test a-1",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "name": "test a-2",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "name": "test b > test b-1",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "name": "test b-2",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it each 0",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it for 0",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it runIf",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it skipIf",",
+        "    "type": "case"",
+        "  }",
+        "]",
+      ]
+    `);
+  });
+
+  it('should list test files json correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--json'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "[",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "type": "file"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "type": "file"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "type": "file"",
+        "  }",
+        "]",
+      ]
+    `);
+  });
+
+  it('should output test json file correctly', async () => {
+    const outputPath = join(__dirname, 'fixtures', 'output.json');
+
+    fs.rmSync(outputPath, { force: true });
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', 'output.json'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(fs.existsSync(outputPath)).toBeTruthy();
+
+    fs.rmSync(outputPath, { force: true });
+  });
+
+  it('should list tests and suites json correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--includeSuites'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "[",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "name": "test a",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "name": "test a > test a-1",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
+        "    "name": "test a-2",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "name": "test b",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "name": "test b > test b-1",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
+        "    "name": "test b-2",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c describe each 0",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c describe for 0",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c describe runIf",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c describe skipIf",",
+        "    "type": "suite"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it each 0",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it for 0",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it runIf",",
+        "    "type": "case"",
+        "  },",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
+        "    "name": "test c it skipIf",",
+        "    "type": "case"",
+        "  }",
+        "]",
+      ]
+    `);
+  });
+
+  it('should list tests and suites with location json correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--includeSuites', '--printLocation'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "[",
+        "  {",
+        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
         "    "name": "test a",",
         "    "location": {",
         "      "line": 3,",
@@ -155,62 +368,5 @@ describe('test list command with --json', () => {
         "]",
       ]
     `);
-  });
-
-  it('should list test files json correctly', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['list', '--filesOnly', '--json'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecSuccess();
-
-    const logs = cli.stdout?.split('\n').filter(Boolean);
-
-    expect(logs).toMatchInlineSnapshot(`
-      [
-        "[",
-        "  {",
-        "    "file": "<ROOT>/e2e/list/fixtures/a.test.ts",",
-        "    "type": "file"",
-        "  },",
-        "  {",
-        "    "file": "<ROOT>/e2e/list/fixtures/b.test.ts",",
-        "    "type": "file"",
-        "  },",
-        "  {",
-        "    "file": "<ROOT>/e2e/list/fixtures/c.test.ts",",
-        "    "type": "file"",
-        "  }",
-        "]",
-      ]
-    `);
-  });
-
-  it('should output test json file correctly', async () => {
-    const outputPath = join(__dirname, 'fixtures', 'output.json');
-
-    fs.rmSync(outputPath, { force: true });
-
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['list', '--json', 'output.json'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-        },
-      },
-    });
-
-    await expectExecSuccess();
-
-    expect(fs.existsSync(outputPath)).toBeTruthy();
-
-    fs.rmSync(outputPath, { force: true });
   });
 });

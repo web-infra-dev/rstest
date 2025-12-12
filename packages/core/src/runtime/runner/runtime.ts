@@ -483,8 +483,8 @@ export const createRuntimeAPI = ({
     runtimeConfig,
   });
 
-  // TODO allow disable get location via config
   const getLocation = (): Location | undefined => {
+    if (!runtimeConfig.includeTaskLocation) return undefined;
     const stack = new Error().stack;
     if (stack) {
       const frames = stackTraceParse(stack);
