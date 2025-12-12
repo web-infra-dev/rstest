@@ -27,20 +27,6 @@
     "configuration": {
       "title": "Rstest",
       "properties": {
-        "rstest.testFileGlobPattern": {
-          "markdownDescription": "Glob patterns used to discover test files. Must be an array of strings.",
-          "scope": "resource",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "**/*.{test,spec}.[jt]s",
-            "**/*.{test,spec}.[cm][jt]s",
-            "**/*.{test,spec}.[jt]sx",
-            "**/*.{test,spec}.[cm][jt]sx"
-          ]
-        },
         "rstest.rstestPackagePath": {
           "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
           "scope": "resource",
@@ -105,19 +91,22 @@
     "@rsbuild/core": "1.6.12-canary-20251204065915",
     "@rslib/core": "0.18.3",
     "@rstest/core": "workspace:*",
+    "@rstest/coverage-istanbul": "workspace:*",
     "@swc/core": "^1.15.3",
-    "@types/glob": "^7.2.0",
+    "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
+    "@types/picomatch": "^4.0.2",
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.7.1",
     "birpc": "2.9.0",
     "core-js-pure": "^3.47.0",
-    "glob": "^7.2.3",
     "mocha": "^11.7.5",
     "ovsx": "^0.10.7",
+    "picomatch": "^4.0.3",
+    "tinyglobby": "^0.2.15",
     "typescript": "^5.9.3",
     "valibot": "^1.2.0"
   }

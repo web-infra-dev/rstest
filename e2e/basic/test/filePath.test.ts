@@ -16,22 +16,20 @@ describe('current URL', () => {
       expect(
         pathe
           .normalize(__filename)
-          .endsWith('/rstest/e2e/basic/test/filePath.test.ts'),
+          .endsWith('/e2e/basic/test/filePath.test.ts'),
       ).toBe(true);
     });
 
     it('__dirname', () => {
       expect(__dirname.startsWith('file://')).toBe(false);
-      expect(
-        pathe.normalize(__dirname).endsWith('/rstest/e2e/basic/test'),
-      ).toBe(true);
+      expect(pathe.normalize(__dirname).endsWith('/e2e/basic/test')).toBe(true);
     });
 
     it('import.meta.url', () => {
       expect(import.meta.url.startsWith('file://')).toBe(true);
-      expect(
-        import.meta.url.endsWith('/rstest/e2e/basic/test/filePath.test.ts'),
-      ).toBe(true);
+      expect(import.meta.url.endsWith('/e2e/basic/test/filePath.test.ts')).toBe(
+        true,
+      );
     });
   });
 });

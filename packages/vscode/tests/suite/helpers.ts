@@ -65,26 +65,26 @@ export function getTestItems(collection: vscode.TestItemCollection) {
 }
 
 export function getProjectItems(testController: vscode.TestController) {
-  const workspaces = getTestItems(testController.items);
-  assert.equal(workspaces.length, 1);
-  const projects = getTestItems(workspaces[0].children);
-  assert.equal(projects.length, 1);
-  return getTestItems(projects[0].children);
+  const folders = getTestItems(testController.items);
+  assert.equal(folders.length, 1);
+  return getTestItems(folders[0].children);
 }
 
 // Helper: recursively transform a TestItem into a label-only tree.
 // Children are sorted by label for stable comparisons.
 export function toLabelTree(
   collection: vscode.TestItemCollection,
-  maxDepth = Number.POSITIVE_INFINITY,
+  fileOnly?: boolean,
 ): {
   label: string;
   children?: { label: string; children?: any[] }[];
 }[] {
-  if (maxDepth === 0) return [];
   const nodes: { label: string; children?: any[] }[] = [];
   collection.forEach((child) => {
-    const children = toLabelTree(child.children, maxDepth - 1);
+    const children =
+      child.label.match(/\.(test|spec)\.[cm]?[jt]sx?/) && fileOnly
+        ? []
+        : toLabelTree(child.children, fileOnly);
     // normalize to linux path style
     const label = child.label.replaceAll(path.sep, '/');
     nodes.push(children.length ? { label, children } : { label });

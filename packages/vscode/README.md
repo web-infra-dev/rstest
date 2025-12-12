@@ -15,10 +15,10 @@ The extension activates automatically when your workspace contains Rstest config
 
 ## Configuration
 
-| Setting                      | Type     | Default                          | Description                                                                                                                                                                                                                                                           |
-| ---------------------------- | -------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rstest.testFileGlobPattern` | string[] | `["**/*.test.*", "**/*.spec.*"]` | Glob pattern(s) used to discover test files in the workspace.                                                                                                                                                                                                         |
-| `rstest.rstestPackagePath`   | string   | `undefined`                      | The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder. |
+| Setting                        | Type     | Default                                        | Description                                                                                                                                                                                                                                                           |
+| ------------------------------ | -------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rstest.rstestPackagePath`     | string   | `undefined`                                    | The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder. |
+| `rstest.configFileGlobPattern` | string[] | `["**/rstest.config.{mjs,ts,js,cjs,mts,cts}"]` | Glob patterns used to discover config files.                                                                                                                                                                                                                          |
 
 ## How it works
 
