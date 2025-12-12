@@ -108,6 +108,39 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
     })
     ```
 
+## rs.hoisted
+
+- **类型：**: `<T = unknown>(fn: () => T) => T`
+
+`rs.hoisted` 是一个辅助函数，允许你创建可以在提升函数（如 `rs.mock` 工厂函数）中访问的值。与 `rs.mock` 类似，`rs.hoisted` 也会被提升到模块的顶部，并在提升的作用域内提供对 `rs` 工具函数的访问。
+
+这在你需要创建应该在 mock 工厂函数和测试代码之间共享的 mock 函数或值时非常有用。
+
+```ts title="src/sum.test.ts"
+import { expect, it, rs } from '@rstest/core';
+import { foo } from './sum';
+
+// 可以在 hoisted 函数中访问 `rs` 工具函数。
+const mocks = rs.hoisted(() => {
+  return {
+    hoistedFn: rs.fn(),
+  };
+});
+
+rs.mock('./sum', () => {
+  return { foo: mocks.hoistedFn };
+});
+
+it('hoisted', () => {
+  mocks.hoistedFn(42);
+  expect(mocks.hoistedFn).toHaveBeenCalledOnce();
+  expect(mocks.hoistedFn).toHaveBeenCalledWith(42);
+  expect(foo).toBe(mocks.hoistedFn);
+});
+```
+
+在这个例子中，`rs.hoisted` 允许你使用 `rs.fn()` 创建一个 mock 函数，该函数可以同时在 `rs.mock` 工厂函数和测试断言中使用。如果没有 `rs.hoisted`，你将无法在 `rs.mock` 工厂函数被执行的作用域中访问 `rs` 工具函数。
+
 {/* ## TODO: rs.mocked */}
 
 ## rs.importActual
