@@ -27,7 +27,11 @@ import {
   TEMP_RSTEST_OUTPUT_DIR,
 } from '../utils';
 import { getSetupFiles, getTestEntries } from '../utils/testFiles';
-import type { BrowserHostConfig, BrowserProjectRuntime } from './protocol';
+import type {
+  BrowserHostConfig,
+  BrowserProjectRuntime,
+  TestFileInfo,
+} from './protocol';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +77,7 @@ type FatalPayload = {
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<string[]>;
+  getTestFiles: () => Promise<TestFileInfo[]>;
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
@@ -84,7 +88,7 @@ type HostRpcMethods = {
 
 /** RPC methods exposed by the container (client) to the host (server) */
 type ContainerRpcMethods = {
-  onTestFileUpdate: (testFiles: string[]) => Promise<void>;
+  onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
   reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
 };
 
@@ -179,7 +183,7 @@ class ContainerRpcManager {
   }
 
   /** Notify container of test file changes */
-  async notifyTestFileUpdate(files: string[]): Promise<void> {
+  async notifyTestFileUpdate(files: TestFileInfo[]): Promise<void> {
     await this.rpc?.onTestFileUpdate(files);
   }
 
@@ -230,7 +234,7 @@ type BrowserRuntime = {
 
 type WatchContext = {
   runtime: BrowserRuntime | null;
-  lastTestFiles: string[];
+  lastTestFiles: TestFileInfo[];
   hooksEnabled: boolean;
   cleanupRegistered: boolean;
 };
@@ -466,6 +470,14 @@ const resolveContainerDist = (): string => {
 // Manifest Generation
 // ============================================================================
 
+/**
+ * Format environment name to a valid JavaScript identifier.
+ * Replaces non-alphanumeric characters with underscores.
+ */
+const toSafeVarName = (name: string): string => {
+  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+};
+
 const generateManifestModule = ({
   manifestPath,
   entries,
@@ -487,49 +499,89 @@ const generateManifestModule = ({
 
   const lines: string[] = [];
 
-  // Currently only handle the first project (multi-project support later)
-  const { project, setupFiles } = entries[0]!;
-
-  // 1. Project config
-  lines.push('export const projectConfig = {');
-  lines.push(`  name: ${JSON.stringify(project.name)},`);
-  lines.push(`  environmentName: ${JSON.stringify(project.environmentName)},`);
-  lines.push(`  projectRoot: ${JSON.stringify(toPosix(project.rootPath))},`);
-  lines.push('};');
-  lines.push('');
-
-  // 2. Setup files - static imports (small number, determined at startup)
-  lines.push('export const setupLoaders = [');
-  for (const filePath of setupFiles) {
-    const relativePath = toRelativeImport(filePath);
-    lines.push(`  () => import(${JSON.stringify(relativePath)}),`);
+  // 1. Export all projects configuration
+  lines.push('// All projects configuration');
+  lines.push('export const projects = [');
+  for (const { project } of entries) {
+    lines.push('  {');
+    lines.push(`    name: ${JSON.stringify(project.name)},`);
+    lines.push(
+      `    environmentName: ${JSON.stringify(project.environmentName)},`,
+    );
+    lines.push(
+      `    projectRoot: ${JSON.stringify(toPosix(project.rootPath))},`,
+    );
+    lines.push('  },');
   }
   lines.push('];');
   lines.push('');
 
-  // 3. Test files context - using import.meta.webpackContext with lazy mode
-  // Use absolute path for clarity and reliability
-  const projectRootPosix = toPosix(project.rootPath);
-  const includeRegExp = globPatternsToRegExp(project.normalizedConfig.include);
-  const excludePatterns = project.normalizedConfig.exclude.patterns;
-  const excludeRegExp = excludePatternsToRegExp(excludePatterns);
-
-  lines.push('// Test files context with lazy loading');
-  lines.push(
-    `const testContext = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
-  );
-  lines.push('  recursive: true,');
-  lines.push(`  regExp: ${includeRegExp.toString()},`);
-  if (excludeRegExp) {
-    lines.push(`  exclude: ${excludeRegExp.toString()},`);
+  // 2. Setup loaders for each project
+  lines.push('// Setup loaders for each project');
+  lines.push('export const projectSetupLoaders = {');
+  for (const { project, setupFiles } of entries) {
+    lines.push(`  ${JSON.stringify(project.name)}: [`);
+    for (const filePath of setupFiles) {
+      const relativePath = toRelativeImport(filePath);
+      lines.push(`    () => import(${JSON.stringify(relativePath)}),`);
+    }
+    lines.push('  ],');
   }
-  lines.push("  mode: 'lazy',");
-  lines.push('});');
+  lines.push('};');
   lines.push('');
 
-  // 4. Export APIs
-  lines.push('export const getTestKeys = () => testContext.keys();');
-  lines.push('export const loadTest = (key) => testContext(key);');
+  // 3. Test context for each project
+  lines.push('// Test context for each project');
+  for (const { project } of entries) {
+    const varName = `context_${toSafeVarName(project.environmentName)}`;
+    const projectRootPosix = toPosix(project.rootPath);
+    const includeRegExp = globPatternsToRegExp(
+      project.normalizedConfig.include,
+    );
+    const excludePatterns = project.normalizedConfig.exclude.patterns;
+    const excludeRegExp = excludePatternsToRegExp(excludePatterns);
+
+    lines.push(
+      `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+    );
+    lines.push('  recursive: true,');
+    lines.push(`  regExp: ${includeRegExp.toString()},`);
+    if (excludeRegExp) {
+      lines.push(`  exclude: ${excludeRegExp.toString()},`);
+    }
+    lines.push("  mode: 'lazy',");
+    lines.push('});');
+    lines.push('');
+  }
+
+  // 4. Export test contexts object
+  lines.push('export const projectTestContexts = {');
+  for (const { project } of entries) {
+    const varName = `context_${toSafeVarName(project.environmentName)}`;
+    lines.push(`  ${JSON.stringify(project.name)}: {`);
+    lines.push(`    getTestKeys: () => ${varName}.keys(),`);
+    lines.push(`    loadTest: (key) => ${varName}(key),`);
+    lines.push(
+      `    projectRoot: ${JSON.stringify(toPosix(project.rootPath))},`,
+    );
+    lines.push('  },');
+  }
+  lines.push('};');
+  lines.push('');
+
+  // 5. Backward compatibility exports (use first project as default)
+  lines.push('// Backward compatibility: export first project as default');
+  lines.push('export const projectConfig = projects[0];');
+  lines.push(
+    'export const setupLoaders = projectSetupLoaders[projects[0].name] || [];',
+  );
+  lines.push('const _defaultCtx = projectTestContexts[projects[0].name];');
+  lines.push(
+    'export const getTestKeys = () => _defaultCtx ? _defaultCtx.getTestKeys() : [];',
+  );
+  lines.push(
+    'export const loadTest = (key) => _defaultCtx ? _defaultCtx.loadTest(key) : Promise.reject(new Error("No project found"));',
+  );
 
   return `${lines.join('\n')}\n`;
 };
@@ -1017,9 +1069,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Track initial test files for watch mode
   if (isWatchMode) {
-    watchContext.lastTestFiles = projectEntries
-      .flatMap((entry) => entry.testFiles)
-      .sort();
+    watchContext.lastTestFiles = projectEntries.flatMap((entry) =>
+      entry.testFiles.map((testPath) => ({
+        testPath,
+        projectName: entry.project.name,
+      })),
+    );
   }
 
   let runtime = isWatchMode ? watchContext.runtime : null;
@@ -1063,8 +1118,13 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   const { browser, port, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
-  // Collect all test files from project entries
-  const allTestFiles = projectEntries.flatMap((entry) => entry.testFiles);
+  // Collect all test files from project entries with project info
+  const allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
+    entry.testFiles.map((testPath) => ({
+      testPath,
+      projectName: entry.project.name,
+    })),
+  );
 
   const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
     (project: ProjectContext) => ({
@@ -1275,15 +1335,22 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   if (isWatchMode) {
     triggerRerun = async () => {
       const newProjectEntries = await collectProjectEntries(context);
-      const currentTestFiles = newProjectEntries
-        .flatMap((entry) => entry.testFiles)
-        .sort();
+      const currentTestFiles: TestFileInfo[] = newProjectEntries.flatMap(
+        (entry) =>
+          entry.testFiles.map((testPath) => ({
+            testPath,
+            projectName: entry.project.name,
+          })),
+      );
+
+      // Compare test files by serializing to JSON for deep comparison
+      const serialize = (files: TestFileInfo[]) =>
+        JSON.stringify(
+          files.map((f) => `${f.projectName}:${f.testPath}`).sort(),
+        );
 
       const filesChanged =
-        currentTestFiles.length !== watchContext.lastTestFiles.length ||
-        currentTestFiles.some(
-          (file, index) => file !== watchContext.lastTestFiles[index],
-        );
+        serialize(currentTestFiles) !== serialize(watchContext.lastTestFiles);
 
       if (filesChanged) {
         watchContext.lastTestFiles = currentTestFiles;

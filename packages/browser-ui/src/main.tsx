@@ -14,6 +14,7 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  TestFileInfo,
 } from './types';
 import {
   type CaseInfo,
@@ -57,7 +58,7 @@ const BrowserRunner: React.FC<{
   setTheme: (theme: 'dark' | 'light') => void;
 }> = ({ options, theme, setTheme }) => {
   const { token } = antdTheme.useToken();
-  const [testFiles, setTestFiles] = useState<string[]>([]);
+  const [testFiles, setTestFiles] = useState<TestFileInfo[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
   const [caseMap, setCaseMap] = useState<
@@ -111,7 +112,7 @@ const BrowserRunner: React.FC<{
     setStatusMap((prev) => {
       const next: Record<string, TestStatus> = {};
       for (const file of testFiles) {
-        next[file] = prev[file] ?? 'idle';
+        next[file.testPath] = prev[file.testPath] ?? 'idle';
       }
       return next;
     });
@@ -120,22 +121,23 @@ const BrowserRunner: React.FC<{
     setCaseMap((prev) => {
       const next: Record<string, Record<string, CaseInfo>> = {};
       for (const file of testFiles) {
-        next[file] = prev[file] ?? {};
+        next[file.testPath] = prev[file.testPath] ?? {};
       }
       return next;
     });
 
     // Clean up openFiles: remove files that no longer exist
-    setOpenFiles((prev) => prev.filter((file) => testFiles.includes(file)));
+    const testPaths = testFiles.map((f) => f.testPath);
+    setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
 
     // Auto-select first file if none selected
     setActive((prev) => {
       if (!prev && testFiles.length > 0) {
-        return testFiles[0]!;
+        return testFiles[0]!.testPath;
       }
       // If current active file was removed, select first file
-      if (prev && !testFiles.includes(prev) && testFiles.length > 0) {
-        return testFiles[0]!;
+      if (prev && !testPaths.includes(prev) && testFiles.length > 0) {
+        return testFiles[0]!.testPath;
       }
       return prev;
     });
@@ -414,15 +416,15 @@ const BrowserRunner: React.FC<{
               {!active && (
                 <EmptyPreviewOverlay message="Select a test file on the left to view its run output" />
               )}
-              {testFiles.map((file) => (
+              {testFiles.map((fileInfo) => (
                 <iframe
-                  key={file}
-                  data-test-file={file}
-                  title={`Test runner for ${getDisplayName(file)}`}
-                  src={iframeUrlFor(file, options.runnerUrl)}
+                  key={fileInfo.testPath}
+                  data-test-file={fileInfo.testPath}
+                  title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
+                  src={iframeUrlFor(fileInfo.testPath, options.runnerUrl)}
                   className="h-full w-full border-0"
                   style={{
-                    display: file === active ? 'block' : 'none',
+                    display: fileInfo.testPath === active ? 'block' : 'none',
                     background: token.colorBgContainer,
                   }}
                   onLoad={(event) => {
@@ -433,7 +435,7 @@ const BrowserRunner: React.FC<{
                           type: 'RSTEST_CONFIG',
                           payload: {
                             ...options,
-                            testFile: file,
+                            testFile: fileInfo.testPath,
                           },
                         },
                         '*',

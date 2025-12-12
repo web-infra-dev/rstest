@@ -1,8 +1,10 @@
 import {
-  getTestKeys,
-  loadTest,
-  projectConfig,
-  setupLoaders,
+  type ManifestProjectConfig,
+  type ManifestTestContext,
+  // Multi-project APIs
+  projects,
+  projectSetupLoaders,
+  projectTestContexts,
 } from '@rstest/browser-manifest';
 import { createRstestRuntime } from '../../runtime/api';
 import { setRealTimers } from '../../runtime/util';
@@ -237,6 +239,29 @@ const toAbsolutePath = (key: string, projectRoot: string): string => {
   return projectRoot + key.slice(1);
 };
 
+/**
+ * Find the project that contains the given test file.
+ * Matches by checking if the testFile path starts with the project root.
+ */
+const findProjectForTestFile = (
+  testFile: string,
+  allProjects: ManifestProjectConfig[],
+): ManifestProjectConfig | undefined => {
+  // Sort projects by root path length (longest first) for most specific match
+  const sorted = [...allProjects].sort(
+    (a, b) => b.projectRoot.length - a.projectRoot.length,
+  );
+
+  for (const proj of sorted) {
+    if (testFile.startsWith(proj.projectRoot)) {
+      return proj;
+    }
+  }
+
+  // Fallback to first project
+  return allProjects[0];
+};
+
 const run = async () => {
   // Wait for configuration if in iframe
   await waitForConfig();
@@ -284,43 +309,84 @@ const run = async () => {
 
   setRealTimers();
 
-  // Find the project matching projectConfig
-  const project = options.projects.find((p) => p.name === projectConfig.name);
-  if (!project) {
+  // Find the project for this test file
+  const targetTestFile = options.testFile;
+  const currentProject = targetTestFile
+    ? findProjectForTestFile(
+        targetTestFile,
+        projects as ManifestProjectConfig[],
+      )
+    : (projects as ManifestProjectConfig[])[0];
+
+  if (!currentProject) {
     send({
       type: 'fatal',
       payload: {
-        message: `Project ${projectConfig.name} not found in options`,
+        message: 'No project found for test file',
       },
     });
     window.__RSTEST_DONE__ = true;
     return;
   }
 
-  const runtimeConfig = restoreRuntimeConfig(project.runtimeConfig);
+  // Find the runtime config for this project
+  const projectRuntime = options.projects.find(
+    (p) => p.name === currentProject.name,
+  );
+  if (!projectRuntime) {
+    send({
+      type: 'fatal',
+      payload: {
+        message: `Project ${currentProject.name} not found in runtime options`,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+    return;
+  }
+
+  const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
   ensureProcessEnv(runtimeConfig.env);
 
-  // 1. Load setup files (static imports)
-  for (const loadSetup of setupLoaders) {
+  // Get this project's setup loaders and test context
+  const currentSetupLoaders =
+    (projectSetupLoaders as Record<string, Array<() => Promise<unknown>>>)[
+      currentProject.name
+    ] || [];
+  const currentTestContext = (
+    projectTestContexts as Record<string, ManifestTestContext>
+  )[currentProject.name];
+
+  if (!currentTestContext) {
+    send({
+      type: 'fatal',
+      payload: {
+        message: `Test context not found for project ${currentProject.name}`,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+    return;
+  }
+
+  // 1. Load setup files for this project
+  for (const loadSetup of currentSetupLoaders) {
     await loadSetup();
   }
 
   // 2. Determine which test files to run
-  const targetTestFile = options.testFile;
   let testKeysToRun: string[];
 
   if (targetTestFile) {
     // Single file mode: convert absolute path to context key
-    const key = toContextKey(targetTestFile, projectConfig.projectRoot);
+    const key = toContextKey(targetTestFile, currentProject.projectRoot);
     testKeysToRun = [key];
   } else {
     // Full run mode: get all test keys from context
-    testKeysToRun = getTestKeys();
+    testKeysToRun = currentTestContext.getTestKeys();
   }
 
   // 3. Run tests for each file
   for (const key of testKeysToRun) {
-    const testPath = toAbsolutePath(key, projectConfig.projectRoot);
+    const testPath = toAbsolutePath(key, currentProject.projectRoot);
 
     // Intercept console methods to forward logs to host
     const restoreConsole = interceptConsole(
@@ -330,8 +396,8 @@ const run = async () => {
     );
 
     const workerState: WorkerState = {
-      project: project.name,
-      projectRoot: project.projectRoot,
+      project: projectRuntime.name,
+      projectRoot: projectRuntime.projectRoot,
       rootPath: options.rootPath,
       runtimeConfig,
       taskId: 0,
@@ -374,13 +440,13 @@ const run = async () => {
       type: 'file-start',
       payload: {
         testPath,
-        projectName: project.name,
+        projectName: projectRuntime.name,
       },
     });
 
     try {
-      // Load the test file dynamically using context
-      await loadTest(key);
+      // Load the test file dynamically using this project's context
+      await currentTestContext.loadTest(key);
       const result = await runtime.runner.runTests(
         testPath,
         runnerHooks,
