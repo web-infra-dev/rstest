@@ -87,6 +87,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '--unstubEnvs',
       'Restores all `process.env` values that were changed with `rstest.stubEnv` before every test',
+    )
+    .option(
+      '--includeTaskLocation',
+      'Collect test and suite locations. This might increase the running time.',
     );
 };
 
@@ -176,6 +180,8 @@ export function setupCommands(): void {
     .command('list [...filters]', 'lists all test files that Rstest will run')
     .option('--filesOnly', 'only list the test files')
     .option('--json [boolean/path]', 'print tests as JSON or write to a file')
+    .option('--includeSuites', 'include suites in output')
+    .option('--printLocation', 'print test case location')
     .action(
       async (
         filters: string[],
@@ -184,6 +190,9 @@ export function setupCommands(): void {
         try {
           const { initCli } = await import('./init');
           const { config, configFilePath, projects } = await initCli(options);
+          if (options.printLocation) {
+            config.includeTaskLocation = true;
+          }
           const { createRstest } = await import('../core');
           const rstest = createRstest(
             { config, configFilePath, projects },
@@ -193,6 +202,8 @@ export function setupCommands(): void {
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,
+            includeSuites: options.includeSuites,
+            printLocation: options.printLocation,
           });
         } catch (err) {
           logger.error('Failed to run Rstest list.');

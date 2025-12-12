@@ -102,6 +102,32 @@ $ npx rstest list --json
 $ npx rstest list --json=./output.json
 ```
 
+You can use `--includeSuites` to print test suites along side test cases:
+
+```bash
+$ npx rstest list
+
+# the output is shown below:
+a.test.ts > test a
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+```
+
+You can use `--printLocation` to print location of tests:
+
+```bash
+$ npx rstest list
+
+# the output is shown below:
+a.test.ts:4:5 > test a > test a-1
+a.test.ts:9:3 > test a-2
+b.test.ts:4:5 > test b > test b-1
+b.test.ts:9:3 > test b-2
+```
+
 ## CLI options
 
 Rstest CLI provides several common options that can be used with all commands:

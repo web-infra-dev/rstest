@@ -64,6 +64,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   } = context.normalizedConfig;
 
   return {
@@ -89,6 +90,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   };
 };
 
@@ -231,6 +233,11 @@ export const createPool = async ({
       context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
       );
     },
     onTestSuiteStart: async (test: TestSuiteInfo) => {

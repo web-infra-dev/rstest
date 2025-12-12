@@ -55,6 +55,10 @@ export interface Reporter {
    */
   onTestFileStart?: (test: TestFileInfo) => void;
   /**
+   * Called after tests in file collected.
+   */
+  onTestFileReady?: (test: TestFileInfo) => void;
+  /**
    * Called when the test file has finished running.
    */
   onTestFileResult?: (test: TestFileResult) => void;

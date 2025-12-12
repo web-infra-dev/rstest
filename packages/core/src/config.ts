@@ -149,6 +149,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hideSkippedTests: false,
   logHeapUsage: false,
   bail: 0,
+  includeTaskLocation: false,
   coverage: {
     exclude: [
       '**/node_modules/**',
