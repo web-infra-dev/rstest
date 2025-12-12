@@ -21,8 +21,6 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'exclude',
       'setupFiles',
       'projects',
-      'update',
-      'globals',
       'passWithNoTests',
       'includeSource',
       'testNamePattern',
@@ -31,6 +29,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'runtime',
     items: [
+      'globals',
       'env',
       'bail',
       'retry',
@@ -54,6 +53,10 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: ['pool', 'isolate', 'testEnvironment'],
   },
   {
+    name: 'snapshot',
+    items: ['update', 'snapshotFormat', 'resolveSnapshotPath'],
+  },
+  {
     name: 'output',
     items: [
       'coverage',
@@ -61,9 +64,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'logHeapUsage',
       'hideSkippedTests',
       'slowTestThreshold',
-      'snapshotFormat',
       'chaiConfig',
-      'resolveSnapshotPath',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',

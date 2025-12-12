@@ -134,6 +134,19 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                          |
 | `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                       |
 | `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                          |
+| `--include <pattern>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                   |
+| `--includeSource <pattern>`     | 指定源码内联测试文件匹配模式，详见 [includeSource](/config/test/include-source)                                                              |
+| `--logHeapUsage`                | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                               |
+| `--hideSkippedTests`            | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                               |
+| `--chaiConfig <config>`         | 自定义 Chai 配置，详见 [chaiConfig](/config/test/chai-config)                                                                                |
+| `--env <key=value>`             | 设置环境变量，详见 [env](/config/test/env)                                                                                                   |
+| `--pool <options>`              | 配置测试线程池选项，详见 [pool](/config/test/pool)                                                                                           |
+| `--setupFiles <files>`          | 指定 setup 文件列表，详见 [setupFiles](/config/test/setup-files)                                                                             |
+| `--snapshotFormat <options>`    | 自定义快照格式，详见 [snapshotFormat](/config/test/snapshot-format)                                                                          |
+| `--resolveSnapshotPath`         | 自定义快照路径解析，详见 [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                           |
+| `--onConsoleLog <handler>`      | 处理 console 日志，详见 [onConsoleLog](/config/test/on-console-log)                                                                          |
+| `--name <name>`                 | 设置测试套件名称，详见 [name](/config/test/name)                                                                                             |
+| `--projects <projects>`         | 配置多项目测试，详见 [projects](/config/test/projects)                                                                                       |
 | `-h, --help`                    | 显示帮助信息                                                                                                                                 |
 | `-v, --version`                 | 显示版本号                                                                                                                                   |
 
