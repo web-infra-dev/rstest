@@ -8,7 +8,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.mock
 
-- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
 
 调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
 
@@ -90,7 +90,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.doMock
 
-- **类型：**: `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
 
 与 `rs.mock` 类似，`rs.doMock` 也会 mock 模块，但它不会被提升到模块顶部。它会在被执行到时调用，这意味着，如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
@@ -145,7 +145,7 @@ it('hoisted', () => {
 
 ## rs.importActual
 
-- **类型：**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
+- **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
 无视一个模块是否被 mock，导入其原始的模块。如果你想 mock 模块的部分实现，可以使用 `rs.importActual` 来获取原始模块的实现与 mock 的实现进行合并进行部分 mock。
 
@@ -172,7 +172,7 @@ rs.mock('./api', () => ({
 
 ## rs.importMock
 
-- **类型：**: `<T = Record<string, unknown>>(path: string) => Promise<T>`
+- **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
 导入一个模块及其所有属性的 mock 实现。
 
@@ -185,7 +185,7 @@ it('test', async () => {
 
 ## rs.unmock
 
-- **类型：**: `(path: string) => void`
+- **类型：** `(path: string) => void`
 
 取消指定模块的 mock 实现。之后所有对 `import` 的调用都将返回原始模块，即使它之前已被 mock。与 `rs.mock` 类似，此调用被提升到文件的顶部，因此它将仅取消在 `setupFiles` 中执行的模块 mock。
 
@@ -218,13 +218,13 @@ it('test', async () => {
 
 ## rs.doUnmock
 
-- **类型：**: `(path: string) => void`
+- **类型：** `(path: string) => void`
 
 与 `rs.unmock` 相同，但不会被提升到文件顶部。模块的下一次导入将导入原始模块而不是 mock。这不会取消 mock 之前导入的模块。
 
 ## rs.resetModules
 
-- **类型：**: `resetModules: () => RstestUtilities`
+- **类型：** `resetModules: () => RstestUtilities`
 
 清除所有模块的缓存。这允许在重新导入时重新执行模块。这在隔离不同测试中共享的模块的状态时非常有用。
 
