@@ -110,7 +110,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.hoisted
 
-- **类型**: `<T = unknown>(fn: () => T) => T`
+- **类型：** `<T = unknown>(fn: () => T) => T`
 
 `rs.hoisted` 是一个辅助函数，允许你创建可以在提升函数（如 `rs.mock` 工厂函数）中访问的值。与 `rs.mock` 类似，`rs.hoisted` 也会被提升到模块的顶部，并在提升的作用域内提供对 `rs` 工具函数的访问。
 
