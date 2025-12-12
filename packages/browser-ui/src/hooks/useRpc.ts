@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
+  TestFileInfo,
 } from '../types';
 
 // ============================================================================
@@ -32,7 +33,7 @@ export type FatalPayload = {
 
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<string[]>;
+  getTestFiles: () => Promise<TestFileInfo[]>;
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
@@ -42,7 +43,7 @@ export type HostRPC = {
 };
 
 export type ContainerRPC = {
-  onTestFileUpdate: (testFiles: string[]) => void;
+  onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
   reloadTestFile: (testFile: string, testNamePattern?: string) => void;
 };
 
@@ -59,7 +60,7 @@ export type RpcState = {
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000]; // Exponential backoff, max 30s
 
 export const useRpc = (
-  setTestFiles: (files: string[]) => void,
+  setTestFiles: (files: TestFileInfo[]) => void,
   wsPort: number | undefined,
   onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
 ): RpcState => {
@@ -70,7 +71,7 @@ export const useRpc = (
   const [connected, setConnected] = useState(false);
 
   // Use refs to avoid triggering reconnect on callback changes
-  const setTestFilesRef = useRef(setTestFiles);
+  const setTestFilesRef = useRef<(files: TestFileInfo[]) => void>(setTestFiles);
   const onReloadTestFileRef = useRef(onReloadTestFile);
   // Track the current active WebSocket to handle StrictMode double-mount
   const activeWsRef = useRef<WebSocket | null>(null);
@@ -103,7 +104,7 @@ export const useRpc = (
       activeWsRef.current = ws;
 
       const methods: ContainerRPC = {
-        onTestFileUpdate(files: string[]) {
+        onTestFileUpdate(files: TestFileInfo[]) {
           console.log('[Container RPC] onTestFileUpdate called:', files);
           setTestFilesRef.current(files);
         },

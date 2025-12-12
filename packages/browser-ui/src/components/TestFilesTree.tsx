@@ -1,8 +1,9 @@
 import { Skeleton, Tree, Typography } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
 import type { DataNode } from 'antd/es/tree';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
+import type { TestFileInfo } from '../types';
 import {
   CASE_STATUS_META,
   type CaseInfo,
@@ -43,7 +44,7 @@ const openInEditor = (file: string): void => {
 // ============================================================================
 
 export type TestFilesTreeProps = {
-  testFiles: string[];
+  testFiles: TestFileInfo[];
   statusMap: Record<string, TestStatus>;
   caseMap: Record<string, Record<string, CaseInfo>>;
   rootPath?: string;
@@ -219,46 +220,101 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     [connected, onRerunTestCase, token.colorTextSecondary],
   );
 
-  const treeData: DataNode[] = useMemo(
-    () =>
-      testFiles.map((file) => {
-        const status = statusMap[file] ?? 'idle';
-        const meta = STATUS_META[status];
-        const relativePath = toRelativePath(file, rootPath);
-        const cases = Object.values(caseMap[file] ?? {});
+  const treeData: DataNode[] = useMemo(() => {
+    // Get unique project names
+    const projectNames = [...new Set(testFiles.map((f) => f.projectName))];
+    const hasMultipleProjects = projectNames.length > 1;
+
+    // Build file nodes helper
+    const buildFileNode = (fileInfo: TestFileInfo): DataNode => {
+      const filePath = fileInfo.testPath;
+      const status = statusMap[filePath] ?? 'idle';
+      const meta = STATUS_META[status];
+      const relativePath = toRelativePath(filePath, rootPath);
+      const cases = Object.values(caseMap[filePath] ?? {});
+
+      return {
+        key: filePath,
+        title: (
+          <TestFileTitle
+            icon={meta.icon}
+            iconColor={meta.color}
+            relativePath={relativePath}
+            onOpen={() => openInEditor(filePath)}
+            onRerun={
+              connected
+                ? () => {
+                    onRerunFile(filePath);
+                  }
+                : undefined
+            }
+            textColor={token.colorTextSecondary}
+          />
+        ),
+        children: buildNestedTree(filePath, cases),
+      };
+    };
+
+    // If multiple projects, group by project name
+    if (hasMultipleProjects) {
+      return projectNames.map((projectName) => {
+        const projectFiles = testFiles.filter(
+          (f) => f.projectName === projectName,
+        );
+        const projectKey = `__project__${projectName}`;
+
+        // Calculate project status based on file statuses
+        const fileStatuses = projectFiles.map(
+          (f) => statusMap[f.testPath] ?? 'idle',
+        );
+        let projectStatus: TestStatus = 'idle';
+        if (fileStatuses.some((s) => s === 'fail')) {
+          projectStatus = 'fail';
+        } else if (fileStatuses.some((s) => s === 'running')) {
+          projectStatus = 'running';
+        } else if (
+          fileStatuses.length > 0 &&
+          fileStatuses.every((s) => s === 'pass')
+        ) {
+          projectStatus = 'pass';
+        }
+        const projectMeta = STATUS_META[projectStatus];
 
         return {
-          key: file,
+          key: projectKey,
           title: (
-            <TestFileTitle
-              icon={meta.icon}
-              iconColor={meta.color}
-              relativePath={relativePath}
-              onOpen={() => openInEditor(file)}
-              onRerun={
-                connected
-                  ? () => {
-                      onRerunFile(file);
-                    }
-                  : undefined
-              }
-              textColor={token.colorTextSecondary}
-            />
+            <div className="flex items-center gap-1.5">
+              <FolderOpen
+                size={14}
+                style={{ color: projectMeta.color }}
+                className="shrink-0"
+              />
+              <span
+                className="truncate text-sm font-medium"
+                style={{ color: token.colorText }}
+              >
+                {projectName}
+              </span>
+            </div>
           ),
-          children: buildNestedTree(file, cases),
+          children: projectFiles.map(buildFileNode),
+          selectable: false,
         };
-      }),
-    [
-      buildNestedTree,
-      caseMap,
-      connected,
-      onRerunFile,
-      rootPath,
-      statusMap,
-      testFiles,
-      token,
-    ],
-  );
+      });
+    }
+
+    // Single project: flat file list (backward compatible)
+    return testFiles.map(buildFileNode);
+  }, [
+    buildNestedTree,
+    caseMap,
+    connected,
+    onRerunFile,
+    rootPath,
+    statusMap,
+    testFiles,
+    token,
+  ]);
 
   // Loading state
   if (loading) {
@@ -317,7 +373,8 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       }
       onSelect={(_keys, info) => {
         const key = info.node.key;
-        if (typeof key === 'string' && testFiles.includes(key)) {
+        const testPaths = testFiles.map((f) => f.testPath);
+        if (typeof key === 'string' && testPaths.includes(key)) {
           onSelect(key);
         }
       }}
