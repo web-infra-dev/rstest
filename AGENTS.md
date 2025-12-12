@@ -36,6 +36,11 @@ pnpm --filter @rstest/core test
 pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 ```
 
+## E2E testing
+
+- To run a specific e2e test: `pnpm rstest <path-to-test>` (e.g., `pnpm rstest browser-mode/config.test.ts`)
+- To run tests in a fixture directory: `cd` into `e2e/<test>/fixtures/<fixture>/`, then run `npx rstest`
+
 ## Do
 
 - Use ESM-first: `.mjs` for runtime loaders, `.ts` for typed utilities
