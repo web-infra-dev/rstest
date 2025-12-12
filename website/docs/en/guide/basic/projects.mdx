@@ -104,6 +104,23 @@ The following configurations are global configurations and are invalid when conf
 
 ### Project configuration
 
+#### Define project configuration
+
+Project configuration is a subset of the Rstest configuration object, supporting most configuration options but not [global configurations](#global-configuration) such as `reporters`.
+
+You can define a project configuration using the `defineProject` helper function:
+
+```ts title='packages/pkg-a/rstest.config.ts'
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  name: 'pkg-a',
+  include: ['tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
+});
+```
+
+#### Share configuration
+
 Project configuration does not inherit the configuration from the root directory. Only the `projects` field and [global configuration](#global-configuration) in the root directory are effective.
 
 If there are reusable configuration items between your sub-projects, you can extract shared configurations and introduce them in sub-projects respectively:
