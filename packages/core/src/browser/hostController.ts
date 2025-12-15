@@ -13,9 +13,12 @@ import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type { Rstest } from '../core/rstest';
 import type {
+  FormattedError,
+  ListCommandResult,
   ProjectContext,
   Reporter,
   RuntimeConfig,
+  Test,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -671,6 +674,7 @@ const createBrowserRuntime = async ({
   onTriggerRerun,
   containerDistPath,
   containerDevServer,
+  forceHeadless,
 }: {
   context: Rstest;
   manifestPath: string;
@@ -680,6 +684,8 @@ const createBrowserRuntime = async ({
   onTriggerRerun?: () => Promise<void>;
   containerDistPath?: string;
   containerDevServer?: string;
+  /** Force headless mode regardless of user config (used for list command) */
+  forceHeadless?: boolean;
 }): Promise<BrowserRuntime> => {
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
@@ -975,7 +981,7 @@ const createBrowserRuntime = async ({
   let browser: ChromiumBrowserInstance;
   try {
     browser = await chromiumLauncher.launch({
-      headless: context.normalizedConfig.browser.headless,
+      headless: forceHeadless ?? context.normalizedConfig.browser.headless,
       args: [
         '--disable-popup-blocking',
         '--no-first-run',
@@ -1419,4 +1425,232 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
     );
   }
+};
+
+// ============================================================================
+// List Browser Tests
+// ============================================================================
+
+/**
+ * Result from collecting browser tests.
+ * This is the return type for listBrowserTests, designed for future extraction
+ * to a separate browser package.
+ */
+export type ListBrowserTestsResult = {
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+};
+
+/**
+ * Collect test metadata from browser mode projects without running them.
+ * This function creates a headless browser runtime, loads test files,
+ * and collects their test structure (describe/test declarations).
+ */
+export const listBrowserTests = async (
+  context: Rstest,
+): Promise<ListBrowserTestsResult> => {
+  const projectEntries = await collectProjectEntries(context);
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (totalTests === 0) {
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
+
+  const tempDir = join(
+    context.rootPath,
+    TEMP_RSTEST_OUTPUT_DIR,
+    'browser',
+    `list-${Date.now()}`,
+  );
+  const manifestPath = join(tempDir, 'manifest.ts');
+
+  const manifestSource = generateManifestModule({
+    manifestPath,
+    entries: projectEntries,
+  });
+
+  // Create a simplified browser runtime for collect mode
+  let runtime: BrowserRuntime;
+  try {
+    runtime = await createBrowserRuntime({
+      context,
+      manifestPath,
+      manifestSource,
+      tempDir,
+      isWatchMode: false,
+      containerDistPath: undefined,
+      containerDevServer: undefined,
+      forceHeadless: true, // Always use headless for list command
+    });
+  } catch (error) {
+    logger.error(
+      color.red(
+        'Failed to load Playwright. Please install "playwright-core" to use browser mode.',
+      ),
+      error,
+    );
+    throw error;
+  }
+
+  const { browser, port } = runtime;
+
+  // Get browser projects for runtime config
+  const browserProjects = getBrowserProjects(context);
+  const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
+    (project: ProjectContext) => ({
+      name: project.name,
+      environmentName: project.environmentName,
+      projectRoot: project.rootPath,
+      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+    }),
+  );
+
+  const hostOptions: BrowserHostConfig = {
+    rootPath: context.rootPath,
+    projects: projectRuntimeConfigs,
+    snapshot: {
+      updateSnapshot: context.snapshotManager.options.updateSnapshot,
+    },
+    mode: 'collect', // Use collect mode
+  };
+
+  runtime.setContainerOptions(hostOptions);
+
+  // Collect results
+  const collectResults: ListCommandResult[] = [];
+  let fatalError: Error | null = null;
+  let collectCompleted = false;
+
+  // Promise that resolves when collection is complete
+  let resolveCollect: (() => void) | undefined;
+  const collectPromise = new Promise<void>((resolve) => {
+    resolveCollect = resolve;
+  });
+
+  // Create a headless page to run collection
+  const browserContext = await browser.newContext({ viewport: null });
+  const page = await browserContext.newPage();
+
+  // Expose dispatch function for browser client to send messages
+  await page.exposeFunction(
+    '__rstest_dispatch__',
+    (message: { type: string; payload?: unknown }) => {
+      switch (message.type) {
+        case 'collect-result': {
+          const payload = message.payload as {
+            testPath: string;
+            project: string;
+            tests: Test[];
+          };
+          collectResults.push({
+            testPath: payload.testPath,
+            project: payload.project,
+            tests: payload.tests,
+          });
+          break;
+        }
+        case 'collect-complete':
+          collectCompleted = true;
+          resolveCollect?.();
+          break;
+        case 'fatal': {
+          const payload = message.payload as {
+            message: string;
+            stack?: string;
+          };
+          fatalError = new Error(payload.message);
+          fatalError.stack = payload.stack;
+          resolveCollect?.();
+          break;
+        }
+        case 'ready':
+        case 'log':
+          // Ignore these messages during collection
+          break;
+        default:
+          // Log unexpected messages for debugging
+          logger.debug(`[List] Unexpected message: ${message.type}`);
+      }
+    },
+  );
+
+  // Inject host options before navigation so the runner can access them
+  const serializedOptions = JSON.stringify(hostOptions).replace(
+    /</g,
+    '\\u003c',
+  );
+  await page.addInitScript(
+    `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+  );
+
+  // Navigate to runner page
+  await page.goto(`http://localhost:${port}/runner.html`, {
+    waitUntil: 'load',
+  });
+
+  // Wait for collection to complete with timeout
+  const timeoutMs = 30000;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<void>((resolve) => {
+    timeoutId = setTimeout(() => {
+      if (!collectCompleted) {
+        logger.warn(
+          color.yellow(
+            `[List] Browser test collection timed out after ${timeoutMs}ms`,
+          ),
+        );
+      }
+      resolve();
+    }, timeoutMs);
+  });
+
+  await Promise.race([collectPromise, timeoutPromise]);
+
+  // Clear timeout to prevent Node.js from waiting for it
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  // Cleanup
+  const cleanup = async () => {
+    try {
+      await page.close();
+      await browserContext.close();
+    } catch {
+      // ignore
+    }
+    await destroyBrowserRuntime(runtime);
+  };
+
+  if (fatalError) {
+    await cleanup();
+    // Return error in the result format instead of throwing
+    const errorResult: ListCommandResult = {
+      testPath: '',
+      project: '',
+      tests: [],
+      errors: [
+        {
+          name: 'BrowserCollectError',
+          message: (fatalError as Error).message,
+          stack: (fatalError as Error).stack,
+        } as FormattedError,
+      ],
+    };
+    return {
+      list: [errorResult],
+      close: async () => {},
+    };
+  }
+
+  return {
+    list: collectResults,
+    close: cleanup,
+  };
 };
