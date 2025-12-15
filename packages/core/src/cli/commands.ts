@@ -191,15 +191,18 @@ export function setupCommands(): void {
         try {
           const { initCli } = await import('./init');
           const { config, configFilePath, projects } = await initCli(options);
+
           if (options.printLocation) {
             config.includeTaskLocation = true;
           }
+
           const { createRstest } = await import('../core');
           const rstest = createRstest(
             { config, configFilePath, projects },
             'list',
             filters.map(normalize),
           );
+
           await rstest.listTests({
             filesOnly: options.filesOnly,
             json: options.json,

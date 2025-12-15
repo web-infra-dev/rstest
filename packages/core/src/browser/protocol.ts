@@ -1,5 +1,5 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { RuntimeConfig, TestFileResult, TestResult } from '../types';
+import type { RuntimeConfig, Test, TestFileResult, TestResult } from '../types';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
@@ -19,6 +19,13 @@ export type TestFileInfo = {
   projectName: string;
 };
 
+/**
+ * Execution mode for browser tests.
+ * - 'run': Execute tests and report results (default)
+ * - 'collect': Only collect test metadata without running
+ */
+export type BrowserExecutionMode = 'run' | 'collect';
+
 export type BrowserHostConfig = {
   rootPath: string;
   projects: BrowserProjectRuntime[];
@@ -34,6 +41,10 @@ export type BrowserHostConfig = {
    * WebSocket port for container RPC.
    */
   wsPort?: number;
+  /**
+   * Execution mode. Defaults to 'run'.
+   */
+  mode?: BrowserExecutionMode;
 };
 
 export type BrowserClientMessage =
@@ -58,4 +69,10 @@ export type BrowserClientMessage =
       type: 'fatal';
       payload: { message: string; stack?: string };
     }
-  | { type: 'complete' };
+  | { type: 'complete' }
+  // Collect mode messages
+  | {
+      type: 'collect-result';
+      payload: { testPath: string; project: string; tests: Test[] };
+    }
+  | { type: 'collect-complete' };
