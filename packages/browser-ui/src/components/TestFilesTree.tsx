@@ -3,7 +3,7 @@ import type { GlobalToken } from 'antd/es/theme/interface';
 import type { DataNode } from 'antd/es/tree';
 import { ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
-import type { TestFileInfo } from '../types';
+import type { BrowserProjectRuntime, TestFileInfo } from '../types';
 import {
   CASE_STATUS_META,
   type CaseInfo,
@@ -48,6 +48,7 @@ export type TestFilesTreeProps = {
   statusMap: Record<string, TestStatus>;
   caseMap: Record<string, Record<string, CaseInfo>>;
   rootPath?: string;
+  projects: BrowserProjectRuntime[];
   loading: boolean;
   connected: boolean;
   openFiles: string[];
@@ -80,6 +81,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   statusMap,
   caseMap,
   rootPath,
+  projects,
   loading,
   connected,
   openFiles,
@@ -221,16 +223,25 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   );
 
   const treeData: DataNode[] = useMemo(() => {
-    // Get unique project names
+    // Get unique project names from test files
     const projectNames = [...new Set(testFiles.map((f) => f.projectName))];
-    const hasMultipleProjects = projectNames.length > 1;
 
-    // Build file nodes helper
-    const buildFileNode = (fileInfo: TestFileInfo): DataNode => {
+    // Build a map from project name to projectRoot for relative path calculation
+    const projectRootMap = new Map<string, string>();
+    for (const project of projects) {
+      projectRootMap.set(project.name, project.projectRoot);
+    }
+
+    // Build file nodes helper - uses project-specific root for relative path
+    const buildFileNode = (
+      fileInfo: TestFileInfo,
+      projectRoot?: string,
+    ): DataNode => {
       const filePath = fileInfo.testPath;
       const status = statusMap[filePath] ?? 'idle';
       const meta = STATUS_META[status];
-      const relativePath = toRelativePath(filePath, rootPath);
+      // Use projectRoot if available, otherwise fall back to rootPath
+      const relativePath = toRelativePath(filePath, projectRoot ?? rootPath);
       const cases = Object.values(caseMap[filePath] ?? {});
 
       return {
@@ -255,13 +266,14 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       };
     };
 
-    // If multiple projects, group by project name
-    if (hasMultipleProjects) {
+    // Always group by project when there are projects configured
+    if (projectNames.length > 0) {
       return projectNames.map((projectName) => {
         const projectFiles = testFiles.filter(
           (f) => f.projectName === projectName,
         );
         const projectKey = `__project__${projectName}`;
+        const projectRoot = projectRootMap.get(projectName);
 
         // Calculate project status based on file statuses
         const fileStatuses = projectFiles.map(
@@ -297,19 +309,20 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               </span>
             </div>
           ),
-          children: projectFiles.map(buildFileNode),
+          children: projectFiles.map((f) => buildFileNode(f, projectRoot)),
           selectable: false,
         };
       });
     }
 
-    // Single project: flat file list (backward compatible)
-    return testFiles.map(buildFileNode);
+    // No projects: flat file list (backward compatible for non-project configs)
+    return testFiles.map((f) => buildFileNode(f));
   }, [
     buildNestedTree,
     caseMap,
     connected,
     onRerunFile,
+    projects,
     rootPath,
     statusMap,
     testFiles,

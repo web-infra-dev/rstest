@@ -8,10 +8,34 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 export async function runTests(context: Rstest): Promise<void> {
+  // Separate browser mode and node mode projects
+  const browserProjects = context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
+
+  const hasBrowserTests =
+    context.normalizedConfig.browser.enabled || browserProjects.length > 0;
+  const hasNodeTests = nodeProjects.length > 0;
+
+  // Run browser mode tests
+  if (hasBrowserTests) {
+    const { runBrowserTests } = await import('../browser');
+    await runBrowserTests(context);
+  }
+
+  // Skip node mode tests if no node mode projects
+  if (!hasNodeTests) {
+    return;
+  }
+
+  const projects = nodeProjects;
+
   const {
     rootPath,
     reporters,
-    projects,
     snapshotManager,
     command,
     normalizedConfig: { coverage },
@@ -51,7 +75,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const { getSetupFiles } = await import('../utils/getSetupFiles');
 
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    projects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -86,7 +110,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      projects: projects.map((p) => p.normalizedConfig),
     },
     isWatchMode,
     globTestSourceEntries: isWatchMode
@@ -146,7 +170,7 @@ export async function runTests(context: Rstest): Promise<void> {
     context.stateManager.reset();
 
     const returns = await Promise.all(
-      context.projects.map(async (p) => {
+      projects.map(async (p) => {
         const {
           assetNames,
           entries,
@@ -283,8 +307,8 @@ export async function runTests(context: Rstest): Promise<void> {
           );
         }
 
-        context.projects.forEach((p) => {
-          if (context.projects.length > 1) {
+        projects.forEach((p) => {
+          if (projects.length > 1) {
             logger.log('');
             logger.log(color.gray('project:'), p.name);
           }
