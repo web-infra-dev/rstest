@@ -205,8 +205,12 @@ export class Project implements vscode.Disposable {
     return this.testItem?.children || this.parentCollection;
   }
   private async startWatchingWorkspace(root: vscode.Uri) {
-    const isInclude = picomatch(this.include, { cwd: root.fsPath });
-    const isExclude = picomatch(this.exclude, { cwd: root.fsPath });
+    const matchInclude = picomatch(this.include);
+    const matchExclude = picomatch(this.exclude);
+    const isInclude = (uri: vscode.Uri) => {
+      const relativePath = path.relative(root.fsPath, uri.fsPath);
+      return matchInclude(relativePath) && !matchExclude(relativePath);
+    };
 
     const files = await glob(this.include, {
       cwd: root.fsPath,
@@ -220,7 +224,7 @@ export class Project implements vscode.Disposable {
 
     const visited = new Set<string>();
     for (const uri of files) {
-      if (isExclude(uri.fsPath)) continue;
+      if (matchExclude(uri.fsPath)) continue;
       this.updateOrCreateFile(uri);
       visited.add(uri.toString());
     }
@@ -243,19 +247,19 @@ export class Project implements vscode.Disposable {
       watcher.dispose(),
     );
     watcher.onDidCreate((uri) => {
-      if (isInclude(uri.fsPath) && !isExclude(uri.fsPath)) {
+      if (isInclude(uri)) {
         this.updateOrCreateFile(uri);
         this.buildTree();
       }
     });
     watcher.onDidChange((uri) => {
-      if (isInclude(uri.fsPath) && !isExclude(uri.fsPath)) {
+      if (isInclude(uri)) {
         this.updateOrCreateFile(uri);
         this.buildTree();
       }
     });
     watcher.onDidDelete((uri) => {
-      if (isInclude(uri.fsPath) && !isExclude(uri.fsPath)) {
+      if (isInclude(uri)) {
         this.testFiles.delete(uri.toString());
         this.buildTree();
       }
