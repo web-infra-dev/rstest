@@ -239,6 +239,15 @@ testWithUser('has user in context', ({ user, expect }) => {
 
 ```ts
 export interface TestContext {
+  /**
+   * Metadata of the current test
+   */
+  task: {
+    /** Test name provided by user */
+    name: string;
+    /** Result of the current test, undefined if the test is not run yet */
+    result?: TestResult;
+  };
   /** The `expect` API bound to the current test */
   expect: Expect;
   /** The `onTestFinished` hook bound to the current test */
