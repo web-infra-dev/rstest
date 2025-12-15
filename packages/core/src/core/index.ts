@@ -34,20 +34,8 @@ export function createRstest(
   );
 
   const runTests = async (): Promise<void> => {
-    // Check if browser mode is enabled in root config or any project config
-    const browserEnabled =
-      context.normalizedConfig.browser.enabled ||
-      context.projects.some(
-        (project) => project.normalizedConfig.browser.enabled,
-      );
-
-    if (browserEnabled) {
-      const { runBrowserTests } = await import('../browser');
-      await runBrowserTests(context);
-    } else {
-      const { runTests } = await import('./runTests');
-      await runTests(context);
-    }
+    const { runTests: runTestsImpl } = await import('./runTests');
+    await runTestsImpl(context);
   };
 
   const listTests = async (options: ListCommandOptions) => {

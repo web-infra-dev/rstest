@@ -410,12 +410,21 @@ const getRuntimeConfigFromProject = (
   };
 };
 
+const getBrowserProjects = (context: Rstest): ProjectContext[] => {
+  return context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+};
+
 const collectProjectEntries = async (
   context: Rstest,
 ): Promise<BrowserProjectEntries[]> => {
   const projectEntries: BrowserProjectEntries[] = [];
 
-  for (const project of context.projects) {
+  // Only collect entries for browser mode projects
+  const browserProjects = getBrowserProjects(context);
+
+  for (const project of browserProjects) {
     const {
       normalizedConfig: { include, exclude, includeSource, setupFiles },
     } = project;
@@ -694,9 +703,9 @@ const createBrowserRuntime = async ({
     }
   };
 
-  // Get user Rsbuild config from the first project
-  // (multi-project browser mode support will be added later)
-  const firstProject = context.projects[0];
+  // Get user Rsbuild config from the first browser project
+  const browserProjects = getBrowserProjects(context);
+  const firstProject = browserProjects[0];
   const userPlugins = firstProject?.normalizedConfig.plugins || [];
   const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
 
@@ -1129,14 +1138,15 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     })),
   );
 
-  const projectRuntimeConfigs: BrowserProjectRuntime[] = context.projects.map(
-    (project: ProjectContext) => ({
+  // Only include browser mode projects in runtime configs
+  const browserProjectsForRuntime = getBrowserProjects(context);
+  const projectRuntimeConfigs: BrowserProjectRuntime[] =
+    browserProjectsForRuntime.map((project: ProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: project.rootPath,
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
-    }),
-  );
+    }));
 
   const hostOptions: BrowserHostConfig = {
     rootPath: context.rootPath,

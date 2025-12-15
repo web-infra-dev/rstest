@@ -236,7 +236,11 @@ const toContextKey = (absolutePath: string, projectRoot: string): string => {
  */
 const toAbsolutePath = (key: string, projectRoot: string): string => {
   // key format: ./src/foo.test.ts
-  return projectRoot + key.slice(1);
+  // Ensure no double slashes by removing trailing slash from projectRoot
+  const normalizedRoot = projectRoot.endsWith('/')
+    ? projectRoot.slice(0, -1)
+    : projectRoot;
+  return normalizedRoot + key.slice(1);
 };
 
 /**
