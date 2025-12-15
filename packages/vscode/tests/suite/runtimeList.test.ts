@@ -116,43 +116,46 @@ suite('Runtime list suite', () => {
       new vscode.CancellationTokenSource().token,
       false,
     );
-    await waitFor(() => {
-      const item = getTestItemByLabels(testController.items, [
-        'test',
-        'each.test.ts',
-      ]);
-      assert.deepStrictEqual(toLabelTree(item.children), [
-        {
-          children: [
-            {
-              label: 'case',
-            },
-          ],
-          label: 'suite',
-        },
-        {
-          children: [
-            {
-              label: 'suite 1 case 1',
-            },
-            {
-              label: 'suite 1 case 2',
-            },
-          ],
-          label: 'suite 1',
-        },
-        {
-          children: [
-            {
-              label: 'suite 2 case 1',
-            },
-            {
-              label: 'suite 2 case 2',
-            },
-          ],
-          label: 'suite 2',
-        },
-      ]);
-    });
+    await waitFor(
+      () => {
+        const item = getTestItemByLabels(testController.items, [
+          'test',
+          'each.test.ts',
+        ]);
+        assert.deepStrictEqual(toLabelTree(item.children), [
+          {
+            children: [
+              {
+                label: 'case',
+              },
+            ],
+            label: 'suite',
+          },
+          {
+            children: [
+              {
+                label: 'suite 1 case 1',
+              },
+              {
+                label: 'suite 1 case 2',
+              },
+            ],
+            label: 'suite 1',
+          },
+          {
+            children: [
+              {
+                label: 'suite 2 case 1',
+              },
+              {
+                label: 'suite 2 case 2',
+              },
+            ],
+            label: 'suite 2',
+          },
+        ]);
+      },
+      { timeoutMs: 5000 },
+    );
   });
 });

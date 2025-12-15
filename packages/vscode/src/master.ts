@@ -121,6 +121,7 @@ export class RstestApi {
       rstestPath: this.resolveRstestPath(),
       configFilePath: this.configFilePath,
       include,
+      includeTaskLocation: true,
     });
     worker.$close();
     return tests;
@@ -171,6 +172,7 @@ export class RstestApi {
           kind === vscode.TestRunProfileKind.Coverage
             ? { enabled: true }
             : undefined,
+        includeTaskLocation: true,
       })
       .finally(() => {
         worker.$close();
