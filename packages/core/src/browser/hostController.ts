@@ -380,6 +380,7 @@ const getRuntimeConfigFromProject = (
     bail,
     logHeapUsage,
     chaiConfig,
+    includeTaskLocation,
   } = project.normalizedConfig;
 
   return {
@@ -405,6 +406,7 @@ const getRuntimeConfigFromProject = (
     bail,
     logHeapUsage,
     chaiConfig,
+    includeTaskLocation,
   };
 };
 
@@ -1098,11 +1100,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         containerDistPath,
         containerDevServer,
       });
-    } catch (_error) {
+    } catch (error) {
       logger.error(
         color.red(
           'Failed to load Playwright. Please install "playwright-core" to use browser mode.',
         ),
+        error,
       );
       ensureProcessExitCode(1);
       await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -1218,6 +1221,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         context.reporters.map((reporter) =>
           (reporter as Reporter).onTestFileStart?.({
             testPath: payload.testPath,
+            tests: [],
           }),
         ),
       );

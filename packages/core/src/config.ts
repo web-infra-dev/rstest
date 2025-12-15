@@ -5,6 +5,7 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
+import { isCI } from 'std-env';
 import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
   castArray,
@@ -167,7 +168,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   browser: {
     enabled: false,
     browser: 'chromium',
-    headless: false,
+    headless: isCI,
   },
   coverage: {
     exclude: [
@@ -223,7 +224,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.browser = {
     enabled: merged.browser?.enabled ?? false,
     browser: merged.browser?.browser ?? 'chromium',
-    headless: merged.browser?.headless ?? false,
+    headless: merged.browser?.headless ?? isCI,
     port: merged.browser?.port,
   };
 
