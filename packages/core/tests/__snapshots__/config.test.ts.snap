@@ -49,6 +49,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "tests/**/*.test.ts",
   ],
   "includeSource": [],
+  "includeTaskLocation": false,
   "isolate": true,
   "logHeapUsage": false,
   "maxConcurrency": 5,
