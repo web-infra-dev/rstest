@@ -52,7 +52,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **Type:** `(fn: () => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Runs before each test in the current suite.
 
@@ -81,7 +81,7 @@ beforeEach(async () => {
 
 ## afterEach
 
-- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 Runs after each test in the current suite.
 
@@ -139,7 +139,7 @@ test('test server', () => {
   const server = startServer();
 
   onTestFailed(({ task }) => {
-    console.log(task.result.errors);
+    console.log(task.result?.errors);
   });
 
   server.listen(3000, () => {

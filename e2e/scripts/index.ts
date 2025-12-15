@@ -107,7 +107,7 @@ export async function runRstestCli({
   });
 
   onTestFailed?.(({ task }) => {
-    if (task.result.errors?.[0]) {
+    if (task.result?.errors?.[0]) {
       task.result.errors![0]!.message +=
         `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
     }
