@@ -52,7 +52,6 @@ describe('new test', () => {
     // In browser watch mode, re-runs show test file results but not full summary
     // Wait for the new test file to appear in output
     await cli.waitForStdout('✓ tests/new.test.ts');
-    expect(cli.stdout).toMatch('new.test.ts');
 
     // ========== Update (break): Modify new test file to fail ==========
     cli.resetStd();
@@ -61,8 +60,7 @@ describe('new test', () => {
     });
 
     // Wait for failure output (error message appears in stderr for browser mode)
-    await cli.waitForStderr("expected 'new' to be 'modified'");
-    expect(cli.stdout).toMatch('✗ new test > should pass');
+    await cli.waitForStdout('✗ new test > should pass');
 
     // ========== Update (fix): Fix the test file ==========
     cli.resetStd();

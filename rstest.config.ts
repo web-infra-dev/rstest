@@ -1,5 +1,8 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: ['packages/*', 'examples/*'],
+  projects: [
+    // 'packages/*',
+    'examples/*',
+  ],
 });

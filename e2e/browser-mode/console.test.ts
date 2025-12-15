@@ -17,10 +17,10 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stdout).toContain('CONSOLE_INFO_TEST_MESSAGE');
 
     // Verify console.warn forwarding
-    expect(cli.stdout).toContain('CONSOLE_WARN_TEST_MESSAGE');
+    expect(cli.stderr).toContain('CONSOLE_WARN_TEST_MESSAGE');
 
     // Verify console.error forwarding
-    expect(cli.stdout).toContain('CONSOLE_ERROR_TEST_MESSAGE');
+    expect(cli.stderr).toContain('CONSOLE_ERROR_TEST_MESSAGE');
 
     // Verify console.debug forwarding
     expect(cli.stdout).toContain('CONSOLE_DEBUG_TEST_MESSAGE');
@@ -41,8 +41,8 @@ describe('browser mode - console forwarding', () => {
     // Verify log level prefix and test file path are displayed
     expect(cli.stdout).toMatch(/log.*\|.*tests\/console\.test\.ts/);
     expect(cli.stdout).toMatch(/info.*\|.*tests\/console\.test\.ts/);
-    expect(cli.stdout).toMatch(/warn.*\|.*tests\/console\.test\.ts/);
-    expect(cli.stdout).toMatch(/error.*\|.*tests\/console\.test\.ts/);
+    expect(cli.stderr).toMatch(/warn.*\|.*tests\/console\.test\.ts/);
+    expect(cli.stderr).toMatch(/error.*\|.*tests\/console\.test\.ts/);
     expect(cli.stdout).toMatch(/debug.*\|.*tests\/console\.test\.ts/);
   });
 });

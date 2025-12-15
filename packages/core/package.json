@@ -96,6 +96,7 @@
     "std-env": "^3.10.0",
     "strip-ansi": "^7.1.2",
     "tinyglobby": "^0.2.15",
+    "url-extras": "^0.1.0",
     "tinyspy": "^4.0.4",
     "webpack-license-plugin": "^4.5.1"
   },
