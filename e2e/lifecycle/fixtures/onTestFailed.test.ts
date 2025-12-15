@@ -9,7 +9,7 @@ import {
 
 beforeEach(() => {
   onTestFailed(({ task }) => {
-    console.log('[onTestFailed]', task.result.name);
+    console.log('[onTestFailed]', task.result?.name);
   });
 });
 describe('level A', () => {
