@@ -52,7 +52,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **类型：** `(fn: () => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 在当前套件的每个测试之前运行。
 
@@ -81,7 +81,7 @@ beforeEach(async () => {
 
 ## afterEach
 
-- **类型：** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
 在当前套件的每个测试之后运行。
 
