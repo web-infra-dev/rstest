@@ -1,0 +1,56 @@
+# includeTaskLocation
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--includeTaskLocation`
+
+在收集测试信息时，是否包含测试的位置信息。
+
+启用此配置后，会为 test case 和 suite 添加行号和列号信息，这对于调试和 reporter 中收集测试信息非常有用。
+
+需要注意的是，启用此配置会导致性能小幅度下降。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --includeTaskLocation
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  includeTaskLocation: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## 与 list 命令一起使用
+
+`includeTaskLocation` 选项在与 `list` 命令一起使用时特别有用，当您想要查看测试的确切位置时：
+
+```bash
+npx rstest list --printLocation
+```
+
+这将自动启用 `includeTaskLocation` 并显示每个测试用例的位置信息。
+
+## 示例输出
+
+启用后，reporter 和 list 命令将包含位置信息：
+
+```json
+{
+  "testId": "test-1",
+  "name": "should calculate correct sum",
+  "testPath": "/path/to/test.spec.ts",
+  "location": {
+    "line": 15,
+    "column": 3
+  }
+}
+```

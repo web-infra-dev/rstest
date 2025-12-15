@@ -61,6 +61,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
+      'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
       'slowTestThreshold',

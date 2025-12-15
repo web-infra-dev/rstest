@@ -1,0 +1,56 @@
+# includeTaskLocation
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--includeTaskLocation`
+
+Whether to include the location information of tests when collecting test information.
+
+Enable this configuration to include line number and column number information for test cases and suites when collecting test information. This is useful for debugging and when reporters need to collect test information.
+
+Note that enabling this configuration will slightly impact test execution performance.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --includeTaskLocation
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  includeTaskLocation: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## Using with the list command
+
+The `includeTaskLocation` option is particularly useful when used with the `list` command, especially when you want to see the exact location of tests:
+
+```bash
+npx rstest list --printLocation
+```
+
+This will automatically enable `includeTaskLocation` and display the location information for each test case.
+
+## Example Output
+
+With `includeTaskLocation` enabled, reporters and the `list` command will include location information:
+
+```json
+{
+  "testId": "test-1",
+  "name": "should calculate correct sum",
+  "testPath": "/path/to/test.spec.ts",
+  "location": {
+    "line": 15,
+    "column": 3
+  }
+}
+```
