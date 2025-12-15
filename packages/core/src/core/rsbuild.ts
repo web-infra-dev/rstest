@@ -70,6 +70,11 @@ export const prepareRsbuild = async (
     command,
     normalizedConfig: { isolate, dev = {}, coverage },
   } = context;
+
+  // Filter out browser mode projects - this rsbuild is for node mode only
+  const projects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
@@ -92,7 +97,7 @@ export const prepareRsbuild = async (
         writeToDisk,
       },
       environments: Object.fromEntries(
-        context.projects.map((project) => [
+        projects.map((project) => [
           project.environmentName,
           {
             plugins: project.normalizedConfig.plugins,

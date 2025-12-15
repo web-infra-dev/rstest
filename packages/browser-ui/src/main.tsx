@@ -373,6 +373,7 @@ const BrowserRunner: React.FC<{
                 statusMap={statusMap}
                 caseMap={caseMap}
                 rootPath={options.rootPath}
+                projects={options.projects}
                 loading={loading}
                 connected={connected}
                 openFiles={openFiles}

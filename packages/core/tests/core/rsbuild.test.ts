@@ -37,6 +37,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'jsdom',
               },
+              browser: { enabled: false },
             },
           },
         ],
@@ -85,6 +86,7 @@ describe('prepareRsbuild', () => {
                 name: 'node',
               },
               isolate: true,
+              browser: { enabled: false },
             },
           },
         ],
@@ -120,9 +122,14 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
+<<<<<<< HEAD
               testEnvironment: {
                 name: 'jsdom',
               },
+=======
+              testEnvironment: 'jsdom',
+              browser: { enabled: false },
+>>>>>>> d47a69a3 (projects should run separately, diversion browser/node mode in runTests)
             },
           },
           {
@@ -135,9 +142,14 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
+<<<<<<< HEAD
               testEnvironment: {
                 name: 'node',
               },
+=======
+              testEnvironment: 'node',
+              browser: { enabled: false },
+>>>>>>> d47a69a3 (projects should run separately, diversion browser/node mode in runTests)
             },
           },
         ],
@@ -192,9 +204,13 @@ describe('prepareRsbuild', () => {
               },
               output: {},
               tools: {},
+<<<<<<< HEAD
               testEnvironment: {
                 name: 'node',
               },
+=======
+              browser: { enabled: false },
+>>>>>>> d47a69a3 (projects should run separately, diversion browser/node mode in runTests)
             },
           },
         ],
@@ -256,6 +272,7 @@ describe('prepareRsbuild', () => {
                 name: 'node',
               },
               isolate: true,
+              browser: { enabled: false },
             },
           },
         ],
@@ -302,9 +319,14 @@ describe('prepareRsbuild', () => {
                 module: true,
               },
               tools: {},
+<<<<<<< HEAD
               testEnvironment: {
                 name: 'node',
               },
+=======
+              testEnvironment: 'node',
+              browser: { enabled: false },
+>>>>>>> d47a69a3 (projects should run separately, diversion browser/node mode in runTests)
             },
           },
         ],

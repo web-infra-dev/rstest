@@ -2,6 +2,15 @@
 
 Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 
+## Sub-package Instructions
+
+When working on code in a specific package, use the Read tool to load that package's AGENTS.md file for package-specific guidelines:
+
+- For @rstest/core: @packages/core/AGENTS.md
+- For @rstest/browser-ui: @packages/browser-ui/AGENTS.md
+- For @rstest/coverage-istanbul: @packages/coverage-istanbul/AGENTS.md
+- For rstest VS Code extension: @packages/vscode/AGENTS.md
+
 ## Monorepo structure
 
 - `packages/core/` — @rstest/core: Core testing framework (CLI, runtime, reporter, pool)
