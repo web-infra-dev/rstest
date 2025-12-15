@@ -13,6 +13,16 @@ type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
     ? [Name, Partial<ReportOptions[Name]>]
     : [Name, Record<string, unknown>];
 
+/** Custom reporter configuration for non-istanbul reporters */
+type CustomReporter = string | [string, Record<string, unknown>];
+
+/** Union type for all supported reporter types */
+type SupportedReporter =
+  | keyof ReportOptions
+  | ReportWithOptions
+  | ReportBase
+  | CustomReporter;
+
 export type CoverageThreshold = {
   /** Threshold for statements */
   statements?: number;
@@ -82,9 +92,19 @@ export type CoverageOptions = {
 
   /**
    * The reporters to use for coverage collection.
+   * Supports built-in istanbul reporters and custom reporters (e.g., '@canyonjs/report-html').
    * @default ['text', 'html', 'clover', 'json']
+   * @example
+   * // Built-in reporters
+   * reporters: ['text', 'html', ['json', { file: 'coverage.json' }]]
+   *
+   * // Custom reporters
+   * reporters: ['canyon-reporter', ['custom-reporter', { outputDir: './reports' }]]
+   *
+   * // Mixed usage
+   * reporters: ['text', 'canyon-reporter', ['html', { subdir: 'html-report' }]]
    */
-  reporters?: (keyof ReportOptions | ReportWithOptions | ReportBase)[];
+  reporters?: SupportedReporter[];
 
   /**
    * The directory to store coverage reports.
