@@ -64,6 +64,7 @@ export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
   setupFiles: Record<string, Record<string, string>>,
+  globalSetupFiles: Record<string, Record<string, string>>,
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -110,15 +111,17 @@ export const prepareRsbuild = async (
         pluginEntryWatch({
           globTestSourceEntries,
           setupFiles,
+          globalSetupFiles,
           context,
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
         !isolate
           ? pluginCacheControl(
-              Object.values(setupFiles).flatMap((files) =>
-                Object.values(files),
-              ),
+              Object.values({
+                ...setupFiles,
+                ...globalSetupFiles,
+              }).flatMap((files) => Object.values(files)),
             )
           : null,
         pluginInspect(),
@@ -135,6 +138,9 @@ export const prepareRsbuild = async (
     );
     coverage.exclude.push(
       ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
+      ...Object.values(globalSetupFiles || {}).flatMap((files) =>
+        Object.values(files),
+      ),
     );
 
     rsbuildInstance.addPlugins([
@@ -250,6 +256,7 @@ class AssetsMemorySafeMap extends Map<string, string> {
 export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
+  globalSetupFiles,
   rsbuildInstance,
   inspectedConfig,
 }: {
@@ -259,6 +266,7 @@ export const createRsbuildServer = async ({
   };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   rootPath: string;
 }): Promise<{
   getRsbuildStats: (options: {
@@ -268,6 +276,7 @@ export const createRsbuildServer = async ({
     hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
+    globalSetupEntries: EntryInfo[];
     assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
@@ -398,6 +407,7 @@ export const createRsbuildServer = async ({
     const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
+    const globalSetupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries(environmentName);
 
     for (const entry of Object.keys(entrypoints!)) {
@@ -411,7 +421,7 @@ export const createRsbuildServer = async ({
         filteredAssets[filteredAssets.length - 1]!.name,
       );
 
-      if (setupFiles[environmentName]![entry]) {
+      if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
           testPath: setupFiles[environmentName]![entry],
@@ -428,6 +438,13 @@ export const createRsbuildServer = async ({
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
+          files: entryFiles[entry],
+          chunks: e.chunks || [],
+        });
+      } else if (globalSetupFiles?.[environmentName]?.[entry]) {
+        globalSetupEntries.push({
+          distPath,
+          testPath: globalSetupFiles[environmentName]![entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
         });
@@ -514,6 +531,7 @@ export const createRsbuildServer = async ({
       hash,
       entries,
       setupEntries,
+      globalSetupEntries,
       assetNames,
       getAssetFiles: async (names: string[]) => {
         return Object.fromEntries(

@@ -9,6 +9,7 @@ import {
   logger,
 } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -65,10 +66,23 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
@@ -86,6 +100,7 @@ export async function runTests(context: Rstest): Promise<void> {
             return globTestSourceEntries(name);
           },
     setupFiles,
+    globalSetupFiles,
     rsbuildInstance,
     rootPath,
   });
@@ -138,6 +153,7 @@ export async function runTests(context: Rstest): Promise<void> {
           assetNames,
           entries,
           setupEntries,
+          globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
           affectedEntries,
@@ -148,6 +164,45 @@ export async function runTests(context: Rstest): Promise<void> {
         });
 
         testStart ??= Date.now();
+
+        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
+          p._globalSetups = true;
+          const { loadModule } = p.outputModule
+            ? await import('../runtime/worker/loadEsModule')
+            : await import('../runtime/worker/loadModule');
+          const assetFiles = await getAssetFiles(
+            globalSetupEntries.flatMap((e) => e.files!),
+          );
+          try {
+            // run global setup files once
+            await runGlobalSetup(
+              globalSetupEntries,
+              assetFiles,
+              ({ codeContent, distPath, testPath, interopDefault }) =>
+                loadModule({
+                  codeContent,
+                  distPath,
+                  testPath,
+                  rstestContext: {
+                    global,
+                    console: global.console,
+                    Error,
+                  },
+                  assetFiles,
+                  interopDefault,
+                }),
+              true,
+            );
+          } catch (error) {
+            return {
+              results: [],
+              testResults: [],
+              errors: [error as Error],
+              assetNames,
+              getSourceMaps,
+            };
+          }
+        }
 
         currentDeletedEntries.push(...deletedEntries);
 
@@ -210,6 +265,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
+    const errors = returns.flatMap((r) => r.errors || []);
 
     context.updateReporterResultState(
       results,
@@ -217,7 +273,7 @@ export async function runTests(context: Rstest): Promise<void> {
       currentDeletedEntries,
     );
 
-    if (results.length === 0) {
+    if (results.length === 0 && !errors.length) {
       if (command === 'watch') {
         if (mode === 'on-demand') {
           logger.log(color.yellow('No test files need re-run.'));
@@ -258,7 +314,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    const isFailure = results.some((r) => r.status === 'fail');
+    const isFailure = results.some((r) => r.status === 'fail') || errors.length;
 
     if (isFailure) {
       process.exitCode = 1;
@@ -268,6 +324,7 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
         testResults: context.reporterResults.testResults,
+        unhandledErrors: errors,
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap: async (name: string) => {
@@ -325,6 +382,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const { onBeforeRestart } = await import('./restart');
 
     onBeforeRestart(async () => {
+      await runGlobalTeardown();
       await pool.close();
       await closeServer();
     });
@@ -477,6 +535,12 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
+
+        // Run global teardown before exit
+        runGlobalTeardown().catch((error) => {
+          logger.log(color.red(`Error in global teardown: ${error}`));
+        });
+
         process.exitCode = 1;
       }
     };
@@ -486,6 +550,10 @@ export async function runTests(context: Rstest): Promise<void> {
     isTeardown = true;
     await pool.close();
     await closeServer();
+
+    // Run global teardown after all tests are done
+    await runGlobalTeardown();
+
     process.off('exit', unExpectedExit);
   }
 }

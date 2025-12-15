@@ -18,6 +18,7 @@ import {
   prettyTestPath,
   ROOT_SUITE_NAME,
 } from '../utils';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 const collectTests = async ({
@@ -39,14 +40,28 @@ const collectTests = async ({
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
+    globalSetupFiles,
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: context.projects.map((p) => p.normalizedConfig),
@@ -67,10 +82,53 @@ const collectTests = async ({
       const {
         entries,
         setupEntries,
+        globalSetupEntries,
         getSourceMaps,
         getAssetFiles,
         assetNames,
       } = await getRsbuildStats({ environmentName: project.environmentName });
+
+      if (
+        entries.length &&
+        globalSetupEntries.length &&
+        !project._globalSetups
+      ) {
+        project._globalSetups = true;
+        const { loadModule } = project.outputModule
+          ? await import('../runtime/worker/loadEsModule')
+          : await import('../runtime/worker/loadModule');
+        const assetFiles = await getAssetFiles(
+          globalSetupEntries.flatMap((e) => e.files!),
+        );
+        try {
+          // run global setup files once
+          await runGlobalSetup(
+            globalSetupEntries,
+            assetFiles,
+            ({ codeContent, distPath, testPath, interopDefault }) =>
+              loadModule({
+                codeContent,
+                distPath,
+                testPath,
+                rstestContext: {
+                  global,
+                  console: global.console,
+                  Error,
+                },
+                assetFiles,
+                interopDefault,
+              }),
+            true,
+          );
+        } catch (error) {
+          return {
+            list: [],
+            errors: [error as Error],
+            assetNames,
+            getSourceMaps,
+          };
+        }
+      }
 
       const list = await pool.collectTests({
         entries,
@@ -91,11 +149,13 @@ const collectTests = async ({
 
   return {
     list: returns.flatMap((r) => r.list),
+    errors: returns.flatMap((r) => r.errors),
     getSourceMap: async (name: string) => {
       const resource = returns.find((r) => r.assetNames.includes(name));
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
+      await runGlobalTeardown();
       await closeServer();
       await pool.close();
     },
@@ -122,6 +182,7 @@ const collectTestFiles = async ({
   }
   return {
     close: async () => {},
+    errors: [],
     list,
     getSourceMap: async (_name: string) => null,
   };
@@ -159,7 +220,12 @@ export async function listTests(
     return entries;
   };
 
-  const { list, close, getSourceMap } = filesOnly
+  const {
+    list,
+    close,
+    getSourceMap,
+    errors = [],
+  } = filesOnly
     ? await collectTestFiles({
         context,
         globTestSourceEntries,
@@ -201,7 +267,7 @@ export async function listTests(
     }
   };
 
-  const hasError = list.some((file) => file.errors?.length);
+  const hasError = list.some((file) => file.errors?.length) || errors.length;
   const showProject = context.projects.length > 1;
 
   if (hasError) {
@@ -224,6 +290,21 @@ export async function listTests(
             rootPath,
           );
         }
+      }
+    }
+
+    if (errors.length) {
+      const { printError } = await import('../utils/error');
+      for (const error of errors || []) {
+        logger.stderr(`${bgColor('bgRed', ' Unhandled Error ')}`);
+        await printError(
+          error!,
+          async (name) => {
+            const sourceMap = await getSourceMap(name);
+            return sourceMap ? JSON.parse(sourceMap) : null;
+          },
+          rootPath,
+        );
       }
     }
 

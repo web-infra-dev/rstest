@@ -158,6 +158,7 @@ export const printSummaryErrorLogs = async ({
   testResults,
   results,
   rootPath,
+  unhandledErrors,
   getSourcemap,
   filterRerunTestPaths,
 }: {
@@ -166,6 +167,7 @@ export const printSummaryErrorLogs = async ({
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
   filterRerunTestPaths?: string[];
+  unhandledErrors?: Error[];
 }): Promise<void> => {
   const failedTests: TestResult[] = [
     ...results.filter(
@@ -185,13 +187,19 @@ export const printSummaryErrorLogs = async ({
     ),
   ];
 
-  if (failedTests.length === 0) {
+  if (failedTests.length === 0 && !unhandledErrors?.length) {
     return;
   }
 
   logger.stderr('');
   logger.stderr(color.bold('Summary of all failing tests:'));
   logger.stderr('');
+
+  const { printError } = await import('../utils/error');
+  for (const error of unhandledErrors || []) {
+    logger.stderr(`${bgColor('bgRed', ' Unhandled Error ')}`);
+    await printError(error, getSourcemap, rootPath);
+  }
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);

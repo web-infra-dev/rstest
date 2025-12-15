@@ -118,12 +118,14 @@ export class DefaultReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     filterRerunTestPaths,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
@@ -135,6 +137,7 @@ export class DefaultReporter implements Reporter {
     await printSummaryErrorLogs({
       testResults,
       results,
+      unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
       filterRerunTestPaths,

@@ -68,7 +68,11 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   } = context.normalizedConfig;
 
   return {
-    env,
+    env: {
+      // get process.env correctly when globalSetup modified it
+      ...process.env,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -204,7 +208,6 @@ export const createPool = async ({
       NODE_ENV: 'test',
       // enable diff color by default
       FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
-      ...process.env,
     },
   });
 

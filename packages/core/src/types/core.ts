@@ -27,6 +27,7 @@ export type ProjectContext = {
   outputModule: boolean;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
+  _globalSetups: boolean;
 };
 
 type RunningModules = Map<
