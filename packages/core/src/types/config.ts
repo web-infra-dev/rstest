@@ -57,7 +57,7 @@ export type BrowserModeConfig = {
   /**
    * Run browser in headless mode.
    *
-   * @default true
+   * @default Inferred from CI environment. `true` in CI, `false` otherwise.
    */
   headless?: boolean;
   /**
