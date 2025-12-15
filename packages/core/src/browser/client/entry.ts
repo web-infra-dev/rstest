@@ -1,9 +1,9 @@
 import {
   type ManifestProjectConfig,
   type ManifestTestContext,
+  projectSetupLoaders,
   // Multi-project APIs
   projects,
-  projectSetupLoaders,
   projectTestContexts,
 } from '@rstest/browser-manifest';
 import { createRstestRuntime } from '../../runtime/api';
@@ -386,6 +386,75 @@ const run = async () => {
   } else {
     // Full run mode: get all test keys from context
     testKeysToRun = currentTestContext.getTestKeys();
+  }
+
+  // Check execution mode
+  const executionMode = options.mode || 'run';
+
+  // Collect mode: only gather test metadata without running
+  if (executionMode === 'collect') {
+    for (const key of testKeysToRun) {
+      const testPath = toAbsolutePath(key, currentProject.projectRoot);
+
+      const workerState: WorkerState = {
+        project: projectRuntime.name,
+        projectRoot: projectRuntime.projectRoot,
+        rootPath: options.rootPath,
+        runtimeConfig,
+        taskId: 0,
+        outputModule: false,
+        environment: 'browser',
+        testPath,
+        distPath: testPath,
+        snapshotOptions: {
+          updateSnapshot: options.snapshot.updateSnapshot,
+          snapshotEnvironment: new BrowserSnapshotEnvironment(),
+          snapshotFormat: runtimeConfig.snapshotFormat,
+        },
+      };
+
+      const runtime = createRstestRuntime(workerState);
+
+      // Register global APIs if globals config is enabled
+      if (runtimeConfig.globals) {
+        for (const apiKey of globalApis) {
+          (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
+        }
+      }
+
+      try {
+        // Load the test file dynamically (registers tests without running)
+        await currentTestContext.loadTest(key);
+
+        // Collect tests metadata
+        const tests = await runtime.runner.collectTests();
+
+        send({
+          type: 'collect-result',
+          payload: {
+            testPath,
+            project: projectRuntime.name,
+            tests,
+          },
+        });
+      } catch (_error) {
+        const error =
+          _error instanceof Error ? _error : new Error(String(_error));
+        send({
+          type: 'fatal',
+          payload: {
+            message: error.message,
+            stack: error.stack,
+          },
+        });
+        window.__RSTEST_DONE__ = true;
+        return;
+      }
+    }
+
+    send({ type: 'collect-complete' });
+    window.__RSTEST_DONE__ = true;
+    return;
   }
 
   // 3. Run tests for each file
