@@ -99,10 +99,10 @@ export type CoverageOptions = {
    * reporters: ['text', 'html', ['json', { file: 'coverage.json' }]]
    *
    * // Custom reporters
-   * reporters: ['canyon-reporter', ['custom-reporter', { outputDir: './reports' }]]
+   * reporters: ['@canyonjs/report-html', ['custom-reporter', { outputDir: './reports' }]]
    *
    * // Mixed usage
-   * reporters: ['text', 'canyon-reporter', ['html', { subdir: 'html-report' }]]
+   * reporters: ['text', '@canyonjs/report-html', ['html', { subdir: 'html-report' }]]
    */
   reporters?: SupportedReporter[];
 
