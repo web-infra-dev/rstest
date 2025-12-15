@@ -29,6 +29,7 @@
 
   "coverage",
   "reporters",
+  "include-task-location",
   "log-heap-usage",
   "hide-skipped-tests",
   "slow-test-threshold",
