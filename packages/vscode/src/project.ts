@@ -1,31 +1,43 @@
 import path from 'node:path';
+import picomatch from 'picomatch';
+import { glob } from 'tinyglobby';
 import * as vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { RstestApi } from './master';
-import { TestFile, testData, testItemType } from './testTree';
-import { shouldIgnoreUri } from './utils';
+import { TestFile, TestFolder, testData } from './testTree';
 
 export class WorkspaceManager implements vscode.Disposable {
-  private projects = new Map<string, Project>();
+  public projects = new Map<string, Project>();
   private workspacePath: string;
-  private testItem: vscode.TestItem;
+  private testItem?: vscode.TestItem;
   private configValueWatcher: vscode.Disposable;
   constructor(
     private workspaceFolder: vscode.WorkspaceFolder,
     private testController: vscode.TestController,
   ) {
     this.workspacePath = workspaceFolder.uri.toString();
-    this.testItem = testController.createTestItem(
-      this.workspacePath,
-      workspaceFolder.name,
-      workspaceFolder.uri,
-    );
-    testItemType.set(this.testItem, 'workspace');
-    testController.items.add(this.testItem);
     this.configValueWatcher = this.startWatchingWorkspace();
   }
+  // if this is the only one workspace, skip create test item
+  public refresh(isOnlyOne: boolean) {
+    if (isOnlyOne) {
+      if (this.testItem) {
+        this.testItem = undefined;
+      }
+    } else {
+      if (!this.testItem) {
+        this.testItem = this.testController.createTestItem(
+          this.workspacePath,
+          this.workspaceFolder.name,
+          this.workspaceFolder.uri,
+        );
+        testData.set(this.testItem, this);
+      }
+      this.testController.items.add(this.testItem);
+    }
+    this.refreshAllProject();
+  }
   public dispose() {
-    this.testController.items.delete(this.workspacePath);
     for (const project of this.projects.values()) {
       project.dispose();
     }
@@ -66,18 +78,30 @@ export class WorkspaceManager implements vscode.Disposable {
             this.projects.delete(configFilePath);
           }
         }
+        this.refreshAllProject();
 
         // start watching config file create and delete event
         for (const pattern of patterns) {
           const watcher = vscode.workspace.createFileSystemWatcher(
             pattern,
             false,
-            true, // we don't care about config file content now, so ignore change event
+            false,
             false,
           );
           token.onCancellationRequested(() => watcher.dispose());
-          watcher.onDidCreate((file) => this.handleAddConfigFile(file));
-          watcher.onDidDelete((file) => this.handleRemoveConfigFile(file));
+          watcher.onDidCreate((file) => {
+            this.handleAddConfigFile(file);
+            this.refreshAllProject();
+          });
+          watcher.onDidDelete((file) => {
+            this.handleRemoveConfigFile(file);
+            this.refreshAllProject();
+          });
+          watcher.onDidChange((file) => {
+            this.handleRemoveConfigFile(file);
+            this.handleAddConfigFile(file);
+            this.refreshAllProject();
+          });
         }
       },
     );
@@ -89,7 +113,7 @@ export class WorkspaceManager implements vscode.Disposable {
       this.workspaceFolder,
       configFileUri,
       this.testController,
-      this.testItem,
+      this.testItem?.children ?? this.testController.items,
     );
     this.projects.set(configFilePath, project);
   }
@@ -100,130 +124,228 @@ export class WorkspaceManager implements vscode.Disposable {
     project.dispose();
     this.projects.delete(configFilePath);
   }
+  private refreshAllProject() {
+    const collection = this.testItem?.children ?? this.testController.items;
+    collection.replace([]);
+    for (const project of this.projects.values()) {
+      project.refresh(this.projects.size === 1, collection);
+    }
+  }
 }
 
 // There is already a concept of 'project' in rstest, so we might consider changing its name here.
 export class Project implements vscode.Disposable {
   api: RstestApi;
   root: vscode.Uri;
-  projectTestItem: vscode.TestItem;
-  configValueWatcher: vscode.Disposable;
+  testItem?: vscode.TestItem;
+  cancellationSource: vscode.CancellationTokenSource;
+  include: string[] = [];
+  exclude: string[] = [];
+  testFiles = new Map<string, TestFile>();
   constructor(
-    workspaceFolder: vscode.WorkspaceFolder,
+    private workspaceFolder: vscode.WorkspaceFolder,
     private configFileUri: vscode.Uri,
     private testController: vscode.TestController,
-    private workspaceTestItem: vscode.TestItem,
+    public parentCollection: vscode.TestItemCollection,
   ) {
-    // TODO get root from config
+    // use dirname of config file as default root
     this.root = configFileUri.with({ path: path.dirname(configFileUri.path) });
     this.api = new RstestApi(
       workspaceFolder,
-      this.root.fsPath,
+      path.dirname(configFileUri.fsPath),
       configFileUri.fsPath,
+      this,
     );
+    this.cancellationSource = new vscode.CancellationTokenSource();
 
-    // TODO skip createTestItem if there is only one configFile in the workspace and it is located in the root directory
-    this.projectTestItem = testController.createTestItem(
-      configFileUri.toString(),
-      path.relative(workspaceFolder.uri.path, configFileUri.path),
-      configFileUri,
+    this.api.getNormalizedConfig().then((config) => {
+      if (this.cancellationSource.token.isCancellationRequested) return;
+      this.root = vscode.Uri.file(config.root);
+      this.include = config.include;
+      this.exclude = config.exclude;
+      this.startWatchingWorkspace(this.root);
+    });
+  }
+
+  public refresh(
+    isOnlyOne: boolean,
+    parentCollection: vscode.TestItemCollection,
+  ) {
+    this.parentCollection = parentCollection;
+    const configFileName = path.relative(
+      this.workspaceFolder.uri.fsPath,
+      this.configFileUri.fsPath,
     );
-    testItemType.set(this.projectTestItem, 'project');
-    workspaceTestItem.children.add(this.projectTestItem);
-    // TODO catch and set error
-    this.api.createChildProcess();
-
-    this.configValueWatcher = this.startWatchingWorkspace();
+    // if this is the only one project, and placed at root of workspace,
+    // and matches normal config file name, skip create test item
+    const skipCreateTestItem =
+      isOnlyOne && configFileName.match(/^rstest\.config\.[mc]?[tj]s$/);
+    if (skipCreateTestItem) {
+      if (this.testItem) {
+        this.testItem = undefined;
+      }
+    } else {
+      if (!this.testItem) {
+        this.testItem = this.testController.createTestItem(
+          this.configFileUri.toString(),
+          path.relative(this.workspaceFolder.uri.path, this.configFileUri.path),
+          this.configFileUri,
+        );
+        testData.set(this.testItem, this);
+      }
+      this.parentCollection.add(this.testItem);
+    }
+    this.buildTree();
   }
   dispose() {
-    this.workspaceTestItem.children.delete(this.configFileUri.toString());
-    this.configValueWatcher.dispose();
     this.api.dispose();
+    this.cancellationSource.cancel();
   }
-  private startWatchingWorkspace() {
-    // TODO read config from config file, or scan files with rstest internal api directly
-    return watchConfigValue(
-      'testFileGlobPattern',
-      this.root,
-      async (globs, token) => {
-        const patterns = globs.map(
-          (glob) => new vscode.RelativePattern(this.root, glob),
-        );
+  get collection() {
+    return this.testItem?.children || this.parentCollection;
+  }
+  private async startWatchingWorkspace(root: vscode.Uri) {
+    const matchInclude = picomatch(this.include);
+    const matchExclude = picomatch(this.exclude);
+    const isInclude = (uri: vscode.Uri) => {
+      const relativePath = path.relative(root.fsPath, uri.fsPath);
+      return matchInclude(relativePath) && !matchExclude(relativePath);
+    };
 
-        const files = (
-          await Promise.all(
-            patterns.map((pattern) =>
-              vscode.workspace.findFiles(
-                pattern,
-                '**/node_modules/**',
-                undefined,
-                token,
-              ),
-            ),
-          )
-        ).flat();
+    const files = await glob(this.include, {
+      cwd: root.fsPath,
+      ignore: this.exclude,
+      absolute: true,
+      dot: true,
+      expandDirectories: false,
+    }).then((files) => files.map((file) => vscode.Uri.file(file)));
 
-        const visited = new Set<string>();
-        for (const uri of files) {
-          if (shouldIgnoreUri(uri)) continue;
-          this.updateOrCreateFile(uri);
-          visited.add(uri.toString());
-        }
+    if (this.cancellationSource.token.isCancellationRequested) return;
 
-        // remove outdated items after glob configuration changed
-        this.projectTestItem.children.forEach((testItem) => {
-          if (!visited.has(testItem.id)) {
-            this.projectTestItem.children.delete(testItem.id);
-          }
-        });
+    const visited = new Set<string>();
+    for (const uri of files) {
+      if (matchExclude(uri.fsPath)) continue;
+      this.updateOrCreateFile(uri);
+      visited.add(uri.toString());
+    }
 
-        // start watching test file change
-        for (const pattern of patterns) {
-          const watcher = vscode.workspace.createFileSystemWatcher(
-            pattern,
-            false,
-            false,
-            false,
-          );
+    // remove outdated items after glob configuration changed
+    for (const file of this.testFiles.keys()) {
+      if (!visited.has(file)) {
+        this.testFiles.delete(file);
+      }
+    }
+    this.buildTree();
 
-          token.onCancellationRequested(() => watcher.dispose());
-          watcher.onDidCreate((uri) => {
-            if (shouldIgnoreUri(uri)) return;
-            this.updateOrCreateFile(uri);
-          });
-          watcher.onDidChange((uri) => {
-            if (shouldIgnoreUri(uri)) return;
-            this.updateOrCreateFile(uri);
-          });
-          watcher.onDidDelete((uri) => {
-            this.projectTestItem.children.delete(uri.toString());
-          });
-        }
-      },
+    // start watching test file change
+    // while createFileSystemWatcher don't support same glob syntax with tinyglobby
+    // we can watch all files and filter with picomatch later
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(root, '**'),
     );
+    this.cancellationSource.token.onCancellationRequested(() =>
+      watcher.dispose(),
+    );
+    watcher.onDidCreate((uri) => {
+      if (isInclude(uri)) {
+        this.updateOrCreateFile(uri);
+        this.buildTree();
+      }
+    });
+    watcher.onDidChange((uri) => {
+      if (isInclude(uri)) {
+        this.updateOrCreateFile(uri);
+        this.buildTree();
+      }
+    });
+    watcher.onDidDelete((uri) => {
+      if (isInclude(uri)) {
+        this.testFiles.delete(uri.toString());
+        this.buildTree();
+      }
+    });
   }
   // TODO pass cancellation token to updateFromDisk
   private updateOrCreateFile(uri: vscode.Uri) {
-    const existing = this.projectTestItem.children.get(uri.toString());
+    const existing = this.testFiles.get(uri.toString());
     if (existing) {
-      (testData.get(existing) as TestFile).updateFromDisk(
-        this.testController,
-        existing,
-      );
+      existing.updateFromDisk(this.testController);
     } else {
-      const file = this.testController.createTestItem(
+      const data = new TestFile(this.api, uri);
+      this.testFiles.set(uri.toString(), data);
+      data.updateFromDisk(this.testController);
+    }
+  }
+
+  private buildTree() {
+    type NestedRecord = { [K: string]: NestedRecord };
+
+    const tree: NestedRecord = {};
+    for (const [uriString] of this.testFiles) {
+      path
+        .relative(this.root.fsPath, vscode.Uri.parse(uriString).fsPath)
+        .split(path.sep)
+        // biome-ignore lint/suspicious/noAssignInExpressions: just simple shorthand
+        .reduce((tree, segment) => (tree[segment] ||= {}), tree);
+    }
+
+    const handleTreeItem = (
+      key: string,
+      value: NestedRecord,
+      mergedParents: string[],
+      parents: string[],
+      collection: vscode.TestItemCollection,
+    ) => {
+      const uri = vscode.Uri.file(
+        [this.root.fsPath, ...parents, key].join(path.sep),
+      );
+      const children = Object.entries(value);
+
+      if (children.length === 1) {
+        // if folder's only child is folder, merge them into one node
+        const onlyChild = children[0];
+        const [childKey, childValue] = onlyChild;
+        const childIsFolder = Object.entries(childValue).length !== 0;
+        if (childIsFolder) {
+          handleTreeItem(
+            childKey,
+            childValue,
+            [...mergedParents, key],
+            [...parents, key],
+            collection,
+          );
+          return;
+        }
+      }
+      const item = this.testController.createTestItem(
         uri.toString(),
-        path.basename(uri.path),
+        [...mergedParents, key].join(path.sep),
         uri,
       );
-      testItemType.set(file, 'file');
-      this.projectTestItem.children.add(file);
+      collection.add(item);
 
-      const data = new TestFile(this.api);
-      testData.set(file, data);
-      data.updateFromDisk(this.testController, file);
+      const file = this.testFiles.get(uri.toString());
+      if (file) {
+        file.setTestItem(item);
+        testData.set(item, file);
+      } else {
+        testData.set(item, new TestFolder(this.api, uri));
+      }
 
-      file.canResolveChildren = true;
+      for (const [childKey, childValue] of children) {
+        handleTreeItem(
+          childKey,
+          childValue,
+          [],
+          [...parents, key],
+          item.children,
+        );
+      }
+    };
+
+    this.collection.replace([]);
+    for (const [childKey, childValue] of Object.entries(tree)) {
+      handleTreeItem(childKey, childValue, [], [], this.collection);
     }
   }
 }
