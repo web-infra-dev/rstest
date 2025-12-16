@@ -1,11 +1,6 @@
 import type { EntryInfo } from '../types';
 import { bgColor, color } from '../utils';
 
-export interface GlobalSetupFile {
-  filePath: string;
-  setup?: () => Promise<void> | void;
-  teardown?: () => Promise<void> | void;
-}
 
 let globalTeardownCallbacks: Array<() => Promise<void> | void> = [];
 
