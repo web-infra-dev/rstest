@@ -185,7 +185,7 @@ export async function runTests(context: Rstest): Promise<void> {
               testResults: [],
               errors,
               assetNames,
-              getSourceMaps,
+              getSourceMaps: () => null,
             };
           }
         }

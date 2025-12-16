@@ -111,7 +111,7 @@ const collectTests = async ({
             list: [],
             errors,
             assetNames,
-            getSourceMaps,
+            getSourceMaps: () => null,
           };
         }
       }
