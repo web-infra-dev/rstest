@@ -22,156 +22,87 @@ process.env.GITHUB_ACTIONS === 'true'
 
 - **CLI：** `--reporter=<name> --reporter=<name1>`
 
-自定义输出报告器的类型。
+配置用于测试结果输出的报告器。
 
-## Built-in Reporters
+### 使用方法
 
-### Default reporter
+#### 基本示例
 
-默认情况下，Rstest 会在终端显示测试运行状态、结果以及汇总信息。
-
-输出如下：
-
-```bash
- ✓ test/index.test.ts (2)
-
- Test Files 1 passed
-      Tests 2 passed
-   Duration 112ms (build 19ms, tests 93ms)
-```
-
-### Verbose reporter
-
-默认报告器仅在测试运行失败或耗时缓慢时输出相关的测试用例信息，Verbose 报告器会在测试完成后输出所有的测试用例信息。
+你可以在 `rstest.config.ts` 文件中或通过 CLI 指定报告器。
 
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
-```bash
-npx rstest --reporter=verbose
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: 'verbose'
-});
-```
-  </Tab>
-</Tabs>
-
-此时，Rstest 输出如下：
-
-```bash
- ✓ test/index.test.ts (2) 2ms
-  ✓ Index > should add two numbers correctly (1ms)
-  ✓ Index > should test source code correctly (1ms)
-
- Test Files 1 passed
-      Tests 2 passed
-   Duration 112ms (build 19ms, tests 93ms)
-```
-
-### GitHub Actions reporter
-
-GitHub Actions 报告器将在测试失败时以 [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) 的形式输出错误信息。
-
-#### 输出示例
-
-当测试失败时，GitHub Actions 报告器会输出类似以下格式的信息：
-
-```bash
-::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
-```
-
-这些输出会被 GitHub Actions 解析，并在对应的位置生成注释。
-
-![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
-
-#### 自动启用
-
-当未手动设置任何 reporter 时，Rstest 会在检测到 GitHub Actions 环境(`process.env.GITHUB_ACTIONS` 为 `'true'`)时自动启用此报告器。
-
-#### 手动启用
-
-你也可以手动启用此报告器：
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
   ```bash
-  npx rstest --reporter=github-actions
+  npx rstest --reporter=default
   ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
+  ```ts
+  import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: ['github-actions']
+reporters: 'default',
 });
-```
-  </Tab>
+
+````
+</Tab>
 </Tabs>
 
-### JUnit reporter
+#### 数组形式
 
-JUnit 报告器支持以 JUnit XML 格式输出测试报告，方便与 CI/CD 系统集成。
+你可以通过数组形式同时指定多个报告器。当你既需要控制台输出又需要 CI/CD 管道的文件报告时，这非常有用。
 
 <Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
+<Tab label="CLI">
 ```bash
-npx rstest --reporter=junit
-```
+npx rstest --reporter=default --reporter=junit
+````
+
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
+  ```ts
+  import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: ['junit']
+reporters: ['default', 'junit'],
 });
-```
-  </Tab>
+
+````
+</Tab>
 </Tabs>
 
-#### 配置项
+#### 报告器配置
 
-- `outputPath`: 配置报告输出的路径，如果不指定则输出到控制台。
+当报告器支持配置选项时，可以通过 `[reporterName, options]` 传递配置选项。
 
-```ts title="rstest.config.ts"
+```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: [['junit', { outputPath: './junit.xml' }]],
+reporters: [
+  ['default', { verbose: true }],
+  ['github-actions', { verbose: true }],
+  ['junit', { outputFile: './test-results.xml' }],
+],
+});
+````
+
+#### 使用自定义报告器
+
+你可以通过提供实现报告器接口的报告器类或对象来创建和使用自定义报告器：
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { CustomReporter } from './custom-reporter';
+
+export default defineConfig({
+  reporters: [CustomReporter],
 });
 ```
 
-#### 输出示例
+### 相关文档
 
-JUnit 报告器生成的 XML 格式如下：
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="rstest tests" tests="3" failures="1" errors="1" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
-  <testsuite name="test1.test.ts" tests="3" failures="1" errors="1" skipped="1" time="0.3" timestamp="2024-01-01T00:00:00.000Z">
-    <testcase name="should pass" classname="test1.test.ts" time="0.1">
-    </testcase>
-    <testcase name="should fail" classname="test1.test.ts" time="0.2">
-      <failure message="Test failed" type="AssertionError">expected 'hi' to be 'hii' // Object.is equality - Expected + Received - hii + hi at test1.test.ts:10:21</failure>
-    </testcase>
-    <testcase name="should skip" classname="test1.test.ts" time="0.0">
-      <skipped/>
-    </testcase>
-  </testsuite>
-</testsuites>
-```
-
-JUnit 报告器会根据测试用例的执行状态，将其映射为 JUnit 测试状态：
-
-- `pass`: 测试通过
-- `fail`: 测试失败，会生成 `<failure>` 标签
-- `skip`: 测试跳过，会生成 `<skipped>` 标签
-- `todo`: 测试待办，会生成 `<skipped>` 标签
+- [报告器指南](/guide/basic/reporters) - 使用示例和内置报告器详情
+- [Reporter API 参考](/api/node-api/reporter) - 自定义报告器实现

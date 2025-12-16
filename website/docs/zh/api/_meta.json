@@ -17,5 +17,10 @@
     "type": "dir-section-header",
     "name": "rstest",
     "label": "Rstest 实用工具"
+  },
+  {
+    "type": "dir-section-header",
+    "name": "node-api",
+    "label": "Node API"
   }
 ]

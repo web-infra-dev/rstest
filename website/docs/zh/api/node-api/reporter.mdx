@@ -1,0 +1,120 @@
+---
+title: Reporter
+---
+
+# Reporter API
+
+Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
+
+> **注意**：使用示例和配置指南，请参阅 [报告器指南](/guide/basic/reporters)。
+
+## 使用自定义报告器
+
+通过实现 `Reporter` 接口来创建自定义报告器：
+
+```ts
+import type { Reporter, TestFileResult } from '@rstest/core';
+
+const customReporter: Reporter = {
+  onTestFileStart(test) {
+    console.log(`Starting: ${test.testPath}`);
+  },
+
+  onTestFileResult(result) {
+    console.log(`Finished: ${result.testPath}`);
+  },
+
+  onTestRunEnd({ results, duration }) {
+    console.log(`All tests completed in ${duration.totalTime}ms`);
+  },
+};
+```
+
+在配置中使用自定义报告器：
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { customReporter } from './path/to/custom-reporter';
+
+export default defineConfig({
+  reporters: [customReporter],
+});
+```
+
+## 接口概览
+
+`Reporter` 接口为测试执行提供生命周期钩子。每个钩子在测试运行期间的具体时间点被调用。
+
+> **重要提示**：有关最新的接口定义和完整类型签名，请参考 [源代码](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)。
+
+### 钩子类别
+
+- **文件级钩子**: `onTestFileStart`、`onTestFileReady`、`onTestFileResult`
+- **套件级钩子**: `onTestSuiteStart`、`onTestSuiteResult`
+- **用例级钩子**: `onTestCaseStart`、`onTestCaseResult`
+- **运行级钩子**: `onTestRunEnd`、`onUserConsoleLog`、`onExit`
+
+### 基本接口结构
+
+```ts
+interface Reporter {
+  onTestFileStart?(test: TestFileInfo): void;
+  onTestFileReady?(test: TestFileInfo): void;
+  onTestFileResult?(test: TestFileResult): void;
+  onTestSuiteStart?(test: TestSuiteInfo): void;
+  onTestSuiteResult?(result: TestResult): void;
+  onTestCaseStart?(test: TestCaseInfo): void;
+  onTestCaseResult?(result: TestResult): void;
+  onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
+  onUserConsoleLog?(log: UserConsoleLog): void;
+  onExit?(): void;
+}
+```
+
+## 示例
+
+### 简单自定义报告器
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const simpleReporter: Reporter = {
+  onTestFileStart(test) {
+    console.log(`📁 ${test.testPath}`);
+  },
+
+  onTestCaseResult(result) {
+    const status = result.status === 'pass' ? '✅' : '❌';
+    console.log(`${status} ${result.name}`);
+  },
+
+  onTestRunEnd({ results }) {
+    const passed = results.filter((r) => r.status === 'pass').length;
+    const failed = results.filter((r) => r.status === 'fail').length;
+    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+  },
+};
+```
+
+### 文件输出报告器
+
+```ts
+import { writeFileSync } from 'node:fs';
+import type { Reporter } from '@rstest/core';
+
+const jsonReporter: Reporter = {
+  onTestRunEnd({ results }) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      results: results.map((r) => ({
+        path: r.testPath,
+        status: r.status,
+        duration: r.duration,
+        errors: r.errors,
+      })),
+    };
+
+    writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```
