@@ -8,7 +8,7 @@ import type {
 } from './types';
 
 export { initCli, runCLI } from './cli';
-export { loadConfig, mergeRstestConfig } from './config';
+export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export { createRstest } from './core';
 
 export * from './runtime/api/public';
