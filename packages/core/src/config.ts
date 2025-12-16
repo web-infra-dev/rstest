@@ -5,7 +5,7 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
-import type { NormalizedConfig, RstestConfig } from './types';
+import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
   castArray,
   color,
@@ -75,6 +75,12 @@ export async function loadConfig({
 
   return { content: content as RstestConfig, filePath: configFilePath };
 }
+
+export const mergeProjectConfig = (
+  ...configs: ProjectConfig[]
+): ProjectConfig => {
+  return mergeRstestConfig(...configs) as ProjectConfig;
+};
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
