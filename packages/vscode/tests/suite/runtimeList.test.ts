@@ -82,7 +82,7 @@ suite('Runtime list suite', () => {
     });
 
     // restore config
-    config.update('testCaseCollectMethod', undefined);
+    await config.update('testCaseCollectMethod', undefined);
     await waitFor(() => {
       const item = getTestItemByLabels(testController.items, [
         'test',

@@ -55,7 +55,7 @@
           ],
           "enumDescriptions": [
             "Fast, only supports basic test cases.",
-            "Slow, supports all test cases, including each/for/extend."
+            "Slow, supports all test cases, including dynamic test generation methods (each/for/extend)."
           ]
         }
       }
