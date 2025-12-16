@@ -76,6 +76,7 @@ export default defineConfig({
         entry: {
           index: './src/index.ts',
           worker: './src/runtime/worker/index.ts',
+          globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
         define: {
           RSTEST_VERSION: JSON.stringify(version),

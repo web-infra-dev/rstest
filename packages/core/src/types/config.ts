@@ -104,6 +104,13 @@ export interface RstestConfig {
   setupFiles?: string[] | string;
 
   /**
+   * Path to global setup files, relative to project root.
+   * A global setup file can either export named functions `setup` and `teardown`
+   * or a `default` function that returns a teardown function.
+   */
+  globalSetup?: string[] | string;
+
+  /**
    * Retry the test specific number of times if it fails.
    * @default 0
    */
@@ -324,13 +331,20 @@ type OptionalKeys =
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'globalSetup'
+    | 'exclude'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
     coverage: NormalizedCoverageOptions;
     setupFiles: string[];
+    globalSetup: string[];
     exclude: {
       patterns: string[];
       override?: boolean;
@@ -340,9 +354,15 @@ export type NormalizedConfig = Required<
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
-    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+    | OptionalKeys
+    | 'projects'
+    | 'reporters'
+    | 'pool'
+    | 'setupFiles'
+    | 'globalSetup'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
+    globalSetup: string[];
   };

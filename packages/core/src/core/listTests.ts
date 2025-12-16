@@ -18,6 +18,7 @@ import {
   prettyTestPath,
   ROOT_SUITE_NAME,
 } from '../utils';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 const collectTests = async ({
@@ -39,14 +40,28 @@ const collectTests = async ({
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
+    globalSetupFiles,
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: context.projects.map((p) => p.normalizedConfig),
@@ -67,10 +82,39 @@ const collectTests = async ({
       const {
         entries,
         setupEntries,
+        globalSetupEntries,
         getSourceMaps,
         getAssetFiles,
         assetNames,
       } = await getRsbuildStats({ environmentName: project.environmentName });
+
+      if (
+        entries.length &&
+        globalSetupEntries.length &&
+        !project._globalSetups
+      ) {
+        project._globalSetups = true;
+        const files = globalSetupEntries.flatMap((e) => e.files!);
+        const assetFiles = await getAssetFiles(files);
+
+        const sourceMaps = await getSourceMaps(files);
+
+        const { success, errors } = await runGlobalSetup({
+          globalSetupEntries,
+          assetFiles,
+          sourceMaps,
+          interopDefault: true,
+          outputModule: project.outputModule,
+        });
+        if (!success) {
+          return {
+            list: [],
+            errors,
+            assetNames,
+            getSourceMaps: () => null,
+          };
+        }
+      }
 
       const list = await pool.collectTests({
         entries,
@@ -91,11 +135,13 @@ const collectTests = async ({
 
   return {
     list: returns.flatMap((r) => r.list),
+    errors: returns.flatMap((r) => r.errors || []),
     getSourceMap: async (name: string) => {
       const resource = returns.find((r) => r.assetNames.includes(name));
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
+      await runGlobalTeardown();
       await closeServer();
       await pool.close();
     },
@@ -122,6 +168,7 @@ const collectTestFiles = async ({
   }
   return {
     close: async () => {},
+    errors: [],
     list,
     getSourceMap: async (_name: string) => null,
   };
@@ -159,7 +206,12 @@ export async function listTests(
     return entries;
   };
 
-  const { list, close, getSourceMap } = filesOnly
+  const {
+    list,
+    close,
+    getSourceMap,
+    errors = [],
+  } = filesOnly
     ? await collectTestFiles({
         context,
         globTestSourceEntries,
@@ -201,7 +253,7 @@ export async function listTests(
     }
   };
 
-  const hasError = list.some((file) => file.errors?.length);
+  const hasError = list.some((file) => file.errors?.length) || errors.length;
   const showProject = context.projects.length > 1;
 
   if (hasError) {
@@ -224,6 +276,21 @@ export async function listTests(
             rootPath,
           );
         }
+      }
+    }
+
+    if (errors.length) {
+      const { printError } = await import('../utils/error');
+      for (const error of errors || []) {
+        logger.stderr(bgColor('bgRed', ' Unhandled Error '));
+        await printError(
+          error,
+          async (name) => {
+            const sourceMap = await getSourceMap(name);
+            return sourceMap ? JSON.parse(sourceMap) : null;
+          },
+          rootPath,
+        );
       }
     }
 

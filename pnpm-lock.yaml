@@ -199,6 +199,12 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
 
+  e2e/globalSetup/fixtures/basic: {}
+
+  e2e/globalSetup/fixtures/error: {}
+
+  e2e/globalSetup/fixtures/teardown-error: {}
+
   e2e/globals/fixtures:
     devDependencies:
       '@rstest/core':

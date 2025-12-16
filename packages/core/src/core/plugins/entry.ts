@@ -30,12 +30,14 @@ export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
   isWatch,
   globTestSourceEntries,
   setupFiles,
+  globalSetupFiles,
   context,
 }) => ({
   name: 'rstest:entry-watch',
@@ -48,6 +50,7 @@ export const pluginEntryWatch: (params: {
           return {
             ...sourceEntries,
             ...setupFiles[environment.name],
+            ...(globalSetupFiles?.[environment.name] || {}),
           };
         };
 
@@ -68,6 +71,8 @@ export const pluginEntryWatch: (params: {
         config.watchOptions.ignored.push(
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
           context.normalizedConfig.coverage.reportsDirectory,
+          // ignore global setup files since they are only run once
+          ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
 
@@ -87,6 +92,7 @@ export const pluginEntryWatch: (params: {
         const sourceEntries = await globTestSourceEntries(environment.name);
         config.entry = {
           ...setupFiles[environment.name],
+          ...(globalSetupFiles?.[environment.name] || {}),
           ...sourceEntries,
         };
       }

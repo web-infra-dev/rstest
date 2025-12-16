@@ -125,6 +125,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     override: false,
   },
   setupFiles: [],
+  globalSetup: [],
   includeSource: [],
   pool: {
     type: 'forks',
@@ -188,6 +189,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
+  merged.globalSetup = castArray(merged.globalSetup);
 
   merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
 
@@ -216,6 +218,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       ),
     },
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
+    globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
       formatRootStr(p, merged.root),
     ),

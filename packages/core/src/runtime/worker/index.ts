@@ -300,6 +300,7 @@ const runInPool = async (
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
+    // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
   };

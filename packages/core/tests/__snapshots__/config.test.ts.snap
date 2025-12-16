@@ -42,6 +42,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "globalSetup": [
+    "./global-setup.ts",
+  ],
   "globals": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,

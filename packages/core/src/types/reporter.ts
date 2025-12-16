@@ -89,11 +89,13 @@ export interface Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     snapshotSummary: SnapshotSummary;
     filterRerunTestPaths?: string[];
   }) => MaybePromise<void>;
