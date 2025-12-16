@@ -13,7 +13,7 @@ describe('globalSetup tests', () => {
     expect(process.env.GLOBAL_SETUP_EXECUTED).toBe('true');
   });
 
-  it('should can not access global variable', () => {
+  it('should not be able to access global variable', () => {
     // @ts-expect-error
     expect(global.SETUP).toBeUndefined();
   });
