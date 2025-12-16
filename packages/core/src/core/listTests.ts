@@ -94,36 +94,22 @@ const collectTests = async ({
         !project._globalSetups
       ) {
         project._globalSetups = true;
-        const { loadModule } = project.outputModule
-          ? await import('../runtime/worker/loadEsModule')
-          : await import('../runtime/worker/loadModule');
-        const assetFiles = await getAssetFiles(
-          globalSetupEntries.flatMap((e) => e.files!),
-        );
-        try {
-          // run global setup files once
-          await runGlobalSetup(
-            globalSetupEntries,
-            assetFiles,
-            ({ codeContent, distPath, testPath, interopDefault }) =>
-              loadModule({
-                codeContent,
-                distPath,
-                testPath,
-                rstestContext: {
-                  global,
-                  console: global.console,
-                  Error,
-                },
-                assetFiles,
-                interopDefault,
-              }),
-            true,
-          );
-        } catch (error) {
+        const files = globalSetupEntries.flatMap((e) => e.files!);
+        const assetFiles = await getAssetFiles(files);
+
+        const sourceMaps = await getSourceMaps(files);
+
+        const { success, errors } = await runGlobalSetup({
+          globalSetupEntries,
+          assetFiles,
+          sourceMaps,
+          interopDefault: true,
+          outputModule: project.outputModule,
+        });
+        if (!success) {
           return {
             list: [],
-            errors: [error as Error],
+            errors,
             assetNames,
             getSourceMaps,
           };

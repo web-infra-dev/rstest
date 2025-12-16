@@ -167,37 +167,23 @@ export async function runTests(context: Rstest): Promise<void> {
 
         if (entries.length && globalSetupEntries.length && !p._globalSetups) {
           p._globalSetups = true;
-          const { loadModule } = p.outputModule
-            ? await import('../runtime/worker/loadEsModule')
-            : await import('../runtime/worker/loadModule');
-          const assetFiles = await getAssetFiles(
-            globalSetupEntries.flatMap((e) => e.files!),
-          );
-          try {
-            // run global setup files once
-            await runGlobalSetup(
-              globalSetupEntries,
-              assetFiles,
-              ({ codeContent, distPath, testPath, interopDefault }) =>
-                loadModule({
-                  codeContent,
-                  distPath,
-                  testPath,
-                  rstestContext: {
-                    global,
-                    console: global.console,
-                    Error,
-                  },
-                  assetFiles,
-                  interopDefault,
-                }),
-              true,
-            );
-          } catch (error) {
+          const files = globalSetupEntries.flatMap((e) => e.files!);
+          const assetFiles = await getAssetFiles(files);
+
+          const sourceMaps = await getSourceMaps(files);
+
+          const { success, errors } = await runGlobalSetup({
+            globalSetupEntries,
+            assetFiles,
+            sourceMaps,
+            interopDefault: true,
+            outputModule: p.outputModule,
+          });
+          if (!success) {
             return {
               results: [],
               testResults: [],
-              errors: [error as Error],
+              errors,
               assetNames,
               getSourceMaps,
             };

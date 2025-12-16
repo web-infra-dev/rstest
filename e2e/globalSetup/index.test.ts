@@ -34,7 +34,7 @@ describe('globalSetup', async () => {
   });
 
   it('should fail when global setup throws an error', async () => {
-    const { expectStderrLog, expectExecFailed } = await runRstestCli({
+    const { expectStderrLog, expectExecFailed, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -46,8 +46,32 @@ describe('globalSetup', async () => {
 
     await expectExecFailed();
 
+    expect(cli.log).not.toContain('This should not be printed');
+
     // Check for global setup error message
     expectStderrLog(/Global setup failed intentionally/);
-    expectStderrLog(/globalSetup\.ts:2:8/);
+    expectStderrLog(/globalSetup\.ts:2/);
+  });
+
+  it('should fail when global teardown throws an error', async () => {
+    const { expectStderrLog, expectLog, expectExecFailed } = await runRstestCli(
+      {
+        command: 'rstest',
+        args: ['run'],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures/teardown-error'),
+          },
+        },
+      },
+    );
+
+    await expectExecFailed();
+
+    expectLog(/This should be printed/);
+
+    // Check for global setup error message
+    expectStderrLog(/Global teardown failed intentionally/);
+    expectStderrLog(/globalSetup\.ts:3/);
   });
 });

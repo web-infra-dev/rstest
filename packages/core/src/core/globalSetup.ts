@@ -1,55 +1,107 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'pathe';
+import { type Options, Tinypool } from 'tinypool';
 import type { EntryInfo } from '../types';
 import { bgColor, color } from '../utils';
 
 let globalTeardownCallbacks: Array<() => Promise<void> | void> = [];
 
-export async function runGlobalSetup(
-  globalSetupEntries: EntryInfo[],
-  assetFiles: Record<string, string>,
-  loadModule: (options: {
-    codeContent: string;
-    distPath: string;
-    testPath: string;
-    interopDefault: boolean;
-  }) => Promise<unknown>,
-  interopDefault: boolean,
-): Promise<void> {
-  if (globalSetupEntries.length === 0) {
-    return;
-  }
-
-  for (const entry of globalSetupEntries) {
-    const { distPath, testPath } = entry;
-    const setupCodeContent = assetFiles[distPath]!;
-
-    const module = (await loadModule({
-      codeContent: setupCodeContent,
-      distPath,
-      testPath,
-      interopDefault,
-    })) as any;
-
-    let teardownCallback: (() => Promise<void> | void) | undefined;
-
-    // Handle different global setup file formats
-    if (module && typeof module === 'object') {
-      // Format 1: Named setup/teardown functions
-      if (module.setup && typeof module.setup === 'function') {
-        await module.setup();
-        if (module.teardown && typeof module.teardown === 'function') {
-          teardownCallback = module.teardown;
-        }
-      }
-      // Format 2: Default function returning teardown
-      else if (module.default && typeof module.default === 'function') {
-        teardownCallback = await module.default();
-      }
-    }
-
-    if (teardownCallback) {
-      globalTeardownCallbacks.push(teardownCallback);
+function applyEnvChanges(changes: Record<string, string | undefined>) {
+  for (const key in changes) {
+    if (changes[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = changes[key];
     }
   }
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+async function createSetupPool() {
+  const options: Options = {
+    runtime: 'child_process',
+    filename: resolve(__dirname, './globalSetupWorker.js'),
+    execArgv: [
+      ...process.execArgv,
+      '--experimental-vm-modules',
+      '--experimental-import-meta-resolve',
+      '--no-warnings',
+    ],
+    maxThreads: 1,
+    minThreads: 1,
+    concurrentTasksPerWorker: 1,
+    isolateWorkers: false,
+    env: {
+      NODE_ENV: 'test',
+      // enable diff color by default
+      FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
+      ...process.env,
+    },
+  };
+
+  const pool = new Tinypool(options);
+
+  // Handle pool cleanup
+  const destroy = pool.destroy.bind(pool);
+  process.on('SIGTERM', destroy);
+
+  return pool;
+}
+
+export async function runGlobalSetup({
+  globalSetupEntries,
+  assetFiles,
+  sourceMaps,
+  interopDefault,
+  outputModule,
+}: {
+  globalSetupEntries: EntryInfo[];
+  assetFiles: Record<string, string>;
+  sourceMaps: Record<string, string>;
+  interopDefault: boolean;
+  outputModule: boolean;
+}): Promise<{
+  success: boolean;
+  errors?: any[];
+}> {
+  const pool = await createSetupPool();
+
+  const result = await pool.run({
+    type: 'setup',
+    entries: globalSetupEntries,
+    assetFiles,
+    interopDefault,
+    outputModule,
+    sourceMaps,
+  });
+
+  if (result.success) {
+    // Apply environment variable changes to main process
+    if (result.envChanges) {
+      applyEnvChanges(result.envChanges);
+    }
+
+    if (result.hasTeardown) {
+      globalTeardownCallbacks.push(() => runWorkerTeardown(pool));
+    }
+  }
+  return {
+    success: result.success,
+    errors: result.errors,
+  };
+}
+
+async function runWorkerTeardown(pool: Tinypool): Promise<void> {
+  const result = await pool.run({
+    type: 'teardown',
+  });
+  if (!result.success) {
+    process.exitCode = 1;
+  }
+
+  await pool.destroy();
 }
 
 export async function runGlobalTeardown(): Promise<void> {

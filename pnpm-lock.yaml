@@ -203,6 +203,8 @@ importers:
 
   e2e/globalSetup/fixtures/error: {}
 
+  e2e/globalSetup/fixtures/teardown-error: {}
+
   e2e/globals/fixtures:
     devDependencies:
       '@rstest/core':
