@@ -1,4 +1,5 @@
 import type { EntryInfo } from '../types';
+import { bgColor, color } from '../utils';
 
 export interface GlobalSetupFile {
   filePath: string;
@@ -66,9 +67,16 @@ export async function runGlobalTeardown(): Promise<void> {
     try {
       await teardown();
     } catch (error) {
-      console.error(
-        `Error during global teardown: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error(bgColor('bgRed', 'Error during global teardown'));
+      if (error instanceof Error) {
+        error.stack
+          ? console.error(color.red(error.stack))
+          : console.error(color.red(error.message));
+      } else {
+        console.error(color.red(String(error)));
+      }
+
+      process.exitCode = 1;
     }
   }
 }

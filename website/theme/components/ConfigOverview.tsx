@@ -20,6 +20,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'include',
       'exclude',
       'setupFiles',
+      'globalSetup',
       'projects',
       'passWithNoTests',
       'includeSource',

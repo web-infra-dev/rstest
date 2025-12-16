@@ -4,6 +4,7 @@
   "include",
   "exclude",
   "setup-files",
+  "global-setup",
   "projects",
   "update",
   "globals",

@@ -1,0 +1,125 @@
+# globalSetup
+
+- **类型:** `string | string[]`
+- **默认值:** `undefined`
+
+Rstest 中的 `globalSetup` 选项允许你运行 setup 和 teardown 代码，这些代码会在所有测试之前和完成后执行。这对于以下场景很有用：
+
+- 启动和停止数据库
+- 初始化测试服务
+- 测试运行后清理资源
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./global-setup.ts'],
+  // 或多个文件
+  globalSetup: ['./setup-db.ts', './setup-server.ts'],
+  // 其他配置...
+});
+```
+
+## 全局设置文件格式
+
+你可以用两种格式编写全局设置文件：
+
+### 命名函数（推荐）
+
+```ts
+// global-setup.ts
+
+export async function setup() {
+  console.log('正在设置测试环境...');
+
+  // 初始化数据库、启动服务等
+  // await startDatabase();
+}
+
+export async function teardown() {
+  console.log('正在清理测试环境...');
+
+  // 清理资源
+  // await stopDatabase();
+}
+```
+
+### 返回 teardown 函数的默认函数
+
+```ts
+// global-setup.ts
+export default async function globalSetup() {
+  console.log('正在设置测试环境...');
+
+  // 初始化资源
+  const database = await connectDatabase();
+  const server = await startTestServer();
+
+  // 返回 teardown 函数
+  return async () => {
+    console.log('正在清理资源...');
+    await server.stop();
+    await database.disconnect();
+  };
+}
+```
+
+:::note
+globalSetup 文件在不同的全局上下文中运行，因此你的测试无法访问在此处定义的变量。
+:::
+
+## 多个全局设置文件
+
+当使用多个全局设置文件时：
+
+- 设置函数按提供的顺序顺序执行
+- teardown 函数按相反顺序执行（LIFO - 后进先出）
+- 如果任何设置失败，整个测试运行都会失败
+
+## 与 setupFiles 的区别
+
+| 特性          | globalSetup                | setupFiles                 |
+| ------------- | -------------------------- | -------------------------- |
+| 执行时机      | 在**所有测试**之前执行一次 | 在**每个测试文件**之前执行 |
+| teardown 支持 | 支持                       | 不支持                     |
+| 使用场景      | 全局资源、数据库、服务     | 每个测试的工具方法、mock   |
+
+## 示例：数据库设置
+
+```ts
+// db-setup.ts
+let dbConnection: any;
+
+export async function setup() {
+  const { MongoClient } = await import('mongodb');
+  const client = new MongoClient(process.env.TEST_MONGODB_URI!);
+  await client.connect();
+
+  dbConnection = client.db('test');
+
+  // 播种测试数据
+  await dbConnection.collection('users').insertMany([
+    { name: 'John', email: 'john@example.com' },
+    { name: 'Jane', email: 'jane@example.com' },
+  ]);
+
+  console.log('✓ 数据库已连接并播种数据');
+}
+
+export async function teardown() {
+  if (dbConnection) {
+    await dbConnection.dropDatabase();
+    await dbConnection.client.close();
+    console.log('✓ 数据库已清理');
+  }
+}
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./db-setup.ts'],
+  include: ['**/*.test.ts'],
+});
+```

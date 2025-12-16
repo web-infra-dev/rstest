@@ -149,7 +149,7 @@ const collectTests = async ({
 
   return {
     list: returns.flatMap((r) => r.list),
-    errors: returns.flatMap((r) => r.errors),
+    errors: returns.flatMap((r) => r.errors || []),
     getSourceMap: async (name: string) => {
       const resource = returns.find((r) => r.assetNames.includes(name));
       return (await resource?.getSourceMaps([name]))?.[name];
