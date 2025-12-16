@@ -4,7 +4,7 @@ import { type Options, Tinypool } from 'tinypool';
 import type { EntryInfo } from '../types';
 import { bgColor, color } from '../utils';
 
-let globalTeardownCallbacks: Array<() => Promise<void> | void> = [];
+let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
 
 function applyEnvChanges(changes: Record<string, string | undefined>) {
   for (const key in changes) {

@@ -197,7 +197,7 @@ export const printSummaryErrorLogs = async ({
 
   const { printError } = await import('../utils/error');
   for (const error of unhandledErrors || []) {
-    logger.stderr(`${bgColor('bgRed', ' Unhandled Error ')}`);
+    logger.stderr(bgColor('bgRed', ' Unhandled Error '));
     await printError(error, getSourcemap, rootPath);
   }
 

@@ -424,7 +424,7 @@ export const createRsbuildServer = async ({
       if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[environmentName]![entry],
+          testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
         });
@@ -444,7 +444,7 @@ export const createRsbuildServer = async ({
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({
           distPath,
-          testPath: globalSetupFiles[environmentName]![entry],
+          testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
         });

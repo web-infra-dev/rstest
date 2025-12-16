@@ -4,7 +4,7 @@ import type { FormattedError } from '../../types';
 import { color } from '../../utils/helper';
 import { formatTestError } from '../util';
 
-let teardownCallbacks: Array<() => Promise<void> | void> = [];
+let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
 let initialEnv: Record<string, string | undefined> = {};
 let envChanges: Record<string, string | undefined> = {};
@@ -35,10 +35,10 @@ function captureEnvChanges(): Record<string, string | undefined> {
 }
 
 const runGlobalSetup = async (data: {
-  entries: Array<{
+  entries: {
     distPath: string;
     testPath: string;
-  }>;
+  }[];
   assetFiles: Record<string, string>;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
@@ -79,7 +79,7 @@ const runGlobalSetup = async (data: {
         ? await import('./loadEsModule')
         : await import('./loadModule');
 
-      const module = (await loadModule({
+      const module = await loadModule({
         codeContent: setupCodeContent,
         distPath,
         testPath,
@@ -90,7 +90,7 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
-      })) as any;
+      });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;
 

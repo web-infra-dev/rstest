@@ -282,9 +282,9 @@ export async function listTests(
     if (errors.length) {
       const { printError } = await import('../utils/error');
       for (const error of errors || []) {
-        logger.stderr(`${bgColor('bgRed', ' Unhandled Error ')}`);
+        logger.stderr(bgColor('bgRed', ' Unhandled Error '));
         await printError(
-          error!,
+          error,
           async (name) => {
             const sourceMap = await getSourceMap(name);
             return sourceMap ? JSON.parse(sourceMap) : null;
