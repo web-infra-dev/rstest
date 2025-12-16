@@ -1,17 +1,25 @@
 import vscode from 'vscode';
 import { logger } from './logger';
-import { WorkspaceManager } from './project';
+import { runningWorkers } from './master';
+import { Project, WorkspaceManager } from './project';
+import { RstestFileCoverage } from './testRunReporter';
 import {
   gatherTestItems,
-  getContentFromFilesystem,
   TestCase,
   TestFile,
+  TestFolder,
   testData,
 } from './testTree';
 
 export async function activate(context: vscode.ExtensionContext) {
   const rstest = new Rstest(context);
   return rstest;
+}
+
+export function deactivate() {
+  for (const worker of runningWorkers) {
+    worker.$close();
+  }
 }
 
 class Rstest {
@@ -40,7 +48,7 @@ class Rstest {
     this.runProfile = this.ctrl.createRunProfile(
       'Run Tests',
       vscode.TestRunProfileKind.Run,
-      (request) => this.startTestRun(request),
+      this.startTestRun,
       true,
       undefined,
       false,
@@ -51,14 +59,24 @@ class Rstest {
       (params: { test: vscode.TestItem; message: vscode.TestMessage }) =>
         this.startTestRun(
           new vscode.TestRunRequest([params.test], undefined, this.runProfile),
+          new vscode.CancellationTokenSource().token,
           true,
         ),
     );
 
+    this.ctrl.createRunProfile(
+      'Debug Tests',
+      vscode.TestRunProfileKind.Debug,
+      this.startTestRun,
+      true,
+      undefined,
+      false,
+    );
+
     this.coverageProfile = this.ctrl.createRunProfile(
-      'Run with Coverage',
+      'Run Tests with Coverage',
       vscode.TestRunProfileKind.Coverage,
-      (request) => this.startTestRun(request),
+      this.startTestRun,
       true,
       undefined,
       false,
@@ -66,11 +84,8 @@ class Rstest {
 
     this.coverageProfile.loadDetailedCoverage = async (_testRun, coverage) => {
       if (coverage instanceof RstestFileCoverage) {
-        return coverage.coveredLines.filter(
-          (l): l is vscode.StatementCoverage => !!l,
-        );
+        return coverage.details;
       }
-
       return [];
     };
   }
@@ -85,6 +100,7 @@ class Rstest {
     for (const workspace of vscode.workspace.workspaceFolders || []) {
       this.handleAddWorkspace(workspace);
     }
+    this.refreshAllWorkspaces();
     // start watching workspace change
     if (!this.workspaceWatcher) {
       this.workspaceWatcher = vscode.workspace.onDidChangeWorkspaceFolders(
@@ -95,6 +111,7 @@ class Rstest {
           for (const removed of e.removed) {
             this.handleRemoveWorkspace(removed);
           }
+          this.refreshAllWorkspaces();
         },
       );
     }
@@ -118,28 +135,40 @@ class Rstest {
     this.workspaces.delete(workspaceFolder.uri.toString());
   }
 
-  private startTestRun = (
+  private refreshAllWorkspaces() {
+    this.ctrl.items.replace([]);
+    for (const workspace of this.workspaces.values()) {
+      workspace.refresh(vscode.workspace.workspaceFolders?.length === 1);
+    }
+  }
+
+  private startTestRun = async (
     request: vscode.TestRunRequest,
+    token: vscode.CancellationToken,
     updateSnapshot?: boolean,
     run = this.ctrl.createTestRun(request),
   ) => {
-    // map of file uris to statements on each line:
-    const coveredLines = new Map<
-      /* file uri */ string,
-      (vscode.StatementCoverage | undefined)[]
-    >();
-
     const enqueuedTests = (tests: readonly vscode.TestItem[]) => {
       for (const test of tests) {
         if (request.exclude?.includes(test)) {
           continue;
         }
-        run.enqueued(test);
+        const data = testData.get(test);
+        if (data instanceof TestFile || data instanceof TestCase) {
+          run.enqueued(test);
+        }
         enqueuedTests(gatherTestItems(test.children, false));
       }
     };
 
     enqueuedTests(request.include ?? gatherTestItems(this.ctrl.items, false));
+
+    const commonOptions = {
+      run,
+      token,
+      updateSnapshot,
+      kind: request.profile?.kind,
+    };
 
     const discoverTests = async (tests: readonly vscode.TestItem[]) => {
       for (const test of tests) {
@@ -148,69 +177,60 @@ class Rstest {
         }
 
         const data = testData.get(test);
-        if (data instanceof TestCase) {
-          run.started(test);
-          await data.run(test, run, updateSnapshot);
+        if (data instanceof WorkspaceManager) {
+          if (data.projects.size === 1) {
+            const project = data.projects.values().next().value!;
+            await project.api.runTest({
+              ...commonOptions,
+            });
+          } else {
+            await discoverTests(gatherTestItems(test.children, false));
+          }
+        } else if (data instanceof Project) {
+          await data.api.runTest({
+            ...commonOptions,
+          });
+        } else if (data instanceof TestFolder) {
+          await data.api.runTest({
+            ...commonOptions,
+            fileFilter: data.uri.fsPath,
+          });
         } else if (data instanceof TestFile) {
-          if (!data.didResolve) {
-            await data.updateFromDisk(this.ctrl, test);
-            enqueuedTests(gatherTestItems(test.children, false));
-          }
-
-          // Run all tests for this file at once
-          run.started(test);
-          await data.run(test, run, updateSnapshot, this.ctrl);
-        } else {
-          // Process child tests
-          await discoverTests(gatherTestItems(test.children, false));
-        }
-
-        if (
-          test.uri &&
-          !coveredLines.has(test.uri.toString()) &&
-          request.profile?.kind === vscode.TestRunProfileKind.Coverage
-        ) {
-          try {
-            const lines = (await getContentFromFilesystem(test.uri)).split(
-              '\n',
-            );
-            coveredLines.set(
-              test.uri.toString(),
-              lines.map((lineText, lineNo) =>
-                lineText.trim().length
-                  ? new vscode.StatementCoverage(
-                      0,
-                      new vscode.Position(lineNo, 0),
-                    )
-                  : undefined,
-              ),
-            );
-          } catch {
-            // ignored
-          }
+          await data.api.runTest({
+            ...commonOptions,
+            fileFilter: data.uri.fsPath,
+          });
+        } else if (data instanceof TestCase) {
+          await data.api.runTest({
+            ...commonOptions,
+            fileFilter: data.uri.fsPath,
+            testCaseNamePath: data.parentNames.concat(test.label),
+            isSuite: data.type === 'suite',
+          });
         }
       }
     };
 
-    discoverTests(request.include ?? gatherTestItems(this.ctrl.items, false))
-      .catch((error) => {
-        logger.error('Error running tests:', error);
-      })
-      .finally(() => run.end());
-  };
-}
-
-class RstestFileCoverage extends vscode.FileCoverage {
-  constructor(
-    uri: string,
-    public readonly coveredLines: (vscode.StatementCoverage | undefined)[],
-  ) {
-    super(vscode.Uri.parse(uri), new vscode.TestCoverageCount(0, 0));
-    for (const line of coveredLines) {
-      if (line) {
-        this.statementCoverage.covered += line.executed ? 1 : 0;
-        this.statementCoverage.total++;
+    try {
+      if (!request.include?.length) {
+        if (this.workspaces.size === 1) {
+          const workspace = this.workspaces.values().next().value!;
+          if (workspace.projects.size === 1) {
+            const project = workspace.projects.values().next().value!;
+            await project.api.runTest({
+              ...commonOptions,
+            });
+            return;
+          }
+        }
       }
+      await discoverTests(
+        request.include ?? gatherTestItems(this.ctrl.items, false),
+      );
+    } catch (error) {
+      logger.error('Error running tests:', error);
+    } finally {
+      run.end();
     }
-  }
+  };
 }

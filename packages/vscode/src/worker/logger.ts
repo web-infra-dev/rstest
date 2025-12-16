@@ -6,7 +6,7 @@ class WorkerLogger extends BaseLogger {
     super('worker');
   }
   protected log(level: LogLevel, message: string) {
-    masterApi.log(level, message);
+    masterApi.log.asEvent(level, message);
   }
 }
 

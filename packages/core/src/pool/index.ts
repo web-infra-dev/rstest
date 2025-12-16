@@ -89,7 +89,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     disableConsoleIntercept,
     testEnvironment,
     isolate,
-    coverage,
+    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
     bail,

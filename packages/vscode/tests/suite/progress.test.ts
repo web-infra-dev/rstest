@@ -16,11 +16,7 @@ suite('Test Progress Reporting', () => {
     assert.ok(testController, 'Test controller should be exported');
 
     const item = await waitFor(() => {
-      const item = [
-        'workspace-1',
-        'rstest.config.ts',
-        'progress.test.ts',
-      ].reduce(
+      const item = ['test', 'progress.test.ts'].reduce(
         (item, label) =>
           item &&
           getTestItems(item.children).find((child) => child.label === label),
@@ -75,6 +71,7 @@ suite('Test Progress Reporting', () => {
 
     rstestInstance.startTestRun(
       new vscode.TestRunRequest([item], undefined, rstestInstance.runProfile),
+      new vscode.CancellationTokenSource().token,
       false,
       mockRun,
     );

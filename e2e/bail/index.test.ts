@@ -22,7 +22,9 @@ describe('test bail option', () => {
 
     expectLog(/Test run aborted/);
 
-    const logs = cli.stdout.split('\n').filter((log) => log.includes('Tests'));
+    const logs = cli.stdout
+      .split('\n')
+      .filter((log) => log.startsWith('      Tests'));
     // `Tests 1 failed | 1 passed (2)` => 2
     const totalCount = Number(logs[0]!.match(/\((\d+)\)/)?.[1]);
     expect(totalCount).toBe(2);
@@ -41,7 +43,9 @@ describe('test bail option', () => {
 
     await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter((log) => log.includes('Tests'));
+    const logs = cli.stdout
+      .split('\n')
+      .filter((log) => log.startsWith('      Tests'));
     // `Tests 1 failed | 1 passed (2)` => 2
     const totalCount = Number(logs[0]!.match(/\((\d+)\)/)?.[1]);
     expect(totalCount).toBe(2);
@@ -60,7 +64,9 @@ describe('test bail option', () => {
 
     await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter((log) => log.includes('Tests'));
+    const logs = cli.stdout
+      .split('\n')
+      .filter((log) => log.startsWith('      Tests'));
     // `Tests 1 failed | 2 passed (3)` => 3
     const totalCount = Number(logs[0]!.match(/\((\d+)\)/)?.[1]);
     expect(totalCount).toBe(3);

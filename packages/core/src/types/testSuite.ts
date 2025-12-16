@@ -78,13 +78,16 @@ export type SuiteContext = {
 };
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
+
 export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
-export type AfterEachListener = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
-export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
+
+export type AfterEachListener = (ctx: TestContext) => MaybePromise<void>;
+
+export type BeforeEachListener = (
+  ctx: TestContext,
+) => MaybePromise<void | AfterEachListener>;
 
 export type TestSuiteInfo = {
   testId: string;

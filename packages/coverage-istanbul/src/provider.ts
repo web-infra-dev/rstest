@@ -95,11 +95,15 @@ export class CoverageProvider implements RstestCoverageProvider {
       });
       const reportersList = this.options.reporters;
       for (const reporter of reportersList) {
-        const [reporterName, reporterOptions] = Array.isArray(reporter)
-          ? reporter
-          : [reporter, {}];
-        const report = reports.create(reporterName, reporterOptions);
-        report.execute(context);
+        if (typeof reporter === 'object' && 'execute' in reporter) {
+          reporter.execute(context);
+        } else {
+          const [reporterName, reporterOptions] = Array.isArray(reporter)
+            ? reporter
+            : [reporter, {}];
+          const report = reports.create(reporterName, reporterOptions);
+          report.execute(context);
+        }
       }
     } catch (error) {
       console.error('Failed to generate coverage reports:', error);
