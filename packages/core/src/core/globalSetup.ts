@@ -1,7 +1,6 @@
 import type { EntryInfo } from '../types';
 import { bgColor, color } from '../utils';
 
-
 let globalTeardownCallbacks: Array<() => Promise<void> | void> = [];
 
 export async function runGlobalSetup(
@@ -75,4 +74,3 @@ export async function runGlobalTeardown(): Promise<void> {
     }
   }
 }
-
