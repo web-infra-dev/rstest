@@ -165,11 +165,12 @@ export async function runTests(context: Rstest): Promise<void> {
 
         testStart ??= Date.now();
 
+        // Global setup only run once per project
+        // Global setup runs only if there is at least one running test
         if (entries.length && globalSetupEntries.length && !p._globalSetups) {
           p._globalSetups = true;
           const files = globalSetupEntries.flatMap((e) => e.files!);
           const assetFiles = await getAssetFiles(files);
-
           const sourceMaps = await getSourceMaps(files);
 
           const { success, errors } = await runGlobalSetup({
@@ -185,6 +186,7 @@ export async function runTests(context: Rstest): Promise<void> {
               testResults: [],
               errors,
               assetNames,
+              // sourcemap is useless since we install source-map-support in worker
               getSourceMaps: () => null,
             };
           }
