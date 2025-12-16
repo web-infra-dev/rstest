@@ -76,6 +76,3 @@ export async function runGlobalTeardown(): Promise<void> {
   }
 }
 
-export function clearGlobalTeardownCallbacks(): void {
-  globalTeardownCallbacks = [];
-}
