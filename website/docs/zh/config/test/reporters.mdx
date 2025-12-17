@@ -34,19 +34,22 @@ import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
-  ```bash
-  npx rstest --reporter=default
-  ```
+
+```bash
+npx rstest --reporter=default
+```
+
   </Tab>
   <Tab label="rstest.config.ts">
-  ```ts
-  import { defineConfig } from '@rstest/core';
+
+```ts
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: 'default',
 });
+```
 
-````
 </Tab>
 </Tabs>
 
@@ -56,20 +59,22 @@ export default defineConfig({
 
 <Tabs defaultValue='rstest.config.ts'>
 <Tab label="CLI">
+
 ```bash
 npx rstest --reporter=default --reporter=junit
-````
+```
 
   </Tab>
   <Tab label="rstest.config.ts">
-  ```ts
-  import { defineConfig } from '@rstest/core';
+
+```ts
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: ['default', 'junit'],
 });
+```
 
-````
 </Tab>
 </Tabs>
 
@@ -81,13 +86,13 @@ export default defineConfig({
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-reporters: [
-  ['default', { verbose: true }],
-  ['github-actions', { verbose: true }],
-  ['junit', { outputPath: './test-results.xml' }],
-],
+  reporters: [
+    ['default', { verbose: true }],
+    ['github-actions', { verbose: true }],
+    ['junit', { outputPath: './test-results.xml' }],
+  ],
 });
-````
+```
 
 #### 使用自定义报告器
 
