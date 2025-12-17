@@ -266,9 +266,7 @@ export class Project implements vscode.Disposable {
         const watcher = vscode.workspace.createFileSystemWatcher(
           new vscode.RelativePattern(root, '**'),
         );
-        this.cancellationSource.token.onCancellationRequested(() =>
-          watcher.dispose(),
-        );
+        token.onCancellationRequested(() => watcher.dispose());
 
         // TODO delay and batch run multiple files
         const updateOrCreateByRuntime = (uri: vscode.Uri) => {
