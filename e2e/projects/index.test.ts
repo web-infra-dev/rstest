@@ -51,6 +51,33 @@ describe('test projects', () => {
     }, 15_000);
   });
 
+  it('should run project correctly with specified config root', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--globals', '-c', 'packages/client/rstest.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // test log print
+    // should only run client project
+    expect(
+      logs.find((log) => log.includes('packages/node/test/index.test.ts')),
+    ).toBeFalsy();
+    expect(
+      logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
+    ).toBeTruthy();
+    expect(
+      logs.find((log) => log.includes('packages/client/test/node.test.ts')),
+    ).toBeTruthy();
+  });
+
   it('should run projects fail when project not found', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
