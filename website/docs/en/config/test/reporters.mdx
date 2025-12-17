@@ -38,7 +38,7 @@ import { Tab, Tabs } from '@theme';
   import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-reporters: 'default',
+  reporters: 'default',
 });
 
 ````
@@ -68,7 +68,7 @@ export default defineConfig({
   reporters: [
     ['default', { verbose: true }],
     ['github-actions', { verbose: true }],
-    ['junit', { outputFile: './test-results.xml' }],
+    ['junit', { outputPath: './test-results.xml' }],
   ],
 });
 ```

@@ -24,7 +24,7 @@ import { customReporter } from './path/to/custom-reporter';
 export default defineConfig({
   reporters: [
     'default', // Simple string reporter
-    ['junit', { outputFile: './test-results.xml' }], // Reporter with options
+    ['junit', { outputPath: './test-results.xml' }], // Reporter with options
     customReporter, // Custom reporter instance
   ],
 });

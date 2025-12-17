@@ -24,7 +24,7 @@ import { customReporter } from './path/to/custom-reporter';
 export default defineConfig({
   reporters: [
     'default', // 简单字符串报告器
-    ['junit', { outputFile: './test-results.xml' }], // 带选项的报告器
+    ['junit', { outputPath: './test-results.xml' }], // 带选项的报告器
     customReporter, // 自定义报告器实例
   ],
 });
