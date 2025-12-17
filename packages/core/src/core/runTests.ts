@@ -1,13 +1,7 @@
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
-import {
-  clearScreen,
-  color,
-  getSetupFiles,
-  getTestEntries,
-  logger,
-} from '../utils';
+import { clearScreen, color, getTestEntries, logger } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -53,6 +47,8 @@ export async function runTests(context: Rstest): Promise<void> {
 
     return entries;
   };
+
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
 
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
