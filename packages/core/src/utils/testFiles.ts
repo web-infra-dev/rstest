@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
 import type { Project } from '../types';
@@ -143,7 +144,10 @@ export const getSetupFiles = (
     return {};
   }
   return Object.fromEntries(
-    setups.map((setupFile) => {
+    setups.map((filePath) => {
+      const setupFile = filePath.startsWith('file://')
+        ? fileURLToPath(filePath)
+        : filePath;
       const setupFilePath = getAbsolutePath(rootPath, setupFile);
       try {
         if (!existsSync(setupFilePath)) {
