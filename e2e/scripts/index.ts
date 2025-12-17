@@ -50,6 +50,7 @@ class Cli {
     for (const io of toReset) {
       this[io] = '';
     }
+    this.log = '';
   };
 
   private waitForStd = (expect: string | RegExp, io: IoType): Promise<void> => {

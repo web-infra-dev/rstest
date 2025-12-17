@@ -85,20 +85,22 @@ export async function runTests(context: Rstest): Promise<void> {
     globalSetupFiles,
   );
 
+  const isWatchMode = command === 'watch';
+
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: context.projects.map((p) => p.normalizedConfig),
     },
-    globTestSourceEntries:
-      command === 'watch'
-        ? globTestSourceEntries
-        : async (name) => {
-            if (entriesCache.has(name)) {
-              return entriesCache.get(name)!.entries;
-            }
-            return globTestSourceEntries(name);
-          },
+    isWatchMode,
+    globTestSourceEntries: isWatchMode
+      ? globTestSourceEntries
+      : async (name) => {
+          if (entriesCache.has(name)) {
+            return entriesCache.get(name)!.entries;
+          }
+          return globTestSourceEntries(name);
+        },
     setupFiles,
     globalSetupFiles,
     rsbuildInstance,
