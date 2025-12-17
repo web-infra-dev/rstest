@@ -26,6 +26,7 @@ suite('Workspace discover suite', () => {
         {
           label: 'test',
           children: [
+            { label: 'each.test.ts' },
             { label: 'foo.test.ts' },
             { label: 'index.test.ts' },
             { label: 'jsFile.spec.js' },
@@ -53,6 +54,7 @@ suite('Workspace discover suite', () => {
             {
               label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -109,6 +111,7 @@ suite('Workspace discover suite', () => {
             {
               label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -208,6 +211,7 @@ suite('Workspace discover suite', () => {
             {
               label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -252,6 +256,7 @@ suite('Workspace discover suite', () => {
         {
           label: 'test',
           children: [
+            { label: 'each.test.ts' },
             { label: 'foo.test.ts' },
             { label: 'index.test.ts' },
             { label: 'jsFile.spec.js' },

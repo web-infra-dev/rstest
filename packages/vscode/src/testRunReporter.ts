@@ -12,6 +12,7 @@ import { parseErrorStacktrace } from '../../core/src/utils/error';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
+import { TestFile, testData } from './testTree';
 
 export class TestRunReporter implements Reporter {
   constructor(
@@ -60,6 +61,17 @@ export class TestRunReporter implements Reporter {
     if (!fileItem) return;
 
     this.run?.started(fileItem);
+  }
+  onTestFileReady(test: TestFileInfo) {
+    const fileTestItem = this.project?.testFiles.get(
+      vscode.Uri.file(test.testPath).toString(),
+    )?.testItem;
+    if (fileTestItem) {
+      const data = testData.get(fileTestItem);
+      if (data instanceof TestFile) {
+        data.updateFromList(test.tests);
+      }
+    }
   }
   onTestFileResult(test: TestFileResult) {
     // only update test file result when explicit run itself or parent

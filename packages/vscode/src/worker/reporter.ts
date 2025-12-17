@@ -11,6 +11,7 @@ import { masterApi } from '.';
 
 export class ProgressReporter implements Reporter {
   onTestFileStart = masterApi.onTestFileStart.asEvent;
+  onTestFileReady = masterApi.onTestFileReady.asEvent;
   onTestFileResult = masterApi.onTestFileResult.asEvent;
   onTestSuiteStart = masterApi.onTestSuiteStart.asEvent;
   onTestSuiteResult = masterApi.onTestSuiteResult.asEvent;

@@ -80,6 +80,12 @@ export class Worker {
       throw error;
     }
   }
+
+  public async listTests(data: WorkerInitOptions) {
+    const rstest = await this.init({ ...data, command: 'list' });
+    const res = await rstest.listTests({});
+    return res;
+  }
 }
 
 export const masterApi = createBirpc<TestRunReporter, Worker>(new Worker(), {
