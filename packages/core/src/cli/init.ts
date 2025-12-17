@@ -104,19 +104,25 @@ function mergeWithCLIOptions(
 }
 
 async function resolveConfig(
-  options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
+  options: CommonOptions & { cwd: string },
 ): Promise<{
   config: RstestConfig;
   configFilePath?: string;
 }> {
   const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: options.root,
+    cwd: options.cwd,
     path: options.config,
     configLoader: options.configLoader,
   });
 
+  const mergedConfig = mergeWithCLIOptions(config, options);
+
+  if (!mergedConfig.root) {
+    mergedConfig.root = options.cwd;
+  }
+
   return {
-    config: mergeWithCLIOptions(config, options),
+    config: mergedConfig,
     configFilePath: configFilePath ?? undefined,
   };
 }
@@ -219,7 +225,7 @@ export async function resolveProjects({
         const { config, configFilePath } = await resolveConfig({
           ...options,
           config: isDirectory ? undefined : project,
-          root: projectRoot,
+          cwd: projectRoot,
         });
 
         if (configFilePath) {
@@ -290,7 +296,7 @@ export async function initCli(options: CommonOptions): Promise<{
 
   const { config, configFilePath } = await resolveConfig({
     ...options,
-    root,
+    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
   });
 
   const projects = await resolveProjects({ config, root, options });
