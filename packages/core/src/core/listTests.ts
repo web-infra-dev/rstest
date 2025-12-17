@@ -62,6 +62,7 @@ const collectTests = async ({
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
     globalSetupFiles,
+    isWatchMode: false,
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: context.projects.map((p) => p.normalizedConfig),
