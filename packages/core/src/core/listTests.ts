@@ -11,7 +11,6 @@ import type {
 import {
   bgColor,
   color,
-  getSetupFiles,
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
@@ -28,6 +27,7 @@ const collectTests = async ({
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {

@@ -57,10 +57,23 @@ describe('test setup file', async () => {
     await expectExecSuccess();
   });
 
-  it('should run setup file correctly when setupFiles path with file protocol', async () => {
+  it('should resolve setup file correctly when setupFiles path with file protocol', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.fileProtocol.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('should resolve setup file correctly when setupFile is pure es module', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.esm.config.ts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures/package-name'),

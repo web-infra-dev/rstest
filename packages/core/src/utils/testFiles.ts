@@ -1,11 +1,8 @@
-import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
 import type { Project } from '../types';
-import { castArray, color, getAbsolutePath, parsePosix } from './helper';
+import { castArray, color, parsePosix } from './helper';
 
 export const filterFiles = (
   testFiles: string[],
@@ -123,50 +120,6 @@ export const getTestEntries = async ({
     filterFiles(testFiles, fileFilters, rootPath).map((entry) => {
       const relativePath = pathe.relative(rootPath, entry);
       return [formatTestEntryName(relativePath), entry];
-    }),
-  );
-};
-
-const tryResolve = (request: string, rootPath: string) => {
-  try {
-    const require = createRequire(rootPath);
-    return require.resolve(request, { paths: [rootPath] });
-  } catch (_err) {
-    return undefined;
-  }
-};
-
-export const getSetupFiles = (
-  setups: string[],
-  rootPath: string,
-): Record<string, string> => {
-  if (!setups.length) {
-    return {};
-  }
-  return Object.fromEntries(
-    setups.map((filePath) => {
-      const setupFile = filePath.startsWith('file://')
-        ? fileURLToPath(filePath)
-        : filePath;
-      const setupFilePath = getAbsolutePath(rootPath, setupFile);
-      try {
-        if (!existsSync(setupFilePath)) {
-          let errorMessage = `Setup file ${color.red(setupFile)} not found`;
-          if (setupFilePath !== setupFile) {
-            errorMessage += color.gray(` (resolved path: ${setupFilePath})`);
-          }
-          throw errorMessage;
-        }
-        const relativePath = pathe.relative(rootPath, setupFilePath);
-        return [formatTestEntryName(relativePath), setupFilePath];
-      } catch (err) {
-        const resolvedPath = tryResolve(setupFile, rootPath);
-        // support use package name as setupFiles value
-        if (resolvedPath) {
-          return [formatTestEntryName(setupFile), resolvedPath];
-        }
-        throw err;
-      }
     }),
   );
 };
