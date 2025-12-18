@@ -4,7 +4,7 @@
   "displayName": "Rstest",
   "publisher": "rstack",
   "description": "VS Code extension for Rstest",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "private": true,
   "license": "MIT",
   "repository": {
