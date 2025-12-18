@@ -14,6 +14,8 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  SnapshotRpcRequest,
+  SnapshotRpcResponse,
   TestFileInfo,
 } from './types';
 import {
@@ -299,6 +301,51 @@ const BrowserRunner: React.FC<{
           };
           // Forward to host via RPC
           rpc?.onLog(payload);
+        } else if (message?.type === 'snapshot-rpc-request') {
+          // Handle snapshot RPC requests from runner iframes
+          const request = message.payload as SnapshotRpcRequest;
+          const sourceWindow = event.source as Window | null;
+
+          if (!rpc || !sourceWindow) {
+            return;
+          }
+
+          // Forward to host and send response back to iframe
+          const sendResponse = (response: SnapshotRpcResponse) => {
+            sourceWindow.postMessage(
+              { type: '__rstest_snapshot_response__', payload: response },
+              '*',
+            );
+          };
+
+          (async () => {
+            try {
+              let result: unknown;
+              switch (request.method) {
+                case 'resolveSnapshotPath':
+                  result = await rpc.resolveSnapshotPath(request.args.testPath);
+                  break;
+                case 'readSnapshotFile':
+                  result = await rpc.readSnapshotFile(request.args.filepath);
+                  break;
+                case 'saveSnapshotFile':
+                  result = await rpc.saveSnapshotFile(
+                    request.args.filepath,
+                    request.args.content,
+                  );
+                  break;
+                case 'removeSnapshotFile':
+                  result = await rpc.removeSnapshotFile(request.args.filepath);
+                  break;
+              }
+              sendResponse({ id: request.id, result });
+            } catch (error) {
+              sendResponse({
+                id: request.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          })();
         }
       }
     };

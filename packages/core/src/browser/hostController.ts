@@ -6,7 +6,7 @@ import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
-import { dirname, join, relative, resolve, sep } from 'pathe';
+import { basename, dirname, join, relative, resolve, sep } from 'pathe';
 import * as picomatch from 'picomatch';
 import type { BrowserContext, ConsoleMessage, Page } from 'playwright-core';
 import sirv from 'sirv';
@@ -88,6 +88,11 @@ type HostRpcMethods = {
   onTestFileComplete: (payload: TestFileResult) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
+  // Snapshot file operations (for browser mode snapshot support)
+  resolveSnapshotPath: (testPath: string) => Promise<string>;
+  readSnapshotFile: (filepath: string) => Promise<string | null>;
+  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
+  removeSnapshotFile: (filepath: string) => Promise<void>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
@@ -1293,6 +1298,39 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       fatalError.stack = payload.stack;
       if (resolveAllTests) {
         resolveAllTests();
+      }
+    },
+    // Snapshot file operations
+    async resolveSnapshotPath(testPath: string) {
+      const snapExtension = '.snap';
+      const resolver =
+        context.normalizedConfig.resolveSnapshotPath ||
+        // test/index.ts -> test/__snapshots__/index.ts.snap
+        (() =>
+          join(
+            dirname(testPath),
+            '__snapshots__',
+            `${basename(testPath)}${snapExtension}`,
+          ));
+      return resolver(testPath, snapExtension);
+    },
+    async readSnapshotFile(filepath: string) {
+      try {
+        return await fs.readFile(filepath, 'utf-8');
+      } catch {
+        return null;
+      }
+    },
+    async saveSnapshotFile(filepath: string, content: string) {
+      const dir = dirname(filepath);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(filepath, content, 'utf-8');
+    },
+    async removeSnapshotFile(filepath: string) {
+      try {
+        await fs.unlink(filepath);
+      } catch {
+        // ignore if file doesn't exist
       }
     },
   });
