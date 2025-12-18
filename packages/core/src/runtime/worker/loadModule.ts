@@ -148,6 +148,14 @@ const defineRstestDynamicImport =
     return importedModule;
   };
 
+let latestAssetFiles: Record<string, string> = {};
+
+export const updateLatestAssetFiles = (
+  assetFiles: Record<string, string>,
+): void => {
+  latestAssetFiles = assetFiles;
+};
+
 // setup and rstest module should not be cached
 export const loadModule = ({
   codeContent,
@@ -193,7 +201,9 @@ export const loadModule = ({
       const joinedPath = isRelativePath(wasmPath)
         ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
-      const content = assetFiles[path.normalize(joinedPath)];
+      const content =
+        assetFiles[path.normalize(joinedPath)] ||
+        latestAssetFiles[path.normalize(joinedPath)];
 
       if (content) {
         callback(null, Buffer.from(content, 'base64'));

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   expect,
-  onTestFailed as onRstestFailed,
+  type onTestFailed as onRstestFailed,
   onTestFinished as onRstestFinished,
 } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
@@ -82,8 +82,8 @@ export async function runRstestCli({
   command,
   options,
   args = [],
-  onTestFinished = onRstestFinished,
-  onTestFailed = onRstestFailed,
+  onTestFinished,
+  onTestFailed,
 }: {
   command: string;
   options?: Partial<Options>;
@@ -91,6 +91,10 @@ export async function runRstestCli({
   onTestFinished?: (fn: () => void | Promise<void>) => void;
   onTestFailed?: typeof onRstestFailed;
 }) {
+  // fix get accurate test when no-isolate
+  const { onTestFinished: onRstestFinished, onTestFailed: onRstestFailed } =
+    await import('@rstest/core');
+
   const process = x(command, args, {
     ...options,
     nodeOptions: {
@@ -103,11 +107,11 @@ export async function runRstestCli({
   } as Options);
   const cli = new Cli(process);
 
-  onTestFinished(() => {
+  (onTestFinished || onRstestFinished)(() => {
     !cli.exec.killed && cli.exec.kill();
   });
 
-  onTestFailed?.(({ task }) => {
+  (onTestFailed || onRstestFailed)?.(({ task }) => {
     if (task.result?.errors?.[0]) {
       task.result.errors![0]!.message +=
         `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
