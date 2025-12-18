@@ -101,7 +101,11 @@ export class CoverageProvider implements RstestCoverageProvider {
           const [reporterName, reporterOptions] = Array.isArray(reporter)
             ? reporter
             : [reporter, {}];
-          const report = reports.create(reporterName, reporterOptions);
+          const report = reports.create(
+            reporterName as Parameters<typeof reports.create>[0],
+            reporterOptions,
+          );
+          //NOTE: https://github.com/vitest-dev/vitest/blob/41a111c35b6605dbe8a536a6e03b35e9bc0ce770/packages/coverage-istanbul/src/provider.ts#L145
           report.execute(context);
         }
       }

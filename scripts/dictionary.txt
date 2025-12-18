@@ -12,6 +12,7 @@ browserslistrc
 bundleless
 bytedance
 caniuse
+canyonjs
 CEHQ
 chunkhash
 Chunktmp
