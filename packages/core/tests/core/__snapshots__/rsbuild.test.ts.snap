@@ -7,15 +7,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "outputModule": true,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -39,7 +36,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -415,6 +411,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -570,14 +567,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -600,7 +594,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -976,6 +969,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -1109,14 +1103,11 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -1140,7 +1131,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -1505,6 +1495,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -1640,14 +1631,11 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "entry": [Function],
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -1671,7 +1659,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -2036,6 +2023,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -2179,14 +2167,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -2209,7 +2194,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -2585,6 +2569,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -2718,14 +2703,11 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "entry": {},
   "experiments": {
     "asyncWebAssembly": true,
-    "inlineConst": false,
-    "inlineEnum": false,
     "rspackFuture": {
       "bundlerInfo": {
         "force": false,
       },
     },
-    "typeReexportsPresence": true,
   },
   "externals": [
     [Function],
@@ -2749,7 +2731,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "javascript": {
         "exportsPresence": "warn",
         "importDynamic": false,
-        "inlineConst": false,
         "requireAsExpression": false,
         "requireDynamic": false,
         "requireResolve": false,
@@ -3125,6 +3106,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
+    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
