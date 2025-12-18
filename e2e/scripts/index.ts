@@ -91,17 +91,28 @@ export async function runRstestCli({
   onTestFinished?: (fn: () => void | Promise<void>) => void;
   onTestFailed?: typeof onRstestFailed;
 }) {
-  const process = x(command, args, {
+  // Create a clean env without CI-related variables that would trigger isCI detection
+  // std-env checks for existence of these vars, not their values
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.CI;
+  delete cleanEnv.GITHUB_ACTIONS;
+  delete cleanEnv.GITLAB_CI;
+  delete cleanEnv.CIRCLECI;
+  delete cleanEnv.TRAVIS;
+  delete cleanEnv.JENKINS_URL;
+  delete cleanEnv.BUILDKITE;
+
+  const execProcess = x(command, args, {
     ...options,
     nodeOptions: {
       ...(options?.nodeOptions || {}),
       env: {
+        ...cleanEnv,
         ...(options?.nodeOptions?.env || {}),
-        GITHUB_ACTIONS: 'false',
       },
     },
   } as Options);
-  const cli = new Cli(process);
+  const cli = new Cli(execProcess);
 
   onTestFinished(() => {
     !cli.exec.killed && cli.exec.kill();
