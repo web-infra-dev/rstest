@@ -3,8 +3,8 @@
   "name": "@rstest/tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "rstest run",
-    "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest run",
+    "test": "rstest",
+    "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

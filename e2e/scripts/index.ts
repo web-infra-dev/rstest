@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  expect,
-  type onTestFailed as onRstestFailed,
+import type {
+  onTestFailed as onRstestFailed,
   onTestFinished as onRstestFinished,
 } from '@rstest/core';
 import stripAnsi from 'strip-ansi';
@@ -88,12 +87,15 @@ export async function runRstestCli({
   command: string;
   options?: Partial<Options>;
   args?: string[];
-  onTestFinished?: (fn: () => void | Promise<void>) => void;
+  onTestFinished?: typeof onRstestFinished;
   onTestFailed?: typeof onRstestFailed;
 }) {
   // fix get accurate test when no-isolate
-  const { onTestFinished: onRstestFinished, onTestFailed: onRstestFailed } =
-    await import('@rstest/core');
+  const {
+    onTestFinished: onRstestFinished,
+    onTestFailed: onRstestFailed,
+    expect,
+  } = await import('@rstest/core');
 
   const process = x(command, args, {
     ...options,
