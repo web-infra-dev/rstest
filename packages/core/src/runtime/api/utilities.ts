@@ -1,10 +1,9 @@
 import type { RstestUtilities, RuntimeConfig, WorkerState } from '../../types';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
-import { fn, isMockFunction, mocks, spyOn } from './spy';
 
 export const createRstestUtilities: (
   workerState: WorkerState,
-) => RstestUtilities = (workerState) => {
+) => Promise<RstestUtilities> = async (workerState) => {
   const originalEnvValues = new Map<string, string | undefined>();
   const originalGlobalValues = new Map<
     string | symbol | number,
@@ -23,6 +22,9 @@ export const createRstestUtilities: (
     }
     return _timers;
   };
+
+  const { initSpy } = await import('./spy');
+  const { fn, spyOn, isMockFunction, mocks } = initSpy();
 
   const rstest: RstestUtilities = {
     fn,

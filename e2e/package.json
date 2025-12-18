@@ -5,6 +5,7 @@
   "scripts": {
     "test": "rstest",
     "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest",
+    "test:no-isolate": "rstest --isolate false",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

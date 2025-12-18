@@ -11,9 +11,9 @@ import { createRunner } from '../runner';
 import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
-export const createRstestRuntime = (
+export const createRstestRuntime = async (
   workerState: WorkerState,
-): {
+): Promise<{
   runner: {
     runTests: (
       testPath: string,
@@ -24,7 +24,7 @@ export const createRstestRuntime = (
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;
-} => {
+}> => {
   const { runner, api: runnerAPI } = createRunner({ workerState });
 
   if (workerState.runtimeConfig.chaiConfig) {
@@ -42,7 +42,7 @@ export const createRstestRuntime = (
     configurable: true,
   });
 
-  const rstest = createRstestUtilities(workerState);
+  const rstest = await createRstestUtilities(workerState);
 
   const runtime = {
     runner,

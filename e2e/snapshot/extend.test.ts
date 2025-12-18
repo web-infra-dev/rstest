@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { join } from 'node:path';
-import { expect, it } from '@rstest/core';
+import { it } from '@rstest/core';
 
 declare module '@rstest/core' {
   interface Assertion {
@@ -8,7 +8,7 @@ declare module '@rstest/core' {
   }
 }
 
-it('test toMatchImageSnapshot correctly', async () => {
+it('test toMatchImageSnapshot correctly', async ({ expect }) => {
   const { toMatchImageSnapshot } = await import('jest-image-snapshot');
 
   expect.extend({ toMatchImageSnapshot });

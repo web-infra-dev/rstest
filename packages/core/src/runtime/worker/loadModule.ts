@@ -6,6 +6,14 @@ import path from 'pathe';
 import { logger } from '../../utils/logger';
 import { asModule, interopModule, shouldInterop } from './interop';
 
+let latestAssetFiles: Record<string, string> = {};
+
+export const updateLatestAssetFiles = (
+  assetFiles: Record<string, string>,
+): void => {
+  latestAssetFiles = assetFiles;
+};
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const createRequire = (
@@ -31,7 +39,7 @@ const createRequire = (
       ? path.join(currentDirectory, id)
       : id;
 
-    const content = assetFiles[joinedPath];
+    const content = assetFiles[joinedPath] || latestAssetFiles[joinedPath];
 
     if (content) {
       try {
@@ -147,14 +155,6 @@ const defineRstestDynamicImport =
     }
     return importedModule;
   };
-
-let latestAssetFiles: Record<string, string> = {};
-
-export const updateLatestAssetFiles = (
-  assetFiles: Record<string, string>,
-): void => {
-  latestAssetFiles = assetFiles;
-};
 
 // setup and rstest module should not be cached
 export const loadModule = ({

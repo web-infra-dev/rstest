@@ -146,7 +146,7 @@ const preparePool = async ({
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = createRstestRuntime(workerState);
+  const { api, runner } = await createRstestRuntime(workerState);
 
   switch (testEnvironment) {
     case 'node':

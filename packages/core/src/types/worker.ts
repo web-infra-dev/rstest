@@ -1,4 +1,4 @@
-import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { ProjectContext, RstestContext } from './core';
 import type {
@@ -94,6 +94,7 @@ export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
   distPath: DistPath;
+  snapshotClient?: SnapshotClient;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;
