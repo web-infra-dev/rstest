@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { sleep } from '../../scripts/utils';
+import { sleep } from '../../../scripts/utils';
 import { getCount, increment } from '../src/index';
 
 process.env.index = '1';
