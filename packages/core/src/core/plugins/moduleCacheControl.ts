@@ -54,6 +54,9 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
+    if (setupFiles.length === 0) {
+      return;
+    }
     api.transform({ test: setupFiles }, ({ code }) => {
       // register setup's moduleId
       return {
