@@ -29,7 +29,8 @@ import {
   serializableConfig,
   TEMP_RSTEST_OUTPUT_DIR,
 } from '../utils';
-import { getSetupFiles, getTestEntries } from '../utils/testFiles';
+import { getSetupFiles } from '../utils/getSetupFiles';
+import { getTestEntries } from '../utils/testFiles';
 import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
