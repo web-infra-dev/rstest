@@ -1,4 +1,5 @@
 import type { SnapshotRpcRequest, SnapshotRpcResponse } from '../protocol';
+import { mapStackFrame } from './sourceMapSupport';
 
 const SNAPSHOT_HEADER = '// Rstest Snapshot';
 
@@ -126,5 +127,24 @@ export class BrowserSnapshotEnvironment {
 
   async removeSnapshotFile(filepath: string): Promise<void> {
     await sendRpcRequest<void>('removeSnapshotFile', { filepath });
+  }
+
+  /**
+   * Process stack trace for inline snapshots.
+   * Maps bundled URLs back to original source file paths.
+   */
+  processStackTrace(stack: {
+    file: string;
+    line: number;
+    column: number;
+    method: string;
+  }): { file: string; line: number; column: number; method: string } {
+    const mapped = mapStackFrame(stack);
+    return {
+      file: mapped.file,
+      line: mapped.line,
+      column: mapped.column,
+      method: mapped.method || stack.method,
+    };
   }
 }

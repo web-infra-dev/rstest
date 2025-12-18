@@ -16,6 +16,11 @@ import type {
   BrowserProjectRuntime,
 } from '../protocol';
 import { BrowserSnapshotEnvironment } from './snapshot';
+import {
+  findNewScriptUrl,
+  getScriptUrls,
+  preloadTestFileSourceMap,
+} from './sourceMapSupport';
 
 declare global {
   interface Window {
@@ -518,8 +523,19 @@ const run = async () => {
     });
 
     try {
+      // Record script URLs before loading the test file
+      const beforeScripts = getScriptUrls();
+
       // Load the test file dynamically using this project's context
       await currentTestContext.loadTest(key);
+
+      // Find the newly loaded chunk and preload its source map (for inline snapshots)
+      const afterScripts = getScriptUrls();
+      const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
+      if (chunkUrl) {
+        await preloadTestFileSourceMap(chunkUrl);
+      }
+
       const result = await runtime.runner.runTests(
         testPath,
         runnerHooks,
