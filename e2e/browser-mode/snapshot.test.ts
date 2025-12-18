@@ -9,12 +9,16 @@ const __dirname = dirname(__filename);
 
 const fixtureDir = path.join(__dirname, 'fixtures', 'snapshot');
 const snapshotDir = path.join(fixtureDir, 'tests', '__snapshots__');
+const fileSnapshotDir = path.join(fixtureDir, '__file_snapshots__');
 
 describe('browser mode - snapshot', () => {
   // Clean up snapshots before each test to ensure a clean state
   beforeEach(() => {
     if (fs.existsSync(snapshotDir)) {
       fs.rmSync(snapshotDir, { recursive: true });
+    }
+    if (fs.existsSync(fileSnapshotDir)) {
+      fs.rmSync(fileSnapshotDir, { recursive: true });
     }
   });
 
@@ -32,6 +36,22 @@ describe('browser snapshot update', () => {
 });
 `;
     fs.writeFileSync(updateTestPath, originalContent);
+
+    // Restore inline-update.test.ts to original state if modified
+    const inlineUpdateTestPath = path.join(
+      fixtureDir,
+      'tests',
+      'inline-update.test.ts',
+    );
+    const inlineUpdateOriginalContent = `import { describe, expect, it } from '@rstest/core';
+
+describe('browser snapshot - inline update', () => {
+  it('should update inline snapshot', () => {
+    expect('original').toMatchInlineSnapshot();
+  });
+});
+`;
+    fs.writeFileSync(inlineUpdateTestPath, inlineUpdateOriginalContent);
   });
 
   describe('Create - initial snapshot creation', () => {
@@ -224,6 +244,137 @@ describe('browser snapshot update', () => {
       // Count the number of snapshot entries
       const snapshotCount = (content.match(/exports\[/g) || []).length;
       expect(snapshotCount).toBe(5);
+    });
+  });
+
+  describe('Error snapshot - toThrowErrorMatchingSnapshot', () => {
+    it('should create and match error snapshots', async () => {
+      // First run: create error snapshot
+      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
+        'snapshot',
+        {
+          args: ['tests/error.test.ts'],
+        },
+      );
+      await firstExecSuccess();
+
+      // Verify error snapshot file was created
+      const snapshotFile = path.join(snapshotDir, 'error.test.ts.snap');
+      expect(fs.existsSync(snapshotFile)).toBe(true);
+
+      const content = fs.readFileSync(snapshotFile, 'utf-8');
+      expect(content).toContain('Test error message');
+      expect(content).toContain('should match error snapshot');
+
+      // Second run: should match existing snapshot
+      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
+        args: ['tests/error.test.ts'],
+      });
+
+      await expectExecSuccess();
+      expect(cli.stdout).toMatch(/Tests.*passed/);
+    });
+  });
+
+  describe('File snapshot - toMatchFileSnapshot', () => {
+    it('should create and match file snapshots', async () => {
+      // Ensure file snapshot directory doesn't exist
+      expect(fs.existsSync(fileSnapshotDir)).toBe(false);
+
+      // First run: create file snapshot
+      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
+        'snapshot',
+        {
+          args: ['tests/file.test.ts'],
+        },
+      );
+      await firstExecSuccess();
+
+      // Verify file snapshot was created
+      const fileSnapshotPath = path.join(fileSnapshotDir, 'data.json');
+      expect(fs.existsSync(fileSnapshotPath)).toBe(true);
+
+      const content = fs.readFileSync(fileSnapshotPath, 'utf-8');
+      const data = JSON.parse(content);
+      expect(data).toEqual({ key: 'value', count: 42 });
+
+      // Second run: should match existing file snapshot
+      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
+        args: ['tests/file.test.ts'],
+      });
+
+      await expectExecSuccess();
+      expect(cli.stdout).toMatch(/Tests.*passed/);
+    });
+  });
+
+  describe('Inline snapshot - toMatchInlineSnapshot', () => {
+    it('should work with inline snapshots in browser mode', async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
+        args: ['tests/inline.test.ts'],
+      });
+
+      await expectExecSuccess();
+      expect(cli.stdout).toMatch(/Tests.*passed/);
+    });
+
+    it('should update inline snapshot correctly when source line changes', async () => {
+      const inlineUpdateTestPath = path.join(
+        fixtureDir,
+        'tests',
+        'inline-update.test.ts',
+      );
+
+      // Step 1: Run with --update to create initial inline snapshot
+      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
+        'snapshot',
+        {
+          args: ['tests/inline-update.test.ts', '--update'],
+        },
+      );
+
+      await firstExecSuccess();
+
+      // Verify inline snapshot was written to the file
+      let content = fs.readFileSync(inlineUpdateTestPath, 'utf-8');
+      expect(content).toContain('toMatchInlineSnapshot(`"original"`)');
+
+      // Step 2: Modify the file - add new lines BEFORE the snapshot to shift its position
+      // This simulates a user adding code above the snapshot
+      const modifiedContent = `import { describe, expect, it } from '@rstest/core';
+
+describe('browser snapshot - inline update', () => {
+  // Adding some comments
+  // to shift the line numbers
+  // of the snapshot below
+  it('should update inline snapshot', () => {
+    expect('modified').toMatchInlineSnapshot(\`"original"\`);
+  });
+});
+`;
+      fs.writeFileSync(inlineUpdateTestPath, modifiedContent);
+
+      // Step 3: Run with --update again - the snapshot is now at a different line
+      // The source map must correctly map the new line position
+      const { expectExecSuccess: secondExecSuccess, cli: secondCli } =
+        await runBrowserCli('snapshot', {
+          args: ['tests/inline-update.test.ts', '--update'],
+        });
+
+      await secondExecSuccess();
+
+      // Verify the snapshot was updated at the correct (shifted) line
+      content = fs.readFileSync(inlineUpdateTestPath, 'utf-8');
+      // The inline snapshot should now contain 'modified' instead of 'original'
+      expect(content).toContain('toMatchInlineSnapshot(`"modified"`)');
+      // The old value should not exist
+      expect(content).not.toContain('"original"');
+      // The comments we added should still be there
+      expect(content).toContain('Adding some comments');
+      expect(content).toContain('to shift the line numbers');
+
+      // Verify stdout reports snapshot updated
+      expect(secondCli.stdout).toMatch(/Snapshots.*\d+.*updated/);
     });
   });
 });

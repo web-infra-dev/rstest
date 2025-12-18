@@ -55,6 +55,7 @@
     "@types/chai": "^5.2.3",
     "@rsbuild/core": "1.7.0-beta.1",
     "tinypool": "^1.1.1",
+    "convert-source-map": "^2.0.0",
     "open-editor": "^4.0.0",
     "playwright-core": "^1.49.1",
     "sirv": "^2.0.4",
@@ -69,6 +70,7 @@
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.1.0",
     "@types/babel__code-frame": "^7.0.6",
+    "@types/convert-source-map": "^2.0.3",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/istanbul-reports": "^3.0.4",
@@ -96,8 +98,8 @@
     "std-env": "^3.10.0",
     "strip-ansi": "^7.1.2",
     "tinyglobby": "^0.2.15",
-    "url-extras": "^0.1.0",
     "tinyspy": "^4.0.4",
+    "url-extras": "^0.1.0",
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {

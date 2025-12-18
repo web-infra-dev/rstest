@@ -767,7 +767,6 @@ const createBrowserRuntime = async ({
             tools: {
               rspack: (rspackConfig) => {
                 rspackConfig.mode = 'development';
-                rspackConfig.devtool = 'source-map';
                 rspackConfig.experiments = {
                   ...rspackConfig.experiments,
                   lazyCompilation: {

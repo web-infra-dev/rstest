@@ -108,7 +108,6 @@ export async function runRstestCli({
       env: {
         ...process.env,
         ...(options?.nodeOptions?.env || {}),
-        GITHUB_ACTIONS: 'false',
       },
     },
   } as Options);
