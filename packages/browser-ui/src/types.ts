@@ -74,6 +74,14 @@ export type BrowserClientMessage =
       type: 'snapshot-rpc-request';
       payload: SnapshotRpcRequest;
     }
+  | {
+      type: 'frame-rpc-request';
+      payload: { testFile: string; request: FrameRpcRequest };
+    }
+  | {
+      type: 'ai-rpc-request';
+      payload: { testFile: string; request: AiRpcRequest };
+    }
   | { type: string; payload?: unknown };
 
 /**
@@ -106,6 +114,107 @@ export type SnapshotRpcRequest =
  * Snapshot RPC response from container to runner iframe.
  */
 export type SnapshotRpcResponse = {
+  id: string;
+  result?: unknown;
+  error?: string;
+};
+
+// ============================================================================
+// Frame RPC types for @rstest/midscene
+// ============================================================================
+
+/**
+ * Mouse click options
+ */
+export type FrameMouseClickOptions = {
+  button?: 'left' | 'right' | 'middle';
+  clickCount?: number;
+  delay?: number;
+};
+
+/**
+ * Frame RPC request from runner iframe to control Playwright Frame.
+ * The container will forward these to the host via WebSocket RPC.
+ */
+export type FrameRpcRequest =
+  | {
+      id: string;
+      method: 'click';
+      args: { selector: string; options?: FrameMouseClickOptions };
+    }
+  | {
+      id: string;
+      method: 'mouse.click';
+      args: { x: number; y: number; options?: FrameMouseClickOptions };
+    }
+  | {
+      id: string;
+      method: 'keyboard.type';
+      args: { text: string; delay?: number };
+    }
+  | {
+      id: string;
+      method: 'keyboard.press';
+      args: { key: string; delay?: number };
+    }
+  | {
+      id: string;
+      method: 'screenshot';
+      args: { fullPage?: boolean };
+    }
+  | {
+      id: string;
+      method: 'evaluate';
+      args: { expression: string };
+    };
+
+/**
+ * Frame RPC response from host to runner iframe.
+ */
+export type FrameRpcResponse = {
+  id: string;
+  result?: unknown;
+  error?: string;
+};
+
+// ============================================================================
+// AI RPC types for @rstest/midscene Agent integration
+// ============================================================================
+
+/**
+ * AI RPC methods supported by the host
+ */
+export type AiRpcMethod =
+  | 'aiTap'
+  | 'aiRightClick'
+  | 'aiDoubleClick'
+  | 'aiHover'
+  | 'aiInput'
+  | 'aiKeyboardPress'
+  | 'aiScroll'
+  | 'aiAct'
+  | 'aiQuery'
+  | 'aiAssert'
+  | 'aiWaitFor'
+  | 'aiLocate'
+  | 'aiBoolean'
+  | 'aiNumber'
+  | 'aiString';
+
+/**
+ * AI RPC request from runner iframe to execute Midscene AI operations.
+ * The container will forward these to the host via WebSocket RPC.
+ */
+export type AiRpcRequest = {
+  id: string;
+  method: AiRpcMethod;
+  args: unknown[];
+};
+
+/**
+ * AI RPC response from host to runner iframe.
+ */
+export type AiRpcResponse = {
   id: string;
   result?: unknown;
   error?: string;

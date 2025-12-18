@@ -1,0 +1,54 @@
+{
+  "name": "@rstest/midscene",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Midscene integration for Rstest browser mode",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "default": "./dist/agent.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
+  },
+  "dependencies": {
+    "@midscene/core": "^1.0.1"
+  },
+  "devDependencies": {
+    "@rstest/tsconfig": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rslib/core": "0.18.3",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "rstest",
+    "midscene",
+    "browser",
+    "testing",
+    "playwright"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/midscene"
+  }
+}

@@ -10,10 +10,14 @@ import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { useRpc } from './hooks/useRpc';
 import type {
+  AiRpcRequest,
+  AiRpcResponse,
   BrowserClientFileResult,
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  FrameRpcRequest,
+  FrameRpcResponse,
   SnapshotRpcRequest,
   SnapshotRpcResponse,
   TestFileInfo,
@@ -341,6 +345,68 @@ const BrowserRunner: React.FC<{
               sendResponse({ id: request.id, result });
             } catch (error) {
               sendResponse({
+                id: request.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          })();
+        } else if (message?.type === 'frame-rpc-request') {
+          // Handle frame RPC requests from runner iframes (for @rstest/midscene)
+          const { testFile, request } = message.payload as {
+            testFile: string;
+            request: FrameRpcRequest;
+          };
+          const sourceWindow = event.source as Window | null;
+
+          if (!rpc || !sourceWindow) {
+            return;
+          }
+
+          // Forward to host and send response back to iframe
+          const sendFrameResponse = (response: FrameRpcResponse) => {
+            sourceWindow.postMessage(
+              { type: '__rstest_frame_response__', payload: response },
+              '*',
+            );
+          };
+
+          (async () => {
+            try {
+              const result = await rpc.frameOperation(testFile, request);
+              sendFrameResponse(result);
+            } catch (error) {
+              sendFrameResponse({
+                id: request.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          })();
+        } else if (message?.type === 'ai-rpc-request') {
+          // Handle AI RPC requests from runner iframes (for @rstest/midscene AI Agent)
+          const { testFile, request } = message.payload as {
+            testFile: string;
+            request: AiRpcRequest;
+          };
+          const sourceWindow = event.source as Window | null;
+
+          if (!rpc || !sourceWindow) {
+            return;
+          }
+
+          // Forward to host and send response back to iframe
+          const sendAiResponse = (response: AiRpcResponse) => {
+            sourceWindow.postMessage(
+              { type: '__rstest_ai_response__', payload: response },
+              '*',
+            );
+          };
+
+          (async () => {
+            try {
+              const result = await rpc.aiOperation(testFile, request);
+              sendAiResponse(result);
+            } catch (error) {
+              sendAiResponse({
                 id: request.id,
                 error: error instanceof Error ? error.message : String(error),
               });

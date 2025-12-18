@@ -32,10 +32,15 @@ import {
 import { getSetupFiles } from '../utils/getSetupFiles';
 import { getTestEntries } from '../utils/testFiles';
 import type {
+  AiRpcRequest,
+  AiRpcResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
+  FrameRpcRequest,
+  FrameRpcResponse,
   TestFileInfo,
 } from './protocol';
+import { HostWebPage } from './hostWebPage';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +98,16 @@ type HostRpcMethods = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Frame operations (for @rstest/midscene Playwright control)
+  frameOperation: (
+    testFile: string,
+    request: FrameRpcRequest,
+  ) => Promise<FrameRpcResponse>;
+  // AI operations (for @rstest/midscene Agent AI capabilities)
+  aiOperation: (
+    testFile: string,
+    request: AiRpcRequest,
+  ) => Promise<AiRpcResponse>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
@@ -775,6 +790,16 @@ const createBrowserRuntime = async ({
                     entries: false,
                   },
                 };
+                // Configure watch options to ignore midscene output directory
+                // This prevents infinite reload loops when Midscene generates reports
+                rspackConfig.watchOptions = {
+                  ...rspackConfig.watchOptions,
+                  ignored: [
+                    '**/node_modules/**',
+                    '**/.git/**',
+                    '**/midscene_run/**',
+                  ],
+                };
                 rspackConfig.plugins = rspackConfig.plugins || [];
                 rspackConfig.plugins.push(virtualManifestPlugin);
               },
@@ -1225,6 +1250,94 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     });
   }
 
+  // Cache for Midscene Agents per test file
+  // We dynamically import @midscene/core to avoid bundling issues
+  type MidsceneAgent = {
+    aiTap: (locator: string) => Promise<void>;
+    aiRightClick: (locator: string) => Promise<void>;
+    aiDoubleClick: (locator: string) => Promise<void>;
+    aiHover: (locator: string) => Promise<void>;
+    aiInput: (locator: string, value: string) => Promise<void>;
+    aiKeyboardPress: (key: string) => Promise<void>;
+    aiScroll: (options: unknown) => Promise<void>;
+    aiAct: (instruction: string) => Promise<void>;
+    aiQuery: <T = unknown>(question: string) => Promise<T>;
+    aiAssert: (assertion: string) => Promise<void>;
+    aiWaitFor: (condition: string, options?: unknown) => Promise<void>;
+    aiLocate: (locator: string) => Promise<unknown>;
+    aiBoolean: (question: string) => Promise<boolean>;
+    aiNumber: (question: string) => Promise<number>;
+    aiString: (question: string) => Promise<string>;
+  };
+  const agentCache = new Map<string, MidsceneAgent>();
+
+  // Track whether we've loaded the .env file for Midscene
+  let envLoaded = false;
+
+  // Helper to get or create an Agent for a test file
+  const getOrCreateAgent = async (testFile: string): Promise<MidsceneAgent> => {
+    const cached = agentCache.get(testFile);
+    if (cached) {
+      return cached;
+    }
+
+    // Load .env file for Midscene configuration (only once)
+    if (!envLoaded) {
+      try {
+        const dotenv = await import('dotenv');
+        const envPath = resolve(context.rootPath, '.env');
+        if (existsSync(envPath)) {
+          dotenv.config({ path: envPath });
+          logger.log(color.gray(`Loaded .env from ${envPath}`));
+        }
+      } catch {
+        // dotenv not available, continue without it
+      }
+      envLoaded = true;
+    }
+
+    if (!containerPage) {
+      throw new Error('Container page not available');
+    }
+
+    // Find the iframe for this test file
+    const iframeElement = await containerPage.$(
+      `iframe[data-test-file="${testFile}"]`,
+    );
+    if (!iframeElement) {
+      throw new Error(`Frame not found for test file: ${testFile}`);
+    }
+
+    const frame = await iframeElement.contentFrame();
+    if (!frame) {
+      throw new Error(`Cannot access content frame for: ${testFile}`);
+    }
+
+    // Create HostWebPage for this iframe
+    const hostWebPage = new HostWebPage(
+      containerPage,
+      iframeElement as import('playwright-core').ElementHandle<HTMLIFrameElement>,
+      frame,
+    );
+
+    // Ensure action space is built before creating the Agent
+    // This is required because actionSpace() is synchronous but building it requires
+    // async dynamic import of @midscene/core/device
+    await hostWebPage.ensureActionSpace();
+
+    // Dynamically import @midscene/core Agent
+    const { Agent } = await import('@midscene/core');
+
+    // Create Agent with the HostWebPage
+    // Use type assertion since HostWebPage implements AbstractInterface but TypeScript
+    // can't verify this at compile time due to dynamic import of @midscene/core/device
+    // biome-ignore lint/suspicious/noExplicitAny: Dynamic typing for Midscene integration
+    const agent = new Agent(hostWebPage as any);
+    agentCache.set(testFile, agent as unknown as MidsceneAgent);
+
+    return agent as unknown as MidsceneAgent;
+  };
+
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
     async rerunTest(testFile: string, testNamePattern?: string) {
@@ -1331,6 +1444,226 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         await fs.unlink(filepath);
       } catch {
         // ignore if file doesn't exist
+      }
+    },
+    // Frame operations for @rstest/midscene
+    async frameOperation(
+      testFile: string,
+      request: FrameRpcRequest,
+    ): Promise<FrameRpcResponse> {
+      const { id, method, args } = request;
+
+      try {
+        if (!containerPage) {
+          throw new Error('Container page not available');
+        }
+
+        // Find the iframe element for the specified test file
+        const iframeElement = await containerPage.$(
+          `iframe[data-test-file="${testFile}"]`,
+        );
+        if (!iframeElement) {
+          throw new Error(`Frame not found for test file: ${testFile}`);
+        }
+
+        // Get the Frame object from the iframe
+        const frame = await iframeElement.contentFrame();
+        if (!frame) {
+          throw new Error(`Cannot access content frame for: ${testFile}`);
+        }
+
+        // Get iframe bounding box for coordinate offset calculation
+        const iframeBoundingBox = await iframeElement.boundingBox();
+
+        let result: unknown;
+
+        switch (method) {
+          case 'click':
+            await frame.click(args.selector, args.options);
+            break;
+
+          case 'mouse.click': {
+            // Frame doesn't have mouse property, use containerPage.mouse with offset
+            if (!iframeBoundingBox) {
+              throw new Error('Cannot get iframe bounding box');
+            }
+            const absoluteX = iframeBoundingBox.x + args.x;
+            const absoluteY = iframeBoundingBox.y + args.y;
+            await containerPage.mouse.click(absoluteX, absoluteY, args.options);
+            break;
+          }
+
+          case 'mouse.dblclick': {
+            if (!iframeBoundingBox) {
+              throw new Error('Cannot get iframe bounding box');
+            }
+            const absoluteX = iframeBoundingBox.x + args.x;
+            const absoluteY = iframeBoundingBox.y + args.y;
+            await containerPage.mouse.dblclick(
+              absoluteX,
+              absoluteY,
+              args.options,
+            );
+            break;
+          }
+
+          case 'mouse.move': {
+            if (!iframeBoundingBox) {
+              throw new Error('Cannot get iframe bounding box');
+            }
+            const absoluteX = iframeBoundingBox.x + args.x;
+            const absoluteY = iframeBoundingBox.y + args.y;
+            await containerPage.mouse.move(absoluteX, absoluteY, {
+              steps: args.steps,
+            });
+            break;
+          }
+
+          case 'mouse.down':
+            await containerPage.mouse.down({ button: args.button });
+            break;
+
+          case 'mouse.up':
+            await containerPage.mouse.up({ button: args.button });
+            break;
+
+          case 'mouse.wheel':
+            await containerPage.mouse.wheel(args.deltaX, args.deltaY);
+            break;
+
+          case 'keyboard.type':
+            // Keyboard events go to the focused element, use containerPage.keyboard
+            await containerPage.keyboard.type(args.text, { delay: args.delay });
+            break;
+
+          case 'keyboard.press':
+            await containerPage.keyboard.press(args.key, { delay: args.delay });
+            break;
+
+          case 'keyboard.down':
+            await containerPage.keyboard.down(args.key);
+            break;
+
+          case 'keyboard.up':
+            await containerPage.keyboard.up(args.key);
+            break;
+
+          case 'screenshot': {
+            // Take screenshot of the iframe element
+            const buffer = await iframeElement.screenshot();
+            result = buffer.toString('base64');
+            break;
+          }
+
+          case 'evaluate':
+            result = await frame.evaluate(args.expression);
+            break;
+
+          case 'getViewportSize': {
+            const size = await frame.evaluate(() => ({
+              width: document.documentElement.clientWidth,
+              height: document.documentElement.clientHeight,
+              dpr: window.devicePixelRatio,
+            }));
+            result = size;
+            break;
+          }
+
+          case 'getUrl':
+            result = frame.url();
+            break;
+
+          default:
+            throw new Error(`Unknown frame operation method: ${method}`);
+        }
+
+        return { id, result };
+      } catch (error) {
+        return { id, error: (error as Error).message };
+      }
+    },
+    // AI operations for @rstest/midscene Agent
+    async aiOperation(
+      testFile: string,
+      request: AiRpcRequest,
+    ): Promise<AiRpcResponse> {
+      const { id, method, args } = request;
+
+      try {
+        // Get or create Agent for this test file
+        const agent = await getOrCreateAgent(testFile);
+
+        let result: unknown;
+
+        // Call the appropriate agent method
+        switch (method) {
+          case 'aiTap':
+            await agent.aiTap(args[0] as string);
+            break;
+
+          case 'aiRightClick':
+            await agent.aiRightClick(args[0] as string);
+            break;
+
+          case 'aiDoubleClick':
+            await agent.aiDoubleClick(args[0] as string);
+            break;
+
+          case 'aiHover':
+            await agent.aiHover(args[0] as string);
+            break;
+
+          case 'aiInput':
+            await agent.aiInput(args[0] as string, args[1] as string);
+            break;
+
+          case 'aiKeyboardPress':
+            await agent.aiKeyboardPress(args[0] as string);
+            break;
+
+          case 'aiScroll':
+            await agent.aiScroll(args[0]);
+            break;
+
+          case 'aiAct':
+            await agent.aiAct(args[0] as string);
+            break;
+
+          case 'aiQuery':
+            result = await agent.aiQuery(args[0] as string);
+            break;
+
+          case 'aiAssert':
+            await agent.aiAssert(args[0] as string);
+            break;
+
+          case 'aiWaitFor':
+            await agent.aiWaitFor(args[0] as string, args[1] as object);
+            break;
+
+          case 'aiLocate':
+            result = await agent.aiLocate(args[0] as string);
+            break;
+
+          case 'aiBoolean':
+            result = await agent.aiBoolean(args[0] as string);
+            break;
+
+          case 'aiNumber':
+            result = await agent.aiNumber(args[0] as string);
+            break;
+
+          case 'aiString':
+            result = await agent.aiString(args[0] as string);
+            break;
+
+          default:
+            throw new Error(`Unknown AI operation method: ${method}`);
+        }
+
+        return { id, result };
+      } catch (error) {
+        return { id, error: (error as Error).message };
       }
     },
   });

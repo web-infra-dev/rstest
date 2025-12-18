@@ -1,8 +1,12 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
 import type {
+  AiRpcRequest,
+  AiRpcResponse,
   BrowserClientFileResult,
   BrowserClientTestResult,
+  FrameRpcRequest,
+  FrameRpcResponse,
   TestFileInfo,
 } from '../types';
 
@@ -45,6 +49,16 @@ export type HostRPC = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Frame RPC operations (for @rstest/midscene integration)
+  frameOperation: (
+    testFile: string,
+    request: FrameRpcRequest,
+  ) => Promise<FrameRpcResponse>;
+  // AI RPC operations (for @rstest/midscene AI Agent integration)
+  aiOperation: (
+    testFile: string,
+    request: AiRpcRequest,
+  ) => Promise<AiRpcResponse>;
 };
 
 export type ContainerRPC = {

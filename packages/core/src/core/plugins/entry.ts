@@ -74,6 +74,9 @@ export const pluginEntryWatch: (params: {
           // ignore global setup files since they are only run once
           ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
+          // ignore midscene output directory to prevent infinite reload loop
+          // when Midscene generates report files during AI operations
+          '**/midscene_run/**',
         );
 
         const configFilePath = context.projects.find(
