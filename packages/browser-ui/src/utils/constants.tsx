@@ -30,12 +30,12 @@ export const STATUS_META: Record<TestStatus, StatusMeta> = {
   },
   pass: {
     label: 'Pass',
-    color: '#4ade80',
+    color: '#4f9c6b',
     icon: <CheckCircle2 size={16} strokeWidth={2.1} />,
   },
   fail: {
     label: 'Fail',
-    color: '#f87171',
+    color: '#c94a4a',
     icon: <XCircle size={16} strokeWidth={2.1} />,
   },
 };

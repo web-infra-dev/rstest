@@ -33,7 +33,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
       <div className="flex items-center gap-3">
         <Logo className="h-7" />
         <span className="text-base font-semibold leading-tight text-[color:var(--ant-color-text)]">
-          Browser Tests
+          RSTEST
         </span>
       </div>
       <div className="flex items-center gap-2">

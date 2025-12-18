@@ -1,7 +1,7 @@
 import { Skeleton, Tree, Typography } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
 import type { DataNode } from 'antd/es/tree';
-import { ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
+import { ChevronDown, ChevronRight, Package } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
 import type { BrowserProjectRuntime, TestFileInfo } from '../types';
 import {
@@ -266,8 +266,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       };
     };
 
-    // Always group by project when there are projects configured
-    if (projectNames.length > 0) {
+    // Only show project level when there are multiple projects (explicit config)
+    // When there's only one project, it's likely the default project without explicit config
+    if (projectNames.length > 1) {
       return projectNames.map((projectName) => {
         const projectFiles = testFiles.filter(
           (f) => f.projectName === projectName,
@@ -296,7 +297,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           key: projectKey,
           title: (
             <div className="flex items-center gap-1.5">
-              <FolderOpen
+              <Package
                 size={14}
                 style={{ color: projectMeta.color }}
                 className="shrink-0"

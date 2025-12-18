@@ -1,6 +1,7 @@
 import { Typography } from 'antd';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import React from 'react';
+import { STATUS_META } from '../utils/constants';
 
 type StatsBarProps = {
   passCount: number;
@@ -28,11 +29,23 @@ export const StatsBar: React.FC<StatsBarProps> = ({
     >
       <div className="flex gap-4 text-xs">
         <div className="inline-flex items-center gap-2">
-          <CheckCircle2 size={14} className="shrink-0 text-[#4ade80]" />
+          <CheckCircle2
+            size={14}
+            className={'shrink-0]'}
+            style={{
+              color: STATUS_META.pass.color,
+            }}
+          />
           <Text className="leading-none!">{passCount} passed</Text>
         </div>
         <div className="inline-flex items-center gap-2">
-          <XCircle size={14} className="shrink-0 text-[#f87171]" />
+          <XCircle
+            size={14}
+            className="shrink-0"
+            style={{
+              color: STATUS_META.fail.color,
+            }}
+          />
           <Text className="leading-none!">{failCount} failed</Text>
         </div>
       </div>
