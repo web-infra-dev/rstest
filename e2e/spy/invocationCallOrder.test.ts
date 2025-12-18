@@ -1,6 +1,7 @@
 import { expect, it, rstest } from '@rstest/core';
 
 it('rstest.fn -> mock.invocationCallOrder', () => {
+  rstest.resetAllMocks();
   const sayHi = rstest.fn();
   const sayHello = rstest.fn();
 
