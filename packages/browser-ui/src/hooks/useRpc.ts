@@ -40,6 +40,11 @@ export type HostRPC = {
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
+  // Snapshot file operations (for browser mode snapshot support)
+  resolveSnapshotPath: (testPath: string) => Promise<string>;
+  readSnapshotFile: (filepath: string) => Promise<string | null>;
+  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
+  removeSnapshotFile: (filepath: string) => Promise<void>;
 };
 
 export type ContainerRPC = {

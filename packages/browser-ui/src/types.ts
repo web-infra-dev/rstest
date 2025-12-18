@@ -70,4 +70,43 @@ export type BrowserClientMessage =
       type: 'fatal';
       payload: { message: string; stack?: string };
     }
+  | {
+      type: 'snapshot-rpc-request';
+      payload: SnapshotRpcRequest;
+    }
   | { type: string; payload?: unknown };
+
+/**
+ * Snapshot RPC request from runner iframe.
+ * The container will forward these to the host via WebSocket RPC.
+ */
+export type SnapshotRpcRequest =
+  | {
+      id: string;
+      method: 'resolveSnapshotPath';
+      args: { testPath: string };
+    }
+  | {
+      id: string;
+      method: 'readSnapshotFile';
+      args: { filepath: string };
+    }
+  | {
+      id: string;
+      method: 'saveSnapshotFile';
+      args: { filepath: string; content: string };
+    }
+  | {
+      id: string;
+      method: 'removeSnapshotFile';
+      args: { filepath: string };
+    };
+
+/**
+ * Snapshot RPC response from container to runner iframe.
+ */
+export type SnapshotRpcResponse = {
+  id: string;
+  result?: unknown;
+  error?: string;
+};

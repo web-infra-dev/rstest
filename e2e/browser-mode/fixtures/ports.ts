@@ -6,5 +6,6 @@ export const BROWSER_PORTS = {
   isolation: 5188,
   react: 5194,
   'setup-files': 5190,
+  snapshot: 5196,
   watch: 5186,
 } as const;
