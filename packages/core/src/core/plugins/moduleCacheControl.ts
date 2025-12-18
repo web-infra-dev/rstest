@@ -54,17 +54,20 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
-    api.transform({ test: setupFiles }, ({ code }) => {
-      // register setup's moduleId
-      return {
-        code: `
+    if (setupFiles.length) {
+      api.transform({ test: setupFiles }, ({ code }) => {
+        // register setup's moduleId
+        return {
+          code: `
           ${code}
          if (global.setupIds && __webpack_module__.id) {
   global.setupIds.push(__webpack_module__.id);
 }
         `,
-      };
-    });
+        };
+      });
+    }
+
     api.modifyRspackConfig(async (config) => {
       config.plugins.push(new RstestCacheControlPlugin());
     });

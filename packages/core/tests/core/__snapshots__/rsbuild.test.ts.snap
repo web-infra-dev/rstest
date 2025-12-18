@@ -394,17 +394,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
         ],
       },
-      {
-        "use": [
-          {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
-            "options": {
-              "getEnvironment": [Function],
-              "id": "rsbuild-transform-1",
-            },
-          },
-        ],
-      },
     ],
   },
   "name": "test",
@@ -948,17 +937,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
-            },
-          },
-        ],
-      },
-      {
-        "use": [
-          {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
-            "options": {
-              "getEnvironment": [Function],
-              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -2552,17 +2530,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
         ],
       },
-      {
-        "use": [
-          {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
-            "options": {
-              "getEnvironment": [Function],
-              "id": "rsbuild-transform-1",
-            },
-          },
-        ],
-      },
     ],
   },
   "name": "test",
@@ -3085,17 +3052,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
-            },
-          },
-        ],
-      },
-      {
-        "use": [
-          {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
-            "options": {
-              "getEnvironment": [Function],
-              "id": "rsbuild-transform-1",
             },
           },
         ],

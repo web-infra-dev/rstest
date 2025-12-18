@@ -212,12 +212,13 @@ const loadFiles = async ({
   isolate: boolean;
   outputModule: boolean;
 }): Promise<void> => {
-  const { loadModule } = outputModule
+  const { loadModule, updateLatestAssetFiles } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
   // clean rstest core cache manually
   if (!isolate) {
+    updateLatestAssetFiles(assetFiles);
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
