@@ -2,9 +2,9 @@ import type {
   Rstest,
   RstestExpect,
   RunnerHooks,
-  Test,
   TestCase,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
@@ -20,7 +20,7 @@ export const createRstestRuntime = async (
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
-    collectTests: () => Promise<Test[]>;
+    collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;
