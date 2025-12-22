@@ -393,8 +393,12 @@ export const createRsbuildServer = async ({
     );
   }
 
+  // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly
+  const cachedReadFilePromises = new Map<string, Promise<string>>();
   const readFile = async (fileName: string) => {
-    return new Promise<string>((resolve, reject) => {
+    if (cachedReadFilePromises.has(fileName))
+      return cachedReadFilePromises.get(fileName)!;
+    const promise = new Promise<string>((resolve, reject) => {
       outputFileSystem.readFile(fileName, (err, data) => {
         if (err) {
           reject(err);
@@ -409,6 +413,9 @@ export const createRsbuildServer = async ({
         resolve(content);
       });
     });
+    cachedReadFilePromises.set(fileName, promise);
+    promise.finally(() => cachedReadFilePromises.delete(fileName));
+    return promise;
   };
 
   const buildData: Record<
