@@ -1,5 +1,5 @@
 /**
- * Code from vitest https://github.com/vitest-dev/vitest/blob/6743008309630c699f6b9e65fd763340d6e19e66/packages/vitest/src/integrations/env/jsdom-keys.ts
+ * Code from Vitest https://github.com/vitest-dev/vitest/blob/6743008309630c699f6b9e65fd763340d6e19e66/packages/vitest/src/integrations/env/jsdom-keys.ts
  */
 
 // SEE https://github.com/jsdom/jsdom/blob/master/lib/jsdom/living/interfaces.js
