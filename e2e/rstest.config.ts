@@ -14,5 +14,6 @@ export default defineConfig({
     '**/dist/**',
     '**/fixtures/**',
     '**/fixtures-*/**',
-  ],
+    process.env.ISOLATE === 'false' ? '**/watch/**' : '',
+  ].filter(Boolean),
 });

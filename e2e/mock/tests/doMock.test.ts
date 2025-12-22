@@ -1,4 +1,8 @@
-import { expect, rs, test } from '@rstest/core';
+import { afterAll, expect, rs, test } from '@rstest/core';
+
+afterAll(() => {
+  rs.doUnmock('../src/increment');
+});
 
 test('doMock works', async () => {
   const { increment: incrementWith1 } = await import('../src/increment');

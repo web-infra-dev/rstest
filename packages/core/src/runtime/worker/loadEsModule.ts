@@ -45,7 +45,7 @@ const defineRstestDynamicImport =
       ? path.join(currentDirectory, specifier)
       : specifier;
 
-    const content = assetFiles[joinedPath];
+    const content = assetFiles[joinedPath] || latestAssetFiles[joinedPath];
 
     if (content) {
       try {
