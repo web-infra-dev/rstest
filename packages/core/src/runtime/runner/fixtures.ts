@@ -103,7 +103,7 @@ export const handleFixtures = async (
       }
     }
 
-    // This API behavior follows Vitest & playwright
+    // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
     await new Promise<void>((fixtureResolve) => {
       let useDone: (() => void) | undefined;
