@@ -119,7 +119,7 @@ function loadConfig(params?: {
   // 指定配置文件（相对路径或绝对路径）
   path?: string;
   envMode?: string;
-  loader?: 'auto' | 'jiti' | 'native';
+  configLoader?: 'auto' | 'jiti' | 'native';
 }): Promise<{
   content: RstestConfig;
   filePath: string | null;
