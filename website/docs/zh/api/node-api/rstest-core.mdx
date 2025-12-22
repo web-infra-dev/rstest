@@ -1,0 +1,143 @@
+# Rstest core
+
+本章节介绍了 Rstest 提供的一些核心方法。
+
+## defineConfig
+
+此函数可用于自动补全 Rstest 配置的类型。
+
+- **类型：**
+
+```ts
+function defineConfig(config: RstestConfig): RstestConfig;
+function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
+function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
+function defineConfig(config: RstestConfigExport): RstestConfigExport;
+```
+
+- **示例：**
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 10000,
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+## defineProject
+
+此函数可用于自动补全 [Rstest Project](/guide/basic/projects) 配置的类型。
+
+- **类型：**
+
+```ts
+function defineProject(
+  config: ProjectConfig | NestedProjectConfig,
+): ProjectConfig | NestedProjectConfig;
+function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
+function defineProject(config: ProjectConfigAsyncFn): ProjectConfigAsyncFn;
+```
+
+- **示例：**
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  root: './apps/web',
+  testTimeout: 15000,
+});
+```
+
+## mergeRstestConfig
+
+将多个 Rstest 配置对象合并为单个配置。它会深度合并每个配置对象，自动将多个函数值合并为按顺序执行的函数数组，并返回合并后的配置对象。
+
+- **类型：**
+
+```ts
+function mergeRstestConfig(...configs: RstestConfig[]): RstestConfig;
+```
+
+- **示例：**
+
+```ts
+import { mergeRstestConfig } from '@rstest/core';
+
+const config = mergeRstestConfig(
+  {
+    testTimeout: 5000,
+  },
+  {
+    coverage: {
+      enabled: true,
+    },
+  },
+);
+```
+
+## mergeProjectConfig
+
+将多个项目配置对象合并为单个配置。
+
+- **类型：**
+
+```ts
+function mergeProjectConfig(...configs: ProjectConfig[]): ProjectConfig;
+```
+
+- **示例：**
+
+```ts
+import { mergeProjectConfig } from '@rstest/core';
+
+const config = mergeProjectConfig(
+  {
+    projects: ['packages/*'],
+  },
+  {
+    testTimeout: 10000,
+  },
+);
+```
+
+## loadConfig
+
+加载 Rstest 配置。
+
+- **类型：**
+
+```ts
+function loadConfig(params?: {
+  // 默认为 process.cwd()
+  cwd?: string;
+  // 指定配置文件（相对路径或绝对路径）
+  path?: string;
+  envMode?: string;
+  loader?: 'auto' | 'jiti' | 'native';
+}): Promise<{
+  content: RstestConfig;
+  filePath: string | null;
+}>;
+```
+
+- **示例：**
+
+```ts
+import { loadConfig } from '@rstest/core';
+
+const { content, filePath } = await loadConfig({
+  cwd: './my-project',
+  path: './rstest.config.ts',
+});
+
+console.log('配置加载自：', filePath);
+console.log('配置：', content);
+```
+
+如果在 cwd 目录中不存在 Rstest 配置文件，loadConfig 方法的返回值为 `{ content: {}, filePath: null }`。
