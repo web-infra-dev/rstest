@@ -43,7 +43,7 @@
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "fs-extra": "^11.3.2",
-    "heading-case": "^1.0.3",
+    "heading-case": "^1.0.4",
     "nano-staged": "^0.9.0",
     "nx": "^21.6.10",
     "path-serializer": "0.5.1",

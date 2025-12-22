@@ -47,8 +47,8 @@ importers:
         specifier: ^11.3.2
         version: 11.3.2
       heading-case:
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.0.4
+        version: 1.0.4
       nano-staged:
         specifier: ^0.9.0
         version: 0.9.0
@@ -3698,8 +3698,8 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
 
-  heading-case@1.0.3:
-    resolution: {integrity: sha512-kHDUzStHy3OIysI4sxJsfQ7KNrRKEudT7YgWRwFMFVKN7/0CINF/l3prqN8eLgo7k18Vvfz+xRcEhR/mUVlCaQ==}
+  heading-case@1.0.4:
+    resolution: {integrity: sha512-cZz+T8C5hzxDelYHhin9Fzq/9lYF2FeUpXl7KVizIV2eEwSbJ7ZT9FpixgQGz8kvhTj0d8zC+EsyYO/QVmZzgg==}
     hasBin: true
 
   hookable@5.5.3:
@@ -9543,7 +9543,7 @@ snapshots:
 
   he@1.2.0: {}
 
-  heading-case@1.0.3: {}
+  heading-case@1.0.4: {}
 
   hookable@5.5.3: {}
 
