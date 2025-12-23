@@ -1,0 +1,143 @@
+# Rstest core
+
+Rstest offers these core methods.
+
+## defineConfig
+
+This function helps you to autocomplete configuration types. It accepts a Rstest config object, or a function that returns a config.
+
+- **Type:**
+
+```ts
+function defineConfig(config: RstestConfig): RstestConfig;
+function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
+function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
+function defineConfig(config: RstestConfigExport): RstestConfigExport;
+```
+
+- **Example:**
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 10000,
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+## defineProject
+
+This function helps you to autocomplete configuration types for [Rstest Project](/guide/basic/projects). It accepts a Rstest project config object, or a function that returns a config.
+
+- **Type:**
+
+```ts
+function defineProject(
+  config: ProjectConfig | NestedProjectConfig,
+): ProjectConfig | NestedProjectConfig;
+function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
+function defineProject(config: ProjectConfigAsyncFn): ProjectConfigAsyncFn;
+```
+
+- **Example:**
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  root: './apps/web',
+  testTimeout: 15000,
+});
+```
+
+## mergeRstestConfig
+
+Merge multiple Rstest config objects into a single config. It deeply merges each configuration object, automatically combining multiple function values into an array of sequentially executed functions, and returns a merged configuration object.
+
+- **Type:**
+
+```ts
+function mergeRstestConfig(...configs: RstestConfig[]): RstestConfig;
+```
+
+- **Example:**
+
+```ts
+import { mergeRstestConfig } from '@rstest/core';
+
+const config = mergeRstestConfig(
+  {
+    testTimeout: 5000,
+  },
+  {
+    coverage: {
+      enabled: true,
+    },
+  },
+);
+```
+
+## mergeProjectConfig
+
+Merge multiple Project config objects into a single config.
+
+- **Type:**
+
+```ts
+function mergeProjectConfig(...configs: ProjectConfig[]): ProjectConfig;
+```
+
+- **Example:**
+
+```ts
+import { mergeProjectConfig } from '@rstest/core';
+
+const config = mergeProjectConfig(
+  {
+    projects: ['packages/*'],
+  },
+  {
+    testTimeout: 10000,
+  },
+);
+```
+
+## loadConfig
+
+Load Rstest configuration.
+
+- **Type:**
+
+```ts
+function loadConfig(params?: {
+  // Default is process.cwd()
+  cwd?: string;
+  // Specify the configuration file (relative or absolute path)
+  path?: string;
+  envMode?: string;
+  configLoader?: 'auto' | 'jiti' | 'native';
+}): Promise<{
+  content: RstestConfig;
+  filePath: string | null;
+}>;
+```
+
+- **Example:**
+
+```ts
+import { loadConfig } from '@rstest/core';
+
+const { content, filePath } = await loadConfig({
+  cwd: './my-project',
+  path: './rstest.config.ts',
+});
+
+console.log('Config loaded from:', filePath);
+console.log('Config:', content);
+```
+
+If the Rstest config file does not exist in the cwd directory, the return value of the loadConfig method is `{ content: {}, filePath: null }`.

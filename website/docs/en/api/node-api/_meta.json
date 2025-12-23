@@ -1,1 +1,1 @@
-["reporter"]
+["reporter", "rstest-core"]
