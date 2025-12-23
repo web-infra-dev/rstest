@@ -68,7 +68,7 @@ Rstest 提供了与 Vitest 兼容的 API。因此，你只需将导入从 Vitest
 + import { describe, expect, it, test } from '@rstest/core';
 ```
 
-Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Vitest 的 `vi.fn()` 和 `vi.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
+Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Vitest 的 `vi.fn()` 和 `vi.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
 
 ```diff
 - const fn = vi.fn();
@@ -81,7 +81,7 @@ fn.mockResolvedValue('foo');
 
 当你需要 mock 一个模块返回值时，Rstest 不支持返回一个异步函数。
 
-作为替代方案，Rstest 提供了同步的 [importActual](/api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
+作为替代方案，Rstest 提供了同步的 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
 
 ```ts
 import * as apiActual from './api' with { rstest: 'importActual' };

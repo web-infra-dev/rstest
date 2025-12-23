@@ -4,7 +4,7 @@
 - **默认值：** `10_000`
 - **CLI：** `--hookTimeout=10000`
 
-单个测试 [hook](/api/test-api/hooks) 的超时时间（毫秒）。设置为 `0` 禁用超时。
+单个测试 [hook](/api/runtime-api/test-api/hooks) 的超时时间（毫秒）。设置为 `0` 禁用超时。
 
 import { Tab, Tabs } from '@theme';
 
@@ -27,8 +27,8 @@ export default defineConfig({
 
 Rstest 会根据以下优先级顺序确定 hook 超时时间：
 
-1. 每个测试用例中的 [timeout](/api/test-api/hooks) 配置
-2. 测试文件中通过 [`rstest.setConfig({ hookTimeout })`](/api/rstest/utilities#rstestsetconfig) 配置的超时时间
+1. 每个测试用例中的 [timeout](/api/runtime-api/test-api/hooks) 配置
+2. 测试文件中通过 [`rstest.setConfig({ hookTimeout })`](/api/runtime-api/rstest/utilities#rstestsetconfig) 配置的超时时间
 3. CLI 中的 `--hookTimeout` 选项
 4. 配置文件中的 `hookTimeout` 选项
 5. 默认值 `10_000` 毫秒
