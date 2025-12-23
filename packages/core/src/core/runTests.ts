@@ -103,13 +103,13 @@ export async function runTests(context: Rstest): Promise<void> {
     rootPath,
   });
 
+  const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+    (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+    [],
+  );
+
   const recommendWorkerCount =
-    command === 'watch'
-      ? Number.POSITIVE_INFINITY
-      : Array.from(entriesCache.values()).reduce(
-          (acc, entry) => acc + Object.keys(entry.entries).length,
-          0,
-        );
+    command === 'watch' ? Number.POSITIVE_INFINITY : entryFiles.length;
 
   const pool = await createPool({
     context,
@@ -146,14 +146,7 @@ export async function runTests(context: Rstest): Promise<void> {
     context.stateManager.reset();
 
     // TODO: this is not the best practice for collecting test files
-    context.stateManager.testFiles = isWatchMode
-      ? undefined
-      : entriesCache
-          .values()
-          .reduce<string[]>(
-            (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-            [],
-          );
+    context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
 
     const returns = await Promise.all(
       context.projects.map(async (p) => {
