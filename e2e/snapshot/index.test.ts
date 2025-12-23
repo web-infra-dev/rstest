@@ -22,7 +22,7 @@ describe('test snapshot', () => {
     `);
   });
 
-  it('test custom serializer', () => {
+  it('test custom serializer', ({ expect }) => {
     expect.addSnapshotSerializer(
       createSnapshotSerializer({
         workspace: path.join(__dirname, '..'),
