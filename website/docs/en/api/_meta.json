@@ -1,26 +1,26 @@
 [
   {
     "type": "section-header",
-    "label": "Overview"
+    "label": "Runtime API"
   },
   {
     "type": "file",
-    "name": "index",
-    "label": "API Overview"
+    "name": "runtime-api/index",
+    "label": "Overview"
   },
   {
-    "type": "dir-section-header",
+    "type": "dir",
     "name": "test-api",
     "label": "Test API"
   },
   {
-    "type": "dir-section-header",
+    "type": "dir",
     "name": "rstest",
     "label": "Rstest Utility"
   },
   {
     "type": "dir-section-header",
-    "name": "node-api",
-    "label": "Node API"
+    "name": "javascript-api",
+    "label": "JavaScript API"
   }
 ]
