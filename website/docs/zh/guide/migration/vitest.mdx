@@ -81,7 +81,7 @@ fn.mockResolvedValue('foo');
 
 当你需要 mock 一个模块返回值时，Rstest 不支持返回一个异步函数。
 
-作为替代方案，Rstest 提供了同步的 [importActual](/api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
+作为替代方案，Rstest 提供了同步的 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
 
 ```ts
 import * as apiActual from './api' with { rstest: 'importActual' };

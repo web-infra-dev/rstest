@@ -27,8 +27,8 @@ export default defineConfig({
 
 Rstest determines the test timeout based on the following priority order:
 
-1. [timeout](/api/test-api/test#test-1) configuration in each test case
-2. Timeout configured in the test file via [`rstest.setConfig({ testTimeout })`](/api/rstest/utilities#rstestsetconfig)
+1. [timeout](/api/runtime-api/test-api/test#test-1) configuration in each test case
+2. Timeout configured in the test file via [`rstest.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rstestsetconfig)
 3. `--testTimeout` option in CLI
 4. `testTimeout` option in the configuration file
 5. Default value of `5000` milliseconds

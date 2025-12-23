@@ -1,22 +1,8 @@
 [
   {
-    "type": "section-header",
-    "label": "总览"
-  },
-  {
-    "type": "file",
-    "name": "index",
-    "label": "API 总览"
-  },
-  {
     "type": "dir-section-header",
-    "name": "test-api",
-    "label": "Test API"
-  },
-  {
-    "type": "dir-section-header",
-    "name": "rstest",
-    "label": "Rstest 实用工具"
+    "name": "runtime-api",
+    "label": "Runtime API"
   },
   {
     "type": "dir-section-header",
