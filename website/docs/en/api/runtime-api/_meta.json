@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "API Overview"
+    "label": "Runtime API Overview"
   },
   {
     "type": "dir",
