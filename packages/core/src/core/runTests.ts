@@ -145,6 +145,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
     context.stateManager.reset();
 
+    // TODO: this is not the best practice for collecting test files
+    context.stateManager.testFiles = isWatchMode
+      ? undefined
+      : entriesCache
+          .values()
+          .reduce<string[]>(
+            (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+            [],
+          );
+
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {

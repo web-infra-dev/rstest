@@ -61,6 +61,13 @@ export class Rstest implements RstestContext {
   public testState: RstestTestState = {
     getRunningModules: () => this.stateManager.runningModules,
     getTestModules: () => this.stateManager.testModules,
+    getTestFiles: () => {
+      // TODO: support collecting test files in watch mode
+      if (this.command === 'watch') {
+        return undefined;
+      }
+      return this.stateManager.testFiles;
+    },
   };
 
   public projects: ProjectContext[] = [];
