@@ -397,10 +397,13 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     ],
   },
   "name": "test",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -947,7 +950,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -1473,7 +1475,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -2001,7 +2002,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -2536,7 +2536,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
@@ -3062,7 +3061,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
-    "inlineExports": false,
     "minimize": false,
     "moduleIds": "named",
     "nodeEnv": false,
