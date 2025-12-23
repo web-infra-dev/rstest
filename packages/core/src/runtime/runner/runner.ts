@@ -300,6 +300,7 @@ export class TestRunner {
           testId: test.testId,
           type: 'suite',
           location: test.location,
+          runMode: test.runMode,
         });
 
         if (test.tests.length === 0) {
@@ -391,6 +392,7 @@ export class TestRunner {
           project: test.project,
           type: 'case',
           location: test.location,
+          runMode: test.runMode,
         });
 
         do {

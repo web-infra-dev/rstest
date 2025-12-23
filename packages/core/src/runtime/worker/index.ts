@@ -2,15 +2,16 @@ import type {
   MaybePromise,
   Rstest,
   RunWorkerOptions,
-  Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import './setup';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
-import { color, undoSerializableConfig } from '../../utils/helper';
+import { color } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -57,7 +58,6 @@ const preparePool = async ({
   context,
 }: RunWorkerOptions['options']) => {
   setRealTimers();
-  context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   // Prefer public env var from tinypool, fallback to context.taskId
   process.env.RSTEST_WORKER_ID = String(
@@ -259,7 +259,7 @@ const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
   | {
-      tests: Test[];
+      tests: TestInfo[];
       testPath: string;
     }
   | TestFileResult
@@ -436,7 +436,12 @@ const runInPool = async (
       const coverageMap = coverageProvider.collect();
       if (coverageMap) {
         // Attach coverage data to test result
-        results.coverage = coverageMap.toJSON();
+        results.coverage = {};
+        Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+          if ('toJSON' in value)
+            results.coverage![key] = value.toJSON() as FileCoverageData;
+          else results.coverage![key] = value;
+        });
       }
       // Cleanup
       coverageProvider.cleanup();

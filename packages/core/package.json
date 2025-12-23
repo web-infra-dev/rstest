@@ -54,7 +54,7 @@
   "dependencies": {
     "@types/chai": "^5.2.3",
     "@rsbuild/core": "1.7.0-beta.0",
-    "tinypool": "^1.1.1"
+    "tinypool": "https://pkg.pr.new/tinypool@128"
   },
   "devDependencies": {
     "chai": "^5.3.3",

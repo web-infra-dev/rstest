@@ -8,9 +8,9 @@ import type {
 import type { Reporter } from './reporter';
 import type {
   FormattedError,
-  Test,
   TestCaseInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
 } from './testSuite';
 
@@ -88,7 +88,7 @@ export type ListCommandOptions = {
 };
 
 export type ListCommandResult = {
-  tests: Test[];
+  tests: TestInfo[];
   testPath: string;
   project: string;
   errors?: FormattedError[];

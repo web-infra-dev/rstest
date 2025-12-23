@@ -1,6 +1,6 @@
 import { isAbsolute, join, normalize, parse, sep } from 'pathe';
 import color from 'picocolors';
-import type { RuntimeConfig, TestResult } from '../types';
+import type { TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export const formatRootStr = (rootStr: string, root: string): string => {
@@ -98,54 +98,6 @@ export const getTaskNameWithPrefix = (
   test: Pick<TestResult, 'name' | 'parentNames'>,
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(` ${delimiter} `);
-
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const wrapRegex = (value: RegExp): string =>
-  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
-
-const unwrapRegex = (value: string): RegExp | string => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
-
-    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
-    if (matches) {
-      const [, pattern, flags] = matches;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
-
-/**
- * Makes some special types that are not supported for passing into the pool serializable.
- * eg. RegExp
- */
-export const serializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
-  const { testNamePattern } = normalizedConfig;
-  return {
-    ...normalizedConfig,
-    testNamePattern:
-      testNamePattern && typeof testNamePattern !== 'string'
-        ? wrapRegex(testNamePattern)
-        : testNamePattern,
-  };
-};
-
-export const undoSerializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
-  const { testNamePattern } = normalizedConfig;
-  return {
-    ...normalizedConfig,
-    testNamePattern:
-      testNamePattern && typeof testNamePattern === 'string'
-        ? unwrapRegex(testNamePattern)
-        : testNamePattern,
-  };
-};
 
 export const getNodeVersion = (): {
   major: number;

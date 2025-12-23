@@ -1,6 +1,5 @@
 import EventEmitter from 'node:events';
 import { fileURLToPath } from 'node:url';
-import v8 from 'node:v8';
 import { createBirpc } from 'birpc';
 import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
@@ -31,8 +30,6 @@ function createChannel(rpcMethods: RuntimeRPC) {
   };
 
   createBirpc<ServerRPC, RuntimeRPC>(rpcMethods, {
-    serialize: v8.serialize,
-    deserialize: (v) => v8.deserialize(Buffer.from(v)),
     post(v) {
       emitter.emit(events.message, v);
     },
@@ -78,6 +75,7 @@ export const createForksPool = (poolOptions: {
     minThreads,
     concurrentTasksPerWorker: 1,
     isolateWorkers: isolate,
+    serialization: 'advanced',
   };
 
   const pool = new Tinypool(options);

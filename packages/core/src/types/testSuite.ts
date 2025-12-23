@@ -1,11 +1,11 @@
 import type { SnapshotResult } from '@vitest/snapshot';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import type {
   NormalizedFixtures,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   TestContext,
 } from './api';
-import type { CoverageMapData } from './coverage';
 import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -43,12 +43,12 @@ export type TestCaseInfo = {
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
   type: 'case';
+  runMode: TestRunMode;
 };
 
 export type TestCase = TestCaseInfo & {
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
-  runMode: TestRunMode;
   fails?: boolean;
   each?: boolean;
   fixtures?: NormalizedFixtures;
@@ -98,10 +98,10 @@ export type TestSuiteInfo = {
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  runMode: TestRunMode;
 };
 
 export type TestSuite = TestSuiteInfo & {
-  runMode: TestRunMode;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
@@ -159,7 +159,7 @@ export type TestResult = {
 export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
-  coverage?: CoverageMapData;
+  coverage?: Record<string, FileCoverageData>;
 };
 
 export interface UserConsoleLog {

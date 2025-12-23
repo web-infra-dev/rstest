@@ -1159,7 +1159,7 @@ Licensed under MIT license in the repository at https://github.com/rspack-contri
 
 > MIT License
 >
-> Copyright (c) 2023-present ByteDance, Inc. and its affiliates.
+> Copyright (c) 2023-present Bytedance, Inc. and its affiliates.
 >
 > Permission is hereby granted, free of charge, to any person obtaining a copy
 > of this software and associated documentation files (the "Software"), to deal

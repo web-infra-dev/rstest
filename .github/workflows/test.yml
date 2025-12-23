@@ -76,7 +76,7 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: [18, 20, 22, 24]
+        node_version: [20, 22, 24]
 
     steps:
       - name: Checkout
