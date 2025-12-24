@@ -25,6 +25,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'passWithNoTests',
       'includeSource',
       'testNamePattern',
+      'extends',
     ],
   },
   {

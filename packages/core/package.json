@@ -57,6 +57,7 @@
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
+    "@rstest/adapter-rslib": "workspace:*",
     "chai": "^5.3.3",
     "pathe": "^2.0.3",
     "birpc": "2.9.0",

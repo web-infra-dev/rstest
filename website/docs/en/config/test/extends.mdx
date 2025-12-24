@@ -1,0 +1,109 @@
+# extends
+
+- **Type:** `MaybePromise<Omit<RstestConfig, 'projects'>>`
+- **Default:** `undefined`
+
+The `extends` option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format.
+
+This enables:
+
+- **Adapter Integration**: Extend from adapters like `@rstest/adapter-rslib`
+- **Async Configuration**: Load configuration from external sources asynchronously
+- **Config Merging**: Automatically merge extended configuration with your local Rstest config
+
+## Basic Usage
+
+```typescript
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: Promise.resolve({
+    testEnvironment: 'jsdom',
+    globals: true,
+    testTimeout: 5000,
+  }),
+  // Local configuration
+  testTimeout: 10000,
+  retry: 2,
+});
+```
+
+## Configuration merging
+
+Rstest performs deep merges for object configurations and simple overrides for primitive types. Local config takes precedence over extended config.
+
+```typescript
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: Promise.resolve({
+    testEnvironment: 'jsdom',
+    globals: true,
+    testTimeout: 5000,
+    source: {
+      define: {
+        BASE_URL: '"https://example.com"',
+      },
+    },
+  }),
+  // Local configuration
+  testTimeout: 10000,
+  retry: 2,
+  source: {
+    define: {
+      API_URL: '"https://api.example.com"',
+    },
+  },
+});
+
+// Result:
+// {
+//   testEnvironment: 'jsdom', // from extends
+//   globals: true,            // from extends
+//   testTimeout: 10000,       // local overrides extends
+//   retry: 2                  // local added
+//   source: {                 // deep merged
+//     define: {
+//       BASE_URL: '"https://example.com"',
+//       API_URL: '"https://api.example.com"',
+//     },
+//   },
+// }
+```
+
+## Using adapters
+
+### Example: extending from rslib config
+
+Use the `@rstest/adapter-rslib` adapter to extend Rstest configuration from an existing rslib config file. The adapter automatically maps compatible options like `source.define`, `source.include`, `source.exclude`, and more.
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig({}),
+  // Additional rstest-specific configuration
+  coverage: {
+    enabled: true,
+    reporters: ['text', 'html'],
+  },
+});
+```
+
+## Limitations
+
+The `extends` configuration cannot include the `projects` field. To define multiple projects, extend each project individually:
+
+```typescript
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libIndex: 0 }),
+    },
+    {
+      extends: withRslibConfig({ libIndex: 1 }),
+    },
+  ],
+});
+```

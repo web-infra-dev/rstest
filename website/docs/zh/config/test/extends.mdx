@@ -1,0 +1,107 @@
+# extends
+
+- **类型:** `MaybePromise<Omit<RstestConfig, 'projects'>>`
+- **默认值:** `undefined`
+
+`extends` 选项允许从外部源扩展 Rstest 配置，例如使用适配器将其他构建工具（如 Rslib、Rspack 等）配置转换为 Rstest 兼容格式。
+
+这样可以实现以下功能：
+
+- **适配器集成**: 通过 `@rstest/adapter-rslib` 等适配器从其他构建工具配置中扩展 Rstest 配置
+- **异步配置**: 从外部源异步加载配置
+- **配置合并**: 自动将扩展配置与本地 Rstest 配置合并
+
+## 基本用法
+
+```typescript
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: Promise.resolve({
+    testEnvironment: 'jsdom',
+    globals: true,
+    testTimeout: 5000,
+  }),
+  // 本地配置会覆盖扩展配置
+  testTimeout: 10000,
+  retry: 2,
+});
+```
+
+## 配置合并
+
+Rstest 对对象配置执行深度合并，对基本类型配置执行简单覆盖。本地配置优先于扩展配置。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: Promise.resolve({
+    testEnvironment: 'jsdom',
+    globals: true,
+    testTimeout: 5000,
+    source: {
+      define: {
+        BASE_URL: '"https://example.com"',
+      },
+    },
+  }),
+  retry: 2,
+  source: {
+    define: {
+      API_URL: '"https://api.example.com"',
+    },
+  },
+});
+
+// 结果:
+// {
+//   testEnvironment: 'jsdom', // 来自扩展
+//   globals: true,            // 来自扩展
+//   testTimeout: 10000,       // 本地覆盖扩展
+//   retry: 2                  // 来自本地添加
+//   source: {                 // 深度合并
+//     define: {
+//       BASE_URL: '"https://example.com"',
+//       API_URL: '"https://api.example.com"',
+//     },
+//   },
+// }
+```
+
+## 使用适配器
+
+### 示例：从 Rslib 配置扩展
+
+使用 `@rstest/adapter-rslib` 适配器从现有的 Rslib 配置文件扩展 Rstest 配置。适配器会自动映射兼容的选项，如 `source.define`、`source.include`、`source.exclude` 等。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig({}),
+  // 额外的 Rstest 特定配置
+  coverage: {
+    enabled: true,
+    reporters: ['text', 'html'],
+  },
+});
+```
+
+## 限制
+
+`extends` 配置不支持 `projects` 字段。要定义多个项目，请单独扩展每个项目：
+
+```typescript
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libIndex: 0 }),
+    },
+    {
+      extends: withRslibConfig({ libIndex: 1 }),
+    },
+  ],
+});
+```

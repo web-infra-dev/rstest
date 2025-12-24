@@ -4,7 +4,7 @@ import type { RstestConfig } from '@rstest/core';
 export interface WithRslibConfigOptions {
   /**
    * `cwd` passed to loadConfig of Rslib
-   * @default undefined
+   * @default process.cwd()
    */
   cwd?: string;
   /**
@@ -28,14 +28,14 @@ export interface WithRslibConfigOptions {
 export async function withRslibConfig(
   options: WithRslibConfigOptions = {},
 ): Promise<Omit<RstestConfig, 'projects'>> {
-  const { configPath, modifyLibConfig, libIndex = 0 } = options;
+  const { configPath, modifyLibConfig, libIndex = 0, cwd } = options;
 
   // Load rslib config
   const {
     content: { lib, ...rawLibConfig },
     filePath,
   } = await loadConfig({
-    cwd: process.cwd(),
+    cwd,
     path: configPath,
   });
 

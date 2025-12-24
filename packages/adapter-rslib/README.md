@@ -28,7 +28,7 @@ Returns a promise that loads rslib config and converts it to rstest configuratio
 
 #### Options
 
-- `cwd` (string): Working directory passed to rslib's loadConfig. Default: `undefined`
+- `cwd` (string): Working directory passed to rslib's loadConfig. Default: `process.cwd()`
 - `configPath` (string): Path to rslib config file. Default: `'./rslib.config.ts'`
 - `libIndex` (number | false): The lib config index in `lib` field to use. Set to a number to use the lib config at that index, or `false` to disable using the lib config. Default: `0`
 - `modifyLibConfig` (function): Function to modify rslib config before conversion
@@ -98,16 +98,9 @@ You can modify the rslib config before it gets converted to rstest config:
 ```typescript
 export default defineConfig({
   extends: withRslibConfig({
-    modifyLibConfig: (libConfig) => ({
-      ...libConfig,
-      source: {
-        ...libConfig.source,
-        define: {
-          ...libConfig.source?.define,
-          'process.env.TEST': '"true"',
-        },
-      },
-    }),
+    modifyLibConfig: (libConfig) => {
+      delete libConfig.source?.define;
+    },
   }),
 });
 ```
