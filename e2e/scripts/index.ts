@@ -97,17 +97,18 @@ export async function runRstestCli({
     expect,
   } = await import('@rstest/core');
 
-  const process = x(command, args, {
+  const exec = x(command, args, {
     ...options,
     nodeOptions: {
       ...(options?.nodeOptions || {}),
       env: {
+        ...process.env,
         ...(options?.nodeOptions?.env || {}),
         GITHUB_ACTIONS: 'false',
       },
     },
   } as Options);
-  const cli = new Cli(process);
+  const cli = new Cli(exec);
 
   (onTestFinished || onRstestFinished)(() => {
     !cli.exec.killed && cli.exec.kill();
