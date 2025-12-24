@@ -15,6 +15,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:basic',
   setup: (api) => {
+    api.modifyBundlerChain((chain) => {
+      // Rsbuild sets splitChunks to false for the node target.
+      // Use modifyBundlerChain to re-enable it so users can override it.
+      chain.optimization.splitChunks({ chunks: 'all' });
+    });
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
         const {
