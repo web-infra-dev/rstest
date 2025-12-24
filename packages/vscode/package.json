@@ -4,7 +4,7 @@
   "displayName": "Rstest",
   "publisher": "rstack",
   "description": "VS Code extension for Rstest",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "private": true,
   "license": "MIT",
   "repository": {
@@ -104,11 +104,11 @@
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.7.0-beta.0",
-    "@rslib/core": "0.18.3",
+    "@rsbuild/core": "1.7.0-beta.1",
+    "@rslib/core": "^0.18.5",
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
-    "@swc/core": "^1.15.3",
+    "@swc/core": "^1.15.7",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",

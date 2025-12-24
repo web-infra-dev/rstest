@@ -41,6 +41,8 @@ type RunningModules = Map<
 export type RstestTestState = {
   getRunningModules: () => RunningModules;
   getTestModules: () => TestFileResult[];
+  /** Get the test files paths. return `undefined` in watch mode. */
+  getTestFiles: () => string[] | undefined;
 };
 
 export type RstestContext = {

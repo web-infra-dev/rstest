@@ -50,6 +50,7 @@ The adapter automatically copies and maps compatible configuration options from 
 - `tools.rspack` → `tools.rspack`
 - `tools.swc` → `tools.swc`
 - `tools.bundlerChain` → `tools.bundlerChain`
+- `output.target` → `testEnvironment` ('happy-dom' for web and 'node' for node)
 
 ## Advanced Usage
 

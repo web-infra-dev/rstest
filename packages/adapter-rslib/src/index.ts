@@ -43,20 +43,19 @@ export async function withRslibConfig(
     return {};
   }
 
-  const libConfig =
-    Array.isArray(lib) && libIndex !== false
-      ? rsbuild.mergeRsbuildConfig<RslibConfig>(
-          rawLibConfig as RslibConfig,
-          (lib[libIndex] || {}) as RslibConfig,
-        )
-      : (rawLibConfig as RslibConfig);
+  const libConfig = libIndex !== false ? lib[libIndex] || {} : {};
 
-  const name = libIndex !== false ? lib[libIndex]?.id : undefined;
+  const rslibConfig = Array.isArray(lib)
+    ? rsbuild.mergeRsbuildConfig<RslibConfig>(
+        rawLibConfig as RslibConfig,
+        libConfig as RslibConfig,
+      )
+    : (rawLibConfig as RslibConfig);
 
   // Allow modification of rslib config
   const finalLibConfig = modifyLibConfig
-    ? modifyLibConfig(libConfig)
-    : libConfig;
+    ? modifyLibConfig(rslibConfig)
+    : rslibConfig;
 
   const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
   const { cssModules, target } = finalLibConfig.output || {};
@@ -67,7 +66,7 @@ export async function withRslibConfig(
   const rstestConfig: RstestConfig = {
     // Copy over compatible configurations
     root: finalLibConfig.root,
-    name,
+    name: libConfig.id,
     plugins: finalLibConfig.plugins,
     source: {
       decorators,
@@ -79,6 +78,7 @@ export async function withRslibConfig(
     resolve: finalLibConfig.resolve,
     output: {
       cssModules,
+      module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
     },
     tools: {
       rspack,
