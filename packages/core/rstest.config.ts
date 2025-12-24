@@ -1,5 +1,5 @@
-import { withRslibConfig } from '@rstest/adapter-rslib';
 import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '../adapter-rslib/src';
 
 export default defineConfig({
   extends: withRslibConfig({
