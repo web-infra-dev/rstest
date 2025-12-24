@@ -1,0 +1,42 @@
+{
+  "name": "@rstest/adapter-rslib",
+  "version": "0.0.1",
+  "description": "Rstest adapter for rslib configuration",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch",
+    "test": "rstest"
+  },
+  "keywords": [
+    "rstest",
+    "rslib",
+    "adapter",
+    "configuration"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@rslib/core": "^0.18.5"
+  },
+  "devDependencies": {
+    "@rslib/core": "^0.18.5",
+    "@rstest/core": "workspace:*",
+    "typescript": "^5.0.0",
+    "@rstest/tsconfig": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

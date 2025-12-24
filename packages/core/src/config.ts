@@ -73,7 +73,17 @@ export async function loadConfig({
     loader: configLoader,
   });
 
-  return { content: content as RstestConfig, filePath: configFilePath };
+  let config = content as RstestConfig;
+
+  // Handle extends configuration
+  if (config.extends) {
+    const extendedConfig = await config.extends;
+    // @ts-expect-error: double check
+    delete extendedConfig.projects;
+    config = mergeRstestConfig(extendedConfig, config);
+  }
+
+  return { content: config, filePath: configFilePath };
 }
 
 export const mergeProjectConfig = (
