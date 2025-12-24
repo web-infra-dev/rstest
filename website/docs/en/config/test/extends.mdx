@@ -11,7 +11,7 @@ This enables:
 - **Async Configuration**: Load configuration from external sources asynchronously
 - **Config Merging**: Automatically merge extended configuration with your local Rstest config
 
-## Basic Usage
+## Basic usage
 
 ```typescript
 import { defineConfig } from '@rstest/core';
@@ -100,9 +100,11 @@ export default defineConfig({
   projects: [
     {
       extends: withRslibConfig({ libIndex: 0 }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
       extends: withRslibConfig({ libIndex: 1 }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },
   ],
 });

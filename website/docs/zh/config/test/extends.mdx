@@ -98,9 +98,11 @@ export default defineConfig({
   projects: [
     {
       extends: withRslibConfig({ libIndex: 0 }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
       extends: withRslibConfig({ libIndex: 1 }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },
   ],
 });

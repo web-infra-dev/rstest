@@ -1,6 +1,6 @@
 # @rstest/adapter-rslib
 
-Rstest adapter for rslib configuration. This package allows you to extend your rstest configuration from rslib config files.
+Rstest adapter for [Rslib](https://rslib.rs) configuration. This package allows you to extend your Rstest configuration from Rslib config files.
 
 ## Installation
 
@@ -24,18 +24,18 @@ export default defineConfig({
 
 ### withRslibConfig(options)
 
-Returns a promise that loads rslib config and converts it to rstest configuration.
+Returns a promise that loads Rslib config and converts it to Rstest configuration.
 
 #### Options
 
-- `cwd` (string): Working directory passed to rslib's loadConfig. Default: `process.cwd()`
-- `configPath` (string): Path to rslib config file. Default: `'./rslib.config.ts'`
+- `cwd` (string): Working directory passed to Rslib's loadConfig. Default: `process.cwd()`
+- `configPath` (string): Path to Rslib config file. Default: `'./rslib.config.ts'`
 - `libIndex` (number | false): The lib config index in `lib` field to use. Set to a number to use the lib config at that index, or `false` to disable using the lib config. Default: `0`
-- `modifyLibConfig` (function): Function to modify rslib config before conversion
+- `modifyLibConfig` (function): Function to modify Rslib config before conversion. Default: `undefined`
 
-The adapter automatically copies and maps compatible configuration options from rslib to rstest:
+The adapter automatically copies and maps compatible configuration options from Rslib to Rstest:
 
-**From rslib → To rstest:**
+**From Rslib → to Rstest:**
 
 - `root` → `root`
 - `lib[libIndex]?.id` → `name`
@@ -52,7 +52,7 @@ The adapter automatically copies and maps compatible configuration options from 
 - `tools.bundlerChain` → `tools.bundlerChain`
 - `output.target` → `testEnvironment` ('happy-dom' for web and 'node' for node)
 
-## Advanced Usage
+## Advanced usage
 
 ### Using specific lib configuration
 
@@ -91,9 +91,9 @@ export default defineConfig({
 });
 ```
 
-### Modifying rslib config
+### Modifying Rslib config
 
-You can modify the rslib config before it gets converted to rstest config:
+You can modify the Rslib config before it gets converted to Rstest config:
 
 ```typescript
 export default defineConfig({
