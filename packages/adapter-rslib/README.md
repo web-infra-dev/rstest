@@ -100,6 +100,7 @@ export default defineConfig({
   extends: withRslibConfig({
     modifyLibConfig: (libConfig) => {
       delete libConfig.source?.define;
+      return libConfig;
     },
   }),
 });
