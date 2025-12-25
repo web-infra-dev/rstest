@@ -418,7 +418,7 @@ const run = async () => {
         },
       };
 
-      const runtime = createRstestRuntime(workerState);
+      const runtime = await createRstestRuntime(workerState);
 
       // Register global APIs if globals config is enabled
       if (runtimeConfig.globals) {
@@ -490,7 +490,7 @@ const run = async () => {
       },
     };
 
-    const runtime = createRstestRuntime(workerState);
+    const runtime = await createRstestRuntime(workerState);
 
     // Register global APIs if globals config is enabled
     if (runtimeConfig.globals) {

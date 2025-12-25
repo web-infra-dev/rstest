@@ -1,7 +1,60 @@
-import { describe, expect, it } from '@rstest/core';
-import { BrowserSnapshotEnvironment } from '../../src/browser/client/snapshot';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  rstest,
+} from '@rstest/core';
 
 describe('BrowserSnapshotEnvironment', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: dynamic import type
+  let BrowserSnapshotEnvironment: any;
+  // biome-ignore lint/suspicious/noExplicitAny: mock type
+  let mockPostMessage: any;
+  let messageHandler: ((event: MessageEvent) => void) | null = null;
+
+  beforeEach(async () => {
+    // Reset modules to get fresh state for messageListenerInitialized
+    rstest.resetModules();
+
+    mockPostMessage = rstest.fn();
+
+    // Mock window object for RPC communication before importing the module
+    rstest.stubGlobal('window', {
+      addEventListener: (
+        _type: string,
+        handler: (event: MessageEvent) => void,
+      ) => {
+        messageHandler = handler;
+      },
+      parent: {
+        postMessage: mockPostMessage,
+      },
+    });
+
+    // Dynamic import to get fresh module with mocked window
+    const module = await import('../../src/browser/client/snapshot');
+    BrowserSnapshotEnvironment = module.BrowserSnapshotEnvironment;
+  });
+
+  afterEach(() => {
+    rstest.unstubAllGlobals();
+    messageHandler = null;
+  });
+
+  // Helper to simulate RPC response
+  const simulateRpcResponse = (id: string, result: unknown) => {
+    if (messageHandler) {
+      messageHandler({
+        data: {
+          type: '__rstest_snapshot_response__',
+          payload: { id, result },
+        },
+      } as MessageEvent);
+    }
+  };
+
   it('should create an instance', () => {
     const env = new BrowserSnapshotEnvironment();
     expect(env).toBeInstanceOf(BrowserSnapshotEnvironment);
@@ -14,7 +67,7 @@ describe('BrowserSnapshotEnvironment', () => {
 
   it('should return header', () => {
     const env = new BrowserSnapshotEnvironment();
-    expect(env.getHeader()).toBe('// Rstest Snapshot');
+    expect(env.getHeader()).toBe('// Rstest Snapshot v1');
   });
 
   it('should resolve raw path', async () => {
@@ -23,68 +76,95 @@ describe('BrowserSnapshotEnvironment', () => {
     expect(result).toBe('/raw/path');
   });
 
-  it('should resolve path with .snap extension', async () => {
-    const env = new BrowserSnapshotEnvironment();
-    const result = await env.resolvePath('/test/file');
-    expect(result).toBe('/test/file.snap');
-  });
-
   it('should prepare directory without error', async () => {
     const env = new BrowserSnapshotEnvironment();
     await expect(env.prepareDirectory()).resolves.toBeUndefined();
   });
 
-  describe('storage operations', () => {
-    it('should save and read snapshot', async () => {
-      const env = new BrowserSnapshotEnvironment();
-      const filepath = '/test/snapshot.snap';
-      const content = 'snapshot content';
+  it('should resolve path via RPC', async () => {
+    const env = new BrowserSnapshotEnvironment();
 
-      await env.saveSnapshotFile(filepath, content);
-      const result = await env.readSnapshotFile(filepath);
+    const resultPromise = env.resolvePath('/test/file');
 
-      expect(result).toBe(content);
+    // Get the request ID from the postMessage call
+    expect(mockPostMessage).toHaveBeenCalled();
+    const call = mockPostMessage.mock.calls[0];
+    const requestId = call[0].payload.payload.id;
+
+    // Simulate response
+    simulateRpcResponse(requestId, '/test/file.snap');
+
+    const result = await resultPromise;
+    expect(result).toBe('/test/file.snap');
+  });
+
+  it('should save snapshot via RPC', async () => {
+    const env = new BrowserSnapshotEnvironment();
+
+    const savePromise = env.saveSnapshotFile('/test/snapshot.snap', 'content');
+
+    expect(mockPostMessage).toHaveBeenCalled();
+    const call = mockPostMessage.mock.calls[0];
+    const requestId = call[0].payload.payload.id;
+    const payload = call[0].payload.payload;
+
+    expect(payload.method).toBe('saveSnapshotFile');
+    expect(payload.args).toEqual({
+      filepath: '/test/snapshot.snap',
+      content: 'content',
     });
 
-    it('should return null for non-existent snapshot', async () => {
-      const env = new BrowserSnapshotEnvironment();
-      const result = await env.readSnapshotFile('/non-existent');
+    simulateRpcResponse(requestId, undefined);
+    await savePromise;
+  });
 
-      expect(result).toBeNull();
-    });
+  it('should read snapshot via RPC', async () => {
+    const env = new BrowserSnapshotEnvironment();
 
-    it('should remove snapshot', async () => {
-      const env = new BrowserSnapshotEnvironment();
-      const filepath = '/test/snapshot.snap';
+    const readPromise = env.readSnapshotFile('/test/snapshot.snap');
 
-      await env.saveSnapshotFile(filepath, 'content');
-      await env.removeSnapshotFile(filepath);
-      const result = await env.readSnapshotFile(filepath);
+    expect(mockPostMessage).toHaveBeenCalled();
+    const call = mockPostMessage.mock.calls[0];
+    const requestId = call[0].payload.payload.id;
+    const payload = call[0].payload.payload;
 
-      expect(result).toBeNull();
-    });
+    expect(payload.method).toBe('readSnapshotFile');
+    expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
 
-    it('should handle multiple snapshots', async () => {
-      const env = new BrowserSnapshotEnvironment();
+    simulateRpcResponse(requestId, 'snapshot content');
 
-      await env.saveSnapshotFile('/file1.snap', 'content1');
-      await env.saveSnapshotFile('/file2.snap', 'content2');
-      await env.saveSnapshotFile('/file3.snap', 'content3');
+    const result = await readPromise;
+    expect(result).toBe('snapshot content');
+  });
 
-      expect(await env.readSnapshotFile('/file1.snap')).toBe('content1');
-      expect(await env.readSnapshotFile('/file2.snap')).toBe('content2');
-      expect(await env.readSnapshotFile('/file3.snap')).toBe('content3');
-    });
+  it('should return null for non-existent snapshot', async () => {
+    const env = new BrowserSnapshotEnvironment();
 
-    it('should overwrite existing snapshot', async () => {
-      const env = new BrowserSnapshotEnvironment();
-      const filepath = '/test/snapshot.snap';
+    const readPromise = env.readSnapshotFile('/non-existent');
 
-      await env.saveSnapshotFile(filepath, 'original');
-      await env.saveSnapshotFile(filepath, 'updated');
-      const result = await env.readSnapshotFile(filepath);
+    const call = mockPostMessage.mock.calls[0];
+    const requestId = call[0].payload.payload.id;
 
-      expect(result).toBe('updated');
-    });
+    simulateRpcResponse(requestId, null);
+
+    const result = await readPromise;
+    expect(result).toBeNull();
+  });
+
+  it('should remove snapshot via RPC', async () => {
+    const env = new BrowserSnapshotEnvironment();
+
+    const removePromise = env.removeSnapshotFile('/test/snapshot.snap');
+
+    expect(mockPostMessage).toHaveBeenCalled();
+    const call = mockPostMessage.mock.calls[0];
+    const requestId = call[0].payload.payload.id;
+    const payload = call[0].payload.payload;
+
+    expect(payload.method).toBe('removeSnapshotFile');
+    expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
+
+    simulateRpcResponse(requestId, undefined);
+    await removePromise;
   });
 });
