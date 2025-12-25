@@ -143,7 +143,7 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
   });
 
-  it('coverage shows 0% when no source files match coverage include patterns', async () => {
+  it('should show 0% coverage when no source files match coverage include patterns', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.noCoverageFiles.config.ts'],
