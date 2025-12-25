@@ -97,6 +97,10 @@ export async function runRstestCli({
     expect,
   } = await import('@rstest/core');
 
+  if (process.env.ISOLATE === 'false' && !args.includes('--isolate')) {
+    args.push('--isolate', 'false');
+  }
+
   const exec = x(command, args, {
     ...options,
     nodeOptions: {

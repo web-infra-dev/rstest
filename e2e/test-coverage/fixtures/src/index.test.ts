@@ -11,6 +11,6 @@ describe('Index', () => {
   });
 
   it('should test env correctly', () => {
-    expect(process.env.rstest).toBe('1');
+    expect(process.env.rstest_1).toBe('1');
   });
 });
