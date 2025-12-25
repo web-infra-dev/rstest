@@ -205,10 +205,10 @@ export const createPool = async ({
         : undefined,
     ].filter(Boolean) as string[],
     env: {
+      ...process.env,
       NODE_ENV: 'test',
       // enable diff color by default
       FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
-      ...process.env,
     },
   });
 
