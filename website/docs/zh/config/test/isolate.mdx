@@ -2,7 +2,7 @@
 
 - **类型：** `boolean`
 - **默认值：** `true`
-- **CLI：** `--isolate=false`
+- **CLI：** `--isolate` / `--no-isolate`
 
 是否运行每个测试在一个独立的环境。
 
@@ -15,7 +15,7 @@ import { Tab, Tabs } from '@theme';
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --isolate=false
+  npx rstest --no-isolate
   ```
   </Tab>
   <Tab label="rstest.config.ts">

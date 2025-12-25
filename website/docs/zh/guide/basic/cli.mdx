@@ -176,6 +176,21 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `-h, --help`                    | 显示帮助信息                                                                                                                                 |
 | `-v, --version`                 | 显示版本号                                                                                                                                   |
 
+### 布尔选项取反
+
+对于布尔类型的选项，你可以使用 `--no-<option>` 前缀来将其设置为 `false`。例如：
+
+```bash
+# 以下两种写法等价：
+npx rstest --isolate false
+npx rstest --no-isolate
+
+# 更多示例：
+npx rstest --no-coverage      # 禁用覆盖率
+npx rstest --no-globals        # 禁用全局 API
+npx rstest --no-clearMocks     # 禁用自动清除 mock
+```
+
 ## CLI 快捷键
 
 在 watch 模式下运行 Rstest 时，你可以使用键盘快捷键来执行各种便捷操作。
