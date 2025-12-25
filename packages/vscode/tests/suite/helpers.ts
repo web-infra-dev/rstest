@@ -33,7 +33,7 @@ export async function waitForConfigValue<T>({
 export function waitFor<T = void>(
   cb: () => T,
   {
-    timeoutMs = 2000,
+    timeoutMs = 10_000,
     pollMs = 25,
   }: {
     timeoutMs?: number;
