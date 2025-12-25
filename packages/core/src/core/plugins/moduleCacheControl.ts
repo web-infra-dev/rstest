@@ -58,8 +58,7 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
       api.transform({ test: setupFiles }, ({ code }) => {
         // register setup's moduleId
         return {
-          code: `
-          ${code}
+          code: `${code}
          if (global.setupIds && __webpack_module__.id) {
   global.setupIds.push(__webpack_module__.id);
 }
