@@ -76,6 +76,6 @@ export default defineConfig({
       withRslibConfig({
         configPath: './non-existent.config.ts',
       }),
-    ).rejects.toThrowError('Failed to load rslib config file');
+    ).rejects.toThrowError(/Cannot find config file:.*non-existent.config.ts/);
   });
 });
