@@ -9,7 +9,7 @@ describe('withRslibConfig', () => {
 import { defineConfig } from '@rslib/core';
 
 export default defineConfig({
-  lib: [{ format: 'esm' }],
+  lib: [{ format: 'esm', id: 'test-lib' }],
   source: {
     define: {
       'process.env.NODE_ENV': '"test"'
@@ -38,7 +38,7 @@ export default defineConfig({
   it('should load and convert rslib config to rstest config', async () => {
     const config = await withRslibConfig({
       configPath: testConfigPath,
-    });
+    })({});
 
     expect(config).toBeDefined();
     expect(config.source?.define).toEqual({
@@ -63,7 +63,7 @@ export default defineConfig({
           },
         },
       }),
-    });
+    })({});
 
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
@@ -75,7 +75,7 @@ export default defineConfig({
     await expect(() =>
       withRslibConfig({
         configPath: './non-existent.config.ts',
-      }),
+      })({}),
     ).rejects.toThrowError(/Cannot find config file:.*non-existent.config.ts/);
   });
 });

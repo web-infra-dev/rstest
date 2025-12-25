@@ -1,6 +1,6 @@
 # extends
 
-- **Type:** `MaybePromise<Omit<RstestConfig, 'projects'>>`
+- **Type:** `ExtendConfig | ExtendConfigFn`
 - **Default:** `undefined`
 
 The `extends` option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format.
@@ -11,41 +11,79 @@ This enables:
 - **Async Configuration**: Load configuration from external sources asynchronously
 - **Config Merging**: Automatically merge extended configuration with your local Rstest config
 
-## Basic usage
+## Basic usage (object)
 
-```typescript
+```ts
+type ExtendConfig = Omit<RstestConfig, 'projects'>;
+```
+
+`ExtendConfig` is a plain subset of `RstestConfig` without `projects`.
+
+You can use it to extend your Rstest configuration from external sources.
+Rstest will merge the extended config with your local config following the [configuration merging rules](#configuration-merging).
+
+```ts
 import { defineConfig } from '@rstest/core';
+import { sharedConfig } from './shared.config';
 
 export default defineConfig({
-  extends: Promise.resolve({
-    testEnvironment: 'jsdom',
-    globals: true,
-    testTimeout: 5000,
-  }),
+  extends: sharedConfig,
   // Local configuration
   testTimeout: 10000,
   retry: 2,
 });
 ```
 
-## Configuration merging
+## Function usage
 
-Rstest performs deep merges for object configurations and simple overrides for primitive types. Local config takes precedence over extended config.
+```ts
+type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => ExtendConfig | Promise<ExtendConfig>;
+```
 
-```typescript
+`ExtendConfigFn` is a function that takes the user's Rstest config as input and returns an extended config.
+
+You can use this to load external configuration files, fetch remote configs, or conditionally modify the config based on user settings.
+
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  extends: Promise.resolve({
+  extends: async (user) => {
+    const useJsdom = user.testEnvironment === 'jsdom';
+    return {
+      setupFiles: useJsdom ? ['<rootDir>/setupDomTests.ts'] : undefined,
+      source: {
+        define: {
+          BUILD_TARGET: '"test"',
+        },
+      },
+    };
+  },
+  testTimeout: 10_000,
+});
+```
+
+## Configuration merging
+
+Rstest deep-merges object fields and overrides primitives. Local config always takes precedence over the extended config.
+
+Example:
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: {
     testEnvironment: 'jsdom',
     globals: true,
     testTimeout: 5000,
     source: {
       define: {
         BASE_URL: '"https://example.com"',
-      },
     },
-  }),
+  },
   // Local configuration
   testTimeout: 10000,
   retry: 2,
@@ -73,11 +111,11 @@ export default defineConfig({
 
 ## Using adapters
 
-### Example: extending from rslib config
+### Example: extend from Rslib config
 
-Use the `@rstest/adapter-rslib` adapter to extend Rstest configuration from an existing rslib config file. The adapter automatically maps compatible options like `source.define`, `source.include`, `source.exclude`, and more.
+Use the `@rstest/adapter-rslib` adapter to extend Rstest configuration from an existing Rslib config file. The adapter automatically maps compatible options like `source.define`, `source.include`, `source.exclude`, and more.
 
-```typescript
+```ts
 import { defineConfig } from '@rstest/core';
 import { withRslibConfig } from '@rstest/adapter-rslib';
 
@@ -95,15 +133,15 @@ export default defineConfig({
 
 The `extends` configuration cannot include the `projects` field. To define multiple projects, extend each project individually:
 
-```typescript
+```ts
 export default defineConfig({
   projects: [
     {
-      extends: withRslibConfig({ libIndex: 0 }),
+      extends: withRslibConfig({ libId: 'node' }),
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
-      extends: withRslibConfig({ libIndex: 1 }),
+      extends: withRslibConfig({ libId: 'react' }),
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },
   ],

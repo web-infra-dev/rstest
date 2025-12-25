@@ -1,5 +1,5 @@
 import { loadConfig, type RslibConfig, rsbuild } from '@rslib/core';
-import type { RstestConfig } from '@rstest/core';
+import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 
 export interface WithRslibConfigOptions {
   /**
@@ -13,81 +13,87 @@ export interface WithRslibConfigOptions {
    */
   configPath?: string;
   /**
-   * The lib config index in `lib` field to use, will be merged with the other fields in the config.
-   * Set to a number to use the lib config at that index.
-   * Set to `false` to disable using the lib config.
-   * @default 0
+   * The lib config id in `lib` field to use, will be merged with the other fields in the config.
+   * Set to a string to use the lib config with matching id.
+   * @default undefined
    */
-  libIndex?: number | false;
+  libId?: string;
   /**
    * Modify rslib config before converting to rstest config
    */
   modifyLibConfig?: (libConfig: RslibConfig) => RslibConfig;
 }
 
-export async function withRslibConfig(
+export function withRslibConfig(
   options: WithRslibConfigOptions = {},
-): Promise<Omit<RstestConfig, 'projects'>> {
-  const { configPath, modifyLibConfig, libIndex = 0, cwd } = options;
+): ExtendConfigFn {
+  return async (userConfig) => {
+    const { configPath, modifyLibConfig, libId, cwd } = options;
 
-  // Load rslib config
-  const {
-    content: { lib, ...rawLibConfig },
-    filePath,
-  } = await loadConfig({
-    cwd,
-    path: configPath,
-  });
+    // Load rslib config
+    const {
+      content: { lib, ...rawLibConfig },
+      filePath,
+    } = await loadConfig({
+      cwd,
+      path: configPath,
+    });
 
-  if (!filePath) {
-    return {};
-  }
+    if (!filePath) {
+      return {};
+    }
 
-  const libConfig = libIndex !== false ? lib[libIndex] || {} : {};
+    const libConfig =
+      libId && Array.isArray(lib) ? lib.find((l) => l.id === libId) || {} : {};
 
-  const rslibConfig = Array.isArray(lib)
-    ? rsbuild.mergeRsbuildConfig<RslibConfig>(
-        rawLibConfig as RslibConfig,
-        libConfig as RslibConfig,
-      )
-    : (rawLibConfig as RslibConfig);
+    if (!userConfig.source?.tsconfigPath) {
+      // TODO: decorators
+    }
 
-  // Allow modification of rslib config
-  const finalLibConfig = modifyLibConfig
-    ? modifyLibConfig(rslibConfig)
-    : rslibConfig;
+    const rslibConfig = Array.isArray(lib)
+      ? rsbuild.mergeRsbuildConfig<RslibConfig>(
+          rawLibConfig as RslibConfig,
+          libConfig as RslibConfig,
+        )
+      : (rawLibConfig as RslibConfig);
 
-  const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
-  const { cssModules, target } = finalLibConfig.output || {};
-  const { decorators, define, include, exclude, tsconfigPath } =
-    finalLibConfig.source || {};
+    // Allow modification of rslib config
+    const finalLibConfig = modifyLibConfig
+      ? modifyLibConfig(rslibConfig)
+      : rslibConfig;
 
-  // Convert rslib config to rstest config
-  const rstestConfig: RstestConfig = {
-    // Copy over compatible configurations
-    root: finalLibConfig.root,
-    name: libConfig.id,
-    plugins: finalLibConfig.plugins,
-    source: {
-      decorators,
-      define,
-      include,
-      exclude,
-      tsconfigPath,
-    },
-    resolve: finalLibConfig.resolve,
-    output: {
-      cssModules,
-      module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
-    },
-    tools: {
-      rspack,
-      swc,
-      bundlerChain,
-    } as RstestConfig['tools'],
+    const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
+    const { cssModules, target } = finalLibConfig.output || {};
+    const { decorators, define, include, exclude, tsconfigPath } =
+      finalLibConfig.source || {};
 
-    testEnvironment: target === 'web' ? 'happy-dom' : 'node',
+    // Convert rslib config to rstest config
+    const rstestConfig: ExtendConfig = {
+      // Copy over compatible configurations
+      root: finalLibConfig.root,
+      name: libId,
+      plugins: finalLibConfig.plugins,
+      source: {
+        decorators,
+        define,
+        include,
+        exclude,
+        tsconfigPath,
+      },
+      resolve: finalLibConfig.resolve,
+      output: {
+        cssModules,
+        module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
+      },
+      tools: {
+        rspack,
+        swc,
+        bundlerChain,
+      } as ExtendConfig['tools'],
+
+      testEnvironment: target === 'web' ? 'happy-dom' : 'node',
+    };
+
+    return rstestConfig;
   };
-
-  return rstestConfig;
 }

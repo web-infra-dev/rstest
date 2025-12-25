@@ -77,10 +77,13 @@ export async function loadConfig({
 
   // Handle extends configuration
   if (config.extends) {
-    const extendedConfig = await config.extends;
+    const extendsConfig =
+      typeof config.extends === 'function'
+        ? await config.extends(Object.freeze({ ...config }))
+        : config.extends;
     // @ts-expect-error: double check
-    delete extendedConfig.projects;
-    config = mergeRstestConfig(extendedConfig, config);
+    delete extendsConfig.projects;
+    config = mergeRstestConfig(extendsConfig, config);
   }
 
   return { content: config, filePath: configFilePath };

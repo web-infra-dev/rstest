@@ -4,7 +4,6 @@ import { withRslibConfig } from '../adapter-rslib/src';
 export default defineConfig({
   extends: withRslibConfig({
     cwd: __dirname,
-    libIndex: false,
   }),
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],

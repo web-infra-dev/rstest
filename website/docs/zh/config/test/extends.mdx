@@ -1,9 +1,9 @@
 # extends
 
-- **类型:** `MaybePromise<Omit<RstestConfig, 'projects'>>`
+- **类型:** `ExtendConfig | ExtendConfigFn`
 - **默认值:** `undefined`
 
-`extends` 选项允许从外部源扩展 Rstest 配置，例如使用适配器将其他构建工具（如 Rslib、Rspack 等）配置转换为 Rstest 兼容格式。
+`extends` 选项允许你从外部来源扩展 Rstest 配置，例如使用适配器将其他构建工具的配置转换为 Rstest 兼容格式。
 
 这样可以实现以下功能：
 
@@ -11,20 +11,56 @@
 - **异步配置**: 从外部源异步加载配置
 - **配置合并**: 自动将扩展配置与本地 Rstest 配置合并
 
-## 基本用法
+## 基本用法（对象）
 
-```typescript
+```ts
+type ExtendConfig = Omit<RstestConfig, 'projects'>;
+```
+
+`ExtendConfig` 是 `RstestConfig` 子集，不包含 `projects` 字段。
+
+你可以用它从外部源扩展 Rstest 配置。Rstest 会按[合并规则](#配置合并)将扩展配置与本地配置合并。
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { sharedConfig } from './shared.config';
+
+export default defineConfig({
+  extends: sharedConfig,
+  // 本地配置
+  testTimeout: 10000,
+  retry: 2,
+});
+```
+
+## 函数用法
+
+```ts
+type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => ExtendConfig | Promise<ExtendConfig>;
+```
+
+`ExtendConfigFn` 是一个接收用户配置(只读)并返回扩展配置的函数。
+
+它适用于加载外部配置文件、获取远程配置或基于用户设置进行动态配置。
+
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  extends: Promise.resolve({
-    testEnvironment: 'jsdom',
-    globals: true,
-    testTimeout: 5000,
-  }),
-  // 本地配置会覆盖扩展配置
-  testTimeout: 10000,
-  retry: 2,
+  extends: async (user) => {
+    const useJsdom = user.testEnvironment === 'jsdom';
+    return {
+      setupFiles: useJsdom ? ['<rootDir>/setupDomTests.ts'] : undefined,
+      source: {
+        define: {
+          BUILD_TARGET: '"test" ',
+        },
+      },
+    };
+  },
+  testTimeout: 10_000,
 });
 ```
 
@@ -32,20 +68,21 @@ export default defineConfig({
 
 Rstest 对对象配置执行深度合并，对基本类型配置执行简单覆盖。本地配置优先于扩展配置。
 
-```typescript
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  extends: Promise.resolve({
+  extends: {
     testEnvironment: 'jsdom',
     globals: true,
     testTimeout: 5000,
     source: {
       define: {
         BASE_URL: '"https://example.com"',
-      },
     },
-  }),
+  },
+  // 本地配置
+  testTimeout: 10000,
   retry: 2,
   source: {
     define: {
@@ -54,12 +91,12 @@ export default defineConfig({
   },
 });
 
-// 结果:
+// 结果：
 // {
-//   testEnvironment: 'jsdom', // 来自扩展
-//   globals: true,            // 来自扩展
-//   testTimeout: 10000,       // 本地覆盖扩展
-//   retry: 2                  // 来自本地添加
+//   testEnvironment: 'jsdom', // 来自 extends
+//   globals: true,            // 来自 extends
+//   testTimeout: 10000,       // 本地覆盖 extends
+//   retry: 2                  // 本地新增
 //   source: {                 // 深度合并
 //     define: {
 //       BASE_URL: '"https://example.com"',
@@ -73,9 +110,9 @@ export default defineConfig({
 
 ### 示例：从 Rslib 配置扩展
 
-使用 `@rstest/adapter-rslib` 适配器从现有的 Rslib 配置文件扩展 Rstest 配置。适配器会自动映射兼容的选项，如 `source.define`、`source.include`、`source.exclude` 等。
+使用 `@rstest/adapter-rslib` 适配器可从现有 Rslib 配置文件扩展 Rstest 配置。该适配器会自动映射兼容选项，如 `source.define`、`source.include`、`source.exclude` 等。
 
-```typescript
+```ts
 import { defineConfig } from '@rstest/core';
 import { withRslibConfig } from '@rstest/adapter-rslib';
 
@@ -93,15 +130,15 @@ export default defineConfig({
 
 `extends` 配置不支持 `projects` 字段。要定义多个项目，请单独扩展每个项目：
 
-```typescript
+```ts
 export default defineConfig({
   projects: [
     {
-      extends: withRslibConfig({ libIndex: 0 }),
+      extends: withRslibConfig({ libId: 'node' }),
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
     },
     {
-      extends: withRslibConfig({ libIndex: 1 }),
+      extends: withRslibConfig({ libId: 'react' }),
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     },
   ],

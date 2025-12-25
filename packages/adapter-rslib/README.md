@@ -10,7 +10,7 @@ npm install @rstest/adapter-rslib -D
 
 ## Usage
 
-```typescript
+```ts
 import { defineConfig } from '@rstest/core';
 import { withRslibConfig } from '@rstest/adapter-rslib';
 
@@ -28,66 +28,111 @@ Returns a promise that loads Rslib config and converts it to Rstest configuratio
 
 #### Options
 
-- `cwd` (string): Working directory passed to Rslib's loadConfig. Default: `process.cwd()`
+- `cwd` (string): Working directory to resolve Rslib config file. Default: `process.cwd()`
 - `configPath` (string): Path to Rslib config file. Default: `'./rslib.config.ts'`
-- `libIndex` (number | false): The lib config index in `lib` field to use. Set to a number to use the lib config at that index, or `false` to disable using the lib config. Default: `0`
+- `libId` (string): The lib config id in `lib` field to use. Set to a string to use the lib config with matching id. Default: `undefined`
 - `modifyLibConfig` (function): Function to modify Rslib config before conversion. Default: `undefined`
 
 The adapter automatically copies and maps compatible configuration options from Rslib to Rstest:
 
 **From Rslib → to Rstest:**
 
-- `root` → `root`
-- `lib[libIndex]?.id` → `name`
-- `plugins` → `plugins`
-- `source.decorators` → `source.decorators`
-- `source.define` → `source.define`
-- `source.include` → `source.include`
-- `source.exclude` → `source.exclude`
-- `source.tsconfigPath` → `source.tsconfigPath`
-- `resolve` → `resolve`
-- `output.cssModules` → `output.cssModules`
-- `tools.rspack` → `tools.rspack`
-- `tools.swc` → `tools.swc`
-- `tools.bundlerChain` → `tools.bundlerChain`
-- `output.target` → `testEnvironment` ('happy-dom' for web and 'node' for node)
+The adapter automatically maps these Rslib options to Rstest:
+
+| Rslib option          | Rstest equivalent     | Notes                                |
+| --------------------- | --------------------- | ------------------------------------ |
+| `lib.id`              | `name`                | Library identifier                   |
+| `plugins`             | `plugins`             | Plugin configuration                 |
+| `source.decorators`   | `source.decorators`   | Decorator support                    |
+| `source.define`       | `source.define`       | Global constants                     |
+| `source.include`      | `source.include`      | Source inclusion patterns            |
+| `source.exclude`      | `source.exclude`      | Source exclusion patterns            |
+| `source.tsconfigPath` | `source.tsconfigPath` | TypeScript config path               |
+| `resolve`             | `resolve`             | Module resolution                    |
+| `output.cssModules`   | `output.cssModules`   | CSS modules configuration            |
+| `tools.rspack`        | `tools.rspack`        | Rspack configuration                 |
+| `tools.swc`           | `tools.swc`           | SWC configuration                    |
+| `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain configuration          |
+| `output.target`       | `testEnvironment`     | 'happy-dom' for web, 'node' for node |
 
 ## Advanced usage
 
-### Using specific lib configuration
+### Specifying working directory
 
-If your rslib config has multiple lib configurations, you can specify which one to use:
+By default, the adapter uses `process.cwd()` as the working directory to resolve the Rslib config file.
 
-```typescript
-export default defineConfig({
-  extends: withRslibConfig({
-    libIndex: 1, // Use the second lib configuration
-  }),
-});
-```
+When your Rslib config is in a different directory or you are running tests in a monorepo (which your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rslib config file from a different directory.
 
-### Disabling lib configuration
-
-To use only the base rslib config without any lib-specific overrides:
-
-```typescript
-export default defineConfig({
-  extends: withRslibConfig({
-    libIndex: false,
-  }),
-});
-```
-
-### Custom working directory
-
-When your rslib config is in a different directory:
-
-```typescript
+```ts
 export default defineConfig({
   extends: withRslibConfig({
     cwd: './packages/my-lib',
-    configPath: './rslib.config.ts',
   }),
+});
+```
+
+### Using specific lib configuration
+
+By default, the adapter does not use any lib configuration from Rslib.
+
+If your Rslib config has multiple lib configurations with different `id` values:
+
+```ts
+// rslib.config.ts
+export default defineConfig({
+  lib: [
+    {
+      id: 'core',
+      format: 'esm',
+      dts: true,
+      source: {
+        define: {
+          IS_CORE: true,
+        },
+      },
+    },
+    {
+      id: 'utils',
+      format: 'esm',
+      source: {
+        define: {
+          IS_CORE: false,
+        },
+      },
+    },
+  ],
+  // shared config
+});
+```
+
+You can then reference specific lib configurations in your Rstest config, Rstest will adapt the Rslib shared configuration and lib configuration with matching `id` value to Rstest format.
+
+```ts
+// For testing the core library
+export default defineConfig({
+  extends: withRslibConfig({
+    libId: 'core',
+  }),
+  // core-specific test config
+});
+```
+
+### Multiple lib configurations
+
+When you need to test multiple libraries with different configurations independently, you can define multiple Rstest projects. Each project can extend a specific library configuration by setting the `libId` option.
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libId: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRslibConfig({ libId: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
 });
 ```
 
@@ -95,7 +140,7 @@ export default defineConfig({
 
 You can modify the Rslib config before it gets converted to Rstest config:
 
-```typescript
+```ts
 export default defineConfig({
   extends: withRslibConfig({
     modifyLibConfig: (libConfig) => {

@@ -74,6 +74,8 @@ export function defineProject(config: RstestProjectConfigExport) {
 export type {
   Assertion,
   DescribeAPI as Describe,
+  ExtendConfig,
+  ExtendConfigFn,
   ProjectConfig,
   Reporter,
   Rstest,

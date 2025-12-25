@@ -1,0 +1,101 @@
+# Rslib
+
+This guide covers how to integrate Rstest with [Rslib](https://rslib.rs) for seamless testing in your Rslib projects.
+
+## Setup
+
+### Create a new Rslib project with Rstest
+
+You can create a new Rslib + Rstest project. Just add the `--tools rstest` flag when creating the project:
+
+```bash
+npx create-rslib --dir my-project --template react-ts --tools rstest
+```
+
+Then, you can see the Rstest dependency and test demo files are already included in the generated project. You can run the tests using the `npm run test` command.
+
+### Add Rstest to an existing Rslib project
+
+To add Rstest to an existing Rslib project, follow the [Quick Start](/guide/start/quick-start) guide to install Rstest and set up the test scripts.
+
+## Reusing Rslib configuration
+
+`@rstest/adapter-rslib` is an official adapter that allows Rstest to automatically inherit configuration from your existing Rslib config file. This ensures your test environment matches your build configuration without duplication.
+
+### Installation
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rslib -D" />
+
+### Basic setup
+
+Using the `withRslibConfig` function from the adapter, you can extend your Rstest configuration from the Rslib config file.
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  // Additional rstest-specific configuration
+});
+```
+
+This will automatically:
+
+- Load your `rslib.config.ts` file
+- Map compatible Rslib options to Rstest configuration
+- Merge with any additional Rstest config you provide
+
+By default, the adapter uses `process.cwd()` as the working directory to resolve the Rslib config file. When your Rslib config is in a different directory, you can specify the `cwd` option to resolve the Rslib config file from a different directory.
+
+```ts
+export default defineConfig({
+  extends: withRslibConfig({
+    cwd: './packages/my-lib',
+  }),
+});
+```
+
+More advanced usage and configuration options can be found in the `@rstest/adapter-rslib` documentation.
+
+### Configuration mapping
+
+The adapter automatically maps these Rslib options to Rstest:
+
+| Rslib option          | Rstest equivalent     | Notes                                |
+| --------------------- | --------------------- | ------------------------------------ |
+| `lib.id`              | `name`                | Library identifier                   |
+| `plugins`             | `plugins`             | Plugin configuration                 |
+| `source.decorators`   | `source.decorators`   | Decorator support                    |
+| `source.define`       | `source.define`       | Global constants                     |
+| `source.include`      | `source.include`      | Source inclusion patterns            |
+| `source.exclude`      | `source.exclude`      | Source exclusion patterns            |
+| `source.tsconfigPath` | `source.tsconfigPath` | TypeScript config path               |
+| `resolve`             | `resolve`             | Module resolution                    |
+| `output.cssModules`   | `output.cssModules`   | CSS modules configuration            |
+| `tools.rspack`        | `tools.rspack`        | Rspack configuration                 |
+| `tools.swc`           | `tools.swc`           | SWC configuration                    |
+| `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain configuration          |
+| `output.target`       | `testEnvironment`     | 'happy-dom' for web, 'node' for node |
+
+### Debugging configuration
+
+To see the resolved configuration returned by the adapter, wrap it and log the result:
+
+```typescript
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRslibConfig({ libId: 'react' })(user);
+    console.log('Extended config:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## Related documentation
+
+- [Adapter documentation](https://www.npmjs.com/package/@rstest/adapter-rslib)
+- [Rslib configuration reference](https://rslib.rs/config)
+- [Rstest configuration reference](/config/)
