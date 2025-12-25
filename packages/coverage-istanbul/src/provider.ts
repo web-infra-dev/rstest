@@ -84,10 +84,6 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {
-    if (!coverageMap || coverageMap.files().length === 0) {
-      return;
-    }
-
     try {
       const context = createContext({
         dir: this.options.reportsDirectory,
