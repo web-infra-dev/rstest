@@ -5,7 +5,7 @@ Rstest adapter for [Rslib](https://rslib.rs) configuration. This package allows 
 ## Installation
 
 ```bash
-npm install @rstest/adapter-rslib
+npm install @rstest/adapter-rslib -D
 ```
 
 ## Usage
