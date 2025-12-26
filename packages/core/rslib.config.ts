@@ -9,7 +9,7 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18'],
+      syntax: ['node 18.12.0'],
       experiments: {
         advancedEsm: true,
       },
@@ -78,9 +78,6 @@ export default defineConfig({
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
-        define: {
-          RSTEST_VERSION: JSON.stringify(version),
-        },
       },
       tools: {
         rspack: {
@@ -122,6 +119,11 @@ export default defineConfig({
   ],
   performance: {
     printFileSize: !isBuildWatch,
+  },
+  source: {
+    define: {
+      RSTEST_VERSION: JSON.stringify(version),
+    },
   },
   tools: {
     rspack: {

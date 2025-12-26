@@ -420,6 +420,24 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/adapter-rslib:
+    devDependencies:
+      '@rslib/core':
+        specifier: ^0.18.6
+        version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      tsconfck:
+        specifier: 3.1.6
+        version: 3.1.6(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@rsbuild/core':
@@ -442,7 +460,7 @@ importers:
         specifier: ^7.55.2
         version: 7.55.2(@types/node@22.18.6)
       '@rslib/core':
-        specifier: 0.18.6
+        specifier: ^0.18.6
         version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/tsconfig':
         specifier: workspace:*
@@ -554,7 +572,7 @@ importers:
         version: 0.0.32
     devDependencies:
       '@rslib/core':
-        specifier: 0.18.6
+        specifier: ^0.18.6
         version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
@@ -584,7 +602,7 @@ importers:
         specifier: 1.7.0-beta.1
         version: 1.7.0-beta.1
       '@rslib/core':
-        specifier: 0.18.6
+        specifier: ^0.18.6
         version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
@@ -5635,6 +5653,16 @@ packages:
 
   trough@2.2.0:
     resolution: {integrity: sha512-tmMpK00BjZiUyVyvrBK7knerNgmgvcV/KLVyuma/SC+TQN167GrMRciANTz09+k3zW8L8t60jWO1GpfkZdjTaw==}
+
+  tsconfck@3.1.6:
+    resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+    peerDependencies:
+      typescript: ^5.0.0
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   tsconfig-paths@4.2.0:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
@@ -11824,6 +11852,10 @@ snapshots:
   trim-lines@3.0.1: {}
 
   trough@2.2.0: {}
+
+  tsconfck@3.1.6(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   tsconfig-paths@4.2.0:
     dependencies:

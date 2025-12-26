@@ -1,13 +1,16 @@
 import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '../adapter-rslib/src';
 
 export default defineConfig({
+  extends: withRslibConfig({
+    cwd: __dirname,
+  }),
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],
   globals: true,
   source: {
     tsconfigPath: './tests/tsconfig.json',
     define: {
-      RSTEST_VERSION: JSON.stringify('0.0.0'),
       'process.env.GITHUB_ACTIONS': JSON.stringify('false'),
     },
   },

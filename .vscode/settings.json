@@ -55,8 +55,8 @@
   },
   "typescript.tsdk": "node_modules/typescript/lib",
   "rstest.configFileGlobPattern": [
-    "packages/core/rstest.config.ts",
-    "packages/vscode/rstest.config.ts",
+    "packages/**/*/rstest.config.ts",
+    "examples/**/*/rstest.config.ts",
     "e2e/rstest.config.ts"
   ]
 }

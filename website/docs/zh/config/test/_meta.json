@@ -11,6 +11,7 @@
   "pass-with-no-tests",
   "include-source",
   "test-name-pattern",
+  "extends",
 
   "env",
   "bail",

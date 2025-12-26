@@ -7,6 +7,7 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+import type { MaybePromise } from './utils';
 
 export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
@@ -54,7 +55,18 @@ type SnapshotFormat = Omit<
 type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
+export type ExtendConfig = Omit<RstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => MaybePromise<ExtendConfig>;
+
 export interface RstestConfig {
+  /**
+   * Extend configuration from adapters
+   */
+  extends?: ExtendConfigFn | ExtendConfig;
+
   /**
    * Project root
    *
@@ -326,7 +338,8 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
-  | 'resolveSnapshotPath';
+  | 'resolveSnapshotPath'
+  | 'extends';
 
 export type NormalizedConfig = Required<
   Omit<
