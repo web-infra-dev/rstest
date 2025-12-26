@@ -14,7 +14,7 @@ rs.setConfig({
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
   it('test files should be ran when create / update / delete', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-0${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-0${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
