@@ -47,7 +47,7 @@ export function withRslibConfig(
       libId && Array.isArray(lib) ? lib.find((l) => l.id === libId) || {} : {};
 
     if (!userConfig.source?.tsconfigPath) {
-      // TODO: decorators
+      // TODO: support read decorators version from tsconfig
     }
 
     const rslibConfig = Array.isArray(lib)

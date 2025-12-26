@@ -1,0 +1,101 @@
+# Rslib
+
+本指南介绍如何将 Rstest 集成到 [Rslib](https://rslib.rs) 项目中，为你的 Rslib 项目提供无缝的测试体验。
+
+## 快速开始
+
+### 新项目
+
+通过在创建时添加 `--tools rstest` 参数，即可创建一个 Rslib + Rstest 项目：
+
+```bash
+npx create-rslib --template react-ts --tools rstest --dir my-project
+```
+
+脚手架已包含 Rstest 和示例测试，运行 `npm run test` 即可执行测试。
+
+### 已有项目
+
+如需为已有项目添加 Rstest，请参考[快速开始](/guide/start/quick-start)安装 Rstest 并配置测试脚本。
+
+## 复用 Rslib 配置
+
+`@rstest/adapter-rslib` 是 Rstest 官方提供的适配器，允许 Rstest 自动继承现有 Rslib 配置文件中的配置。这样可以确保测试环境与构建配置一致，避免重复配置。
+
+### 安装适配器
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rslib -D" />
+
+### 扩展配置
+
+使用适配器中的 `withRslibConfig` 函数，可以从 Rslib 配置文件中扩展 Rstest 配置。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  // 额外的 rstest 特定配置
+});
+```
+
+这将自动：
+
+- 加载你的 `rslib.config.ts` 文件
+- 将兼容的 Rslib 选项映射到 Rstest 配置
+- 与你提供的其他 Rstest 配置合并
+
+默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以设置 `cwd`：
+
+```ts
+export default defineConfig({
+  extends: withRslibConfig({
+    cwd: './packages/my-lib',
+  }),
+});
+```
+
+更多高级选项请参考 `@rstest/adapter-rslib` 文档。
+
+### 配置映射
+
+适配器会自动将以下 Rslib 选项映射到 Rstest：
+
+| Rslib 选项            | Rstest 等效项         | 说明                                                 |
+| --------------------- | --------------------- | ---------------------------------------------------- |
+| `lib.id`              | `name`                | Lib 名称                                             |
+| `plugins`             | `plugins`             | 插件配置                                             |
+| `source.decorators`   | `source.decorators`   | 装饰器支持                                           |
+| `source.define`       | `source.define`       | 全局常量                                             |
+| `source.include`      | `source.include`      | 额外需要 SWC 编译的代码文件                          |
+| `source.exclude`      | `source.exclude`      | 不需要 SWC 编译的代码文件                            |
+| `source.tsconfigPath` | `source.tsconfigPath` | TypeScript 配置路径                                  |
+| `resolve`             | `resolve`             | 模块解析                                             |
+| `output.cssModules`   | `output.cssModules`   | CSS Modules 配置                                     |
+| `tools.rspack`        | `tools.rspack`        | Rspack 配置                                          |
+| `tools.swc`           | `tools.swc`           | SWC 配置                                             |
+| `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain 配置                                   |
+| `output.target`       | `testEnvironment`     | `web` 映射为 'happy-dom'，`node` 及其他映射为 'node' |
+
+### 调试配置
+
+如需查看适配器返回的解析后配置，可以打印结果：
+
+```typescript
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRslibConfig({ libId: 'react' })(user);
+    console.log('Extended config:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## 相关文档
+
+- [适配器文档](https://www.npmjs.com/package/@rstest/adapter-rslib)
+- [Rslib 配置概览](https://rslib.rs/config)
+- [Rstest 配置概览](/config/)
