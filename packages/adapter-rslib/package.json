@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Rstest adapter for rslib configuration",
   "type": "module",
   "main": "dist/index.js",
