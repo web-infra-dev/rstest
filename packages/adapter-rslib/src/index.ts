@@ -46,10 +46,18 @@ export function withRslibConfig(
     const libConfig =
       libId && Array.isArray(lib) ? lib.find((l) => l.id === libId) || {} : {};
 
+    const libTestConfig = {
+      source: libConfig.source,
+      output: libConfig.output,
+      tools: libConfig.tools,
+      plugins: libConfig.plugins,
+      resolve: libConfig.resolve,
+    };
+
     const rslibConfig = Array.isArray(lib)
       ? rsbuild.mergeRsbuildConfig<RslibConfig>(
           rawLibConfig as RslibConfig,
-          libConfig as RslibConfig,
+          libTestConfig as RslibConfig,
         )
       : (rawLibConfig as RslibConfig);
 
