@@ -9,7 +9,7 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18'],
+      syntax: ['node 18.12.0'],
       experiments: {
         advancedEsm: true,
       },

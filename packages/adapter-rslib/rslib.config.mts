@@ -5,12 +5,11 @@ export default defineConfig({
     {
       format: 'esm',
       dts: true,
-      bundle: false,
-    },
-    {
-      format: 'cjs',
-      dts: false,
-      bundle: false,
+      bundle: true,
+      syntax: ['node 18.12.0'],
+      experiments: {
+        advancedEsm: true,
+      },
     },
   ],
 });

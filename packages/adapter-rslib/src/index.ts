@@ -28,7 +28,7 @@ export function withRslibConfig(
   options: WithRslibConfigOptions = {},
 ): ExtendConfigFn {
   return async (userConfig) => {
-    const { configPath, modifyLibConfig, libId, cwd } = options;
+    const { configPath, modifyLibConfig, libId, cwd = process.cwd() } = options;
 
     // Load rslib config
     const {
@@ -46,16 +46,31 @@ export function withRslibConfig(
     const libConfig =
       libId && Array.isArray(lib) ? lib.find((l) => l.id === libId) || {} : {};
 
-    if (!userConfig.source?.tsconfigPath) {
-      // TODO: support read decorators version from tsconfig
-    }
-
     const rslibConfig = Array.isArray(lib)
       ? rsbuild.mergeRsbuildConfig<RslibConfig>(
           rawLibConfig as RslibConfig,
           libConfig as RslibConfig,
         )
       : (rawLibConfig as RslibConfig);
+
+    let libDecoratorsVersion = rslibConfig.source?.decorators?.version;
+
+    if (
+      !userConfig.source?.tsconfigPath &&
+      !userConfig.source?.decorators?.version &&
+      !libDecoratorsVersion
+    ) {
+      // support read decorators version from tsconfig
+      const { loadTsconfig } = await import('./tsconfig');
+      const tsconfig = await loadTsconfig(
+        cwd,
+        rslibConfig.source?.tsconfigPath,
+      );
+
+      if (tsconfig.compilerOptions?.experimentalDecorators) {
+        libDecoratorsVersion = 'legacy';
+      }
+    }
 
     // Allow modification of rslib config
     const finalLibConfig = modifyLibConfig
@@ -74,7 +89,10 @@ export function withRslibConfig(
       name: libId,
       plugins: finalLibConfig.plugins,
       source: {
-        decorators,
+        decorators: {
+          version: libDecoratorsVersion,
+          ...decorators,
+        },
         define,
         include,
         exclude,
