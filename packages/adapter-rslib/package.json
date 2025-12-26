@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Rstest adapter for rslib configuration",
   "type": "module",
   "main": "dist/index.js",
@@ -44,5 +44,13 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/adapter-rslib"
   }
 }
