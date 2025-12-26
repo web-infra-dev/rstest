@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import {
   color,
+  isDebug,
   logger,
   serializableConfig,
   TEMP_RSTEST_OUTPUT_DIR,
@@ -739,6 +740,11 @@ const createBrowserRuntime = async ({
         port: context.normalizedConfig.browser.port,
         strictPort: context.normalizedConfig.browser.port !== undefined,
       },
+      dev: {
+        client: {
+          logLevel: 'error',
+        },
+      },
       environments: {
         web: {},
       },
@@ -767,12 +773,9 @@ const createBrowserRuntime = async ({
             tools: {
               rspack: (rspackConfig) => {
                 rspackConfig.mode = 'development';
-                rspackConfig.experiments = {
-                  ...rspackConfig.experiments,
-                  lazyCompilation: {
-                    imports: true,
-                    entries: false,
-                  },
+                rspackConfig.lazyCompilation = {
+                  imports: true,
+                  entries: false,
                 };
                 rspackConfig.plugins = rspackConfig.plugins || [];
                 rspackConfig.plugins.push(virtualManifestPlugin);
@@ -1167,6 +1170,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     },
     runnerUrl: `http://localhost:${port}`,
     wsPort,
+    debug: isDebug(),
   };
 
   runtime.setContainerOptions(hostOptions);
@@ -1556,6 +1560,7 @@ export const listBrowserTests = async (
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
     },
     mode: 'collect', // Use collect mode
+    debug: isDebug(),
   };
 
   runtime.setContainerOptions(hostOptions);

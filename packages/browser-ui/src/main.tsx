@@ -25,6 +25,7 @@ import {
   STATUS_META,
   type TestStatus,
 } from './utils/constants';
+import { logger } from './utils/logger';
 import './index.css';
 
 // ============================================================================
@@ -70,7 +71,7 @@ const BrowserRunner: React.FC<{
 
   const handleReloadTestFile = useCallback(
     (testFile: string, testNamePattern?: string) => {
-      console.log(
+      logger.debug(
         '[Container] handleReloadTestFile called:',
         testFile,
         testNamePattern,
@@ -78,7 +79,7 @@ const BrowserRunner: React.FC<{
       const iframe = document.querySelector<HTMLIFrameElement>(
         `iframe[data-test-file="${testFile}"]`,
       );
-      console.log('[Container] Found iframe:', iframe);
+      logger.debug('[Container] Found iframe:', iframe);
       if (iframe) {
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
@@ -94,7 +95,7 @@ const BrowserRunner: React.FC<{
           options.runnerUrl,
           testNamePattern,
         );
-        console.log('[Container] Setting iframe.src to:', newSrc);
+        logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
       }
     },

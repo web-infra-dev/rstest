@@ -45,6 +45,10 @@ export type BrowserHostConfig = {
    * Execution mode. Defaults to 'run'.
    */
   mode?: BrowserExecutionMode;
+  /**
+   * Debug mode. When true, enables verbose logging in browser.
+   */
+  debug?: boolean;
 };
 
 export type BrowserClientMessage =

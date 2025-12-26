@@ -29,6 +29,16 @@ declare global {
   }
 }
 
+/**
+ * Debug logger for browser client.
+ * Only logs when debug mode is enabled (DEBUG=rstest on server side).
+ */
+const debugLog = (...args: unknown[]): void => {
+  if (window.__RSTEST_BROWSER_OPTIONS__?.debug) {
+    console.log(...args);
+  }
+};
+
 type GlobalWithProcess = typeof globalThis & {
   global?: typeof globalThis;
   process?: NodeJS.Process;
@@ -204,7 +214,7 @@ const waitForConfig = (): Promise<void> => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'RSTEST_CONFIG') {
         window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
-        console.log(
+        debugLog(
           '[Runner] Received config from container:',
           event.data.payload,
         );

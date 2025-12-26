@@ -33,6 +33,8 @@ export type BrowserHostConfig = {
   runnerUrl?: string;
   /** WebSocket port for container RPC */
   wsPort?: number;
+  /** Debug mode. When true, enables verbose logging in browser */
+  debug?: boolean;
 };
 
 export type BrowserClientTestResult = {

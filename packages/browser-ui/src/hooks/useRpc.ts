@@ -5,6 +5,7 @@ import type {
   BrowserClientTestResult,
   TestFileInfo,
 } from '../types';
+import { logger } from '../utils/logger';
 
 // ============================================================================
 // RPC Types
@@ -110,11 +111,11 @@ export const useRpc = (
 
       const methods: ContainerRPC = {
         onTestFileUpdate(files: TestFileInfo[]) {
-          console.log('[Container RPC] onTestFileUpdate called:', files);
+          logger.debug('[Container RPC] onTestFileUpdate called:', files);
           setTestFilesRef.current(files);
         },
         reloadTestFile(testFile: string, testNamePattern?: string) {
-          console.log(
+          logger.debug(
             '[Container RPC] reloadTestFile called:',
             testFile,
             testNamePattern,
@@ -126,7 +127,7 @@ export const useRpc = (
       ws.onopen = () => {
         if (!isMounted || !ws) return;
 
-        console.log('[Container] WebSocket connected');
+        logger.debug('[Container] WebSocket connected');
         reconnectAttempt = 0; // Reset reconnect counter on successful connection
         setConnected(true);
 
@@ -176,7 +177,7 @@ export const useRpc = (
 
         if (!isMounted) return;
 
-        console.log('[Container] WebSocket disconnected');
+        logger.debug('[Container] WebSocket disconnected');
         setRpc(null);
         setConnected(false);
 
@@ -185,7 +186,7 @@ export const useRpc = (
           RECONNECT_DELAYS[
             Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)
           ];
-        console.log(
+        logger.debug(
           `[Container] Reconnecting in ${delay}ms (attempt ${reconnectAttempt + 1})`,
         );
         reconnectAttempt++;
@@ -199,7 +200,7 @@ export const useRpc = (
 
       ws.onerror = () => {
         if (!isMounted) return;
-        console.log('[Container] WebSocket error');
+        logger.debug('[Container] WebSocket error');
         // onclose will be called after onerror, which handles reconnect
       };
     };
