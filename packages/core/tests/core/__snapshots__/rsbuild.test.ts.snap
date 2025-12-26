@@ -410,7 +410,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     "runtimeChunk": {
       "name": "test-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
@@ -956,7 +958,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "runtimeChunk": {
       "name": "test-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
@@ -1481,7 +1485,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "runtimeChunk": {
       "name": "test-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
@@ -2008,7 +2014,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     "runtimeChunk": {
       "name": "test-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
@@ -2542,7 +2550,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "runtimeChunk": {
       "name": "test-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
@@ -3067,7 +3077,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "runtimeChunk": {
       "name": "test-node-runtime",
     },
-    "splitChunks": false,
+    "splitChunks": {
+      "chunks": "all",
+    },
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
