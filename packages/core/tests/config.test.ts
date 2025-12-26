@@ -7,10 +7,19 @@ describe('mergeRstestConfig', () => {
       root: __dirname,
       exclude: ['**/aa/**'],
       setupFiles: ['./setup.ts'],
+      globalSetup: ['./global-setup.ts'],
       reporters: ['verbose'],
     });
 
     expect(merged).toMatchSnapshot();
+  });
+
+  it('should handle globalSetup array conversion', () => {
+    const merged = withDefaultConfig({
+      globalSetup: './single-global-setup.ts',
+    });
+
+    expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
   });
 
   it('should merge exclude correctly', () => {

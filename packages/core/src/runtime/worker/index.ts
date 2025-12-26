@@ -146,7 +146,7 @@ const preparePool = async ({
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = createRstestRuntime(workerState);
+  const { api, runner } = await createRstestRuntime(workerState);
 
   switch (testEnvironment) {
     case 'node':
@@ -212,12 +212,13 @@ const loadFiles = async ({
   isolate: boolean;
   outputModule: boolean;
 }): Promise<void> => {
-  const { loadModule } = outputModule
+  const { loadModule, updateLatestAssetFiles } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
   // clean rstest core cache manually
   if (!isolate) {
+    updateLatestAssetFiles(assetFiles);
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -300,6 +301,7 @@ const runInPool = async (
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
+    // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
   };
@@ -385,7 +387,7 @@ const runInPool = async (
 
     cleanups.push(cleanup);
 
-    rpc.onTestFileStart?.({ testPath });
+    rpc.onTestFileStart?.({ testPath, tests: [] });
 
     await loadFiles({
       rstestContext,
@@ -400,6 +402,9 @@ const runInPool = async (
     const results = await runner.runTests(
       testPath,
       {
+        onTestFileReady: async (test) => {
+          await rpc.onTestFileReady(test);
+        },
         onTestSuiteStart: async (test) => {
           await rpc.onTestSuiteStart(test);
         },

@@ -4,7 +4,7 @@
 - **Default:** `10_000`
 - **CLI:** `--hookTimeout=10000`
 
-Default timeout of [hook](/api/test-api/hooks) in milliseconds. `0` will disable the timeout.
+Default timeout of [hook](/api/runtime-api/test-api/hooks) in milliseconds. `0` will disable the timeout.
 
 import { Tab, Tabs } from '@theme';
 
@@ -27,8 +27,8 @@ export default defineConfig({
 
 Rstest determines the hook timeout based on the following priority order:
 
-1. [timeout](/api/test-api/hooks) configuration in each test case
-2. Timeout configured in the test file via [`rstest.setConfig({ hookTimeout })`](/api/rstest/utilities#rstestsetconfig)
+1. [timeout](/api/runtime-api/test-api/hooks) configuration in each test case
+2. Timeout configured in the test file via [`rstest.setConfig({ hookTimeout })`](/api/runtime-api/rstest/utilities#rstestsetconfig)
 3. `--hookTimeout` option in CLI
 4. `hookTimeout` option in the configuration file
 5. Default value of `10_000` milliseconds

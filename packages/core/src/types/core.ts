@@ -6,7 +6,13 @@ import type {
   RstestConfig,
 } from './config';
 import type { Reporter } from './reporter';
-import type { TestCaseInfo, TestFileResult, TestResult } from './testSuite';
+import type {
+  FormattedError,
+  Test,
+  TestCaseInfo,
+  TestFileResult,
+  TestResult,
+} from './testSuite';
 
 export type RstestCommand = 'watch' | 'run' | 'list';
 
@@ -21,6 +27,7 @@ export type ProjectContext = {
   outputModule: boolean;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
+  _globalSetups: boolean;
 };
 
 type RunningModules = Map<
@@ -34,6 +41,8 @@ type RunningModules = Map<
 export type RstestTestState = {
   getRunningModules: () => RunningModules;
   getTestModules: () => TestFileResult[];
+  /** Get the test files paths. return `undefined` in watch mode. */
+  getTestFiles: () => string[] | undefined;
 };
 
 export type RstestContext = {
@@ -74,10 +83,19 @@ export type RstestContext = {
 export type ListCommandOptions = {
   filesOnly?: boolean;
   json?: boolean | string;
+  includeSuites?: boolean;
+  printLocation?: boolean;
+};
+
+export type ListCommandResult = {
+  tests: Test[];
+  testPath: string;
+  project: string;
+  errors?: FormattedError[];
 };
 
 export type RstestInstance = {
   context: RstestContext;
   runTests: () => Promise<void>;
-  listTests: (options: ListCommandOptions) => Promise<void>;
+  listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
 };

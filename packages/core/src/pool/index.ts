@@ -64,10 +64,15 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   } = context.normalizedConfig;
 
   return {
-    env,
+    env: {
+      // get process.env correctly when globalSetup modified it
+      ...process.env,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -84,11 +89,12 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     disableConsoleIntercept,
     testEnvironment,
     isolate,
-    coverage,
+    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   };
 };
 
@@ -199,10 +205,10 @@ export const createPool = async ({
         : undefined,
     ].filter(Boolean) as string[],
     env: {
+      ...process.env,
       NODE_ENV: 'test',
       // enable diff color by default
       FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
-      ...process.env,
     },
   });
 
@@ -231,6 +237,11 @@ export const createPool = async ({
       context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
       );
     },
     onTestSuiteStart: async (test: TestSuiteInfo) => {

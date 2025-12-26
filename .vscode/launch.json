@@ -15,8 +15,9 @@
         "${workspaceFolder}/packages/vscode/sample"
       ],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
-      "preLaunchTask": "npm: watch:local",
-      "autoAttachChildProcesses": true
+      "preLaunchTask": "vscode dev",
+      // only enable this on demand, this causes test run slowly, and child process sourcemap not working
+      "autoAttachChildProcesses": false
     }
   ]
 }

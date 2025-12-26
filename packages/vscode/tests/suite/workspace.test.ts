@@ -22,21 +22,17 @@ suite('Workspace discover suite', () => {
 
     // initial workspaces
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
-          label: 'workspace-1',
+          label: 'test',
           children: [
-            {
-              label: 'rstest.config.ts',
-              children: [
-                { label: 'foo.test.ts' },
-                { label: 'index.test.ts' },
-                { label: 'jsFile.spec.js' },
-                { label: 'jsxFile.test.jsx' },
-                { label: 'progress.test.ts' },
-                { label: 'tsxFile.test.tsx' },
-              ],
-            },
+            { label: 'each.test.ts' },
+            { label: 'foo.test.ts' },
+            { label: 'index.test.ts' },
+            { label: 'jsFile.spec.js' },
+            { label: 'jsxFile.test.jsx' },
+            { label: 'progress.test.ts' },
+            { label: 'tsxFile.test.tsx' },
           ],
         },
       ]);
@@ -51,13 +47,14 @@ suite('Workspace discover suite', () => {
       },
     );
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
           label: 'workspace-1',
           children: [
             {
-              label: 'rstest.config.ts',
+              label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -73,11 +70,21 @@ suite('Workspace discover suite', () => {
           children: [
             {
               label: 'folder/project-2/rstest.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
             {
               label: 'project-1/rstest.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
           ],
         },
@@ -97,13 +104,14 @@ suite('Workspace discover suite', () => {
       path.resolve(fixturesRoot, 'workspace-2/folder/project-2/bar.config.ts'),
     );
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
           label: 'workspace-1',
           children: [
             {
-              label: 'rstest.config.ts',
+              label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -125,7 +133,7 @@ suite('Workspace discover suite', () => {
       '**/foo.config.{mjs,ts,js,cjs,mts,cts}',
     ]);
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
           label: 'workspace-1',
         },
@@ -134,7 +142,12 @@ suite('Workspace discover suite', () => {
           children: [
             {
               label: 'project-1/foo.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
           ],
         },
@@ -147,7 +160,7 @@ suite('Workspace discover suite', () => {
       path.resolve(fixturesRoot, 'workspace-2/folder/project-2/foo.config.ts'),
     );
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
           label: 'workspace-1',
         },
@@ -156,11 +169,21 @@ suite('Workspace discover suite', () => {
           children: [
             {
               label: 'folder/project-2/foo.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
             {
               label: 'project-1/foo.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
           ],
         },
@@ -181,13 +204,14 @@ suite('Workspace discover suite', () => {
     );
     await config.update('configFileGlobPattern', undefined);
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 3), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
           label: 'workspace-1',
           children: [
             {
-              label: 'rstest.config.ts',
+              label: 'test',
               children: [
+                { label: 'each.test.ts' },
                 { label: 'foo.test.ts' },
                 { label: 'index.test.ts' },
                 { label: 'jsFile.spec.js' },
@@ -203,11 +227,21 @@ suite('Workspace discover suite', () => {
           children: [
             {
               label: 'folder/project-2/rstest.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
             {
               label: 'project-1/rstest.config.ts',
-              children: [{ label: 'foo.test.ts' }],
+              children: [
+                {
+                  label: 'test',
+                  children: [{ label: 'foo.test.ts' }],
+                },
+              ],
             },
           ],
         },
@@ -218,13 +252,17 @@ suite('Workspace discover suite', () => {
     vscode.workspace.updateWorkspaceFolders(1, 1);
 
     await waitFor(() => {
-      assert.deepStrictEqual(toLabelTree(testController.items, 2), [
+      assert.deepStrictEqual(toLabelTree(testController.items, true), [
         {
-          label: 'workspace-1',
+          label: 'test',
           children: [
-            {
-              label: 'rstest.config.ts',
-            },
+            { label: 'each.test.ts' },
+            { label: 'foo.test.ts' },
+            { label: 'index.test.ts' },
+            { label: 'jsFile.spec.js' },
+            { label: 'jsxFile.test.jsx' },
+            { label: 'progress.test.ts' },
+            { label: 'tsxFile.test.tsx' },
           ],
         },
       ]);

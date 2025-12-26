@@ -1,0 +1,260 @@
+---
+title: Test
+---
+
+# Test
+
+`test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
+
+Alias: `it`.
+
+## test
+
+- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+Defines a test case.
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('should add two numbers correctly', () => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+## test.only
+
+Only run certain tests in a test file.
+
+```ts
+test.only('run only this test', () => {
+  // ...
+});
+```
+
+## test.skip
+
+Skips certain tests.
+
+```ts
+test.skip('skip this test', () => {
+  // ...
+});
+```
+
+## test.todo
+
+Marks certain tests as todo.
+
+```ts
+test.todo('should implement this test');
+```
+
+## test.each
+
+- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+
+Runs the same test logic for each item in the provided array.
+
+```ts
+test.each([
+  { a: 1, b: 2, sum: 3 },
+  { a: 2, b: 2, sum: 4 },
+])('adds $a + $b', ({ a, b, sum }) => {
+  expect(a + b).toBe(sum);
+});
+```
+
+You can inject parameters with [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) in the test name in the order of the test function parameters.
+
+- `%s`: String
+- `%d`: Number
+- `%i`: Integer
+- `%f`: Floating point value
+- `%j`: JSON
+- `%o`: Object
+- `%#`: 0-based index of the test case
+- `%$`: 1-based index of the test case
+- `%%`: Single percent sign ('%')
+
+```ts
+test.each([
+  [1, 2, 3],
+  [2, 2, 4],
+])('adds %i + %i to equal %i', (a, b, sum) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// adds 1 + 2 to equal 3
+// adds 2 + 2 to equal 4
+```
+
+You can also access object properties and array elements with `$` prefix:
+
+```ts
+test.each([
+  { a: 1, b: 1, sum: 2 },
+  { a: 1, b: 2, sum: 3 },
+  { a: 2, b: 1, sum: 3 },
+])('adds $a + $b to equal $sum', ({ a, b, sum }) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// adds 1 + 1 to equal 2
+// adds 1 + 2 to equal 3
+// adds 2 + 1 to equal 3
+
+test.each([
+  [1, 1, 2],
+  [1, 2, 3],
+  [2, 1, 3],
+])('add $0 + $1 to equal $2', (a, b, sum) => {
+  expect(a + b).toBe(sum);
+});
+
+// this will return
+// add 1 + 1 to equal 2
+// add 1 + 2 to equal 3
+// add 2 + 1 to equal 3
+```
+
+## test.for
+
+- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+Alternative to `test.each` to provide `TestContext`.
+
+```ts
+test.for([
+  { a: 1, b: 2 },
+  { a: 2, b: 2 },
+])('adds $a + $b', ({ a, b }, { expect }) => {
+  expect(a + b).matchSnapshot();
+});
+```
+
+## test.fails
+
+Marks the test as expected to fail.
+
+```ts
+test.fails('should fail', () => {
+  throw new Error('This test is expected to fail');
+});
+```
+
+## test.concurrent
+
+Runs the test concurrently with consecutive `concurrent` flags.
+
+```ts
+describe('suite', () => {
+  test('serial test', async () => {
+    /* ... */
+  });
+  test.concurrent('concurrent test 1', async () => {
+    /* ... */
+  });
+  test.concurrent('concurrent test 2', async () => {
+    /* ... */
+  });
+  test('serial test 1', async () => {
+    /* ... */
+  });
+});
+```
+
+## test.sequential
+
+Runs the test sequentially (default behavior).
+
+```ts
+describe('suite', () => {
+  test('serial test', async () => {
+    /* ... */
+  });
+  test('serial test 1', async () => {
+    /* ... */
+  });
+});
+```
+
+## test.runIf
+
+Runs the test only if the condition is true.
+
+```ts
+test.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
+  // ...
+});
+```
+
+## test.skipIf
+
+Skips the test if the condition is true.
+
+```ts
+test.skipIf(process.platform === 'win32')('skip on Windows', () => {
+  // ...
+});
+```
+
+## test.extend
+
+- **Type:** `test.extend(fixtures: Fixtures)`
+
+Extends the test context with custom fixtures.
+
+```ts
+const testWithUser = test.extend({
+  user: async ({}, use) => {
+    await use({ name: 'Alice' });
+  },
+});
+
+testWithUser('has user in context', ({ user, expect }) => {
+  expect(user.name).toBe('Alice');
+});
+```
+
+## Chainable modifiers
+
+`test` supports chainable modifiers, so you can use them together. For example:
+
+- `test.only.runIf(condition)` (or `test.runIf(condition).only`) will only run the test block if the condition is true.
+- `test.skipIf(condition).concurrent` (or `test.concurrent.skipIf(condition)`) will skip the test block if the condition is true, otherwise run the tests concurrently.
+- `test.runIf(condition).concurrent` (or `test.concurrent.runIf(condition)`) will only run the test block concurrently if the condition is true.
+- `test.only.concurrent` (or `test.concurrent.only`) will only run the test block concurrently.
+- `test.for(cases).concurrent` (or `test.concurrent.for(cases)`) will run the test block concurrently for each case in the provided array.
+- ......
+
+## Types
+
+### TestContext
+
+`TestContext` provides some APIs, context information, and custom fixtures related to the current test.
+
+```ts
+export interface TestContext {
+  /**
+   * Metadata of the current test
+   */
+  task: {
+    /** Test name provided by user */
+    name: string;
+    /** Result of the current test, undefined if the test is not run yet */
+    result?: TestResult;
+  };
+  /** The `expect` API bound to the current test */
+  expect: Expect;
+  /** The `onTestFinished` hook bound to the current test */
+  onTestFinished: OnTestFinished;
+  /** The `onTestFailed` hook bound to the current test */
+  onTestFailed: OnTestFailed;
+}
+```
+
+You can also extend `TestContext` with custom fixtures using `test.extend`.

@@ -4,6 +4,7 @@ import rsbuildConfig from './rsbuild.config';
 export default defineProject({
   projects: [
     {
+      root: __dirname,
       ...(rsbuildConfig as RstestConfig),
       name: 'client-jsdom',
       testEnvironment: 'jsdom',
@@ -11,6 +12,7 @@ export default defineProject({
       exclude: ['test/node.test.ts'],
     },
     {
+      root: __dirname,
       name: 'client-node',
       include: ['test/node.test.ts'],
     },

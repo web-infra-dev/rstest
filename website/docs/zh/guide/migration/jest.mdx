@@ -21,7 +21,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## 配置迁移
 
-将你的 jest 配置文件（例如 `jest.config.js` 或 `jest.config.ts`）更新为 `rstest.config.ts` 文件：
+将你的 Jest 配置文件（例如 `jest.config.js` 或 `jest.config.ts`）更新为 `rstest.config.ts` 文件：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -107,7 +107,7 @@ Rstest 提供了与 Jest 兼容的 API。因此，你只需将导入从 Jest 更
 + import { describe, expect, it, test } from '@rstest/core';
 ```
 
-Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/) 中找到。
+Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Jest 的 `jest.fn()` 和 `jest.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
 
 ```diff
 - const fn = jest.fn();

@@ -16,6 +16,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "integration",
+    "label": "集成"
+  },
+  {
+    "type": "dir-section-header",
     "name": "migration",
     "label": "迁移"
   }

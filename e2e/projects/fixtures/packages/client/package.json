@@ -8,15 +8,15 @@
     "preview": "rsbuild preview"
   },
   "dependencies": {
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.6.12-canary-20251204065915",
+    "@rsbuild/core": "1.7.0-beta.1",
     "@rsbuild/plugin-react": "^1.4.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/react": "^16.3.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "jsdom": "^26.1.0",

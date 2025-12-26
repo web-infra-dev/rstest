@@ -1,0 +1,151 @@
+---
+title: Hooks
+---
+
+# Hooks
+
+Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
+
+## beforeAll
+
+- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的所有测试之前运行。
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async (ctx) => {
+  // 在所有测试前的初始化逻辑
+  // ctx.filepath 表示当前测试文件路径
+});
+```
+
+`beforeAll` 也支持返回一个函数，在所有测试之后运行，用于清理操作（等价于 `afterAll`）：
+
+```ts
+import { beforeAll } from '@rstest/core';
+
+beforeAll(async () => {
+  const cleanUp = await doSomething();
+
+  // 在所有测试后的清理逻辑
+  return async () => {
+    await cleanUp();
+  };
+});
+```
+
+## afterAll
+
+- **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的所有测试之后运行。
+
+```ts
+import { afterAll } from '@rstest/core';
+
+afterAll(async (ctx) => {
+  // 在所有测试后的清理逻辑
+});
+```
+
+## beforeEach
+
+- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的每个测试之前运行。
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  // 每个测试前的初始化逻辑
+});
+```
+
+`beforeEach` 也支持返回一个函数，在每个测试之后运行，用于清理操作（等价于 `afterEach`）：
+
+```ts
+import { beforeEach } from '@rstest/core';
+
+beforeEach(async () => {
+  const cleanUp = await doSomething();
+
+  // 每个测试后的清理逻辑
+  return async () => {
+    await cleanUp();
+  };
+});
+```
+
+## afterEach
+
+- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+在当前套件的每个测试之后运行。
+
+```ts
+import { afterEach } from '@rstest/core';
+
+afterEach(async () => {
+  // 每个测试后的清理逻辑
+});
+```
+
+## onTestFinished
+
+- **类型：** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+
+测试运行完成后调用，无论测试成功或失败。可用于执行清理操作。该 hook 会在 `afterEach` 之后执行。
+
+```ts
+import { onTestFinished, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+  // Register a cleanup function to close the server after the test
+  onTestFinished(() => server.close());
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```
+
+需要注意的是，当你在并发测试中使用 `onTestFinished` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFinished hook 所属的具体测试。
+
+```ts
+describe.concurrent('并发套件', () => {
+  test('test 1', async ({ onTestFinished }) => {
+    /* ... */
+  });
+  test('test 2', async ({ onTestFinished }) => {
+    /* ... */
+  });
+});
+```
+
+## onTestFailed
+
+- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+
+测试运行失败后调用。
+
+```ts
+import { onTestFailed, test } from '@rstest/core';
+
+test('test server', () => {
+  const server = startServer();
+
+  onTestFailed(({ task }) => {
+    console.log(task.result?.errors);
+  });
+
+  server.listen(3000, () => {
+    console.log('Server is running on port 3000');
+  });
+});
+```
+
+需要注意的是，当你在并发测试中使用 `onTestFailed` hook 时，你应当从测试上下文中获取该 hook。这是因为 Rstest 在并发测试中无法准确追踪来自全局的 onTestFailed hook 所属的具体测试。

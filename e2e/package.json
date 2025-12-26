@@ -5,11 +5,12 @@
   "scripts": {
     "test": "rstest run",
     "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run",
+    "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.6.12-canary-20251204065915",
-    "@rslib/core": "0.18.3",
+    "@rsbuild/core": "1.7.0-beta.1",
+    "@rslib/core": "0.18.6",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",
@@ -19,7 +20,7 @@
     "jest-image-snapshot": "^6.5.1",
     "memfs": "^4.51.1",
     "pathe": "^2.0.3",
-    "react": "^19.2.1",
+    "react": "^19.2.3",
     "redux": "^5.0.1",
     "strip-ansi": "^7.1.2",
     "tinyexec": "^1.0.2",

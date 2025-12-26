@@ -1,6 +1,12 @@
-import { expect, it, rs } from '@rstest/core';
+import { afterAll, expect, it, rs } from '@rstest/core';
 import { b } from '../src/b';
 import { d1 } from '../src/d';
+
+afterAll(() => {
+  rs.doUnmock('../src/b');
+  rs.doUnmock('../src/c');
+  rs.doUnmock('../src/d');
+});
 
 // b
 rs.mock(import('../src/b'), () => {

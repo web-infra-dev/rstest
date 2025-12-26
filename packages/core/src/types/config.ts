@@ -7,6 +7,7 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+import type { MaybePromise } from './utils';
 
 export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
@@ -54,7 +55,18 @@ type SnapshotFormat = Omit<
 type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
+export type ExtendConfig = Omit<RstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => MaybePromise<ExtendConfig>;
+
 export interface RstestConfig {
+  /**
+   * Extend configuration from adapters
+   */
+  extends?: ExtendConfigFn | ExtendConfig;
+
   /**
    * Project root
    *
@@ -102,6 +114,13 @@ export interface RstestConfig {
    * Path to setup files. They will be run before each test file.
    */
   setupFiles?: string[] | string;
+
+  /**
+   * Path to global setup files, relative to project root.
+   * A global setup file can either export named functions `setup` and `teardown`
+   * or a `default` function that returns a teardown function.
+   */
+  globalSetup?: string[] | string;
 
   /**
    * Retry the test specific number of times if it fails.
@@ -274,6 +293,11 @@ export interface RstestConfig {
    */
   chaiConfig?: ChaiConfig;
 
+  /**
+   * Include `location` property in `TestInfo` received by reporters
+   */
+  includeTaskLocation?: boolean;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
@@ -314,18 +338,26 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
-  | 'resolveSnapshotPath';
+  | 'resolveSnapshotPath'
+  | 'extends';
 
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'globalSetup'
+    | 'exclude'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
     coverage: NormalizedCoverageOptions;
     setupFiles: string[];
+    globalSetup: string[];
     exclude: {
       patterns: string[];
       override?: boolean;
@@ -335,9 +367,15 @@ export type NormalizedConfig = Required<
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
-    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+    | OptionalKeys
+    | 'projects'
+    | 'reporters'
+    | 'pool'
+    | 'setupFiles'
+    | 'globalSetup'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
+    globalSetup: string[];
   };

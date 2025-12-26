@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  expect,
+import type {
   onTestFailed as onRstestFailed,
   onTestFinished as onRstestFinished,
 } from '@rstest/core';
@@ -50,6 +49,7 @@ class Cli {
     for (const io of toReset) {
       this[io] = '';
     }
+    this.log = '';
   };
 
   private waitForStd = (expect: string | RegExp, io: IoType): Promise<void> => {
@@ -81,33 +81,45 @@ export async function runRstestCli({
   command,
   options,
   args = [],
-  onTestFinished = onRstestFinished,
-  onTestFailed = onRstestFailed,
+  onTestFinished,
+  onTestFailed,
 }: {
   command: string;
   options?: Partial<Options>;
   args?: string[];
-  onTestFinished?: (fn: () => void | Promise<void>) => void;
+  onTestFinished?: typeof onRstestFinished;
   onTestFailed?: typeof onRstestFailed;
 }) {
-  const process = x(command, args, {
+  // fix get accurate test when no-isolate
+  const {
+    onTestFinished: onRstestFinished,
+    onTestFailed: onRstestFailed,
+    expect,
+  } = await import('@rstest/core');
+
+  if (process.env.ISOLATE === 'false' && !args.includes('--isolate')) {
+    args.push('--isolate', 'false');
+  }
+
+  const exec = x(command, args, {
     ...options,
     nodeOptions: {
       ...(options?.nodeOptions || {}),
       env: {
+        ...process.env,
         ...(options?.nodeOptions?.env || {}),
         GITHUB_ACTIONS: 'false',
       },
     },
   } as Options);
-  const cli = new Cli(process);
+  const cli = new Cli(exec);
 
-  onTestFinished(() => {
+  (onTestFinished || onRstestFinished)(() => {
     !cli.exec.killed && cli.exec.kill();
   });
 
-  onTestFailed?.(({ task }) => {
-    if (task.result.errors?.[0]) {
+  (onTestFailed || onRstestFailed)?.(({ task }) => {
+    if (task.result?.errors?.[0]) {
       task.result.errors![0]!.message +=
         `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
     }

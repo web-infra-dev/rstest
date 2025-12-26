@@ -5,7 +5,7 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
-import type { NormalizedConfig, RstestConfig } from './types';
+import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
   castArray,
   color,
@@ -73,8 +73,27 @@ export async function loadConfig({
     loader: configLoader,
   });
 
-  return { content: content as RstestConfig, filePath: configFilePath };
+  let config = content as RstestConfig;
+
+  // Handle extends configuration
+  if (config.extends) {
+    const extendsConfig =
+      typeof config.extends === 'function'
+        ? await config.extends(Object.freeze({ ...config }))
+        : config.extends;
+    // @ts-expect-error: double check
+    delete extendsConfig.projects;
+    config = mergeRstestConfig(extendsConfig, config);
+  }
+
+  return { content: config, filePath: configFilePath };
 }
+
+export const mergeProjectConfig = (
+  ...configs: ProjectConfig[]
+): ProjectConfig => {
+  return mergeRstestConfig(...configs) as ProjectConfig;
+};
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
@@ -119,6 +138,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     override: false,
   },
   setupFiles: [],
+  globalSetup: [],
   includeSource: [],
   pool: {
     type: 'forks',
@@ -149,6 +169,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hideSkippedTests: false,
   logHeapUsage: false,
   bail: 0,
+  includeTaskLocation: false,
   coverage: {
     exclude: [
       '**/node_modules/**',
@@ -181,6 +202,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
+  merged.globalSetup = castArray(merged.globalSetup);
 
   merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
 
@@ -209,6 +231,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       ),
     },
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
+    globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
       formatRootStr(p, merged.root),
     ),

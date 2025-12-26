@@ -1,14 +1,9 @@
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
-import {
-  clearScreen,
-  color,
-  getSetupFiles,
-  getTestEntries,
-  logger,
-} from '../utils';
+import { clearScreen, color, getTestEntries, logger } from '../utils';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -53,6 +48,8 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+
   const setupFiles = Object.fromEntries(
     context.projects.map((project) => {
       const {
@@ -65,38 +62,54 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
+
+  const isWatchMode = command === 'watch';
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: context.projects.map((p) => p.normalizedConfig),
     },
-    globTestSourceEntries:
-      command === 'watch'
-        ? globTestSourceEntries
-        : async (name) => {
-            if (entriesCache.has(name)) {
-              return entriesCache.get(name)!.entries;
-            }
-            return globTestSourceEntries(name);
-          },
+    isWatchMode,
+    globTestSourceEntries: isWatchMode
+      ? globTestSourceEntries
+      : async (name) => {
+          if (entriesCache.has(name)) {
+            return entriesCache.get(name)!.entries;
+          }
+          return globTestSourceEntries(name);
+        },
     setupFiles,
+    globalSetupFiles,
     rsbuildInstance,
     rootPath,
   });
 
+  const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+    (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+    [],
+  );
+
   const recommendWorkerCount =
-    command === 'watch'
-      ? Number.POSITIVE_INFINITY
-      : Array.from(entriesCache.values()).reduce(
-          (acc, entry) => acc + Object.keys(entry.entries).length,
-          0,
-        );
+    command === 'watch' ? Number.POSITIVE_INFINITY : entryFiles.length;
 
   const pool = await createPool({
     context,
@@ -132,12 +145,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
     context.stateManager.reset();
 
+    // TODO: this is not the best practice for collecting test files
+    context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
+
     const returns = await Promise.all(
       context.projects.map(async (p) => {
         const {
           assetNames,
           entries,
           setupEntries,
+          globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
           affectedEntries,
@@ -148,6 +165,33 @@ export async function runTests(context: Rstest): Promise<void> {
         });
 
         testStart ??= Date.now();
+
+        // Global setup only run once per project
+        // Global setup runs only if there is at least one running test
+        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
+          p._globalSetups = true;
+          const files = globalSetupEntries.flatMap((e) => e.files!);
+          const assetFiles = await getAssetFiles(files);
+          const sourceMaps = await getSourceMaps(files);
+
+          const { success, errors } = await runGlobalSetup({
+            globalSetupEntries,
+            assetFiles,
+            sourceMaps,
+            interopDefault: true,
+            outputModule: p.outputModule,
+          });
+          if (!success) {
+            return {
+              results: [],
+              testResults: [],
+              errors,
+              assetNames,
+              // sourcemap is useless since we install source-map-support in worker
+              getSourceMaps: () => null,
+            };
+          }
+        }
 
         currentDeletedEntries.push(...deletedEntries);
 
@@ -210,6 +254,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
+    const errors = returns.flatMap((r) => r.errors || []);
 
     context.updateReporterResultState(
       results,
@@ -217,7 +262,7 @@ export async function runTests(context: Rstest): Promise<void> {
       currentDeletedEntries,
     );
 
-    if (results.length === 0) {
+    if (results.length === 0 && !errors.length) {
       if (command === 'watch') {
         if (mode === 'on-demand') {
           logger.log(color.yellow('No test files need re-run.'));
@@ -258,7 +303,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    const isFailure = results.some((r) => r.status === 'fail');
+    const isFailure = results.some((r) => r.status === 'fail') || errors.length;
 
     if (isFailure) {
       process.exitCode = 1;
@@ -268,6 +313,7 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
         testResults: context.reporterResults.testResults,
+        unhandledErrors: errors,
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap: async (name: string) => {
@@ -325,6 +371,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const { onBeforeRestart } = await import('./restart');
 
     onBeforeRestart(async () => {
+      await runGlobalTeardown();
       await pool.close();
       await closeServer();
     });
@@ -477,6 +524,12 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
+
+        // Run global teardown before exit
+        runGlobalTeardown().catch((error) => {
+          logger.log(color.red(`Error in global teardown: ${error}`));
+        });
+
         process.exitCode = 1;
       }
     };
@@ -486,6 +539,10 @@ export async function runTests(context: Rstest): Promise<void> {
     isTeardown = true;
     await pool.close();
     await closeServer();
+
+    // Run global teardown after all tests are done
+    await runGlobalTeardown();
+
     process.off('exit', unExpectedExit);
   }
 }

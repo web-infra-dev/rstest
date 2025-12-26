@@ -4,12 +4,14 @@
   "include",
   "exclude",
   "setup-files",
+  "global-setup",
   "projects",
   "update",
   "globals",
   "pass-with-no-tests",
   "include-source",
   "test-name-pattern",
+  "extends",
 
   "env",
   "bail",
@@ -29,6 +31,7 @@
 
   "coverage",
   "reporters",
+  "include-task-location",
   "log-heap-usage",
   "hide-skipped-tests",
   "slow-test-threshold",

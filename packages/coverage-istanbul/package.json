@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "type": "module",
   "description": "Istanbul coverage provider for Rstest",
   "author": "Travis Zhang<https://github.com/travzhang>",
@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "dev": "rslib build --watch"
+    "dev": "cross-env SOURCEMAP=true rslib build --watch"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:~"
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@rslib/core": "0.18.3",
+    "@rslib/core": "^0.18.6",
     "@types/node": "^22.16.5",
     "typescript": "^5.9.3",
     "@types/istanbul-lib-coverage": "^2.0.6",

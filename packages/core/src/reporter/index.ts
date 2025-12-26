@@ -22,6 +22,7 @@ export class DefaultReporter implements Reporter {
   protected config: NormalizedConfig;
   private options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  private testState: RstestTestState;
 
   constructor({
     rootPath,
@@ -37,6 +38,7 @@ export class DefaultReporter implements Reporter {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
+    this.testState = testState;
     if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
         rootPath,
@@ -57,9 +59,12 @@ export class DefaultReporter implements Reporter {
     const { slowTestThreshold } = this.config;
 
     logFileTitle(test, relativePath);
+    // Always display all test cases when running a single test file
+    const showAllCases = this.testState.getTestFiles()?.length === 1;
 
     for (const result of test.results) {
       const isDisplayed =
+        showAllCases ||
         result.status === 'fail' ||
         (result.duration ?? 0) > slowTestThreshold ||
         (result.retryCount ?? 0) > 0;
@@ -118,12 +123,14 @@ export class DefaultReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     filterRerunTestPaths,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
@@ -135,6 +142,7 @@ export class DefaultReporter implements Reporter {
     await printSummaryErrorLogs({
       testResults,
       results,
+      unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
       filterRerunTestPaths,

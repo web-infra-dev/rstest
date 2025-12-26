@@ -10,39 +10,24 @@ import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
 import { logger } from './logger';
-import { testItemType } from './testTree';
+import type { Project } from './project';
+import type { LogLevel } from './shared/logger';
+import { TestFile, testData } from './testTree';
 
 export class TestRunReporter implements Reporter {
-  private fileItem: vscode.TestItem;
-  private path: string[];
   constructor(
-    private run: vscode.TestRun,
-    private testItem: vscode.TestItem,
-  ) {
-    let fileItem: vscode.TestItem | undefined = testItem;
-    const path: string[] = [];
+    private run?: vscode.TestRun,
+    private project?: Project,
+    private path: string[] = [],
+  ) {}
 
-    while (
-      fileItem &&
-      (testItemType.get(fileItem) === 'suite' ||
-        testItemType.get(fileItem) === 'case')
-    ) {
-      path.unshift(fileItem.label);
-      fileItem = fileItem.parent;
-    }
-
-    if (!fileItem) throw new Error('Cannot find test file');
-
-    this.fileItem = fileItem;
-    this.path = path;
-  }
-  public getTestItemPath() {
-    return this.path;
+  public async log(level: LogLevel, message: string) {
+    logger[level](message);
   }
 
   // pipe default reporter output to vscode test results panel
   onOutput(message: string) {
-    this.run.appendOutput(message.replaceAll('\n', '\r\n'));
+    this.run?.appendOutput(message.replaceAll('\n', '\r\n'));
   }
 
   private generatePath(value: TestCaseInfo | TestSuiteInfo | TestResult) {
@@ -51,9 +36,12 @@ export class TestRunReporter implements Reporter {
       : [...(value.parentNames || []), value.name];
   }
   private findTestItem(value: TestCaseInfo | TestSuiteInfo | TestResult) {
+    const fileItem = this.project?.testFiles.get(
+      vscode.Uri.file(value.testPath).toString(),
+    )?.testItem;
     return this.generatePath(value).reduce<vscode.TestItem | undefined>(
       (item, name) => item?.children.get(name),
-      this.fileItem,
+      fileItem,
     );
   }
   /** check whether current running suite/case contains reported suite/case */
@@ -63,23 +51,47 @@ export class TestRunReporter implements Reporter {
     return this.path.every((name, index) => path[index] === name);
   }
 
-  onTestFileStart(_test: TestFileInfo) {
-    this.run.started(this.testItem);
+  onTestFileStart(test: TestFileInfo) {
+    // only update test file result when explicit run itself or parent
+    if (this.path.length) return;
+
+    const fileItem = this.project?.testFiles.get(
+      vscode.Uri.file(test.testPath).toString(),
+    )?.testItem;
+    if (!fileItem) return;
+
+    this.run?.started(fileItem);
+  }
+  onTestFileReady(test: TestFileInfo) {
+    const fileTestItem = this.project?.testFiles.get(
+      vscode.Uri.file(test.testPath).toString(),
+    )?.testItem;
+    if (fileTestItem) {
+      const data = testData.get(fileTestItem);
+      if (data instanceof TestFile) {
+        data.updateFromList(test.tests);
+      }
+    }
   }
   onTestFileResult(test: TestFileResult) {
-    // only update test file result when explicit run it
+    // only update test file result when explicit run itself or parent
     if (this.path.length) return;
+
+    const fileItem = this.project?.testFiles.get(
+      vscode.Uri.file(test.testPath).toString(),
+    )?.testItem;
+    if (!fileItem) return;
 
     switch (test.status) {
       case 'todo':
       case 'skip':
-        this.run.skipped(this.fileItem);
+        this.run?.skipped(fileItem);
         break;
       case 'pass':
-        this.run.passed(this.fileItem, test.duration);
+        this.run?.passed(fileItem, test.duration);
         break;
       case 'fail':
-        this.run.failed(this.fileItem, [], test.duration);
+        this.run?.failed(fileItem, [], test.duration);
         break;
     }
   }
@@ -92,7 +104,7 @@ export class TestRunReporter implements Reporter {
     this.onTestCaseResult(result);
   }
 
-  onTestCaseStart(test: TestCaseInfo) {
+  onTestCaseStart(test: TestCaseInfo | TestSuiteInfo) {
     // ignore reported item not belongs current testItem
     if (!this.contains(test)) return;
 
@@ -101,7 +113,7 @@ export class TestRunReporter implements Reporter {
       logger.error('Cannot find testItem', test);
       return;
     }
-    this.run.started(testItem);
+    this.run?.started(testItem);
   }
   async onTestCaseResult(result: TestResult) {
     // if reported result is not belongs to current testItem, only update result when there's some suite before/after hooks error
@@ -117,16 +129,16 @@ export class TestRunReporter implements Reporter {
 
     switch (result.status) {
       case 'pass': {
-        this.run.passed(testItem, result.duration);
+        this.run?.passed(testItem, result.duration);
         break;
       }
       case 'skip':
       case 'todo': {
-        this.run.skipped(testItem);
+        this.run?.skipped(testItem);
         break;
       }
       case 'fail': {
-        this.run.failed(
+        this.run?.failed(
           testItem,
           await Promise.all(
             (result.errors || []).map(async (error) =>
@@ -138,6 +150,52 @@ export class TestRunReporter implements Reporter {
         break;
       }
     }
+  }
+
+  async onCoverage(
+    uri: string,
+    statementCoverage: vscode.TestCoverageCount,
+    branchCoverage?: vscode.TestCoverageCount,
+    declarationCoverage?: vscode.TestCoverageCount,
+    details?: vscode.FileCoverageDetail[],
+  ) {
+    this.run?.addCoverage(
+      new RstestFileCoverage(
+        vscode.Uri.file(uri),
+        statementCoverage,
+        branchCoverage,
+        declarationCoverage,
+        details?.map((detail) => {
+          const mapLocation = (location: vscode.Position | vscode.Range) => {
+            if ('start' in location)
+              return new vscode.Range(
+                location.start.line,
+                location.start.character,
+                location.end.line,
+                location.end.character,
+              );
+            return new vscode.Position(location.line, location.character);
+          };
+          return 'name' in detail
+            ? new vscode.DeclarationCoverage(
+                detail.name,
+                detail.executed,
+                mapLocation(detail.location),
+              )
+            : new vscode.StatementCoverage(
+                detail.executed,
+                mapLocation(detail.location),
+                detail.branches.map(
+                  (branch) =>
+                    new vscode.BranchCoverage(
+                      branch.executed,
+                      branch.location && mapLocation(branch.location),
+                    ),
+                ),
+              );
+        }),
+      ),
+    );
   }
 
   private async createError(
@@ -186,5 +244,17 @@ export class TestRunReporter implements Reporter {
     }
 
     return message;
+  }
+}
+
+export class RstestFileCoverage extends vscode.FileCoverage {
+  constructor(
+    uri: vscode.Uri,
+    statementCoverage: vscode.TestCoverageCount,
+    branchCoverage?: vscode.TestCoverageCount,
+    declarationCoverage?: vscode.TestCoverageCount,
+    public readonly details: vscode.FileCoverageDetail[] = [],
+  ) {
+    super(uri, statementCoverage, branchCoverage, declarationCoverage);
   }
 }

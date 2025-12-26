@@ -16,6 +16,7 @@ export class TestStateManager {
   >();
 
   public testModules: TestFileResult[] = [];
+  public testFiles: string[] | undefined = undefined;
 
   onTestFileStart(testPath: string): void {
     this.runningModules.set(testPath, { runningTests: [], results: [] });
@@ -75,5 +76,6 @@ export class TestStateManager {
   reset(): void {
     this.runningModules.clear();
     this.testModules = [];
+    this.testFiles = undefined;
   }
 }

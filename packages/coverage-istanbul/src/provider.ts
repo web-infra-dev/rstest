@@ -84,10 +84,6 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {
-    if (!coverageMap || coverageMap.files().length === 0) {
-      return;
-    }
-
     try {
       const context = createContext({
         dir: this.options.reportsDirectory,
@@ -95,11 +91,19 @@ export class CoverageProvider implements RstestCoverageProvider {
       });
       const reportersList = this.options.reporters;
       for (const reporter of reportersList) {
-        const [reporterName, reporterOptions] = Array.isArray(reporter)
-          ? reporter
-          : [reporter, {}];
-        const report = reports.create(reporterName, reporterOptions);
-        report.execute(context);
+        if (typeof reporter === 'object' && 'execute' in reporter) {
+          reporter.execute(context);
+        } else {
+          const [reporterName, reporterOptions] = Array.isArray(reporter)
+            ? reporter
+            : [reporter, {}];
+          const report = reports.create(
+            reporterName as Parameters<typeof reports.create>[0],
+            reporterOptions,
+          );
+          //NOTE: https://github.com/vitest-dev/vitest/blob/41a111c35b6605dbe8a536a6e03b35e9bc0ce770/packages/coverage-istanbul/src/provider.ts#L145
+          report.execute(context);
+        }
       }
     } catch (error) {
       console.error('Failed to generate coverage reports:', error);

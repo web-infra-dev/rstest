@@ -61,6 +61,13 @@ export class Rstest implements RstestContext {
   public testState: RstestTestState = {
     getRunningModules: () => this.stateManager.runningModules,
     getTestModules: () => this.stateManager.testModules,
+    getTestFiles: () => {
+      // TODO: support collecting test files in watch mode
+      if (this.command === 'watch') {
+        return undefined;
+      }
+      return this.stateManager.testFiles;
+    },
   };
 
   public projects: ProjectContext[] = [];
@@ -136,6 +143,7 @@ export class Rstest implements RstestContext {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
+            _globalSetups: false,
             outputModule:
               config.output?.module ??
               process.env.RSTEST_OUTPUT_MODULE !== 'false',
@@ -147,6 +155,7 @@ export class Rstest implements RstestContext {
           {
             configFilePath,
             rootPath,
+            _globalSetups: false,
             name: rstestConfig.name,
             outputModule:
               rstestConfig.output?.module ??

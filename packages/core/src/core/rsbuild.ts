@@ -64,6 +64,7 @@ export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
   setupFiles: Record<string, Record<string, string>>,
+  globalSetupFiles: Record<string, Record<string, string>>,
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -110,15 +111,17 @@ export const prepareRsbuild = async (
         pluginEntryWatch({
           globTestSourceEntries,
           setupFiles,
+          globalSetupFiles,
           context,
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
         !isolate
           ? pluginCacheControl(
-              Object.values(setupFiles).flatMap((files) =>
-                Object.values(files),
-              ),
+              Object.values({
+                ...setupFiles,
+                ...globalSetupFiles,
+              }).flatMap((files) => Object.values(files)),
             )
           : null,
         pluginInspect(),
@@ -135,6 +138,9 @@ export const prepareRsbuild = async (
     );
     coverage.exclude.push(
       ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
+      ...Object.values(globalSetupFiles || {}).flatMap((files) =>
+        Object.values(files),
+      ),
     );
 
     rsbuildInstance.addPlugins([
@@ -149,16 +155,20 @@ export const prepareRsbuild = async (
 export const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
-  buildData: { entryToChunkHashes?: TestEntryToChunkHashes },
+  buildData: {
+    entryToChunkHashes?: TestEntryToChunkHashes;
+    setupEntryToChunkHashes?: TestEntryToChunkHashes;
+  },
   runtimeChunkName: string,
+  setupEntries: EntryInfo[],
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
 } => {
-  const entryToChunkHashesMap = new Map<string, Record<string, string>>();
-
-  // Build current chunk hashes map
-  const buildChunkHashes = (entry: EntryInfo) => {
+  const buildChunkHashes = (
+    entry: EntryInfo,
+    map: Map<string, Record<string, string>>,
+  ) => {
     const validChunks = (entry.chunks || []).filter(
       (chunk) => chunk !== runtimeChunkName,
     );
@@ -168,70 +178,115 @@ export const calcEntriesToRerun = (
         c.names?.includes(chunkName as string),
       );
       if (chunkInfo) {
-        const existing = entryToChunkHashesMap.get(entry.testPath) || {};
+        const existing = map.get(entry.testPath) || {};
         existing[chunkName] = chunkInfo.hash ?? '';
-        entryToChunkHashesMap.set(entry.testPath, existing);
+        map.set(entry.testPath, existing);
       }
     });
   };
 
-  (entries || []).forEach(buildChunkHashes);
+  const processEntryChanges = (
+    _entries: EntryInfo[],
+    prevHashes: TestEntryToChunkHashes | undefined,
+    currentHashesMap: Map<string, Record<string, string>>,
+  ): {
+    affectedPaths: Set<string>;
+    deletedPaths: string[];
+  } => {
+    const affectedPaths = new Set<string>();
+    const deletedPaths: string[] = [];
+
+    if (prevHashes) {
+      const prevMap = new Map(prevHashes.map((e) => [e.name, e.chunks]));
+      const currentNames = new Set(currentHashesMap.keys());
+
+      deletedPaths.push(
+        ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
+      );
+
+      const findAffectedEntry = (testPath: string) => {
+        const currentChunks = currentHashesMap.get(testPath);
+        const prevChunks = prevMap.get(testPath);
+
+        if (!currentChunks) return;
+
+        if (!prevChunks) {
+          affectedPaths.add(testPath);
+          return;
+        }
+
+        const hasChanges = Object.entries(currentChunks).some(
+          ([chunkName, hash]) => prevChunks[chunkName] !== hash,
+        );
+
+        if (hasChanges) {
+          affectedPaths.add(testPath);
+        }
+      };
+
+      currentHashesMap.forEach((_, testPath) => {
+        findAffectedEntry(testPath);
+      });
+    }
+
+    return { affectedPaths, deletedPaths };
+  };
+
+  const previousSetupHashes = buildData.setupEntryToChunkHashes;
+  const previousEntryHashes = buildData.entryToChunkHashes;
+
+  const setupEntryToChunkHashesMap = new Map<string, Record<string, string>>();
+  setupEntries.forEach((entry) => {
+    buildChunkHashes(entry, setupEntryToChunkHashesMap);
+  });
+
+  const setupEntryToChunkHashes: TestEntryToChunkHashes = Array.from(
+    setupEntryToChunkHashesMap.entries(),
+  ).map(([name, chunks]) => ({ name, chunks }));
+
+  // apply latest setup entry chunk hashes
+  buildData.setupEntryToChunkHashes = setupEntryToChunkHashes;
+
+  const entryToChunkHashesMap = new Map<string, Record<string, string>>();
+  (entries || []).forEach((entry) => {
+    buildChunkHashes(entry, entryToChunkHashesMap);
+  });
 
   const entryToChunkHashes: TestEntryToChunkHashes = Array.from(
     entryToChunkHashesMap.entries(),
   ).map(([name, chunks]) => ({ name, chunks }));
 
-  // Process changes if we have previous data
-  const affectedTestPaths = new Set<string>();
-  const deletedEntries: string[] = [];
-
-  if (buildData.entryToChunkHashes) {
-    const prevMap = new Map(
-      buildData.entryToChunkHashes.map((e) => [e.name, e.chunks]),
-    );
-    const currentNames = new Set(entryToChunkHashesMap.keys());
-
-    // Find deleted entries
-    deletedEntries.push(
-      ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
-    );
-
-    // Find modified or added entries
-    const findAffectedEntry = (testPath: string) => {
-      const currentChunks = entryToChunkHashesMap.get(testPath);
-      const prevChunks = prevMap.get(testPath);
-
-      if (!currentChunks) return;
-
-      if (!prevChunks) {
-        // New entry
-        affectedTestPaths.add(testPath);
-        return;
-      }
-
-      // Check for modified chunks
-      const hasChanges = Object.entries(currentChunks).some(
-        ([chunkName, hash]) => prevChunks[chunkName] !== hash,
-      );
-
-      if (hasChanges) {
-        affectedTestPaths.add(testPath);
-      }
-    };
-
-    entryToChunkHashesMap.forEach((_, testPath) => {
-      findAffectedEntry(testPath);
-    });
-  }
-
+  // apply latest entry chunk hashes
   buildData.entryToChunkHashes = entryToChunkHashes;
 
-  // Convert affected test paths to EntryInfo objects
+  const isSetupChanged = () => {
+    const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
+      processEntryChanges(
+        setupEntries,
+        previousSetupHashes,
+        setupEntryToChunkHashesMap,
+      );
+
+    const affectedSetups = Array.from(affectedSetupPaths)
+      .map((testPath) => setupEntries.find((e) => e.testPath === testPath))
+      .filter((entry): entry is EntryInfo => entry !== undefined);
+
+    return affectedSetups.length > 0 || deletedSetups.length > 0;
+  };
+
+  if (isSetupChanged()) {
+    // if setup files changed, all test entries are affected
+    return { affectedEntries: entries, deletedEntries: [] };
+  }
+
+  const { affectedPaths: affectedTestPaths, deletedPaths } =
+    processEntryChanges(entries, previousEntryHashes, entryToChunkHashesMap);
+
   const affectedEntries = Array.from(affectedTestPaths)
     .map((testPath) => entries.find((e) => e.testPath === testPath))
     .filter((entry): entry is EntryInfo => entry !== undefined);
 
-  return { affectedEntries, deletedEntries };
+  return { affectedEntries, deletedEntries: deletedPaths };
 };
 
 class AssetsMemorySafeMap extends Map<string, string> {
@@ -250,15 +305,19 @@ class AssetsMemorySafeMap extends Map<string, string> {
 export const createRsbuildServer = async ({
   globTestSourceEntries,
   setupFiles,
+  globalSetupFiles,
   rsbuildInstance,
   inspectedConfig,
+  isWatchMode,
 }: {
+  isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
   inspectedConfig: RstestContext['normalizedConfig'] & {
     projects: NormalizedProjectConfig[];
   };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   rootPath: string;
 }): Promise<{
   getRsbuildStats: (options: {
@@ -268,10 +327,13 @@ export const createRsbuildServer = async ({
     hash?: string;
     entries: EntryInfo[];
     setupEntries: EntryInfo[];
+    globalSetupEntries: EntryInfo[];
     assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+    /** affected test entries only available in watch mode */
     affectedEntries: EntryInfo[];
+    /** deleted test entries only available in watch mode */
     deletedEntries: string[];
   }>;
   closeServer: () => Promise<void>;
@@ -331,8 +393,12 @@ export const createRsbuildServer = async ({
     );
   }
 
+  // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly
+  const cachedReadFilePromises = new Map<string, Promise<string>>();
   const readFile = async (fileName: string) => {
-    return new Promise<string>((resolve, reject) => {
+    if (cachedReadFilePromises.has(fileName))
+      return cachedReadFilePromises.get(fileName)!;
+    const promise = new Promise<string>((resolve, reject) => {
       outputFileSystem.readFile(fileName, (err, data) => {
         if (err) {
           reject(err);
@@ -347,11 +413,17 @@ export const createRsbuildServer = async ({
         resolve(content);
       });
     });
+    cachedReadFilePromises.set(fileName, promise);
+    promise.finally(() => cachedReadFilePromises.delete(fileName));
+    return promise;
   };
 
   const buildData: Record<
     string,
-    { entryToChunkHashes?: TestEntryToChunkHashes }
+    {
+      entryToChunkHashes?: TestEntryToChunkHashes;
+      setupEntryToChunkHashes?: TestEntryToChunkHashes;
+    }
   > = {};
 
   const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
@@ -398,6 +470,7 @@ export const createRsbuildServer = async ({
     const entryFiles = await getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
+    const globalSetupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries(environmentName);
 
     for (const entry of Object.keys(entrypoints!)) {
@@ -411,10 +484,10 @@ export const createRsbuildServer = async ({
         filteredAssets[filteredAssets.length - 1]!.name,
       );
 
-      if (setupFiles[environmentName]![entry]) {
+      if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
-          testPath: setupFiles[environmentName]![entry],
+          testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
         });
@@ -428,6 +501,13 @@ export const createRsbuildServer = async ({
         entries.push({
           distPath,
           testPath: sourceEntries[entry],
+          files: entryFiles[entry],
+          chunks: e.chunks || [],
+        });
+      } else if (globalSetupFiles?.[environmentName]?.[entry]) {
+        globalSetupEntries.push({
+          distPath,
+          testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
         });
@@ -458,12 +538,15 @@ export const createRsbuildServer = async ({
 
     // affectedEntries: entries affected by source code.
     // deletedEntries: entry files deleted from compilation.
-    const { affectedEntries, deletedEntries } = calcEntriesToRerun(
-      entries,
-      chunks,
-      buildData[environmentName],
-      `${environmentName}-${RUNTIME_CHUNK_NAME}`,
-    );
+    const { affectedEntries, deletedEntries } = isWatchMode
+      ? calcEntriesToRerun(
+          entries,
+          chunks,
+          buildData[environmentName],
+          `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+          setupEntries,
+        )
+      : { affectedEntries: [], deletedEntries: [] };
 
     const cachedAssetFiles = new AssetsMemorySafeMap();
     const cachedSourceMaps = new AssetsMemorySafeMap();
@@ -514,6 +597,7 @@ export const createRsbuildServer = async ({
       hash,
       entries,
       setupEntries,
+      globalSetupEntries,
       assetNames,
       getAssetFiles: async (names: string[]) => {
         return Object.fromEntries(

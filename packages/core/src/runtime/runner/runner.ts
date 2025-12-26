@@ -100,9 +100,15 @@ export class TestRunner {
 
       const cleanups: AfterEachListener[] = [];
 
+      const fixtureCleanups = await this.beforeRunTest(
+        test,
+        snapshotClient.getSnapshotState(testPath),
+      );
+      cleanups.push(...fixtureCleanups);
+
       try {
         for (const fn of parentHooks.beforeEachListeners) {
-          const cleanupFn = await fn();
+          const cleanupFn = await fn(test.context);
           cleanupFn && cleanups.push(cleanupFn);
         }
       } catch (error) {
@@ -120,11 +126,6 @@ export class TestRunner {
       if (result?.status !== 'fail') {
         if (test.fails) {
           try {
-            const fixtureCleanups = await this.beforeRunTest(
-              test,
-              snapshotClient.getSnapshotState(testPath),
-            );
-            cleanups.push(...fixtureCleanups);
             await test.fn?.(test.context);
             this.afterRunTest(test);
 
@@ -153,11 +154,6 @@ export class TestRunner {
           }
         } else {
           try {
-            const fixtureCleanups = await this.beforeRunTest(
-              test,
-              snapshotClient.getSnapshotState(testPath),
-            );
-            cleanups.push(...fixtureCleanups);
             if (test.fn) {
               const fn = wrapTimeout({
                 name: 'test',
@@ -203,9 +199,10 @@ export class TestRunner {
         .concat(cleanups)
         .concat(test.onFinished);
 
+      test.context.task.result = result;
       try {
         for (const fn of afterEachFns) {
-          await fn({ task: { result } });
+          await fn(test.context);
         }
       } catch (error) {
         result.status = 'fail';
@@ -216,7 +213,7 @@ export class TestRunner {
       if (result.status === 'fail') {
         for (const fn of [...test.onFailed].reverse()) {
           try {
-            await fn({ task: { result } });
+            await fn(test.context);
           } catch (error) {
             result.errors ??= [];
             result.errors.push(...formatTestError(error));
@@ -301,6 +298,8 @@ export class TestRunner {
           testPath,
           project: test.project,
           testId: test.testId,
+          type: 'suite',
+          location: test.location,
         });
 
         if (test.tests.length === 0) {
@@ -390,6 +389,8 @@ export class TestRunner {
           timeout: test.timeout,
           parentNames: test.parentNames,
           project: test.project,
+          type: 'case',
+          location: test.location,
         });
 
         do {
@@ -516,7 +517,7 @@ export class TestRunner {
     }
   }
 
-  private createTestContext(): TestContext {
+  private createTestContext(test: TestCase): TestContext {
     const context = (() => {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
@@ -524,6 +525,8 @@ export class TestRunner {
     let _expect: RstestExpect | undefined;
 
     const current = this._test;
+
+    context.task = { name: test.name };
 
     Object.defineProperty(context, 'expect', {
       get: () => {
@@ -616,7 +619,7 @@ export class TestRunner {
       (globalThis as any)[GLOBAL_EXPECT],
     );
 
-    const context = this.createTestContext();
+    const context = this.createTestContext(test);
 
     const { cleanups } = await handleFixtures(test, context);
 

@@ -20,10 +20,12 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'include',
       'exclude',
       'setupFiles',
+      'globalSetup',
       'projects',
       'passWithNoTests',
       'includeSource',
       'testNamePattern',
+      'extends',
     ],
   },
   {
@@ -61,6 +63,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
+      'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
       'slowTestThreshold',

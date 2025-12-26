@@ -26,19 +26,6 @@ import {
 import type { Assertion, TestCase, WorkerState } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils';
 
-let _client: SnapshotClient;
-
-export function getSnapshotClient(): SnapshotClient {
-  if (!_client) {
-    _client = new SnapshotClient({
-      isEqual: (received, expected) => {
-        return equals(received, expected, [iterableEquality, subsetEquality]);
-      },
-    });
-  }
-  return _client;
-}
-
 function recordAsyncExpect(
   _test: any,
   promise: Promise<any>,
@@ -144,8 +131,25 @@ function getTestMeta(test: TestCase) {
     testId: test.testId,
   };
 }
-export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin =
-  (workerState) => (chai, utils) => {
+export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
+  workerState,
+) => {
+  let _client: SnapshotClient;
+  if (!workerState.snapshotClient) {
+    workerState.snapshotClient = new SnapshotClient({
+      isEqual: (received, expected) => {
+        return equals(received, expected, [iterableEquality, subsetEquality]);
+      },
+    });
+  }
+
+  _client = workerState.snapshotClient;
+
+  function getSnapshotClient(): SnapshotClient {
+    return _client;
+  }
+
+  return (chai, utils) => {
     function getTest(obj: object) {
       const test = utils.flag(obj, 'vitest-test');
       return test as TestCase | undefined;
@@ -368,3 +372,4 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin =
     );
     utils.addMethod(chai.expect, 'addSnapshotSerializer', addSerializer);
   };
+};

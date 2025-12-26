@@ -55,6 +55,10 @@ export interface Reporter {
    */
   onTestFileStart?: (test: TestFileInfo) => void;
   /**
+   * Called after tests in file collected.
+   */
+  onTestFileReady?: (test: TestFileInfo) => void;
+  /**
    * Called when the test file has finished running.
    */
   onTestFileResult?: (test: TestFileResult) => void;
@@ -85,11 +89,13 @@ export interface Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     snapshotSummary: SnapshotSummary;
     filterRerunTestPaths?: string[];
   }) => MaybePromise<void>;

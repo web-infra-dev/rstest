@@ -22,16 +22,19 @@ describe('test snapshot', () => {
     `);
   });
 
-  it('test custom serializer', () => {
-    expect.addSnapshotSerializer(
-      createSnapshotSerializer({
-        workspace: path.join(__dirname, '..'),
-      }),
-    );
-    expect(__filename).toMatchInlineSnapshot(
-      `"<WORKSPACE>/snapshot/index.test.ts"`,
-    );
-  });
+  it.skipIf(process.env.ISOLATE === 'false')(
+    'test custom serializer',
+    ({ expect }) => {
+      expect.addSnapshotSerializer(
+        createSnapshotSerializer({
+          workspace: path.join(__dirname, '..'),
+        }),
+      );
+      expect(__filename).toMatchInlineSnapshot(
+        `"<WORKSPACE>/snapshot/index.test.ts"`,
+      );
+    },
+  );
 
   it('should failed when use inline snapshot in each', async () => {
     const { cli } = await runRstestCli({

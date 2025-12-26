@@ -11,6 +11,15 @@ import type {
 import type { MaybePromise } from './utils';
 
 export type TestContext = {
+  /**
+   * Metadata of the current test
+   */
+  task: {
+    /** Test name provided by user */
+    name: string;
+    /** Result of the current test, undefined if the test is not run yet */
+    result?: TestResult;
+  };
   expect: RstestExpect;
   onTestFinished: RunnerAPI['onTestFinished'];
   onTestFailed: RunnerAPI['onTestFailed'];
@@ -157,13 +166,9 @@ export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   }>;
 };
 
-export type OnTestFinishedHandler = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
+export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;
 
-export type OnTestFailedHandler = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
+export type OnTestFailedHandler = (ctx: TestContext) => MaybePromise<void>;
 
 export type RunnerAPI = {
   describe: DescribeAPI;

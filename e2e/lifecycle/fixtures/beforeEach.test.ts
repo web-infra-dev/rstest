@@ -34,7 +34,8 @@ describe('level A', () => {
       expect(2 + 2).toBe(4);
     });
 
-    beforeEach(() => {
+    beforeEach((ctx) => {
+      expect(ctx.task.name).toBe('it in level B-B');
       console.log('[beforeEach] in level B-B');
     });
   });
