@@ -19,6 +19,7 @@ export class TestRunReporter implements Reporter {
     private run?: vscode.TestRun,
     private project?: Project,
     private path: string[] = [],
+    private coverageEnabled?: boolean,
     private onFinish?: () => void,
     private createTestRun?: () => vscode.TestRun,
   ) {}
@@ -163,6 +164,16 @@ export class TestRunReporter implements Reporter {
   }
 
   async onTestRunEnd() {
+    if (this.coverageEnabled) return;
+
+    this.onFinish?.();
+    if (!this.isFirstRun) {
+      this.run?.end();
+    }
+    this.isFirstRun = false;
+  }
+
+  async onCoverageEnd() {
     this.onFinish?.();
     if (!this.isFirstRun) {
       this.run?.end();

@@ -90,12 +90,16 @@ export class CoverageReporter
       } satisfies vscode.StatementCoverage);
     }
 
-    masterApi.onCoverage(
+    masterApi.onCoverage.asEvent(
       coverage.path,
       summary.statements,
       summary.branches,
       summary.functions,
       details,
     );
+  }
+
+  onEnd() {
+    masterApi.onCoverageEnd.asEvent();
   }
 }

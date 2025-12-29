@@ -152,10 +152,12 @@ export class RstestApi {
     const promise = new Promise((resolve) => {
       onFinish = () => resolve(null);
     });
+    const coverageEnabled = kind === vscode.TestRunProfileKind.Coverage;
     const testRunReporter = new TestRunReporter(
       run,
       this.project,
       testCaseNamePath,
+      coverageEnabled,
       onFinish,
       createTestRun,
     );
@@ -182,10 +184,7 @@ export class RstestApi {
         update: updateSnapshot,
         configFilePath: this.configFilePath,
         rstestPath: this.resolveRstestPath(),
-        coverage:
-          kind === vscode.TestRunProfileKind.Coverage
-            ? { enabled: true }
-            : undefined,
+        coverage: coverageEnabled ? { enabled: true } : undefined,
         includeTaskLocation: true,
       })
       .finally(() => {
