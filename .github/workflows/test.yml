@@ -113,7 +113,7 @@ jobs:
 
       - name: Install Playwright Browsers
         if: steps.changes.outputs.changed == 'true'
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium webkit
 
       - name: E2E Test
         if: steps.changes.outputs.changed == 'true'

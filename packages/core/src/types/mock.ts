@@ -165,8 +165,9 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   mockRejectedValueOnce(error: unknown): this;
 }
 
-export interface Mock<T extends FunctionLike = FunctionLike>
-  extends MockInstance<T> {
+export interface Mock<
+  T extends FunctionLike = FunctionLike,
+> extends MockInstance<T> {
   new (...args: Parameters<T>): ReturnType<T>;
   (...args: Parameters<T>): ReturnType<T>;
 }

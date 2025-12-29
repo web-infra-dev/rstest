@@ -42,7 +42,6 @@
   "dependencies": {
     "@rsbuild/core": "1.7.0-beta.1",
     "open-editor": "^4.0.0",
-    "playwright-core": "^1.49.1",
     "sirv": "^2.0.4",
     "ws": "^8.18.3"
   },
@@ -60,10 +59,12 @@
     "convert-source-map": "^2.0.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
-    "picomatch": "^4.0.3"
+    "picomatch": "^4.0.3",
+    "playwright": "^1.49.1"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:^"
+    "@rstest/core": "workspace:^",
+    "playwright": "^1.49.1"
   },
   "engines": {
     "node": ">=18.12.0"

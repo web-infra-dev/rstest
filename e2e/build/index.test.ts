@@ -13,25 +13,26 @@ describe('test build config', () => {
     { name: 'plugin' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
-  ])('$name config should work correctly', async ({ name }, {
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        `fixtures/${name}`,
-        '-c',
-        `fixtures/${name}/rstest.config.ts`,
-      ],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
+  ])(
+    '$name config should work correctly',
+    async ({ name }, { onTestFinished }) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          `fixtures/${name}`,
+          '-c',
+          `fixtures/${name}/rstest.config.ts`,
+        ],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-  });
+      await expectExecSuccess();
+    },
+  );
 });

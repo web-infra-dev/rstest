@@ -1,4 +1,4 @@
-# Rstest Monorepo
+# Rstest monorepo
 
 Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 

@@ -1,4 +1,4 @@
-# Rstest VS Code Extension
+# Rstest VS Code extension
 
 VS Code extension providing integrated testing experience for Rstest.
 

@@ -8,4 +8,5 @@ export const BROWSER_PORTS = {
   'setup-files': 5190,
   snapshot: 5196,
   watch: 5186,
+  webkit: 5198,
 } as const;

@@ -182,6 +182,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   includeTaskLocation: false,
   browser: {
     enabled: false,
+    provider: 'playwright',
     browser: 'chromium',
     headless: isCI,
   },
@@ -245,6 +246,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       
   merged.browser = {
     enabled: merged.browser?.enabled ?? false,
+    provider: merged.browser?.provider ?? 'playwright',
     browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? isCI,
     port: merged.browser?.port,

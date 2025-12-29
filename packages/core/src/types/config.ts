@@ -47,13 +47,23 @@ export type BrowserModeConfig = {
    */
   enabled?: boolean;
   /**
-   * Which browser implementation to use.
+   * Browser provider to use for running tests.
    *
-   * Currently only Chromium is supported.
+   * Currently only 'playwright' is supported.
+   *
+   * @default 'playwright'
+   */
+  provider?: 'playwright';
+  /**
+   * Which browser to use for testing.
+   *
+   * - `chromium` - Google Chrome, Microsoft Edge
+   * - `firefox` - Mozilla Firefox
+   * - `webkit` - Safari
    *
    * @default 'chromium'
    */
-  browser?: 'chromium';
+  browser?: 'chromium' | 'firefox' | 'webkit';
   /**
    * Run browser in headless mode.
    *
@@ -384,7 +394,8 @@ type OptionalKeys =
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
-  browser: 'chromium';
+  provider: 'playwright';
+  browser: 'chromium' | 'firefox' | 'webkit';
   headless: boolean;
   port?: number;
 };

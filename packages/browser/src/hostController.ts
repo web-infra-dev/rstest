@@ -9,7 +9,7 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, relative, resolve, sep } from 'pathe';
 import * as picomatch from 'picomatch';
-import type { BrowserContext, ConsoleMessage, Page } from 'playwright-core';
+import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type {
@@ -49,9 +49,9 @@ type VirtualModulesPluginInstance = InstanceType<
   (typeof rspack.experiments)['VirtualModulesPlugin']
 >;
 
-type PlaywrightModule = typeof import('playwright-core');
-type ChromiumLauncher = PlaywrightModule['chromium'];
-type ChromiumBrowserInstance = Awaited<ReturnType<ChromiumLauncher['launch']>>;
+type PlaywrightModule = typeof import('playwright');
+type BrowserType = PlaywrightModule['chromium'];
+type BrowserInstance = Awaited<ReturnType<BrowserType['launch']>>;
 
 type BrowserProjectEntries = {
   project: ProjectContext;
@@ -226,7 +226,7 @@ class ContainerRpcManager {
 type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
-  browser: ChromiumBrowserInstance;
+  browser: BrowserInstance;
   port: number;
   wsPort: number;
   manifestPath: string;
@@ -1009,23 +1009,29 @@ const createBrowserRuntime = async ({
     color.gray(`[Browser UI] WebSocket server started on port ${wsPort}`),
   );
 
-  let chromiumLauncher: ChromiumLauncher;
+  let browserLauncher: BrowserType;
+  const browserName = context.normalizedConfig.browser.browser;
   try {
-    ({ chromium: chromiumLauncher } = await import('playwright-core'));
+    const playwright = await import('playwright');
+    browserLauncher = playwright[browserName];
   } catch (_error) {
     await devServer.close();
     throw _error;
   }
 
-  let browser: ChromiumBrowserInstance;
+  let browser: BrowserInstance;
   try {
-    browser = await chromiumLauncher.launch({
+    browser = await browserLauncher.launch({
       headless: forceHeadless ?? context.normalizedConfig.browser.headless,
-      args: [
-        '--disable-popup-blocking',
-        '--no-first-run',
-        '--no-default-browser-check',
-      ],
+      // Chromium-specific args (ignored by other browsers)
+      args:
+        browserName === 'chromium'
+          ? [
+              '--disable-popup-blocking',
+              '--no-first-run',
+              '--no-default-browser-check',
+            ]
+          : undefined,
     });
   } catch (_error) {
     await devServer.close();
@@ -1157,7 +1163,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     } catch (error) {
       logger.error(
         color.red(
-          'Failed to load Playwright. Please install "playwright-core" to use browser mode.',
+          'Failed to load Playwright. Please install "playwright" to use browser mode.',
         ),
         error,
       );
@@ -1564,7 +1570,7 @@ export const listBrowserTests = async (
   } catch (error) {
     logger.error(
       color.red(
-        'Failed to load Playwright. Please install "playwright-core" to use browser mode.',
+        'Failed to load Playwright. Please install "playwright" to use browser mode.',
       ),
       error,
     );

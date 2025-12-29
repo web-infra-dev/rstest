@@ -34,8 +34,8 @@ export function createRstest(
   );
 
   const runTests = async (): Promise<void> => {
-    const { runTests: runTestsImpl } = await import('./runTests');
-    await runTestsImpl(context);
+    const { runTests } = await import('./runTests');
+    await runTests(context);
   };
 
   const listTests = async (options: ListCommandOptions) => {
