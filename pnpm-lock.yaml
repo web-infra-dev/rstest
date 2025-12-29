@@ -86,6 +86,9 @@ importers:
       '@rslib/core':
         specifier: 0.18.6
         version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
+      '@rstest/browser':
+        specifier: workspace:*
+        version: link:../packages/browser
       '@rstest/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -412,6 +415,9 @@ importers:
 
   examples/browser:
     devDependencies:
+      '@rstest/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -424,6 +430,9 @@ importers:
 
   examples/browser-projects:
     devDependencies:
+      '@rstest/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -504,6 +513,67 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/browser:
+    dependencies:
+      '@rsbuild/core':
+        specifier: 1.7.0-beta.1
+        version: 1.7.0-beta.1
+      open-editor:
+        specifier: ^4.0.0
+        version: 4.1.1
+      playwright-core:
+        specifier: ^1.49.1
+        version: 1.56.1
+      sirv:
+        specifier: ^2.0.4
+        version: 2.0.4
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
+    devDependencies:
+      '@jridgewell/trace-mapping':
+        specifier: 0.3.31
+        version: 0.3.31
+      '@rslib/core':
+        specifier: ^0.18.6
+        version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
+      '@rstest/browser-ui':
+        specifier: workspace:*
+        version: link:../browser-ui
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      '@types/convert-source-map':
+        specifier: ^2.0.3
+        version: 2.0.3
+      '@types/picomatch':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      '@vitest/snapshot':
+        specifier: ^3.2.4
+        version: 3.2.4
+      birpc:
+        specifier: 2.9.0
+        version: 2.9.0
+      convert-source-map:
+        specifier: ^2.0.0
+        version: 2.0.0
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+      picomatch:
+        specifier: ^4.0.3
+        version: 4.0.3
+
   packages/browser-ui:
     dependencies:
       antd:
@@ -561,24 +631,9 @@ importers:
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
-      convert-source-map:
-        specifier: ^2.0.0
-        version: 2.0.0
-      open-editor:
-        specifier: ^4.0.0
-        version: 4.1.1
-      playwright-core:
-        specifier: ^1.49.1
-        version: 1.56.1
-      sirv:
-        specifier: ^2.0.4
-        version: 2.0.4
       tinypool:
         specifier: ^1.1.1
         version: 1.1.1
-      ws:
-        specifier: ^8.18.3
-        version: 8.18.3
     devDependencies:
       '@babel/code-frame':
         specifier: ^7.27.1
@@ -603,6 +658,7 @@ importers:
 >>>>>>> 50e57fed (chore)
         specifier: ^0.18.6
         version: 0.18.6(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
+<<<<<<< HEAD
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -618,6 +674,8 @@ importers:
 >>>>>>> 2d413d95 (remove canUseRpc)
 =======
 >>>>>>> 50e57fed (chore)
+=======
+>>>>>>> 6c37f9d6 (@rstest/browser)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -627,9 +685,6 @@ importers:
       '@types/babel__code-frame':
         specifier: ^7.0.6
         version: 7.0.6
-      '@types/convert-source-map':
-        specifier: ^2.0.3
-        version: 2.0.3
       '@types/istanbul-lib-coverage':
         specifier: ^2.0.6
         version: 2.0.6
@@ -651,9 +706,6 @@ importers:
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
       '@vitest/expect':
         specifier: ^3.2.4
         version: 3.2.4

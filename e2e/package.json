@@ -12,6 +12,7 @@
     "@rsbuild/core": "1.7.0-beta.1",
     "@rslib/core": "0.18.6",
     "@rsbuild/plugin-react": "^1.4.2",
+    "@rstest/browser": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/jest-image-snapshot": "^6.4.0",

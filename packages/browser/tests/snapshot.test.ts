@@ -34,7 +34,7 @@ describe('BrowserSnapshotEnvironment', () => {
     });
 
     // Dynamic import to get fresh module with mocked window
-    const module = await import('../../src/browser/client/snapshot');
+    const module = await import('../src/client/snapshot');
     BrowserSnapshotEnvironment = module.BrowserSnapshotEnvironment;
   });
 

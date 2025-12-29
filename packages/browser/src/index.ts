@@ -1,4 +1,4 @@
-import type { Rstest } from '../core/rstest';
+import type { Rstest } from '@rstest/core/browser';
 import {
   type ListBrowserTestsResult,
   listBrowserTests as listBrowserTestsImpl,

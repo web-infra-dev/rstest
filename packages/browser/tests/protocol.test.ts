@@ -2,42 +2,10 @@ import { describe, expect, it } from '@rstest/core';
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
-  BrowserManifestEntry,
   BrowserProjectRuntime,
-} from '../../src/browser/protocol';
+} from '../src/protocol';
 
 describe('browser protocol types', () => {
-  describe('BrowserManifestEntry', () => {
-    it('should accept valid setup entry', () => {
-      const entry: BrowserManifestEntry = {
-        id: 'project-setup-0',
-        type: 'setup',
-        projectName: 'default',
-        projectRoot: '/root',
-        filePath: '/root/setup.ts',
-        relativePath: './setup.ts',
-      };
-
-      expect(entry.type).toBe('setup');
-      expect(entry.testPath).toBeUndefined();
-    });
-
-    it('should accept valid test entry', () => {
-      const entry: BrowserManifestEntry = {
-        id: 'project-test-0',
-        type: 'test',
-        projectName: 'default',
-        projectRoot: '/root',
-        filePath: '/root/test.ts',
-        relativePath: './test.ts',
-        testPath: '/root/test.ts',
-      };
-
-      expect(entry.type).toBe('test');
-      expect(entry.testPath).toBe('/root/test.ts');
-    });
-  });
-
   describe('BrowserProjectRuntime', () => {
     it('should accept valid project runtime with minimal config', () => {
       const runtime: BrowserProjectRuntime = {
@@ -74,15 +42,17 @@ describe('browser protocol types', () => {
           updateSnapshot: 'all',
         },
         testFile: '/root/test.ts',
-        testFiles: ['/root/test1.ts', '/root/test2.ts'],
         runnerUrl: 'http://localhost:3000',
         wsPort: 3001,
+        mode: 'run',
+        debug: true,
       };
 
       expect(config.testFile).toBe('/root/test.ts');
-      expect(config.testFiles).toHaveLength(2);
       expect(config.runnerUrl).toBe('http://localhost:3000');
       expect(config.wsPort).toBe(3001);
+      expect(config.mode).toBe('run');
+      expect(config.debug).toBe(true);
     });
   });
 
@@ -103,29 +73,20 @@ describe('browser protocol types', () => {
       }
     });
 
-    it('should accept case-result message', () => {
-      const msg: BrowserClientMessage = {
-        type: 'case-result',
-        payload: {
-          testId: '1',
-          name: 'test case',
-          status: 'pass',
-          duration: 100,
-          testPath: '/test.ts',
-          project: 'default',
-        },
-      };
-      expect(msg.type).toBe('case-result');
-    });
-
     it('should accept log message', () => {
       const msg: BrowserClientMessage = {
         type: 'log',
-        payload: { level: 'log', message: 'test log' },
+        payload: {
+          level: 'log',
+          content: 'test log',
+          testPath: '/test.ts',
+          type: 'stdout',
+        },
       };
       expect(msg.type).toBe('log');
       if (msg.type === 'log') {
         expect(msg.payload.level).toBe('log');
+        expect(msg.payload.content).toBe('test log');
       }
     });
 
@@ -143,6 +104,19 @@ describe('browser protocol types', () => {
     it('should accept complete message', () => {
       const msg: BrowserClientMessage = { type: 'complete' };
       expect(msg.type).toBe('complete');
+    });
+
+    it('should accept collect-result message', () => {
+      const msg: BrowserClientMessage = {
+        type: 'collect-result',
+        payload: { testPath: '/test.ts', project: 'default', tests: [] },
+      };
+      expect(msg.type).toBe('collect-result');
+    });
+
+    it('should accept collect-complete message', () => {
+      const msg: BrowserClientMessage = { type: 'collect-complete' };
+      expect(msg.type).toBe('collect-complete');
     });
   });
 });

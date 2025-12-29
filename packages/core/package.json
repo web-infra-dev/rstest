@@ -28,6 +28,14 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./browser-runtime": {
+      "types": "./dist/browser-runtime.d.ts",
+      "default": "./dist/browser-runtime.js"
+    },
     "./package.json": {
       "default": "./package.json"
     },
@@ -54,23 +62,18 @@
   "dependencies": {
     "@types/chai": "^5.2.3",
     "@rsbuild/core": "1.7.0-beta.1",
-    "tinypool": "^1.1.1",
-    "convert-source-map": "^2.0.0",
-    "open-editor": "^4.0.0",
-    "playwright-core": "^1.49.1",
-    "sirv": "^2.0.4",
-    "ws": "^8.18.3"
+    "tinypool": "^1.1.1"
   },
   "devDependencies": {
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.31",
+    "birpc": "2.9.0",
     "@microsoft/api-extractor": "^7.55.2",
     "@rslib/core": "^0.19.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.1.0",
     "@types/babel__code-frame": "^7.0.6",
-    "@types/convert-source-map": "^2.0.3",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/istanbul-reports": "^3.0.4",
@@ -78,10 +81,8 @@
     "@types/picomatch": "^4.0.2",
     "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
-    "@types/ws": "^8.18.1",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
-    "birpc": "2.9.0",
     "cac": "^6.7.14",
     "chai": "^5.3.3",
     "chokidar": "^4.0.3",

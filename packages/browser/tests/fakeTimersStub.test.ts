@@ -1,8 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import {
-  type InstalledClock,
-  withGlobal,
-} from '../../src/browser/client/fakeTimersStub';
+import { type InstalledClock, withGlobal } from '../src/client/fakeTimersStub';
 
 describe('fakeTimersStub', () => {
   describe('withGlobal', () => {

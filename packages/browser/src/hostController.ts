@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -11,27 +12,27 @@ import * as picomatch from 'picomatch';
 import type { BrowserContext, ConsoleMessage, Page } from 'playwright-core';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
-import type { Rstest } from '../core/rstest';
 import type {
   FormattedError,
   ListCommandResult,
   ProjectContext,
   Reporter,
+  Rstest,
   RuntimeConfig,
   Test,
   TestFileResult,
   TestResult,
   UserConsoleLog,
-} from '../types';
+} from '@rstest/core/browser';
 import {
   color,
   isDebug,
   logger,
   serializableConfig,
   TEMP_RSTEST_OUTPUT_DIR,
-} from '../utils';
-import { getSetupFiles } from '../utils/getSetupFiles';
-import { getTestEntries } from '../utils/testFiles';
+  getSetupFiles,
+  getTestEntries,
+} from '@rstest/core/browser';
 import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
@@ -461,10 +462,13 @@ const collectProjectEntries = async (
 };
 
 const resolveBrowserFile = (relativePath: string): string => {
+  // __dirname points to packages/browser/dist when running from built code
+  // or packages/browser/src when running from source
   const candidates = [
+    // When running from built dist: look in ../src for source files
+    resolve(__dirname, '../src', relativePath),
+    // When running from source (dev mode)
     resolve(__dirname, relativePath),
-    resolve(__dirname, '../src/browser', relativePath),
-    resolve(__dirname, '../../src/browser', relativePath),
   ];
 
   for (const candidate of candidates) {
@@ -477,13 +481,35 @@ const resolveBrowserFile = (relativePath: string): string => {
 };
 
 const resolveContainerDist = (): string => {
-  const distPath = resolve(__dirname, '../dist/browser-container');
+  // When running from built dist: browser-container is in the same dist folder
+  const distPath = resolve(__dirname, 'browser-container');
   if (existsSync(distPath)) {
     return distPath;
   }
 
   throw new Error(
-    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/core build".`,
+    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/browser build".`,
+  );
+};
+
+/**
+ * Resolve @rstest/core source file path for browser compilation.
+ * Browser client code needs to import from core's source files (not dist)
+ * because the dist files contain Node.js-specific code that can't run in browsers.
+ */
+const resolveCoreSourceFile = (relativePath: string): string => {
+  const require = createRequire(import.meta.url);
+  const corePkgPath = require.resolve('@rstest/core/package.json');
+  const coreRoot = dirname(corePkgPath);
+  const srcPath = resolve(coreRoot, 'src', relativePath);
+
+  if (existsSync(srcPath)) {
+    return srcPath;
+  }
+
+  throw new Error(
+    `Unable to resolve @rstest/core source file: ${relativePath}. ` +
+      `Looked in: ${srcPath}`,
   );
 };
 
@@ -723,9 +749,14 @@ const createBrowserRuntime = async ({
   const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
 
   // Rstest internal aliases that must not be overridden by user config
+  // These aliases point to source files because dist files contain Node.js code
+  // that cannot run in the browser environment.
   const rstestInternalAliases = {
     '@rstest/browser-manifest': manifestPath,
+    // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
+    // Browser runtime APIs for entry.ts and public.ts
+    '@rstest/core/browser-runtime': resolveCoreSourceFile('browser-runtime.ts'),
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 

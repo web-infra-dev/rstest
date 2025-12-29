@@ -2,6 +2,7 @@ import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import { clearScreen, color, getTestEntries, logger } from '../utils';
+import { loadBrowserModule } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -22,7 +23,9 @@ export async function runTests(context: Rstest): Promise<void> {
 
   // Run browser mode tests
   if (hasBrowserTests) {
-    const { runBrowserTests } = await import('../browser');
+    // Pass project roots to resolve @rstest/browser from project-specific node_modules
+    const projectRoots = browserProjects.map((p) => p.rootPath);
+    const { runBrowserTests } = await loadBrowserModule({ projectRoots });
     await runBrowserTests(context);
   }
 

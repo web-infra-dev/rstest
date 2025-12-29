@@ -1,5 +1,10 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import type { RuntimeConfig, Test, TestFileResult, TestResult } from '../types';
+import type {
+  RuntimeConfig,
+  Test,
+  TestFileResult,
+  TestResult,
+} from '@rstest/core/browser-runtime';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
