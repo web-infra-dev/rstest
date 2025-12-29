@@ -1,0 +1,166 @@
+# 适配器
+
+适配器是一个强大的功能，它允许你将来自其他工具（如构建工具或 CLI）的配置转换为 Rstest 支持的配置格式。通过创建一个自定义适配器，你可以复用现有配置，避免在多个工具之间重复定义，并确保项目的一致性。
+
+本指南将引导你完成创建和使用自定义 Rstest 适配器的过程。
+
+## 为什么使用适配器
+
+- **复用配置**: 将已有的构建工具配置（如路径别名、全局变量等）转换为测试配置，避免重复定义。
+- **框架定制**: 允许框架或模板预设测试配置，例如添加特定的 `setup` 脚本、更改默认超时时间或设置默认测试环境，从而提供开箱即用的测试体验。
+- **简化维护**: 集中管理配置，减少手动同步不同工具配置的麻烦，降低出错可能性。
+- **快速集成**: 通过适配器，可以快速将 Rstest 集成到现有项目中，复用已有的项目配置。
+
+## 核心概念
+
+Rstest 的配置扩展功能主要依赖 [extends](/config/test/extends) 选项。此选项可以接受一个对象或一个函数 (`ExtendConfigFn`)，该函数返回一个配置对象 (`ExtendConfig`) 或一个解析为该对象的 Promise。
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  // `extends` 可以是一个对象、一个 Promise 或一个函数
+  extends: async () => {
+    // 动态返回配置
+    return {
+      testTimeout: 5000,
+    };
+  },
+});
+```
+
+适配器的本质就是一个实现了 `ExtendConfigFn` 接口的函数。
+
+```typescript
+// 来自 @rstest/core/types/config.ts
+export type ExtendConfig = Omit<RstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => MaybePromise<ExtendConfig>;
+```
+
+适配器函数接收用户当前的 Rstest 配置作为参数，并返回一个新的配置对象，该对象将与用户配置进行深度合并。
+
+## 创建一个自定义适配器
+
+创建一个自定义适配器包含以下步骤：
+
+1.  **定义一个适配器函数**: 此函数应符合 `ExtendConfigFn` 类型签名。
+2.  **加载外部配置**: 在函数内部，读取并解析你想要集成的工具的配置文件（例如 `my-build-tool.config.js`）。
+3.  **转换配置**: 将加载的配置映射到 `ExtendConfig` 接口定义的字段。这是适配器的核心逻辑，你需要决定如何将源配置的属性（如 `alias`、`define` 等）转换为 Rstest 的相应选项（如 `resolve.alias`、`source.define`）。
+4.  **返回配置**: 返回转换后的 `ExtendConfig` 对象。
+
+### 示例：一个简单的适配器
+
+假设你有一个自定义的构建配置文件 `my.config.ts`，内容如下：
+
+```typescript
+// my.config.ts
+export default {
+  base: '/src',
+  aliases: {
+    '@': './utils',
+  },
+  globals: {
+    __VERSION__: '1.0.0',
+  },
+};
+```
+
+你可以创建一个适配器 `my-adapter.ts` 来读取此文件并将其转换为 Rstest 配置。
+
+```typescript
+// my-adapter.ts
+import { type ExtendConfigFn } from '@rstest/core';
+import myConfig from './my.config'; // 导入你的配置
+
+export const withMyConfig: ExtendConfigFn = async (userConfig) => {
+  // 1. 读取配置 (已通过 import 完成)
+
+  // 2. 转换配置
+  const rstestConfig = {
+    root: myConfig.base, // `base` 映射到 `root`
+    resolve: {
+      alias: myConfig.aliases, // `aliases` 映射到 `resolve.alias`
+    },
+    source: {
+      define: myConfig.globals, // `globals` 映射到 `source.define`
+    },
+  };
+
+  // 3. 返回转换后的配置
+  return rstestConfig;
+};
+```
+
+## 使用你的自定义适配器
+
+现在，你可以在 Rstest 配置文件中使用你创建的适配器：
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { withMyConfig } from './my-adapter';
+
+export default defineConfig({
+  extends: withMyConfig,
+  // 在这里可以继续添加或覆盖其他 Rstest 特定配置
+  testTimeout: 8000,
+});
+```
+
+当 Rstest 加载此配置时，它将：
+
+1. 调用 `withMyConfig` 函数。
+2. 获取返回的配置对象。
+3. 将其与 `defineConfig` 中的内联配置深度合并。需要注意的是，用户的本地配置（如 `testTimeout: 8000`）将优先于 `extends` 返回的配置。
+
+## 高级用法：带选项的适配器
+
+与 `@rstest/adapter-rslib` 类似，你可以让你的适配器接受一个选项对象，以实现更灵活的集成。
+
+```typescript
+// my-adapter.ts
+import { type ExtendConfigFn } from '@rstest/core';
+import { load } from './loader'; // 假设有一个加载器
+
+export interface MyAdapterOptions {
+  configPath?: string;
+  profile?: 'web' | 'node';
+}
+
+export function withMyConfig(options: MyAdapterOptions = {}): ExtendConfigFn {
+  return async (userConfig) => {
+    const config = await load(options.configPath); // 从指定路径加载
+
+    const rstestConfig = {
+      // ...转换逻辑
+      testEnvironment: options.profile === 'web' ? 'happy-dom' : 'node',
+    };
+
+    return rstestConfig;
+  };
+}
+```
+
+使用方式如下：
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { withMyConfig } from './my-adapter';
+
+export default defineConfig({
+  extends: withMyConfig({ profile: 'web' }),
+});
+```
+
+通过这种方式，你可以创建功能强大且可复用的适配器，将任何工具链与 Rstest 无缝集成。
+
+## 使用官方适配器
+
+以下是 Rstest 官方支持的适配器：
+
+- [Rslib Adapter](/zh/guide/integration/rslib#安装适配器)：用于从 Rslib 配置中扩展 Rstest 配置。
