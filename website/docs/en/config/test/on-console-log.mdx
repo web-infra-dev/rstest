@@ -16,5 +16,16 @@ export default defineConfig({
 ```
 
 :::note
-When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `onConsoleLog` will be ignored.
+When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `onConsoleLog` will not take effect.
 :::
+
+## Silencing console logs
+
+You can silence console logs by returning `false` in the `onConsoleLog` handler.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  onConsoleLog: () => false,
+});
+```
