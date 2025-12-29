@@ -37,11 +37,11 @@ describe('browser snapshot update', () => {
 `;
     fs.writeFileSync(updateTestPath, originalContent);
 
-    // Restore inline-update.test.ts to original state if modified
+    // Restore inlineUpdate.test.ts to original state if modified
     const inlineUpdateTestPath = path.join(
       fixtureDir,
       'tests',
-      'inline-update.test.ts',
+      'inlineUpdate.test.ts',
     );
     const inlineUpdateOriginalContent = `import { describe, expect, it } from '@rstest/core';
 
@@ -322,14 +322,14 @@ describe('browser snapshot update', () => {
       const inlineUpdateTestPath = path.join(
         fixtureDir,
         'tests',
-        'inline-update.test.ts',
+        'inlineUpdate.test.ts',
       );
 
       // Step 1: Run with --update to create initial inline snapshot
       const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
         'snapshot',
         {
-          args: ['tests/inline-update.test.ts', '--update'],
+          args: ['tests/inlineUpdate.test.ts', '--update'],
         },
       );
 
@@ -358,7 +358,7 @@ describe('browser snapshot - inline update', () => {
       // The source map must correctly map the new line position
       const { expectExecSuccess: secondExecSuccess, cli: secondCli } =
         await runBrowserCli('snapshot', {
-          args: ['tests/inline-update.test.ts', '--update'],
+          args: ['tests/inlineUpdate.test.ts', '--update'],
         });
 
       await secondExecSuccess();

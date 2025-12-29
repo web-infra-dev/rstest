@@ -1,17 +1,10 @@
-import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
 import { createRsbuild, rspack } from '@rsbuild/core';
-import { type BirpcReturn, createBirpc } from 'birpc';
-import openEditor from 'open-editor';
-import { basename, dirname, join, relative, resolve, sep } from 'pathe';
-import * as picomatch from 'picomatch';
-import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
-import sirv from 'sirv';
-import { type WebSocket, WebSocketServer } from 'ws';
 import type {
   FormattedError,
   ListCommandResult,
@@ -26,13 +19,20 @@ import type {
 } from '@rstest/core/browser';
 import {
   color,
+  getSetupFiles,
+  getTestEntries,
   isDebug,
   logger,
   serializableConfig,
   TEMP_RSTEST_OUTPUT_DIR,
-  getSetupFiles,
-  getTestEntries,
 } from '@rstest/core/browser';
+import { type BirpcReturn, createBirpc } from 'birpc';
+import openEditor from 'open-editor';
+import { basename, dirname, join, relative, resolve, sep } from 'pathe';
+import * as picomatch from 'picomatch';
+import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
+import sirv from 'sirv';
+import { type WebSocket, WebSocketServer } from 'ws';
 import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
@@ -756,7 +756,7 @@ const createBrowserRuntime = async ({
     // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
     // Browser runtime APIs for entry.ts and public.ts
-    '@rstest/core/browser-runtime': resolveCoreSourceFile('browser-runtime.ts'),
+    '@rstest/core/browser-runtime': resolveCoreSourceFile('browserRuntime.ts'),
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
@@ -1161,12 +1161,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
         containerDevServer,
       });
     } catch (error) {
-      logger.error(
-        color.red(
-          'Failed to load Playwright. Please install "playwright" to use browser mode.',
-        ),
-        error,
-      );
+      logger.error(error instanceof Error ? error : new Error(String(error)));
       ensureProcessExitCode(1);
       await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       return;

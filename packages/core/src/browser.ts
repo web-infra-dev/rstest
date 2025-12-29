@@ -4,23 +4,14 @@
  * @rstest/browser must have the same version as @rstest/core.
  */
 
+// Re-export Rstest type for convenience
+export type { Rstest } from './core/rstest';
 // Runtime API
 export { createRstestRuntime } from './runtime/api';
-export { setRealTimers } from './runtime/util';
-
-// Constants
-export { globalApis } from './utils/constants';
-
-// Utils needed by browser package
-export { color, isDebug, logger, serializableConfig } from './utils';
-export { TEMP_RSTEST_OUTPUT_DIR } from './utils/constants';
-export { getSetupFiles } from './utils/getSetupFiles';
-export { getTestEntries } from './utils/testFiles';
-
 // Public runtime API (for browser client usage)
 // These are the test APIs that run in the browser (describe, it, expect, etc.)
 export * from './runtime/api/public';
-
+export { setRealTimers } from './runtime/util';
 // Types
 export type {
   FormattedError,
@@ -35,6 +26,9 @@ export type {
   UserConsoleLog,
   WorkerState,
 } from './types';
-
-// Re-export Rstest type for convenience
-export type { Rstest } from './core/rstest';
+// Utils needed by browser package
+export { color, isDebug, logger, serializableConfig } from './utils';
+// Constants
+export { globalApis, TEMP_RSTEST_OUTPUT_DIR } from './utils/constants';
+export { getSetupFiles } from './utils/getSetupFiles';
+export { getTestEntries } from './utils/testFiles';

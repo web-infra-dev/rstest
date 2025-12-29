@@ -6,15 +6,15 @@ import {
   projects,
   projectTestContexts,
 } from '@rstest/browser-manifest';
-import {
-  createRstestRuntime,
-  setRealTimers,
-  globalApis,
-} from '@rstest/core/browser-runtime';
 import type {
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
+} from '@rstest/core/browser-runtime';
+import {
+  createRstestRuntime,
+  globalApis,
+  setRealTimers,
 } from '@rstest/core/browser-runtime';
 import type {
   BrowserClientMessage,

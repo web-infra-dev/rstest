@@ -17,7 +17,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@test-alias': './aliased-module.ts',
+      '@test-alias': './aliasedModule.ts',
     },
   },
 });

@@ -6,8 +6,7 @@
  * (describe, it, expect, etc.) without any Node.js dependencies.
  */
 
-// Re-export all public test APIs
-export * from '@rstest/core/browser-runtime';
-
 // Re-export types from @rstest/core (these are compile-time only)
 export type { Assertion, Mock } from '@rstest/core';
+// Re-export all public test APIs
+export * from '@rstest/core/browser-runtime';

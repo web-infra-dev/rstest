@@ -1,5 +1,5 @@
-import convert from 'convert-source-map';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import convert from 'convert-source-map';
 
 // Source map cache: JS URL → TraceMap
 const sourceMapCache = new Map<string, TraceMap | null>();

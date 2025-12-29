@@ -10,14 +10,9 @@
 
 // Runtime API for creating test runtime in browser
 export { createRstestRuntime } from './runtime/api';
-export { setRealTimers } from './runtime/util';
-
-// Constants needed by browser client
-export { globalApis } from './utils/constants';
-
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
-
+export { setRealTimers } from './runtime/util';
 // Types for browser runtime
 export type {
   RunnerHooks,
@@ -27,3 +22,5 @@ export type {
   TestResult,
   WorkerState,
 } from './types';
+// Constants needed by browser client
+export { globalApis } from './utils/constants';

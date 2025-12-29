@@ -8,9 +8,7 @@ import {
 } from '@rstest/core';
 
 describe('BrowserSnapshotEnvironment', () => {
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic import type
   let BrowserSnapshotEnvironment: any;
-  // biome-ignore lint/suspicious/noExplicitAny: mock type
   let mockPostMessage: any;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
 
