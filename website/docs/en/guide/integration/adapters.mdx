@@ -1,0 +1,166 @@
+# Adapters
+
+Adapters are a powerful feature that allows you to convert configurations from other tools (such as build tools or CLIs) into a format that Rstest supports. By creating a custom adapter, you can reuse existing configurations, avoid redundant definitions across multiple tools, and ensure project consistency.
+
+This guide will walk you through the process of creating and using custom Rstest adapters.
+
+## Why use adapters
+
+- **Reuse Configuration**: Convert existing build tool configurations (e.g., path aliases, global variables) into test configurations to avoid redundant definitions.
+- **Framework Customization**: Allow frameworks or templates to preset test configurations, such as adding specific `setup` scripts, changing default timeouts, or setting default test environments, thereby providing an out-of-the-box testing experience.
+- **Simplify Maintenance**: Centralize configuration management, reduce the hassle of manually synchronizing configurations across different tools, and lower the chance of errors.
+- **Quick Integration**: Through adapters, you can quickly integrate Rstest into existing projects and reuse existing project configurations.
+
+## Core concepts
+
+Rstest's configuration extension functionality primarily relies on the [`extends`](/config/test/extends) option. This option can accept an object or a function (`ExtendConfigFn`) that returns a configuration object (`ExtendConfig`) or a Promise resolving to such an object.
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  // `extends` can be an object, a Promise, or a function
+  extends: async () => {
+    // Dynamically return configuration
+    return {
+      testTimeout: 5000,
+    };
+  },
+});
+```
+
+An adapter is essentially a function that implements the `ExtendConfigFn` interface.
+
+```typescript
+// From @rstest/core/types/config.ts
+export type ExtendConfig = Omit<RstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => MaybePromise<ExtendConfig>;
+```
+
+The adapter function receives the user's current Rstest configuration as an argument and returns a new configuration object, which will be deeply merged with the user's configuration.
+
+## Creating a custom adapter
+
+Creating a custom adapter involves the following steps:
+
+1.  **Define an adapter function**: This function should conform to the `ExtendConfigFn` type signature.
+2.  **Load external configuration**: Inside the function, read and parse the configuration file of the tool you want to integrate (e.g., `my-build-tool.config.js`).
+3.  **Transform configuration**: Map the loaded configuration to the fields defined in the `ExtendConfig` interface. This is the core logic of the adapter, where you decide how to convert properties from the source configuration (e.g., `alias`, `define`) to the corresponding Rstest options (e.g., `resolve.alias`, `source.define`).
+4.  **Return configuration**: Return the transformed `ExtendConfig` object.
+
+### Example: A simple adapter
+
+Suppose you have a custom build configuration file `my.config.ts` with the following content:
+
+```typescript
+// my.config.ts
+export default {
+  base: '/src',
+  aliases: {
+    '@': './utils',
+  },
+  globals: {
+    __VERSION__: '1.0.0',
+  },
+};
+```
+
+You can create an adapter `my-adapter.ts` to read this file and convert it into an Rstest configuration.
+
+```typescript
+// my-adapter.ts
+import { type ExtendConfigFn } from '@rstest/core';
+import myConfig from './my.config'; // Import your configuration
+
+export const withMyConfig: ExtendConfigFn = async (userConfig) => {
+  // 1. Read configuration (already done via import)
+
+  // 2. Transform configuration
+  const rstestConfig = {
+    root: myConfig.base, // `base` maps to `root`
+    resolve: {
+      alias: myConfig.aliases, // `aliases` maps to `resolve.alias`
+    },
+    source: {
+      define: myConfig.globals, // `globals` maps to `source.define`
+    },
+  };
+
+  // 3. Return the transformed configuration
+  return rstestConfig;
+};
+```
+
+## Using your custom adapter
+
+Now, you can use the adapter you created in your Rstest configuration file:
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { withMyConfig } from './my-adapter';
+
+export default defineConfig({
+  extends: withMyConfig,
+  // You can add or override other Rstest-specific configurations here
+  testTimeout: 8000,
+});
+```
+
+When Rstest loads this configuration, it will:
+
+1. Call the `withMyConfig` function.
+2. Get the returned configuration object.
+3. Deeply merge it with the inline configuration in `defineConfig`. Note that the user's local configuration (e.g., `testTimeout: 8000`) will take precedence over the configuration returned by `extends`.
+
+## Advanced usage: adapters with options
+
+Similar to `@rstest/adapter-rslib`, you can allow your adapter to accept an options object for more flexible integration.
+
+```typescript
+// my-adapter.ts
+import { type ExtendConfigFn } from '@rstest/core';
+import { load } from './loader'; // Assume a loader exists
+
+export interface MyAdapterOptions {
+  configPath?: string;
+  profile?: 'web' | 'node';
+}
+
+export function withMyConfig(options: MyAdapterOptions = {}): ExtendConfigFn {
+  return async (userConfig) => {
+    const config = await load(options.configPath); // Load from specified path
+
+    const rstestConfig = {
+      // ...transformation logic
+      testEnvironment: options.profile === 'web' ? 'happy-dom' : 'node',
+    };
+
+    return rstestConfig;
+  };
+}
+```
+
+Usage example:
+
+```typescript
+// rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { withMyConfig } from './my-adapter';
+
+export default defineConfig({
+  extends: withMyConfig({ profile: 'web' }),
+});
+```
+
+In this way, you can create powerful and reusable adapters that seamlessly integrate any toolchain with Rstest.
+
+## Using official adapters
+
+The following are the officially supported Rstest adapters:
+
+- [Rslib Adapter](/guide/integration/rslib#install-adapter): Used to extend Rstest configuration from Rslib configuration.
