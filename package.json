@@ -9,7 +9,7 @@
     "test": "rstest",
     "change": "changeset",
     "changeset": "changeset",
-    "check-dependency-version": "pnpx check-dependency-version-consistency . && echo",
+    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
     "format": "prettier --write . && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
