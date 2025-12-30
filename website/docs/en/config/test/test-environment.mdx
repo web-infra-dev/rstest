@@ -1,6 +1,6 @@
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom' | 'happy-dom'`
+- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions }`
 - **Default:** `'node'`
 - **CLI:** `--testEnvironment=node`
 
@@ -62,6 +62,29 @@ test('DOM test', () => {
   expect(paragraph?.innerHTML).toBe('hello world');
 });
 ```
+
+#### Environment Options
+
+You can also pass options to the test environment. This is useful for configuring `jsdom` or `happy-dom`. For example, you can set the `url` for `jsdom`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    options: {
+      // jsdom-specific options
+      url: 'https://example.com',
+    },
+  },
+});
+```
+
+The `options` object is passed directly to the environment's constructor.
+
+- For `jsdom`, it's passed to the `JSDOM` constructor. You can find available options in the [jsdom documentation](https://github.com/jsdom/jsdom#customizing-jsdom).
+- For `happy-dom`, it's passed to the `Window` constructor. You can find available options in the [happy-dom documentation](hhttps://github.com/capricorn86/happy-dom/wiki/Window).
 
 ### Examples
 

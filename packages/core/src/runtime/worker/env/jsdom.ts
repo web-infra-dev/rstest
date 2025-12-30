@@ -10,9 +10,8 @@ type JSDOMOptions = ConstructorOptions & {
 
 export const environment: TestEnvironment<typeof globalThis> = {
   name: 'jsdom',
-  async setup(global, { jsdom = {} }) {
+  async setup(global, options) {
     checkPkgInstalled('jsdom');
-
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = await import(
       'jsdom'
     );
@@ -28,7 +27,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
       console = false,
       cookieJar = false,
       ...restOptions
-    } = jsdom as JSDOMOptions;
+    } = options as JSDOMOptions;
     const dom = new JSDOM(html, {
       pretendToBeVisual,
       resources:
