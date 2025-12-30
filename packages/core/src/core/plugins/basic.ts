@@ -127,6 +127,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   exportsPresence: 'warn',
                 };
 
+                config.module.rules ??= [];
+                config.module.rules.push({
+                  test: /\.m[jt]s$/,
+                  // Treated mjs and mts as strict ES modules.
+                  type: 'javascript/esm',
+                });
+
                 config.resolve ??= {};
                 config.resolve.extensions ??= [];
                 config.resolve.extensions.push('.cjs');
