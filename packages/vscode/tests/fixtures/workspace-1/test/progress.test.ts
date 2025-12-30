@@ -19,7 +19,7 @@ describe('s1', () => {
     expect({ a: 1 }).equal({ b: 1 });
   });
   it('should mismatch inline snapshot', () => {
-    expect('str').toMatchInlineSnapshot(`"value"`);
+    expect('hello').toMatchInlineSnapshot(`"world"`);
   });
   it.skip('should skipped', () => {});
 });

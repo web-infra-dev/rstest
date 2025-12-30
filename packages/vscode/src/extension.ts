@@ -51,7 +51,7 @@ class Rstest {
       this.startTestRun,
       true,
       undefined,
-      false,
+      true,
     );
 
     vscode.commands.registerCommand(
@@ -70,7 +70,7 @@ class Rstest {
       this.startTestRun,
       true,
       undefined,
-      false,
+      true,
     );
 
     this.coverageProfile = this.ctrl.createRunProfile(
@@ -79,7 +79,7 @@ class Rstest {
       this.startTestRun,
       true,
       undefined,
-      false,
+      true,
     );
 
     this.coverageProfile.loadDetailedCoverage = async (_testRun, coverage) => {
@@ -146,8 +146,10 @@ class Rstest {
     request: vscode.TestRunRequest,
     token: vscode.CancellationToken,
     updateSnapshot?: boolean,
-    run = this.ctrl.createTestRun(request),
+    // used by e2e tests
+    createTestRun = this.ctrl.createTestRun.bind(this.ctrl),
   ) => {
+    const run = createTestRun(request);
     const enqueuedTests = (tests: readonly vscode.TestItem[]) => {
       for (const test of tests) {
         if (request.exclude?.includes(test)) {
@@ -168,6 +170,17 @@ class Rstest {
       token,
       updateSnapshot,
       kind: request.profile?.kind,
+      continuous: request.continuous,
+      createTestRun: () =>
+        createTestRun(
+          new vscode.TestRunRequest(
+            request.include,
+            request.exclude,
+            request.profile,
+            request.continuous,
+            request.preserveFocus,
+          ),
+        ),
     };
 
     const discoverTests = async (tests: readonly vscode.TestItem[]) => {

@@ -10,6 +10,8 @@ import type vscode from 'vscode';
 import { masterApi } from '.';
 
 export class ProgressReporter implements Reporter {
+  onTestRunStart = masterApi.onTestRunStart.asEvent;
+  onTestRunEnd = () => masterApi.onTestRunEnd.asEvent();
   onTestFileStart = masterApi.onTestFileStart.asEvent;
   onTestFileReady = masterApi.onTestFileReady.asEvent;
   onTestFileResult = masterApi.onTestFileResult.asEvent;
@@ -88,12 +90,16 @@ export class CoverageReporter
       } satisfies vscode.StatementCoverage);
     }
 
-    masterApi.onCoverage(
+    masterApi.onCoverage.asEvent(
       coverage.path,
       summary.statements,
       summary.branches,
       summary.functions,
       details,
     );
+  }
+
+  onEnd() {
+    masterApi.onCoverageEnd.asEvent();
   }
 }

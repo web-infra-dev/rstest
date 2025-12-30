@@ -43,7 +43,7 @@ export class Rstest implements RstestContext {
   public command: RstestCommand;
   public fileFilters?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter | JUnitReporter)[];
+  public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public version: string;
   public rootPath: string;

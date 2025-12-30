@@ -5,5 +5,5 @@ export type WorkerInitOptions = RstestConfig & {
   configFilePath: string;
   fileFilters?: string[];
   rstestPath: string;
-  command?: 'run' | 'list';
+  command?: 'run' | 'list' | 'watch';
 };

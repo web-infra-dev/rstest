@@ -82,11 +82,6 @@ export const createForksPool = (poolOptions: {
 
   const pool = new Tinypool(options);
 
-  const destroy = pool.destroy.bind(pool);
-
-  // FIXME It seems that there are still some edge cases where the worker is not killed when the parent process exits.
-  process.on('SIGTERM', destroy);
-
   return {
     name: 'forks',
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
@@ -105,9 +100,6 @@ export const createForksPool = (poolOptions: {
         cleanup();
       }
     },
-    close: () => {
-      process.off('SIGTERM', destroy);
-      return destroy();
-    },
+    close: () => pool.destroy(),
   };
 };

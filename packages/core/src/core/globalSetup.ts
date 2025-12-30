@@ -43,10 +43,6 @@ async function createSetupPool() {
 
   const pool = new Tinypool(options);
 
-  // Handle pool cleanup
-  const destroy = pool.destroy.bind(pool);
-  process.on('SIGTERM', destroy);
-
   return pool;
 }
 
