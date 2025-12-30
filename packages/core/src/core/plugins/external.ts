@@ -109,7 +109,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
         return mergeEnvironmentConfig(config, {
           output: {
             externals:
-              testEnvironment === 'node'
+              testEnvironment.name === 'node'
                 ? [autoExternalNodeModules(outputModule)]
                 : undefined,
           },

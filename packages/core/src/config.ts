@@ -149,7 +149,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: 5_000,
   hookTimeout: 10_000,
-  testEnvironment: 'node',
+  testEnvironment: {
+    name: 'node',
+  },
   retry: 0,
   reporters:
     process.env.GITHUB_ACTIONS === 'true'
@@ -220,6 +222,13 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
           type: config.pool,
         }
       : merged.pool;
+
+  merged.testEnvironment =
+    typeof config.testEnvironment === 'string'
+      ? {
+          name: config.testEnvironment,
+        }
+      : merged.testEnvironment;
 
   return {
     ...merged,

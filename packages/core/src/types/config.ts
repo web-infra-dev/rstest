@@ -61,6 +61,13 @@ export type ExtendConfigFn = (
   userConfig: Readonly<RstestConfig>,
 ) => MaybePromise<ExtendConfig>;
 
+export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+
+export type EnvironmentWithOptions = {
+  name: EnvironmentName;
+  options?: Record<string, any>;
+};
+
 export interface RstestConfig {
   /**
    * Extend configuration from adapters
@@ -155,7 +162,7 @@ export interface RstestConfig {
    *
    * @default 'node'
    */
-  testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+  testEnvironment?: EnvironmentName | EnvironmentWithOptions;
 
   /**
    * Stop running tests after n failures.
@@ -351,10 +358,12 @@ export type NormalizedConfig = Required<
     | 'setupFiles'
     | 'globalSetup'
     | 'exclude'
+    | 'testEnvironment'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
+    testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
     setupFiles: string[];
     globalSetup: string[];

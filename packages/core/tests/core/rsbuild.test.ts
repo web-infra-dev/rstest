@@ -19,7 +19,9 @@ describe('prepareRsbuild', () => {
           source: {},
           output: {},
           tools: {},
-          testEnvironment: 'jsdom',
+          testEnvironment: {
+            name: 'jsdom',
+          },
         },
         projects: [
           {
@@ -32,12 +34,15 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
-              testEnvironment: 'jsdom',
+              testEnvironment: {
+                name: 'jsdom',
+              },
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
@@ -60,7 +65,9 @@ describe('prepareRsbuild', () => {
           source: {},
           output: {},
           tools: {},
-          testEnvironment: 'node',
+          testEnvironment: {
+            name: 'node',
+          },
           isolate: true,
         },
         projects: [
@@ -74,13 +81,16 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
-              testEnvironment: 'node',
+              testEnvironment: {
+                name: 'node',
+              },
               isolate: true,
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
@@ -110,7 +120,9 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
-              testEnvironment: 'jsdom',
+              testEnvironment: {
+                name: 'jsdom',
+              },
             },
           },
           {
@@ -123,12 +135,15 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
-              testEnvironment: 'node',
+              testEnvironment: {
+                name: 'node',
+              },
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
@@ -149,6 +164,9 @@ describe('prepareRsbuild', () => {
           name: 'test',
           plugins: [],
           resolve: {},
+          testEnvironment: {
+            name: 'node',
+          },
           source: {
             decorators: {
               version: 'legacy',
@@ -174,11 +192,15 @@ describe('prepareRsbuild', () => {
               },
               output: {},
               tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
@@ -211,7 +233,9 @@ describe('prepareRsbuild', () => {
           source: {},
           output: {},
           tools: {},
-          testEnvironment: 'node',
+          testEnvironment: {
+            name: 'node',
+          },
           isolate: true,
           coverage: {
             reportsDirectory: join(rootPath, './coverage'),
@@ -228,13 +252,16 @@ describe('prepareRsbuild', () => {
               source: {},
               output: {},
               tools: {},
-              testEnvironment: 'node',
+              testEnvironment: {
+                name: 'node',
+              },
               isolate: true,
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
@@ -257,7 +284,9 @@ describe('prepareRsbuild', () => {
           source: {},
           output: {},
           tools: {},
-          testEnvironment: 'node',
+          testEnvironment: {
+            name: 'node',
+          },
         },
         projects: [
           {
@@ -273,12 +302,15 @@ describe('prepareRsbuild', () => {
                 module: true,
               },
               tools: {},
-              testEnvironment: 'node',
+              testEnvironment: {
+                name: 'node',
+              },
             },
           },
         ],
       } as unknown as RstestContext,
       async () => ({}),
+      {},
       {},
     );
     expect(rsbuildInstance).toBeDefined();
