@@ -263,7 +263,7 @@ rs.mock('react-router', () => ({
 }));
 ```
 
-2. Disable the related bundler optimization in the test environment to prevent re-export flattening. Should be careful about this, disabling it may lead to errors related to runtime circular dependencies.
+2. Disable the related bundler optimization in the test environment to prevent re-export flattening. Be careful with this: disabling it may lead to errors related to runtime circular dependencies.
 
 ```ts title="rstest.config.js"
 export default defineConfig({
