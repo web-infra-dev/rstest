@@ -231,3 +231,48 @@ Clears the cache of all modules. This allows modules to be re-executed when re-i
 :::warning
 Does not reset mocked modules. To clear mocked modules, use [`rs.unmock`](#rsunmock) or [`rs.doUnmock`](#rsdounmock).
 :::
+
+## FAQ
+
+### Mocking re-exported modules
+
+In some libraries, APIs are exposed via **re-exports**. For example, in React Router, certain APIs (such as `useParams`) are imported from `react-router-dom` but are actually re-exported from `react-router`.
+
+When using Rspack, these re-exports may be further optimized: the export can be resolved directly from the source module (e.g. `react-router`), skipping the intermediate module (`react-router-dom`).
+
+In this case:
+
+- Mocking `react-router-dom` may not take effect
+- Mocking `react-router` directly will work as expected
+
+```ts
+// Even if your source code imports from:
+import { useParams } from 'react-router-dom';
+
+// At runtime, it may be resolved as:
+import { useParams } from 'react-router';
+```
+
+If your mock does not work as expected, you can:
+
+1. Mock the module that is actually resolved at runtime:
+
+```ts
+rs.mock('react-router', () => ({
+  useParams: () => ({ id: 'mocked-id' }),
+}));
+```
+
+2. Disable the related bundler optimization in the test environment to prevent re-export flattening. Should be careful about this, disabling it may lead to errors related to runtime circular dependencies.
+
+```ts title="rstest.config.js"
+export default defineConfig({
+  tools: {
+    rspack: {
+      optimization: {
+        providedExports: false,
+      },
+    },
+  },
+});
+```
