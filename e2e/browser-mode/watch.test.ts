@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
+import treeKill from 'tree-kill';
 import { prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,9 +89,28 @@ describe('new test', () => {
     // The deleted file should not appear in this run's output
     expect(cli.stdout).not.toMatch('renamed.test.ts');
 
-    cli.exec.kill();
+    // Kill the entire process tree to ensure browser and all child processes are terminated.
+    // This is critical on Windows where child processes are not killed by default.
+    const pid = cli.exec.process?.pid;
+    if (pid) {
+      treeKill(pid, 'SIGKILL');
+    } else {
+      cli.exec.kill();
+    }
+
+    // Wait for process and browser to fully exit and release file handles (especially on Windows)
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Clean up fixtures folder
-    fs.delete(fixturesTargetPath);
+    // Note: On Windows, file handles may not be fully released even after waiting,
+    // causing EBUSY errors. This is a known issue with watch mode tests.
+    // See: https://github.com/nodejs/node/issues/49985
+    try {
+      fs.delete(fixturesTargetPath);
+    } catch (err) {
+      if (process.platform !== 'win32') {
+        throw err;
+      }
+    }
   });
 });

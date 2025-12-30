@@ -16,6 +16,7 @@ import {
   globalApis,
   setRealTimers,
 } from '@rstest/core/browser-runtime';
+import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserHostConfig,
@@ -242,11 +243,18 @@ const waitForConfig = (): Promise<void> => {
 /**
  * Convert absolute path to context key (relative path)
  * e.g., '/project/src/foo.test.ts' -> './src/foo.test.ts'
+ *       'D:/project/src/foo.test.ts' -> './src/foo.test.ts'
+ *
+ * Uses pathe's normalize to handle cross-platform path separators.
  */
 const toContextKey = (absolutePath: string, projectRoot: string): string => {
-  let relative = absolutePath;
-  if (absolutePath.startsWith(projectRoot)) {
-    relative = absolutePath.slice(projectRoot.length);
+  // Normalize both paths to use forward slashes for cross-platform compatibility
+  const normalizedAbsolute = normalize(absolutePath);
+  const normalizedRoot = normalize(projectRoot);
+
+  let relative = normalizedAbsolute;
+  if (normalizedAbsolute.startsWith(normalizedRoot)) {
+    relative = normalizedAbsolute.slice(normalizedRoot.length);
   }
   return relative.startsWith('/') ? `.${relative}` : `./${relative}`;
 };
@@ -258,27 +266,32 @@ const toContextKey = (absolutePath: string, projectRoot: string): string => {
 const toAbsolutePath = (key: string, projectRoot: string): string => {
   // key format: ./src/foo.test.ts
   // Ensure no double slashes by removing trailing slash from projectRoot
-  const normalizedRoot = projectRoot.endsWith('/')
-    ? projectRoot.slice(0, -1)
-    : projectRoot;
+  const normalizedRoot = normalize(projectRoot).replace(/\/$/, '');
   return normalizedRoot + key.slice(1);
 };
 
 /**
  * Find the project that contains the given test file.
  * Matches by checking if the testFile path starts with the project root.
+ *
+ * Uses pathe's normalize to handle cross-platform path separators.
  */
 const findProjectForTestFile = (
   testFile: string,
   allProjects: ManifestProjectConfig[],
 ): ManifestProjectConfig | undefined => {
+  // Normalize the test file path for cross-platform compatibility
+  const normalizedTestFile = normalize(testFile);
+
   // Sort projects by root path length (longest first) for most specific match
   const sorted = [...allProjects].sort(
     (a, b) => b.projectRoot.length - a.projectRoot.length,
   );
 
   for (const proj of sorted) {
-    if (testFile.startsWith(proj.projectRoot)) {
+    // projectRoot should already be normalized, but normalize again for safety
+    const normalizedRoot = normalize(proj.projectRoot);
+    if (normalizedTestFile.startsWith(normalizedRoot)) {
       return proj;
     }
   }

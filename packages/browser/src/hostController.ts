@@ -1177,25 +1177,27 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries with project info
+  // Normalize paths to posix format for cross-platform compatibility
   const allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
     entry.testFiles.map((testPath) => ({
-      testPath,
+      testPath: toPosix(testPath),
       projectName: entry.project.name,
     })),
   );
 
   // Only include browser mode projects in runtime configs
+  // Normalize projectRoot to posix format for cross-platform compatibility
   const browserProjectsForRuntime = getBrowserProjects(context);
   const projectRuntimeConfigs: BrowserProjectRuntime[] =
     browserProjectsForRuntime.map((project: ProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
-      projectRoot: project.rootPath,
+      projectRoot: toPosix(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
     }));
 
   const hostOptions: BrowserHostConfig = {
-    rootPath: context.rootPath,
+    rootPath: toPosix(context.rootPath),
     projects: projectRuntimeConfigs,
     snapshot: {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
@@ -1429,10 +1431,11 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   if (isWatchMode) {
     triggerRerun = async () => {
       const newProjectEntries = await collectProjectEntries(context);
+      // Normalize paths to posix format for cross-platform compatibility
       const currentTestFiles: TestFileInfo[] = newProjectEntries.flatMap(
         (entry) =>
           entry.testFiles.map((testPath) => ({
-            testPath,
+            testPath: toPosix(testPath),
             projectName: entry.project.name,
           })),
       );
@@ -1575,18 +1578,19 @@ export const listBrowserTests = async (
   const { browser, port } = runtime;
 
   // Get browser projects for runtime config
+  // Normalize projectRoot to posix format for cross-platform compatibility
   const browserProjects = getBrowserProjects(context);
   const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
     (project: ProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
-      projectRoot: project.rootPath,
+      projectRoot: toPosix(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
     }),
   );
 
   const hostOptions: BrowserHostConfig = {
-    rootPath: context.rootPath,
+    rootPath: toPosix(context.rootPath),
     projects: projectRuntimeConfigs,
     snapshot: {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,

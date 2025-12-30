@@ -243,7 +243,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
           name: config.testEnvironment,
         }
       : merged.testEnvironment;
-      
+
   merged.browser = {
     enabled: merged.browser?.enabled ?? false,
     provider: merged.browser?.provider ?? 'playwright',
