@@ -164,7 +164,7 @@ const preparePool = async ({
       const { environment } = await import('./env/happyDom');
       const { teardown } = await environment.setup(
         global,
-        testEnvironment.options,
+        testEnvironment.options || {},
       );
       cleanupFns.push(async () => teardown(global));
       break;
