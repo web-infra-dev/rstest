@@ -147,7 +147,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -393,6 +392,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -699,7 +702,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -945,6 +947,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -1226,7 +1232,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -1472,6 +1477,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -1755,7 +1764,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -2001,6 +2009,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -2291,7 +2303,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -2537,6 +2548,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -2818,7 +2833,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
@@ -3065,6 +3079,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
         ],
       },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
+      },
     ],
   },
   "name": "test-node",
@@ -3225,7 +3243,6 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
     },
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-    "type": "javascript/auto",
     "use": [
       {
         "loader": "builtin:swc-loader",
