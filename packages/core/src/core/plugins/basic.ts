@@ -102,6 +102,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   }),
                 );
 
+                config.module.rules ??= [];
+                config.module.rules.push({
+                  test: /\.mts$/,
+                  // Treated mts as strict ES modules.
+                  type: 'javascript/esm',
+                });
+
                 if (outputModule) {
                   config.plugins.push(
                     new rspack.BannerPlugin({
