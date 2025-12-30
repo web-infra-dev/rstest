@@ -238,7 +238,7 @@ Does not reset mocked modules. To clear mocked modules, use [`rs.unmock`](#rsunm
 
 In some libraries, APIs are exposed via **re-exports**. For example, in React Router, certain APIs (such as `useParams`) are imported from `react-router-dom` but are actually re-exported from `react-router`.
 
-When using Rspack, these re-exports may be further optimized: the export can be resolved directly from the source module (e.g. `react-router`), skipping the intermediate module (`react-router-dom`).
+When using Rspack, these re-exports may be further optimized: the exports can be resolved directly from the source module (e.g. `react-router`), skipping the intermediate module (`react-router-dom`).
 
 In this case:
 
