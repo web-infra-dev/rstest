@@ -54,6 +54,7 @@ export type TestFilesTreeProps = {
   openFiles: string[];
   activeFile: string | null;
   token: GlobalToken;
+  filterText: string;
   onExpandChange: (keys: string[]) => void;
   onSelect: (file: string) => void;
   onRerunFile: (file: string) => void;
@@ -87,11 +88,52 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   openFiles,
   activeFile,
   token,
+  filterText,
   onExpandChange,
   onSelect,
   onRerunFile,
   onRerunTestCase,
 }) => {
+  // Filter test files and cases based on filterText
+  const { filteredTestFiles, filteredCaseMap } = useMemo(() => {
+    if (!filterText.trim()) {
+      return { filteredTestFiles: testFiles, filteredCaseMap: caseMap };
+    }
+
+    const lowerFilter = filterText.toLowerCase();
+    const newFilteredFiles: TestFileInfo[] = [];
+    const newFilteredCaseMap: Record<string, Record<string, CaseInfo>> = {};
+
+    for (const file of testFiles) {
+      const filePath = file.testPath;
+      const fileMatches = filePath.toLowerCase().includes(lowerFilter);
+      const cases = caseMap[filePath] ?? {};
+
+      // Filter cases that match
+      const matchingCases: Record<string, CaseInfo> = {};
+      for (const [caseId, caseInfo] of Object.entries(cases)) {
+        if (
+          caseInfo.name.toLowerCase().includes(lowerFilter) ||
+          caseInfo.fullName.toLowerCase().includes(lowerFilter)
+        ) {
+          matchingCases[caseId] = caseInfo;
+        }
+      }
+
+      // Include file if file name matches or any case matches
+      if (fileMatches || Object.keys(matchingCases).length > 0) {
+        newFilteredFiles.push(file);
+        // If file name matches, show all cases; otherwise show only matching cases
+        newFilteredCaseMap[filePath] = fileMatches ? cases : matchingCases;
+      }
+    }
+
+    return {
+      filteredTestFiles: newFilteredFiles,
+      filteredCaseMap: newFilteredCaseMap,
+    };
+  }, [testFiles, caseMap, filterText]);
+
   // Build nested tree structure from flat cases
   const buildNestedTree = useCallback(
     (file: string, cases: CaseInfo[]): DataNode[] => {
@@ -174,6 +216,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               <TestSuiteTitle
                 icon={suiteMeta.icon}
                 iconColor={suiteMeta.color}
+                status={suiteStatus}
                 name={child.name}
                 onRerun={
                   connected
@@ -198,6 +241,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               <TestCaseTitle
                 icon={caseMeta.icon}
                 iconColor={caseMeta.color}
+                status={testCase.status}
                 label={testCase.name}
                 onRerun={
                   connected
@@ -224,7 +268,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
 
   const treeData: DataNode[] = useMemo(() => {
     // Get unique project names from test files
-    const projectNames = [...new Set(testFiles.map((f) => f.projectName))];
+    const projectNames = [
+      ...new Set(filteredTestFiles.map((f) => f.projectName)),
+    ];
 
     // Build a map from project name to projectRoot for relative path calculation
     const projectRootMap = new Map<string, string>();
@@ -242,7 +288,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       const meta = STATUS_META[status];
       // Use projectRoot if available, otherwise fall back to rootPath
       const relativePath = toRelativePath(filePath, projectRoot ?? rootPath);
-      const cases = Object.values(caseMap[filePath] ?? {});
+      const cases = Object.values(filteredCaseMap[filePath] ?? {});
 
       return {
         key: filePath,
@@ -250,6 +296,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           <TestFileTitle
             icon={meta.icon}
             iconColor={meta.color}
+            status={status}
             relativePath={relativePath}
             onOpen={() => openInEditor(filePath)}
             onRerun={
@@ -270,7 +317,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     // When there's only one project, it's likely the default project without explicit config
     if (projectNames.length > 1) {
       return projectNames.map((projectName) => {
-        const projectFiles = testFiles.filter(
+        const projectFiles = filteredTestFiles.filter(
           (f) => f.projectName === projectName,
         );
         const projectKey = `__project__${projectName}`;
@@ -317,16 +364,16 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     }
 
     // No projects: flat file list (backward compatible for non-project configs)
-    return testFiles.map((f) => buildFileNode(f));
+    return filteredTestFiles.map((f) => buildFileNode(f));
   }, [
     buildNestedTree,
-    caseMap,
+    filteredCaseMap,
     connected,
     onRerunFile,
     projects,
     rootPath,
     statusMap,
-    testFiles,
+    filteredTestFiles,
     token,
   ]);
 
@@ -366,6 +413,15 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     );
   }
 
+  // No results after filtering
+  if (filteredTestFiles.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Text type="secondary">No matching tests found</Text>
+      </div>
+    );
+  }
+
   // Normal tree view
   return (
     <Tree
@@ -387,7 +443,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       }
       onSelect={(_keys, info) => {
         const key = info.node.key;
-        const testPaths = testFiles.map((f) => f.testPath);
+        const testPaths = filteredTestFiles.map((f) => f.testPath);
         if (typeof key === 'string' && testPaths.includes(key)) {
           onSelect(key);
         }

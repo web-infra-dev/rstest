@@ -1,7 +1,7 @@
 import {
   CheckCircle2,
   CircleDashed,
-  Loader2,
+  Loader,
   Sparkles,
   XCircle,
 } from 'lucide-react';
@@ -26,7 +26,7 @@ export const STATUS_META: Record<TestStatus, StatusMeta> = {
   running: {
     label: 'Running',
     color: '#f2c94c',
-    icon: <Loader2 size={16} className="animate-spin" strokeWidth={2.1} />,
+    icon: <Loader size={16} className="animate-spin" strokeWidth={2.1} />,
   },
   pass: {
     label: 'Pass',

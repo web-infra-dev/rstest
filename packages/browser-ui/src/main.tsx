@@ -5,7 +5,6 @@ import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
 import { ResizablePanel, ResizablePanelGroup } from './components/Resizable';
 import { SidebarHeader } from './components/SidebarHeader';
-import { StatsBar } from './components/StatsBar';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { useRpc } from './hooks/useRpc';
@@ -68,6 +67,7 @@ const BrowserRunner: React.FC<{
     Record<string, Record<string, CaseInfo>>
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [filterText, setFilterText] = useState<string>('');
 
   const handleReloadTestFile = useCallback(
     (testFile: string, testNamePattern?: string) => {
@@ -205,11 +205,13 @@ const BrowserRunner: React.FC<{
     [rpc, connected],
   );
 
-  const handleRerun = useCallback(() => {
-    if (active && rpc && connected) {
-      void rpc.rerunTest(active);
+  const handleRerunAll = useCallback(() => {
+    if (rpc && connected) {
+      for (const file of testFiles) {
+        void rpc.rerunTest(file.testPath);
+      }
     }
-  }, [active, rpc, connected]);
+  }, [testFiles, rpc, connected]);
 
   // Handle messages from test runner iframes
   useEffect(() => {
@@ -354,18 +356,85 @@ const BrowserRunner: React.FC<{
     return () => window.removeEventListener('message', listener);
   }, [active, upsertCase, mapCaseStatus, rpc]);
 
-  // Computed values
-  const counts = useMemo(
+  // Computed values - case level statistics
+  const caseCounts = useMemo(() => {
+    const allCases = Object.values(caseMap).flatMap((cases) =>
+      Object.values(cases),
+    );
+    return {
+      idle: allCases.filter((c) => c.status === 'idle').length,
+      running: allCases.filter((c) => c.status === 'running').length,
+      pass: allCases.filter((c) => c.status === 'pass').length,
+      fail: allCases.filter((c) => c.status === 'fail').length,
+      skip: allCases.filter((c) => c.status === 'skip').length,
+    };
+  }, [caseMap]);
+
+  // File level counts for progress bar
+  const fileCounts = useMemo(
     () => ({
+      idle: Object.values(statusMap).filter((s) => s === 'idle').length,
+      running: Object.values(statusMap).filter((s) => s === 'running').length,
       pass: Object.values(statusMap).filter((s) => s === 'pass').length,
       fail: Object.values(statusMap).filter((s) => s === 'fail').length,
     }),
     [statusMap],
   );
 
-  const completedTotal = counts.pass + counts.fail;
+  // Collect all expandable node keys for expand/collapse all functionality
+  const allExpandableKeys = useMemo(() => {
+    const keys: string[] = [];
+
+    // Get unique project names
+    const projectNames = [...new Set(testFiles.map((f) => f.projectName))];
+    const hasMultipleProjects = projectNames.length > 1;
+
+    // Add project keys if multiple projects
+    if (hasMultipleProjects) {
+      for (const projectName of projectNames) {
+        keys.push(`__project__${projectName}`);
+      }
+    }
+
+    // Add file keys and suite keys
+    for (const file of testFiles) {
+      const filePath = file.testPath;
+      keys.push(filePath);
+
+      // Collect all unique suite paths from cases
+      const cases = Object.values(caseMap[filePath] ?? {});
+      const suitePaths = new Set<string>();
+
+      for (const testCase of cases) {
+        const parentNames = testCase.parentNames;
+        // Build all ancestor suite keys
+        for (let i = 1; i <= parentNames.length; i++) {
+          const suitePath = parentNames.slice(0, i).join('::');
+          suitePaths.add(suitePath);
+        }
+      }
+
+      // Add suite keys - need to match the key format in TestFilesTree
+      // Key format: ${keyPrefix}::suite::${fullPath.join('::')}
+      // where keyPrefix accumulates from parent suites
+      for (const suitePath of suitePaths) {
+        const parts = suitePath.split('::');
+        // Build the actual key by accumulating prefixes
+        let currentKey = filePath;
+        for (let i = 1; i <= parts.length; i++) {
+          const partialPath = parts.slice(0, i).join('::');
+          currentKey = `${currentKey}::suite::${partialPath}`;
+        }
+        keys.push(currentKey);
+      }
+    }
+
+    return [...new Set(keys)]; // Deduplicate
+  }, [testFiles, caseMap]);
+
+  const completedTotal = fileCounts.pass + fileCounts.fail;
   const successPercent =
-    completedTotal === 0 ? 0 : (counts.pass / completedTotal) * 100;
+    completedTotal === 0 ? 0 : (fileCounts.pass / completedTotal) * 100;
   const progressPercent = completedTotal === 0 ? 0 : 100;
   const isDark = theme === 'dark';
   const themeSwitchLabel = isDark
@@ -396,21 +465,34 @@ const BrowserRunner: React.FC<{
               onThemeToggle={(checked: boolean) =>
                 setTheme(checked ? 'dark' : 'light')
               }
-              onRerun={connected ? handleRerun : undefined}
               isConnected={connected}
               token={token}
               progressPercent={progressPercent}
               successPercent={successPercent}
             />
 
-            <StatsBar
-              passCount={counts.pass}
-              failCount={counts.fail}
-              borderColor={token.colorBorderSecondary}
-              background={token.colorFillQuaternary}
+            <TestFilesHeader
+              token={token}
+              filterText={filterText}
+              onFilterChange={setFilterText}
+              isAllExpanded={
+                allExpandableKeys.length > 0 &&
+                allExpandableKeys.every((key) => openFiles.includes(key))
+              }
+              onToggleExpandAll={() => {
+                const isAllExpanded =
+                  allExpandableKeys.length > 0 &&
+                  allExpandableKeys.every((key) => openFiles.includes(key));
+                if (isAllExpanded) {
+                  setOpenFiles([]);
+                } else {
+                  // Expand all nodes (files, suites, projects)
+                  setOpenFiles(allExpandableKeys);
+                }
+              }}
+              onRerun={connected ? handleRerunAll : undefined}
+              counts={caseCounts}
             />
-
-            <TestFilesHeader isConnected={connected} token={token} />
 
             <div
               className="flex-1 overflow-x-hidden overflow-y-auto"
@@ -427,6 +509,7 @@ const BrowserRunner: React.FC<{
                 openFiles={openFiles}
                 activeFile={active}
                 token={token}
+                filterText={filterText}
                 onExpandChange={setOpenFiles}
                 onSelect={handleSelect}
                 onRerunFile={handleRerunFile}
