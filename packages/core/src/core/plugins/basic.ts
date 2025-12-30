@@ -15,10 +15,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:basic',
   setup: (api) => {
-    api.modifyBundlerChain((chain) => {
+    api.modifyBundlerChain((chain, { CHAIN_ID }) => {
       // Rsbuild sets splitChunks to false for the node target.
       // Use modifyBundlerChain to re-enable it so users can override it.
       chain.optimization.splitChunks({ chunks: 'all' });
+
+      // Port https://github.com/web-infra-dev/rsbuild/pull/5955 before it merged into Rsbuild.
+      chain.module.rule(CHAIN_ID.RULE.JS).delete('type');
     });
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
@@ -126,13 +129,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   // suppress ESModulesLinkingError for exports that might be implemented in mock
                   exportsPresence: 'warn',
                 };
-
-                config.module.rules ??= [];
-                config.module.rules.push({
-                  test: /\.m[jt]s$/,
-                  // Treated mjs and mts as strict ES modules.
-                  type: 'javascript/esm',
-                });
 
                 config.resolve ??= {};
                 config.resolve.extensions ??= [];
