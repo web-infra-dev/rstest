@@ -253,15 +253,6 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
         }
         const test = getTest(this);
 
-        if (test) {
-          const isInsideEach = test.each || test.inTestEach;
-          if (isInsideEach) {
-            throw new Error(
-              'InlineSnapshot cannot be used inside of test.each or describe.each',
-            );
-          }
-        }
-
         const expected = utils.flag(this, 'object');
         const error = utils.flag(this, 'error');
         if (typeof properties === 'string') {
@@ -335,14 +326,6 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
         }
         const test = getTest(this);
 
-        if (test) {
-          const isInsideEach = test.each || test.inTestEach;
-          if (isInsideEach) {
-            throw new Error(
-              'InlineSnapshot cannot be used inside of test.each or describe.each',
-            );
-          }
-        }
         const expected = utils.flag(this, 'object');
         const error = utils.flag(this, 'error');
         const promise = utils.flag(this, 'promise') as string | undefined;
