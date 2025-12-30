@@ -8,7 +8,7 @@ type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
 export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
   {
     name: 'happy-dom',
-    async setup(global, options = {}) {
+    setup: async (global, options = {}) => {
       checkPkgInstalled('happy-dom');
       const { Window } = await import('happy-dom');
       const win = new Window({
