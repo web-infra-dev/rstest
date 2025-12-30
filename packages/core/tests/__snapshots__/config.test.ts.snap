@@ -74,7 +74,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   ],
   "slowTestThreshold": 300,
   "snapshotFormat": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,

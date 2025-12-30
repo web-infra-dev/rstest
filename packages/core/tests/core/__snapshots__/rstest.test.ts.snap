@@ -69,7 +69,9 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "setupFiles": [],
   "slowTestThreshold": 300,
   "snapshotFormat": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,
@@ -149,7 +151,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,
@@ -229,7 +233,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,
