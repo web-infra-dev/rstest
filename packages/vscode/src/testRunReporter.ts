@@ -166,16 +166,18 @@ export class TestRunReporter implements Reporter {
   async onTestRunEnd() {
     if (this.coverageEnabled) return;
 
-    this.onFinish?.();
-    if (!this.isFirstRun) {
+    if (this.isFirstRun) {
+      this.onFinish?.();
+    } else {
       this.run?.end();
     }
     this.isFirstRun = false;
   }
 
   async onCoverageEnd() {
-    this.onFinish?.();
-    if (!this.isFirstRun) {
+    if (this.isFirstRun) {
+      this.onFinish?.();
+    } else {
       this.run?.end();
     }
     this.isFirstRun = false;

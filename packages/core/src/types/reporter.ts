@@ -81,7 +81,7 @@ export interface Reporter {
    */
   onTestCaseStart?: (test: TestCaseInfo) => void;
   /**
-   * Called before all tests stat
+   * Called before all tests start
    */
   onTestRunStart?: () => MaybePromise<void>;
   /**
