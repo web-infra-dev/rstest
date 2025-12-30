@@ -21,6 +21,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
       chain.optimization.splitChunks({ chunks: 'all' });
 
       // Port https://github.com/web-infra-dev/rsbuild/pull/5955 before it merged into Rsbuild.
+      // Use Rspack default behavior
       chain.module.rule(CHAIN_ID.RULE.JS).delete('type');
     });
     api.modifyEnvironmentConfig(
