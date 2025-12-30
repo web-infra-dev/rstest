@@ -6,6 +6,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
+ * Default env overrides for browser e2e tests.
+ * Clear CI-related env vars to prevent them from affecting snapshot behavior.
+ * In CI mode, Rstest sets `updateSnapshot: 'none'`, which prevents new snapshots
+ * from being created. Since e2e tests often delete and recreate snapshots,
+ * this causes all snapshot tests to fail in CI.
+ */
+const defaultEnvOverrides: Record<string, string> = {
+  CI: '',
+  GITHUB_ACTIONS: '',
+};
+
+/**
  * Run browser mode CLI with specified fixture
  */
 export const runBrowserCli = async (
@@ -21,7 +33,7 @@ export const runBrowserCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: extra?.env,
+        env: { ...defaultEnvOverrides, ...extra?.env },
       },
     },
   });
@@ -43,7 +55,7 @@ export const runBrowserWatchCli = async (
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
-        env: { DEBUG: 'rstest', ...extra?.env },
+        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
       },
     },
   });
@@ -65,7 +77,7 @@ export const runBrowserCliWithCwd = async (
     options: {
       nodeOptions: {
         cwd,
-        env: extra?.env,
+        env: { ...defaultEnvOverrides, ...extra?.env },
       },
     },
   });

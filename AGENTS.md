@@ -7,15 +7,19 @@ Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 When working on code in a specific package, use the Read tool to load that package's AGENTS.md file for package-specific guidelines:
 
 - For @rstest/core: @packages/core/AGENTS.md
+- For @rstest/browser: @packages/browser/AGENTS.md
 - For @rstest/browser-ui: @packages/browser-ui/AGENTS.md
 - For @rstest/coverage-istanbul: @packages/coverage-istanbul/AGENTS.md
+- For @rstest/adapter-rslib: @packages/adapter-rslib/AGENTS.md
 - For rstest VS Code extension: @packages/vscode/AGENTS.md
 
 ## Monorepo structure
 
 - `packages/core/` — @rstest/core: Core testing framework (CLI, runtime, reporter, pool)
+- `packages/browser/` — @rstest/browser: Browser mode support (Playwright, WebSocket RPC)
 - `packages/browser-ui/` — @rstest/browser-ui: Browser test UI (React + Tailwind + Ant Design)
 - `packages/coverage-istanbul/` — @rstest/coverage-istanbul: Istanbul coverage provider
+- `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
 - `packages/vscode/` — rstest: VS Code extension
 - `e2e/` — End-to-end integration tests
 - `examples/` — Example projects (node, react, browser)
@@ -49,6 +53,29 @@ pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
 - To run a specific e2e test: `pnpm rstest <path-to-test>` (e.g., `pnpm rstest browser-mode/config.test.ts`)
 - To run tests in a fixture directory: `cd` into `e2e/<test>/fixtures/<fixture>/`, then run `npx rstest`
+
+## File-scoped commands
+
+Prefer file-scoped commands over project-wide commands for faster feedback:
+
+```bash
+# Type check a single file
+pnpm tsc --noEmit path/to/file.ts
+
+# Format a single file
+pnpm prettier --write path/to/file.ts
+
+# Lint a single file (with auto-fix)
+pnpm biome check --write path/to/file.ts
+
+# Run a single test file
+pnpm rstest path/to/file.test.ts
+
+# Run a single e2e test
+cd e2e && pnpm rstest browser-mode/config.test.ts
+```
+
+Note: Always lint and typecheck updated files. Use project-wide commands sparingly.
 
 ## Do
 
