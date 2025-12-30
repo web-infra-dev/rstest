@@ -130,7 +130,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.module.rules ??= [];
                 config.module.rules.push({
                   test: /\.m[jt]s$/,
-                  // Treated mjs and mts as strict ES modules.
+                  // Treat mjs and mts as strict ES modules.
                   type: 'javascript/esm',
                 });
 
