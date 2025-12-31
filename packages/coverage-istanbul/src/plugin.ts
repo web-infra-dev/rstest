@@ -55,11 +55,14 @@ export const pluginCoverage: (
 
     api.modifyBundlerChain({
       handler: (chain, { rspack, CHAIN_ID, environment }) => {
-        const { rspackExperiments: _rspackExperiments, ...swcOptions } =
-          chain.module
-            .rule(CHAIN_ID.RULE.JS)
-            .use(CHAIN_ID.USE.SWC)
-            .get('options') || {};
+        const {
+          rspackExperiments: _rspackExperiments,
+          collectTypeScriptInfo: _collectTypeScriptInfo,
+          ...swcOptions
+        } = chain.module
+          .rule(CHAIN_ID.RULE.JS)
+          .use(CHAIN_ID.USE.SWC)
+          .get('options') || {};
 
         transformCoverageFns[environment.name] = async (
           code: string,
