@@ -37,6 +37,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'jsdom',
               },
+              browser: { enabled: false },
             },
           },
         ],
@@ -85,6 +86,7 @@ describe('prepareRsbuild', () => {
                 name: 'node',
               },
               isolate: true,
+              browser: { enabled: false },
             },
           },
         ],
@@ -123,6 +125,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'jsdom',
               },
+              browser: { enabled: false },
             },
           },
           {
@@ -138,6 +141,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'node',
               },
+              browser: { enabled: false },
             },
           },
         ],
@@ -195,6 +199,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'node',
               },
+              browser: { enabled: false },
             },
           },
         ],
@@ -256,6 +261,7 @@ describe('prepareRsbuild', () => {
                 name: 'node',
               },
               isolate: true,
+              browser: { enabled: false },
             },
           },
         ],
@@ -305,6 +311,7 @@ describe('prepareRsbuild', () => {
               testEnvironment: {
                 name: 'node',
               },
+              browser: { enabled: false },
             },
           },
         ],

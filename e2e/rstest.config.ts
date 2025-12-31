@@ -2,7 +2,8 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   setupFiles: ['../scripts/rstest.setup.ts'],
-  testTimeout: process.env.CI ? 20_000 : 10_000,
+  // Increased timeout for CI to handle slower environments (e.g., Node.js 22 on Windows)
+  testTimeout: process.env.CI ? 30_000 : 10_000,
   slowTestThreshold: 2_000,
   output: {
     externals: {

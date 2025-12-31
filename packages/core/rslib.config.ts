@@ -75,6 +75,8 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
+          'browser-runtime': './src/browserRuntime.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },

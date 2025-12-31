@@ -3,6 +3,13 @@
 exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,

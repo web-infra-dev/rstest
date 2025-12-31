@@ -1,5 +1,4 @@
 import { expect, rs, test } from '@rstest/core';
-// @ts-expect-error: "react" has been mocked.
 import increment from 'react';
 
 rs.mock('react', () => {
@@ -9,5 +8,6 @@ rs.mock('react', () => {
 });
 
 test('interop default export', async () => {
+  // @ts-expect-error
   expect(increment(1)).toBe(43);
 });

@@ -2,9 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
 import type {
+  FormattedError,
   ListCommandOptions,
   ListCommandResult,
   Location,
+  ProjectContext,
   RstestContext,
   Test,
 } from '../types';
@@ -20,16 +22,29 @@ import {
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-const collectTests = async ({
+/**
+ * Collect tests from node mode projects using Rsbuild and worker pool.
+ */
+const collectNodeTests = async ({
   context,
+  nodeProjects,
   globTestSourceEntries,
 }: {
   context: RstestContext;
+  nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
   const { getSetupFiles } = await import('../utils/getSetupFiles');
+  if (nodeProjects.length === 0) {
+    return {
+      list: [],
+      getSourceMap: async (_name: string) => null,
+      close: async () => {},
+    };
+  }
+
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    nodeProjects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -65,7 +80,7 @@ const collectTests = async ({
     isWatchMode: false,
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      projects: nodeProjects.map((p) => p.normalizedConfig),
     },
     setupFiles,
     rsbuildInstance,
@@ -79,7 +94,7 @@ const collectTests = async ({
   const updateSnapshot = context.snapshotManager.options.updateSnapshot;
 
   const returns = await Promise.all(
-    context.projects.map(async (project) => {
+    nodeProjects.map(async (project) => {
       const {
         entries,
         setupEntries,
@@ -149,6 +164,35 @@ const collectTests = async ({
   };
 };
 
+/**
+ * Collect tests from browser mode projects using headless browser.
+ */
+const collectBrowserTests = async ({
+  context,
+  browserProjects,
+}: {
+  context: RstestContext;
+  browserProjects: ProjectContext[];
+}): Promise<{
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+}> => {
+  if (browserProjects.length === 0) {
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
+
+  const { loadBrowserModule } = await import('./browserLoader');
+  // Pass project roots to resolve @rstest/browser from project-specific node_modules
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { listBrowserTests } = await loadBrowserModule({ projectRoots });
+  // Cast to any because listBrowserTests expects Rstest but we have RstestContext
+  // In practice, context is always a Rstest instance
+  return listBrowserTests(context as any);
+};
+
 const collectTestFiles = async ({
   context,
   globTestSourceEntries,
@@ -172,6 +216,52 @@ const collectTestFiles = async ({
     errors: [],
     list,
     getSourceMap: async (_name: string) => null,
+  };
+};
+
+/**
+ * Collect all tests by separating browser and node mode projects.
+ */
+const collectAllTests = async ({
+  context,
+  globTestSourceEntries,
+}: {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+}): Promise<{
+  errors?: FormattedError[];
+  list: ListCommandResult[];
+  getSourceMap: (name: string) => Promise<string | null | undefined>;
+  close: () => Promise<void>;
+}> => {
+  // Separate browser and node mode projects
+  const browserProjects = context.projects.filter(
+    (p) => p.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (p) => !p.normalizedConfig.browser.enabled,
+  );
+
+  // Collect from both in parallel
+  const [nodeResult, browserResult] = await Promise.all([
+    collectNodeTests({
+      context,
+      nodeProjects,
+      globTestSourceEntries,
+    }),
+    collectBrowserTests({
+      context,
+      browserProjects,
+    }),
+  ]);
+
+  return {
+    errors: nodeResult.errors,
+    list: [...nodeResult.list, ...browserResult.list],
+    getSourceMap: nodeResult.getSourceMap,
+    close: async () => {
+      await Promise.all([nodeResult.close(), browserResult.close()]);
+    },
   };
 };
 
@@ -217,7 +307,7 @@ export async function listTests(
         context,
         globTestSourceEntries,
       })
-    : await collectTests({
+    : await collectAllTests({
         context,
         globTestSourceEntries,
       });
