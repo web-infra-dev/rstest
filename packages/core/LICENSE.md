@@ -1155,7 +1155,7 @@ Licensed under MIT license in the repository at git://github.com/paulmillr/readd
 
 ### rslog
 
-Licensed under MIT license in the repository at https://github.com/rspack-contrib/rslog.git.
+Licensed under MIT license in the repository at https://github.com/rstackjs/rslog.git.
 
 > MIT License
 >
