@@ -85,9 +85,26 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {
     try {
+      const { readFile } = await import('node:fs/promises');
+      const { createSourceMapStore } = await import('istanbul-lib-source-maps');
+      const mapStore = createSourceMapStore();
+      await Promise.all(
+        coverageMap
+          .files()
+          // process js/cjs/mjs file only
+          .filter((filename) => filename.endsWith('js'))
+          .map(async (filename) => {
+            const content = await readFile(filename, 'utf8');
+            // FIXME: find better regex, maybe we can copy from webpack/rspack
+            // match the source map url comment (format may be `//# sourceMappingURL=...`)
+            const sourceMapUrlRegex = /\/\/# sourceMappingURL=(.+)\s*$/m;
+            const match = content.match(sourceMapUrlRegex);
+            if (match?.[1]) mapStore.registerURL(filename, match[1]);
+          }),
+      );
       const context = createContext({
         dir: this.options.reportsDirectory,
-        coverageMap: createCoverageMap(coverageMap.toJSON()),
+        coverageMap: await mapStore.transformCoverage(coverageMap),
       });
       const reportersList = this.options.reporters;
       for (const reporter of reportersList) {
