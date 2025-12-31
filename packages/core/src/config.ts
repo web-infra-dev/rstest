@@ -175,7 +175,6 @@ const createDefaultConfig = (): NormalizedConfig => ({
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/[.]*',
       '**/dist/**',
       '**/test/**',
       '**/__tests__/**',
