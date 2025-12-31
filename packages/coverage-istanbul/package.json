@@ -24,20 +24,22 @@
     "@rstest/core": "workspace:~"
   },
   "dependencies": {
-    "swc-plugin-coverage-instrument": "0.0.32",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
-    "istanbul-reports": "^3.2.0"
+    "istanbul-lib-source-maps": "^5.0.6",
+    "istanbul-reports": "^3.2.0",
+    "swc-plugin-coverage-instrument": "0.0.32"
   },
   "devDependencies": {
-    "@rstest/tsconfig": "workspace:*",
-    "@rstest/core": "workspace:*",
     "@rslib/core": "^0.19.0",
-    "@types/node": "^22.16.5",
-    "typescript": "^5.9.3",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
-    "@types/istanbul-reports": "^3.0.4"
+    "@types/istanbul-lib-source-maps": "^4.0.4",
+    "@types/istanbul-reports": "^3.0.4",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.3"
   },
   "keywords": [
     "rstest",
