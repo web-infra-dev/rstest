@@ -549,6 +549,9 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+      memfs:
+        specifier: ^4.51.1
+        version: 4.51.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
