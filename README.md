@@ -29,7 +29,7 @@ The project is currently in active development, and we will continue to refine f
 
 ## 🦀 Rstack
 
-Rstack is a unified JavaScript toolchain built around Rspack, with high performance and consistent architecture.
+Rstack is a unified JavaScript toolchain centered on Rspack, with high performance and consistent architecture.
 
 | Name                                                  | Description              | Version                                                                                                                                                                          |
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -118,6 +118,7 @@ rslog
 rspack
 rspress
 rstack
+rstackjs
 rstest
 Samply
 selfsign
