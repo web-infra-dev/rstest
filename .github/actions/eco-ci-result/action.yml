@@ -20,7 +20,7 @@ runs:
         CI_OUTPUT: ${{ inputs.workflow-output }}
       with:
         script: |
-          const owner = "rspack-contrib"
+          const owner = "rstackjs"
           const repo = "rstest-ecosystem-ci"
           const runId = JSON.parse(process.env.CI_OUTPUT).workflow_id
 
