@@ -11,7 +11,7 @@ describe('getIncludedFiles', () => {
     defaultExclude = withDefaultConfig({}).coverage.exclude;
     memfs = fs as any;
 
-    // There's a bug in tinyglobby: the computed common root path cannot be the root of the Windows volume.
+    // There's a bug in tinyglobby: if the computed common root path cannot be the root of the Windows volume, the root path will be resolved to pwd.
     [
       '/root/apps/a.ts',
       '/root/apps/b.js',
