@@ -135,6 +135,8 @@ export class RstestApi {
     testCaseNamePath,
     isSuite,
     kind,
+    continuous,
+    createTestRun,
   }: {
     run: vscode.TestRun;
     token: vscode.CancellationToken;
@@ -143,11 +145,21 @@ export class RstestApi {
     testCaseNamePath?: string[];
     isSuite?: boolean;
     kind?: vscode.TestRunProfileKind;
+    continuous?: boolean;
+    createTestRun?: () => vscode.TestRun;
   }) {
+    let onFinish!: () => void;
+    const promise = new Promise((resolve) => {
+      onFinish = () => resolve(null);
+    });
+    const coverageEnabled = kind === vscode.TestRunProfileKind.Coverage;
     const testRunReporter = new TestRunReporter(
       run,
       this.project,
       testCaseNamePath,
+      coverageEnabled,
+      onFinish,
+      createTestRun,
     );
 
     const worker = await this.createChildProcess(
@@ -155,10 +167,14 @@ export class RstestApi {
       kind === vscode.TestRunProfileKind.Debug,
       run,
     );
-    token.onCancellationRequested(() => worker.$close());
+    token.onCancellationRequested(() => {
+      worker.$close();
+      onFinish();
+    });
 
-    await worker
+    worker
       .runTest({
+        command: continuous ? 'watch' : 'run',
         fileFilters: fileFilter ? [fileFilter] : undefined,
         testNamePattern: testCaseNamePath
           ? new RegExp(
@@ -168,15 +184,14 @@ export class RstestApi {
         update: updateSnapshot,
         configFilePath: this.configFilePath,
         rstestPath: this.resolveRstestPath(),
-        coverage:
-          kind === vscode.TestRunProfileKind.Coverage
-            ? { enabled: true }
-            : undefined,
+        coverage: coverageEnabled ? { enabled: true } : undefined,
         includeTaskLocation: true,
       })
       .finally(() => {
-        worker.$close();
+        if (!continuous) worker.$close();
       });
+
+    await promise;
   }
 
   public async createChildProcess(

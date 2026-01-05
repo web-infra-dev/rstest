@@ -3,13 +3,19 @@
 exports[`rstest context > should generate rstest context correctly 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]*",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
@@ -69,7 +75,9 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "setupFiles": [],
   "slowTestThreshold": 300,
   "snapshotFormat": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,
@@ -80,13 +88,19 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
 exports[`rstest context > should generate rstest context correctly with multiple projects 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]*",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
@@ -149,7 +163,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,
@@ -160,13 +176,19 @@ exports[`rstest context > should generate rstest context correctly with multiple
 exports[`rstest context > should generate rstest context correctly with multiple projects 2`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+  },
   "clearMocks": false,
   "coverage": {
     "clean": true,
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]*",
       "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
@@ -229,7 +251,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,

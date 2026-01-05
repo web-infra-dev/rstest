@@ -15,10 +15,14 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:basic',
   setup: (api) => {
-    api.modifyBundlerChain((chain) => {
+    api.modifyBundlerChain((chain, { CHAIN_ID }) => {
       // Rsbuild sets splitChunks to false for the node target.
       // Use modifyBundlerChain to re-enable it so users can override it.
       chain.optimization.splitChunks({ chunks: 'all' });
+
+      // Port https://github.com/web-infra-dev/rsbuild/pull/5955 before it merged into Rsbuild.
+      // Use Rspack default behavior
+      chain.module.rule(CHAIN_ID.RULE.JS).delete('type');
     });
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
@@ -98,6 +102,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                   }),
                 );
 
+                config.module.rules ??= [];
+                config.module.rules.push({
+                  test: /\.mts$/,
+                  // Treated mts as strict ES modules.
+                  type: 'javascript/esm',
+                });
+
                 if (outputModule) {
                   config.plugins.push(
                     new rspack.BannerPlugin({
@@ -136,7 +147,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
                 config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
 
-                if (testEnvironment === 'node') {
+                if (testEnvironment.name === 'node') {
                   // skip `module` field in Node.js environment.
                   // ESM module resolved by module field is not always a native ESM module
                   config.resolve.mainFields = config.resolve.mainFields?.filter(

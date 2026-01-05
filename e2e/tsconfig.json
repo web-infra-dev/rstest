@@ -9,5 +9,10 @@
     "allowImportingTsExtensions": true
   },
   "include": ["./"],
-  "exclude": ["vue/", "projects/fixtures/", "globals/fixtures/"]
+  "exclude": [
+    "vue/",
+    "projects/fixtures/",
+    "globals/fixtures/",
+    "browser-mode/fixtures/react/"
+  ]
 }

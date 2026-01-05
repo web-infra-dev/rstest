@@ -147,11 +147,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -175,12 +178,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -206,6 +203,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -229,12 +230,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -393,6 +388,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -699,11 +698,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -727,12 +729,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -758,6 +754,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -781,12 +781,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -945,6 +939,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -1226,11 +1224,14 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -1254,12 +1255,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -1285,6 +1280,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -1308,12 +1307,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -1472,6 +1465,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -1755,11 +1752,14 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -1783,12 +1783,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -1814,6 +1808,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -1837,12 +1835,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -2001,6 +1993,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -2291,11 +2287,14 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -2319,12 +2318,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -2350,6 +2343,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -2373,12 +2370,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -2537,6 +2528,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -2818,11 +2813,14 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         },
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -2846,12 +2844,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -2877,6 +2869,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "loader": "builtin:swc-loader",
             "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
               "env": {
                 "targets": [
                   "node >= 16",
@@ -2900,12 +2896,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "transform": {
                   "decoratorVersion": "2022-03",
                   "legacyDecorator": false,
-                },
-              },
-              "rspackExperiments": {
-                "collectTypeScriptInfo": {
-                  "exportedEnum": false,
-                  "typeExports": true,
                 },
               },
             },
@@ -3064,6 +3054,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.mts\\$/,
+        "type": "javascript/esm",
       },
     ],
   },
@@ -3225,11 +3219,14 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
     },
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-    "type": "javascript/auto",
     "use": [
       {
         "loader": "builtin:swc-loader",
         "options": {
+          "collectTypeScriptInfo": {
+            "exportedEnum": false,
+            "typeExports": true,
+          },
           "env": {
             "targets": [
               "node >= 16",
@@ -3254,12 +3251,6 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
               "decoratorMetadata": true,
               "legacyDecorator": true,
               "useDefineForClassFields": false,
-            },
-          },
-          "rspackExperiments": {
-            "collectTypeScriptInfo": {
-              "exportedEnum": false,
-              "typeExports": true,
             },
           },
         },

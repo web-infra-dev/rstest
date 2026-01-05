@@ -1,3 +1,4 @@
+import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
@@ -75,6 +76,7 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
@@ -115,6 +117,24 @@ export default defineConfig({
           js: '[name].mjs',
         },
       },
+    },
+    {
+      id: 'browser_runtime',
+      format: 'esm',
+      syntax: 'es2021',
+      dts: {
+        bundle: true,
+      },
+      source: {
+        entry: {
+          index: './src/browserRuntime.ts',
+        },
+      },
+      output: {
+        target: 'web',
+        distPath: 'dist/browser-runtime',
+      },
+      plugins: [pluginNodePolyfill()],
     },
   ],
   performance: {

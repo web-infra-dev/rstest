@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-import { format } from 'node:util';
 import { diff } from 'jest-diff';
 import {
   format as prettyFormat,
@@ -67,6 +65,42 @@ export const formatTestError = (err: any, test?: Test): FormattedError[] => {
 // cspell:ignore sdjifo
 const formatRegExp = /%[sdjifoOc%]/;
 
+const formatTemplate = (template: string, values: any[]): string => {
+  if (!formatRegExp.test(template)) {
+    return template;
+  }
+
+  let valueIndex = 0;
+  return template.replace(/%[sdjifoOc%]/g, (specifier) => {
+    if (specifier === '%%') {
+      return '%';
+    }
+
+    const value = values[valueIndex++];
+
+    switch (specifier) {
+      case '%s':
+      case '%O':
+      case '%o':
+      case '%c':
+        return String(value);
+      case '%d':
+      case '%i':
+        return Number.parseInt(String(value), 10).toString();
+      case '%f':
+        return Number(value).toString();
+      case '%j':
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return '[Circular]';
+        }
+      default:
+        return String(value ?? '');
+    }
+  });
+};
+
 export const formatName = (
   template: string,
   param: any[] | Record<string, any>,
@@ -88,13 +122,14 @@ export const formatName = (
   if (Array.isArray(param)) {
     // format printf-like string
     // https://nodejs.org/api/util.html#util_util_format_format_args
-    return formatRegExp.test(templateStr)
-      ? format(templateStr, ...param)
-      : templateStr;
+    if (formatRegExp.test(templateStr)) {
+      return formatTemplate(templateStr, param);
+    }
+    return templateStr;
   }
 
   if (formatRegExp.test(templateStr)) {
-    templateStr = format(templateStr, param);
+    templateStr = formatTemplate(templateStr, [param]);
   }
 
   return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
@@ -123,16 +158,32 @@ export class RstestError extends Error {
 }
 
 export function checkPkgInstalled(name: string): void {
-  const require = createRequire(import.meta.url);
+  if (typeof process === 'undefined' || !process.versions?.node) {
+    return;
+  }
+
+  let resolveFn: ((id: string) => string) | undefined;
   try {
-    require.resolve(name);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const req = Function('return require')();
+    resolveFn = req?.resolve?.bind(req);
+  } catch {
+    resolveFn = undefined;
+  }
+
+  if (!resolveFn) {
+    return;
+  }
+
+  try {
+    resolveFn(name);
   } catch (error: any) {
-    if (error.code === 'MODULE_NOT_FOUND') {
-      const error = new RstestError(
+    if (error?.code === 'MODULE_NOT_FOUND') {
+      const missingError = new RstestError(
         `Missing dependency "${name}". Please install it first.`,
       );
-      error.fullStack = true;
-      throw error;
+      missingError.fullStack = true;
+      throw missingError;
     }
     throw error;
   }

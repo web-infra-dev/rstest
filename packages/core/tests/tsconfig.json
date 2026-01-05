@@ -3,5 +3,5 @@
   "compilerOptions": {
     "baseUrl": "./"
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "./rstestEnv.d.ts"]
 }

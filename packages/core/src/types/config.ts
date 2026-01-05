@@ -39,6 +39,45 @@ export type ProjectConfig = Omit<
   | 'bail'
 >;
 
+export type BrowserModeConfig = {
+  /**
+   * Enable browser mode when running tests.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Browser provider to use for running tests.
+   *
+   * Currently only 'playwright' is supported.
+   *
+   * @default 'playwright'
+   */
+  provider?: 'playwright';
+  /**
+   * Which browser to use for testing.
+   *
+   * - `chromium` - Google Chrome, Microsoft Edge
+   * - `firefox` - Mozilla Firefox
+   * - `webkit` - Safari
+   *
+   * @default 'chromium'
+   */
+  browser?: 'chromium' | 'firefox' | 'webkit';
+  /**
+   * Run browser in headless mode.
+   *
+   * @default Inferred from CI environment. `true` in CI, `false` otherwise.
+   */
+  headless?: boolean;
+  /**
+   * Port for the browser mode dev server.
+   *
+   * If not specified, a random available port will be used.
+   */
+  port?: number;
+};
+
 type SnapshotFormat = Omit<
   NonNullable<SnapshotStateOptions['snapshotFormat']>,
   'plugins' | 'compareKeys'
@@ -60,6 +99,13 @@ export type ExtendConfig = Omit<RstestConfig, 'projects'>;
 export type ExtendConfigFn = (
   userConfig: Readonly<RstestConfig>,
 ) => MaybePromise<ExtendConfig>;
+
+export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+
+export type EnvironmentWithOptions = {
+  name: EnvironmentName;
+  options?: Record<string, any>;
+};
 
 export interface RstestConfig {
   /**
@@ -155,7 +201,7 @@ export interface RstestConfig {
    *
    * @default 'node'
    */
-  testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+  testEnvironment?: EnvironmentName | EnvironmentWithOptions;
 
   /**
    * Stop running tests after n failures.
@@ -284,6 +330,11 @@ export interface RstestConfig {
   env?: Partial<NodeJS.ProcessEnv>;
 
   /**
+   * Browser mode configuration.
+   */
+  browser?: BrowserModeConfig;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;
@@ -341,6 +392,14 @@ type OptionalKeys =
   | 'resolveSnapshotPath'
   | 'extends';
 
+export type NormalizedBrowserModeConfig = {
+  enabled: boolean;
+  provider: 'playwright';
+  browser: 'chromium' | 'firefox' | 'webkit';
+  headless: boolean;
+  port?: number;
+};
+
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
@@ -351,11 +410,15 @@ export type NormalizedConfig = Required<
     | 'setupFiles'
     | 'globalSetup'
     | 'exclude'
+    | 'testEnvironment'
+    | 'browser'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
+    testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
+    browser: NormalizedBrowserModeConfig;
     setupFiles: string[];
     globalSetup: string[];
     exclude: {

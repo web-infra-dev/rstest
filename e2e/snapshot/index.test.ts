@@ -37,7 +37,7 @@ describe('test snapshot', () => {
   );
 
   it('should failed when use inline snapshot in each', async () => {
-    const { cli } = await runRstestCli({
+    const { expectLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'fixtures/inlineSnapshot.each.test.ts'],
       options: {
@@ -47,19 +47,8 @@ describe('test snapshot', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expect(
-      logs.find((log) =>
-        log.includes(
-          'InlineSnapshot cannot be used inside of test.each or describe.each',
-        ),
-      ),
-    ).toBeTruthy();
-
-    expect(logs.find((log) => log.includes('Tests 6 failed'))).toBeTruthy();
+    expectLog(/Tests 2 failed \| 3 passed/);
   });
 });

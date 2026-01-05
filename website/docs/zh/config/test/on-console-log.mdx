@@ -16,5 +16,16 @@ export default defineConfig({
 ```
 
 :::note
-当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`onConsoleLog` 将被忽略。
+当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`onConsoleLog` 将不会生效。
 :::
+
+## 静默控制台日志
+
+你可以通过在 `onConsoleLog` 处理函数中返回 `false` 来静默控制台日志。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+export default defineConfig({
+  onConsoleLog: () => false,
+});
+```

@@ -63,6 +63,10 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         run: pnpm run typecheck
 
+      - name: Install Playwright Browsers
+        if: steps.changes.outputs.changed == 'true'
+        run: npx playwright install chromium webkit
+
       - name: Run Test
         if: steps.changes.outputs.changed == 'true'
         run: pnpm run test
@@ -110,6 +114,10 @@ jobs:
       - name: Install Dependencies
         if: steps.changes.outputs.changed == 'true'
         run: pnpm install
+
+      - name: Install Playwright Browsers
+        if: steps.changes.outputs.changed == 'true'
+        run: npx playwright install chromium webkit
 
       - name: E2E Test
         if: steps.changes.outputs.changed == 'true'

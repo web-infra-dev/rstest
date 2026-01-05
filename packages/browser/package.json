@@ -1,0 +1,81 @@
+{
+  "name": "@rstest/browser",
+  "version": "0.7.8",
+  "description": "Browser mode support for Rstest testing framework.",
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/browser"
+  },
+  "keywords": [
+    "rstest",
+    "browser",
+    "test",
+    "rstack",
+    "rspack"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "typecheck": "tsc --noEmit",
+    "dev": "rslib build --watch"
+  },
+  "dependencies": {
+    "@rsbuild/core": "1.7.1",
+    "open-editor": "^4.0.0",
+    "sirv": "^2.0.4",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@jridgewell/trace-mapping": "0.3.31",
+    "@rslib/core": "^0.19.0",
+    "@rstest/browser-ui": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/convert-source-map": "^2.0.3",
+    "@types/picomatch": "^4.0.2",
+    "@types/ws": "^8.18.1",
+    "@vitest/snapshot": "^3.2.4",
+    "birpc": "2.9.0",
+    "convert-source-map": "^2.0.0",
+    "pathe": "^2.0.3",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.3",
+    "playwright": "^1.49.1"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:^",
+    "playwright": "^1.49.1"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

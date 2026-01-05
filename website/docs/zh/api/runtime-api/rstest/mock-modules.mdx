@@ -231,3 +231,48 @@ it('test', async () => {
 :::warning
 不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock) 或 [`rs.doUnmock`](#rsdounmock) 。
 :::
+
+## 常见问题
+
+### Mocking re-exported modules
+
+在某些库中，API 是通过 **re-exports** 暴露的。例如在 React Router 中，某些 API（如 `useParams`）是从 `react-router-dom` 导入的，但实际上是从 `react-router` 重新导出的。
+
+当使用 Rspack 时，这些 re-exports 可能会被进一步优化：导出语句会被直接解析为从源模块（如 `react-router`）导入，而跳过中间模块（如 `react-router-dom`）。
+
+在这种情况下：
+
+- 对 `react-router-dom` 的 mock 可能不会生效
+- 直接 mock `react-router` 则可以正常生效
+
+```ts
+// 即使你的代码中写的是：
+import { useParams } from 'react-router-dom';
+
+// 实际运行时可能等价于：
+import { useParams } from 'react-router';
+```
+
+在遇到 mock 不生效的问题时，建议：
+
+1. 尝试 mock 实际被解析到的模块路径：
+
+```ts
+rs.mock('react-router', () => ({
+  useParams: () => ({ id: 'mocked-id' }),
+}));
+```
+
+2. 禁用测试环境中的相关打包器优化，以避免 re-export 被 “穿透”。需要注意的是，禁用此优化可能会导致与运行时循环依赖相关的错误。
+
+```ts title="rstest.config.js"
+export default defineConfig({
+  tools: {
+    rspack: {
+      optimization: {
+        providedExports: false,
+      },
+    },
+  },
+});
+```
