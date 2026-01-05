@@ -1,0 +1,101 @@
+# Rsbuild
+
+This guide covers how to integrate Rstest with [Rsbuild](https://rsbuild.dev) for seamless testing in your Rsbuild projects.
+
+## Quick start
+
+### New project
+
+Create a new Rsbuild + Rstest project. Add the `--tools rstest` flag when creating:
+
+```bash
+npm create rsbuild@latest -- --tools rstest
+```
+
+The scaffold includes Rstest and demo tests. Run them with `npm run test`.
+
+### Existing project
+
+To add Rstest to an existing project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
+
+## Reuse Rsbuild config
+
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) is an official adapter that allows Rstest to automatically inherit configuration from your existing Rsbuild config file. This ensures your test environment matches your build configuration without duplication.
+
+### Install adapter
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+### Extend your config
+
+Using the `withRsbuildConfig` function from the adapter, you can extend your Rstest configuration from the Rsbuild config file.
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  // Additional rstest-specific configuration
+});
+```
+
+This will automatically:
+
+- Load your `rsbuild.config.ts` file
+- Map compatible Rsbuild options to Rstest configuration
+- Merge with any additional Rstest config you provide
+
+By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, set `cwd`:
+
+```ts
+export default defineConfig({
+  extends: withRsbuildConfig({
+    cwd: './packages/my-app',
+  }),
+});
+```
+
+See the [`@rstest/adapter-rsbuild` documentation](https://www.npmjs.com/package/@rstest/adapter-rsbuild) for advanced options.
+
+### Configuration mapping
+
+The adapter automatically maps these Rsbuild options to Rstest:
+
+| Rsbuild option          | Rstest equivalent     | Notes                                |
+| ----------------------- | --------------------- | ------------------------------------ |
+| `name` from environment | `name`                | Environment identifier               |
+| `plugins`               | `plugins`             | Plugin configuration                 |
+| `source.decorators`     | `source.decorators`   | Decorator support                    |
+| `source.define`         | `source.define`       | Global constants                     |
+| `source.include`        | `source.include`      | Source inclusion patterns            |
+| `source.exclude`        | `source.exclude`      | Source exclusion patterns            |
+| `source.tsconfigPath`   | `source.tsconfigPath` | TypeScript config path               |
+| `resolve`               | `resolve`             | Module resolution                    |
+| `output.cssModules`     | `output.cssModules`   | CSS modules configuration            |
+| `tools.rspack`          | `tools.rspack`        | Rspack configuration                 |
+| `tools.swc`             | `tools.swc`           | SWC configuration                    |
+| `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler chain configuration          |
+| `output.target`         | `testEnvironment`     | 'happy-dom' for web, 'node' for node |
+
+### Debug config
+
+To see the resolved configuration returned by the adapter, wrap it and log the result:
+
+```typescript
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRsbuildConfig()(user);
+    console.log('Extended config:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## Related documentation
+
+- [`@rstest/adapter-rsbuild` documentation](https://www.npmjs.com/package/@rstest/adapter-rsbuild)
+- [Rsbuild configuration overview](https://rsbuild.dev/config)
+- [Rstest configuration overview](/config/)

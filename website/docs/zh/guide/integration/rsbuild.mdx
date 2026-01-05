@@ -1,0 +1,101 @@
+# Rsbuild
+
+本指南介绍了如何将 Rstest 与 [Rsbuild](https://rsbuild.dev) 集成，以便在你的 Rsbuild 项目中进行无缝测试。
+
+## 快速开始
+
+### 新建项目
+
+创建一个新的 Rsbuild + Rstest 项目。在创建时添加 `--tools rstest` 标志：
+
+```bash
+npm create rsbuild@latest -- --tools rstest
+```
+
+脚手架包含了 Rstest 和演示测试。使用 `npm run test` 来运行它们。
+
+### 现有项目
+
+要将 Rstest 添加到现有项目中，请遵循[快速入门](/guide/start/quick-start)来安装和设置测试脚本。
+
+## 复用 Rsbuild 配置
+
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rsbuild 配置文件中继承配置。这可以确保你的测试环境与构建配置相匹配，而无需重复配置。
+
+### 安装适配器
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+### 继承你的配置
+
+使用适配器中的 `withRsbuildConfig` 函数，你可以从 Rsbuild 配置文件中继承 Rstest 配置。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  // 额外的 rstest 特定配置
+});
+```
+
+这将自动：
+
+- 加载你的 `rsbuild.config.ts` 文件
+- 将兼容的 Rsbuild 选项映射到 Rstest 配置
+- 与你提供的任何其他 Rstest 配置合并
+
+默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果你的配置文件在其他地方，请设置 `cwd`：
+
+```ts
+export default defineConfig({
+  extends: withRsbuildConfig({
+    cwd: './packages/my-app',
+  }),
+});
+```
+
+有关高级选项，请参阅 [`@rstest/adapter-rsbuild` 文档](https://www.npmjs.com/package/@rstest/adapter-rsbuild)。
+
+### 配置映射
+
+适配器会自动将这些 Rsbuild 选项映射到 Rstest：
+
+| Rsbuild 选项            | Rstest 等效项         | 说明                                       |
+| ----------------------- | --------------------- | ------------------------------------------ |
+| `name` from environment | `name`                | 环境标识符                                 |
+| `plugins`               | `plugins`             | 插件配置                                   |
+| `source.decorators`     | `source.decorators`   | 装饰器支持                                 |
+| `source.define`         | `source.define`       | 全局常量                                   |
+| `source.include`        | `source.include`      | 源文件包含模式                             |
+| `source.exclude`        | `source.exclude`      | 源文件排除模式                             |
+| `source.tsconfigPath`   | `source.tsconfigPath` | TypeScript 配置文件路径                    |
+| `resolve`               | `resolve`             | 模块解析                                   |
+| `output.cssModules`     | `output.cssModules`   | CSS 模块配置                               |
+| `tools.rspack`          | `tools.rspack`        | Rspack 配置                                |
+| `tools.swc`             | `tools.swc`           | SWC 配置                                   |
+| `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler 链配置                             |
+| `output.target`         | `testEnvironment`     | web 环境为 'happy-dom'，node 环境为 'node' |
+
+### 调试配置
+
+要查看适配器返回的解析配置，可以将其包装并打印结果：
+
+```typescript
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRsbuildConfig()(user);
+    console.log('继承的配置:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## 相关文档
+
+- [`@rstest/adapter-rsbuild` 文档](https://www.npmjs.com/package/@rstest/adapter-rsbuild)
+- [Rsbuild 配置概览](https://rsbuild.dev/config)
+- [Rstest 配置概览](/config/)
