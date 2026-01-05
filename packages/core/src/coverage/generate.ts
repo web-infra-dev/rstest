@@ -66,7 +66,7 @@ export async function generateCoverage(
     }
 
     if (coverage.include?.length) {
-      const coveredFiles = finalCoverageMap.files();
+      const coveredFiles = finalCoverageMap.files().map(normalize);
 
       let isTimeout = false;
 
