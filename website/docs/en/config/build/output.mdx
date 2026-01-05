@@ -4,16 +4,19 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 ## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
 
+- **Type:** `boolean`
+- **Default:** `true`
+
 Whether to output JavaScript files in ES module format.
 
-Rstest outputs and executes test code in CommonJS format by default. If you want to output test code in ES module format, you can enable it through the following configuration:
+Rstest outputs and executes test code in ES module format by default. If you want to output test code in CommonJS format, you can enable it through the following configuration:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   output: {
-    module: true,
+    module: false,
   },
 });
 ```

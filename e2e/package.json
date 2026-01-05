@@ -3,8 +3,8 @@
   "name": "@rstest/tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "rstest",
-    "test:esm": "cross-env RSTEST_OUTPUT_MODULE=true rstest",
+    "test": "rstest run",
+    "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run",
     "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false",
     "typecheck": "tsc --noEmit"
   },

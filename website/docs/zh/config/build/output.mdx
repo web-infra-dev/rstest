@@ -4,16 +4,19 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 ## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
 
+- **类型：** `boolean`
+- **默认值：** `true`
+
 是否以 ES 模块格式输出 JavaScript 文件。
 
-Rstest 默认会以 CommonJS 格式输出并执行测试代码。如果你希望以 ES 模块格式输出测试代码，可以通过如下配置项开启：
+Rstest 默认会以 ES 模块格式输出并执行测试代码。如果你希望以 CommonJS 格式输出测试代码，可以通过如下配置项开启：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   output: {
-    module: true,
+    module: false,
   },
 });
 ```
