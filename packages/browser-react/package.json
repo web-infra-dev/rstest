@@ -1,0 +1,68 @@
+{
+  "name": "@rstest/browser-react",
+  "version": "0.7.8",
+  "type": "module",
+  "description": "React component testing support for Rstest browser mode",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./pure": {
+      "types": "./dist/pure.d.ts",
+      "default": "./dist/pure.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "rstest"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:^",
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "react-dom": "^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@rslib/core": "^0.19.0",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "rstest",
+    "react",
+    "testing",
+    "browser",
+    "component"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/browser-react"
+  },
+  "engines": {
+    "node": ">=18.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
