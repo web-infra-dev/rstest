@@ -21,7 +21,7 @@ import {
   type InspectOptions,
   inspect,
 } from 'node:util';
-import { color, prettyTime } from '../../utils';
+import { color, prettyTime } from '../../utils/helper';
 import type { WorkerRPC } from './rpc';
 
 const RealDate = Date;

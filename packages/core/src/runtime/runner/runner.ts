@@ -20,7 +20,7 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
-import { getTaskNameWithPrefix } from '../../utils';
+import { getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError } from '../util';
 import { handleFixtures } from './fixtures';

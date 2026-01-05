@@ -5,6 +5,7 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
+import { isCI } from 'std-env';
 import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
   castArray,
@@ -113,6 +114,13 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
       };
     }
 
+    if (config.browser) {
+      merged.browser = {
+        ...(merged.browser || {}),
+        ...config.browser,
+      };
+    }
+
     // The following configurations need overrides
     merged.include = config.include ?? merged.include;
     merged.reporters = config.reporters ?? merged.reporters;
@@ -172,6 +180,12 @@ const createDefaultConfig = (): NormalizedConfig => ({
   logHeapUsage: false,
   bail: 0,
   includeTaskLocation: false,
+  browser: {
+    enabled: false,
+    provider: 'playwright',
+    browser: 'chromium',
+    headless: isCI,
+  },
   coverage: {
     exclude: [
       '**/node_modules/**',
@@ -228,6 +242,14 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
           name: config.testEnvironment,
         }
       : merged.testEnvironment;
+
+  merged.browser = {
+    enabled: merged.browser?.enabled ?? false,
+    provider: merged.browser?.provider ?? 'playwright',
+    browser: merged.browser?.browser ?? 'chromium',
+    headless: merged.browser?.headless ?? isCI,
+    port: merged.browser?.port,
+  };
 
   return {
     ...merged,

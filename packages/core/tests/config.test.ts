@@ -1,5 +1,10 @@
 import { mergeRstestConfig, withDefaultConfig } from '../src/config';
 
+// Mock std-env to ensure consistent snapshot across environments
+rs.mock('std-env', () => ({
+  isCI: false,
+}));
+
 describe('mergeRstestConfig', () => {
   it('should merge config correctly with default config', () => {
     const merged = withDefaultConfig({

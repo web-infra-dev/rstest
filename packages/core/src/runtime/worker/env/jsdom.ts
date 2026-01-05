@@ -15,6 +15,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = await import(
       'jsdom'
     );
+
     const {
       html = '<!DOCTYPE html>',
       userAgent,

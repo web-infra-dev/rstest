@@ -38,7 +38,7 @@ class Cli {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stderr += processStd ?? '';
       this.log += processStd ?? '';
-      for (const listener of this.stdoutListeners) {
+      for (const listener of this.stderrListeners) {
         listener();
       }
     });
@@ -108,7 +108,6 @@ export async function runRstestCli({
       env: {
         ...process.env,
         ...(options?.nodeOptions?.env || {}),
-        GITHUB_ACTIONS: 'false',
       },
     },
   } as Options);
@@ -190,7 +189,25 @@ export async function prepareFixtures({
 }) {
   const root = path.dirname(fixturesPath);
   const distPath = fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
-  fs.rmSync(distPath, { recursive: true, force: true });
+
+  // Clean up any leftover fixtures from previous runs
+  // On Windows, file handles may not be fully released, causing EBUSY errors
+  // See: https://github.com/nodejs/node/issues/49985
+  try {
+    fs.rmSync(distPath, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 500,
+    });
+  } catch (err) {
+    if (process.platform !== 'win32') {
+      throw err;
+    }
+    // On Windows, if we can't delete, try to proceed anyway
+    // The copy operation with force: true may still work
+  }
+
   await fs.promises.mkdir(distPath, { recursive: true });
   await fs.promises.cp(fixturesPath, distPath, {
     recursive: true,
@@ -215,7 +232,14 @@ export async function prepareFixtures({
 
   const remove = (filePath: string) => {
     const targetFilepath = path.resolve(root, filePath);
-    fs.rmSync(targetFilepath, { recursive: true, force: true });
+    // Use maxRetries and retryDelay to handle Windows file locking issues
+    // where processes may not have fully released file handles yet
+    fs.rmSync(targetFilepath, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 500,
+    });
   };
 
   const create = (filePath: string, content: string) => {
@@ -229,13 +253,9 @@ export async function prepareFixtures({
   };
 
   const rename = (oldPath: string, newPath: string) => {
-    const relativePath = path.relative(root, oldPath);
-    if (oldPath === relativePath) {
-      const newRelativePath = path.relative(root, newPath);
-      const oldAbsPath = path.join(root, relativePath);
-      const newAbsPath = path.join(root, newRelativePath);
-      fs.renameSync(oldAbsPath, newAbsPath);
-    }
+    const oldAbsPath = path.resolve(root, oldPath);
+    const newAbsPath = path.resolve(root, newPath);
+    fs.renameSync(oldAbsPath, newAbsPath);
   };
 
   return {
