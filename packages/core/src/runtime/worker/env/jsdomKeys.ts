@@ -5,8 +5,6 @@
 // SEE https://github.com/jsdom/jsdom/blob/master/lib/jsdom/living/interfaces.js
 const LIVING_KEYS = [
   'DOMException',
-  'URL',
-  'URLSearchParams',
   'EventTarget',
 
   'NamedNodeMap',
@@ -185,9 +183,6 @@ const LIVING_KEYS = [
   'ShadowRoot',
   'MutationObserver',
   'MutationRecord',
-  'Headers',
-  'AbortController',
-  'AbortSignal',
 
   'Uint8Array',
   'Uint16Array',
@@ -210,6 +205,13 @@ const LIVING_KEYS = [
   'Option',
 
   'CSS',
+
+  // Conflict with Node.js values
+  // 'Headers',
+  // 'AbortController',
+  // 'AbortSignal',
+  // 'URL',
+  // 'URLSearchParams',
 ];
 
 const OTHER_KEYS = [
