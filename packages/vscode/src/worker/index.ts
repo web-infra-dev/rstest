@@ -37,8 +37,9 @@ export class Worker {
           ...initializedConfig,
           ...overrideConfig,
           reporters: [
-            new ProgressReporter(),
+            // place default reporter first to ensure output is flushed
             ['default', { logger: new ProgressLogger() }],
+            new ProgressReporter(),
           ],
           coverage: {
             ...initializedConfig.coverage,
