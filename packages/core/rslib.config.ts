@@ -1,3 +1,4 @@
+import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
@@ -122,16 +123,18 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2021',
       dts: {
-        bundle: false,
+        bundle: true,
       },
       source: {
         entry: {
-          'browser-runtime': './src/browserRuntime.ts',
+          index: './src/browserRuntime.ts',
         },
       },
       output: {
         target: 'web',
+        distPath: 'dist/browser-runtime',
       },
+      plugins: [pluginNodePolyfill()],
     },
   ],
   performance: {

@@ -33,8 +33,8 @@
       "default": "./dist/browser.js"
     },
     "./browser-runtime": {
-      "types": "./dist/browser-runtime.d.ts",
-      "default": "./dist/browser-runtime.js"
+      "types": "./dist/browser-runtime/index.d.ts",
+      "default": "./dist/browser-runtime/index.js"
     },
     "./package.json": {
       "default": "./package.json"
@@ -68,6 +68,7 @@
     "@babel/code-frame": "^7.27.1",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.55.2",
+    "@rsbuild/plugin-node-polyfill": "^1.3.0",
     "@rslib/core": "^0.19.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
@@ -101,6 +102,7 @@
     "strip-ansi": "^7.1.2",
     "tinyglobby": "^0.2.15",
     "tinyspy": "^4.0.4",
+    "url-extras": "^0.1.0",
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
