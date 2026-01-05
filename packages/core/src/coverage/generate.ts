@@ -1,5 +1,5 @@
 import { normalize } from 'pathe';
-import { glob, isDynamicPattern } from 'tinyglobby';
+import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import type { RstestContext, TestFileResult } from '../types';
 import type {
   CoverageMap,
@@ -8,9 +8,10 @@ import type {
 } from '../types/coverage';
 import { logger } from '../utils';
 
-const getIncludedFiles = async (
+export const getIncludedFiles = async (
   coverage: CoverageOptions,
   rootPath: string,
+  fs?: GlobOptions['fs'],
 ): Promise<string[]> => {
   // fix issue with glob not working correctly when exclude path was not in the cwd
   const ignoredPatterns = coverage.exclude?.filter(
@@ -24,8 +25,8 @@ const getIncludedFiles = async (
     absolute: true,
     onlyFiles: true,
     ignore: ignoredPatterns,
-    dot: true,
     expandDirectories: false,
+    fs,
   });
 
   // 'a.ts' should match 'src/a.ts'
