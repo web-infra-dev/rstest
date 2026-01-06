@@ -84,7 +84,7 @@ The adapter automatically maps these Rsbuild options to Rstest:
 
 To see the resolved configuration returned by the adapter, wrap it and log the result:
 
-```typescript
+```ts
 export default defineConfig({
   extends: async (user) => {
     const config = await withRsbuildConfig()(user);
