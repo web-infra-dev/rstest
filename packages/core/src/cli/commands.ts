@@ -114,6 +114,9 @@ export const runRest = async ({
   command: RstestCommand;
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
+  const unexpectedlyExitHandler = (err: any) => {
+    handleUnexpectedExit(rstest, err);
+  };
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);
@@ -124,16 +127,19 @@ export const runRest = async ({
       filters.map(normalize),
     );
 
-    process.on('uncaughtException', (err) => {
-      handleUnexpectedExit(rstest, err);
-    });
+    process.on('uncaughtException', unexpectedlyExitHandler);
 
-    process.on('unhandledRejection', (err) => {
-      handleUnexpectedExit(rstest, err);
-    });
+    process.on('unhandledRejection', unexpectedlyExitHandler);
 
-    if (command === 'watch' && configFilePath) {
-      const { watchFilesForRestart } = await import('../core/restart');
+    if (command === 'watch') {
+      const { watchFilesForRestart, onBeforeRestart } = await import(
+        '../core/restart'
+      );
+
+      onBeforeRestart(() => {
+        process.off('uncaughtException', unexpectedlyExitHandler);
+        process.off('unhandledRejection', unexpectedlyExitHandler);
+      });
 
       watchFilesForRestart({
         rstest,

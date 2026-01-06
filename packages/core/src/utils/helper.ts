@@ -206,4 +206,5 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
   );
 };
 
-export const isDeno: boolean = process.versions?.deno !== undefined;
+export const isDeno: boolean =
+  typeof process !== 'undefined' && process.versions?.deno !== undefined;
