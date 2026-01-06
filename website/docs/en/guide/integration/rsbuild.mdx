@@ -48,7 +48,22 @@ This will automatically:
 - Map compatible Rsbuild options to Rstest configuration
 - Merge with any additional Rstest config you provide
 
-By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, set `cwd`:
+By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
+
+## API
+
+### `withRsbuildConfig(options)`
+
+Returns a configuration function that loads Rsbuild config and converts it to Rstest configuration.
+
+#### `cwd`
+
+- **Type:** `string`
+- **Default:** `process.cwd()`
+
+The `cwd` is passed to Rsbuild's `loadConfig` function. It's the working directory to resolve the Rsbuild config file.
+
+When your Rsbuild config is in a different directory or you are running tests in a monorepo (where your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rsbuild config file from a different directory.
 
 ```ts
 export default defineConfig({
@@ -58,9 +73,97 @@ export default defineConfig({
 });
 ```
 
-See the [`@rstest/adapter-rsbuild` documentation](https://www.npmjs.com/package/@rstest/adapter-rsbuild) for advanced options.
+#### `configPath`
 
-### Configuration mapping
+- **Type:** `string`
+- **Default:** `'./rsbuild.config.ts'`
+
+Path to rsbuild config file.
+
+#### `environmentName`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+The environment name in the `environments` field to use, which will be merged with the common config. Set to a string to use the environment config with a matching name.
+
+By default, the adapter uses the common configuration from Rsbuild. If your Rsbuild config has multiple environment configurations:
+
+```ts
+// rsbuild.config.ts
+export default {
+  source: {
+    define: {
+      'process.env.NODE_ENV': '"development"',
+    },
+  },
+  environments: {
+    test: {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"test"',
+        },
+      },
+    },
+    prod: {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"production"',
+        },
+      },
+    },
+  },
+};
+```
+
+You can then reference specific environment configurations in your Rstest config. Rstest will adapt the Rsbuild shared configuration and the environment configuration with a matching `environmentName` to Rstest format.
+
+```ts
+// For testing the 'test' environment
+export default defineConfig({
+  extends: withRsbuildConfig({
+    environmentName: 'test',
+  }),
+  // test-environment-specific config
+});
+```
+
+When you need to test multiple parts of your application with different configurations independently, you can define multiple Rstest projects. Each project can extend a specific environment configuration by setting the `environmentName` option.
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRsbuildConfig({ environmentName: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRsbuildConfig({ environmentName: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `modifyRsbuildConfig`
+
+- **Type:** `(config: RsbuildConfig) => RsbuildConfig | void`
+- **Default:** `undefined`
+
+Modify the Rsbuild config before it gets converted to Rstest config:
+
+```ts
+export default defineConfig({
+  extends: withRsbuildConfig({
+    modifyRsbuildConfig: (rsbuildConfig) => {
+      delete rsbuildConfig.source?.define;
+      return rsbuildConfig;
+    },
+  }),
+});
+```
+
+## Configuration mapping
 
 The adapter automatically maps these Rsbuild options to Rstest:
 
@@ -80,7 +183,7 @@ The adapter automatically maps these Rsbuild options to Rstest:
 | `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler chain configuration          |
 | `output.target`         | `testEnvironment`     | 'happy-dom' for web, 'node' for node |
 
-### Debug config
+## Debug config
 
 To see the resolved configuration returned by the adapter, wrap it and log the result:
 
@@ -96,6 +199,5 @@ export default defineConfig({
 
 ## Related documentation
 
-- [`@rstest/adapter-rsbuild` documentation](https://www.npmjs.com/package/@rstest/adapter-rsbuild)
 - [Rsbuild configuration overview](https://rsbuild.dev/config)
 - [Rstest configuration overview](/config/)
