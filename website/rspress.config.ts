@@ -2,7 +2,6 @@ import * as path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
-import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
@@ -24,6 +23,7 @@ export default defineConfig({
       checkDeadLinks: true,
     },
   },
+  llms: true,
   search: {
     codeBlocks: true,
   },
@@ -76,7 +76,6 @@ export default defineConfig({
     pluginSitemap({
       domain: siteUrl,
     }),
-    pluginLlms(),
   ],
   builderConfig: {
     plugins: [
