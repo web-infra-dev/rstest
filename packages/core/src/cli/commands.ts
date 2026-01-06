@@ -95,6 +95,15 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
+const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
+  for (const reporter of rstest?.context.reporters || []) {
+    reporter.onExit?.();
+  }
+  logger.error('Failed to run Rstest.');
+  logger.error(formatError(err));
+  process.exit(1);
+};
+
 export const runRest = async ({
   options,
   filters,
@@ -115,6 +124,14 @@ export const runRest = async ({
       filters.map(normalize),
     );
 
+    process.on('uncaughtException', (err) => {
+      handleUnexpectedExit(rstest, err);
+    });
+
+    process.on('unhandledRejection', (err) => {
+      handleUnexpectedExit(rstest, err);
+    });
+
     if (command === 'watch' && configFilePath) {
       const { watchFilesForRestart } = await import('../core/restart');
 
@@ -126,12 +143,7 @@ export const runRest = async ({
     }
     await rstest.runTests();
   } catch (err) {
-    for (const reporter of rstest?.context.reporters || []) {
-      reporter.onExit?.();
-    }
-    logger.error('Failed to run Rstest.');
-    logger.error(formatError(err));
-    process.exit(1);
+    handleUnexpectedExit(rstest, err);
   }
 };
 

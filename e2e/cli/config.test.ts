@@ -57,4 +57,19 @@ describe('test config load', () => {
 
     expectStderrLog(/plugin setup error/);
   });
+
+  it('should print error correctly when worker setup error', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['success.test.ts', '-c', 'fixtures/worker.error.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog(/bad option: --invalid-flag/);
+  });
 });

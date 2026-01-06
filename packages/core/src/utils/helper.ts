@@ -205,3 +205,5 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
     !process.env.CI
   );
 };
+
+export const isDeno: boolean = process.versions?.deno !== undefined;
