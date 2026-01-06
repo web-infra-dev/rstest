@@ -1,6 +1,6 @@
 # @rstest/adapter-rsbuild
 
-Rstest adapter for [Rsbuild](https://rsbuild.dev) configuration. This package allows you to extend your Rstest configuration from Rsbuild config files.
+Rstest adapter for [Rsbuild](https://rsbuild.rs) configuration. This package allows you to extend your Rstest configuration from Rsbuild config files.
 
 ## Installation
 
