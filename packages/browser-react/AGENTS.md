@@ -2,11 +2,20 @@
 
 React component testing support for Rstest browser mode. Provides `render`, `renderHook`, `cleanup`, and `act` utilities for testing React components in a real browser environment.
 
-## Module structure
+## Do
 
-- `src/index.ts` — Default entry with auto-cleanup via `beforeEach`
-- `src/pure.tsx` — Pure exports without auto-cleanup (for manual control)
-- `src/act.ts` — React `act()` wrapper with `IS_REACT_ACT_ENVIRONMENT` management
+- Support React 17, 18, and 19 — ensure code works across all versions
+- Use `act()` for all render/unmount/state update operations
+- Keep this package focused on React rendering lifecycle only
+- Use JSDoc comments for public API functions
+- Default to small, focused diffs
+
+## Don't
+
+- Don't add DOM query utilities (users should use `@testing-library/dom`)
+- Don't add dependencies beyond React peer deps
+- Don't break compatibility with older React versions without discussion
+- Don't use React version-specific APIs without fallbacks
 
 ## Commands
 
@@ -15,19 +24,58 @@ React component testing support for Rstest browser mode. Provides `render`, `ren
 pnpm --filter @rstest/browser-react build
 pnpm --filter @rstest/browser-react dev     # Watch mode
 
-# Typecheck
-pnpm --filter @rstest/browser-react typecheck
+# Type check single file
+pnpm tsc --noEmit src/pure.tsx
+
+# Format single file
+pnpm prettier --write src/pure.tsx
 
 # Run tests
 pnpm --filter @rstest/browser-react test
+```
+
+Note: Prefer file-scoped commands for faster feedback during development.
+
+## Project structure
+
+- `src/index.ts` — Default entry with auto-cleanup via `beforeEach`
+- `src/pure.tsx` — Core implementation (render, renderHook, cleanup, configure)
+- `src/act.ts` — React `act()` wrapper with `IS_REACT_ACT_ENVIRONMENT` management
+
+## Good and bad examples
+
+### Handling React version differences
+
+Good — use feature detection with fallback:
+
+```typescript
+// src/act.ts
+const _act = (React as Record<string, unknown>).act as
+  | ((callback: () => unknown) => Promise<void>)
+  | undefined;
+
+export const act: ActFunction =
+  typeof _act !== 'function'
+    ? async (callback) => {
+        await callback();
+      } // React 17 fallback
+    : async (callback) => {
+        await _act(callback);
+      }; // React 18+
+```
+
+Bad — assume specific React version:
+
+```typescript
+import { act } from 'react'; // Breaks React 17
 ```
 
 ## Exports
 
 ### Default entry (`@rstest/browser-react`)
 
-- `render` — Render a React component
-- `renderHook` — Test React hooks
+- `render` — Render a React component, returns `RenderResult`
+- `renderHook` — Test React hooks, returns `RenderHookResult`
 - `cleanup` — Cleanup mounted components
 - `act` — Wrap state updates
 
@@ -39,36 +87,28 @@ Same exports plus:
 
 - `configure` — Configure render behavior (e.g., `reactStrictMode`)
 
-No auto-cleanup, user must call `cleanup()` manually.
+No auto-cleanup — user must call `cleanup()` manually.
 
-## Usage with @testing-library/dom
-
-This package provides React rendering utilities. For DOM queries (`getByRole`, `getByText`, etc.), users can optionally install `@testing-library/dom`:
+## Key types
 
 ```typescript
-import { render } from '@rstest/browser-react'
-import { screen } from '@testing-library/dom'
+interface RenderResult {
+  container: HTMLElement;
+  baseElement: HTMLElement;
+  unmount: () => Promise<void>;
+  rerender: (ui: ReactNode) => Promise<void>;
+  asFragment: () => DocumentFragment;
+}
 
-test('example', async () => {
-  await render(<Button>Click me</Button>)
-  expect(screen.getByRole('button')).toBeTruthy()
-})
+interface RenderOptions {
+  container?: HTMLElement;
+  baseElement?: HTMLElement;
+  wrapper?: JSXElementConstructor<{ children: ReactNode }>;
+}
 ```
 
-## Do
+## When stuck
 
-- Keep this package focused on React rendering lifecycle
-- Use `act()` for all render/unmount operations
-- Support React 17, 18, and 19
-
-## Don't
-
-- Don't add DOM query utilities (users can use @testing-library/dom)
-- Don't add dependencies beyond React peer deps
-- Don't break compatibility with older React versions without discussion
-
-## Key files
-
-- `src/pure.tsx` — Core implementation
-- `src/act.ts` — React act wrapper
-- `src/index.ts` — Auto-cleanup entry
+- Ask clarifying questions or propose a plan
+- Check React version compatibility before making changes
+- Reference `@testing-library/react` for API design inspiration

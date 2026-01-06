@@ -40,13 +40,14 @@
     "dev": "rslib build --watch"
   },
   "dependencies": {
-    "@rsbuild/core": "1.7.1",
+    "@jridgewell/trace-mapping": "0.3.31",
+    "convert-source-map": "^2.0.0",
     "open-editor": "^4.0.0",
+    "pathe": "^2.0.3",
     "sirv": "^2.0.4",
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@jridgewell/trace-mapping": "0.3.31",
     "@rslib/core": "^0.19.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
@@ -56,8 +57,6 @@
     "@types/ws": "^8.18.1",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "2.9.0",
-    "convert-source-map": "^2.0.0",
-    "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.3",
     "playwright": "^1.49.1"

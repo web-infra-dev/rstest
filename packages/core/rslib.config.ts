@@ -133,6 +133,30 @@ export default defineConfig({
       output: {
         target: 'web',
         distPath: 'dist/browser-runtime',
+        // Enable sourcemap for browser runtime to support inline snapshot
+        // When compiled by @rstest/browser, extractSourceMap merges this sourcemap
+        sourceMap: true,
+        minify: {
+          jsOptions: {
+            minimizerOptions: {
+              mangle: false,
+              minify: false,
+              compress: {
+                defaults: false,
+                unused: true,
+                dead_code: true,
+                toplevel: true,
+                // fix `Couldn't infer stack frame for inline snapshot` error
+                // should keep function name __INLINE_SNAPSHOT__ used to filter stack trace
+                keep_fnames: true,
+              },
+              format: {
+                comments: 'some',
+                preserve_annotations: true,
+              },
+            },
+          },
+        },
       },
       plugins: [pluginNodePolyfill()],
     },
