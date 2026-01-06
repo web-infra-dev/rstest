@@ -1012,6 +1012,7 @@ const createBrowserRuntime = async ({
     const playwright = await import('playwright');
     browserLauncher = playwright[browserName];
   } catch (_error) {
+    wss.close();
     await devServer.close();
     throw _error;
   }
@@ -1031,6 +1032,7 @@ const createBrowserRuntime = async ({
           : undefined,
     });
   } catch (_error) {
+    wss.close();
     await devServer.close();
     throw _error;
   }
