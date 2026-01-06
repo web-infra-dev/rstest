@@ -10,9 +10,9 @@
   },
   "devDependencies": {
     "@rsbuild/plugin-sass": "^1.4.0",
-    "@rspress/core": "2.0.0-rc.3",
-    "@rspress/plugin-llms": "2.0.0-rc.3",
-    "@rspress/plugin-algolia": "2.0.0-rc.3",
+    "@rspress/core": "2.0.0-rc.4",
+    "@rspress/plugin-llms": "2.0.0-rc.4",
+    "@rspress/plugin-algolia": "2.0.0-rc.4",
     "@rstack-dev/doc-ui": "1.12.2",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",
