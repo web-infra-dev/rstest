@@ -78,7 +78,7 @@ const sourceMappingURLRegex = new RegExp(
 /**
  * Extract source mapping URL from code comments
  * @param {string} code source code content
- * @returns {SourceMappingURL} source mapping information
+ * @returns {string | undefined} source mapping information
  */
 function getSourceMappingURL(code: string): string | undefined {
   const lines = code.split(/^/m);
@@ -96,11 +96,11 @@ function getSourceMappingURL(code: string): string | undefined {
   return sourceMappingURL ? decodeURI(sourceMappingURL) : sourceMappingURL;
 }
 
-export async function registerSourceMapURL(
+export function registerSourceMapURL(
   filename: string,
   code: string,
   sourcemapUrlCache: Map<string, string | undefined>,
-): Promise<void> {
+): void {
   // process js/cjs/mjs file only
   if (!filename.endsWith('js')) return;
 
@@ -121,8 +121,10 @@ export async function transformCoverage(
         let url = sourcemapUrlCache.get(filename);
         if (!url) {
           const { readFile } = await import('node:fs/promises');
-          const content = await readFile(filename, 'utf8');
-          url = getSourceMappingURL(content);
+          url = await readFile(filename, 'utf8').then(
+            (content) => getSourceMappingURL(content),
+            () => undefined,
+          );
         }
         sourcemapUrlCache.set(filename, url);
       }),
