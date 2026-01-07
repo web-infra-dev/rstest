@@ -115,6 +115,7 @@ const ensureNodeRemoteImpl = async () => {
     ]),
   );
   await waitForUrl(remoteEntryUrl);
+  await run(nodeLocalDir, 'npx', ['pnpm', 'build:node']);
 };
 
 declare global {
@@ -129,6 +130,7 @@ declare global {
 
 const workspaceRoot = resolve(__dirname, '..', '..');
 const componentAppDir = resolve(workspaceRoot, 'component-app');
+const nodeLocalDir = resolve(workspaceRoot, 'node-local-remote');
 const lockFile = resolve(workspaceRoot, '.rstest-mf-node-remote.lock');
 const remoteEntryUrl = 'http://localhost:3003/remoteEntry.js';
 

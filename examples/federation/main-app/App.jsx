@@ -1,12 +1,14 @@
 import Button from 'component-app/Button';
 import Dialog from 'component-app/Dialog';
 import ToolTip from 'component-app/ToolTip';
+import NodeLocal from 'node-local-remote/test';
 import React from 'react';
 export default class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       dialogVisible: false,
+      nodeLocalContent: String(NodeLocal || ''),
     };
     this.handleClick = this.handleClick.bind(this);
     this.handleSwitchVisible = this.handleSwitchVisible.bind(this);
@@ -45,6 +47,8 @@ export default class App extends React.Component {
         />
         <h4>hover me please!</h4>
         <ToolTip content="hover me please" message="Hello,world!" />
+        <h4>Node-local remote:</h4>
+        <p>{this.state.nodeLocalContent}</p>
       </div>
     );
   }

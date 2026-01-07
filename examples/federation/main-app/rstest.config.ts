@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { ModuleFederationPlugin } from '@module-federation/enhanced/rspack';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
@@ -26,21 +27,32 @@ export default defineConfig({
         // Avoid hard-coding dev-server URLs for test builds.
         publicPath: 'auto',
       };
+      (config as any).builtins ??= {} as any;
+      (config as any).builtins.define = {
+        ...(((config as any).builtins.define as any) ?? {}),
+        __NODE_LOCAL_REMOTE__: 'true',
+      } as any;
 
       config.plugins ??= [];
+      const nodeLocalEntry = path.resolve(
+        __dirname,
+        '../../node-local-remote/dist-node/remoteEntry.js',
+      );
+
       config.plugins.push(
         new ModuleFederationPlugin({
           name: 'main_app',
           library: { type: 'commonjs-module', name: 'main_app' },
           remoteType: 'script',
           remotes: {
-            // Use a Node-targeted remote build (dist-node, served on 3003).
             'component-app':
               'component_app@http://localhost:3003/remoteEntry.js',
+            'node-local-remote': `commonjs ${nodeLocalEntry}`,
           },
+          runtimePlugins: ['@module-federation/node/runtimePlugin'],
           shared: {
-            react: { singleton: true, requiredVersion: '17.0.2' },
-            'react-dom': { singleton: true, requiredVersion: '17.0.2' },
+            react: { singleton: true, requiredVersion: '19.2.3' },
+            'react-dom': { singleton: true, requiredVersion: '19.2.3' },
           },
         }),
       );
