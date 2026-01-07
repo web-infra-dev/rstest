@@ -1,20 +1,18 @@
+const { HtmlRspackPlugin } = require('@rspack/core');
 const {
-  HtmlRspackPlugin,
-} = require('@rspack/core');
-const {ModuleFederationPlugin} = require('@module-federation/enhanced/rspack')
+  ModuleFederationPlugin,
+} = require('@module-federation/enhanced/rspack');
 
-const path = require('path');
 module.exports = {
   entry: './index.js',
   mode: 'development',
   devtool: 'hidden-source-map',
-  target: 'async-node',
   output: {
     publicPath: 'http://localhost:3001/',
     clean: true,
   },
   resolve: {
-    extensions: [".jsx", ".js", ".json", ".wasm"]
+    extensions: ['.jsx', '.js', '.json', '.wasm'],
   },
   experiments: {
     css: true,
@@ -52,8 +50,6 @@ module.exports = {
       name: 'component_app',
       filename: 'remoteEntry.js',
       library: { type: 'commonjs-module' },
-      // Required for async-node remotes that load chunks over HTTP in Node.
-      runtimePlugins: [path.resolve(__dirname, '../runtimePlugin.js')],
       exposes: {
         './Button': './src/Button.jsx',
         './Dialog': './src/Dialog.jsx',
@@ -61,8 +57,8 @@ module.exports = {
         './ToolTip': './src/ToolTip.jsx',
       },
     }),
-	    new HtmlRspackPlugin({
-	      template: './public/index.html',
-	    }),
+    new HtmlRspackPlugin({
+      template: './public/index.html',
+    }),
   ],
 };

@@ -27,9 +27,6 @@ const styleMapping = {
   },
 };
 export default class Button extends React.Component {
-  constructor(props) {
-    super(props);
-  }
   render() {
     var type = this.props.type || 'primary';
     return (

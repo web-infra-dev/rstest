@@ -19,9 +19,6 @@ const boxStyle = {
   backgroundColor: '#fff',
 };
 export default class Dialog extends React.Component {
-  constructor(props) {
-    super(props);
-  }
   render() {
     if (this.props.visible) {
       return (

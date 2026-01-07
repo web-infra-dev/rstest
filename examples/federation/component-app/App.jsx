@@ -1,7 +1,7 @@
 import React from 'react';
-import Logo from './src/Logo';
-import Dialog from './src/Dialog';
 import Button from './src/Button';
+import Dialog from './src/Dialog';
+import Logo from './src/Logo';
 export default class App extends React.Component {
   constructor(props) {
     super(props);
@@ -9,7 +9,7 @@ export default class App extends React.Component {
       dialogVisible: false,
     };
     this.handleClick = this.handleClick.bind(this);
-    this.HanldeSwitchVisible = this.HanldeSwitchVisible.bind(this);
+    this.handleSwitchVisible = this.handleSwitchVisible.bind(this);
   }
   handleClick(ev) {
     console.log(ev);
@@ -17,7 +17,7 @@ export default class App extends React.Component {
       dialogVisible: true,
     });
   }
-  HanldeSwitchVisible(visible) {
+  handleSwitchVisible(visible) {
     this.setState({
       dialogVisible: visible,
     });
@@ -30,8 +30,13 @@ export default class App extends React.Component {
         <Button />
         <br />
 
-        <button onClick={this.handleClick}>click to open dialog</button>
-        <Dialog switchVisible={this.HanldeSwitchVisible} visible={this.state.dialogVisible} />
+        <button type="button" onClick={this.handleClick}>
+          click to open dialog
+        </button>
+        <Dialog
+          switchVisible={this.handleSwitchVisible}
+          visible={this.state.dialogVisible}
+        />
       </div>
     );
   }

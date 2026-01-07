@@ -1,5 +1,7 @@
-const { ModuleFederationPlugin } = require('@module-federation/enhanced/rspack');
-const path = require('path');
+const {
+  ModuleFederationPlugin,
+} = require('@module-federation/enhanced/rspack');
+const path = require('node:path');
 
 /**
  * Node-targeted remote build used by Rstest's Module Federation test.
@@ -59,7 +61,7 @@ module.exports = {
       filename: 'remoteEntry.js',
       library: { type: 'commonjs-module' },
       // Required for async-node remotes that load chunks over HTTP in Node.
-      runtimePlugins: [path.resolve(__dirname, '../runtimePlugin.js')],
+      runtimePlugins: ['@module-federation/node/runtimePlugin'],
       exposes: {
         './Button': './src/Button.jsx',
         './Dialog': './src/Dialog.jsx',
