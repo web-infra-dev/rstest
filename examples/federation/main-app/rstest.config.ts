@@ -9,6 +9,12 @@ export default defineConfig({
   testEnvironment: 'jsdom',
   plugins: [pluginReact()],
   federation: true,
+  output: {
+    module: false,
+  },
+  dev: {
+    writeToDisk: true,
+  },
   tools: {
     rspack: (config) => {
       config.plugins ??= [];
