@@ -52,6 +52,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           console.error(
             `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
           );
+          process.exitCode = 1;
           return undefined;
         }
       }),
