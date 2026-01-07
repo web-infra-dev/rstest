@@ -45,7 +45,3 @@ tests-dist/
 .vscode-test/
 packages/vscode/*.vsix
 packages/vscode/icon.png
-examples/federation/main-app/test/app-ssr.test.ts
-examples/federation/main-app/test/component-remotes.dynamic.test.ts
-examples/federation/main-app/test/node-local.dynamic.test.ts
-examples/federation/main-app/test/node-local.static.test.ts
