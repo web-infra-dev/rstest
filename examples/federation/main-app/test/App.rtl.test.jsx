@@ -13,7 +13,9 @@ test('renders main-app with federated remotes', async () => {
     ),
   ).toBeInTheDocument();
 
-  expect(screen.getByText(/Buttons:/i)).toBeInTheDocument();
+  expect(
+    await screen.findByRole('button', { name: /primary Button/i }),
+  ).toBeInTheDocument();
 
   expect(screen.getByText(/hover me please/i)).toBeInTheDocument();
 

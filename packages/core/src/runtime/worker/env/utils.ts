@@ -72,10 +72,12 @@ export function installGlobal(
     });
   }
 
-  global.window = global;
-  global.self = global;
-  global.top = global;
-  global.parent = global;
+  // Point window-like globals at the real DOM window. This matters for runtimes
+  // that evaluate code in the DOM context (e.g. <script> loading in JSDOM).
+  global.window = win;
+  global.self = win;
+  global.top = win;
+  global.parent = win;
 
   if (global.global) {
     global.global = global;
@@ -84,7 +86,7 @@ export function installGlobal(
   // rewrite defaultView to reference the same global context
   if (global.document?.defaultView) {
     Object.defineProperty(global.document, 'defaultView', {
-      get: () => global,
+      get: () => win,
       enumerable: true,
       configurable: true,
     });

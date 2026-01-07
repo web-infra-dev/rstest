@@ -1,7 +1,6 @@
 const {
   ModuleFederationPlugin,
 } = require('@module-federation/enhanced/rspack');
-const { DefinePlugin } = require('@rspack/core');
 
 module.exports = {
   entry: './index.js',
@@ -47,6 +46,5 @@ module.exports = {
         'react-dom': { singleton: true, requiredVersion: '19.2.3' },
       },
     }),
-    new DefinePlugin({ __NODE_LOCAL_REMOTE__: JSON.stringify(true) }),
   ],
 };

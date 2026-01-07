@@ -1,4 +1,4 @@
-const { HtmlRspackPlugin, DefinePlugin } = require('@rspack/core');
+const { HtmlRspackPlugin } = require('@rspack/core');
 const {
   ModuleFederationPlugin,
 } = require('@module-federation/enhanced/rspack');
@@ -37,7 +37,6 @@ module.exports = {
           'node_local_remote@http://localhost:3004/remoteEntry.js',
       },
     }),
-    new DefinePlugin({ __NODE_LOCAL_REMOTE__: JSON.stringify(true) }),
     new HtmlRspackPlugin({ template: './public/index.html' }),
   ],
 };

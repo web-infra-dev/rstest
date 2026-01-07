@@ -91,7 +91,9 @@ const ensureNodeRemoteImpl = async () => {
     500,
   ));
 
-  if (!need3003 && !need3001) return;
+  if (!need3003 && !need3001) {
+    return;
+  }
 
   // Try to become the owner (cross-worker).
   let fd: number | null = null;
@@ -130,6 +132,7 @@ const ensureNodeRemoteImpl = async () => {
   globalThis.__RSTEST_MF_CHILDREN__.push(
     start('component-app(web)', componentAppDir, 'pnpm', ['serve']),
   );
+
   // Wait for endpoints
   await waitForUrl(remoteEntryUrl);
   await waitForUrl('http://localhost:3001/remoteEntry.js');
@@ -177,12 +180,14 @@ const start = (name: string, cwd: string, cmd: string, args: string[]) => {
 const run = async (cwd: string, cmd: string, args: string[]) => {
   const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: workerEnv });
   await new Promise<void>((resolveRun, rejectRun) => {
-    child.once('exit', (code) => {
-      if (code === 0) resolveRun();
-      else
+    child.once('exit', (code: number | null) => {
+      if (code === 0) {
+        resolveRun();
+      } else {
         rejectRun(
           new Error(`${cmd} ${args.join(' ')} exited with code ${code}`),
         );
+      }
     });
     child.once('error', rejectRun);
   });
@@ -190,6 +195,7 @@ const run = async (cwd: string, cmd: string, args: string[]) => {
 
 export const cleanupNodeRemote = async () => {
   // Kill by port first (covers detached/extra processes).
+  await killPort(3001).catch(() => {});
   await killPort(3003).catch(() => {});
 
   try {
@@ -208,6 +214,8 @@ export const cleanupNodeRemote = async () => {
 };
 
 export const ensureNodeRemote = async () => {
+  console.log('[Federation Setup] Starting federation setup...');
+
   // Keep state across test files within the same worker process.
   globalThis.__RSTEST_MF_CHILDREN__ ??= [];
   globalThis.__RSTEST_MF_OWNER__ ??= false;
