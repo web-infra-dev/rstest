@@ -1,6 +1,31 @@
 /** biome-ignore-all lint/complexity/useArrowFunction: <follow webpack runtime code convention> */
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
+// Some async-node outputs (including Module Federation runtimes) are externalized to
+// `__rstest_dynamic_import__(<abs-path>)`. Those chunks can be evaluated via vm/eval
+// and will not have access to the worker's function-argument injection. Provide a
+// safe default that relies on Node's native dynamic import.
+//
+// The worker will still override this with a richer implementation when available.
+try {
+  globalThis.__rstest_dynamic_import__ =
+    globalThis.__rstest_dynamic_import__ ||
+    function (specifier, importAttributes) {
+      return import(specifier, importAttributes);
+    };
+  // Ensure an unscoped identifier exists for strict-mode evaluated scripts.
+  // This must be done via the main context so that code evaluated later via
+  // vm/eval can reference `__rstest_dynamic_import__`.
+  // eslint-disable-next-line no-var
+  var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    require('vm').runInThisContext(
+      'var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
+    );
+  } catch {}
+} catch {}
+
 const originalWebpackRequire = __webpack_require__;
 __webpack_require__ = new Proxy(
   function (...args) {
@@ -16,6 +41,31 @@ __webpack_require__ = new Proxy(
   },
   {
     set(target, property, value) {
+      // Ensure chunk handler placeholders never throw before federation runtime
+      // initializes. The bundler assigns `__webpack_require__.f = {}` early and
+      // later runtimes do `__webpack_require__.f.consumes = __webpack_require__.f.consumes || thrower`.
+      // Pre-seeding those keys prevents the thrower from being installed.
+      if (property === 'f' && value && typeof value === 'object') {
+        value.consumes ??= function () {};
+        value.remotes ??= function () {};
+
+        // Module Federation's Node runtime plugin may try to patch chunk loading
+        // handlers like `readFileVm` / `require` to load chunks via native require.
+        // That breaks Rstest because chunks must be evaluated inside the same
+        // runtime instance to preserve mocks and shims.
+        //
+        // Wrap `__webpack_require__.f` so once Rspack installs our chunk loader,
+        // it can't be replaced by other runtimes.
+        value = new Proxy(value, {
+          set(obj, key, val) {
+            if ((key === 'readFileVm' || key === 'require') && obj[key]) {
+              return true;
+            }
+            obj[key] = val;
+            return true;
+          },
+        });
+      }
       target[property] = value;
       originalWebpackRequire[property] = value;
       return true;
@@ -31,6 +81,23 @@ __webpack_require__ = new Proxy(
 
 __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_factories = {};
+
+// Module Federation can attach placeholder chunk handlers during bootstrap that
+// are later overridden by the federation runtime once it initializes. Our test
+// runtime eagerly calls `__webpack_require__.e()` which iterates over all
+// `__webpack_require__.f[...]` handlers; if any handler is still a placeholder
+// that throws, chunk loading will fail before federation has a chance to patch
+// it. Make placeholder handlers no-ops until the real runtime replaces them.
+const __rstest_noop_chunk_handler__ = function () {};
+if (typeof __webpack_require__.f === 'object' && __webpack_require__.f) {
+  for (const k of ['consumes', 'remotes']) {
+    if (typeof __webpack_require__.f[k] !== 'function') continue;
+    const src = Function.prototype.toString.call(__webpack_require__.f[k]);
+    if (src.includes('should have __webpack_require__.f.')) {
+      __webpack_require__.f[k] = __rstest_noop_chunk_handler__;
+    }
+  }
+}
 
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id) => {

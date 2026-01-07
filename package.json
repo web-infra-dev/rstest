@@ -14,7 +14,8 @@
     "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
-    "prepare": "pnpm run build && simple-git-hooks"
+    "prepare": "pnpm run build && simple-git-hooks",
+    "test:feederation": "pnpm -C examples/federation test"
   },
   "simple-git-hooks": {
     "pre-commit": "npx nano-staged"

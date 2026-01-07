@@ -1,4 +1,5 @@
 import { createRequire as createNativeRequire } from 'node:module';
+import fs from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
@@ -38,22 +39,32 @@ const createRequire = (
     const joinedPath = isRelativePath(id)
       ? path.join(currentDirectory, id)
       : id;
+    const normalizedJoinedPath = path.normalize(joinedPath);
 
-    const content = assetFiles[joinedPath] || latestAssetFiles[joinedPath];
+    // Prefer in-memory assets produced by the bundler (dev server output).
+    // For Module Federation / async-node, runtime may `require()` chunks from disk,
+    // so fall back to reading from filesystem to keep evaluation inside our VM
+    // wrapper (ensures `__rstest_dynamic_import__` and other shims exist).
+    const content =
+      assetFiles[normalizedJoinedPath] ||
+      latestAssetFiles[normalizedJoinedPath] ||
+      (isRelativePath(id) && fs.existsSync(normalizedJoinedPath)
+        ? fs.readFileSync(normalizedJoinedPath, 'utf8')
+        : undefined);
 
     if (content) {
       try {
         return cacheableLoadModule({
           codeContent: content,
-          testPath: joinedPath,
-          distPath: joinedPath,
+          testPath: normalizedJoinedPath,
+          distPath: normalizedJoinedPath,
           rstestContext,
           assetFiles,
           interopDefault,
         });
       } catch (err) {
         logger.error(
-          `load file ${joinedPath} failed:\n`,
+          `load file ${normalizedJoinedPath} failed:\n`,
           err instanceof Error ? err.message : err,
         );
       }
@@ -221,6 +232,28 @@ export const loadModule = ({
     __filename: testPath,
     ...rstestContext,
   };
+
+  // Some runtimes (notably Module Federation's Node runtime plugin) may evaluate code
+  // via `vm`/`eval` wrappers that do not preserve the function-argument injection
+  // we do below. Expose the dynamic import shim on globalThis as a fallback so
+  // those evaluated chunks can still resolve external modules.
+  //
+  // This is intentionally best-effort and scoped to the worker process.
+  try {
+    (globalThis as any).__rstest_dynamic_import__ = context.__rstest_dynamic_import__;
+  } catch {
+    // ignore
+  }
+  try {
+    // Ensure a global binding exists for strict-mode scripts evaluated via vm/eval.
+    // Note: assigning on globalThis alone is not enough because evaluated scripts
+    // may refer to an unscoped identifier `__rstest_dynamic_import__`.
+    vm.runInThisContext(
+      'globalThis.__rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__ || undefined; var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
+    );
+  } catch {
+    // ignore
+  }
 
   const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
   const code = `${codeDefinition}${codeContent}\n}`;

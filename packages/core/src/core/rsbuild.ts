@@ -68,7 +68,7 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {}, coverage },
+    normalizedConfig: { isolate, dev = {}, coverage, federation },
   } = context;
 
   // Filter out browser mode projects - this rsbuild is for node mode only
@@ -78,7 +78,9 @@ export const prepareRsbuild = async (
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
-  const writeToDisk = dev.writeToDisk || debugMode;
+  // Module Federation's Node runtime can load chunks via fs/vm, so the test build
+  // artifacts need to exist on disk (even though rsbuild runs in middlewareMode).
+  const writeToDisk = dev.writeToDisk || debugMode || Boolean(federation);
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
