@@ -106,16 +106,25 @@ const ensureNodeRemoteImpl = async () => {
   }
 
   // Owner path: build, serve, wait.
+  void killPort(3001).catch(() => {});
   void killPort(3003).catch(() => {});
-  await run(componentAppDir, 'npx', ['pnpm', 'build:node']);
+  void killPort(3004).catch(() => {});
+  await run(componentAppDir, 'pnpm', ['build:node']);
+  await run(componentAppDir, 'pnpm', ['build']);
   globalThis.__RSTEST_MF_CHILDREN__.push(
-    start('component-app(node)', componentAppDir, 'npx', [
-      'pnpm',
-      'serve:node',
-    ]),
+    start('component-app(node)', componentAppDir, 'pnpm', ['serve:node']),
+  );
+  globalThis.__RSTEST_MF_CHILDREN__.push(
+    start('component-app(web)', componentAppDir, 'pnpm', ['serve']),
   );
   await waitForUrl(remoteEntryUrl);
-  await run(nodeLocalDir, 'npx', ['pnpm', 'build:node']);
+  await run(nodeLocalDir, 'pnpm', ['build:node']);
+  await run(nodeLocalDir, 'pnpm', ['build']);
+  globalThis.__RSTEST_MF_CHILDREN__.push(
+    start('node-local-remote(web)', nodeLocalDir, 'pnpm', ['serve']),
+  );
+  await waitForUrl('http://localhost:3001/remoteEntry.js');
+  await waitForUrl('http://localhost:3004/remoteEntry.js');
 };
 
 declare global {

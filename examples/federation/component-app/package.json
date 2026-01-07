@@ -21,7 +21,8 @@
     "serve": "14.2.3"
   },
   "dependencies": {
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "@module-federation/node": "^2.7.26",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   }
 }
