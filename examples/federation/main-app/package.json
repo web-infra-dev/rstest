@@ -23,6 +23,7 @@
     "@rsbuild/plugin-react": "^1.4.2",
     "@rspack/cli": "1.6.8",
     "@rspack/core": "1.6.8",
+    "@testing-library/react": "14.0.0",
     "kill-port": "^2.0.1",
     "concurrently": "8.2.2",
     "serve": "14.2.3"
