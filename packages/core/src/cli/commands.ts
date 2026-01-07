@@ -95,6 +95,15 @@ const applyCommonOptions = (cli: CAC) => {
     );
 };
 
+const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
+  for (const reporter of rstest?.context.reporters || []) {
+    reporter.onExit?.();
+  }
+  logger.error('Failed to run Rstest.');
+  logger.error(formatError(err));
+  process.exit(1);
+};
+
 export const runRest = async ({
   options,
   filters,
@@ -105,6 +114,9 @@ export const runRest = async ({
   command: RstestCommand;
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
+  const unexpectedlyExitHandler = (err: any) => {
+    handleUnexpectedExit(rstest, err);
+  };
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);
@@ -115,8 +127,19 @@ export const runRest = async ({
       filters.map(normalize),
     );
 
-    if (command === 'watch' && configFilePath) {
-      const { watchFilesForRestart } = await import('../core/restart');
+    process.on('uncaughtException', unexpectedlyExitHandler);
+
+    process.on('unhandledRejection', unexpectedlyExitHandler);
+
+    if (command === 'watch') {
+      const { watchFilesForRestart, onBeforeRestart } = await import(
+        '../core/restart'
+      );
+
+      onBeforeRestart(() => {
+        process.off('uncaughtException', unexpectedlyExitHandler);
+        process.off('unhandledRejection', unexpectedlyExitHandler);
+      });
 
       watchFilesForRestart({
         rstest,
@@ -126,12 +149,7 @@ export const runRest = async ({
     }
     await rstest.runTests();
   } catch (err) {
-    for (const reporter of rstest?.context.reporters || []) {
-      reporter.onExit?.();
-    }
-    logger.error('Failed to run Rstest.');
-    logger.error(formatError(err));
-    process.exit(1);
+    handleUnexpectedExit(rstest, err);
   }
 };
 
