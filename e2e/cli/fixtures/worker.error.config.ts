@@ -4,4 +4,5 @@ export default defineConfig({
   pool: {
     execArgv: ['--invalid-flag'],
   },
+  disableConsoleIntercept: true,
 });
