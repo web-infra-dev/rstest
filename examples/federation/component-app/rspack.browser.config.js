@@ -19,32 +19,21 @@ module.exports = {
   },
   module: {
     rules: [
-      {
-        test: /\.(jpg|png|gif|jpeg)$/,
-        type: 'asset/resource',
-      },
+      { test: /\.(jpg|png|gif|jpeg)$/, type: 'asset/resource' },
       {
         test: /\.(js|jsx)$/,
         use: {
           loader: 'builtin:swc-loader',
           options: {
             jsc: {
-              parser: {
-                syntax: 'ecmascript',
-                jsx: true,
-              },
-              transform: {
-                react: {
-                  runtime: 'automatic',
-                },
-              },
+              parser: { syntax: 'ecmascript', jsx: true },
+              transform: { react: { runtime: 'automatic' } },
             },
           },
         },
       },
     ],
   },
-
   plugins: [
     new ModuleFederationPlugin({
       name: 'component_app',
@@ -57,8 +46,6 @@ module.exports = {
         './ToolTip': './src/ToolTip.jsx',
       },
     }),
-    new HtmlRspackPlugin({
-      template: './public/index.html',
-    }),
+    new HtmlRspackPlugin({ template: './public/index.html' }),
   ],
 };

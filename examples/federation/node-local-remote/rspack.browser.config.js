@@ -16,9 +16,7 @@ module.exports = {
     new ModuleFederationPlugin({
       name: 'node_local_remote',
       filename: 'remoteEntry.js',
-      exposes: {
-        './test': './src/test.js',
-      },
+      exposes: { './test': './src/test.js' },
     }),
   ],
 };

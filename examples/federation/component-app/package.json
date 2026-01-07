@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "rspack build --config rspack.config.js ",
+    "build": "rspack build --config rspack.browser.config.js ",
     "build:node": "rspack build --config rspack.node.config.js",
     "serve": "serve dist -p 3001",
     "serve:node": "serve dist-node -p 3003",

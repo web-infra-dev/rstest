@@ -13,25 +13,15 @@ module.exports = {
   },
   module: {
     rules: [
-      {
-        test: /\.(jpg|png|gif|jpeg)$/,
-        type: 'asset/resource',
-      },
+      { test: /\.(jpg|png|gif|jpeg)$/, type: 'asset/resource' },
       {
         test: /\.(js|jsx)$/,
         use: {
           loader: 'builtin:swc-loader',
           options: {
             jsc: {
-              parser: {
-                syntax: 'ecmascript',
-                jsx: true,
-              },
-              transform: {
-                react: {
-                  runtime: 'automatic',
-                },
-              },
+              parser: { syntax: 'ecmascript', jsx: true },
+              transform: { react: { runtime: 'automatic' } },
             },
           },
         },
@@ -47,11 +37,7 @@ module.exports = {
           'node_local_remote@http://localhost:3004/remoteEntry.js',
       },
     }),
-    new DefinePlugin({
-      __NODE_LOCAL_REMOTE__: JSON.stringify(true),
-    }),
-    new HtmlRspackPlugin({
-      template: './public/index.html',
-    }),
+    new DefinePlugin({ __NODE_LOCAL_REMOTE__: JSON.stringify(true) }),
+    new HtmlRspackPlugin({ template: './public/index.html' }),
   ],
 };
