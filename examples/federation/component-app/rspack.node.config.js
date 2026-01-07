@@ -18,7 +18,7 @@ module.exports = {
   output: {
     // The Node remote runtime resolves chunk URLs relative to the remoteEntry URL
     // when publicPath is explicitly set. `auto` can throw in non-browser contexts.
-    publicPath: 'http://localhost:3003/',
+    publicPath: 'http://localhost:3001/',
     clean: true,
     path: path.resolve(__dirname, 'dist-node'),
   },
@@ -59,6 +59,10 @@ module.exports = {
     new ModuleFederationPlugin({
       name: 'component_app',
       filename: 'remoteEntry.js',
+      // This remote is consumed by Rstest using `remoteType: 'script'` while tests
+      // run under JSDOM. We force the MF runtime to use its Node loader (vm eval),
+      // so the remoteEntry must export through CommonJS for the loader to return
+      // the container interface (get/init).
       library: { type: 'commonjs-module' },
       // Required for async-node remotes that load chunks over HTTP in Node.
       runtimePlugins: ['@module-federation/node/runtimePlugin'],

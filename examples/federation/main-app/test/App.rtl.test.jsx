@@ -17,7 +17,9 @@ test('renders main-app with federated remotes', async () => {
     await screen.findByRole('button', { name: /primary Button/i }),
   ).toBeInTheDocument();
 
-  expect(screen.getByText(/hover me please/i)).toBeInTheDocument();
+  // Both a heading ("hover me please!") and the tooltip trigger ("hover me please")
+  // exist; assert on the actual tooltip trigger element to avoid ambiguity.
+  expect(screen.getByText('hover me please')).toBeInTheDocument();
 
   expect(screen.getByText('Node-local remote:')).toBeInTheDocument();
   expect(screen.getByText('module from node-local-remote')).toBeInTheDocument();

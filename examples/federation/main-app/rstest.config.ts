@@ -24,7 +24,7 @@ export default defineConfig({
           remoteType: 'script',
           remotes: {
             'component-app':
-              'component_app@http://localhost:3003/remoteEntry.js',
+              'component_app@http://localhost:3001/remoteEntry.js',
             'node-local-remote': `commonjs ${path.resolve(
               __dirname,
               '../node-local-remote/dist-node/remoteEntry.js',

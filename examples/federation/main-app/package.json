@@ -7,7 +7,7 @@
     "build": "rspack build --config rspack.browser.config.js",
     "serve": "serve dist -p 3002",
     "start": "concurrently \"npm run build\" \"npm run serve\"",
-    "pretest": "npx kill-port 3001 3003 || true",
+    "pretest": "npx kill-port 3001 || true",
     "test": "rstest --reporter=verbose"
   },
   "dependencies": {

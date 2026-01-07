@@ -85,13 +85,15 @@ const waitForUrl = async (
 };
 
 const ensureNodeRemoteImpl = async () => {
-  const need3003 = !(await isUrlReachable(remoteEntryUrl, 500));
-  const need3001 = !(await isUrlReachable(
-    'http://localhost:3001/remoteEntry.js',
-    500,
-  ));
+  console.log(
+    '[Federation Setup] Checking if remote server is already running...',
+  );
+  const need3001 = !(await isUrlReachable(remoteEntryUrl, 500));
 
-  if (!need3003 && !need3001) {
+  console.log(`[Federation Setup] Port 3001 needs start: ${need3001}`);
+
+  if (!need3001) {
+    console.log('[Federation Setup] Server already running, skipping setup');
     return;
   }
 
@@ -104,8 +106,7 @@ const ensureNodeRemoteImpl = async () => {
     if (e?.code === 'EEXIST') {
       // Another worker is (supposedly) starting it; wait for all pending endpoints.
       globalThis.__RSTEST_MF_OWNER__ = false;
-      if (need3003) await waitForUrl(remoteEntryUrl);
-      if (need3001) await waitForUrl('http://localhost:3001/remoteEntry.js');
+      if (need3001) await waitForUrl(remoteEntryUrl);
       return;
     }
     throw e;
@@ -114,28 +115,44 @@ const ensureNodeRemoteImpl = async () => {
   }
 
   // Owner path: build required outputs, start servers, then wait for all endpoints.
-  await killPort(3001).catch(() => {});
-  await killPort(3003).catch(() => {});
+  console.log(
+    '[Federation Setup] Cleaning up any existing processes on port 3001...',
+  );
+  try {
+    await killPort(3001);
+    console.log('[Federation Setup] Successfully killed process on port 3001');
+  } catch {
+    console.log('[Federation Setup] No process found on port 3001');
+  }
+
+  // Add a small delay to ensure port is fully released
+  await sleep(500);
 
   // Build local commonjs remote first so path-based require works for node tests
+  console.log('[Federation Setup] Building node-local-remote (node)...');
   await run(nodeLocalDir, 'pnpm', ['build:node']);
+  console.log('[Federation Setup] Building node-local-remote (web)...');
   await run(nodeLocalDir, 'pnpm', ['build']);
 
-  // Build component app for both node and web
+  // Build component app for node (serves both node and browser tests)
+  console.log('[Federation Setup] Building component-app (node)...');
   await run(componentAppDir, 'pnpm', ['build:node']);
-  await run(componentAppDir, 'pnpm', ['build']);
 
-  // Start servers
-  globalThis.__RSTEST_MF_CHILDREN__.push(
-    start('component-app(node)', componentAppDir, 'pnpm', ['serve:node']),
+  // Start server - only need one server for node build
+  console.log(
+    '[Federation Setup] Starting component-app server on port 3001...',
   );
-  globalThis.__RSTEST_MF_CHILDREN__.push(
-    start('component-app(web)', componentAppDir, 'pnpm', ['serve']),
-  );
+  const server = start('component-app(node)', componentAppDir, 'pnpm', [
+    'serve:node',
+  ]);
+  globalThis.__RSTEST_MF_CHILDREN__!.push(server);
 
-  // Wait for endpoints
+  // Wait for endpoint
+  console.log('[Federation Setup] Waiting for server at', remoteEntryUrl);
   await waitForUrl(remoteEntryUrl);
-  await waitForUrl('http://localhost:3001/remoteEntry.js');
+  console.log('[Federation Setup] Server ready!');
+
+  console.log('[Federation Setup] Federation server is running and ready!');
 };
 
 declare global {
@@ -152,7 +169,7 @@ const workspaceRoot = resolve(__dirname, '..', '..');
 const componentAppDir = resolve(workspaceRoot, 'component-app');
 const nodeLocalDir = resolve(workspaceRoot, 'node-local-remote');
 const lockFile = resolve(workspaceRoot, '.rstest-mf-node-remote.lock');
-const remoteEntryUrl = 'http://localhost:3003/remoteEntry.js';
+const remoteEntryUrl = 'http://localhost:3001/remoteEntry.js';
 
 const workerEnv = {
   ...process.env,
@@ -169,34 +186,60 @@ const workerEnv = {
 };
 
 const start = (name: string, cwd: string, cmd: string, args: string[]) => {
+  console.log(`[Federation Setup] Spawning ${name}: ${cmd} ${args.join(' ')}`);
   const child = spawn(cmd, args, {
     cwd,
     stdio: 'inherit',
     env: workerEnv,
   });
+
+  child.on('error', (err: Error) => {
+    console.error(`[Federation Setup] Error in ${name}:`, err);
+  });
+
+  child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+    if (code !== null) {
+      console.log(`[Federation Setup] ${name} exited with code ${code}`);
+    } else if (signal !== null) {
+      console.log(
+        `[Federation Setup] ${name} terminated with signal ${signal}`,
+      );
+    }
+  });
+
   return { name, child };
 };
 
 const run = async (cwd: string, cmd: string, args: string[]) => {
+  const cmdStr = `${cmd} ${args.join(' ')}`;
+  console.log(`[Federation Setup] Running: ${cmdStr} in ${cwd}`);
   const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: workerEnv });
   await new Promise<void>((resolveRun, rejectRun) => {
     child.once('exit', (code: number | null) => {
       if (code === 0) {
+        console.log(`[Federation Setup] Successfully completed: ${cmdStr}`);
         resolveRun();
       } else {
-        rejectRun(
-          new Error(`${cmd} ${args.join(' ')} exited with code ${code}`),
-        );
+        const err = new Error(`${cmdStr} exited with code ${code}`);
+        console.error(`[Federation Setup] Failed: ${err.message}`);
+        rejectRun(err);
       }
     });
-    child.once('error', rejectRun);
+    child.once('error', (err: Error) => {
+      console.error(`[Federation Setup] Process error: ${cmdStr}`, err);
+      rejectRun(err);
+    });
   });
 };
 
 export const cleanupNodeRemote = async () => {
+  console.log('[Federation Setup] Starting cleanup...');
+
   // Kill by port first (covers detached/extra processes).
-  await killPort(3001).catch(() => {});
-  await killPort(3003).catch(() => {});
+  try {
+    await killPort(3001);
+    console.log('[Federation Setup] Killed process on port 3001');
+  } catch {}
 
   try {
     rmSync(lockFile, { force: true });

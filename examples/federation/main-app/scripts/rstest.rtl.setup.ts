@@ -39,3 +39,9 @@ if (matchers) {
     },
   });
 }
+// Module Federation runtime picks the "web" script loader whenever it detects a DOM.
+// In JSDOM, that loader can't reliably execute remoteEntry scripts. Force the runtime
+// into the Node loader path (fetch + vm evaluation) while keeping RTL on JSDOM.
+// MF SDK treats any value other than "web" as "node-like".
+// eslint-disable-next-line no-restricted-globals
+(globalThis as any).ENV_TARGET = 'node';
