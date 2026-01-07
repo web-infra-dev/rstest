@@ -67,10 +67,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -109,7 +109,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -381,7 +381,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -506,7 +506,7 @@ const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.u
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -618,10 +618,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -660,7 +660,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -932,7 +932,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -1034,7 +1034,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -1144,10 +1144,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -1186,7 +1186,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -1458,7 +1458,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -1559,7 +1559,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -1672,10 +1672,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -1714,7 +1714,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -1986,7 +1986,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -2090,7 +2090,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -2207,10 +2207,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -2249,7 +2249,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -2521,7 +2521,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -2623,7 +2623,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -2733,10 +2733,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
           },
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "importLoaders": 0,
               "modules": {
@@ -2775,7 +2775,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "type": "javascript/auto",
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
               "exportType": "string",
               "importLoaders": 1,
@@ -3047,7 +3047,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/b18edd5e0a4aa2127556bb278b4b9dd35d55ca088211931ede71cf903cf53d96/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -3149,7 +3149,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<ROOT>/node_modules/<PNPM_INNER>/@swc/helpers",
+      "@swc/helpers": "<HOME>/Library/pnpm/store/v10/links/@swc/helpers/0.5.18/5973bdbbbb01e6f5d6d4639634c0a81ca57799f6f26cb59d4a086d4e1e259f48/node_modules/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {

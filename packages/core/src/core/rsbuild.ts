@@ -19,6 +19,7 @@ import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
+import { pluginFederationCompat } from './plugins/federation';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
@@ -112,6 +113,7 @@ export const prepareRsbuild = async (
       ),
       plugins: [
         pluginBasic(context),
+        pluginFederationCompat(context),
         pluginIgnoreResolveError,
         pluginMockRuntime,
         pluginCSSFilter(),
