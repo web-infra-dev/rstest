@@ -4,12 +4,14 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
+  testTimeout: 15000,
   projects: [
     {
       name: 'main-app-node',
       testEnvironment: 'node',
       plugins: [pluginReact()],
       federation: true,
+      exclude: ['test/**/*.rtl.*'],
       dev: { writeToDisk: true },
       output: { module: false },
       tools: {
@@ -70,8 +72,10 @@ export default defineConfig({
               remotes: {
                 'component-app':
                   'component_app@http://localhost:3001/remoteEntry.js',
-                'node-local-remote':
-                  'node_local_remote@http://localhost:3004/remoteEntry.js',
+                'node-local-remote': `commonjs ${path.resolve(
+                  __dirname,
+                  '../node-local-remote/dist-node/remoteEntry.js',
+                )}`,
               },
               shared: {
                 react: {

@@ -85,8 +85,13 @@ const waitForUrl = async (
 };
 
 const ensureNodeRemoteImpl = async () => {
-  // Fast path if already reachable.
-  if (await isUrlReachable(remoteEntryUrl, 500)) return;
+  const need3003 = !(await isUrlReachable(remoteEntryUrl, 500));
+  const need3001 = !(await isUrlReachable(
+    'http://localhost:3001/remoteEntry.js',
+    500,
+  ));
+
+  if (!need3003 && !need3001) return;
 
   // Try to become the owner (cross-worker).
   let fd: number | null = null;
@@ -95,9 +100,10 @@ const ensureNodeRemoteImpl = async () => {
     globalThis.__RSTEST_MF_OWNER__ = true;
   } catch (e: any) {
     if (e?.code === 'EEXIST') {
-      // Another worker is (supposedly) starting it; wait, but allow stale lock recovery.
+      // Another worker is (supposedly) starting it; wait for all pending endpoints.
       globalThis.__RSTEST_MF_OWNER__ = false;
-      await waitForUrl(remoteEntryUrl);
+      if (need3003) await waitForUrl(remoteEntryUrl);
+      if (need3001) await waitForUrl('http://localhost:3001/remoteEntry.js');
       return;
     }
     throw e;
@@ -105,26 +111,28 @@ const ensureNodeRemoteImpl = async () => {
     if (fd !== null) closeSync(fd);
   }
 
-  // Owner path: build, serve, wait.
-  void killPort(3001).catch(() => {});
-  void killPort(3003).catch(() => {});
-  void killPort(3004).catch(() => {});
+  // Owner path: build required outputs, start servers, then wait for all endpoints.
+  await killPort(3001).catch(() => {});
+  await killPort(3003).catch(() => {});
+
+  // Build local commonjs remote first so path-based require works for node tests
+  await run(nodeLocalDir, 'pnpm', ['build:node']);
+  await run(nodeLocalDir, 'pnpm', ['build']);
+
+  // Build component app for both node and web
   await run(componentAppDir, 'pnpm', ['build:node']);
   await run(componentAppDir, 'pnpm', ['build']);
+
+  // Start servers
   globalThis.__RSTEST_MF_CHILDREN__.push(
     start('component-app(node)', componentAppDir, 'pnpm', ['serve:node']),
   );
   globalThis.__RSTEST_MF_CHILDREN__.push(
     start('component-app(web)', componentAppDir, 'pnpm', ['serve']),
   );
+  // Wait for endpoints
   await waitForUrl(remoteEntryUrl);
-  await run(nodeLocalDir, 'pnpm', ['build:node']);
-  await run(nodeLocalDir, 'pnpm', ['build']);
-  globalThis.__RSTEST_MF_CHILDREN__.push(
-    start('node-local-remote(web)', nodeLocalDir, 'pnpm', ['serve']),
-  );
   await waitForUrl('http://localhost:3001/remoteEntry.js');
-  await waitForUrl('http://localhost:3004/remoteEntry.js');
 };
 
 declare global {
