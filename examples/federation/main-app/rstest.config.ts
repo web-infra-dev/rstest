@@ -36,7 +36,7 @@ export default defineConfig({
       config.plugins ??= [];
       const nodeLocalEntry = path.resolve(
         __dirname,
-        '../../node-local-remote/dist-node/remoteEntry.js',
+        '../node-local-remote/dist-node/remoteEntry.js',
       );
 
       config.plugins.push(
