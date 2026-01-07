@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 // Hardcoded expectations for this example app. This avoids relying on shared
 // fixtures that may not exist when running the example standalone.
@@ -40,33 +40,55 @@ test.describe('Complete React case', () => {
 
   test('Check App build and running', async ({ page }) => {
     await expect(page.locator('h1')).toHaveText(APP_TEXT.header);
-    await expect(page.locator('strong').nth(0)).toHaveText(APP_TEXT.paragraphs.firstStrong);
-    await expect(page.locator('strong').nth(1)).toHaveText(APP_TEXT.paragraphs.secondStrong);
-    await expect(page.locator('h4').filter({ hasText: APP_TEXT.h4.buttons })).toBeVisible();
-    await expect(page.locator('h4').filter({ hasText: APP_TEXT.h4.dialog })).toBeVisible();
-    await expect(page.locator('h4').filter({ hasText: APP_TEXT.h4.hoverTitle })).toBeVisible();
-    await expect(page.locator('.tool-tip')).toHaveText(APP_TEXT.tooltip.content);
+    await expect(page.locator('strong').nth(0)).toHaveText(
+      APP_TEXT.paragraphs.firstStrong,
+    );
+    await expect(page.locator('strong').nth(1)).toHaveText(
+      APP_TEXT.paragraphs.secondStrong,
+    );
+    await expect(
+      page.locator('h4').filter({ hasText: APP_TEXT.h4.buttons }),
+    ).toBeVisible();
+    await expect(
+      page.locator('h4').filter({ hasText: APP_TEXT.h4.dialog }),
+    ).toBeVisible();
+    await expect(
+      page.locator('h4').filter({ hasText: APP_TEXT.h4.hoverTitle }),
+    ).toBeVisible();
+    await expect(page.locator('.tool-tip')).toHaveText(
+      APP_TEXT.tooltip.content,
+    );
   });
 
   test('Check App buttons', async ({ page }) => {
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.primaryButton })).toBeVisible();
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.warningButton })).toBeVisible();
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.openDialogButton })).toBeVisible();
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.primaryButton })).toHaveCSS(
-      'background-color',
-      COLORS.primaryButtonBg,
-    );
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.warningButton })).toHaveCSS(
-      'background-color',
-      COLORS.warningButtonBg,
-    );
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.primaryButton }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.warningButton }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.openDialogButton }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.primaryButton }),
+    ).toHaveCSS('background-color', COLORS.primaryButtonBg);
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.warningButton }),
+    ).toHaveCSS('background-color', COLORS.warningButtonBg);
   });
 
   test('Check App Dialog popup', async ({ page }) => {
-    await page.getByRole('button', { name: APP_TEXT.buttons.openDialogButton }).click();
-    await expect(page.getByRole('button', { name: APP_TEXT.buttons.closeButton })).toBeVisible();
+    await page
+      .getByRole('button', { name: APP_TEXT.buttons.openDialogButton })
+      .click();
+    await expect(
+      page.getByRole('button', { name: APP_TEXT.buttons.closeButton }),
+    ).toBeVisible();
     await expect(page.getByText(APP_TEXT.dialog.nameMessage)).toBeVisible();
     await page.fill('input', APP_TEXT.dialog.inputValue);
-    await page.getByRole('button', { name: APP_TEXT.buttons.closeButton }).click();
+    await page
+      .getByRole('button', { name: APP_TEXT.buttons.closeButton })
+      .click();
   });
 });
