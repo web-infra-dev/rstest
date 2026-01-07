@@ -26,6 +26,7 @@ import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
   getScriptUrls,
+  preloadRunnerSourceMap,
   preloadTestFileSourceMap,
 } from './sourceMapSupport';
 
@@ -358,6 +359,11 @@ const run = async () => {
   send({ type: 'ready' });
 
   setRealTimers();
+
+  // Preload runner.js sourcemap for inline snapshot support.
+  // The snapshot code runs in runner.js, so we need its sourcemap
+  // to map stack traces back to original source files.
+  await preloadRunnerSourceMap();
 
   // Find the project for this test file
   const targetTestFile = options.testFile;

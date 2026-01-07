@@ -5,7 +5,7 @@ interface ButtonProps {
   children: ReactNode;
 }
 
-export const Button = ({ onClick, children }: ButtonProps) => {
+export const Button = ({ onClick, children }: ButtonProps): JSX.Element => {
   return (
     <button type="button" className="btn" onClick={onClick}>
       {children}
@@ -18,7 +18,10 @@ interface CounterProps {
   title?: string;
 }
 
-export const Counter = ({ initialCount = 0, title }: CounterProps) => {
+export const Counter = ({
+  initialCount = 0,
+  title,
+}: CounterProps): JSX.Element => {
   const [count, setCount] = useState(initialCount);
 
   return (
@@ -31,13 +34,11 @@ export const Counter = ({ initialCount = 0, title }: CounterProps) => {
   );
 };
 
-export const App = () => {
+export const App = (): JSX.Element => {
   return (
     <div className="app">
       <h1>React Browser Test</h1>
-      <p data-testid="description">
-        Testing @testing-library/react in browser mode
-      </p>
+      <p data-testid="description">Testing @rstest/browser-react</p>
       <Counter />
     </div>
   );

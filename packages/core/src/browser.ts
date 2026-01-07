@@ -4,6 +4,10 @@
  * @rstest/browser must have the same version as @rstest/core.
  */
 
+// Re-export @rsbuild/core for @rstest/browser to avoid duplicate dependency
+import * as rsbuild from '@rsbuild/core';
+export { rsbuild };
+
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Runtime API

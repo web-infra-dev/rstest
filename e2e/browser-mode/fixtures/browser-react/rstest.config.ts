@@ -7,7 +7,7 @@ export default defineConfig({
   browser: {
     enabled: true,
     headless: true,
-    port: BROWSER_PORTS['testing-library'],
+    port: BROWSER_PORTS['browser-react'],
   },
   include: ['tests/**/*.test.tsx'],
   testTimeout: 30000,
