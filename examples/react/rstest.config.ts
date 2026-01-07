@@ -5,4 +5,10 @@ export default defineConfig({
   plugins: [pluginReact()],
   testEnvironment: 'jsdom',
   setupFiles: ['./rstest.setup.ts'],
+  output: {
+    module: false,
+  },
+  dev: {
+    writeToDisk: true,
+  },
 });
