@@ -1,5 +1,5 @@
-import { createRequire as createNativeRequire } from 'node:module';
 import fs from 'node:fs';
+import { createRequire as createNativeRequire } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
@@ -240,7 +240,8 @@ export const loadModule = ({
   //
   // This is intentionally best-effort and scoped to the worker process.
   try {
-    (globalThis as any).__rstest_dynamic_import__ = context.__rstest_dynamic_import__;
+    (globalThis as any).__rstest_dynamic_import__ =
+      context.__rstest_dynamic_import__;
   } catch {
     // ignore
   }

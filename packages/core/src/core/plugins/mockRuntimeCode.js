@@ -7,20 +7,16 @@
 // safe default that relies on Node's native dynamic import.
 //
 // The worker will still override this with a richer implementation when available.
+var __rstest_dynamic_import__;
 try {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
     function (specifier, importAttributes) {
       return import(specifier, importAttributes);
     };
-  // Ensure an unscoped identifier exists for strict-mode evaluated scripts.
-  // This must be done via the main context so that code evaluated later via
-  // vm/eval can reference `__rstest_dynamic_import__`.
-  // eslint-disable-next-line no-var
-  var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
+  __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require('vm').runInThisContext(
+    require('node:vm').runInThisContext(
       'var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
     );
   } catch {}
@@ -56,7 +52,7 @@ __webpack_require__ = new Proxy(
         //
         // Wrap `__webpack_require__.f` so once Rspack installs our chunk loader,
         // it can't be replaced by other runtimes.
-        value = new Proxy(value, {
+        const proxied = new Proxy(value, {
           set(obj, key, val) {
             if ((key === 'readFileVm' || key === 'require') && obj[key]) {
               return true;
@@ -65,6 +61,9 @@ __webpack_require__ = new Proxy(
             return true;
           },
         });
+        target[property] = proxied;
+        originalWebpackRequire[property] = proxied;
+        return true;
       }
       target[property] = value;
       originalWebpackRequire[property] = value;
