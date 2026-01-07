@@ -1,6 +1,5 @@
 import React from 'react';
-import css from './tool-tip.css';
-const styleObj = {};
+import './tool-tip.css';
 export default class ToolTip extends React.Component {
   constructor(props) {
     super(props);

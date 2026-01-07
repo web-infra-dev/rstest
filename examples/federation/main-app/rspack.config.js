@@ -1,9 +1,8 @@
+const { HtmlRspackPlugin } = require('@rspack/core');
 const {
-  HtmlRspackPlugin,
-} = require('@rspack/core');
-const {ModuleFederationPlugin} = require('@module-federation/enhanced/rspack')
+  ModuleFederationPlugin,
+} = require('@module-federation/enhanced/rspack');
 
-const path = require('path');
 module.exports = {
   entry: './index.js',
   mode: 'development',

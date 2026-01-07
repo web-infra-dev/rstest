@@ -1,4 +1,5 @@
 import React from 'react';
+
 const styleMapping = {
   primary: {
     marginLeft: '10px',
@@ -31,6 +32,10 @@ export default class Button extends React.Component {
   }
   render() {
     var type = this.props.type || 'primary';
-    return <button style={styleMapping[type]}>{type} Button</button>;
+    return (
+      <button type="button" style={styleMapping[type]}>
+        {type} Button
+      </button>
+    );
   }
 }

@@ -1,7 +1,7 @@
-import React from 'react';
 import Button from 'component-app/Button';
 import Dialog from 'component-app/Dialog';
 import ToolTip from 'component-app/ToolTip';
+import React from 'react';
 export default class App extends React.Component {
   constructor(props) {
     super(props);
@@ -36,8 +36,13 @@ export default class App extends React.Component {
         <Button type="primary" />
         <Button type="warning" />
         <h4>Dialog:</h4>
-        <button onClick={this.handleClick}>click me to open Dialog</button>
-        <Dialog switchVisible={this.handleSwitchVisible} visible={this.state.dialogVisible} />
+        <button type="button" onClick={this.handleClick}>
+          click me to open Dialog
+        </button>
+        <Dialog
+          switchVisible={this.handleSwitchVisible}
+          visible={this.state.dialogVisible}
+        />
         <h4>hover me please!</h4>
         <ToolTip content="hover me please" message="Hello,world!" />
       </div>
