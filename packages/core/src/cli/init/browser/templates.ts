@@ -194,7 +194,7 @@ export function getDependenciesWithVersions(
   // Currently we only support Playwright, keep this switch
   // so it's easy to extend providers in the future.
   if (provider === 'playwright') {
-    deps.playwright = '^1.49.0';
+    deps.playwright = PLAYWRIGHT_VERSION;
   }
   if (framework === 'react') {
     deps['@rstest/browser-react'] = `^${rstestVersion}`;
