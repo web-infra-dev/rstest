@@ -8,9 +8,18 @@ test('should handle click error', async () => {
 
   const element = screen.getByText('Rsbuild with React');
 
-  window.addEventListener('error', (event) => {
-    expect(event.message).toBe('click error');
+  await new Promise<void>((resolve) => {
+    window.addEventListener(
+      'error',
+      (event) => {
+        expect(event.message).toBe('click error');
+        event.preventDefault();
+        resolve();
+      },
+      { once: true },
+    );
+    element.click();
   });
 
-  element.click();
+  // Ensure the assertion above is reached before the test completes.
 });

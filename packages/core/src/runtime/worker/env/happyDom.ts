@@ -22,9 +22,9 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch'],
       });
 
-      const cleanupHandler = addDefaultErrorHandler(
-        global as unknown as Window,
-      );
+      // Attach to the actual DOM window object so user `window.addEventListener('error')`
+      // is detected and can suppress default uncaughtException forwarding.
+      const cleanupHandler = addDefaultErrorHandler(win as unknown as Window);
 
       return {
         async teardown() {

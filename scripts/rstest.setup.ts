@@ -42,8 +42,16 @@ const enhancedPathSerializer = {
     // <HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/hash/node_modules/@rsbuild/core/...
     // Windows global paths: <HOME>/AppData/Local/pnpm/store/v10/links/...
     // But preserves <PNPM_INNER> replacements for local node_modules/.pnpm paths
+    //
+    // Note: path-serializer may or may not replace the leading user home segment
+    // depending on the host OS. Match both "<HOME>/.../pnpm/store/..." and
+    // raw "C:/Users/.../pnpm/store/..." forms after win32 normalization.
     serialized = serialized.replace(
-      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//g,
+      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//gi,
+      '<PNPM_STORE>/$1/node_modules/',
+    );
+    serialized = serialized.replace(
+      /\/[a-z]\/Users\/[^/]+(?:\/[^/]+)*\/pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//gi,
       '<PNPM_STORE>/$1/node_modules/',
     );
 
