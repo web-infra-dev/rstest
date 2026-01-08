@@ -7,6 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import './setup';
+import vm from 'node:vm';
 import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
 import { globalApis } from '../../utils/constants';
@@ -51,6 +52,23 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   }
 };
 
+const setupFederationWorkerEnv = (enabled: boolean): void => {
+  if (!enabled) return;
+
+  // Module Federation's runtime chooses between DOM vs Node loading based on an
+  // unscoped identifier `ENV_TARGET`. In JSDOM, Rspack's own script loader would
+  // try to inject <script> tags, which won't work for async-node remotes.
+  //
+  // Expose `ENV_TARGET='node'` as both a global property and a global binding so
+  // all runtime-evaluated code paths (vm/eval wrappers) see the same value.
+  (globalThis as any).ENV_TARGET = 'node';
+  try {
+    vm.runInThisContext("var ENV_TARGET = 'node'");
+  } catch {
+    // best effort; failing to define this will break federation runtime behavior
+  }
+};
+
 const preparePool = async ({
   entryInfo: { distPath, testPath },
   updateSnapshot,
@@ -79,9 +97,11 @@ const preparePool = async ({
       testEnvironment,
       snapshotFormat,
       env,
+      federation,
     },
   } = context;
 
+  setupFederationWorkerEnv(Boolean(federation));
   setupEnv(env);
 
   if (!disableConsoleIntercept) {

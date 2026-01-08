@@ -56,6 +56,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     printConsoleTrace,
     disableConsoleIntercept,
     testEnvironment,
+    federation,
     hookTimeout,
     isolate,
     coverage,
@@ -88,6 +89,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     printConsoleTrace,
     disableConsoleIntercept,
     testEnvironment,
+    federation,
     isolate,
     coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,

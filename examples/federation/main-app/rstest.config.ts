@@ -9,9 +9,6 @@ export default defineConfig({
   testEnvironment: 'jsdom',
   plugins: [pluginReact()],
   federation: true,
-  output: {
-    module: false,
-  },
   tools: {
     rspack: (config) => {
       config.plugins ??= [];
@@ -19,6 +16,17 @@ export default defineConfig({
         new ModuleFederationPlugin({
           name: 'main_app_web',
           library: { type: 'commonjs-module', name: 'main_app_web' },
+          // IMPORTANT: Keep these federation settings stable.
+          //
+          // - `remoteType: 'script'` is required so the Module Federation Node runtime plugin
+          //   can load `remoteEntry.js` over HTTP in a Node (async-node) execution context,
+          //   even though tests run in JSDOM.
+          //
+          // - `component-app` must stay as an HTTP remote:
+          //   `component_app@http://localhost:3001/remoteEntry.js`
+          //
+          // - `node-local-remote` must stay as a filesystem (abs-path) CommonJS remoteEntry:
+          //   `commonjs <abs-path-to-remoteEntry.js>`
           remoteType: 'script',
           remotes: {
             'component-app':

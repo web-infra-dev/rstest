@@ -22,25 +22,33 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
   (context) => ({
     name: 'rstest:federation-compat',
     setup: (api) => {
-      api.modifyRspackConfig(async (config, { environment }) => {
-        const project = context.projects.find(
-          (p) => p.environmentName === environment.name,
-        );
-        if (!project?.normalizedConfig.federation) return;
+      api.modifyEnvironmentConfig(
+        async (config, { mergeEnvironmentConfig, name }) => {
+          const project = context.projects.find(
+            (p) => p.environmentName === name,
+          );
+          if (!project?.normalizedConfig.federation) return config;
 
-        // Rstest executes tests in a Node worker process even for DOM-like test
-        // environments (jsdom/happy-dom). When federation is enabled, always build
-        // with Rspack's `async-node` target so Module Federation's Node runtime can
-        // load remote chunks over the network.
-        config.target = 'async-node';
+          // Ensure CommonJS output at the Rstest environment config level.
+          // This propagates to normalized config so other plugins (e.g. externals)
+          // can respect `outputModule` consistently.
+          const merged = await mergeEnvironmentConfig(config, {
+            output: {
+              module: false,
+            },
+            tools: {
+              rspack: (rspackConfig) => {
+                // Tests run in Node workers even for DOM-like environments.
+                // Use async-node target and avoid splitChunks for federation.
+                rspackConfig.target = 'async-node';
+                rspackConfig.optimization ??= {};
+                rspackConfig.optimization.splitChunks = false;
+              },
+            },
+          });
 
-        // Keep federation builds in a single chunk to avoid MF generating async
-        // fallback chunks for `loadShareSync` initial consumes.
-        config.optimization ??= {};
-        config.optimization.splitChunks = false;
-
-        // Do not patch Module Federation plugin options. Users should configure
-        // shared/consumes behavior explicitly in their project configs.
-      });
+          return merged;
+        },
+      );
     },
   });
