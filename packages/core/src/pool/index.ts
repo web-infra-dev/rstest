@@ -190,6 +190,8 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
+  const suppressFile = join(import.meta.dirname, 'rstestSuppressWarnings.cjs');
+
   const pool = createForksPool({
     ...poolOptions,
     isolate,
@@ -206,7 +208,8 @@ export const createPool = async ({
             needFlagExperimentalDetectModule()
               ? '--experimental-detect-module'
               : undefined,
-            '--no-warnings',
+            '--require',
+            suppressFile,
           ].filter(Boolean) as string[])),
     ],
     env: {
