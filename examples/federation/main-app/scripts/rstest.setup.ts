@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { closeSync, openSync, rmSync } from 'node:fs';
+import { connect } from 'node:net';
 import { resolve } from 'node:path';
 import killPort from 'kill-port';
 
@@ -9,6 +10,29 @@ type TrackedChild = {
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const isPortInUse = async (
+  port: number,
+  host = '127.0.0.1',
+  timeoutMs = 200,
+) => {
+  return await new Promise<boolean>((resolve) => {
+    const socket = connect({ port, host });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      resolve(false);
+    }, timeoutMs);
+    socket.on('connect', () => {
+      clearTimeout(timer);
+      socket.end();
+      resolve(true);
+    });
+    socket.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+};
 
 const isUrlReachable = async (url: string, timeoutMs = 300) => {
   const ctrl =
@@ -113,13 +137,14 @@ const ensureNodeRemoteImpl = async () => {
   }
 
   // Owner path: build required outputs, start servers, then wait for all endpoints.
-  console.log(
-    '[Federation Setup] Cleaning up any existing processes on port 3001...',
-  );
-  try {
-    await killPort(3001);
+  const inUse = await isPortInUse(3001);
+  if (inUse) {
+    console.log(
+      '[Federation Setup] Cleaning up existing process on port 3001...',
+    );
+    await killPort(3001).catch(() => {});
     console.log('[Federation Setup] Successfully killed process on port 3001');
-  } catch {
+  } else {
     console.log('[Federation Setup] No process found on port 3001');
   }
 
@@ -232,11 +257,11 @@ const run = async (cwd: string, cmd: string, args: string[]) => {
 export const cleanupNodeRemote = async () => {
   console.log('[Federation Setup] Starting cleanup...');
 
-  // Kill by port first (covers detached/extra processes).
-  try {
-    await killPort(3001);
+  const inUse = await isPortInUse(3001);
+  if (inUse) {
+    await killPort(3001).catch(() => {});
     console.log('[Federation Setup] Killed process on port 3001');
-  } catch {}
+  }
 
   try {
     rmSync(lockFile, { force: true });
