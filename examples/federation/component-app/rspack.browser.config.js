@@ -45,6 +45,10 @@ module.exports = {
         './Logo': './src/Logo.jsx',
         './ToolTip': './src/ToolTip.jsx',
       },
+      shared: {
+        react: { singleton: true, requiredVersion: '19.2.3' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+      },
     }),
     new HtmlRspackPlugin({ template: './public/index.html' }),
   ],

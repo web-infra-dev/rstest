@@ -17,6 +17,10 @@ module.exports = {
       name: 'node_local_remote',
       filename: 'remoteEntry.js',
       exposes: { './test': './src/test.js' },
+      shared: {
+        react: { singleton: true, requiredVersion: '19.2.3' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+      },
     }),
   ],
 };

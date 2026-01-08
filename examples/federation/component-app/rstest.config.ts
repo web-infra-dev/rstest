@@ -23,6 +23,14 @@ export default defineConfig({
             )}`,
           },
           runtimePlugins: ['@module-federation/node/runtimePlugin'],
+          shared: {
+            react: { singleton: true, eager: true, requiredVersion: '19.2.3' },
+            'react-dom': {
+              singleton: true,
+              eager: true,
+              requiredVersion: '19.2.3',
+            },
+          },
         }),
       );
       return config;

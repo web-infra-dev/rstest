@@ -36,6 +36,10 @@ module.exports = {
         'node-local-remote':
           'node_local_remote@http://localhost:3004/remoteEntry.js',
       },
+      shared: {
+        react: { singleton: true, requiredVersion: '19.2.3' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+      },
     }),
     new HtmlRspackPlugin({ template: './public/index.html' }),
   ],

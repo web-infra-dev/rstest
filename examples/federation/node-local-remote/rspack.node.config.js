@@ -22,6 +22,10 @@ module.exports = {
       exposes: {
         './test': './src/test.js',
       },
+      shared: {
+        react: { singleton: true, requiredVersion: '19.2.3' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+      },
     }),
   ],
 };
