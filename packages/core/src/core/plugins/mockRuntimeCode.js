@@ -14,6 +14,8 @@ try {
     function (specifier, importAttributes) {
       return import(specifier, importAttributes);
     };
+  // Assign to the local binding as well: bundler output calls `__rstest_dynamic_import__`
+  // as a free identifier within the runtime scope.
   __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
   try {
     require('node:vm').runInThisContext(
