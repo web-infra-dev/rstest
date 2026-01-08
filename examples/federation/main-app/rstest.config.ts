@@ -4,9 +4,7 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
-  // Use the Vitest adapter so matcher registration uses `vitest.expect` (Rstest doesn't
-  // expose a global `expect` by default).
-  setupFiles: ['@testing-library/jest-dom/vitest'],
+  setupFiles: ['./scripts/rstest.setup.ts'],
   testTimeout: 30_000,
   testEnvironment: 'jsdom',
   plugins: [pluginReact()],
