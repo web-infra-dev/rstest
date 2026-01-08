@@ -1,7 +1,6 @@
 /**
  * This test demonstrates using @rstest/browser-react with @testing-library/dom
- * for DOM queries. This is the recommended approach for users who want
- * testing-library-style queries without the full @testing-library/react dependency.
+ * for DOM queries. This is the recommended approach for browser mode testing.
  */
 import { act, render } from '@rstest/browser-react';
 import { describe, expect, it } from '@rstest/core';
