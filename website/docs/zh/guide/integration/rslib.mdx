@@ -190,7 +190,7 @@ export default defineConfig({
 
 ```typescript
 export default defineConfig({
-  extends: async (user) => {.
+  extends: async (user) => {
     const config = await withRslibConfig()(user);
     console.log('Extended config:', JSON.stringify(config, null, 2));
     return config;
