@@ -34,6 +34,11 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
         // load remote chunks over the network.
         config.target = 'async-node';
 
+        // Keep federation builds in a single chunk to avoid MF generating async
+        // fallback chunks for `loadShareSync` initial consumes.
+        config.optimization ??= {};
+        config.optimization.splitChunks = false;
+
         // Do not patch Module Federation plugin options. Users should configure
         // shared/consumes behavior explicitly in their project configs.
       });

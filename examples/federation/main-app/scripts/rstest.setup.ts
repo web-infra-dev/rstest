@@ -132,16 +132,15 @@ const ensureNodeRemoteImpl = async () => {
   console.log('[Federation Setup] Building node-local-remote (web)...');
   await run(nodeLocalDir, 'pnpm', ['build']);
 
-  // Build component app for node (serves both node and browser tests)
-  console.log('[Federation Setup] Building component-app (node)...');
-  await run(componentAppDir, 'pnpm', ['build:node']);
+  // Build component app for web and start HTTP server on 3001
+  console.log('[Federation Setup] Building component-app (web)...');
+  await run(componentAppDir, 'pnpm', ['build']);
 
-  // Start server - only need one server for node build
   console.log(
     '[Federation Setup] Starting component-app server on port 3001...',
   );
-  const server = start('component-app(node)', componentAppDir, 'pnpm', [
-    'serve:node',
+  const server = start('component-app(web)', componentAppDir, 'pnpm', [
+    'serve',
   ]);
   globalThis.__RSTEST_MF_CHILDREN__!.push(server);
 

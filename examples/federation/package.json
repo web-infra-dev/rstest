@@ -6,7 +6,7 @@
   "scripts": {
     "start": "pnpm --filter rstest_example_* --parallel start",
     "build": "pnpm --filter rstest_example_* --parallel build",
-    "test": "pnpm --filter rstest_example_main-app test",
+    "test": "pnpm --filter rstest_example_main-app test && pnpm --filter rstest_example_component-app test",
     "e2e:ci": "pnpm build && pnpm exec playwright test --reporter=list"
   },
   "keywords": [],

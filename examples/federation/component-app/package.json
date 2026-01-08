@@ -7,14 +7,17 @@
     "build": "rspack build --config rspack.browser.config.js ",
     "build:node": "rspack build --config rspack.node.config.js",
     "serve": "serve dist -p 3001",
-    "serve:node": "serve dist-node -p 3001",
-    "start": "concurrently \"npm run build\" \"npm run serve\""
+    "serve:node": "serve dist-node -p 3003",
+    "start": "concurrently \"npm run build\" \"npm run serve\"",
+    "test": "rstest --reporter=verbose"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@module-federation/enhanced": "0.22.0",
+    "@rstest/core": "workspace:*",
+    "@rsbuild/plugin-react": "^1.4.2",
     "@rspack/cli": "1.6.8",
     "@rspack/core": "1.6.8",
     "concurrently": "8.2.2",

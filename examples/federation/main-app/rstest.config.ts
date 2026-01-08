@@ -4,7 +4,7 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
-  setupFiles: ['./scripts/rstest.rtl.setup.ts'],
+  setupFiles: ['@testing-library/jest-dom'],
   testTimeout: 30_000,
   testEnvironment: 'jsdom',
   plugins: [pluginReact()],
