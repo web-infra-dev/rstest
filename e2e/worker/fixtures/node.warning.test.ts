@@ -4,7 +4,7 @@ import { describe, expect, it } from '@rstest/core';
 const eventEmitter = new EventEmitter();
 
 for (let i = 0; i < 11; i++) {
-  eventEmitter.on('', () => {});
+  eventEmitter.on('test-event', () => {});
 }
 
 describe('Index', () => {
