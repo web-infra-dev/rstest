@@ -446,7 +446,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -491,7 +491,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     BannerPlugin {
       "_args": [
         {
-          "banner": "// Rstest ESM shims\\nimport __rstest_shim_module__ from 'node:module';\\nconst require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);\\n",
+          "banner": "// Rstest ESM shims
+import __rstest_shim_module__ from 'node:module';
+const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
+",
           "include": /\\\\\\.\\(js\\|mjs\\)\\$/,
           "raw": true,
           "stage": 99,
@@ -986,7 +989,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -1512,7 +1515,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -2040,7 +2043,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -2575,7 +2578,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
@@ -3101,7 +3104,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
-          "process.env.BASE_URL": "\\"/\\"",
+          "process.env.BASE_URL": ""/"",
         },
       ],
       "affectedHooks": "compilation",
