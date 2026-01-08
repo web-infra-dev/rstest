@@ -36,7 +36,9 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
           // Ensure CommonJS output at the Rstest environment config level.
           // This propagates to normalized config so other plugins (e.g. externals)
           // can respect `outputModule` consistently.
-          const merged = await mergeEnvironmentConfig(config, {
+          // `mergeEnvironmentConfig` is synchronous in Rsbuild's API; avoid `await`
+          // to satisfy `@typescript-eslint/await-thenable`.
+          const merged = mergeEnvironmentConfig(config, {
             output: {
               module: false,
             },
