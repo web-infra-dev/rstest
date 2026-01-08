@@ -36,6 +36,14 @@ const enhancedPathSerializer = {
     // that include JSON lines stay readable (no extra escaping).
     let serialized = pathSerializer.serialize(value);
 
+    // Normalize pnpm "virtual store" paths under `<ROOT>/node_modules/.pnpm/...` (rendered
+    // by path-serializer as `<ROOT>/node_modules/<PNPM_INNER>/...`) to the same
+    // `<PNPM_STORE>/.../node_modules/...` shape used by our snapshots.
+    serialized = serialized.replace(
+      /<ROOT>\/node_modules\/<PNPM_INNER>\/((?:@[^/]+\/)?[^/]+)(?=\/|")/g,
+      '<PNPM_STORE>/$1/node_modules/$1',
+    );
+
     // Additional normalization for global pnpm store paths that aren't handled
     // by the built-in replacePnpmInner (which only handles local .pnpm directories).
     // This handles macOS/Linux global pnpm store paths like:
