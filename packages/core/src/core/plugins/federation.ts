@@ -36,6 +36,17 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
             output: {
               module: false,
             },
+            source: {
+              define: {
+                // Module Federation runtime chooses between DOM vs Node loaders based on
+                // the compile-time constant `ENV_TARGET`.
+                //
+                // When tests run in JSDOM, MF would otherwise detect a browser-like
+                // environment and attempt <script> injection for `remoteType: 'script'`,
+                // which doesn't work for async-node remotes. Force node loader behavior.
+                ENV_TARGET: JSON.stringify('node'),
+              },
+            },
             tools: {
               rspack: (rspackConfig) => {
                 // Tests run in Node workers even for DOM-like environments.
