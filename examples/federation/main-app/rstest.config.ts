@@ -45,6 +45,11 @@ export default defineConfig({
               requiredVersion: '19.2.3',
             },
           },
+          experiments: {
+            optimization: {
+              target: 'node', // Required for JSDOM test environments
+            },
+          },
         }),
       );
       return config;
