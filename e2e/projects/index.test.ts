@@ -134,4 +134,21 @@ describe('test projects', () => {
       logs.find((log) => log.includes('No test files found')),
     ).toBeTruthy();
   });
+  it('should run projects with extends correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'extends'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.find((log) => log.includes('project-a'))).toBeTruthy();
+    expect(logs.find((log) => log.includes('project-b'))).toBeTruthy();
+  });
 });

@@ -48,7 +48,22 @@ This will automatically:
 - Map compatible Rslib options to Rstest configuration
 - Merge with any additional Rstest config you provide
 
-By default, the adapter uses `process.cwd()` to resolve the Rslib config. If your config lives elsewhere, set `cwd`:
+By default, the adapter uses `process.cwd()` to resolve the Rslib config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
+
+## API
+
+### `withRslibConfig(options)`
+
+Returns a configuration function that loads Rslib config and converts it to Rstest configuration.
+
+#### `cwd`
+
+- **Type:** `string`
+- **Default:** `process.cwd()`
+
+The `cwd` is the working directory to resolve the Rslib config file.
+
+When your Rslib config is in a different directory or you are running tests in a monorepo (where your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rslib config file from a different directory.
 
 ```ts
 export default defineConfig({
@@ -58,9 +73,98 @@ export default defineConfig({
 });
 ```
 
-See the [`@rstest/adapter-rslib` documentation](https://www.npmjs.com/package/@rstest/adapter-rslib) for advanced options.
+#### `configPath`
 
-### Configuration mapping
+- **Type:** `string`
+- **Default:** `'./rslib.config.ts'`
+
+Path to rslib config file.
+
+#### `libId`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+The lib config id in `lib` field to use. Set to a string to use the lib config with matching id.
+
+By default, the adapter uses the common configuration from Rslib. If your Rslib config has multiple lib configurations:
+
+```ts
+// rslib.config.ts
+export default defineConfig({
+  lib: [
+    {
+      id: 'core',
+      format: 'esm',
+      dts: true,
+      source: {
+        define: {
+          IS_CORE: true,
+        },
+      },
+    },
+    {
+      id: 'utils',
+      format: 'esm',
+      source: {
+        define: {
+          IS_CORE: false,
+        },
+      },
+    },
+  ],
+  // shared config
+});
+```
+
+You can then reference specific lib configurations in your Rstest config. Rstest will adapt the Rslib shared configuration and the lib configuration with a matching `libId` to Rstest format.
+
+```ts
+// For testing the 'core' environment
+export default defineConfig({
+  extends: withRslibConfig({
+    libId: 'core',
+  }),
+  // core-specific test config
+});
+```
+
+When you need to test multiple parts of your application with different configurations independently, you can define multiple Rstest projects. Each project can extend a specific lib configuration by setting the `libId` option.
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libId: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRslibConfig({ libId: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `modifyLibConfig`
+
+- **Type:** `(config: RslibConfig) => RslibConfig | void`
+- **Default:** `undefined`
+
+Modify the Rslib config before it gets converted to Rstest config:
+
+```ts
+export default defineConfig({
+  extends: withRslibConfig({
+    modifyLibConfig: (libConfig) => {
+      delete libConfig.source?.define;
+      return libConfig;
+    },
+  }),
+});
+```
+
+## Configuration mapping
 
 The adapter automatically maps these Rslib options to Rstest:
 
@@ -80,7 +184,7 @@ The adapter automatically maps these Rslib options to Rstest:
 | `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain configuration                            |
 | `output.target`       | `testEnvironment`     | 'happy-dom' for web, 'node' for node and other targets |
 
-### Debug config
+## Debug config
 
 To see the resolved configuration returned by the adapter, wrap it and log the result:
 
