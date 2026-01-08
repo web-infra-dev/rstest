@@ -1,9 +1,8 @@
-import { pluginReact } from '@rsbuild/plugin-react';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  plugins: [pluginReact()],
-  testEnvironment: 'jsdom',
+  extends: withRsbuildConfig({ cwd: __dirname }),
   setupFiles: ['./rstest.setup.ts'],
   output: {
     module: false,

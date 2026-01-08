@@ -18,6 +18,7 @@ import type {
 } from '../types';
 import {
   color,
+  isDeno,
   needFlagExperimentalDetectModule,
   serializableConfig,
 } from '../utils';
@@ -199,13 +200,17 @@ export const createPool = async ({
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
-      '--experimental-vm-modules',
-      '--experimental-import-meta-resolve',
-      '--no-warnings',
-      needFlagExperimentalDetectModule()
-        ? '--experimental-detect-module'
-        : undefined,
-    ].filter(Boolean) as string[],
+      ...(isDeno
+        ? []
+        : ([
+            '--experimental-vm-modules',
+            '--experimental-import-meta-resolve',
+            needFlagExperimentalDetectModule()
+              ? '--experimental-detect-module'
+              : undefined,
+            '--no-warnings',
+          ].filter(Boolean) as string[])),
+    ],
     env: {
       ...process.env,
       NODE_ENV: 'test',

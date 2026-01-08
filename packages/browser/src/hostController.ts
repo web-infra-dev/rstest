@@ -1,30 +1,26 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import type { RsbuildDevServer, RsbuildInstance } from '@rsbuild/core';
-import { createRsbuild, rspack } from '@rsbuild/core';
-import type {
-  FormattedError,
-  ListCommandResult,
-  ProjectContext,
-  Reporter,
-  Rstest,
-  RuntimeConfig,
-  Test,
-  TestFileResult,
-  TestResult,
-  UserConsoleLog,
-} from '@rstest/core/browser';
 import {
   color,
+  type FormattedError,
   getSetupFiles,
   getTestEntries,
   isDebug,
+  type ListCommandResult,
   logger,
+  type ProjectContext,
+  type Reporter,
+  type Rstest,
+  type RuntimeConfig,
+  rsbuild,
   serializableConfig,
   TEMP_RSTEST_OUTPUT_DIR,
+  type Test,
+  type TestFileResult,
+  type TestResult,
+  type UserConsoleLog,
 } from '@rstest/core/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
@@ -38,6 +34,10 @@ import type {
   BrowserProjectRuntime,
   TestFileInfo,
 } from './protocol';
+
+const { createRsbuild, rspack } = rsbuild;
+type RsbuildDevServer = rsbuild.RsbuildDevServer;
+type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -492,27 +492,6 @@ const resolveContainerDist = (): string => {
   );
 };
 
-/**
- * Resolve @rstest/core source file path for browser compilation.
- * Browser client code needs to import from core's source files (not dist)
- * because the dist files contain Node.js-specific code that can't run in browsers.
- */
-const resolveCoreSourceFile = (relativePath: string): string => {
-  const require = createRequire(import.meta.url);
-  const corePkgPath = require.resolve('@rstest/core/package.json');
-  const coreRoot = dirname(corePkgPath);
-  const srcPath = resolve(coreRoot, 'src', relativePath);
-
-  if (existsSync(srcPath)) {
-    return srcPath;
-  }
-
-  throw new Error(
-    `Unable to resolve @rstest/core source file: ${relativePath}. ` +
-      `Looked in: ${srcPath}`,
-  );
-};
-
 // ============================================================================
 // Manifest Generation
 // ============================================================================
@@ -748,14 +727,17 @@ const createBrowserRuntime = async ({
   const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
 
   // Rstest internal aliases that must not be overridden by user config
-  // These aliases point to source files because dist files contain Node.js code
-  // that cannot run in the browser environment.
+  const browserRuntimePath = fileURLToPath(
+    import.meta.resolve('@rstest/core/browser-runtime'),
+  );
+
   const rstestInternalAliases = {
     '@rstest/browser-manifest': manifestPath,
     // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
     // Browser runtime APIs for entry.ts and public.ts
-    '@rstest/core/browser-runtime': resolveCoreSourceFile('browserRuntime.ts'),
+    // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
+    '@rstest/core/browser-runtime': browserRuntimePath,
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
@@ -799,6 +781,10 @@ const createBrowserRuntime = async ({
             },
             output: {
               target: 'web',
+              // Enable source map for inline snapshot support
+              sourceMap: {
+                js: 'source-map',
+              },
             },
             tools: {
               rspack: (rspackConfig) => {
@@ -809,6 +795,24 @@ const createBrowserRuntime = async ({
                 };
                 rspackConfig.plugins = rspackConfig.plugins || [];
                 rspackConfig.plugins.push(virtualManifestPlugin);
+
+                // Extract and merge sourcemaps from pre-built @rstest/core files
+                // This preserves the sourcemap chain for inline snapshot support
+                // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                const browserRuntimeDir = dirname(browserRuntimePath);
+                rspackConfig.module = rspackConfig.module || {};
+                rspackConfig.module.rules = rspackConfig.module.rules || [];
+                rspackConfig.module.rules.unshift({
+                  test: /\.js$/,
+                  include: browserRuntimeDir,
+                  extractSourceMap: true,
+                });
+
+                if (isDebug()) {
+                  logger.log(
+                    `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                  );
+                }
               },
             },
           });
