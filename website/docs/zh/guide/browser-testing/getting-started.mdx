@@ -1,0 +1,111 @@
+# 快速开始
+
+本指南将帮助你在项目中配置并运行浏览器模式测试。
+
+import { PackageManagerTabs } from '@theme';
+
+## 使用脚手架初始化
+
+运行以下命令快速初始化浏览器测试环境：
+
+<PackageManagerTabs command="exec rstest init browser" />
+
+该命令会启动一个引导式流程：
+
+1. **检测项目配置** 自动识别包管理器、测试目录、UI 框架、TypeScript 等
+2. **选择浏览器驱动** 目前支持 Playwright
+3. **预览变更** 展示将要创建的文件和 package.json 修改
+4. **确认执行** 确认后创建配置文件、示例测试，并更新 package.json
+
+初始化命令会添加 `@rstest/browser`、`@testing-library/dom`、`playwright` 等依赖，React 项目还会添加 `@rstest/browser-react`。
+
+:::tip
+你可以使用 `--yes` 参数跳过引导流程，直接使用检测到的默认配置：`npx rstest init browser --yes`
+:::
+
+### 运行测试
+
+初始化完成后，安装新添加的依赖：
+
+<PackageManagerTabs command="install" />
+
+安装 Playwright 浏览器：
+
+<PackageManagerTabs command="exec playwright install --with-deps" />
+
+运行浏览器测试（使用生成的 `rstest.browser.config.ts` 配置）：
+
+<PackageManagerTabs command="run test:browser" />
+
+## 手动配置
+
+### 1. 安装依赖
+
+安装 Rstest 核心包、浏览器模式支持包和 Playwright：
+
+<PackageManagerTabs command="add @rstest/core @rstest/browser playwright -D" />
+
+然后安装 Playwright 浏览器：
+
+<PackageManagerTabs command="exec playwright install chromium" />
+
+你也可以安装其他浏览器：
+
+```bash
+# 安装 Firefox
+npx playwright install firefox
+
+# 安装 WebKit (Safari)
+npx playwright install webkit
+
+# 安装所有浏览器
+npx playwright install
+```
+
+### 2. 创建配置文件
+
+创建或更新 `rstest.config.ts` 配置文件：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+  },
+});
+```
+
+### 3. 编写测试
+
+创建一个简单的浏览器测试文件：
+
+```ts title="src/dom.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('should work with DOM APIs', () => {
+  const div = document.createElement('div');
+  div.textContent = 'Hello Browser!';
+  document.body.appendChild(div);
+
+  expect(document.body.textContent).toContain('Hello Browser!');
+});
+```
+
+### 4. 运行测试
+
+```bash
+npx rstest
+```
+
+你应该看到类似以下的输出：
+
+```bash
+ ✓ src/dom.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 1.2s
+```
+
+更多配置选项请查看 [browser 配置](/config/test/browser)。

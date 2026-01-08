@@ -1,0 +1,162 @@
+# 组件测试
+
+本指南介绍如何在浏览器模式下测试 UI 组件。
+
+import { PackageManagerTabs } from '@theme';
+
+## DOM 查询
+
+推荐使用 `@testing-library/dom` 进行 DOM 查询和断言：
+
+<PackageManagerTabs command="add @testing-library/dom -D" />
+
+```ts title="src/dom.test.ts"
+import { expect, test } from '@rstest/core';
+import { getByText, getByRole } from '@testing-library/dom';
+
+test('queries DOM elements', () => {
+  document.body.innerHTML = `
+    <div>
+      <button>Submit</button>
+      <p>Hello World</p>
+    </div>
+  `;
+
+  expect(getByRole(document.body, 'button')).toHaveTextContent('Submit');
+  expect(getByText(document.body, 'Hello World')).toBeInTheDocument();
+});
+```
+
+更多查询方法请参考 [Testing Library 文档](https://testing-library.com/docs/queries/about)。
+
+## 事件交互
+
+### 原生 DOM 事件
+
+你可以使用原生 DOM API 触发事件：
+
+```ts title="src/button.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('handles click event', () => {
+  const button = document.createElement('button');
+  let clicked = false;
+
+  button.addEventListener('click', () => {
+    clicked = true;
+  });
+
+  document.body.appendChild(button);
+  button.click();
+
+  expect(clicked).toBe(true);
+});
+```
+
+对于更复杂的事件，可以使用 `dispatchEvent`：
+
+```ts
+input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+```
+
+### 使用 userEvent
+
+推荐使用 `@testing-library/user-event` 模拟更接近真实用户行为的交互：
+
+<PackageManagerTabs command="add @testing-library/user-event -D" />
+
+```ts title="src/dropdown.test.ts"
+import { expect, test } from '@rstest/core';
+import { getByRole, queryByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { createDropdown } from './dropdown';
+
+test('toggles dropdown on click', async () => {
+  const user = userEvent.setup();
+
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  createDropdown(container);
+
+  await user.click(getByRole(container, 'button'));
+
+  expect(queryByRole(container, 'menu')).toBeInTheDocument();
+});
+```
+
+`userEvent` 支持点击、输入、键盘、选择等多种交互，详见 [user-event 文档](https://testing-library.com/docs/user-event/intro)。
+
+## 测试 Web components
+
+```ts title="src/my-element.test.ts"
+import { expect, test } from '@rstest/core';
+import './my-element'; // 注册 custom element
+
+test('renders content in shadow DOM', () => {
+  const el = document.createElement('my-element');
+  el.setAttribute('name', 'World');
+  document.body.appendChild(el);
+
+  const shadowRoot = el.shadowRoot!;
+  expect(shadowRoot.textContent).toContain('Hello, World!');
+});
+```
+
+## 框架集成
+
+### React
+
+安装 [@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) 和相关依赖：
+
+<PackageManagerTabs command="add @rstest/browser-react @testing-library/dom @testing-library/user-event -D" />
+
+使用 `render` 函数将 React 组件渲染到真实浏览器 DOM 中，返回的 `container` 可用于 DOM 查询：
+
+```tsx title="src/Button.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render } from '@rstest/browser-react';
+import { getByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { Button } from './Button';
+
+test('renders button and handles click', async () => {
+  const user = userEvent.setup();
+  let clicked = false;
+
+  const { container } = render(
+    <Button onClick={() => (clicked = true)}>Click me</Button>,
+  );
+
+  expect(getByRole(container, 'button')).toHaveTextContent('Click me');
+
+  await user.click(getByRole(container, 'button'));
+  expect(clicked).toBe(true);
+});
+```
+
+更多 API 用法请参考 [@rstest/browser-react 文档](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react)。
+
+## 多环境项目
+
+如果你的项目同时包含浏览器测试和 Node.js 测试，可以使用 [projects](/config/test/projects) 配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'browser',
+      include: ['src/**/*.test.{ts,tsx}'],
+      browser: {
+        enabled: true,
+      },
+    },
+    {
+      name: 'node',
+      include: ['src/utils/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+  ],
+});
+```
