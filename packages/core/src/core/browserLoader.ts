@@ -3,8 +3,6 @@ import { pathToFileURL } from 'node:url';
 import type { ListCommandResult } from '../types';
 import { color, logger } from '../utils';
 
-declare const RSTEST_VERSION: string;
-
 /**
  * Type definition for the @rstest/browser package exports.
  */

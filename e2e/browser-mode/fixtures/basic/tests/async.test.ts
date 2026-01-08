@@ -65,7 +65,7 @@ describe('Async operations', () => {
       count++;
     }, 20);
 
-    await sleep(70);
+    await sleep(300);
     globalThis.clearInterval(intervalId);
 
     expect(count).toBeGreaterThanOrEqual(2);

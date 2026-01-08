@@ -1,5 +1,6 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
@@ -167,6 +168,7 @@ export default defineConfig({
   source: {
     define: {
       RSTEST_VERSION: JSON.stringify(version),
+      PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
     },
   },
   tools: {
