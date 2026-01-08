@@ -10,6 +10,10 @@ export default defineConfig({
       react: 'commonjs react',
     },
   },
+  pool: {
+    // debug warnings
+    execArgv: ['--trace-warnings'],
+  },
   exclude: [
     '**/node_modules/**',
     '**/dist/**',

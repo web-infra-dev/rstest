@@ -1,7 +1,7 @@
 import { expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
-it('github-actions', async () => {
+it.skipIf(!process.env.CI)('github-actions', async () => {
   const { cli } = await runRstestCli({
     command: 'rstest',
     args: ['run', 'githubActions', '--reporter', 'github-actions'],
