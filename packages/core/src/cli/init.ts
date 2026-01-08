@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
-import { loadConfig } from '../config';
+import { loadConfig, mergeRstestConfig } from '../config';
 import type { Project, RstestConfig } from '../types';
 import {
   castArray,
@@ -174,47 +174,58 @@ export async function resolveProjects({
   const resolvedProjectPaths = new Set<string>();
 
   const getProjects = async (rstestConfig: RstestConfig, root: string) => {
-    const { projectPaths, projectPatterns, projectConfigs } = (
-      rstestConfig.projects || []
-    ).reduce(
-      (total, p) => {
+    const projectPaths: string[] = [];
+    const projectPatterns: string[] = [];
+    const projectConfigs: {
+      config: RstestConfig;
+      configFilePath: string | undefined;
+    }[] = [];
+
+    await Promise.all(
+      (rstestConfig.projects || []).map(async (p) => {
         if (typeof p === 'object') {
           const projectRoot = p.root ? formatRootStr(p.root, root) : root;
-          total.projectConfigs.push({
+
+          // Handle extends
+          let projectConfig: RstestConfig = { ...p };
+          if (projectConfig.extends) {
+            const extendsConfig =
+              typeof projectConfig.extends === 'function'
+                ? await projectConfig.extends(
+                    Object.freeze({ ...projectConfig }),
+                  )
+                : projectConfig.extends;
+            delete (extendsConfig as RstestConfig).projects;
+            projectConfig = mergeRstestConfig(extendsConfig, projectConfig);
+          }
+
+          projectConfigs.push({
             config: mergeWithCLIOptions(
               {
                 root: projectRoot,
-                ...p,
+                ...projectConfig,
                 name: p.name ? p.name : getDefaultProjectName(projectRoot),
               },
               options,
             ),
             configFilePath: undefined,
           });
-          return total;
+          return;
         }
+
         const projectStr = formatRootStr(p, root);
 
         if (isDynamicPattern(projectStr)) {
-          total.projectPatterns.push(projectStr);
+          projectPatterns.push(projectStr);
         } else {
           const absolutePath = getAbsolutePath(root, projectStr);
 
           if (!existsSync(absolutePath)) {
             throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
           }
-          total.projectPaths.push(absolutePath);
+          projectPaths.push(absolutePath);
         }
-        return total;
-      },
-      {
-        projectPaths: [] as string[],
-        projectPatterns: [] as string[],
-        projectConfigs: [] as {
-          config: RstestConfig;
-          configFilePath: string | undefined;
-        }[],
-      },
+      }),
     );
 
     projectPaths.push(...(await globProjects(projectPatterns, root)));
