@@ -2,23 +2,7 @@ import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
-
-const shouldKeepBundledForFederation = (request: string): boolean => {
-  // Module Federation runtimes can generate "loader-style" requests that embed
-  // inline JS via a `data:` URL (e.g. `something!=!data:text/javascript,...`).
-  // Externalizing those breaks because Node can't resolve them via require/import.
-  if (request.includes('!=!data:') && request.includes('javascript')) {
-    return true;
-  }
-
-  // Keep MF runtime packages bundled when federation is enabled. They participate
-  // in runtime bootstrapping and may be referenced through loader-style specifiers.
-  if (request.startsWith('@module-federation/')) {
-    return true;
-  }
-
-  return false;
-};
+import { shouldKeepBundledForFederation } from './federation';
 
 const autoExternalNodeModules: (
   outputModule: boolean,
