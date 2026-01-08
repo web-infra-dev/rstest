@@ -191,7 +191,7 @@ export default defineConfig({
 ```typescript
 export default defineConfig({
   extends: async (user) => {
-    const config = await withRslibConfig()(user);
+    const config = await withRslibConfig({ libId: 'react' })(user);
     console.log('Extended config:', JSON.stringify(config, null, 2));
     return config;
   },
