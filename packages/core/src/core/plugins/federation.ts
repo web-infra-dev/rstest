@@ -36,17 +36,6 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
             output: {
               module: false,
             },
-            source: {
-              define: {
-                // Module Federation runtime chooses between DOM vs Node loaders based on
-                // the compile-time constant `ENV_TARGET`.
-                //
-                // When tests run in JSDOM, MF would otherwise detect a browser-like
-                // environment and attempt <script> injection for `remoteType: 'script'`,
-                // which doesn't work for async-node remotes. Force node loader behavior.
-                ENV_TARGET: JSON.stringify('node'),
-              },
-            },
             tools: {
               rspack: (rspackConfig) => {
                 // Tests run in Node workers even for DOM-like environments.
@@ -54,6 +43,33 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
                 rspackConfig.target = 'async-node';
                 rspackConfig.optimization ??= {};
                 rspackConfig.optimization.splitChunks = false;
+
+                // Configure ModuleFederationPlugin instances to target node environment
+                // This sets ENV_TARGET='node' in the federation runtime
+                if (rspackConfig.plugins) {
+                  rspackConfig.plugins = rspackConfig.plugins.map(
+                    (plugin: any) => {
+                      // Check if this is a ModuleFederationPlugin by checking for
+                      // known properties/methods
+                      if (
+                        plugin &&
+                        plugin._options &&
+                        (plugin._options.name ||
+                          plugin._options.remotes ||
+                          plugin._options.exposes)
+                      ) {
+                        // Ensure experiments.optimization.target is set to 'node'
+                        plugin._options.experiments =
+                          plugin._options.experiments || {};
+                        plugin._options.experiments.optimization =
+                          plugin._options.experiments.optimization || {};
+                        plugin._options.experiments.optimization.target =
+                          'node';
+                      }
+                      return plugin;
+                    },
+                  );
+                }
               },
             },
           });

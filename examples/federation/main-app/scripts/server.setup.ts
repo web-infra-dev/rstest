@@ -130,6 +130,13 @@ export const cleanupNodeRemote = async () => {
 export const ensureNodeRemote = async () => {
   globalThis.__RSTEST_MF_CHILDREN__ ??= [];
 
+  // Kill port 3001 if it's already in use before starting the server
+  const inUse = await isPortInUse(3001);
+  if (inUse) {
+    await killPort(3001).catch(() => {});
+    console.log('[Federation Setup] Killed existing process on port 3001');
+  }
+
   // In federation mode, the host is built for Node execution (async-node) even if tests
   // run under JSDOM. Serve the *node* remoteEntry on 3001 so the MF node loader can
   // evaluate it via fetch + vm and obtain the container interface (get/init).
