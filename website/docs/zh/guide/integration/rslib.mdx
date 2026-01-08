@@ -48,19 +48,123 @@ export default defineConfig({
 - 将兼容的 Rslib 选项映射到 Rstest 配置
 - 与你提供的其他 Rstest 配置合并
 
-默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以设置 `cwd`：
+默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。更多详情请参阅 [API](#api)。
+
+## API
+
+### `withRslibConfig(options)`
+
+返回一个加载 Rslib 配置并将其转换为 Rstest 配置的函数。
+
+#### `cwd`
+
+- **类型:** `string`
+- **默认值:** `process.cwd()`
+
+`cwd` 是用于解析 Rslib 配置文件的当前工作目录。
+
+当你的 Rslib 配置文件位于不同目录，或者你在 monorepo 中运行测试（此时 `process.cwd()` 可能不是你的配置目录）时，可以指定 `cwd` 选项从不同的目录解析 Rslib 配置文件。
 
 ```ts
 export default defineConfig({
   extends: withRslibConfig({
-    cwd: './packages/my-lib',
+    cwd: './packages/my-app',
   }),
 });
 ```
 
-更多高级选项请参考 [`@rstest/adapter-rslib` 文档](https://www.npmjs.com/package/@rstest/adapter-rslib)。
+#### `configPath`
 
-### 配置映射
+- **类型:** `string`
+- **默认值:** `'./rslib.config.ts'`
+
+Rslib 配置文件的路径。
+
+#### `libId`
+
+- **类型:** `string`
+- **默认值:** `undefined`
+
+要使用的 `lib` 字段中的 lib 配置 ID。设置为字符串以使用具有匹配 ID 的 lib 配置。
+
+默认情况下，适配器使用 Rslib 的通用配置。如果你的 Rslib 配置有多个 lib 配置：
+
+```ts
+// rslib.config.ts
+export default defineConfig({
+  lib: [
+    {
+      id: 'core',
+      format: 'esm',
+      dts: true,
+      source: {
+        define: {
+          IS_CORE: true,
+        },
+      },
+    },
+    {
+      id: 'utils',
+      format: 'esm',
+      source: {
+        define: {
+          IS_CORE: false,
+        },
+      },
+    },
+  ],
+  // 共享配置
+});
+```
+
+你可以在 Rstest 配置中引用特定的 lib 配置。Rstest 会将 Rslib 的共享配置和具有匹配 `libId` 的 lib 配置调整为 Rstest 格式。
+
+```ts
+// 用于测试 'core' 环境
+export default defineConfig({
+  extends: withRslibConfig({
+    libId: 'core',
+  }),
+  // core-specific test config
+});
+```
+
+当你需要使用不同的配置独立测试应用程序的多个部分时，可以定义多个 Rstest project。每个 project 都可以通过设置 `libId` 选项来扩展特定的 lib 配置。
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libId: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRslibConfig({ libId: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `modifyLibConfig`
+
+- **类型:** `(config: RslibConfig) => RslibConfig | void`
+- **默认值:** `undefined`
+
+在 Rslib 配置转换为 Rstest 配置之前对其进行修改：
+
+```ts
+export default defineConfig({
+  extends: withRslibConfig({
+    modifyLibConfig: (libConfig) => {
+      delete libConfig.source?.define;
+      return libConfig;
+    },
+  }),
+});
+```
+
+## 配置映射
 
 适配器会自动将以下 Rslib 选项映射到 Rstest：
 
@@ -80,14 +184,14 @@ export default defineConfig({
 | `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain 配置                                   |
 | `output.target`       | `testEnvironment`     | `web` 映射为 'happy-dom'，`node` 及其他映射为 'node' |
 
-### 调试配置
+## 调试配置
 
 如需查看适配器返回的解析后配置，可以打印结果：
 
 ```typescript
 export default defineConfig({
-  extends: async (user) => {
-    const config = await withRslibConfig({ libId: 'react' })(user);
+  extends: async (user) => {.
+    const config = await withRslibConfig()(user);
     console.log('Extended config:', JSON.stringify(config, null, 2));
     return config;
   },
