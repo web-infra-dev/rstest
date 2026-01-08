@@ -31,6 +31,11 @@ export default defineConfig({
               requiredVersion: '19.2.3',
             },
           },
+          experiments: {
+            optimization: {
+              target: 'node', // Required for Node.js test environment
+            },
+          },
         }),
       );
       return config;

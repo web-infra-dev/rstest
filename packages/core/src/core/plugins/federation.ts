@@ -1,6 +1,10 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 
+// Note: ModuleFederationPlugin configuration should include
+// experiments.optimization.target: 'node' when used with Rstest
+// to ensure proper Node.js loading in JSDOM environments
+
 export const shouldKeepBundledForFederation = (request: string): boolean => {
   // Module Federation runtimes can generate "loader-style" requests that embed
   // inline JS via a `data:` URL (e.g. `something!=!data:text/javascript,...`).
@@ -44,31 +48,28 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
                 rspackConfig.optimization ??= {};
                 rspackConfig.optimization.splitChunks = false;
 
-                // Configure ModuleFederationPlugin instances to target node environment
-                // This sets ENV_TARGET='node' in the federation runtime
+                // Validate that ModuleFederationPlugin instances have the correct config
                 if (rspackConfig.plugins) {
-                  rspackConfig.plugins = rspackConfig.plugins.map(
-                    (plugin: any) => {
-                      // Check if this is a ModuleFederationPlugin by checking for
-                      // known properties/methods
-                      if (
-                        plugin &&
-                        plugin._options &&
-                        (plugin._options.name ||
-                          plugin._options.remotes ||
-                          plugin._options.exposes)
-                      ) {
-                        // Ensure experiments.optimization.target is set to 'node'
-                        plugin._options.experiments =
-                          plugin._options.experiments || {};
-                        plugin._options.experiments.optimization =
-                          plugin._options.experiments.optimization || {};
-                        plugin._options.experiments.optimization.target =
-                          'node';
+                  for (const plugin of rspackConfig.plugins) {
+                    // Check if this looks like a ModuleFederationPlugin
+                    if (
+                      plugin &&
+                      typeof plugin === 'object' &&
+                      plugin.constructor?.name === 'ModuleFederationPlugin'
+                    ) {
+                      const options = (plugin as any)._options;
+                      if (options && typeof options === 'object') {
+                        // Validate experiments.optimization.target is set to 'node'
+                        if (
+                          options.experiments?.optimization?.target !== 'node'
+                        ) {
+                          console.warn(
+                            `[Rstest Federation] ModuleFederationPlugin "${options.name || 'unnamed'}" should have experiments.optimization.target set to 'node' for JSDOM test environments.`,
+                          );
+                        }
                       }
-                      return plugin;
-                    },
-                  );
+                    }
+                  }
                 }
               },
             },
