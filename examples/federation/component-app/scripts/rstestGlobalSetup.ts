@@ -7,7 +7,14 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const run = async (cwd: string, cmd: string, args: string[]) => {
-  const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: process.env });
+  // On Windows, pnpm is typically a `.cmd` shim, which isn't directly executable
+  // via CreateProcess (spawn) unless run through a shell.
+  const child = spawn(cmd, args, {
+    cwd,
+    stdio: 'inherit',
+    env: process.env,
+    shell: process.platform === 'win32',
+  });
   await new Promise<void>((resolve, reject) => {
     child.once('exit', (code) => {
       code === 0
@@ -18,12 +25,10 @@ const run = async (cwd: string, cmd: string, args: string[]) => {
   });
 };
 
-const getPnpmCmd = () => (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm');
-
 export async function setup() {
   const federationRoot = path.resolve(__dirname, '..', '..');
   const nodeLocalDir = path.resolve(federationRoot, 'node-local-remote');
-  await run(nodeLocalDir, getPnpmCmd(), ['build:node']);
+  await run(nodeLocalDir, 'pnpm', ['build:node']);
 }
 
 export async function teardown() {
