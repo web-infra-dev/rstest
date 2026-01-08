@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { createRequire as createNativeRequire } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -42,15 +41,9 @@ const createRequire = (
     const normalizedJoinedPath = path.normalize(joinedPath);
 
     // Prefer in-memory assets produced by the bundler (dev server output).
-    // For Module Federation / async-node, runtime may `require()` chunks from disk,
-    // so fall back to reading from filesystem to keep evaluation inside our VM
-    // wrapper (ensures `__rstest_dynamic_import__` and other shims exist).
     const content =
       assetFiles[normalizedJoinedPath] ||
-      latestAssetFiles[normalizedJoinedPath] ||
-      (isRelativePath(id) && fs.existsSync(normalizedJoinedPath)
-        ? fs.readFileSync(normalizedJoinedPath, 'utf8')
-        : undefined);
+      latestAssetFiles[normalizedJoinedPath];
 
     if (content) {
       try {

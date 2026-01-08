@@ -12,9 +12,6 @@ export default defineConfig({
   output: {
     module: false,
   },
-  dev: {
-    writeToDisk: true,
-  },
   tools: {
     rspack: (config) => {
       // Build host for Node federation runtime (async-node) even though tests run
