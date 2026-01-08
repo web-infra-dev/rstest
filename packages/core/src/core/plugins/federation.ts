@@ -1,5 +1,6 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
+import { logger } from '../../utils';
 
 // Note: ModuleFederationPlugin configuration should include
 // experiments.optimization.target: 'node' when used with Rstest
@@ -65,7 +66,7 @@ export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
                         if (
                           options.experiments?.optimization?.target !== 'node'
                         ) {
-                          console.warn(
+                          logger.warn(
                             `[Rstest Federation] ModuleFederationPlugin "${options.name || 'unnamed'}" should have experiments.optimization.target set to 'node' for JSDOM test environments.`,
                           );
                         }
