@@ -1,0 +1,203 @@
+# Rsbuild
+
+本指南介绍了如何将 Rstest 与 [Rsbuild](https://rsbuild.dev) 集成，以便在你的 Rsbuild 项目中进行无缝测试。
+
+## 快速开始
+
+### 新建项目
+
+创建一个新的 Rsbuild + Rstest 项目。在创建时添加 `--tools rstest` 标志：
+
+```bash
+npm create rsbuild@latest -- --tools rstest
+```
+
+脚手架包含了 Rstest 和演示测试。使用 `npm run test` 来运行它们。
+
+### 现有项目
+
+要将 Rstest 添加到现有项目中，请遵循[快速入门](/guide/start/quick-start)来安装和设置测试脚本。
+
+## 复用 Rsbuild 配置
+
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rsbuild 配置文件中继承配置。这可以确保你的测试环境与构建配置相匹配，而无需重复配置。
+
+### 安装适配器
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+### 继承你的配置
+
+使用适配器中的 `withRsbuildConfig` 函数，你可以从 Rsbuild 配置文件中继承 Rstest 配置。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  // 额外的 rstest 特定配置
+});
+```
+
+这将自动：
+
+- 加载你的 `rsbuild.config.ts` 文件
+- 将兼容的 Rsbuild 选项映射到 Rstest 配置
+- 与你提供的任何其他 Rstest 配置合并
+
+默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果你的配置文件在其他地方，你可以使用 `cwd` 选项。更多详情请参阅 [API](#api) 部分。
+
+## API
+
+### `withRsbuildConfig(options)`
+
+返回一个配置函数，该函数加载 Rsbuild 配置并将其转换为 Rstest 配置。
+
+#### `cwd`
+
+- **类型:** `string`
+- **默认值:** `process.cwd()`
+
+`cwd` 会传递给 Rsbuild 的 `loadConfig` 函数。它是用于解析 Rsbuild 配置文件的当前工作目录。
+
+当你的 Rsbuild 配置文件位于不同的目录，或者你在 monorepo 中运行测试（此时 `process.cwd()` 不是你的配置目录）时，你可以指定 `cwd` 选项从不同的目录解析 Rsbuild 配置文件。
+
+```ts
+export default defineConfig({
+  extends: withRsbuildConfig({
+    cwd: './packages/my-app',
+  }),
+});
+```
+
+#### `configPath`
+
+- **类型:** `string`
+- **默认值:** `'./rsbuild.config.ts'`
+
+Rsbuild 配置文件的路径。
+
+#### `environmentName`
+
+- **类型:** `string`
+- **默认值:** `undefined`
+
+要使用的 `environments` 字段中的环境名称，它将与通用配置合并。设置为一个字符串以使用具有匹配名称的环境配置。
+
+默认情况下，适配器使用 Rsbuild 的通用配置。如果你的 Rsbuild 配置有多个环境配置：
+
+```ts
+// rsbuild.config.ts
+export default {
+  source: {
+    define: {
+      'process.env.NODE_ENV': '"development"',
+    },
+  },
+  environments: {
+    test: {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"test"',
+        },
+      },
+    },
+    prod: {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"production"',
+        },
+      },
+    },
+  },
+};
+```
+
+你可以在 Rstest 配置中引用特定的环境配置。Rstest 将会把 Rsbuild 的共享配置和具有匹配 `environmentName` 的环境配置适配为 Rstest 格式。
+
+```ts
+// 用于测试 'test' 环境
+export default defineConfig({
+  extends: withRsbuildConfig({
+    environmentName: 'test',
+  }),
+  // 测试环境特定的配置
+});
+```
+
+当你需要使用不同的配置独立测试应用程序的多个部分时，你可以定义多个 Rstest 项目。每个项目可以通过设置 `environmentName` 选项来继承特定的环境配置。
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRsbuildConfig({ environmentName: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRsbuildConfig({ environmentName: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `modifyRsbuildConfig`
+
+- **类型:** `(config: RsbuildConfig) => RsbuildConfig | void`
+- **默认值:** `undefined`
+
+在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改：
+
+```ts
+export default defineConfig({
+  extends: withRsbuildConfig({
+    modifyRsbuildConfig: (rsbuildConfig) => {
+      delete rsbuildConfig.source?.define;
+      return rsbuildConfig;
+    },
+  }),
+});
+```
+
+## 配置映射
+
+适配器会自动将这些 Rsbuild 选项映射到 Rstest：
+
+| Rsbuild 选项            | Rstest 等效项         | 说明                                       |
+| ----------------------- | --------------------- | ------------------------------------------ |
+| `name` from environment | `name`                | 环境标识符                                 |
+| `plugins`               | `plugins`             | 插件配置                                   |
+| `source.decorators`     | `source.decorators`   | 装饰器支持                                 |
+| `source.define`         | `source.define`       | 全局常量                                   |
+| `source.include`        | `source.include`      | 源文件包含模式                             |
+| `source.exclude`        | `source.exclude`      | 源文件排除模式                             |
+| `source.tsconfigPath`   | `source.tsconfigPath` | TypeScript 配置文件路径                    |
+| `resolve`               | `resolve`             | 模块解析                                   |
+| `output.cssModules`     | `output.cssModules`   | CSS 模块配置                               |
+| `tools.rspack`          | `tools.rspack`        | Rspack 配置                                |
+| `tools.swc`             | `tools.swc`           | SWC 配置                                   |
+| `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler 链配置                             |
+| `output.target`         | `testEnvironment`     | web 环境为 'happy-dom'，node 环境为 'node' |
+
+## 调试配置
+
+要查看适配器返回的解析配置，可以将其包装并打印结果：
+
+```typescript
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRsbuildConfig()(user);
+    console.log('继承的配置:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## 相关文档
+
+- [Rsbuild 配置概览](https://rsbuild.dev/config)
+- [Rstest 配置概览](/config/)
