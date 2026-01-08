@@ -235,5 +235,54 @@ export function setupCommands(): void {
       },
     );
 
+  // init command - initialize rstest configuration
+  cli
+    .command('init [project]', 'Initialize rstest configuration')
+    .option('--yes', 'Use default options (non-interactive)')
+    .action(async (project: string | undefined, options: { yes?: boolean }) => {
+      try {
+        let selectedProject = project;
+
+        // If no project specified, show selection menu
+        if (!selectedProject) {
+          const { select, isCancel } = await import('@clack/prompts');
+          const color = (await import('picocolors')).default;
+
+          console.log();
+          const selected = await select({
+            message: 'What would you like to initialize?',
+            options: [
+              {
+                value: 'browser',
+                label: 'browser',
+                hint: 'Browser mode for component testing',
+              },
+            ],
+          });
+
+          if (isCancel(selected)) {
+            console.log(color.yellow('Operation cancelled.'));
+            process.exit(0);
+          }
+
+          selectedProject = selected as string;
+        }
+
+        if (selectedProject === 'browser') {
+          const { create } = await import('./init/browser');
+          await create({ yes: options.yes });
+        } else {
+          logger.error(
+            `Unknown project type: "${selectedProject}". Available: browser`,
+          );
+          process.exit(1);
+        }
+      } catch (err) {
+        logger.error('Failed to initialize rstest.');
+        logger.error(formatError(err));
+        process.exit(1);
+      }
+    });
+
   cli.parse();
 }
