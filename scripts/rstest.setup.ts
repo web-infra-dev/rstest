@@ -30,13 +30,11 @@ const enhancedPathSerializer = {
     // - <HOME> replacement
     // - <ROOT> replacement
     // - <PNPM_INNER> replacement for local .pnpm paths
-    const serialized = pathSerializer.serialize(value);
-
-    // Remove quotes for processing
-    let normalized = serialized;
-    if (normalized.startsWith('"') && normalized.endsWith('"')) {
-      normalized = normalized.slice(1, -1);
-    }
+    //
+    // Note: `pathSerializer.serialize` returns a snapshot-ready string
+    // (including surrounding quotes). Keep that shape so inline snapshots
+    // that include JSON lines stay readable (no extra escaping).
+    let serialized = pathSerializer.serialize(value);
 
     // Additional normalization for global pnpm store paths that aren't handled
     // by the built-in replacePnpmInner (which only handles local .pnpm directories).
@@ -44,12 +42,12 @@ const enhancedPathSerializer = {
     // <HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/hash/node_modules/@rsbuild/core/...
     // Windows global paths: <HOME>/AppData/Local/pnpm/store/v10/links/...
     // But preserves <PNPM_INNER> replacements for local node_modules/.pnpm paths
-    normalized = normalized.replace(
-      /<HOME>\/[^/]*\/pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//g,
+    serialized = serialized.replace(
+      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//g,
       '<PNPM_STORE>/$1/node_modules/',
     );
 
-    return JSON.stringify(normalized);
+    return serialized;
   },
 };
 
