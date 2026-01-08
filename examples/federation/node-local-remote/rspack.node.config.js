@@ -17,7 +17,7 @@ module.exports = {
     new ModuleFederationPlugin({
       name: 'node_local_remote',
       filename: 'remoteEntry.js',
-      library: { type: 'commonjs-module' },
+      library: { type: 'commonjs-module', name: 'node_local_remote' },
       runtimePlugins: ['@module-federation/node/runtimePlugin'],
       exposes: {
         './test': './src/test.js',

@@ -129,18 +129,18 @@ export const cleanupNodeRemote = async () => {
 
 export const ensureNodeRemote = async () => {
   globalThis.__RSTEST_MF_CHILDREN__ ??= [];
-  const reachable = await isUrlReachable(remoteEntryUrl, 500);
-  if (reachable) return;
 
-  const inUse = await isPortInUse(3001);
-  if (inUse) await killPort(3001).catch(() => {});
-
-  await run(componentAppDir, 'pnpm', ['build']);
-  const server = start('component-app(web)', componentAppDir, 'pnpm', [
-    'serve',
-    '-p',
-    '3001',
+  // In federation mode, the host is built for Node execution (async-node) even if tests
+  // run under JSDOM. Serve the *node* remoteEntry on 3001 so the MF node loader can
+  // evaluate it via fetch + vm and obtain the container interface (get/init).
+  await run(componentAppDir, 'pnpm', ['build:node']);
+  const server = start('component-app(node)', componentAppDir, 'pnpm', [
+    'serve:node',
   ]);
   globalThis.__RSTEST_MF_CHILDREN__!.push(server);
   await waitForUrl(remoteEntryUrl, 30_000);
+
+  // Also build node-local-remote for path-based consumption.
+  const nodeLocalDir = resolve(workspaceRoot, 'node-local-remote');
+  await run(nodeLocalDir, 'pnpm', ['build:node']);
 };

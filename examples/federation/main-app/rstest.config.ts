@@ -14,16 +14,11 @@ export default defineConfig({
   },
   tools: {
     rspack: (config) => {
-      // Build host for Node federation runtime (async-node) even though tests run
-      // under JSDOM. This keeps remote resolution consistent with "node" tests.
-      config.target = 'async-node';
-      config.optimization ??= {};
-      config.optimization.splitChunks = false;
-      config.output = { ...(config.output ?? {}), publicPath: 'auto' };
       config.plugins ??= [];
       config.plugins.push(
         new ModuleFederationPlugin({
           name: 'main_app_web',
+          library: { type: 'commonjs-module', name: 'main_app_web' },
           remoteType: 'script',
           remotes: {
             'component-app':

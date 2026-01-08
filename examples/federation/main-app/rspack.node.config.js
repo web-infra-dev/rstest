@@ -34,6 +34,7 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'main_app',
+      library: { type: 'commonjs-module', name: 'main_app_web' },
       remoteType: 'script',
       remotes: {
         'component-app': 'component_app@http://localhost:3003/remoteEntry.js',

@@ -63,7 +63,7 @@ module.exports = {
       // run under JSDOM. We force the MF runtime to use its Node loader (vm eval),
       // so the remoteEntry must export through CommonJS for the loader to return
       // the container interface (get/init).
-      library: { type: 'commonjs-module' },
+      library: { type: 'commonjs-module', name: 'component_app' },
       // Required for async-node remotes that load chunks over HTTP in Node.
       runtimePlugins: ['@module-federation/node/runtimePlugin'],
       exposes: {
