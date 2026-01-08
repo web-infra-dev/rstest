@@ -67,17 +67,6 @@ const waitForUrl = async (
       // ignore and retry
     }
 
-    // If another worker created the lock but the server never came up (or was killed),
-    // proactively remove the stale lock and let this worker become the owner.
-    if (globalThis.__RSTEST_MF_OWNER__ === false) {
-      const reachable = await isUrlReachable(url);
-      if (!reachable) {
-        try {
-          rmSync(lockFile, { force: true });
-        } catch {}
-      }
-    }
-
     await sleep(intervalMs);
   }
 
@@ -98,20 +87,29 @@ const ensureNodeRemoteImpl = async () => {
   }
 
   // Try to become the owner (cross-worker).
-  let fd: number | null = null;
-  try {
-    fd = openSync(lockFile, 'wx');
-    globalThis.__RSTEST_MF_OWNER__ = true;
-  } catch (e: any) {
-    if (e?.code === 'EEXIST') {
-      // Another worker is (supposedly) starting it; wait for all pending endpoints.
+  for (;;) {
+    let fd: number | null = null;
+    try {
+      fd = openSync(lockFile, 'wx');
+      globalThis.__RSTEST_MF_OWNER__ = true;
+      break;
+    } catch (e: any) {
+      if (e?.code !== 'EEXIST') throw e;
+
+      // Another worker is (supposedly) starting it. Wait briefly; if the server
+      // never comes up, treat the lock as stale and retry ownership.
       globalThis.__RSTEST_MF_OWNER__ = false;
-      if (need3001) await waitForUrl(remoteEntryUrl);
-      return;
+      try {
+        await waitForUrl(remoteEntryUrl, { timeoutMs: 5_000 });
+        return;
+      } catch {
+        try {
+          rmSync(lockFile, { force: true });
+        } catch {}
+      }
+    } finally {
+      if (fd !== null) closeSync(fd);
     }
-    throw e;
-  } finally {
-    if (fd !== null) closeSync(fd);
   }
 
   // Owner path: build required outputs, start servers, then wait for all endpoints.
