@@ -32,6 +32,13 @@ install({
   },
 });
 
+const originalConsole = global.console;
+
+// Create RPC only once
+const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
+  originalConsole,
+});
+
 const registerGlobalApi = (api: Rstest) => {
   return globalApis.reduce<{
     [key in keyof Rstest]?: Rstest[key];
@@ -66,11 +73,6 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const originalConsole = global.console;
-
-  const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
-    originalConsole,
-  });
   const {
     runtimeConfig: {
       globals,
