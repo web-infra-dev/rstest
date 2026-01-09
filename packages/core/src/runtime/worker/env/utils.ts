@@ -42,7 +42,12 @@ export function installGlobal(
   const keys = getWindowKeys(global, win, options.additionalKeys);
 
   const originals = new Map<string | symbol, any>();
-  const boundFunctionCache = new WeakMap<Function, Function>();
+  // Cache bound functions per underlying implementation. We intentionally avoid
+  // the broad `Function` type to satisfy existing lint rules.
+  const boundFunctionCache = new WeakMap<
+    (...args: any[]) => any,
+    (...args: any[]) => any
+  >();
 
   const overrides = new Map<string | symbol, any>();
   for (const key of keys) {
@@ -65,7 +70,7 @@ export function installGlobal(
           if (cached) {
             return cached;
           }
-          const bound = current.bind(win);
+          const bound = current.bind(win) as (...args: any[]) => any;
           boundFunctionCache.set(current, bound);
           return bound;
         }
