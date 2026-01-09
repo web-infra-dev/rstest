@@ -14,6 +14,9 @@ test('should handle click error', async () => {
       (event) => {
         expect(event.message).toBe('click error');
         event.preventDefault();
+        // Some DOM implementations (e.g. happy-dom) don't reflect preventDefault()
+        // via `defaultPrevented`; this ensures frameworks can treat it as handled.
+        (event as any).returnValue = false;
         resolve();
       },
       { once: true },
