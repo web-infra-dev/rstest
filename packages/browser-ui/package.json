@@ -1,9 +1,7 @@
 {
   "name": "@rstest/browser-ui",
   "version": "0.7.9",
-  "publishConfig": {
-    "access": "public"
-  },
+  "license": "MIT",
   "description": "Prebuilt browser container UI for Rstest",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +17,28 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
+  },
+  "keywords": [
+    "rstest",
+    "react",
+    "testing",
+    "browser",
+    "component"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/browser-ui"
+  },
+  "engines": {
+    "node": ">=18.12.0"
   },
   "devDependencies": {
     "@rsbuild/core": "1.7.1",
