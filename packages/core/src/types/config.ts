@@ -95,15 +95,7 @@ type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
 type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
-  reporters?:
-    | any
-    | BuiltInReporterNames
-    | (
-        | any
-        | BuiltInReporterNames
-        | [BuiltInReporterNames]
-        | ReporterWithOptions
-      )[];
+  reporters?: any;
 };
 
 export type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
