@@ -69,16 +69,24 @@ const workerEnv = {
   ...process.env,
   PATH: [
     process.env.PATH,
+    // Windows runners typically rely on the `.cmd` shims for package managers.
+    // Keep it on PATH and run through a shell so `spawn('pnpm')` works.
+    ...(process.platform === 'win32' ? ['C:\\Windows\\System32'] : []),
     '/usr/local/bin',
     '/opt/homebrew/bin',
     `${process.env.HOME}/.local/bin`,
   ]
     .filter(Boolean)
-    .join(':'),
+    .join(process.platform === 'win32' ? ';' : ':'),
 };
 
 const start = (name: string, cwd: string, cmd: string, args: string[]) => {
-  const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: workerEnv });
+  const child = spawn(cmd, args, {
+    cwd,
+    stdio: 'inherit',
+    env: workerEnv,
+    shell: process.platform === 'win32',
+  });
   child.on('error', (err) => {
     console.error(`[Federation Setup] Error in ${name}:`, err);
   });
@@ -94,7 +102,12 @@ const start = (name: string, cwd: string, cmd: string, args: string[]) => {
 };
 
 const run = async (cwd: string, cmd: string, args: string[]) => {
-  const child = spawn(cmd, args, { cwd, stdio: 'inherit', env: workerEnv });
+  const child = spawn(cmd, args, {
+    cwd,
+    stdio: 'inherit',
+    env: workerEnv,
+    shell: process.platform === 'win32',
+  });
   await new Promise<void>((resolveRun, rejectRun) => {
     child.once('exit', (code) => {
       code === 0

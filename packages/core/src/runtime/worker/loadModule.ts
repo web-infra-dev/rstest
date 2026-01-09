@@ -54,6 +54,7 @@ const createRequire = (
           rstestContext,
           assetFiles,
           interopDefault,
+          federation: Boolean((globalThis as any).__rstest_federation__),
         });
       } catch (err) {
         logger.error(
@@ -168,6 +169,7 @@ export const loadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  federation,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -175,6 +177,7 @@ export const loadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  federation?: boolean;
 }): any => {
   const fileDir = path.dirname(testPath);
 
@@ -226,27 +229,29 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  // Some runtimes (notably Module Federation's Node runtime plugin) may evaluate code
-  // via `vm`/`eval` wrappers that do not preserve the function-argument injection
-  // we do below. Expose the dynamic import shim on globalThis as a fallback so
-  // those evaluated chunks can still resolve external modules.
-  //
-  // This is intentionally best-effort and scoped to the worker process.
-  try {
-    (globalThis as any).__rstest_dynamic_import__ =
-      context.__rstest_dynamic_import__;
-  } catch {
-    // ignore
-  }
-  try {
-    // Ensure a global binding exists for strict-mode scripts evaluated via vm/eval.
-    // Note: assigning on globalThis alone is not enough because evaluated scripts
-    // may refer to an unscoped identifier `__rstest_dynamic_import__`.
-    vm.runInThisContext(
-      'globalThis.__rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__ || undefined; var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
-    );
-  } catch {
-    // ignore
+  if (federation) {
+    // Some runtimes (notably Module Federation's Node runtime plugin) may evaluate
+    // code via `vm`/`eval` wrappers that do not preserve the function-argument
+    // injection we do below. Expose the dynamic import shim on globalThis as a
+    // fallback so those evaluated chunks can still resolve external modules.
+    //
+    // This is intentionally best-effort and scoped to the worker process.
+    try {
+      (globalThis as any).__rstest_dynamic_import__ =
+        context.__rstest_dynamic_import__;
+    } catch {
+      // ignore
+    }
+    try {
+      // Ensure a global binding exists for strict-mode scripts evaluated via vm/eval.
+      // Note: assigning on globalThis alone is not enough because evaluated scripts
+      // may refer to an unscoped identifier `__rstest_dynamic_import__`.
+      vm.runInThisContext(
+        'globalThis.__rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__ || undefined; var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
+      );
+    } catch {
+      // ignore
+    }
   }
 
   const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
@@ -279,6 +284,7 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  federation,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -286,6 +292,7 @@ export const cacheableLoadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  federation?: boolean;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);
@@ -297,6 +304,7 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
+    federation,
   });
   moduleCache.set(testPath, mod);
   return mod;

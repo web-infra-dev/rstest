@@ -72,12 +72,16 @@ export function installGlobal(
     });
   }
 
-  // Point window-like globals at the real DOM window. This matters for runtimes
-  // that evaluate code in the DOM context (e.g. <script> loading in JSDOM).
-  global.window = win;
-  global.self = win;
-  global.top = win;
-  global.parent = win;
+  const federationEnabled = Boolean((globalThis as any).__rstest_federation__);
+
+  // Most environments expect `window`/`self` to map to the worker global.
+  // Module Federation's Node runtime can evaluate code in a DOM window context
+  // (e.g. via <script> in JSDOM), so point these to the real window only when
+  // federation compatibility mode is enabled.
+  global.window = federationEnabled ? win : global;
+  global.self = federationEnabled ? win : global;
+  global.top = federationEnabled ? win : global;
+  global.parent = federationEnabled ? win : global;
 
   if (global.global) {
     global.global = global;
@@ -86,7 +90,7 @@ export function installGlobal(
   // rewrite defaultView to reference the same global context
   if (global.document?.defaultView) {
     Object.defineProperty(global.document, 'defaultView', {
-      get: () => win,
+      get: () => (federationEnabled ? win : global),
       enumerable: true,
       configurable: true,
     });

@@ -59,6 +59,17 @@ const preparePool = async ({
   setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
+  // Expose a simple flag on the worker global so low-level helpers can gate
+  // federation-specific behavior without threading config through every call.
+  // This is best-effort and scoped to the worker process.
+  try {
+    (globalThis as any).__rstest_federation__ = Boolean(
+      context.runtimeConfig.federation,
+    );
+  } catch {
+    // ignore
+  }
+
   // Prefer public env var from tinypool, fallback to context.taskId
   process.env.RSTEST_WORKER_ID = String(
     process.__tinypool_state__.workerId || context.taskId,
@@ -208,6 +219,7 @@ const loadFiles = async ({
   interopDefault,
   isolate,
   outputModule,
+  federation,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: Record<string, string>;
@@ -217,6 +229,7 @@ const loadFiles = async ({
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<void> => {
   const { loadModule, updateLatestAssetFiles } = outputModule
     ? await import('./loadEsModule')
@@ -234,6 +247,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      federation,
     });
   }
 
@@ -248,6 +262,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      federation,
     });
   }
 
@@ -258,6 +273,7 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
+    federation,
   });
 };
 
@@ -337,6 +353,7 @@ const runInPool = async (
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
+        federation: Boolean(options.context.runtimeConfig.federation),
       });
       const tests = await runner.collectTests();
       return {
@@ -404,6 +421,7 @@ const runInPool = async (
       interopDefault,
       isolate,
       outputModule: options.context.outputModule,
+      federation: Boolean(options.context.runtimeConfig.federation),
     });
     const results = await runner.runTests(
       testPath,
