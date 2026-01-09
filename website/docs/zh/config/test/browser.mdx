@@ -26,6 +26,46 @@ const defaultBrowser = {
 
 浏览器模式配置。启用后，测试将在真实浏览器中运行，而非 Node.js 环境。
 
+## 常用配置（Recipes）
+
+### 本地调试（推荐）
+
+在本地开发时，通常希望打开浏览器窗口方便观察与调试：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    headless: false,
+  },
+});
+```
+
+### CI 运行（推荐）
+
+在 CI 环境中，通常以 headless 模式运行，并确保在执行测试前安装 Playwright 浏览器：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    headless: true,
+  },
+});
+```
+
+```bash
+npx playwright install --with-deps
+```
+
+### 多浏览器
+
+如果你的项目需要验证跨浏览器一致性，推荐结合 [projects](/config/test/projects) 同时在多个浏览器中运行。完整示例请参考本页下方的“多浏览器测试”。
+
 ## 选项
 
 ### enabled

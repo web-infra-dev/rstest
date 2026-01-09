@@ -2,9 +2,18 @@
 
 Rstest 提供了浏览器模式（Browser Mode），允许你在真实浏览器中运行测试，而不是使用 jsdom 或 happy-dom 等模拟环境。
 
+## 适用场景（Component Testing）
+
+浏览器模式特别适合用于 **Component Testing** 中那些需要“真实浏览器行为”的用例，例如：
+
+- 依赖真实 CSS/layout 计算（例如 `getComputedStyle`、字体/滚动/定位）
+- 依赖真实事件与焦点行为（pointer/keyboard/focus/selection）
+- 依赖 Canvas / WebGL / Web Workers 等 jsdom 难以完整模拟的能力
+- 需要跨浏览器验证一致性（Chromium / Firefox / WebKit）
+
 ## 什么是浏览器模式？
 
-浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行你的测试代码。这意味着你的测试将在与生产环境完全一致的浏览器 API 和行为下运行。
+浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行你的测试代码。这意味着你的测试会在更接近生产环境的浏览器 API 和行为下运行。
 
 ## 何时使用浏览器模式
 
@@ -23,13 +32,13 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
     💡 可用 jsdom
 ```
 
-:::tip 推荐
-即使你的测试在 jsdom 中能正常运行，我们仍然**推荐使用浏览器模式**。具体优势见下方对比表。
+:::tip 建议策略
+浏览器模式通常比 jsdom 更慢、资源消耗更高。推荐将它用于“关键交互/布局相关组件”的用例，其余单元测试仍然使用 jsdom 以控制整体耗时。
 :::
 
 ## 浏览器模式 vs. jsdom / happy-dom
 
-以下是浏览器模式与传统模拟环境的对比。从表中可以看出，浏览器模式在 API 完整性、调试体验和跨浏览器兼容性方面具有显著优势，这也是我们推荐使用浏览器模式的原因：
+以下是浏览器模式与传统模拟环境的对比：
 
 | 特性              | 浏览器模式      | jsdom / happy-dom      |
 | ----------------- | --------------- | ---------------------- |
@@ -45,4 +54,5 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
 ## 下一步
 
 - [快速开始](/guide/browser-testing/getting-started) - 配置并运行你的第一个浏览器测试
-- [组件测试](/guide/browser-testing/testing-components) - 学习如何测试 React 等框架组件
+- [组件测试](/guide/browser-testing/testing-components) - 在浏览器模式下进行 Component Testing（推荐 Testing Library）
+- [browser 配置](/config/test/browser) - 查阅浏览器模式配置项与常用配置

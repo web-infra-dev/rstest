@@ -2,9 +2,15 @@
 
 本指南将帮助你在项目中配置并运行浏览器模式测试。
 
+## 你将完成什么
+
+- 安装并启用浏览器模式（Playwright）
+- 跑通一个最小示例用例
+- 掌握本地调试（headed）与 CI（headless）两种常见运行方式
+
 import { PackageManagerTabs } from '@theme';
 
-## 使用脚手架初始化
+## 使用脚手架初始化（推荐）
 
 运行以下命令快速初始化浏览器测试环境：
 
@@ -36,6 +42,15 @@ import { PackageManagerTabs } from '@theme';
 运行浏览器测试（使用生成的 `rstest.browser.config.ts` 配置）：
 
 <PackageManagerTabs command="run test:browser" />
+
+## 本地开发 vs CI
+
+浏览器模式在本地开发和 CI 的最佳实践通常不同：
+
+- **本地开发：** 推荐使用 `headless: false`，便于观察页面状态、复现交互问题
+- **CI：** 推荐使用 `headless: true`，并确保安装 Playwright 浏览器（例如 `playwright install --with-deps`）
+
+你可以在 [browser 配置](/config/test/browser) 中查看 `headless`、`browser`、`port` 等选项的说明。
 
 ## 手动配置
 
@@ -107,5 +122,9 @@ npx rstest
       Tests 2 passed
    Duration 1.2s
 ```
+
+## 混合项目（可选）
+
+如果你的项目同时包含浏览器组件测试与 Node.js 相关的单元测试，推荐使用 [projects](/config/test/projects) 拆分不同测试集，避免所有用例都进入浏览器模式导致整体变慢。示例可参考 [组件测试](/guide/browser-testing/testing-components) 的“多环境项目”一节。
 
 更多配置选项请查看 [browser 配置](/config/test/browser)。

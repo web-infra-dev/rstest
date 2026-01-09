@@ -1,6 +1,16 @@
 # 组件测试
 
-本指南介绍如何在浏览器模式下测试 UI 组件。
+本指南介绍如何在浏览器模式下测试 UI 组件（Component Testing）。
+
+## 推荐技术栈（当前最佳实践）
+
+现阶段，我们推荐在浏览器模式中配合 Testing Library 生态来编写组件测试：
+
+- **DOM 查询：** `@testing-library/dom`（优先使用可访问性语义查询，例如 role/label/text）
+- **用户交互：** `@testing-library/user-event`（更贴近真实用户操作）
+- **DOM 断言：** 常搭配 `@testing-library/jest-dom` 提供的 matchers（如 `toBeInTheDocument`）
+
+Rstest 目前没有提供内置的 query / userEvent API，因此直接使用成熟的社区方案能更快落地，并且与主流组件测试写法一致。
 
 import { PackageManagerTabs } from '@theme';
 
@@ -86,6 +96,10 @@ test('toggles dropdown on click', async () => {
 
 `userEvent` 支持点击、输入、键盘、选择等多种交互，详见 [user-event 文档](https://testing-library.com/docs/user-event/intro)。
 
+:::note
+`@testing-library/user-event` 主要通过模拟事件工作。在绝大多数组件测试场景中这已经足够，但它可能与真实浏览器的底层输入链路（例如某些复杂 IME 行为、拖拽等）存在差异。
+:::
+
 ## 测试 Web components
 
 ```ts title="src/my-element.test.ts"
@@ -110,7 +124,7 @@ test('renders content in shadow DOM', () => {
 
 <PackageManagerTabs command="add @rstest/browser-react @testing-library/dom @testing-library/user-event -D" />
 
-使用 `render` 函数将 React 组件渲染到真实浏览器 DOM 中，返回的 `container` 可用于 DOM 查询：
+使用 `render` 函数将 React 组件渲染到真实浏览器 DOM 中。渲染层由 `@rstest/browser-react` 提供，DOM 查询与交互推荐使用 Testing Library：
 
 ```tsx title="src/Button.test.tsx"
 import { expect, test } from '@rstest/core';
