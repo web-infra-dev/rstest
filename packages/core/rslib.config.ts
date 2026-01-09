@@ -93,6 +93,10 @@ export default defineConfig({
                   to: 'mockRuntimeCode.js',
                 },
                 {
+                  from: 'src/pool/rstestSuppressWarnings.cjs',
+                  to: 'rstestSuppressWarnings.cjs',
+                },
+                {
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
                 },

@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join } from 'pathe';
 import type {
@@ -113,6 +114,22 @@ const filterAssetsByEntry = async (
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
 };
 
+const getNodeExecArgv = () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
+
+  return [
+    '--experimental-vm-modules',
+    '--experimental-import-meta-resolve',
+    needFlagExperimentalDetectModule()
+      ? '--experimental-detect-module'
+      : undefined,
+    '--require',
+    suppressFile,
+  ].filter(Boolean) as string[];
+};
+
 export const createPool = async ({
   context,
   recommendWorkerCount = Number.POSITIVE_INFINITY,
@@ -198,16 +215,7 @@ export const createPool = async ({
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
-      ...(isDeno
-        ? []
-        : ([
-            '--experimental-vm-modules',
-            '--experimental-import-meta-resolve',
-            needFlagExperimentalDetectModule()
-              ? '--experimental-detect-module'
-              : undefined,
-            '--no-warnings',
-          ].filter(Boolean) as string[])),
+      ...(isDeno ? [] : getNodeExecArgv()),
     ],
     env: {
       ...process.env,
