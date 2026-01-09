@@ -190,7 +190,16 @@ export async function parseErrorStacktrace({
             ...frame,
             file: isRelativePath(source)
               ? resolve(frame.file!, '../', source)
-              : new URL(source).pathname,
+              : (() => {
+                  // `source` can be a filesystem path (e.g. `C:\...`) or a URL-like
+                  // string (e.g. `webpack://...`). `new URL()` throws for plain paths,
+                  // so fall back to the raw value instead of crashing the reporter.
+                  try {
+                    return new URL(source).pathname;
+                  } catch {
+                    return source;
+                  }
+                })(),
             lineNumber: line,
             name,
             column,

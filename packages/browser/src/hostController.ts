@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import {
   color,
@@ -768,56 +769,63 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
-        api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig }) => {
-          // Merge order: current config -> userConfig -> rstest required config (highest priority)
-          const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
-            source: {
-              entry: {
-                runner: resolveBrowserFile('client/entry.ts'),
+        api.modifyEnvironmentConfig({
+          handler: (config, { mergeEnvironmentConfig }) => {
+            // Merge order: current config -> userConfig -> rstest required config (highest priority)
+            const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
+              resolve: {
+                alias: rstestInternalAliases,
               },
-            },
-            resolve: {
-              alias: rstestInternalAliases,
-            },
-            output: {
-              target: 'web',
-              // Enable source map for inline snapshot support
-              sourceMap: {
-                js: 'source-map',
+              output: {
+                target: 'web',
+                // Enable source map for inline snapshot support
+                sourceMap: {
+                  js: 'source-map',
+                },
               },
-            },
-            tools: {
-              rspack: (rspackConfig) => {
-                rspackConfig.mode = 'development';
-                rspackConfig.lazyCompilation = {
-                  imports: true,
-                  entries: false,
-                };
-                rspackConfig.plugins = rspackConfig.plugins || [];
-                rspackConfig.plugins.push(virtualManifestPlugin);
+              tools: {
+                rspack: (rspackConfig) => {
+                  rspackConfig.mode = 'development';
+                  rspackConfig.lazyCompilation = {
+                    imports: true,
+                    entries: false,
+                  };
+                  rspackConfig.plugins = rspackConfig.plugins || [];
+                  rspackConfig.plugins.push(virtualManifestPlugin);
 
-                // Extract and merge sourcemaps from pre-built @rstest/core files
-                // This preserves the sourcemap chain for inline snapshot support
-                // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
-                const browserRuntimeDir = dirname(browserRuntimePath);
-                rspackConfig.module = rspackConfig.module || {};
-                rspackConfig.module.rules = rspackConfig.module.rules || [];
-                rspackConfig.module.rules.unshift({
-                  test: /\.js$/,
-                  include: browserRuntimeDir,
-                  extractSourceMap: true,
-                });
+                  // Extract and merge sourcemaps from pre-built @rstest/core files
+                  // This preserves the sourcemap chain for inline snapshot support
+                  // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                  const browserRuntimeDir = dirname(browserRuntimePath);
+                  rspackConfig.module = rspackConfig.module || {};
+                  rspackConfig.module.rules = rspackConfig.module.rules || [];
+                  rspackConfig.module.rules.unshift({
+                    test: /\.js$/,
+                    include: browserRuntimeDir,
+                    extractSourceMap: true,
+                  });
 
-                if (isDebug()) {
-                  logger.log(
-                    `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                  );
-                }
+                  if (isDebug()) {
+                    logger.log(
+                      `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                    );
+                  }
+                },
               },
-            },
-          });
+            });
 
-          return merged;
+            // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
+            // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
+            // This must be done after mergeEnvironmentConfig to ensure highest priority.
+            merged.source = merged.source || {};
+            merged.source.entry = {
+              runner: resolveBrowserFile('client/entry.ts'),
+            };
+
+            return merged;
+          },
+          // Execute after all other plugins to ensure rstest's entry config has the highest priority
+          order: 'post',
         });
       },
     },
@@ -1005,9 +1013,15 @@ const createBrowserRuntime = async ({
 
   const { port } = await devServer.listen();
 
-  // Create WebSocket server on a different port
-  const wsPort = port + 1;
-  const wss = new WebSocketServer({ port: wsPort });
+  // Create WebSocket server on an available port
+  // Using port: 0 lets the OS assign an available port, avoiding conflicts
+  // when the fixed port (e.g., container port + 1) is already in use
+  const wss = new WebSocketServer({ port: 0 });
+  await new Promise<void>((resolve, reject) => {
+    wss.once('listening', resolve);
+    wss.once('error', reject);
+  });
+  const wsPort = (wss.address() as AddressInfo).port;
   logger.log(
     color.gray(`[Browser UI] WebSocket server started on port ${wsPort}`),
   );

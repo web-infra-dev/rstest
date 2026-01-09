@@ -2,13 +2,15 @@ import path from 'node:path';
 import { expect } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 
-// Create a custom serializer that handles global pnpm store paths
+// The default path-serializer doesn't normalize pnpm global store paths (e.g.
+// `<HOME>/Library/pnpm/store/.../node_modules/pkg/...`) which makes snapshots
+// OS/host dependent. Keep existing snapshot patterns by mapping those store
+// paths to the same `<ROOT>/node_modules/<PNPM_INNER>/...` shape.
 const pathSerializer = createSnapshotSerializer({
   root: path.resolve(__dirname, '..'),
   features: {
     replaceWorkspace: false,
     escapeDoubleQuotes: false,
-    // Ensure consistent path handling across platforms
     replaceHomeDir: true,
     replacePnpmInner: true,
     replaceTmpDir: true,
@@ -16,8 +18,6 @@ const pathSerializer = createSnapshotSerializer({
   },
 });
 
-// Custom serializer that allows the built-in path-serializer to work
-// but adds additional normalization for global pnpm store paths
 const enhancedPathSerializer = {
   test: (value: any): boolean => {
     return (
@@ -25,42 +25,18 @@ const enhancedPathSerializer = {
     );
   },
   serialize: (value: string): string => {
-    // First apply the default path serializer which handles:
-    // - Windows vs Unix path normalization
-    // - <HOME> replacement
-    // - <ROOT> replacement
-    // - <PNPM_INNER> replacement for local .pnpm paths
-    //
-    // Note: `pathSerializer.serialize` returns a snapshot-ready string
-    // (including surrounding quotes). Keep that shape so inline snapshots
-    // that include JSON lines stay readable (no extra escaping).
+    // `pathSerializer.serialize` returns a snapshot-ready string (including quotes).
     let serialized = pathSerializer.serialize(value);
 
-    // Normalize pnpm "virtual store" paths under `<ROOT>/node_modules/.pnpm/...` (rendered
-    // by path-serializer as `<ROOT>/node_modules/<PNPM_INNER>/...`) to the same
-    // `<PNPM_STORE>/.../node_modules/...` shape used by our snapshots.
-    serialized = serialized.replace(
-      /<ROOT>\/node_modules\/<PNPM_INNER>\/((?:@[^/]+\/)?[^/]+)(?=\/|")/g,
-      '<PNPM_STORE>/$1/node_modules/$1',
-    );
-
-    // Additional normalization for global pnpm store paths that aren't handled
-    // by the built-in replacePnpmInner (which only handles local .pnpm directories).
-    // This handles macOS/Linux global pnpm store paths like:
-    // <HOME>/Library/pnpm/store/v10/links/@rsbuild/core/1.7.1/hash/node_modules/@rsbuild/core/...
-    // Windows global paths: <HOME>/AppData/Local/pnpm/store/v10/links/...
-    // But preserves <PNPM_INNER> replacements for local node_modules/.pnpm paths
+    // Normalize pnpm global store paths (macOS/Linux and Windows) into the same
+    // placeholder used by existing snapshots.
     //
-    // Note: path-serializer may or may not replace the leading user home segment
-    // depending on the host OS. Match both "<HOME>/.../pnpm/store/..." and
-    // raw "C:/Users/.../pnpm/store/..." forms after win32 normalization.
+    // Example:
+    // `<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/.../node_modules/@rsbuild/core/dist/...`
+    //   -> `<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/...`
     serialized = serialized.replace(
-      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//gi,
-      '<PNPM_STORE>/$1/node_modules/',
-    );
-    serialized = serialized.replace(
-      /\/[a-z]\/Users\/[^/]+(?:\/[^/]+)*\/pnpm\/store\/v[0-9]+\/links\/([^/]+\/[^/]+)\/[^/]+\/[^/]+\/node_modules\//gi,
-      '<PNPM_STORE>/$1/node_modules/',
+      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/((?:@[^/]+\/)?[^/]+)\/[^/]+(?:\/[^/]+)*\/node_modules\/\1(?=\/|")/gi,
+      '<ROOT>/node_modules/<PNPM_INNER>/$1',
     );
 
     return serialized;
