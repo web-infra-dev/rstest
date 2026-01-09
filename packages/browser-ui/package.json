@@ -1,7 +1,6 @@
 {
   "name": "@rstest/browser-ui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.7.9",
   "description": "Prebuilt browser container UI for Rstest",
   "type": "module",
   "main": "./dist/index.js",
