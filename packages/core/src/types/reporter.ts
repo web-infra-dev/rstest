@@ -37,10 +37,19 @@ export type DefaultReporterOptions = {
    * @default process.stdout/process.stderr
    */
   logger?: WindowRendererOptionsOptions['logger'];
+
+  /**
+   * prints out project name in test file title
+   * show project name by default when running multiple projects
+   */
+  showProjectName?: boolean;
 };
+
+export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  verbose: VerboseReporterOptions;
 };
 
 export type ReporterWithOptions<

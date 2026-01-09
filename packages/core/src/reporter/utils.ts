@@ -72,8 +72,15 @@ export const logFileTitle = (
   test: TestFileResult,
   relativePath: string,
   alwaysShowTime = false,
+  showProjectName = false,
 ): void => {
-  let title = ` ${color.bold(statusColorfulStr[test.status])} ${prettyTestPath(relativePath)}`;
+  let title = ` ${color.bold(statusColorfulStr[test.status])}`;
+
+  if (showProjectName && test.project) {
+    title += ` ${color.yellow(`[${test.project}]`)}`;
+  }
+
+  title += ` ${prettyTestPath(relativePath)}`;
 
   const formatDuration = (duration: number) => {
     return color.green(prettyTime(duration));

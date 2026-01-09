@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 describe('test projects', () => {
   describe('merge configs', () => {
     it('should run projects correctly with cli options', async () => {
-      const { cli, expectExecSuccess } = await runRstestCli({
+      const { cli, expectExecSuccess, expectLog } = await runRstestCli({
         command: 'rstest',
         args: ['run', '--globals'],
         options: {
@@ -22,16 +22,13 @@ describe('test projects', () => {
       await expectExecSuccess();
       const logs = cli.stdout.split('\n').filter(Boolean);
 
+      // test project name print
+      expectLog('[node]', logs);
+      expectLog('[client-jsdom]', logs);
       // test log print
-      expect(
-        logs.find((log) => log.includes('packages/node/test/index.test.ts')),
-      ).toBeTruthy();
-      expect(
-        logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
-      ).toBeTruthy();
-      expect(
-        logs.find((log) => log.includes('packages/client/test/node.test.ts')),
-      ).toBeTruthy();
+      expectLog('packages/node/test/index.test.ts', logs);
+      expectLog('packages/client/test/App.test.tsx', logs);
+      expectLog('packages/client/test/node.test.ts', logs);
     });
 
     it('should not inherit projects config and run projects failed ', async () => {
