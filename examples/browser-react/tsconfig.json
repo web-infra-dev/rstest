@@ -8,7 +8,9 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "jsx": "react-jsx",
+    "types": ["@rstest/core"]
   },
-  "include": ["tests", "rstest.config.ts"]
+  "include": ["src", "tests", "rstest.config.ts"]
 }
