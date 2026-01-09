@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import {
   color,
@@ -1010,9 +1011,15 @@ const createBrowserRuntime = async ({
 
   const { port } = await devServer.listen();
 
-  // Create WebSocket server on a different port
-  const wsPort = port + 1;
-  const wss = new WebSocketServer({ port: wsPort });
+  // Create WebSocket server on an available port
+  // Using port: 0 lets the OS assign an available port, avoiding conflicts
+  // when the fixed port (e.g., container port + 1) is already in use
+  const wss = new WebSocketServer({ port: 0 });
+  await new Promise<void>((resolve, reject) => {
+    wss.once('listening', resolve);
+    wss.once('error', reject);
+  });
+  const wsPort = (wss.address() as AddressInfo).port;
   logger.log(
     color.gray(`[Browser UI] WebSocket server started on port ${wsPort}`),
   );
