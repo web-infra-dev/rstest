@@ -14,7 +14,6 @@ export default defineConfig({
     // Limit to 80% of available workers to reduce "worker exited unexpectedly"
     // errors in resource-constrained environments (e.g., certain CI runners).
     // Limit to 80% of available workers to reduce "worker exited unexpectedly"
-    // errors in resource-constrained environments (e.g., certain CI runners).
     maxWorkers: '80%',
     // debug warnings
     execArgv: ['--trace-warnings'],
