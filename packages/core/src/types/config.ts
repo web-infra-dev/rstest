@@ -94,10 +94,14 @@ type SnapshotFormat = Omit<
 type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
-export type ExtendConfig = Omit<RstestConfig, 'projects'>;
+type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
+  reporters?: any;
+};
+
+export type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
 
 export type ExtendConfigFn = (
-  userConfig: Readonly<RstestConfig>,
+  userConfig: Readonly<LooseRstestConfig>,
 ) => MaybePromise<ExtendConfig>;
 
 export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
