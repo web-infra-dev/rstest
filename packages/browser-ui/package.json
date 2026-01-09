@@ -1,6 +1,7 @@
 {
   "name": "@rstest/browser-ui",
-  "version": "0.7.9",
+  "version": "0.0.0",
+  "private": true,
   "license": "MIT",
   "description": "Prebuilt browser container UI for Rstest",
   "type": "module",
@@ -25,10 +26,6 @@
     "browser",
     "component"
   ],
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
