@@ -1,6 +1,9 @@
 {
   "name": "@rstest/browser-ui",
   "version": "0.7.9",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Prebuilt browser container UI for Rstest",
   "type": "module",
   "main": "./dist/index.js",
