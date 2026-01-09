@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   pool: {
+    maxWorkers: '80%',
     // debug warnings
     execArgv: ['--trace-warnings'],
   },
