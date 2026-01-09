@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { remove } from 'fs-extra';
+import treeKill from 'tree-kill';
 import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +49,16 @@ export default defineConfig({});
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 passed');
 
-    cli.exec.kill();
+    // Ensure we kill the entire process tree (important on Windows where child
+    // processes may survive and keep the test worker alive).
+    const pid = cli.exec.process?.pid;
+    if (pid) {
+      treeKill(pid, 'SIGKILL');
+    } else {
+      cli.exec.kill();
+    }
+
+    // Give the OS a moment to release file handles (especially on Windows CI).
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 });

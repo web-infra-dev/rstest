@@ -13,6 +13,10 @@ describe('globalSetup', async () => {
       args: ['run'],
       options: {
         nodeOptions: {
+          // This test spawns nested `rstest` runs. In the e2e `test:no-isolate`
+          // step we set `ISOLATE=false`, which would be inherited by the child
+          // process and make the nested run non-isolated as well (flaky on CI).
+          env: { ISOLATE: undefined },
           cwd: join(__dirname, 'fixtures/basic'),
         },
       },
@@ -39,6 +43,7 @@ describe('globalSetup', async () => {
       args: ['run'],
       options: {
         nodeOptions: {
+          env: { ISOLATE: undefined },
           cwd: join(__dirname, 'fixtures/error'),
         },
       },
@@ -60,6 +65,7 @@ describe('globalSetup', async () => {
         args: ['run'],
         options: {
           nodeOptions: {
+            env: { ISOLATE: undefined },
             cwd: join(__dirname, 'fixtures/teardown-error'),
           },
         },
