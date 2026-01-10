@@ -3,6 +3,15 @@ import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import path from 'pathe';
 
+type Mutable<T> = {
+  -readonly [K in keyof T]: T[K];
+};
+
+// TS types for ESM imports mark Node built-in module properties as readonly.
+// The actual `fs` export object is mutable at runtime, and we intentionally
+// patch it in federation mode so third-party runtimes can read in-memory assets.
+const mutableFs = fs as unknown as Mutable<typeof fs>;
+
 type VirtualFiles = Record<string, string>;
 
 let installed = false;
@@ -93,7 +102,7 @@ export const installVirtualFs = (): void => {
   originals.promisesAccess = fs.promises.access.bind(fs.promises);
   originals.promisesStat = fs.promises.stat.bind(fs.promises);
 
-  fs.readFileSync = ((filePath: any, options?: any) => {
+  mutableFs.readFileSync = ((filePath: any, options?: any) => {
     const v = findVirtualContent(filePath);
     if (v) {
       const encoding =
@@ -110,7 +119,7 @@ export const installVirtualFs = (): void => {
     return originals.readFileSync!(filePath, options);
   }) as any;
 
-  fs.readFile = ((filePath: any, options: any, callback?: any) => {
+  mutableFs.readFile = ((filePath: any, options: any, callback?: any) => {
     const cb = typeof options === 'function' ? options : callback;
     const opts = typeof options === 'function' ? undefined : options;
     const v = findVirtualContent(filePath);
@@ -132,12 +141,12 @@ export const installVirtualFs = (): void => {
     return originals.readFile!(filePath, options, cb);
   }) as any;
 
-  fs.existsSync = ((filePath: any) => {
+  mutableFs.existsSync = ((filePath: any) => {
     if (findVirtualContent(filePath)) return true;
     return originals.existsSync!(filePath);
   }) as any;
 
-  fs.statSync = ((filePath: any, options?: any) => {
+  mutableFs.statSync = ((filePath: any, options?: any) => {
     const v = findVirtualContent(filePath);
     if (v) {
       const size = v.isWasm
@@ -148,7 +157,7 @@ export const installVirtualFs = (): void => {
     return originals.statSync!(filePath, options);
   }) as any;
 
-  fs.createReadStream = ((filePath: any, options?: any) => {
+  mutableFs.createReadStream = ((filePath: any, options?: any) => {
     const v = findVirtualContent(filePath);
     if (v) {
       const buffer = v.isWasm
@@ -163,7 +172,10 @@ export const installVirtualFs = (): void => {
   }) as any;
 
   // Patch the promises API as well, since many runtimes use `fs.promises`.
-  fs.promises.readFile = (async (filePath: any, options?: any) => {
+  (mutableFs.promises as Mutable<typeof fs.promises>).readFile = (async (
+    filePath: any,
+    options?: any,
+  ) => {
     const v = findVirtualContent(filePath);
     if (v) {
       const encoding =
@@ -180,12 +192,18 @@ export const installVirtualFs = (): void => {
     return originals.promisesReadFile!(filePath, options);
   }) as typeof fs.promises.readFile;
 
-  fs.promises.access = (async (filePath: any, mode?: any) => {
+  (mutableFs.promises as Mutable<typeof fs.promises>).access = (async (
+    filePath: any,
+    mode?: any,
+  ) => {
     if (findVirtualContent(filePath)) return;
     return originals.promisesAccess!(filePath, mode);
   }) as typeof fs.promises.access;
 
-  fs.promises.stat = (async (filePath: any, options?: any) => {
+  (mutableFs.promises as Mutable<typeof fs.promises>).stat = (async (
+    filePath: any,
+    options?: any,
+  ) => {
     const v = findVirtualContent(filePath);
     if (v) {
       const size = v.isWasm
