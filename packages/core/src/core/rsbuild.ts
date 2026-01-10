@@ -82,9 +82,10 @@ export const prepareRsbuild = async (
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
-  // Module Federation's Node runtime can load chunks via fs/vm, so the test build
-  // artifacts need to exist on disk (even though rsbuild runs in middlewareMode).
-  const writeToDisk = dev.writeToDisk || debugMode || hasFederation;
+  // Keep the default fast in-memory dev output; federation mode installs a
+  // worker-level virtual FS layer to satisfy runtimes that try to read chunks
+  // from disk paths.
+  const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',

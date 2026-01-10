@@ -14,6 +14,7 @@ import { color, undoSerializableConfig } from '../../utils/helper';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
+import { installVirtualFs, setVirtualFiles } from './virtualFs';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -50,6 +51,10 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
     Object.assign(process.env, env);
   }
 };
+
+// Allow runtimes (e.g. Module Federation) to read compiled artifacts from the
+// in-memory bundler output even when rsbuild does not write to disk.
+installVirtualFs();
 
 const preparePool = async ({
   entryInfo: { distPath, testPath },
@@ -264,6 +269,9 @@ const loadFiles = async ({
   }
 
   // run setup files
+  // Keep the virtual FS up-to-date as we execute in-memory assets, so any
+  // third-party runtime that tries to load by file path can still succeed.
+  setVirtualFiles(assetFiles);
   for (const { distPath, testPath } of setupEntries) {
     const setupCodeContent = assetFiles[distPath]!;
 
@@ -278,6 +286,9 @@ const loadFiles = async ({
     });
   }
 
+  // Keep the virtual FS in sync for the primary entry as well. This is cheap
+  // and makes federation runtime chunk loading deterministic.
+  setVirtualFiles(assetFiles);
   await loadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
