@@ -19,6 +19,7 @@ import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
+import { pluginFederationCompat } from './plugins/federation';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
@@ -75,9 +76,15 @@ export const prepareRsbuild = async (
   const projects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
   );
+  const hasFederation = projects.some((project) =>
+    Boolean(project.normalizedConfig.federation),
+  );
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
+  // Keep the default fast in-memory dev output; federation mode installs a
+  // worker-level virtual FS layer to satisfy runtimes that try to read chunks
+  // from disk paths.
   const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({
@@ -110,6 +117,7 @@ export const prepareRsbuild = async (
       ),
       plugins: [
         pluginBasic(context),
+        hasFederation ? pluginFederationCompat(context) : null,
         pluginIgnoreResolveError,
         pluginMockRuntime,
         pluginCSSFilter(),

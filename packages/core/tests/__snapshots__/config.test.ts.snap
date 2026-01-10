@@ -48,6 +48,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "federation": false,
   "globalSetup": [
     "./global-setup.ts",
   ],
