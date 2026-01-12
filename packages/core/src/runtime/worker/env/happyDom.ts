@@ -10,8 +10,10 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
     name: 'happy-dom',
     setup: async (global, options = {}) => {
       checkPkgInstalled('happy-dom');
-      const { Window } = await import('happy-dom');
-      const win = new Window({
+
+      const { Window, GlobalWindow } = await import('happy-dom');
+      // running Happy DOM in the global scope
+      const win = new (GlobalWindow || Window)({
         ...options,
         url: options.url || 'http://localhost:3000',
         console: console && global.console ? global.console : undefined,

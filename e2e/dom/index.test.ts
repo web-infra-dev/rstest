@@ -54,4 +54,9 @@ describe('happy-dom', () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'happy-dom');
     await expectExecSuccess();
   });
+
+  it('should run TextEncoder correctly in happy-dom', async () => {
+    const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
+    await expectExecSuccess();
+  });
 });
