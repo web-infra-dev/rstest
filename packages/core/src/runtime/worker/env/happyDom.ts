@@ -12,7 +12,9 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
       checkPkgInstalled('happy-dom');
 
       const { Window, GlobalWindow } = await import('happy-dom');
-      // running Happy DOM in the global scope
+      // Prefer GlobalWindow to run happy-dom in the global scope so globals like
+      // TextEncoder and Uint8Array are correctly exposed; fall back to Window for
+      // backward compatibility with older happy-dom versions that lack GlobalWindow.
       const win = new (GlobalWindow || Window)({
         ...options,
         url: options.url || 'http://localhost:3000',
