@@ -7,6 +7,7 @@ import type {
 import stripAnsi from 'strip-ansi';
 import type { Options, Result } from 'tinyexec';
 import { x } from 'tinyexec';
+import treeKill from 'tree-kill';
 
 type IoType = 'stdout' | 'stderr';
 class Cli {
@@ -42,6 +43,21 @@ class Cli {
         listener();
       }
     });
+
+    const execKill = this.exec.kill.bind(this.exec);
+
+    this.exec.kill = () => {
+      // Ensure we kill the entire process tree (important on Windows where child
+      // processes may survive and keep the test worker alive).
+      const pid = this.exec.process?.pid;
+      if (pid) {
+        treeKill(pid, 'SIGKILL');
+      } else {
+        execKill();
+      }
+
+      return true;
+    };
   }
 
   resetStd = (std?: IoType) => {
