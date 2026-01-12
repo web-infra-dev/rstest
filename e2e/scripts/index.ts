@@ -52,11 +52,10 @@ class Cli {
       const pid = this.exec.process?.pid;
       if (pid) {
         treeKill(pid, 'SIGKILL');
-      } else {
-        execKill();
+        return true;
       }
 
-      return true;
+      return execKill();
     };
   }
 
