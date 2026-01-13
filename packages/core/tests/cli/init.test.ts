@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
+import type { CommonOptions } from '../../src/cli/commands';
 import { resolveProjects } from '../../src/cli/init';
 import type { RstestConfig } from '../../src/types';
 
@@ -235,6 +236,90 @@ describe('resolveProjects', () => {
 
       expect(projects).toHaveLength(1);
       expect(projects[0]!.config.testTimeout).toBe(15000);
+    });
+  });
+
+  describe('browser CLI options', () => {
+    it('should apply --browser shorthand (boolean)', async () => {
+      const config: RstestConfig = {
+        projects: [{ name: 'test-project' }],
+      };
+
+      // --browser sets browser to true, --no-browser sets to false
+      const enabledProjects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: { browser: true },
+      });
+      expect(enabledProjects[0]!.config.browser?.enabled).toBe(true);
+
+      const disabledProjects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project', browser: { enabled: true } }],
+        },
+        root: rootPath,
+        options: { browser: false },
+      });
+      expect(disabledProjects[0]!.config.browser?.enabled).toBe(false);
+    });
+
+    it('should apply all browser.* options from CLI', async () => {
+      const config: RstestConfig = {
+        projects: [{ name: 'test-project' }],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            enabled: true,
+            name: 'webkit',
+            headless: false,
+            port: 4000,
+            strictPort: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.browser).toEqual({
+        enabled: true,
+        browser: 'webkit',
+        headless: false,
+        port: 4000,
+        strictPort: true,
+      });
+    });
+
+    it('should override config browser options with CLI options', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              browser: 'chromium',
+              headless: true,
+              port: 5000,
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: { name: 'firefox', port: 6000 },
+        },
+      });
+
+      expect(projects[0]!.config.browser).toMatchObject({
+        enabled: true, // preserved from config
+        browser: 'firefox', // overridden by CLI
+        headless: true, // preserved from config
+        port: 6000, // overridden by CLI
+      });
     });
   });
 });
