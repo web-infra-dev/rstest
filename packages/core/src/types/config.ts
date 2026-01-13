@@ -76,6 +76,12 @@ export type BrowserModeConfig = {
    * If not specified, a random available port will be used.
    */
   port?: number;
+  /**
+   * Whether to exit if the specified port is already in use.
+   *
+   * @default false
+   */
+  strictPort?: boolean;
 };
 
 type SnapshotFormat = Omit<
@@ -402,6 +408,7 @@ export type NormalizedBrowserModeConfig = {
   browser: 'chromium' | 'firefox' | 'webkit';
   headless: boolean;
   port?: number;
+  strictPort: boolean;
 };
 
 export type NormalizedConfig = Required<
