@@ -9,6 +9,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "headless": false,
     "port": undefined,
     "provider": "playwright",
+    "strictPort": false,
   },
   "clearMocks": false,
   "coverage": {

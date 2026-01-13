@@ -748,8 +748,8 @@ const createBrowserRuntime = async ({
       plugins: userPlugins,
       server: {
         printUrls: false,
-        port: context.normalizedConfig.browser.port,
-        strictPort: context.normalizedConfig.browser.port !== undefined,
+        port: context.normalizedConfig.browser.port ?? 4000,
+        strictPort: context.normalizedConfig.browser.strictPort,
       },
       dev: {
         client: {

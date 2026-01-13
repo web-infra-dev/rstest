@@ -185,6 +185,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     provider: 'playwright',
     browser: 'chromium',
     headless: isCI,
+    strictPort: false,
   },
   coverage: {
     exclude: [
@@ -249,6 +250,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     browser: merged.browser?.browser ?? 'chromium',
     headless: merged.browser?.headless ?? isCI,
     port: merged.browser?.port,
+    strictPort: merged.browser?.strictPort ?? false,
   };
 
   return {
