@@ -177,6 +177,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
+  hideSkippedTestFiles: false,
   logHeapUsage: false,
   bail: 0,
   includeTaskLocation: false,

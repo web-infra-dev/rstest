@@ -65,6 +65,7 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
     .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
     .option('--hideSkippedTests', 'Hide skipped tests from the output')
+    .option('--hideSkippedTestFiles', 'Hide skipped test files from the output')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option(
       '--bail [number]',
