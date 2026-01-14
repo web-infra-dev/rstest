@@ -80,7 +80,21 @@ const applyCommonOptions = (cli: CAC) => {
       '--restoreMocks',
       'Automatically restore mock state and implementation before every test',
     )
-    .option('--browser', 'Run tests in browser mode (Chromium)')
+    .option('--browser', 'Run tests in browser mode')
+    .option('--browser.enabled', 'Run tests in browser mode')
+    .option(
+      '--browser.name <name>',
+      'Browser to use: chromium, firefox, webkit (default: chromium)',
+    )
+    .option(
+      '--browser.headless',
+      'Run browser in headless mode (default: true in CI)',
+    )
+    .option('--browser.port <port>', 'Port for the browser mode dev server')
+    .option(
+      '--browser.strictPort',
+      'Exit if the specified port is already in use',
+    )
     .option(
       '--unstubGlobals',
       'Restores all global variables that were changed with `rstest.stubGlobal` before every test',

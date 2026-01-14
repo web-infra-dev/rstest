@@ -39,6 +39,15 @@ export type ProjectConfig = Omit<
   | 'bail'
 >;
 
+/**
+ * Supported browser types for browser mode testing.
+ *
+ * - `chromium` - Google Chrome, Microsoft Edge
+ * - `firefox` - Mozilla Firefox
+ * - `webkit` - Safari
+ */
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
 export type BrowserModeConfig = {
   /**
    * Enable browser mode when running tests.
@@ -57,13 +66,9 @@ export type BrowserModeConfig = {
   /**
    * Which browser to use for testing.
    *
-   * - `chromium` - Google Chrome, Microsoft Edge
-   * - `firefox` - Mozilla Firefox
-   * - `webkit` - Safari
-   *
    * @default 'chromium'
    */
-  browser?: 'chromium' | 'firefox' | 'webkit';
+  browser?: BrowserName;
   /**
    * Run browser in headless mode.
    *
@@ -405,7 +410,7 @@ type OptionalKeys =
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: 'playwright';
-  browser: 'chromium' | 'firefox' | 'webkit';
+  browser: BrowserName;
   headless: boolean;
   port?: number;
   strictPort: boolean;
