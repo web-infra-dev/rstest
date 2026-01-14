@@ -49,6 +49,7 @@ export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  verbose: VerboseReporterOptions;
 };
 
 export type ReporterWithOptions<
