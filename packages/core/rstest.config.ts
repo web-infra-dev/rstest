@@ -5,6 +5,7 @@ export default defineConfig({
   extends: withRslibConfig({
     cwd: __dirname,
   }),
+  name: 'core',
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],
   globals: true,
