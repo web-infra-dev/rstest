@@ -1,6 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
-import type { CommonOptions } from '../../src/cli/commands';
 import { resolveProjects } from '../../src/cli/init';
 import type { RstestConfig } from '../../src/types';
 
