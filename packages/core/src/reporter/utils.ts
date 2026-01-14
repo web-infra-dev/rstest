@@ -14,16 +14,26 @@ export const statusStr = {
   skip: '-',
 };
 
+export const statusColor: Record<
+  keyof typeof statusStr,
+  (str: string) => string
+> = {
+  fail: color.red,
+  pass: color.green,
+  todo: color.gray,
+  skip: color.gray,
+};
+
 export const statusColorfulStr: {
   fail: string;
   pass: string;
   todo: string;
   skip: string;
 } = {
-  fail: color.red(statusStr.fail),
-  pass: color.green(statusStr.pass),
-  todo: color.gray(statusStr.todo),
-  skip: color.gray(statusStr.skip),
+  fail: statusColor.fail(statusStr.fail),
+  pass: statusColor.pass(statusStr.pass),
+  todo: statusColor.todo(statusStr.todo),
+  skip: statusColor.skip(statusStr.skip),
 };
 
 export const logCase = (
@@ -77,7 +87,7 @@ export const logFileTitle = (
   let title = ` ${color.bold(statusColorfulStr[test.status])}`;
 
   if (showProjectName && test.project) {
-    title += ` ${color.yellow(`[${test.project}]`)}`;
+    title += ` ${statusColor[test.status](`[${test.project}]`)}`;
   }
 
   title += ` ${prettyTestPath(relativePath)}`;
