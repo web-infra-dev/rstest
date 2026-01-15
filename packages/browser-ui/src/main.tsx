@@ -17,12 +17,11 @@ import type {
   SnapshotRpcResponse,
   TestFileInfo,
 } from './types';
-import {
-  type CaseInfo,
-  type CaseStatus,
-  type ContainerWindow,
-  STATUS_META,
-  type TestStatus,
+import type {
+  CaseInfo,
+  CaseStatus,
+  ContainerWindow,
+  TestStatus,
 } from './utils/constants';
 import { logger } from './utils/logger';
 import './index.css';
@@ -51,15 +50,18 @@ const iframeUrlFor = (
 };
 
 // ============================================================================
-// BrowserRunner Component
+// App Component
 // ============================================================================
+
+type ThemeMode = 'dark' | 'light' | 'system';
 
 const BrowserRunner: React.FC<{
   options: BrowserHostConfig;
-  theme: 'dark' | 'light';
-  setTheme: (theme: 'dark' | 'light') => void;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
 }> = ({ options, theme, setTheme }) => {
   const { token } = antdTheme.useToken();
+
   const [testFiles, setTestFiles] = useState<TestFileInfo[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
@@ -370,14 +372,8 @@ const BrowserRunner: React.FC<{
     };
   }, [caseMap]);
 
-  // File level counts for progress bar
-  const fileCounts = useMemo(
-    () => ({
-      idle: Object.values(statusMap).filter((s) => s === 'idle').length,
-      running: Object.values(statusMap).filter((s) => s === 'running').length,
-      pass: Object.values(statusMap).filter((s) => s === 'pass').length,
-      fail: Object.values(statusMap).filter((s) => s === 'fail').length,
-    }),
+  const isAnyFileRunning = useMemo(
+    () => Object.values(statusMap).some((s) => s === 'running'),
     [statusMap],
   );
 
@@ -432,15 +428,6 @@ const BrowserRunner: React.FC<{
     return [...new Set(keys)]; // Deduplicate
   }, [testFiles, caseMap]);
 
-  const completedTotal = fileCounts.pass + fileCounts.fail;
-  const successPercent =
-    completedTotal === 0 ? 0 : (fileCounts.pass / completedTotal) * 100;
-  const progressPercent = completedTotal === 0 ? 0 : 100;
-  const isDark = theme === 'dark';
-  const themeSwitchLabel = isDark
-    ? 'Switch to light theme'
-    : 'Switch to dark theme';
-
   return (
     <div
       className="m-0 h-screen w-full overflow-hidden p-0"
@@ -455,20 +442,15 @@ const BrowserRunner: React.FC<{
           <div
             className="flex h-full flex-col overflow-hidden"
             style={{
-              borderRight: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorBgContainer,
             }}
           >
             <SidebarHeader
-              themeSwitchLabel={themeSwitchLabel}
-              isDark={isDark}
-              onThemeToggle={(checked: boolean) =>
-                setTheme(checked ? 'dark' : 'light')
-              }
+              theme={theme}
+              onThemeToggle={setTheme}
               isConnected={connected}
               token={token}
-              progressPercent={progressPercent}
-              successPercent={successPercent}
+              counts={caseCounts}
             />
 
             <TestFilesHeader
@@ -492,6 +474,7 @@ const BrowserRunner: React.FC<{
               }}
               onRerun={connected ? handleRerunAll : undefined}
               counts={caseCounts}
+              isRunning={isAnyFileRunning}
             />
 
             <div
@@ -526,19 +509,9 @@ const BrowserRunner: React.FC<{
           >
             <PreviewHeader
               token={token}
-              activeDisplayName={
-                active ? getDisplayName(active) : 'Select a test file'
-              }
-              statusLabel={
-                active
-                  ? STATUS_META[statusMap[active] ?? 'idle'].label
-                  : undefined
-              }
-              statusColor={
-                active
-                  ? STATUS_META[statusMap[active] ?? 'idle'].color
-                  : undefined
-              }
+              activeFile={active ?? undefined}
+              rootPath={options.rootPath}
+              status={active ? (statusMap[active] ?? 'idle') : undefined}
             />
 
             <div
@@ -584,33 +557,41 @@ const BrowserRunner: React.FC<{
   );
 };
 
-// ============================================================================
-// App Component
-// ============================================================================
-
 const App: React.FC = () => {
   const options = (window as ContainerWindow).__RSTEST_BROWSER_OPTIONS__;
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
+  const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) =>
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    setSystemTheme(query.matches ? 'dark' : 'light');
+    query.addEventListener('change', handler);
+    return () => query.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem('rstest-theme');
-      if (stored === 'light' || stored === 'dark') {
-        setTheme(stored);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        setThemeMode(stored as ThemeMode);
       }
     } catch {
       // ignore
     }
   }, []);
 
+  const theme = themeMode === 'system' ? systemTheme : themeMode;
+
   useEffect(() => {
     document.body.dataset.theme = theme;
     try {
-      window.localStorage.setItem('rstest-theme', theme);
+      window.localStorage.setItem('rstest-theme', themeMode);
     } catch {
       // ignore
     }
-  }, [theme]);
+  }, [theme, themeMode]);
 
   if (!options) {
     return (
@@ -630,14 +611,24 @@ const App: React.FC = () => {
           ? antdTheme.darkAlgorithm
           : antdTheme.defaultAlgorithm,
         token: {
-          fontFamily:
-            '"Space Grotesk","Inter",system-ui,-apple-system,"Segoe UI",sans-serif',
-          colorInfo: isDark ? '#ffffff' : '#0f0f0f',
+          fontFamily: '"Inter",system-ui,-apple-system,"Segoe UI",sans-serif',
+          fontFamilyCode:
+            '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          colorInfo: '#0070f3',
+          colorPrimary: '#0070f3',
+          colorSuccess: '#45a557',
+          colorError: isDark ? '#d93036' : '#da2f35',
+          colorWarning: '#ffb224',
+          borderRadius: 6,
         },
       }}
     >
       <AntdApp>
-        <BrowserRunner options={options} theme={theme} setTheme={setTheme} />
+        <BrowserRunner
+          options={options}
+          theme={themeMode}
+          setTheme={setThemeMode}
+        />
       </AntdApp>
     </ConfigProvider>
   );

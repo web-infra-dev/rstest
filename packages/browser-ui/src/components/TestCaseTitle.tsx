@@ -45,27 +45,29 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
       {icon && (
         <span
           key={flashKey}
-          className={`flex shrink-0 ${flashKey > 0 ? 'status-icon-flash' : ''}`}
+          className={`flex w-[16px] shrink-0 items-center justify-center ${flashKey > 0 ? 'status-icon-flash' : ''}`}
           style={{ color: iconColor }}
         >
           {icon}
         </span>
       )}
       <Tooltip title={label} mouseLeaveDelay={0}>
-        <span className="truncate text-[13px]">{label}</span>
+        <span className="truncate text-[13px] tracking-tight opacity-70">
+          {label}
+        </span>
       </Tooltip>
       <div className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <Tooltip title="Re-run this test" mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
-            icon={<RotateCw size={14} />}
+            icon={<RotateCw size={14} strokeWidth={2.5} />}
             disabled={!onRerun}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onRerun?.();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
             style={{ color: buttonTextColor }}
           />
         </Tooltip>

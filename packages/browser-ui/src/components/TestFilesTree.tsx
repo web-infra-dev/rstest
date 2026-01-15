@@ -1,9 +1,10 @@
-import { Skeleton, Tree, Typography } from 'antd';
+import { Skeleton, Tree } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
 import type { DataNode } from 'antd/es/tree';
 import { ChevronDown, ChevronRight, Package } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
 import type { BrowserProjectRuntime, TestFileInfo } from '../types';
+import { openInEditor, toRelativePath } from '../utils';
 import {
   CASE_STATUS_META,
   type CaseInfo,
@@ -14,30 +15,6 @@ import {
 import { TestCaseTitle } from './TestCaseTitle';
 import { TestFileTitle } from './TestFileTitle';
 import { TestSuiteTitle } from './TestSuiteTitle';
-
-const { Text } = Typography;
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-const toRelativePath = (file: string, rootPath?: string): string => {
-  if (!rootPath) return file;
-  const normalizedRoot = rootPath.endsWith('/')
-    ? rootPath.slice(0, -1)
-    : rootPath;
-  if (file.startsWith(normalizedRoot)) {
-    const sliced = file.slice(normalizedRoot.length);
-    return sliced.startsWith('/') ? sliced.slice(1) : sliced;
-  }
-  return file;
-};
-
-const openInEditor = (file: string): void => {
-  const payload = { type: 'open-in-editor', payload: { file } };
-  window.parent?.postMessage(payload, '*');
-  fetch(`/__open-in-editor?file=${encodeURIComponent(file)}`).catch(() => {});
-};
 
 // ============================================================================
 // Types
@@ -142,9 +119,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           {
             key: `${file}::__empty`,
             title: (
-              <Text type="secondary" className="text-xs">
+              <span className="text-xs text-(--muted-foreground)">
                 No test cases reported yet
-              </Text>
+              </span>
             ),
             isLeaf: true,
             selectable: false,
@@ -347,6 +324,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               <Package
                 size={14}
                 style={{ color: projectMeta.color }}
+                strokeWidth={2.5}
                 className="shrink-0"
               />
               <span
@@ -399,7 +377,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   if (!connected) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
-        <Text type="warning">Reconnecting...</Text>
+        <span className="text-(--warning)">Reconnecting...</span>
       </div>
     );
   }
@@ -408,7 +386,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   if (testFiles.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Text type="secondary">No test files detected</Text>
+        <span className="text-(--muted-foreground)">
+          No test files detected
+        </span>
       </div>
     );
   }
@@ -417,7 +397,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   if (filteredTestFiles.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Text type="secondary">No matching tests found</Text>
+        <span className="text-(--muted-foreground)">
+          No matching tests found
+        </span>
       </div>
     );
   }
@@ -428,7 +410,11 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       blockNode
       showLine={false}
       switcherIcon={(props: { expanded?: boolean }) =>
-        props.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+        props.expanded ? (
+          <ChevronDown size={12} strokeWidth={2.5} />
+        ) : (
+          <ChevronRight size={12} strokeWidth={2.5} />
+        )
       }
       showIcon
       expandAction="click"
@@ -449,7 +435,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         }
       }}
       treeData={treeData}
-      className="m-1! bg-transparent"
+      className="m-1 bg-transparent"
     />
   );
 };
