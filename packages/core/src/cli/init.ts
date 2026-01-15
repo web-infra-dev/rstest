@@ -55,6 +55,7 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
 };
 
@@ -83,6 +84,7 @@ function mergeWithCLIOptions(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'hideSkippedTestFiles',
     'logHeapUsage',
   ];
   for (const key of keys) {

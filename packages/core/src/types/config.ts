@@ -36,6 +36,7 @@ export type ProjectConfig = Omit<
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
   | 'hideSkippedTests'
+  | 'hideSkippedTestFiles'
   | 'bail'
 >;
 
@@ -266,6 +267,12 @@ export interface RstestConfig {
    */
   hideSkippedTests?: boolean;
   /**
+   * Hide skipped test files logs.
+   *
+   * @default false
+   */
+  hideSkippedTestFiles?: boolean;
+  /**
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
@@ -404,6 +411,7 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
+  | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
   | 'extends';
 

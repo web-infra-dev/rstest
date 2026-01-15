@@ -55,6 +55,10 @@ export class DefaultReporter implements Reporter {
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
 
+    if (this.config.hideSkippedTestFiles && test.status === 'skip') {
+      return;
+    }
+
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 

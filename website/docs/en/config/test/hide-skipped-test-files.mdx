@@ -1,0 +1,53 @@
+# hideSkippedTestFiles
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--hideSkippedTestFiles`
+
+Hide skipped test files logs.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --hideSkippedTestFiles
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  hideSkippedTestFiles: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## Example
+
+By default, Rstest displays logs for all test files.
+
+```bash
+ ✓ test/index.test.ts (1) 1ms
+  ✓ Index > should add two numbers correctly (0ms)
+ - test/all-skipped.test.ts (2) 1ms
+
+ Test Files 1 passed | 1 skipped
+      Tests 1 passed | 2 skipped (3)
+   Duration 93ms (build 50ms, tests 43ms)
+```
+
+When you set `hideSkippedTestFiles` to `true`, Rstest will hide logs for all skipped test files after the test run is complete.
+
+The output will look like this:
+
+```bash
+ ✓ test/index.test.ts (1) 1ms
+  ✓ Index > should add two numbers correctly (0ms)
+
+ Test Files 1 passed | 1 skipped
+      Tests 1 passed | 2 skipped (3)
+   Duration 93ms (build 50ms, tests 43ms)
+```

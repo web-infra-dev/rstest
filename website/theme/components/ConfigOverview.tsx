@@ -66,6 +66,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
+      'hideSkippedTestFiles',
       'slowTestThreshold',
       'chaiConfig',
       'onConsoleLog',
