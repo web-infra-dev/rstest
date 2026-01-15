@@ -40,6 +40,7 @@ pnpm --filter @rstest/browser-ui typecheck
 - Follow the Vercel Geist design system (https://vercel.com/geist) for UI aesthetics, including color scales and spacing.
 - Only use Geist palette CSS variables for colors (e.g. `var(--ds-*)`, `var(--accents-*)`, `var(--background)`, `var(--foreground)`). If hard-coded colors are unavoidable, confirm with the user first.
 - Do not use `!important` in CSS or Tailwind `!` modifier classes unless explicitly approved.
+- Maintain the agent-facing `data-testid` attributes across the app. Treat them as part of the public API—do not rename or remove them. In browser-ui, follow a rule-driven policy: add `data-testid` to every interactive surface an agent might click or focus (buttons, inputs, toggles, tabs, menu items, tree/list rows, expandable headers). For repeated/dynamic items, keep a stable `data-testid` base and add `data-test-*` attributes for identifiers (paths, ids, names). Skip purely decorative elements.
 
 ## Don't
 

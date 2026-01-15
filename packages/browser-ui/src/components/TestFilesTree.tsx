@@ -195,6 +195,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 iconColor={suiteMeta.color}
                 status={suiteStatus}
                 name={child.name}
+                fullName={suiteFullName}
                 onRerun={
                   connected
                     ? () => {
@@ -220,6 +221,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 iconColor={caseMeta.color}
                 status={testCase.status}
                 label={testCase.name}
+                caseId={testCase.id}
                 onRerun={
                   connected
                     ? () => {
@@ -275,6 +277,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
             iconColor={meta.color}
             status={status}
             relativePath={relativePath}
+            filePath={filePath}
             onOpen={() => openInEditor(filePath)}
             onRerun={
               connected
@@ -320,7 +323,11 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         return {
           key: projectKey,
           title: (
-            <div className="flex items-center gap-1.5">
+            <div
+              className="flex items-center gap-1.5"
+              data-testid="test-project-title"
+              data-test-project={projectName}
+            >
               <Package
                 size={14}
                 style={{ color: projectMeta.color }}
@@ -408,6 +415,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   return (
     <Tree
       blockNode
+      data-testid="test-files-tree"
       showLine={false}
       switcherIcon={(props: { expanded?: boolean }) =>
         props.expanded ? (

@@ -8,6 +8,7 @@ type TestFileTitleProps = {
   iconColor: string;
   status: TestStatus;
   relativePath: string;
+  filePath: string;
   onOpen: () => void;
   onRerun?: () => void;
   textColor: string;
@@ -21,6 +22,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   iconColor,
   status,
   relativePath,
+  filePath,
   onOpen,
   onRerun,
   textColor,
@@ -43,7 +45,11 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   }, [status, shouldFlash]);
 
   return (
-    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div
+      className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+      data-testid="test-file-title"
+      data-test-file={filePath}
+    >
       <span
         key={flashKey}
         className={`flex w-[16px] shrink-0 items-center justify-center ${flashKey > 0 ? 'status-icon-flash' : ''}`}
@@ -76,6 +82,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
               onOpen();
             }}
             className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-file-open-editor"
             style={{ color: textColor }}
           />
         </Tooltip>
@@ -90,6 +97,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
               onRerun?.();
             }}
             className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-file-rerun"
             style={{ color: textColor }}
           />
         </Tooltip>

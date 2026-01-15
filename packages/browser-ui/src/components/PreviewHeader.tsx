@@ -45,6 +45,7 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
   return (
     <div
       className="flex h-[48px] items-center justify-between px-4"
+      data-testid="preview-header"
       style={{
         background: token.colorBgContainer,
         borderBottom: `1px solid ${token.colorBorder}`,
@@ -83,6 +84,7 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
                       type="text"
                       size="small"
                       className="flex h-5 w-5 items-center justify-center rounded-md p-0 text-(--accents-4) hover:text-foreground hover:bg-(--accents-1) transition-all"
+                      data-testid="preview-copy-path"
                       icon={<Copy size={12} strokeWidth={2.5} />}
                       onClick={handleCopy}
                     />
@@ -92,6 +94,7 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
                       type="text"
                       size="small"
                       className="flex h-5 w-5 items-center justify-center rounded-md p-0 text-(--accents-4) hover:text-foreground hover:bg-(--accents-1) transition-all"
+                      data-testid="preview-open-editor"
                       icon={
                         <SquareArrowOutUpRight size={12} strokeWidth={2.5} />
                       }

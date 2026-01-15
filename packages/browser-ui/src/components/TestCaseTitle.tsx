@@ -8,6 +8,7 @@ type TestCaseTitleProps = {
   iconColor: string;
   status: CaseStatus;
   label: string;
+  caseId: string;
   onRerun?: () => void;
   buttonTextColor: string;
 };
@@ -20,6 +21,7 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
   iconColor,
   status,
   label,
+  caseId,
   onRerun,
   buttonTextColor,
 }) => {
@@ -41,7 +43,11 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
   }, [status, shouldFlash]);
 
   return (
-    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div
+      className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+      data-testid="test-case-title"
+      data-test-case={caseId}
+    >
       {icon && (
         <span
           key={flashKey}
@@ -68,6 +74,7 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
               onRerun?.();
             }}
             className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-case-rerun"
             style={{ color: buttonTextColor }}
           />
         </Tooltip>
