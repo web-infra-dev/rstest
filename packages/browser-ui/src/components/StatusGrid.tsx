@@ -1,6 +1,7 @@
 import { Tag } from 'antd';
 import React, { memo } from 'react';
 
+/* cspell:ignore nums */
 export type StatusCounts = Record<string, number>;
 
 /**
@@ -29,7 +30,7 @@ export const StatusGrid: React.FC<{
           return (
             <Tag
               key={item.label}
-              className={`m-0! flex items-center px-2 py-0! border-0! ${isRunningItem && isFileLoading ? 'animate-pulse' : ''}`}
+              className={`m-0 flex items-center px-2 py-0 border-0 ${isRunningItem && isFileLoading ? 'animate-pulse' : ''}`}
               style={{
                 backgroundColor: `var(--ds-${item.color}-200)`,
                 color: `var(--ds-${item.color}-900)`,

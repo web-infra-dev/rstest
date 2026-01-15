@@ -4,7 +4,14 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
+.ant-typography.font-mono {
+  font-family: var(--font-mono);
+}
+
 :root {
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
   /* Core Backgrounds */
   --background: #ffffff;
   --foreground: #000000;
@@ -158,13 +165,9 @@ body {
   box-shadow: 0 0 0 1px var(--foreground);
 }
 
-.ant-tag {
-  transition: none !important;
-}
-
 /* Ant Design Tree Customization */
-.ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected::before {
-  display: none !important;
+.ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  transition: none;
 }
 
 /* Flash effect for status icon transitions (flashbang style) */

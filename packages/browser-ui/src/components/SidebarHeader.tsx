@@ -105,7 +105,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
           <Button
             type="text"
             size="small"
-            className="flex h-8 w-8 items-center justify-center rounded-md p-0!"
+            className="flex h-8 w-8 items-center justify-center rounded-md p-0"
             icon={<ThemeIcon size={14} strokeWidth={2.5} />}
             onClick={handleCycleTheme}
           />

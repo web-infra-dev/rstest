@@ -67,7 +67,7 @@ export const TestCaseTitle: React.FC<TestCaseTitleProps> = ({
               e.stopPropagation();
               onRerun?.();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
             style={{ color: buttonTextColor }}
           />
         </Tooltip>

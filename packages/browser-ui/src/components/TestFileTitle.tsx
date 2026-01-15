@@ -53,7 +53,12 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
       </span>
       <Tooltip
         title={relativePath}
-        overlayInnerStyle={{ whiteSpace: 'nowrap', maxWidth: 'none' }}
+        styles={{
+          container: {
+            whiteSpace: 'nowrap',
+            maxWidth: 'none',
+          },
+        }}
         mouseLeaveDelay={0}
       >
         <span className="truncate font-mono text-[12px] font-medium tracking-tight opacity-90">
@@ -70,7 +75,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
               e.stopPropagation();
               onOpen();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
             style={{ color: textColor }}
           />
         </Tooltip>
@@ -84,7 +89,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
               e.stopPropagation();
               onRerun?.();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
             style={{ color: textColor }}
           />
         </Tooltip>

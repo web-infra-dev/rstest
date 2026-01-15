@@ -509,9 +509,8 @@ const BrowserRunner: React.FC<{
           >
             <PreviewHeader
               token={token}
-              activeDisplayName={
-                active ? getDisplayName(active) : 'Select a test file'
-              }
+              activeFile={active ?? undefined}
+              rootPath={options.rootPath}
               status={active ? (statusMap[active] ?? 'idle') : undefined}
             />
 
@@ -613,51 +612,14 @@ const App: React.FC = () => {
           : antdTheme.defaultAlgorithm,
         token: {
           fontFamily: '"Inter",system-ui,-apple-system,"Segoe UI",sans-serif',
-          colorInfo: 'var(--ds-blue-700)',
-          colorPrimary: 'var(--ds-blue-700)',
-          colorSuccess: 'var(--ds-green-700)',
-          colorError: 'var(--ds-red-800)',
-          colorWarning: 'var(--ds-amber-700)',
+          fontFamilyCode:
+            '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          colorInfo: '#0070f3',
+          colorPrimary: '#0070f3',
+          colorSuccess: '#45a557',
+          colorError: isDark ? '#d93036' : '#da2f35',
+          colorWarning: '#ffb224',
           borderRadius: 6,
-          colorBgContainer: 'var(--background)',
-          colorBgLayout: 'var(--background)',
-          colorBorder: 'var(--accents-2)',
-          colorBorderSecondary: 'var(--accents-1)',
-          colorText: 'var(--foreground)',
-          colorTextDescription: 'var(--accents-5)',
-        },
-        components: {
-          Button: {
-            borderRadius: 6,
-            controlHeight: 32,
-            fontWeight: 500,
-            colorBgTextHover: 'var(--accents-1)',
-            colorBgTextActive: 'var(--accents-2)',
-          },
-          Input: {
-            borderRadius: 6,
-            controlHeight: 32,
-            colorBgContainer: 'transparent',
-            colorBorder: 'var(--accents-2)',
-            activeBorderColor: 'var(--foreground)',
-            hoverBorderColor: 'var(--accents-5)',
-            activeShadow: '0 0 0 1px var(--foreground)',
-          },
-          Tree: {
-            colorBgContainer: 'transparent',
-            controlItemBgHover: 'var(--accents-1)',
-            controlItemBgActive: 'var(--accents-2)',
-            nodeHoverBg: 'var(--accents-1)',
-            nodeSelectedBg: 'var(--accents-2)',
-            paddingXS: 4,
-          },
-          Splitter: {
-            handleBarSize: 1,
-            handleBarHoverSize: 1,
-            handleSize: 4,
-            handleBarColor: 'var(--accents-2)',
-            handleBarHoverColor: 'var(--foreground)',
-          },
         },
       }}
     >

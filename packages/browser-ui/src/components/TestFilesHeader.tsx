@@ -53,7 +53,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
                 )
               }
               onClick={onToggleExpandAll}
-              className="flex h-7 w-7 items-center justify-center rounded-md p-0!"
+              className="flex h-7 w-7 items-center justify-center rounded-md p-0"
               style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
@@ -64,7 +64,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
               icon={<RotateCw size={14} strokeWidth={2.5} />}
               onClick={onRerun}
               disabled={!onRerun}
-              className="flex h-7 w-7 items-center justify-center rounded-md p-0!"
+              className="flex h-7 w-7 items-center justify-center rounded-md p-0"
               style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
