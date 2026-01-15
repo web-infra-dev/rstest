@@ -428,6 +428,13 @@ const BrowserRunner: React.FC<{
     return [...new Set(keys)]; // Deduplicate
   }, [testFiles, caseMap]);
 
+  // Generate project-specific storage key for split position
+  const projectKey =
+    options.projects?.[0]?.name ||
+    options.rootPath.split('/').filter(Boolean).pop() ||
+    'default';
+  const splitStorageKey = `rstest-split-${projectKey}`;
+
   return (
     <div
       className="m-0 h-screen w-full overflow-hidden p-0"
@@ -436,7 +443,7 @@ const BrowserRunner: React.FC<{
       <ResizablePanelGroup
         direction="horizontal"
         className="h-full w-full"
-        autoSaveId="rstest-split"
+        autoSaveId={splitStorageKey}
       >
         <ResizablePanel defaultSize={32} minSize={20} maxSize={50}>
           <div
@@ -602,6 +609,14 @@ const App: React.FC = () => {
   }
 
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const projectName =
+      options.projects?.[0]?.name ||
+      options.rootPath.split('/').filter(Boolean).pop() ||
+      'rstest';
+    document.title = `${projectName} [RSTEST BROWSER]`;
+  }, [options]);
 
   return (
     <ConfigProvider

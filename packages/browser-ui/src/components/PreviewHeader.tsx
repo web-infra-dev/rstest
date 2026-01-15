@@ -1,6 +1,6 @@
 import { App, Button, Tooltip } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
-import { Copy, SquareArrowOutUpRight } from 'lucide-react';
+import { Copy, FileCode, SquareArrowOutUpRight } from 'lucide-react';
 import React from 'react';
 import { openInEditor, toRelativePath } from '../utils';
 import { STATUS_META, type TestStatus } from '../utils/constants';
@@ -52,12 +52,11 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
       }}
     >
       <div className="flex items-center gap-2 overflow-hidden">
-        <span className="text-[11px] font-medium tracking-wider text-(--accents-5) shrink-0">
-          PREVIEW
-        </span>
-        <span className="text-(--accents-3) font-light select-none shrink-0">
-          /
-        </span>
+        <FileCode
+          size={16}
+          strokeWidth={2}
+          className="shrink-0 text-(--accents-7)"
+        />
         <div className="flex items-center gap-1.5 overflow-hidden">
           {dirPath && (
             <>
@@ -83,7 +82,8 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
                     <Button
                       type="text"
                       size="small"
-                      className="flex h-5 w-5 items-center justify-center rounded-md p-0 text-(--accents-4) hover:text-foreground hover:bg-(--accents-1) transition-all"
+                      className="flex ml-1 h-5 w-5 items-center justify-center rounded-md p-0 text-(--accents-4) hover:text-foreground hover:bg-(--accents-1) transition-all"
+                      style={{ color: token.colorTextDescription }}
                       data-testid="preview-copy-path"
                       icon={<Copy size={12} strokeWidth={2.5} />}
                       onClick={handleCopy}
@@ -99,6 +99,7 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
                         <SquareArrowOutUpRight size={12} strokeWidth={2.5} />
                       }
                       onClick={() => openInEditor(activeFile)}
+                      style={{ color: token.colorTextDescription }}
                     />
                   </Tooltip>
                 </div>

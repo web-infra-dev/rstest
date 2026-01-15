@@ -108,8 +108,9 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             size="small"
             className="flex h-8 w-8 items-center justify-center rounded-md p-0"
             data-testid="theme-toggle"
-            icon={<ThemeIcon size={14} strokeWidth={2.5} />}
+            icon={<ThemeIcon size={15} strokeWidth={2.5} />}
             onClick={handleCycleTheme}
+            style={{ color: token.colorTextDescription }}
           />
         </Tooltip>
       </div>

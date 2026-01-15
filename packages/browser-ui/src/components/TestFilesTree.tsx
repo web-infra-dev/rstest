@@ -443,7 +443,8 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         }
       }}
       treeData={treeData}
-      className="m-1 bg-transparent"
+      className="bg-transparent"
+      style={{ marginLeft: '16px' }}
     />
   );
 };

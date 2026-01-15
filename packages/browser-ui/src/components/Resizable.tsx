@@ -29,20 +29,55 @@ const ResizablePanelGroup = ({
       React.isValidElement(child) && child.type === ResizablePanel,
   );
 
-  const items = panels.map((panel) => {
+  // Load saved sizes from localStorage
+  const getSavedSizes = React.useCallback((): number[] | null => {
+    if (!autoSaveId) return null;
+    try {
+      const saved = localStorage.getItem(autoSaveId);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === panels.length) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }, [autoSaveId, panels.length]);
+
+  const savedSizes = getSavedSizes();
+
+  const items = panels.map((panel, index) => {
     const {
       defaultSize,
       minSize,
       maxSize,
       children: panelChildren,
     } = panel.props;
+
+    // Use saved size if available, otherwise use defaultSize
+    const size = savedSizes?.[index] ?? defaultSize;
+
     return {
-      defaultSize: defaultSize ? `${defaultSize}%` : undefined,
+      defaultSize: size ? `${size}%` : undefined,
       min: minSize ? `${minSize}%` : undefined,
       max: maxSize ? `${maxSize}%` : undefined,
       children: panelChildren,
     };
   });
+
+  const handleSizesChange = React.useCallback(
+    (sizes: number[]) => {
+      if (!autoSaveId) return;
+      try {
+        localStorage.setItem(autoSaveId, JSON.stringify(sizes));
+      } catch {
+        // ignore
+      }
+    },
+    [autoSaveId],
+  );
 
   return (
     <Splitter
@@ -55,6 +90,7 @@ const ResizablePanelGroup = ({
         margin: 0,
         ...style,
       }}
+      onResizeEnd={handleSizesChange}
       {...props}
     >
       {items.map((item) => (
