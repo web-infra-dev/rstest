@@ -8,6 +8,88 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('browser mode - watch', () => {
+  it('source file changes should trigger all dependent tests to re-run', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-source`;
+
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures/watch`,
+      fixturesTargetPath,
+    });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { DEBUG: 'rstest' },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    // ========== Initial Run ==========
+    // Fixture has 2 test files: index.test.ts and another.test.ts
+    // Both import from src/helper.ts
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Test Files 2 passed');
+
+    const helperPath = path.join(fixturesTargetPath, 'src/helper.ts');
+
+    // ========== Update shared source file ==========
+    // Both test files depend on helper.ts, so both should re-run
+    cli.resetStd();
+    fs.update(helperPath, (content) => {
+      return content.replace("return 'hello'", "return 'world'");
+    });
+
+    // Wait for the re-run message that shows both files were detected
+    await cli.waitForStdout('Re-running 2 affected test file(s)');
+    // Verify both test files are in the affected list (from debug log)
+    expect(cli.stdout).toMatch(
+      /\[Watch\] Affected test files:.*another\.test\.ts/,
+    );
+    expect(cli.stdout).toMatch(
+      /\[Watch\] Affected test files:.*index\.test\.ts/,
+    );
+    // Wait for test execution result (proves the rerun actually executed)
+    await cli.waitForStdout("expected 'world' to be 'hello'");
+
+    // ========== Fix source file ==========
+    cli.resetStd();
+    fs.update(helperPath, (content) => {
+      return content.replace("return 'world'", "return 'hello'");
+    });
+
+    // Wait for the re-run and verify both files are affected again
+    await cli.waitForStdout('Re-running 2 affected test file(s)');
+    expect(cli.stdout).toMatch(
+      /\[Watch\] Affected test files:.*another\.test\.ts/,
+    );
+    expect(cli.stdout).toMatch(
+      /\[Watch\] Affected test files:.*index\.test\.ts/,
+    );
+    // At least one test should pass
+    await cli.waitForStdout('✓ tests/');
+
+    // Kill the process tree
+    const pid = cli.exec.process?.pid;
+    if (pid) {
+      treeKill(pid, 'SIGKILL');
+    } else {
+      cli.exec.kill();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    try {
+      fs.delete(fixturesTargetPath);
+    } catch (err) {
+      if (process.platform !== 'win32') {
+        throw err;
+      }
+    }
+  });
+
   it('test files should be ran when create / update / rename / delete', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch`;
 
@@ -30,7 +112,7 @@ describe('browser mode - watch', () => {
     // ========== Initial Run ==========
     // Initial run outputs full summary with Duration
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Test Files 1 passed');
+    expect(cli.stdout).toMatch('Test Files 2 passed');
 
     const newTestPath = path.join(fixturesTargetPath, 'tests/new.test.ts');
     const renamedTestPath = path.join(
