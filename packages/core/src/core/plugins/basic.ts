@@ -77,7 +77,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
             tools: {
               rspack: (config, { isProd, rspack }) => {
-                config.context = rootPath;
+                // keep windows path as native path
+                config.context = path.resolve(rootPath);
                 // treat `test` as development mode
                 config.mode = isProd ? 'production' : 'development';
                 config.output ??= {};
