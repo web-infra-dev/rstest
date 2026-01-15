@@ -29,6 +29,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
   return (
     <div
       className="flex flex-col gap-3 px-4 py-3"
+      data-testid="test-files-header"
       style={{
         background: token.colorBgContainer,
       }}
@@ -54,6 +55,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
               }
               onClick={onToggleExpandAll}
               className="flex h-7 w-7 items-center justify-center rounded-md p-0"
+              data-testid="test-files-toggle-expand"
               style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
@@ -65,6 +67,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
               onClick={onRerun}
               disabled={!onRerun}
               className="flex h-7 w-7 items-center justify-center rounded-md p-0"
+              data-testid="test-files-rerun-all"
               style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
@@ -79,6 +82,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
         }
         allowClear
         className="rounded-md py-1.5"
+        data-testid="test-files-search"
       />
     </div>
   );

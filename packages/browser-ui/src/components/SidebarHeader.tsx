@@ -76,6 +76,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   return (
     <div
       className="relative flex h-[48px] items-center justify-between px-4"
+      data-testid="sidebar-header"
       style={{ background: token.colorBgContainer }}
     >
       <div className="flex items-center gap-2">
@@ -106,6 +107,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
             type="text"
             size="small"
             className="flex h-8 w-8 items-center justify-center rounded-md p-0"
+            data-testid="theme-toggle"
             icon={<ThemeIcon size={14} strokeWidth={2.5} />}
             onClick={handleCycleTheme}
           />

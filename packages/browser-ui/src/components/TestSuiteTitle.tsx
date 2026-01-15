@@ -8,6 +8,7 @@ type TestSuiteTitleProps = {
   iconColor: string;
   status: CaseStatus;
   name: string;
+  fullName: string;
   onRerun?: () => void;
   buttonTextColor: string;
 };
@@ -20,6 +21,7 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
   iconColor,
   status,
   name,
+  fullName,
   onRerun,
   buttonTextColor,
 }) => {
@@ -41,7 +43,11 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
   }, [status, shouldFlash]);
 
   return (
-    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div
+      className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+      data-testid="test-suite-title"
+      data-test-suite={fullName}
+    >
       {icon && (
         <span
           key={flashKey}
@@ -68,6 +74,7 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
               onRerun?.();
             }}
             className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-suite-rerun"
             style={{ color: buttonTextColor }}
           />
         </Tooltip>
