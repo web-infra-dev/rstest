@@ -30,14 +30,16 @@ export const StatusGrid: React.FC<{
           return (
             <Tag
               key={item.label}
-              className={`m-0 flex items-center px-2 py-0 border-0 ${isRunningItem && isFileLoading ? 'animate-pulse' : ''}`}
+              className={`m-0 flex items-center gap-1 px-2 py-0 border-0 ${isRunningItem && isFileLoading ? 'animate-pulse' : ''}`}
               style={{
+                display: 'flex',
+                alignItems: 'center',
                 backgroundColor: `var(--ds-${item.color}-200)`,
                 color: `var(--ds-${item.color}-900)`,
                 borderRadius: '100px',
                 fontSize: '11px',
                 height: '20px',
-                lineHeight: '20px',
+                lineHeight: 'normal',
                 fontWeight: 700,
               }}
             >
@@ -49,7 +51,7 @@ export const StatusGrid: React.FC<{
                 }}
               >
                 {count}
-              </span>{' '}
+              </span>
               <span
                 className="text-[10px] uppercase tracking-wider"
                 style={{ fontWeight: 'inherit' }}

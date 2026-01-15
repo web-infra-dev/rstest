@@ -38,7 +38,7 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
         <div>
           <StatusGrid counts={counts} isRunning={isRunning} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Tooltip
             title={isAllExpanded ? 'Collapse all' : 'Expand all'}
             mouseLeaveDelay={0}
@@ -48,13 +48,13 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
               size="small"
               icon={
                 isAllExpanded ? (
-                  <FoldVertical size={14} strokeWidth={2.5} />
+                  <FoldVertical size={13} strokeWidth={2.5} />
                 ) : (
-                  <UnfoldVertical size={14} strokeWidth={2.5} />
+                  <UnfoldVertical size={13} strokeWidth={2.5} />
                 )
               }
               onClick={onToggleExpandAll}
-              className="flex h-7 w-7 items-center justify-center rounded-md p-0"
+              className="flex h-8 w-8 items-center justify-center rounded-md p-0"
               data-testid="test-files-toggle-expand"
               style={{ color: token.colorTextDescription }}
             />
@@ -63,10 +63,10 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<RotateCw size={14} strokeWidth={2.5} />}
+              icon={<RotateCw size={15} strokeWidth={2.5} />}
               onClick={onRerun}
               disabled={!onRerun}
-              className="flex h-7 w-7 items-center justify-center rounded-md p-0"
+              className="flex h-8 w-8 items-center justify-center rounded-md p-0"
               data-testid="test-files-rerun-all"
               style={{ color: token.colorTextDescription }}
             />
