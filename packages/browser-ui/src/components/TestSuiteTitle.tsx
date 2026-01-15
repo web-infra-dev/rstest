@@ -45,21 +45,23 @@ export const TestSuiteTitle: React.FC<TestSuiteTitleProps> = ({
       {icon && (
         <span
           key={flashKey}
-          className={`flex shrink-0 ${flashKey > 0 ? 'status-icon-flash' : ''}`}
+          className={`flex w-[16px] shrink-0 items-center justify-center ${flashKey > 0 ? 'status-icon-flash' : ''}`}
           style={{ color: iconColor }}
         >
           {icon}
         </span>
       )}
       <Tooltip title={name} mouseLeaveDelay={0}>
-        <span className="truncate text-[13px] font-medium">{name}</span>
+        <span className="truncate text-[13px] font-medium tracking-tight opacity-80">
+          {name}
+        </span>
       </Tooltip>
       <div className="opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <Tooltip title="Re-run this suite" mouseLeaveDelay={0}>
           <Button
             type="text"
             size="small"
-            icon={<RotateCw size={14} />}
+            icon={<RotateCw size={14} strokeWidth={2.5} />}
             disabled={!onRerun}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();

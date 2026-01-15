@@ -46,7 +46,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
     <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
       <span
         key={flashKey}
-        className={`flex w-[18px] shrink-0 ${flashKey > 0 ? 'status-icon-flash' : ''}`}
+        className={`flex w-[16px] shrink-0 items-center justify-center ${flashKey > 0 ? 'status-icon-flash' : ''}`}
         style={{ color: iconColor }}
       >
         {icon}
@@ -56,7 +56,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
         overlayInnerStyle={{ whiteSpace: 'nowrap', maxWidth: 'none' }}
         mouseLeaveDelay={0}
       >
-        <span className="truncate text-[13px] font-semibold">
+        <span className="truncate font-mono text-[12px] font-medium tracking-tight opacity-90">
           {relativePath}
         </span>
       </Tooltip>
@@ -65,7 +65,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
           <Button
             type="text"
             size="small"
-            icon={<SquareArrowOutUpRight size={14} />}
+            icon={<SquareArrowOutUpRight size={14} strokeWidth={2.5} />}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onOpen();
@@ -78,7 +78,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
           <Button
             type="text"
             size="small"
-            icon={<RotateCw size={14} />}
+            icon={<RotateCw size={14} strokeWidth={2.5} />}
             disabled={!onRerun}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();

@@ -347,6 +347,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               <Package
                 size={14}
                 style={{ color: projectMeta.color }}
+                strokeWidth={2.5}
                 className="shrink-0"
               />
               <span
@@ -428,7 +429,11 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       blockNode
       showLine={false}
       switcherIcon={(props: { expanded?: boolean }) =>
-        props.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+        props.expanded ? (
+          <ChevronDown size={12} strokeWidth={2.5} />
+        ) : (
+          <ChevronRight size={12} strokeWidth={2.5} />
+        )
       }
       showIcon
       expandAction="click"
