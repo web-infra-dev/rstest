@@ -1,5 +1,6 @@
+import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import path from 'pathe';
+import pathe from 'pathe';
 import type { RstestContext } from '../../types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
@@ -99,7 +100,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                     injectModulePathName: true,
                     importMetaPathName: true,
                     hoistMockModule: true,
-                    manualMockRoot: path.resolve(rootPath, '__mocks__'),
+                    manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
                   }),
                 );
 
