@@ -3,8 +3,8 @@
  *
  * Problem: When a project has `src/index.ts`, Rsbuild auto-detects it as the default entry
  * and generates `index.html`. Rsbuild's HTML fallback middleware then routes all unmatched
- * requests (including `/container.html`) to this `index.html`, bypassing rstest's custom
- * middleware that serves the test container UI.
+ * requests to this `index.html`, bypassing rstest's custom middleware that serves the test
+ * container UI at `/`.
  *
  * Solution: rstest uses `modifyEnvironmentConfig` with `order: 'post'` to completely
  * overwrite the entry config, ensuring browser mode entry is fully controlled by rstest.

@@ -1077,7 +1077,7 @@ const createBrowserRuntime = async ({
       }
       return;
     }
-    if (url.pathname === '/' || url.pathname === '/container.html') {
+    if (url.pathname === '/') {
       if (await respondWithDevServerHtml(url, res)) {
         return;
       }
@@ -1524,14 +1524,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
 
   // Only navigate on first creation
   if (isNewPage) {
-    await containerPage.goto(`http://localhost:${port}/container.html`, {
+    await containerPage.goto(`http://localhost:${port}/`, {
       waitUntil: 'load',
     });
 
     logger.log(
-      color.cyan(
-        `\nContainer page opened at http://localhost:${port}/container.html\n`,
-      ),
+      color.cyan(`\nBrowser mode opened at http://localhost:${port}/\n`),
     );
   }
 
