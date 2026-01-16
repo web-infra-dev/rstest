@@ -38,6 +38,10 @@ import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
+import {
+  RSTEST_BROWSER_EXPOSE_ID,
+  type RstestBrowserExposedApi,
+} from './extensionContract';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
 import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
@@ -379,6 +383,8 @@ type BrowserRuntime = {
   manifestPlugin: VirtualModulesPluginInstance;
   containerPage?: BrowserProviderPage;
   containerContext?: BrowserProviderContext;
+  /** Late-binding ref for plugin dispatch handlers that need Playwright access. */
+  containerPageRef: { current: BrowserProviderPage | null };
   setContainerOptions: (options: BrowserHostConfig) => void;
   // Reserved extension seam for host-side dispatch capabilities.
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
@@ -1153,6 +1159,13 @@ const createBrowserRuntime = async ({
   // Reserved extension seam for future browser-side capabilities.
   const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
 
+  // Late-binding ref for the headed container page.
+  // Populated in runBrowserController once the Playwright page is ready;
+  // used by plugin dispatch handlers that need Playwright access.
+  const containerPageRef: { current: BrowserProviderPage | null } = {
+    current: null,
+  };
+
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
     if (containerHtmlTemplate) {
@@ -1215,19 +1228,63 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
-        // Internal extension entry: register host dispatch handlers without
-        // coupling scheduling to individual capability implementations.
-        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
-          'rstest:browser',
-          {
+        // Expose API for other Rsbuild plugins to register dispatch namespace
+        // handlers and access browser context helpers.
+        const getPlaywrightPage = (): import('playwright').Page => {
+          if (!containerPageRef.current) {
+            throw new Error(
+              'Container page is not available. ' +
+                'Make sure you are calling this within a dispatch handler during test execution.',
+            );
+          }
+          // The runtime page IS a Playwright Page; cast from the provider-agnostic type.
+          return containerPageRef.current as unknown as import('playwright').Page;
+        };
+        const exposedApi: RstestBrowserExposedApi = {
+          dispatch: {
             registerDispatchHandler: (
               namespace: string,
               handler: BrowserDispatchHandler,
             ) => {
               dispatchHandlers.set(namespace, handler);
+              logger.debug(
+                `[Dispatch] Registered extension namespace "${namespace}"`,
+              );
             },
           },
-        );
+          playwright: {
+            getContainerPage: getPlaywrightPage,
+            getIframeElementForTestFile: async (testFile: string) => {
+              const page = getPlaywrightPage();
+              const iframeElement = await page.$(
+                `iframe[data-test-file="${testFile}"]`,
+              );
+              if (!iframeElement) {
+                throw new Error(`Iframe not found for test file: ${testFile}`);
+              }
+              return iframeElement as import('playwright').ElementHandle<HTMLIFrameElement>;
+            },
+            getFrameForTestFile: async (testFile: string) => {
+              const page = getPlaywrightPage();
+              const iframeElement = await page.$(
+                `iframe[data-test-file="${testFile}"]`,
+              );
+              if (!iframeElement) {
+                throw new Error(`Iframe not found for test file: ${testFile}`);
+              }
+              const frame = await iframeElement.contentFrame();
+              if (!frame) {
+                throw new Error(`Cannot access content frame for: ${testFile}`);
+              }
+              return frame;
+            },
+          },
+        };
+        (
+          api as {
+            expose?: (name: string, value: unknown) => void;
+          }
+        ).expose?.(RSTEST_BROWSER_EXPOSE_ID, exposedApi);
 
         api.modifyEnvironmentConfig({
           handler: (config, { mergeEnvironmentConfig, name }) => {
@@ -1266,6 +1323,24 @@ const createBrowserRuntime = async ({
                   rspackConfig.mode = 'development';
                   rspackConfig.lazyCompilation =
                     createBrowserLazyCompilationConfig(setupFiles);
+
+                  const existingIgnored = rspackConfig.watchOptions?.ignored;
+                  const ignoredPatterns = Array.isArray(existingIgnored)
+                    ? [...existingIgnored]
+                    : existingIgnored
+                      ? [existingIgnored]
+                      : [];
+                  for (const pattern of ['**/midscene_run/**']) {
+                    if (!ignoredPatterns.includes(pattern)) {
+                      ignoredPatterns.push(pattern);
+                    }
+                  }
+                  rspackConfig.watchOptions = {
+                    ...rspackConfig.watchOptions,
+                    ignored: ignoredPatterns as NonNullable<
+                      NonNullable<typeof rspackConfig.watchOptions>['ignored']
+                    >,
+                  };
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
 
@@ -1554,6 +1629,7 @@ const createBrowserRuntime = async ({
       manifestPlugin: virtualManifestPlugin,
       setContainerOptions,
       dispatchHandlers,
+      containerPageRef,
       wss,
     };
   } catch (_error) {
@@ -2760,6 +2836,9 @@ export const runBrowserController = async (
         await page.close().catch(() => {});
       }
     });
+
+    // Populate the lazy ref so plugin dispatch handlers can access the page.
+    runtime.containerPageRef.current = containerPage;
 
     if (isWatchMode) {
       runtime.containerPage = containerPage;

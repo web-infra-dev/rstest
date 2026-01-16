@@ -9,6 +9,7 @@ When working on code in a specific package, use the Read tool to load that packa
 - For @rstest/core: @packages/core/AGENTS.md
 - For @rstest/browser: @packages/browser/AGENTS.md
 - For @rstest/browser-ui: @packages/browser-ui/AGENTS.md
+- For @rstest/midscene: @packages/midscene/AGENTS.md
 - For @rstest/coverage-istanbul: @packages/coverage-istanbul/AGENTS.md
 - For @rstest/adapter-rslib: @packages/adapter-rslib/AGENTS.md
 - For rstest VS Code extension: @packages/vscode/AGENTS.md
@@ -18,6 +19,7 @@ When working on code in a specific package, use the Read tool to load that packa
 - `packages/core/` — @rstest/core: Core testing framework (CLI, runtime, reporter, pool)
 - `packages/browser/` — @rstest/browser: Browser mode support (Playwright, WebSocket RPC)
 - `packages/browser-ui/` — @rstest/browser-ui: Browser test UI (React + Tailwind + Ant Design)
+- `packages/midscene/` — @rstest/midscene: Midscene AI integration for browser mode
 - `packages/coverage-istanbul/` — @rstest/coverage-istanbul: Istanbul coverage provider
 - `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
 - `packages/vscode/` — rstest: VS Code extension

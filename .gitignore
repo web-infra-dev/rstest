@@ -44,3 +44,8 @@ tests-dist/
 .vscode-test/
 packages/vscode/*.vsix
 packages/vscode/icon.png
+
+.env
+
+# Midscene artifacts
+midscene_run/

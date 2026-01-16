@@ -26,8 +26,8 @@
       "default": "./dist/browser.js"
     },
     "./internal": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/internal.d.ts",
+      "default": "./dist/internal.js"
     },
     "./package.json": {
       "default": "./package.json"
