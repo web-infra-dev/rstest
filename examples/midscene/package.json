@@ -1,0 +1,22 @@
+{
+  "name": "@examples/midscene",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "devDependencies": {
+    "@rstest/browser": "workspace:*",
+    "@rstest/browser-react": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rstest/midscene": "workspace:*",
+    "@types/node": "^22.16.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "playwright": "^1.58.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^5.9.3"
+  }
+}

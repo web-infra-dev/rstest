@@ -162,9 +162,20 @@ type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
 
 export type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
 
-export type ExtendConfigFn = (
-  userConfig: Readonly<LooseRstestConfig>,
-) => MaybePromise<ExtendConfig>;
+export type ExtendConfigMergeMode = 'prepend' | 'append';
+
+export interface ExtendConfigFn {
+  (userConfig: Readonly<LooseRstestConfig>): MaybePromise<ExtendConfig>;
+  /**
+   * Controls how the returned config is merged with the local user config.
+   *
+   * - `prepend` (default): returned config is merged before local user config,
+   *   so local fields still override adapter defaults.
+   * - `append`: returned config is merged after local user config, which lets an
+   *   adapter raise or normalize specific final values based on `userConfig`.
+   */
+  mergeMode?: ExtendConfigMergeMode;
+}
 
 export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 

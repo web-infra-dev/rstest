@@ -32,6 +32,7 @@ export default defineConfig({
         tsconfigPath: './tsconfig.json',
         entry: {
           index: './src/index.ts',
+          internal: './src/internal.ts',
           browser: './src/browser.ts',
         },
       },
