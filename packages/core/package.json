@@ -65,7 +65,9 @@
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
+    "@midscene/core": "^1.0.1",
     "@babel/code-frame": "^7.27.1",
+    "dotenv": "^16.5.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.55.2",
     "@rsbuild/plugin-node-polyfill": "^1.3.0",
@@ -109,10 +111,18 @@
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
+    "@midscene/core": "*",
+    "@midscene/web": "*",
     "happy-dom": "*",
     "jsdom": "*"
   },
   "peerDependenciesMeta": {
+    "@midscene/core": {
+      "optional": true
+    },
+    "@midscene/web": {
+      "optional": true
+    },
     "happy-dom": {
       "optional": true
     },

@@ -2,7 +2,9 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
 import type {
   BrowserClientFileResult,
+  BrowserClientMessage,
   BrowserClientTestResult,
+  BrowserPluginResponse,
   TestFileInfo,
 } from '../types';
 import { logger } from '../utils/logger';
@@ -46,6 +48,11 @@ export type HostRPC = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Generic plugin dispatch (for decoupled plugin architecture)
+  dispatch: (
+    testFile: string,
+    message: BrowserClientMessage,
+  ) => Promise<{ namespace: string; response: BrowserPluginResponse } | null>;
 };
 
 export type ContainerRPC = {

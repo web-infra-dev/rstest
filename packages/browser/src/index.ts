@@ -16,3 +16,17 @@ export async function listBrowserTests(
 }
 
 export type { ListBrowserTestsResult };
+
+// Export plugin-related types for decoupled plugin architecture
+export type {
+  PluginMessageContext,
+  PluginMessageHandler,
+  RstestBrowserExposedApi,
+} from './hostController';
+
+export type {
+  BrowserPluginRequest,
+  BrowserPluginRequestMessage,
+  BrowserPluginResponse,
+  BrowserPluginResponseEnvelope,
+} from './protocol';

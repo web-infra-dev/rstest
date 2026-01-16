@@ -13,6 +13,8 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserPluginRequestMessage,
+  BrowserPluginResponseEnvelope,
   SnapshotRpcRequest,
   SnapshotRpcResponse,
   TestFileInfo,
@@ -351,6 +353,58 @@ const BrowserRunner: React.FC<{
                 id: request.id,
                 error: error instanceof Error ? error.message : String(error),
               });
+            }
+          })();
+        } else if (message?.type === 'plugin') {
+          // Handle generic plugin RPC requests (for decoupled plugin architecture)
+          const pluginMessage = message as BrowserPluginRequestMessage;
+          const { testFile } = pluginMessage.payload;
+          const sourceWindow = event.source as Window | null;
+
+          if (!rpc || !sourceWindow) {
+            return;
+          }
+
+          // Forward to host via dispatch and send response back to iframe
+          (async () => {
+            try {
+              const result = await rpc.dispatch(testFile, pluginMessage);
+              if (result) {
+                const responseEnvelope: BrowserPluginResponseEnvelope = {
+                  type: '__rstest_plugin_response__',
+                  payload: result,
+                };
+                sourceWindow.postMessage(responseEnvelope, '*');
+              } else {
+                // No handler found for this plugin
+                logger.debug(
+                  `[Container] No handler for plugin namespace: ${pluginMessage.payload.namespace}`,
+                );
+                const errorEnvelope: BrowserPluginResponseEnvelope = {
+                  type: '__rstest_plugin_response__',
+                  payload: {
+                    namespace: pluginMessage.payload.namespace,
+                    response: {
+                      id: pluginMessage.payload.request.id,
+                      error: `No handler registered for plugin namespace: ${pluginMessage.payload.namespace}`,
+                    },
+                  },
+                };
+                sourceWindow.postMessage(errorEnvelope, '*');
+              }
+            } catch (error) {
+              const errorEnvelope: BrowserPluginResponseEnvelope = {
+                type: '__rstest_plugin_response__',
+                payload: {
+                  namespace: pluginMessage.payload.namespace,
+                  response: {
+                    id: pluginMessage.payload.request.id,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                },
+              };
+              sourceWindow.postMessage(errorEnvelope, '*');
             }
           })();
         }
