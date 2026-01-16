@@ -191,6 +191,7 @@ const BrowserRunner: React.FC<{
 
   const handleRerunFile = useCallback(
     (file: string) => {
+      setActive(file);
       if (rpc && connected) {
         void rpc.rerunTest(file);
       }
@@ -200,6 +201,7 @@ const BrowserRunner: React.FC<{
 
   const handleRerunTestCase = useCallback(
     (file: string, testName: string) => {
+      setActive(file);
       if (rpc && connected) {
         void rpc.rerunTest(file, testName);
       }
