@@ -176,6 +176,57 @@ type ContainerRpcMethods = {
 type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
 
 // ============================================================================
+// Extension Dispatch API - Playwright context for plugin dispatch handlers
+// ============================================================================
+
+/**
+ * Playwright context helpers exposed to external plugins via the `rstest:browser` API.
+ * Handlers registered via `registerDispatchHandler` can use these to interact
+ * with the headful browser container page and test runner iframes.
+ */
+export type PlaywrightDispatchContext = {
+  /** Get the container Playwright Page that hosts all test runner iframes. */
+  getContainerPage: () => import('playwright').Page;
+  /** Get the Frame inside the iframe for a specific test file. */
+  getFrameForTestFile: (
+    testFile: string,
+  ) => Promise<import('playwright').Frame>;
+  /** Get the ElementHandle for the iframe of a specific test file. */
+  getIframeElementForTestFile: (
+    testFile: string,
+  ) => Promise<import('playwright').ElementHandle<HTMLIFrameElement>>;
+};
+
+/**
+ * Dispatch context exposed to external plugins.
+ *
+ * The context is provider-discriminated so plugins can safely narrow before
+ * accessing provider-specific helpers.
+ */
+export type BrowserDispatchContext = {
+  provider: 'playwright';
+  playwright: PlaywrightDispatchContext;
+};
+
+/**
+ * API exposed to RsbuildPlugins via `api.useExposed('rstest:browser')`.
+ * Plugins register their dispatch namespace handler here.
+ */
+export type RstestBrowserExposedApi = {
+  /**
+   * Register a dispatch handler for a given namespace.
+   * The handler receives a `BrowserDispatchRequest` and returns the result.
+   * Use provider-specific helpers from `browser` for browser automation.
+   */
+  registerDispatchHandler: (
+    namespace: string,
+    handler: BrowserDispatchHandler,
+  ) => void;
+  /** Browser provider context helpers for automation within dispatch handlers. */
+  browser: BrowserDispatchContext;
+};
+
+// ============================================================================
 // RPC Manager - Encapsulates WebSocket and birpc management
 // ============================================================================
 
@@ -298,6 +349,8 @@ type BrowserRuntime = {
   manifestPlugin: VirtualModulesPluginInstance;
   containerPage?: BrowserProviderPage;
   containerContext?: BrowserProviderContext;
+  /** Late-binding ref for plugin dispatch handlers that need Playwright access. */
+  containerPageRef: { current: BrowserProviderPage | null };
   setContainerOptions: (options: BrowserHostConfig) => void;
   // Reserved extension seam for host-side dispatch capabilities.
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
@@ -981,6 +1034,11 @@ const createBrowserRuntime = async ({
   // Reserved extension seam for future browser-side capabilities.
   const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
 
+  // Late-binding ref for the headed container page.
+  // Populated in runBrowserController once the Playwright page is ready;
+  // used by plugin dispatch handlers that need Playwright access.
+  const containerPageRef: { current: BrowserProviderPage | null } = { current: null };
+
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
     if (containerHtmlTemplate) {
@@ -1047,18 +1105,68 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
-        // Internal extension entry: register host dispatch handlers without
-        // coupling scheduling to individual capability implementations.
-        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
-          'rstest:browser',
-          {
-            registerDispatchHandler: (
-              namespace: string,
-              handler: BrowserDispatchHandler,
-            ) => {
-              dispatchHandlers.set(namespace, handler);
+        // Expose API for other Rsbuild plugins (e.g., @rstest/midscene) to register
+        // dispatch namespace handlers and access Playwright context helpers.
+        const getPlaywrightPage = (): import('playwright').Page => {
+          if (!containerPageRef.current) {
+            throw new Error(
+              'Container page is not available. ' +
+                'Make sure you are calling this within a dispatch handler during test execution.',
+            );
+          }
+          // The runtime page IS a Playwright Page; cast from the provider-agnostic type.
+          return containerPageRef.current as unknown as import('playwright').Page;
+        };
+        const exposedApi: RstestBrowserExposedApi = {
+          registerDispatchHandler: (
+            namespace: string,
+            handler: BrowserDispatchHandler,
+          ) => {
+            dispatchHandlers.set(namespace, handler);
+            logger.debug(
+              `[Dispatch] Registered extension namespace "${namespace}"`,
+            );
+          },
+          browser: {
+            provider: 'playwright',
+            playwright: {
+              getContainerPage: getPlaywrightPage,
+              getIframeElementForTestFile: async (testFile: string) => {
+                const page = getPlaywrightPage();
+                const iframeElement = await page.$(
+                  `iframe[data-test-file="${testFile}"]`,
+                );
+                if (!iframeElement) {
+                  throw new Error(
+                    `Iframe not found for test file: ${testFile}`,
+                  );
+                }
+                return iframeElement as import('playwright').ElementHandle<HTMLIFrameElement>;
+              },
+              getFrameForTestFile: async (testFile: string) => {
+                const page = getPlaywrightPage();
+                const iframeElement = await page.$(
+                  `iframe[data-test-file="${testFile}"]`,
+                );
+                if (!iframeElement) {
+                  throw new Error(
+                    `Iframe not found for test file: ${testFile}`,
+                  );
+                }
+                const frame = await iframeElement.contentFrame();
+                if (!frame) {
+                  throw new Error(
+                    `Cannot access content frame for: ${testFile}`,
+                  );
+                }
+                return frame;
+              },
             },
           },
+        };
+        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
+          'rstest:browser',
+          exposedApi,
         );
 
         api.modifyEnvironmentConfig({
@@ -1093,6 +1201,30 @@ const createBrowserRuntime = async ({
                   rspackConfig.lazyCompilation = {
                     imports: true,
                     entries: false,
+                  };
+                  // Configure watch options to ignore midscene output directory
+                  // This prevents infinite reload loops when Midscene generates reports
+                  const existingIgnored = rspackConfig.watchOptions?.ignored;
+                  const ignoredPatterns = Array.isArray(existingIgnored)
+                    ? [...existingIgnored]
+                    : existingIgnored
+                      ? [existingIgnored]
+                      : [];
+                  for (const pattern of [
+                    '**/node_modules/**',
+                    '**/.git/**',
+                    '**/midscene_run/**',
+                  ]) {
+                    if (!ignoredPatterns.includes(pattern)) {
+                      ignoredPatterns.push(pattern);
+                    }
+                  }
+                  const mergedIgnored = ignoredPatterns as NonNullable<
+                    NonNullable<typeof rspackConfig.watchOptions>['ignored']
+                  >;
+                  rspackConfig.watchOptions = {
+                    ...rspackConfig.watchOptions,
+                    ignored: mergedIgnored,
                   };
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
@@ -1380,6 +1512,7 @@ const createBrowserRuntime = async ({
       manifestPlugin: virtualManifestPlugin,
       setContainerOptions,
       dispatchHandlers,
+      containerPageRef,
       wss,
     };
   } catch (_error) {
@@ -2495,6 +2628,9 @@ export const runBrowserController = async (
         await page.close().catch(() => {});
       }
     });
+
+    // Populate the lazy ref so plugin dispatch handlers can access the page.
+    runtime.containerPageRef.current = containerPage;
 
     if (isWatchMode) {
       runtime.containerPage = containerPage;

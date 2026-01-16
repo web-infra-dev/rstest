@@ -74,6 +74,7 @@ menlo
 metafile
 microfrontend
 microfrontends
+Midscene
 mjsx
 modularly
 mtsx

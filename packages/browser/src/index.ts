@@ -35,3 +35,9 @@ export type {
   BrowserTestRunResult,
   ListBrowserTestsResult,
 };
+
+export type {
+  BrowserDispatchContext,
+  PlaywrightDispatchContext,
+  RstestBrowserExposedApi,
+} from './hostController';
