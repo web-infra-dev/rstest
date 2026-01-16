@@ -50,3 +50,8 @@ packages/vscode/icon.png
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/
+
+.env
+
+# Midscene artifacts
+midscene_run/

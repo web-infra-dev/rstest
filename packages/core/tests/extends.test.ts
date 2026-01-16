@@ -84,6 +84,31 @@ export default defineConfig({
     expect(config.retry).toBe(2);
   });
 
+  it('should allow extend function to append merged config', async () => {
+    const testConfigContent = `
+import { defineConfig } from '@rstest/core';
+
+const extendsConfig = () => ({
+  testTimeout: 120000,
+});
+
+extendsConfig.mergeMode = 'append';
+
+export default defineConfig({
+  extends: extendsConfig,
+  testTimeout: 10000,
+});
+    `;
+
+    writeFileSync(testConfigPath, testConfigContent);
+
+    const { content: config } = await loadConfig({
+      path: testConfigPath,
+    });
+
+    expect(config.testTimeout).toBe(120000);
+  });
+
   it('should merge extends config with local config', async () => {
     testConfigPath = createConfigPath();
     const testConfigContent = `

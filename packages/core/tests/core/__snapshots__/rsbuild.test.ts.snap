@@ -2108,6 +2108,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "**/dist/.rstest-temp",
       "<ROOT>/packages/core/coverage",
       "**/*.snap",
+      "**/midscene_run/**",
     ],
   },
 }

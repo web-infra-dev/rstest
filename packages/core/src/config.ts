@@ -8,6 +8,8 @@ import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
   ExtendConfig,
+  ExtendConfigFn,
+  ExtendConfigMergeMode,
   NormalizedConfig,
   ProjectConfig,
   RstestConfig,
@@ -24,11 +26,7 @@ import {
   TEMP_RSTEST_OUTPUT_DIR,
 } from './utils';
 
-type ResolvedExtendEntry =
-  | ExtendConfig
-  | ((
-      userConfig: Readonly<RstestConfig>,
-    ) => Promise<ExtendConfig> | ExtendConfig);
+type ResolvedExtendEntry = ExtendConfig | ExtendConfigFn;
 
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
@@ -97,16 +95,28 @@ export async function loadConfig({
 const resolveExtendEntry = async (
   entry: ResolvedExtendEntry,
   userConfig: Readonly<RstestConfig>,
-): Promise<ExtendConfig> => {
+): Promise<{
+  config: ExtendConfig;
+  mergeMode: ExtendConfigMergeMode;
+}> => {
   const resolved =
     typeof entry === 'function' ? await entry(userConfig) : entry;
 
+  const mergeMode =
+    typeof entry === 'function' ? (entry.mergeMode ?? 'prepend') : 'prepend';
+
   if ('projects' in resolved) {
     const { projects: _projects, ...rest } = resolved;
-    return rest;
+    return {
+      config: rest,
+      mergeMode,
+    };
   }
 
-  return resolved;
+  return {
+    config: resolved,
+    mergeMode,
+  };
 };
 
 export const resolveExtends = async (
@@ -122,7 +132,11 @@ export const resolveExtends = async (
     extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
   );
 
-  return mergeRstestConfig(...resolvedExtends, config);
+  return resolvedExtends.reduce<RstestConfig>((mergedConfig, entry) => {
+    return entry.mergeMode === 'append'
+      ? mergeRstestConfig(mergedConfig, entry.config)
+      : mergeRstestConfig(entry.config, mergedConfig);
+  }, config);
 };
 
 export const mergeProjectConfig = (

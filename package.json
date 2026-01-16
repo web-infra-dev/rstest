@@ -75,6 +75,8 @@
     },
     "ignoredBuiltDependencies": [
       "@biomejs/biome",
+      "nx",
+      "sharp",
       "simple-git-hooks"
     ]
   }
