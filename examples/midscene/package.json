@@ -1,0 +1,17 @@
+{
+  "name": "@examples/midscene",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "devDependencies": {
+    "@rstest/browser": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rstest/midscene": "workspace:*",
+    "@types/node": "^22.16.5",
+    "playwright": "^1.49.1",
+    "typescript": "^5.9.3"
+  }
+}

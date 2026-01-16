@@ -34,7 +34,10 @@ import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type {
+  BrowserClientMessage,
   BrowserHostConfig,
+  BrowserPluginRequestMessage,
+  BrowserPluginResponse,
   BrowserProjectRuntime,
   TestFileInfo,
 } from './protocol';
@@ -112,6 +115,11 @@ type HostRpcMethods = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Generic plugin dispatch (for decoupled plugin architecture)
+  dispatch: (
+    testFile: string,
+    message: BrowserClientMessage,
+  ) => Promise<{ namespace: string; response: BrowserPluginResponse } | null>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
@@ -121,6 +129,63 @@ type ContainerRpcMethods = {
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
+
+// ============================================================================
+// Plugin Handler Registry - For decoupled plugin architecture
+// ============================================================================
+
+/**
+ * Context provided to plugin message handlers.
+ * Contains the message and Playwright accessors for iframe control.
+ */
+export type PluginMessageContext = {
+  testFile: string;
+  message: BrowserPluginRequestMessage;
+  /**
+   * Get the container page (the main Playwright Page that hosts all iframes).
+   */
+  getContainerPage: () => Page;
+  /**
+   * Get the Frame inside the iframe for a specific test file.
+   * This is useful for executing JavaScript within the iframe context.
+   */
+  getFrameForTestFile: (
+    testFile: string,
+  ) => Promise<import('playwright').Frame>;
+  /**
+   * Get the ElementHandle for the iframe element of a specific test file.
+   * This is useful for taking screenshots or getting bounding box.
+   */
+  getIframeElementForTestFile: (
+    testFile: string,
+  ) => Promise<import('playwright').ElementHandle<HTMLIFrameElement>>;
+};
+
+/**
+ * Plugin message handler function type.
+ * Returns a response if the plugin handles the message, undefined otherwise.
+ */
+export type PluginMessageHandler = (
+  ctx: PluginMessageContext,
+) => Promise<
+  { namespace: string; response: BrowserPluginResponse } | undefined
+>;
+
+/**
+ * API exposed to RsbuildPlugins via rsbuildInstance.expose('rstest:browser', api).
+ * Plugins can register handlers for plugin messages.
+ */
+export type RstestBrowserExposedApi = {
+  /**
+   * Register a handler for plugin messages.
+   * The handler will be called for all plugin messages, and should return
+   * a response if it handles the message (matched by namespace).
+   */
+  registerPluginMessageHandler: (handler: PluginMessageHandler) => void;
+};
+
+/** Global registry for plugin message handlers */
+const pluginMessageHandlers: PluginMessageHandler[] = [];
 
 // ============================================================================
 // RPC Manager - Encapsulates WebSocket and birpc management
@@ -904,6 +969,15 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
+        // Expose API for other plugins (e.g., @rstest/midscene) to register plugin handlers
+        const exposedApi: RstestBrowserExposedApi = {
+          registerPluginMessageHandler: (handler: PluginMessageHandler) => {
+            pluginMessageHandlers.push(handler);
+            logger.debug('[Plugin] Handler registered');
+          },
+        };
+        api.expose('rstest:browser', exposedApi);
+
         api.modifyEnvironmentConfig({
           handler: (config, { mergeEnvironmentConfig }) => {
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
@@ -924,6 +998,16 @@ const createBrowserRuntime = async ({
                   rspackConfig.lazyCompilation = {
                     imports: true,
                     entries: false,
+                  };
+                  // Configure watch options to ignore midscene output directory
+                  // This prevents infinite reload loops when Midscene generates reports
+                  rspackConfig.watchOptions = {
+                    ...rspackConfig.watchOptions,
+                    ignored: [
+                      '**/node_modules/**',
+                      '**/.git/**',
+                      '**/midscene_run/**',
+                    ],
                   };
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
@@ -1653,6 +1737,85 @@ export const runBrowserController = async (
       } catch {
         // ignore if file doesn't exist
       }
+    },
+    // Generic plugin dispatch for decoupled plugin architecture
+    async dispatch(
+      testFile: string,
+      message: BrowserClientMessage,
+    ): Promise<{ namespace: string; response: BrowserPluginResponse } | null> {
+      // Only handle plugin messages
+      if (message.type !== 'plugin') {
+        return null;
+      }
+
+      const pluginMessage = message as BrowserPluginRequestMessage;
+
+      // Helper to get iframe element for a test file
+      const getIframeElementForTestFile = async (
+        file: string,
+      ): Promise<import('playwright').ElementHandle<HTMLIFrameElement>> => {
+        if (!containerPage) {
+          throw new Error('Container page not available');
+        }
+        const iframeElement = await containerPage.$(
+          `iframe[data-test-file="${file}"]`,
+        );
+        if (!iframeElement) {
+          throw new Error(`Frame not found for test file: ${file}`);
+        }
+        return iframeElement as import('playwright').ElementHandle<HTMLIFrameElement>;
+      };
+
+      // Helper to get frame for a test file
+      const getFrameForTestFile = async (
+        file: string,
+      ): Promise<import('playwright').Frame> => {
+        const iframeElement = await getIframeElementForTestFile(file);
+        const frame = await iframeElement.contentFrame();
+        if (!frame) {
+          throw new Error(`Cannot access content frame for: ${file}`);
+        }
+        return frame;
+      };
+
+      // Build context for handlers
+      const ctx: PluginMessageContext = {
+        testFile,
+        message: pluginMessage,
+        getContainerPage: () => {
+          if (!containerPage) {
+            throw new Error('Container page not available');
+          }
+          return containerPage;
+        },
+        getFrameForTestFile,
+        getIframeElementForTestFile,
+      };
+
+      // Try each registered handler
+      for (const handler of pluginMessageHandlers) {
+        try {
+          const result = await handler(ctx);
+          if (result) {
+            return result;
+          }
+        } catch (error) {
+          // Handler threw an error, return it as an error response
+          return {
+            namespace: pluginMessage.payload.namespace,
+            response: {
+              id: pluginMessage.payload.request.id,
+              error: (error as Error).message,
+            },
+          };
+        }
+      }
+
+      // No handler matched
+      logger.debug(
+        `[Plugin] No handler found for namespace: ${pluginMessage.payload.namespace}`,
+      );
+      return null;
     },
   });
 

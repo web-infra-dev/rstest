@@ -8,13 +8,18 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
-import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
+import {
+  forwardPluginRpcRequest,
+  forwardSnapshotRpcRequest,
+  readDispatchMessage,
+} from './core/channel';
 import { createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserPluginRequestMessage,
   FatalPayload,
   LogPayload,
   SnapshotRpcRequest,
@@ -385,6 +390,12 @@ const BrowserRunner: React.FC<{
         void forwardSnapshotRpcRequest(
           rpc,
           message.payload as SnapshotRpcRequest,
+          event.source,
+        );
+      } else if (message.type === 'plugin') {
+        void forwardPluginRpcRequest(
+          rpc,
+          message as BrowserPluginRequestMessage,
           event.source,
         );
       }

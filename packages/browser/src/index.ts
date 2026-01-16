@@ -35,3 +35,8 @@ export type {
   BrowserTestRunResult,
   ListBrowserTestsResult,
 };
+
+export type {
+  PluginMessageContext,
+  RstestBrowserExposedApi,
+} from './hostController';

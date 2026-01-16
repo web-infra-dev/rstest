@@ -65,6 +65,7 @@
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
+    "@midscene/core": "^1.0.1",
     "@babel/code-frame": "^7.27.1",
     "@clack/prompts": "^0.10.1",
     "@jridgewell/trace-mapping": "0.3.31",
@@ -108,10 +109,18 @@
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
+    "@midscene/core": "*",
+    "@midscene/web": "*",
     "happy-dom": "*",
     "jsdom": "*"
   },
   "peerDependenciesMeta": {
+    "@midscene/core": {
+      "optional": true
+    },
+    "@midscene/web": {
+      "optional": true
+    },
     "happy-dom": {
       "optional": true
     },

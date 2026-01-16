@@ -1,5 +1,9 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
-import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
+import {
+  forwardPluginRpcRequest,
+  forwardSnapshotRpcRequest,
+  readDispatchMessage,
+} from './core/channel';
 import {
   createRunnerUrl,
   createWebSocketUrl,
@@ -10,6 +14,7 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserPluginRequestMessage,
   ContainerRPC,
   FatalPayload,
   HostRPC,
@@ -274,6 +279,14 @@ window.addEventListener('message', (event: MessageEvent) => {
     void forwardSnapshotRpcRequest(
       rpc,
       message.payload as SnapshotRpcRequest,
+      event.source,
+    );
+    return;
+  }
+  if (message.type === 'plugin') {
+    void forwardPluginRpcRequest(
+      rpc,
+      message as BrowserPluginRequestMessage,
       event.source,
     );
     return;

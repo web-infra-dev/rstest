@@ -106,6 +106,8 @@ export type BrowserClientMessage =
       type: 'snapshot-rpc-request';
       payload: SnapshotRpcRequest;
     }
+  // Generic plugin RPC requests (for decoupled plugins)
+  | BrowserPluginRequestMessage
   | { type: string; payload?: unknown };
 
 export type HostRPC = {
@@ -120,6 +122,10 @@ export type HostRPC = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  dispatch: (
+    testFile: string,
+    message: BrowserClientMessage,
+  ) => Promise<{ namespace: string; response: BrowserPluginResponse } | null>;
 };
 
 export type ContainerRPC = {
@@ -160,4 +166,51 @@ export type SnapshotRpcResponse = {
   id: string;
   result?: unknown;
   error?: string;
+};
+
+// ============================================================================
+// Generic Plugin RPC types (for decoupled plugin architecture)
+// ============================================================================
+
+/**
+ * Generic plugin RPC request from runner iframe.
+ * Plugins identify themselves via namespace (e.g., 'midscene').
+ */
+export type BrowserPluginRequest = {
+  id: string;
+  method: string;
+  args: unknown[];
+};
+
+/**
+ * Plugin message from runner iframe to container.
+ * Used for the new decoupled plugin architecture.
+ */
+export type BrowserPluginRequestMessage = {
+  type: 'plugin';
+  payload: {
+    testFile: string;
+    namespace: string; // e.g., 'midscene'
+    request: BrowserPluginRequest;
+  };
+};
+
+/**
+ * Plugin response from host back to runner iframe.
+ */
+export type BrowserPluginResponse = {
+  id: string;
+  result?: unknown;
+  error?: string;
+};
+
+/**
+ * Plugin response envelope sent from container to runner iframe.
+ */
+export type BrowserPluginResponseEnvelope = {
+  type: '__rstest_plugin_response__';
+  payload: {
+    namespace: string;
+    response: BrowserPluginResponse;
+  };
 };
