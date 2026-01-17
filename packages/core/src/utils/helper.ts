@@ -4,7 +4,7 @@ import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 
 export const formatRootStr = (rootStr: string, root: string): string => {
-  return rootStr.replace('<rootDir>', normalize(root));
+  return normalize(rootStr.replace('<rootDir>', normalize(root)));
 };
 
 export function getAbsolutePath(base: string, filepath: string): string {

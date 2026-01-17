@@ -256,9 +256,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
 
   return {
     ...merged,
-    include: merged.include.map((p) =>
-      normalize(formatRootStr(p, merged.root)),
-    ),
+    include: merged.include.map((p) => formatRootStr(p, merged.root)),
     exclude: {
       ...merged.exclude,
       patterns: merged.exclude.patterns.map((p) =>
