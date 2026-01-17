@@ -4,7 +4,7 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
-import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
+import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
