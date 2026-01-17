@@ -4,7 +4,7 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
-import { dirname, isAbsolute, join, resolve } from 'pathe';
+import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
@@ -256,7 +256,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
 
   return {
     ...merged,
-    include: merged.include.map((p) => formatRootStr(p, merged.root)),
+    include: merged.include.map((p) =>
+      normalize(formatRootStr(p, merged.root)),
+    ),
     exclude: {
       ...merged.exclude,
       patterns: merged.exclude.patterns.map((p) =>
