@@ -367,12 +367,21 @@ const run = async () => {
 
   // Find the project for this test file
   const targetTestFile = options.testFile;
-  const currentProject = targetTestFile
-    ? findProjectForTestFile(
-        targetTestFile,
-        projects as ManifestProjectConfig[],
-      )
-    : (projects as ManifestProjectConfig[])[0];
+
+  // If no testFile is specified, the runner is in "standby" mode.
+  // It will wait for the host to trigger execution via reloadTestFile RPC,
+  // which will reload this page with a testFile URL parameter.
+  if (!targetTestFile) {
+    debugLog(
+      '[Runner] No testFile specified, waiting for host to trigger execution',
+    );
+    return;
+  }
+
+  const currentProject = findProjectForTestFile(
+    targetTestFile,
+    projects as ManifestProjectConfig[],
+  );
 
   if (!currentProject) {
     send({

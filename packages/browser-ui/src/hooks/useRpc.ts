@@ -35,6 +35,7 @@ export type FatalPayload = {
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<TestFileInfo[]>;
+  onContainerReady: () => Promise<void>;
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;

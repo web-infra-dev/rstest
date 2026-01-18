@@ -146,7 +146,11 @@ const BrowserRunner: React.FC<{
       }
       return prev;
     });
-  }, [testFiles]);
+
+    if (rpc && connected) {
+      void rpc.onContainerReady();
+    }
+  }, [testFiles, rpc, connected]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -535,22 +539,21 @@ const BrowserRunner: React.FC<{
                   key={fileInfo.testPath}
                   data-test-file={fileInfo.testPath}
                   title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
-                  src={iframeUrlFor(fileInfo.testPath, options.runnerUrl)}
+                  src={`${options.runnerUrl || window.location.origin}/runner.html`}
                   className="h-full w-full border-0"
                   style={{
                     display: fileInfo.testPath === active ? 'block' : 'none',
                     background: token.colorBgContainer,
                   }}
                   onLoad={(event) => {
+                    // Send base config to runner (without testFile).
+                    // The runner will wait for host to trigger execution via reloadTestFile RPC.
                     const frame = event.currentTarget;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
                           type: 'RSTEST_CONFIG',
-                          payload: {
-                            ...options,
-                            testFile: fileInfo.testPath,
-                          },
+                          payload: options,
                         },
                         '*',
                       );

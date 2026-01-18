@@ -158,9 +158,10 @@ describe('new test', () => {
     cli.resetStd();
     fs.rename(newTestPath, renamedTestPath);
 
-    // Wait for renamed file to appear, original file should not appear
+    // Wait for renamed file to appear, original file should not appear in test results
+    // (note: debug logs may contain old filenames due to async timing)
     await cli.waitForStdout('✓ tests/renamed.test.ts');
-    expect(cli.stdout).not.toMatch('new.test.ts');
+    expect(cli.stdout).not.toMatch(/[✓✗] tests\/new\.test\.ts/);
 
     // ========== Delete: Remove the renamed test file ==========
     cli.resetStd();
@@ -168,8 +169,9 @@ describe('new test', () => {
 
     // Wait for re-run after delete - should only show original test file
     await cli.waitForStdout('✓ tests/index.test.ts');
-    // The deleted file should not appear in this run's output
-    expect(cli.stdout).not.toMatch('renamed.test.ts');
+    // The deleted file should not appear in test results
+    // (note: debug logs may contain old filenames due to async timing)
+    expect(cli.stdout).not.toMatch(/[✓✗] tests\/renamed\.test\.ts/);
 
     // Kill the entire process tree to ensure browser and all child processes are terminated.
     // This is critical on Windows where child processes are not killed by default.
