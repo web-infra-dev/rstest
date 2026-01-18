@@ -159,6 +159,7 @@ export const useRpc = (
             if (isMounted) {
               setTestFilesRef.current(files);
               setLoading(false);
+              void birpc.onContainerReady();
             }
           })
           .catch(() => {

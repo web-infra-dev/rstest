@@ -7,11 +7,11 @@ export type ReadyGate = {
 
 export const createReadyGate = (): ReadyGate => {
   let ready = false;
-  let resolveReady: (() => void) | null = null;
+  const waiters: Array<() => void> = [];
 
   const reset = (): void => {
     ready = false;
-    resolveReady = null;
+    waiters.length = 0;
   };
 
   const isReady = (): boolean => ready;
@@ -19,8 +19,9 @@ export const createReadyGate = (): ReadyGate => {
   const markReady = (): void => {
     if (!ready) {
       ready = true;
-      resolveReady?.();
-      resolveReady = null;
+      while (waiters.length > 0) {
+        waiters.shift()?.();
+      }
     }
   };
 
@@ -28,18 +29,8 @@ export const createReadyGate = (): ReadyGate => {
     if (ready) {
       return;
     }
-    if (resolveReady) {
-      await new Promise<void>((resolve) => {
-        const prevResolve = resolveReady;
-        resolveReady = () => {
-          prevResolve?.();
-          resolve();
-        };
-      });
-      return;
-    }
     await new Promise<void>((resolve) => {
-      resolveReady = resolve;
+      waiters.push(resolve);
     });
   };
 

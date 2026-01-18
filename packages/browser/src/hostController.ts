@@ -309,6 +309,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       if (scheduler !== null) {
         scheduler.onTestFileComplete(payload.testPath);
       } else if (completedTests >= allTestFiles.length && resolveAllTests) {
+        // Fallback for direct rerun paths that bypass scheduler.
         resolveAllTests();
       }
     },
@@ -392,6 +393,7 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     }
   }
 
+  // Browser mode dispatches all test files eagerly; scheduler only gates readiness.
   scheduler = new TestFileScheduler(
     Number.MAX_SAFE_INTEGER,
     rpcManager,

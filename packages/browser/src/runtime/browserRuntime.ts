@@ -62,7 +62,12 @@ export const destroyBrowserRuntime = async (
 
 export const registerWatchCleanup = (runtimeRef: {
   runtime: BrowserRuntime | null;
+  cleanupRegistered?: boolean;
 }): void => {
+  if (runtimeRef.cleanupRegistered) {
+    return;
+  }
+
   const cleanup = async () => {
     if (!runtimeRef.runtime) {
       return;
@@ -80,6 +85,8 @@ export const registerWatchCleanup = (runtimeRef: {
   process.once('exit', () => {
     void cleanup();
   });
+
+  runtimeRef.cleanupRegistered = true;
 };
 
 export const createBrowserRuntime = async ({
