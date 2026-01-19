@@ -1395,9 +1395,12 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
     async rerunTest(testFile: string, testNamePattern?: string) {
+      const projectName = context.normalizedConfig.name || 'project';
+      const relativePath = relative(context.rootPath, testFile);
+      const displayPath = `<${projectName}>/${relativePath}`;
       logger.log(
         color.cyan(
-          `\nRe-running test: ${testFile}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
+          `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
         ),
       );
       await rpcManager.reloadTestFile(testFile, testNamePattern);
