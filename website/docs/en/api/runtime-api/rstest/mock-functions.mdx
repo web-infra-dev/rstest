@@ -66,6 +66,138 @@ expect(spy).toHaveBeenCalled();
 
 Determines if the given function is a mocked function.
 
+## rstest.mockObject
+
+- **Alias:** `rs.mockObject`
+- **Type:**
+
+```ts
+type MockObject = <T>(
+  object: T,
+  options?: { spy?: boolean },
+) => MaybeMockedDeep<T>;
+```
+
+Creates a deep mock of an object. All methods are replaced with mock functions, while primitive values and plain objects are preserved.
+
+### Basic Usage
+
+```ts
+const original = {
+  method() {
+    return 42;
+  },
+  nested: {
+    getValue() {
+      return 'real';
+    },
+  },
+  prop: 'foo',
+};
+
+const mocked = rstest.mockObject(original);
+
+// Methods return undefined by default
+expect(mocked.method()).toBe(undefined);
+expect(mocked.nested.getValue()).toBe(undefined);
+
+// Primitive values are preserved
+expect(mocked.prop).toBe('foo');
+
+// Methods are mock functions
+expect(rstest.isMockFunction(mocked.method)).toBe(true);
+```
+
+### Mocking Return Values
+
+You can configure mocked methods to return specific values:
+
+```ts
+const mocked = rstest.mockObject({
+  fetchData: () => 'real data',
+});
+
+mocked.fetchData.mockReturnValue('mocked data');
+
+expect(mocked.fetchData()).toBe('mocked data');
+```
+
+### Spy Mode
+
+When `{ spy: true }` is passed as the second argument, the original implementations are preserved while still tracking calls:
+
+```ts
+const original = {
+  add: (a: number, b: number) => a + b,
+};
+
+const spied = rstest.mockObject(original, { spy: true });
+
+// Original implementation is preserved
+expect(spied.add(1, 2)).toBe(3);
+
+// Calls are tracked
+expect(spied.add).toHaveBeenCalledWith(1, 2);
+expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
+```
+
+### Arrays
+
+By default, arrays are replaced with empty arrays. With `{ spy: true }`, arrays keep their original values:
+
+```ts
+const mocked = rstest.mockObject({ array: [1, 2, 3] });
+expect(mocked.array).toEqual([]);
+
+const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
+expect(spied.array).toEqual([1, 2, 3]);
+```
+
+### Mocking Classes
+
+You can also mock class constructors:
+
+```ts
+class UserService {
+  getUser() {
+    return { id: 1, name: 'Alice' };
+  }
+}
+
+const MockedService = rstest.mockObject(UserService);
+const instance = new MockedService();
+
+rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
+expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
+```
+
+## rstest.mocked
+
+- **Alias:** `rs.mocked`
+- **Type:**
+
+```ts
+type Mocked = <T>(
+  item: T,
+  deep?: boolean | { partial?: boolean; deep?: boolean },
+) => MaybeMockedDeep<T>;
+```
+
+A type helper for TypeScript that wraps an object with mock types without changing its runtime behavior. This is useful when you have mocked a module and want proper type hints for the mock methods.
+
+```ts
+import { myModule } from './myModule';
+
+rs.mock('./myModule');
+
+// TypeScript now knows myModule.method is a MockInstance
+const mockedModule = rstest.mocked(myModule);
+
+mockedModule.method.mockReturnValue('mocked');
+```
+
+The function simply returns the same object at runtime - it only affects TypeScript types.
+
 ## rstest.clearAllMocks
 
 - **Alias:** `rs.clearAllMocks`

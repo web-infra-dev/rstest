@@ -1,5 +1,11 @@
-import type { RstestUtilities, RuntimeConfig, WorkerState } from '../../types';
+import type {
+  MaybeMockedDeep,
+  RstestUtilities,
+  RuntimeConfig,
+  WorkerState,
+} from '../../types';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
+import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
 export const createRstestUtilities: (
@@ -24,12 +30,35 @@ export const createRstestUtilities: (
     return _timers;
   };
 
-  const { fn, spyOn, isMockFunction, mocks } = initSpy();
+  const { fn, spyOn, isMockFunction, mocks, createMockInstance } = initSpy();
 
   const rstest: RstestUtilities = {
     fn,
     spyOn,
     isMockFunction,
+    mockObject: <T>(
+      value: T,
+      options?: { spy?: boolean },
+    ): MaybeMockedDeep<T> => {
+      return mockObjectImpl(
+        {
+          globalConstructors: {
+            Object,
+            Function,
+            Array,
+            Map,
+            RegExp,
+          },
+          createMockInstance,
+          type: options?.spy ? 'autospy' : 'automock',
+        },
+        { value },
+        {},
+      ).value as MaybeMockedDeep<T>;
+    },
+    // Type helper - just returns the same item
+    // The type transformation happens at compile time
+    mocked: ((item: any) => item) as RstestUtilities['mocked'],
     clearAllMocks: () => {
       for (const mock of mocks) {
         mock.mockClear();

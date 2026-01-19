@@ -66,6 +66,138 @@ expect(spy).toHaveBeenCalled();
 
 判断给定的函数是否为 mock 函数。
 
+## rstest.mockObject
+
+- **别名：** `rs.mockObject`
+- **类型：**
+
+```ts
+type MockObject = <T>(
+  object: T,
+  options?: { spy?: boolean },
+) => MaybeMockedDeep<T>;
+```
+
+创建一个对象的深度 mock。所有方法都会被替换为 mock 函数，而原始值和普通对象会保留。
+
+### 基本用法
+
+```ts
+const original = {
+  method() {
+    return 42;
+  },
+  nested: {
+    getValue() {
+      return 'real';
+    },
+  },
+  prop: 'foo',
+};
+
+const mocked = rstest.mockObject(original);
+
+// 方法默认返回 undefined
+expect(mocked.method()).toBe(undefined);
+expect(mocked.nested.getValue()).toBe(undefined);
+
+// 原始值保持不变
+expect(mocked.prop).toBe('foo');
+
+// 方法是 mock 函数
+expect(rstest.isMockFunction(mocked.method)).toBe(true);
+```
+
+### Mock 返回值
+
+你可以配置 mock 方法返回特定的值：
+
+```ts
+const mocked = rstest.mockObject({
+  fetchData: () => 'real data',
+});
+
+mocked.fetchData.mockReturnValue('mocked data');
+
+expect(mocked.fetchData()).toBe('mocked data');
+```
+
+### Spy 模式
+
+当传入 `{ spy: true }` 作为第二个参数时，原始实现会被保留，同时仍然追踪调用：
+
+```ts
+const original = {
+  add: (a: number, b: number) => a + b,
+};
+
+const spied = rstest.mockObject(original, { spy: true });
+
+// 保留原始实现
+expect(spied.add(1, 2)).toBe(3);
+
+// 追踪调用
+expect(spied.add).toHaveBeenCalledWith(1, 2);
+expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
+```
+
+### 数组
+
+默认情况下，数组会被替换为空数组。使用 `{ spy: true }` 时，数组保持其原始值：
+
+```ts
+const mocked = rstest.mockObject({ array: [1, 2, 3] });
+expect(mocked.array).toEqual([]);
+
+const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
+expect(spied.array).toEqual([1, 2, 3]);
+```
+
+### Mock 类
+
+你也可以 mock 类构造函数：
+
+```ts
+class UserService {
+  getUser() {
+    return { id: 1, name: 'Alice' };
+  }
+}
+
+const MockedService = rstest.mockObject(UserService);
+const instance = new MockedService();
+
+rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
+expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
+```
+
+## rstest.mocked
+
+- **别名：** `rs.mocked`
+- **类型：**
+
+```ts
+type Mocked = <T>(
+  item: T,
+  deep?: boolean | { partial?: boolean; deep?: boolean },
+) => MaybeMockedDeep<T>;
+```
+
+一个 TypeScript 类型辅助函数，用于将对象包装为 mock 类型而不改变其运行时行为。当你 mock 了一个模块并想要获得正确的 mock 方法类型提示时，这很有用。
+
+```ts
+import { myModule } from './myModule';
+
+rs.mock('./myModule');
+
+// TypeScript 现在知道 myModule.method 是一个 MockInstance
+const mockedModule = rstest.mocked(myModule);
+
+mockedModule.method.mockReturnValue('mocked');
+```
+
+该函数在运行时只是返回相同的对象——它只影响 TypeScript 类型。
+
 ## rstest.clearAllMocks
 
 - **别名：** `rs.clearAllMocks`

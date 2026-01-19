@@ -8,6 +8,7 @@ import type {
   NormalizedProcedure,
   RstestUtilities,
 } from '../../types';
+import type { CreateMockInstanceFn } from './mockObject';
 
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
@@ -17,6 +18,7 @@ export const initSpy = (): Pick<
   'isMockFunction' | 'spyOn' | 'fn'
 > & {
   mocks: Set<MockInstance>;
+  createMockInstance: CreateMockInstanceFn;
 } => {
   let callOrder = 0;
   const mocks: Set<MockInstance> = new Set<MockInstance>();
@@ -236,10 +238,111 @@ export const initSpy = (): Pick<
     return wrapSpy(obj, method as string);
   };
 
+  /**
+   * Creates a mock instance for use with mockObject.
+   * This creates a mock function that can optionally preserve the original implementation
+   * and support prototype members for class mocking.
+   */
+  const createMockInstance = (options?: {
+    prototypeMembers?: (string | symbol)[];
+    name?: string | symbol;
+    originalImplementation?: (...args: any[]) => any;
+    keepMembersImplementation?: boolean;
+  }): Mock => {
+    const {
+      name,
+      originalImplementation,
+      prototypeMembers = [],
+      keepMembersImplementation = false,
+    } = options || {};
+    const mockName = name ? String(name) : 'rstest.fn()';
+
+    // Check if the original implementation is a class constructor
+    const isClass =
+      originalImplementation &&
+      /^class\s/.test(Function.prototype.toString.call(originalImplementation));
+
+    // For class constructors, we need special handling
+    if (isClass && originalImplementation) {
+      // Create a wrapper function that can be called with 'new'
+      const classWrapper = function (
+        this: any,
+        ...args: any[]
+      ): ReturnType<typeof originalImplementation> {
+        // Use Reflect.construct to properly instantiate the class
+        const instance = Reflect.construct(
+          originalImplementation,
+          args,
+          new.target || originalImplementation,
+        );
+
+        // If keepMembersImplementation is true, wrap instance methods as spies
+        if (keepMembersImplementation && prototypeMembers.length > 0) {
+          for (const memberName of prototypeMembers) {
+            const originalMethod = instance[memberName];
+            if (typeof originalMethod === 'function') {
+              // Create a spy for each prototype method
+              const methodSpy = wrapSpy(
+                instance,
+                memberName as string,
+                originalMethod.bind(instance),
+              );
+              instance[memberName] = methodSpy;
+            }
+          }
+        }
+
+        return instance;
+      } as any;
+
+      // Make the wrapper behave like a constructor
+      Object.defineProperty(classWrapper, 'name', {
+        value: mockName,
+        configurable: true,
+      });
+
+      // Copy the prototype
+      classWrapper.prototype = originalImplementation.prototype;
+
+      // Create the mock using the class wrapper
+      const mock = wrapSpy(
+        {
+          [mockName]: classWrapper,
+        },
+        mockName,
+        classWrapper,
+      );
+
+      // Make sure the mock can be used with 'new'
+      Object.setPrototypeOf(mock, Function.prototype);
+      mock.prototype = originalImplementation.prototype;
+
+      return mock;
+    }
+
+    // Create a base mock function for non-class functions
+    const mock = wrapSpy(
+      {
+        [mockName]: originalImplementation,
+      },
+      mockName,
+      originalImplementation,
+    );
+
+    // For class constructors, we need to set up the prototype
+    if (prototypeMembers.length > 0 && originalImplementation?.prototype) {
+      // Copy prototype to the mock
+      Object.setPrototypeOf(mock.prototype, originalImplementation.prototype);
+    }
+
+    return mock;
+  };
+
   return {
     isMockFunction,
     spyOn,
     fn,
     mocks,
+    createMockInstance,
   };
 };
