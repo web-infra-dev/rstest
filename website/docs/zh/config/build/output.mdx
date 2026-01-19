@@ -21,6 +21,59 @@ export default defineConfig({
 });
 ```
 
+### Commonjs interop
+
+当你以 ES 模块格式输出 JavaScript 文件时（`output.module: true`），Rstest 会默认根据依赖的引用方式来判断 external 的类型：
+
+- 通过 `import` 语法引用的依赖会被视为 ES 模块类型的 external。
+- 通过 `require` 语法引用的依赖会被视为 CommonJS 的 external。
+
+当你通过 import 语法引用 CommonJS 模块时，Rstest 会尝试进行 interop 处理，使得你可以通过 `import` 语法正常引用 CommonJS 模块的导出。以下代码在 rstest 中可以正常工作：
+
+```ts title="cjs-module"
+Object.defineProperty(exports, '__esModule', { value: true });
+
+const a = require('./a');
+
+exports.a = a.a;
+
+exports.default = () => {
+  return `hello ${a.a}`;
+};
+```
+
+```ts title="test/index.test.ts"
+import defaultExport, { a } from 'cjs-module'; // ✅
+```
+
+然而，这种 interop 处理并不总是完美的，具体取决于被引用的 CommonJS 模块的导出方式。目前 Rstest 还不支持将 CommonJS 模块的 default 导出作为命名导出进行 interop。
+
+```ts
+function lodash(_value) {}
+
+lodash.VERSION = VERSION;
+
+module.exports = lodash;
+```
+
+```ts
+imoprt { VERSION } from 'lodash'; // ❌
+```
+
+如果你在使用过程中遇到问题，可以通过 [指定 external 类型](#指定-external-类型) 的方式来指定某个依赖的 external 类型为 CommonJS。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: {
+      lodash: 'commonjs lodash', // 将 lodash 作为 CommonJS 模块进行 external
+    },
+  },
+});
+```
+
 ## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
 
 配置代码中的某些 `import` 的依赖不被打包，而是由 Rstest 在运行时去获取这些依赖。
