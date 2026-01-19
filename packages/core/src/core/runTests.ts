@@ -322,6 +322,8 @@ export async function runTests(context: Rstest): Promise<void> {
             logger.log('');
             logger.log(color.gray('project:'), p.name);
           }
+          logger.log(color.gray('root:'), p.rootPath);
+
           logger.log(
             color.gray('include:'),
             p.normalizedConfig.include.join(color.gray(', ')),
