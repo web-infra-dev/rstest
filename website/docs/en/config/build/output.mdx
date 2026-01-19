@@ -68,7 +68,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   output: {
     externals: {
-      lodash: 'commonjs lodash', // 将 lodash 作为 CommonJS 模块进行 external
+      lodash: 'commonjs lodash', // externalize lodash as a CommonJS module
     },
   },
 });
