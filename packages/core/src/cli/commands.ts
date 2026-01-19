@@ -132,6 +132,7 @@ export const runRest = async ({
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };
+
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);

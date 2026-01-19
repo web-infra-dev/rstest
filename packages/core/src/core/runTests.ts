@@ -384,6 +384,33 @@ export async function runTests(context: Rstest): Promise<void> {
   if (command === 'watch') {
     const enableCliShortcuts = isCliShortcutsEnabled();
 
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
 
@@ -543,6 +570,22 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   } else {
     let isTeardown = false;
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
 
     const unExpectedExit = (code?: number) => {
       if (isTeardown) {
@@ -566,16 +609,30 @@ export async function runTests(context: Rstest): Promise<void> {
         process.exitCode = 1;
       }
     };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
     process.on('exit', unExpectedExit);
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
 
-    await run();
-    isTeardown = true;
-    await pool.close();
-    await closeServer();
+    try {
+      await run();
+      isTeardown = true;
+      await pool.close();
+      await closeServer();
 
-    // Run global teardown after all tests are done
-    await runGlobalTeardown();
-
-    process.off('exit', unExpectedExit);
+      // Run global teardown after all tests are done
+      await runGlobalTeardown();
+    } finally {
+      process.off('exit', unExpectedExit);
+      process.off('SIGINT', handleSignal);
+      process.off('SIGTERM', handleSignal);
+    }
   }
 }
