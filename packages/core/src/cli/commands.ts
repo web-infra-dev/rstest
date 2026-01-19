@@ -129,9 +129,19 @@ export const runRest = async ({
   command: RstestCommand;
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
+  let signalHandlersInstalled = false;
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };
+
+  const handleSignal = async (signal: NodeJS.Signals) => {
+    if (!rstest) {
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    }
+    // Let runTests handle the cleanup
+    // This prevents double cleanup
+  };
+
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);
@@ -145,6 +155,14 @@ export const runRest = async ({
     process.on('uncaughtException', unexpectedlyExitHandler);
 
     process.on('unhandledRejection', unexpectedlyExitHandler);
+
+    // Install signal handlers for non-watch mode
+    // Watch mode has its own signal handling
+    if (command !== 'watch') {
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      signalHandlersInstalled = true;
+    }
 
     if (command === 'watch') {
       const { watchFilesForRestart, onBeforeRestart } = await import(
@@ -165,6 +183,12 @@ export const runRest = async ({
     await rstest.runTests();
   } catch (err) {
     handleUnexpectedExit(rstest, err);
+  } finally {
+    // Cleanup signal handlers
+    if (signalHandlersInstalled) {
+      process.off('SIGINT', handleSignal);
+      process.off('SIGTERM', handleSignal);
+    }
   }
 };
 
