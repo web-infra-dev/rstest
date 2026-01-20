@@ -15,4 +15,11 @@ export default defineConfig({
       'process.env.GITHUB_ACTIONS': JSON.stringify('false'),
     },
   },
+  tools: {
+    rspack: {
+      watchOptions: {
+        ignored: /test-temp-.*/,
+      },
+    },
+  },
 });
