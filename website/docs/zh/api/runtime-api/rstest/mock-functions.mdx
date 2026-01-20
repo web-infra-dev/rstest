@@ -155,7 +155,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mock 类
 
-你也可以 mock 类构造函数：
+你也可以 mock 类构造函数。使用 `{ spy: true }` 可以保留原始类的行为，同时追踪调用：
 
 ```ts
 class UserService {
@@ -164,9 +164,14 @@ class UserService {
   }
 }
 
-const MockedService = rstest.mockObject(UserService);
+// 使用 { spy: true } 保留原始实现
+const MockedService = rstest.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
+// 原始方法正常工作
+expect(instance.getUser()).toEqual({ id: 1, name: 'Alice' });
+
+// 覆盖实现
 rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```

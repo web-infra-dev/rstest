@@ -80,7 +80,7 @@ type MockObject = <T>(
 
 Creates a deep mock of an object. All methods are replaced with mock functions, while primitive values and plain objects are preserved.
 
-### Basic Usage
+### Basic usage
 
 ```ts
 const original = {
@@ -108,7 +108,7 @@ expect(mocked.prop).toBe('foo');
 expect(rstest.isMockFunction(mocked.method)).toBe(true);
 ```
 
-### Mocking Return Values
+### Mocking return values
 
 You can configure mocked methods to return specific values:
 
@@ -122,7 +122,7 @@ mocked.fetchData.mockReturnValue('mocked data');
 expect(mocked.fetchData()).toBe('mocked data');
 ```
 
-### Spy Mode
+### Spy mode
 
 When `{ spy: true }` is passed as the second argument, the original implementations are preserved while still tracking calls:
 
@@ -155,7 +155,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mocking Classes
 
-You can also mock class constructors:
+You can also mock class constructors. Use `{ spy: true }` to preserve the original class behavior while tracking calls:
 
 ```ts
 class UserService {
@@ -164,9 +164,14 @@ class UserService {
   }
 }
 
-const MockedService = rstest.mockObject(UserService);
+// Use { spy: true } to keep original implementation
+const MockedService = rstest.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
+// Original method works
+expect(instance.getUser()).toEqual({ id: 1, name: 'Alice' });
+
+// Override the implementation
 rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```

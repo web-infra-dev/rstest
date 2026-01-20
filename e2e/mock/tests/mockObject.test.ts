@@ -67,6 +67,14 @@ describe('rs.mockObject', () => {
       type: 'return',
       value: 'value',
     });
+
+    // Also verify nested methods are tracked
+    expect(spied.nested.method()).toBe('real');
+    expect(spied.nested.method).toHaveBeenCalled();
+    expect(spied.nested.method.mock.results[0]).toEqual({
+      type: 'return',
+      value: 'real',
+    });
   });
 
   test('arrays are empty by default', () => {
@@ -111,7 +119,7 @@ describe('rs.mockObject', () => {
     expect(mocked.obj).toEqual({ a: 1, b: { c: 2 } });
   });
 
-  test('mocks class constructors', () => {
+  test('mocks class constructors with spy option', () => {
     class OriginalClass {
       value = 42;
       getValue() {
@@ -123,6 +131,108 @@ describe('rs.mockObject', () => {
     expect(instance.getValue()).toBe(42);
     rs.mocked(instance.getValue).mockImplementation(() => 100);
     expect(instance.getValue()).toBe(100);
+  });
+
+  test('mocks class constructors without spy option', () => {
+    class OriginalClass {
+      value = 42;
+      getValue() {
+        return this.value;
+      }
+    }
+    const MockedClass = rs.mockObject(OriginalClass);
+    expect(rs.isMockFunction(MockedClass)).toBe(true);
+  });
+
+  // Special object types tests
+  test('preserves Date objects', () => {
+    const date = new Date('2024-01-01');
+    const mocked = rs.mockObject({ date });
+    expect(mocked.date).toBe(date);
+    expect(mocked.date instanceof Date).toBe(true);
+  });
+
+  test('preserves RegExp objects', () => {
+    const regex = /test/gi;
+    const mocked = rs.mockObject({ regex });
+    expect(mocked.regex).toBe(regex);
+    expect(mocked.regex instanceof RegExp).toBe(true);
+  });
+
+  test('preserves Map objects', () => {
+    const map = new Map([['key', 'value']]);
+    const mocked = rs.mockObject({ map });
+    expect(mocked.map).toBe(map);
+    expect(mocked.map instanceof Map).toBe(true);
+  });
+
+  test('preserves Set objects', () => {
+    const set = new Set([1, 2, 3]);
+    const mocked = rs.mockObject({ set });
+    expect(mocked.set).toBe(set);
+    expect(mocked.set instanceof Set).toBe(true);
+  });
+
+  // Circular reference tests
+  test('handles self-referencing objects', () => {
+    const original: Record<string, unknown> = { value: 1 };
+    original.self = original;
+
+    const mocked = rs.mockObject(original);
+    expect(mocked.value).toBe(1);
+    expect(mocked.self).toBe(mocked);
+  });
+
+  test('handles mutually referencing objects', () => {
+    const a: Record<string, unknown> = { name: 'a' };
+    const b: Record<string, unknown> = { name: 'b' };
+    a.ref = b;
+    b.ref = a;
+
+    const mocked = rs.mockObject({ a, b });
+    expect(mocked.a.name).toBe('a');
+    expect(mocked.b.name).toBe('b');
+    expect(mocked.a.ref).toBe(mocked.b);
+    expect(mocked.b.ref).toBe(mocked.a);
+  });
+
+  // Getter/setter tests
+  test('handles getters in automock mode', () => {
+    const original = {
+      _value: 42,
+      get value() {
+        return this._value;
+      },
+    };
+    const mocked = rs.mockObject(original);
+    // In automock mode, getter returns undefined
+    expect(mocked.value).toBe(undefined);
+  });
+
+  test('handles getters in spy mode', () => {
+    const internalValue = 42;
+    const original = Object.defineProperty({} as { value: number }, 'value', {
+      get() {
+        return internalValue;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+    const spied = rs.mockObject(original, { spy: true });
+    expect(spied.value).toBe(42);
+  });
+
+  // Symbol property tests
+  test('handles symbol properties', () => {
+    const sym = Symbol('test');
+    const original = {
+      [sym]: 'symbol value',
+      regular: 'regular value',
+    };
+
+    const mocked = rs.mockObject(original);
+    expect(mocked[sym]).toBe('symbol value');
+    expect(mocked.regular).toBe('regular value');
   });
 });
 

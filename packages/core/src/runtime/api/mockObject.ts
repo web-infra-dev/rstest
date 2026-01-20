@@ -2,14 +2,6 @@ import type { Mock } from '../../types';
 
 type Key = string | symbol;
 
-export interface MockOptions {
-  /**
-   * If `true`, the original implementation will be kept.
-   * All methods will call the original implementation, but you can still track the calls.
-   */
-  spy?: boolean;
-}
-
 export type CreateMockInstanceFn = (options?: {
   prototypeMembers?: Key[];
   name?: Key;
