@@ -153,7 +153,7 @@ const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
 expect(spied.array).toEqual([1, 2, 3]);
 ```
 
-### Mocking Classes
+### Mocking classes
 
 You can also mock class constructors. Use `{ spy: true }` to preserve the original class behavior while tracking calls:
 
