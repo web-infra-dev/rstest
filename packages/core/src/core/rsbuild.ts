@@ -24,6 +24,10 @@ import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 
+const debugMode = isDebug();
+
+RsbuildLogger.level = debugMode ? 'verbose' : 'error';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type TestEntryToChunkHashes = {
@@ -75,9 +79,7 @@ export const prepareRsbuild = async (
   const projects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
   );
-  const debugMode = isDebug();
 
-  RsbuildLogger.level = debugMode ? 'verbose' : 'error';
   const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({

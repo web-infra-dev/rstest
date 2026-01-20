@@ -8,6 +8,20 @@ import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
+/**
+ * Run browser mode tests.
+ * Returns the result for unified reporter output.
+ */
+async function runBrowserModeTests(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+  options: { skipOnTestRunEnd: boolean },
+): Promise<BrowserTestRunResult | void> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  return runBrowserTests(context, options);
+}
+
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
@@ -26,21 +40,31 @@ export async function runTests(context: Rstest): Promise<void> {
   // For non-watch mode with both browser and node tests, we need to unify reporter output
   const shouldUnifyReporter = !isWatchMode && hasBrowserTests && hasNodeTests;
 
-  let browserResult: BrowserTestRunResult | void;
+  // If only browser tests, run them and return
+  if (hasBrowserTests && !hasNodeTests) {
+    await runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: false,
+    });
+    return;
+  }
 
-  // Run browser mode tests
+  // If only node tests, run them (handled below)
+  // If both, run them in parallel
+
+  let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
+
   if (hasBrowserTests) {
-    // Pass project roots to resolve @rstest/browser from project-specific node_modules
-    const projectRoots = browserProjects.map((p) => p.rootPath);
-    const { runBrowserTests } = await loadBrowserModule({ projectRoots });
-    // Skip onTestRunEnd if we need to unify with node tests
-    browserResult = await runBrowserTests(context, {
+    // Start browser tests in parallel (don't await yet)
+    browserResultPromise = runBrowserModeTests(context, browserProjects, {
       skipOnTestRunEnd: shouldUnifyReporter,
     });
   }
 
   // Skip node mode tests if no node mode projects
   if (!hasNodeTests) {
+    if (browserResultPromise) {
+      await browserResultPromise;
+    }
     return;
   }
 
@@ -282,6 +306,11 @@ export async function runTests(context: Rstest): Promise<void> {
     );
 
     const buildTime = testStart! - buildStart;
+
+    // Wait for browser tests to complete if running in parallel
+    const browserResult = browserResultPromise
+      ? await browserResultPromise
+      : undefined;
 
     const testTime = Date.now() - testStart!;
 
