@@ -307,12 +307,12 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const buildTime = testStart! - buildStart;
 
+    const testTime = Date.now() - testStart!;
+
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
       ? await browserResultPromise
       : undefined;
-
-    const testTime = Date.now() - testStart!;
 
     // When unifying reporter output, combine browser and node durations
     const duration =
