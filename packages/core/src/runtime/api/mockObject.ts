@@ -169,9 +169,9 @@ export function mockObject<T extends Record<Key, any>>(
   const isSpyMode = type === 'autospy';
 
   // Track processed object references to prevent infinite recursion from circular references
-  const processedRefs = new WeakMap<object, any>();
+  const processedRefs = new WeakMap();
   // Deferred assignment queue for handling circular references
-  const deferredAssignments: Array<() => void> = [];
+  const deferredAssignments: (() => void)[] = [];
 
   /**
    * Create a mock instance for a function
