@@ -13,6 +13,7 @@ export function getConfigTemplate(): string {
 export default defineConfig({
   browser: {
     enabled: true,
+    provider: 'playwright',
   },
 });
 `;

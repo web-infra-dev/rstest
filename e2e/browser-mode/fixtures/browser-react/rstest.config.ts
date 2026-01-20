@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [pluginReact()],
   browser: {
     enabled: true,
+    provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['browser-react'],
   },

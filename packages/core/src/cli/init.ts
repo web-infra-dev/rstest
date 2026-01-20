@@ -118,7 +118,7 @@ function mergeWithCLIOptions(
   }
 
   if (options.browser !== undefined) {
-    config.browser ??= {};
+    config.browser ??= { provider: 'playwright' };
     // Handle --browser as shorthand for --browser.enabled
     if (typeof options.browser === 'boolean') {
       config.browser.enabled = options.browser;
