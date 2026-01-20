@@ -55,10 +55,14 @@ export class DefaultReporter implements Reporter {
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
 
+    if (this.config.hideSkippedTestFiles && test.status === 'skip') {
+      return;
+    }
+
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    logFileTitle(test, relativePath);
+    logFileTitle(test, relativePath, false, this.options.showProjectName);
     // Always display all test cases when running a single test file
     const showAllCases = this.testState.getTestFiles()?.length === 1;
 

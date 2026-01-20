@@ -5,6 +5,7 @@ export default defineConfig({
   extends: withRslibConfig({
     cwd: __dirname,
   }),
+  name: 'core',
   setupFiles: ['../../scripts/rstest.setup.ts'],
   include: ['<rootDir>/tests/**/*.test.ts'],
   globals: true,
@@ -12,6 +13,13 @@ export default defineConfig({
     tsconfigPath: './tests/tsconfig.json',
     define: {
       'process.env.GITHUB_ACTIONS': JSON.stringify('false'),
+    },
+  },
+  tools: {
+    rspack: {
+      watchOptions: {
+        ignored: /test-temp-.*/,
+      },
     },
   },
 });

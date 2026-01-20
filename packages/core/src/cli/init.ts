@@ -3,7 +3,7 @@ import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig, mergeRstestConfig } from '../config';
-import type { Project, RstestConfig } from '../types';
+import type { BrowserName, Project, RstestConfig } from '../types';
 import {
   castArray,
   color,
@@ -17,7 +17,20 @@ export type CommonOptions = {
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
-  browser?: boolean;
+  /**
+   * Browser mode options.
+   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--browser` flag)
+   * - `object`: detailed browser config (from `--browser.*` options)
+   */
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        name?: BrowserName;
+        headless?: boolean;
+        port?: number;
+        strictPort?: boolean;
+      };
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
@@ -42,6 +55,7 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
 };
 
@@ -70,6 +84,7 @@ function mergeWithCLIOptions(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'hideSkippedTestFiles',
     'logHeapUsage',
   ];
   for (const key of keys) {
@@ -101,6 +116,31 @@ function mergeWithCLIOptions(
   if (options.include) {
     config.include = castArray(options.include);
   }
+
+  if (options.browser !== undefined) {
+    config.browser ??= { provider: 'playwright' };
+    // Handle --browser as shorthand for --browser.enabled
+    if (typeof options.browser === 'boolean') {
+      config.browser.enabled = options.browser;
+    } else {
+      if (options.browser.enabled !== undefined) {
+        config.browser.enabled = options.browser.enabled;
+      }
+      if (options.browser.name !== undefined) {
+        config.browser.browser = options.browser.name;
+      }
+      if (options.browser.headless !== undefined) {
+        config.browser.headless = options.browser.headless;
+      }
+      if (options.browser.port !== undefined) {
+        config.browser.port = Number(options.browser.port);
+      }
+      if (options.browser.strictPort !== undefined) {
+        config.browser.strictPort = options.browser.strictPort;
+      }
+    }
+  }
+
   return config;
 }
 
@@ -120,11 +160,6 @@ async function resolveConfig(
 
   if (!mergedConfig.root) {
     mergedConfig.root = options.cwd;
-  }
-
-  if (options.browser !== undefined) {
-    config.browser ??= {};
-    config.browser.enabled = options.browser;
   }
 
   return {

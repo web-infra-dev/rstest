@@ -295,7 +295,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const projectName = context.normalizedConfig.name;
+      const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 

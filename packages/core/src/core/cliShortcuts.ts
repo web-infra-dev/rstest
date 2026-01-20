@@ -81,7 +81,9 @@ export async function setupCliShortcuts({
       if (!isPrompting) return;
 
       if (key.ctrl && key.name === 'c') {
-        process.exit(0);
+        // Send SIGINT to self to trigger proper cleanup
+        process.kill(process.pid, 'SIGINT');
+        return;
       }
 
       if (key.name === 'return' || key.name === 'enter') {
@@ -195,9 +197,11 @@ export async function setupCliShortcuts({
   ) => {
     if (isPrompting) return; // Ignore global shortcuts while prompting
 
-    // Handle Ctrl+C
+    // Handle Ctrl+C - let the process signal handler take care of cleanup
     if (key.ctrl && key.name === 'c') {
-      process.exit(0);
+      // Send SIGINT to self to trigger proper cleanup
+      process.kill(process.pid, 'SIGINT');
+      return;
     }
 
     // Check shortcuts

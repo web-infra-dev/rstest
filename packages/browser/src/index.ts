@@ -1,12 +1,19 @@
-import type { Rstest } from '@rstest/core/browser';
+import type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
+  Rstest,
+} from '@rstest/core/browser';
 import {
   type ListBrowserTestsResult,
   listBrowserTests as listBrowserTestsImpl,
   runBrowserController,
 } from './hostController';
 
-export async function runBrowserTests(context: Rstest): Promise<void> {
-  await runBrowserController(context);
+export async function runBrowserTests(
+  context: Rstest,
+  options?: BrowserTestRunOptions,
+): Promise<BrowserTestRunResult | void> {
+  return runBrowserController(context, options);
 }
 
 export async function listBrowserTests(
@@ -15,4 +22,8 @@ export async function listBrowserTests(
   return listBrowserTestsImpl(context);
 }
 
-export type { ListBrowserTestsResult };
+export type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
+  ListBrowserTestsResult,
+};

@@ -1,5 +1,6 @@
+import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import path from 'pathe';
+import pathe from 'pathe';
 import type { RstestContext } from '../../types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
@@ -77,7 +78,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
             tools: {
               rspack: (config, { isProd, rspack }) => {
-                config.context = rootPath;
+                // keep windows path as native path
+                config.context = path.resolve(rootPath);
                 // treat `test` as development mode
                 config.mode = isProd ? 'production' : 'development';
                 config.output ??= {};
@@ -98,7 +100,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                     injectModulePathName: true,
                     importMetaPathName: true,
                     hoistMockModule: true,
-                    manualMockRoot: path.resolve(rootPath, '__mocks__'),
+                    manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
                   }),
                 );
 

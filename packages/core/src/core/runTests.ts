@@ -2,11 +2,25 @@ import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import { clearScreen, color, getTestEntries, logger } from '../utils';
-import { loadBrowserModule } from './browserLoader';
+import { type BrowserTestRunResult, loadBrowserModule } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
+
+/**
+ * Run browser mode tests.
+ * Returns the result for unified reporter output.
+ */
+async function runBrowserModeTests(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+  options: { skipOnTestRunEnd: boolean },
+): Promise<BrowserTestRunResult | void> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  return runBrowserTests(context, options);
+}
 
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
@@ -21,16 +35,36 @@ export async function runTests(context: Rstest): Promise<void> {
     context.normalizedConfig.browser.enabled || browserProjects.length > 0;
   const hasNodeTests = nodeProjects.length > 0;
 
-  // Run browser mode tests
+  const isWatchMode = context.command === 'watch';
+
+  // For non-watch mode with both browser and node tests, we need to unify reporter output
+  const shouldUnifyReporter = !isWatchMode && hasBrowserTests && hasNodeTests;
+
+  // If only browser tests, run them and return
+  if (hasBrowserTests && !hasNodeTests) {
+    await runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: false,
+    });
+    return;
+  }
+
+  // If only node tests, run them (handled below)
+  // If both, run them in parallel
+
+  let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
+
   if (hasBrowserTests) {
-    // Pass project roots to resolve @rstest/browser from project-specific node_modules
-    const projectRoots = browserProjects.map((p) => p.rootPath);
-    const { runBrowserTests } = await loadBrowserModule({ projectRoots });
-    await runBrowserTests(context);
+    // Start browser tests in parallel (don't await yet)
+    browserResultPromise = runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: shouldUnifyReporter,
+    });
   }
 
   // Skip node mode tests if no node mode projects
   if (!hasNodeTests) {
+    if (browserResultPromise) {
+      await browserResultPromise;
+    }
     return;
   }
 
@@ -107,8 +141,6 @@ export async function runTests(context: Rstest): Promise<void> {
     setupFiles,
     globalSetupFiles,
   );
-
-  const isWatchMode = command === 'watch';
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
@@ -278,11 +310,24 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const testTime = Date.now() - testStart!;
 
-    const duration = {
-      totalTime: testTime + buildTime,
-      buildTime,
-      testTime,
-    };
+    // Wait for browser tests to complete if running in parallel
+    const browserResult = browserResultPromise
+      ? await browserResultPromise
+      : undefined;
+
+    // When unifying reporter output, combine browser and node durations
+    const duration =
+      shouldUnifyReporter && browserResult
+        ? {
+            totalTime: testTime + buildTime + browserResult.duration.totalTime,
+            buildTime: buildTime + browserResult.duration.buildTime,
+            testTime: testTime + browserResult.duration.testTime,
+          }
+        : {
+            totalTime: testTime + buildTime,
+            buildTime,
+            testTime,
+          };
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
@@ -293,6 +338,11 @@ export async function runTests(context: Rstest): Promise<void> {
       testResults,
       currentDeletedEntries,
     );
+
+    // Check for failures including browser results when unified
+    const nodeHasFailure =
+      results.some((r) => r.status === 'fail') || errors.length;
+    const browserHasFailure = shouldUnifyReporter && browserResult?.hasFailure;
 
     if (results.length === 0 && !errors.length) {
       if (command === 'watch') {
@@ -323,6 +373,8 @@ export async function runTests(context: Rstest): Promise<void> {
             logger.log('');
             logger.log(color.gray('project:'), p.name);
           }
+          logger.log(color.gray('root:'), p.rootPath);
+
           logger.log(
             color.gray('include:'),
             p.normalizedConfig.include.join(color.gray(', ')),
@@ -335,7 +387,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    const isFailure = results.some((r) => r.status === 'fail') || errors.length;
+    const isFailure = nodeHasFailure || browserHasFailure;
 
     if (isFailure) {
       process.exitCode = 1;
@@ -382,6 +434,33 @@ export async function runTests(context: Rstest): Promise<void> {
 
   if (command === 'watch') {
     const enableCliShortcuts = isCliShortcutsEnabled();
+
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -542,6 +621,22 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   } else {
     let isTeardown = false;
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
 
     const unExpectedExit = (code?: number) => {
       if (isTeardown) {
@@ -565,16 +660,30 @@ export async function runTests(context: Rstest): Promise<void> {
         process.exitCode = 1;
       }
     };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
     process.on('exit', unExpectedExit);
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
 
-    await run();
-    isTeardown = true;
-    await pool.close();
-    await closeServer();
+    try {
+      await run();
+      isTeardown = true;
+      await pool.close();
+      await closeServer();
 
-    // Run global teardown after all tests are done
-    await runGlobalTeardown();
-
-    process.off('exit', unExpectedExit);
+      // Run global teardown after all tests are done
+      await runGlobalTeardown();
+    } finally {
+      process.off('exit', unExpectedExit);
+      process.off('SIGINT', handleSignal);
+      process.off('SIGTERM', handleSignal);
+    }
   }
 }

@@ -13,6 +13,7 @@ type TestFilesHeaderProps = {
   onToggleExpandAll: () => void;
   onRerun?: () => void;
   counts: StatusCounts;
+  isRunning: boolean;
 };
 
 export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
@@ -23,17 +24,20 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
   onToggleExpandAll,
   onRerun,
   counts,
+  isRunning,
 }) => {
   return (
     <div
-      className="flex flex-col gap-2 px-3 py-2"
+      className="flex flex-col gap-3 px-4 py-3"
+      data-testid="test-files-header"
       style={{
-        borderTop: `1px solid ${token.colorBorderSecondary}`,
         background: token.colorBgContainer,
       }}
     >
       <div className="flex items-center justify-between">
-        <StatusGrid counts={counts} />
+        <div>
+          <StatusGrid counts={counts} isRunning={isRunning} />
+        </div>
         <div className="flex items-center gap-1">
           <Tooltip
             title={isAllExpanded ? 'Collapse all' : 'Expand all'}
@@ -44,38 +48,41 @@ export const TestFilesHeader: React.FC<TestFilesHeaderProps> = ({
               size="small"
               icon={
                 isAllExpanded ? (
-                  <FoldVertical size={14} />
+                  <FoldVertical size={13} strokeWidth={2.5} />
                 ) : (
-                  <UnfoldVertical size={14} />
+                  <UnfoldVertical size={13} strokeWidth={2.5} />
                 )
               }
               onClick={onToggleExpandAll}
-              className="inline-flex! h-5! w-5! items-center justify-center p-0!"
-              style={{ color: token.colorTextSecondary }}
+              className="flex h-8 w-8 items-center justify-center rounded-md p-0"
+              data-testid="test-files-toggle-expand"
+              style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
           <Tooltip title="Re-run all tests" mouseLeaveDelay={0}>
             <Button
               type="text"
               size="small"
-              icon={<RotateCw size={14} />}
+              icon={<RotateCw size={15} strokeWidth={2.5} />}
               onClick={onRerun}
               disabled={!onRerun}
-              className="inline-flex! h-5! w-5! items-center justify-center p-0!"
-              style={{ color: token.colorTextSecondary }}
+              className="flex h-8 w-8 items-center justify-center rounded-md p-0"
+              data-testid="test-files-rerun-all"
+              style={{ color: token.colorTextDescription }}
             />
           </Tooltip>
         </div>
       </div>
       <Input
-        placeholder="Filter tests..."
-        prefix={<Search size={14} className="text-gray-400" />}
+        placeholder="Search tests..."
+        prefix={<Search size={14} strokeWidth={2.5} className="opacity-40" />}
         value={filterText}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
           onFilterChange(e.target.value)
         }
         allowClear
-        size="small"
+        className="rounded-md py-1.5"
+        data-testid="test-files-search"
       />
     </div>
   );

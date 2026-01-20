@@ -76,6 +76,23 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('- basic > c');
   });
 
+  it('hideSkippedTestFiles', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--hideSkippedTestFiles'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('index.test.ts');
+    expect(cli.stdout).not.toContain('allSkipped.test.ts');
+  });
+
   it('custom', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

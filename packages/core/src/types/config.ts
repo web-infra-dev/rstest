@@ -36,8 +36,18 @@ export type ProjectConfig = Omit<
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
   | 'hideSkippedTests'
+  | 'hideSkippedTestFiles'
   | 'bail'
 >;
+
+/**
+ * Supported browser types for browser mode testing.
+ *
+ * - `chromium` - Google Chrome, Microsoft Edge
+ * - `firefox` - Mozilla Firefox
+ * - `webkit` - Safari
+ */
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
 export type BrowserModeConfig = {
   /**
@@ -50,20 +60,14 @@ export type BrowserModeConfig = {
    * Browser provider to use for running tests.
    *
    * Currently only 'playwright' is supported.
-   *
-   * @default 'playwright'
    */
-  provider?: 'playwright';
+  provider: 'playwright';
   /**
    * Which browser to use for testing.
    *
-   * - `chromium` - Google Chrome, Microsoft Edge
-   * - `firefox` - Mozilla Firefox
-   * - `webkit` - Safari
-   *
    * @default 'chromium'
    */
-  browser?: 'chromium' | 'firefox' | 'webkit';
+  browser?: BrowserName;
   /**
    * Run browser in headless mode.
    *
@@ -76,6 +80,12 @@ export type BrowserModeConfig = {
    * If not specified, a random available port will be used.
    */
   port?: number;
+  /**
+   * Whether to exit if the specified port is already in use.
+   *
+   * @default false
+   */
+  strictPort?: boolean;
 };
 
 type SnapshotFormat = Omit<
@@ -255,6 +265,12 @@ export interface RstestConfig {
    */
   hideSkippedTests?: boolean;
   /**
+   * Hide skipped test files logs.
+   *
+   * @default false
+   */
+  hideSkippedTestFiles?: boolean;
+  /**
    * Run only tests with a name that matches the regex.
    */
   testNamePattern?: string | RegExp;
@@ -404,15 +420,17 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
+  | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
   | 'extends';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: 'playwright';
-  browser: 'chromium' | 'firefox' | 'webkit';
+  browser: BrowserName;
   headless: boolean;
   port?: number;
+  strictPort: boolean;
 };
 
 export type NormalizedConfig = Required<

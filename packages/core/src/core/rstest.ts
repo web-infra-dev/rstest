@@ -114,18 +114,10 @@ export class Rstest implements RstestContext {
       root: rootPath,
     });
 
-    const reporters =
-      command !== 'list'
-        ? createReporters(rstestConfig.reporters, {
-            rootPath,
-            config: rstestConfig,
-            testState: this.testState,
-          })
-        : [];
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
-    this.reporters = reporters;
+
     this.snapshotManager = snapshotManager;
     this.version = RSTEST_VERSION;
     this.rootPath = rootPath;
@@ -187,6 +179,19 @@ export class Rstest implements RstestContext {
             };
           })(),
         ];
+
+    const reporters =
+      command !== 'list'
+        ? createReporters(rstestConfig.reporters, {
+            rootPath,
+            config: rstestConfig,
+            testState: this.testState,
+            options: {
+              showProjectName: projects.length > 1,
+            },
+          })
+        : [];
+    this.reporters = reporters;
   }
 
   public updateReporterResultState(
@@ -243,7 +248,7 @@ export type BuiltInReporterNames = keyof typeof reportersMap;
 
 export function createReporters(
   reporters: RstestConfig['reporters'],
-  initOptions: any = {},
+  initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
@@ -253,8 +258,11 @@ export function createReporters(
       if (name in reportersMap) {
         const Reporter = reportersMap[name];
         return new Reporter({
-          ...initOptions,
-          options,
+          ...initConfig,
+          options: {
+            ...(initConfig.options || {}),
+            ...options,
+          },
         });
       }
 

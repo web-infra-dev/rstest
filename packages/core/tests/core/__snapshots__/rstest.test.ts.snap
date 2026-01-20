@@ -9,6 +9,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "headless": false,
     "port": undefined,
     "provider": "playwright",
+    "strictPort": false,
   },
   "clearMocks": false,
   "coverage": {
@@ -50,6 +51,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "federation": false,
   "globalSetup": [],
   "globals": false,
+  "hideSkippedTestFiles": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
   "include": [
@@ -95,6 +97,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "headless": false,
     "port": undefined,
     "provider": "playwright",
+    "strictPort": false,
   },
   "clearMocks": false,
   "coverage": {
@@ -136,6 +139,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "federation": false,
   "globalSetup": [],
   "globals": false,
+  "hideSkippedTestFiles": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
   "include": [
@@ -184,6 +188,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "headless": false,
     "port": undefined,
     "provider": "playwright",
+    "strictPort": false,
   },
   "clearMocks": false,
   "coverage": {
@@ -225,6 +230,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "federation": false,
   "globalSetup": [],
   "globals": false,
+  "hideSkippedTestFiles": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
   "include": [

@@ -8,6 +8,7 @@ type TestFileTitleProps = {
   iconColor: string;
   status: TestStatus;
   relativePath: string;
+  filePath: string;
   onOpen: () => void;
   onRerun?: () => void;
   textColor: string;
@@ -21,6 +22,7 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   iconColor,
   status,
   relativePath,
+  filePath,
   onOpen,
   onRerun,
   textColor,
@@ -43,20 +45,29 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
   }, [status, shouldFlash]);
 
   return (
-    <div className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
+    <div
+      className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+      data-testid="test-file-title"
+      data-test-file={filePath}
+    >
       <span
         key={flashKey}
-        className={`flex w-[18px] shrink-0 ${flashKey > 0 ? 'status-icon-flash' : ''}`}
+        className={`flex w-[16px] shrink-0 items-center justify-center ${flashKey > 0 ? 'status-icon-flash' : ''}`}
         style={{ color: iconColor }}
       >
         {icon}
       </span>
       <Tooltip
         title={relativePath}
-        overlayInnerStyle={{ whiteSpace: 'nowrap', maxWidth: 'none' }}
+        styles={{
+          container: {
+            whiteSpace: 'nowrap',
+            maxWidth: 'none',
+          },
+        }}
         mouseLeaveDelay={0}
       >
-        <span className="truncate text-[13px] font-semibold">
+        <span className="truncate font-mono text-[12px] font-medium tracking-tight opacity-90">
           {relativePath}
         </span>
       </Tooltip>
@@ -65,12 +76,13 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
           <Button
             type="text"
             size="small"
-            icon={<SquareArrowOutUpRight size={14} />}
+            icon={<SquareArrowOutUpRight size={14} strokeWidth={2.5} />}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onOpen();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-file-open-editor"
             style={{ color: textColor }}
           />
         </Tooltip>
@@ -78,13 +90,14 @@ export const TestFileTitle: React.FC<TestFileTitleProps> = ({
           <Button
             type="text"
             size="small"
-            icon={<RotateCw size={14} />}
+            icon={<RotateCw size={14} strokeWidth={2.5} />}
             disabled={!onRerun}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
               onRerun?.();
             }}
-            className="inline-flex! h-5! w-5! items-center justify-center p-0!"
+            className="inline-flex h-5 w-5 items-center justify-center p-0"
+            data-testid="test-file-rerun"
             style={{ color: textColor }}
           />
         </Tooltip>

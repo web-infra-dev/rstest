@@ -65,6 +65,7 @@ const applyCommonOptions = (cli: CAC) => {
     .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
     .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
     .option('--hideSkippedTests', 'Hide skipped tests from the output')
+    .option('--hideSkippedTestFiles', 'Hide skipped test files from the output')
     .option('--retry <retry>', 'Number of times to retry a test if it fails')
     .option(
       '--bail [number]',
@@ -80,7 +81,21 @@ const applyCommonOptions = (cli: CAC) => {
       '--restoreMocks',
       'Automatically restore mock state and implementation before every test',
     )
-    .option('--browser', 'Run tests in browser mode (Chromium)')
+    .option('--browser', 'Run tests in browser mode')
+    .option('--browser.enabled', 'Run tests in browser mode')
+    .option(
+      '--browser.name <name>',
+      'Browser to use: chromium, firefox, webkit (default: chromium)',
+    )
+    .option(
+      '--browser.headless',
+      'Run browser in headless mode (default: true in CI)',
+    )
+    .option('--browser.port <port>', 'Port for the browser mode dev server')
+    .option(
+      '--browser.strictPort',
+      'Exit if the specified port is already in use',
+    )
     .option(
       '--unstubGlobals',
       'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
@@ -117,6 +132,7 @@ export const runRest = async ({
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };
+
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);

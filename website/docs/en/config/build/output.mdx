@@ -21,6 +21,59 @@ export default defineConfig({
 });
 ```
 
+### Commonjs interop
+
+When you output JavaScript files in ES module format (`output.module: true`), Rstest will determine the type of external based on how the dependency is imported:
+
+- Dependencies imported via `import` syntax will be treated as ES module type externals.
+- Dependencies imported via `require` syntax will be treated as CommonJS externals.
+
+When you import CommonJS modules using the `import` syntax, Rstest will attempt interop handling, allowing you to import CommonJS module exports normally using `import` syntax. The following code works correctly in rstest:
+
+```ts title="cjs-module"
+Object.defineProperty(exports, '__esModule', { value: true });
+
+const a = require('./a');
+
+exports.a = a.a;
+
+exports.default = () => {
+  return `hello ${a.a}`;
+};
+```
+
+```ts title="test/index.test.ts"
+import defaultExport, { a } from 'cjs-module';
+```
+
+However, this interop handling does not always work perfectly, depending on the way the CommonJS module exports its content. Currently, Rstest does not support interop CommonJS module default exports as named exports.
+
+```ts
+function lodash(_value) {}
+
+lodash.VERSION = VERSION;
+
+module.exports = lodash;
+```
+
+```ts
+import { VERSION } from 'lodash'; // ❌
+```
+
+If you encounter issues during usage, you can specify the external type of a dependency as CommonJS through [specifying external type](#specify-external-type).
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: {
+      lodash: 'commonjs lodash', // externalize lodash as a CommonJS module
+    },
+  },
+});
+```
+
 ## output.externals <RsbuildDocBadge path="/config/output/externals" text="output.externals" />
 
 Prevent some `import` dependencies from being packed into bundles in your code, and instead Rstest will `import` them at runtime.

@@ -10,8 +10,13 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
     name: 'happy-dom',
     setup: async (global, options = {}) => {
       checkPkgInstalled('happy-dom');
-      const { Window } = await import('happy-dom');
-      const win = new Window({
+
+      const { Window, GlobalWindow } = await import('happy-dom');
+      // Prefer GlobalWindow to run happy-dom in the global scope so globals like
+      // TextEncoder and Uint8Array are correctly exposed; fall back to Window for
+      // backward compatibility with older happy-dom versions that lack GlobalWindow.
+      const WindowClass = GlobalWindow || Window;
+      const win = new WindowClass({
         ...options,
         url: options.url || 'http://localhost:3000',
         console: console && global.console ? global.console : undefined,

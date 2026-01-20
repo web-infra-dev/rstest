@@ -1,13 +1,22 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import type { ListCommandResult } from '../types';
+import type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
+  ListCommandResult,
+} from '../types';
 import { color, logger } from '../utils';
+
+export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 
 /**
  * Type definition for the @rstest/browser package exports.
  */
 export interface BrowserModule {
-  runBrowserTests: (context: unknown) => Promise<void>;
+  runBrowserTests: (
+    context: unknown,
+    options?: BrowserTestRunOptions,
+  ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (context: unknown) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;

@@ -5,6 +5,7 @@ export default defineConfig({
   exclude: ['**/tests/fixtures/**', '**/tests/suite/**'],
   setupFiles: ['../../scripts/rstest.setup.ts'],
   globals: true,
+  name: 'vscode',
   output: {
     externals: {
       vscode: 'commonjs vscode',

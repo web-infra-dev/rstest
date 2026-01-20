@@ -20,23 +20,23 @@ export type StatusMeta = {
 export const STATUS_META: Record<TestStatus, StatusMeta> = {
   idle: {
     label: 'Idle',
-    color: '#d1d5db',
-    icon: <Sparkles size={16} strokeWidth={2.1} />,
+    color: 'var(--accents-5)',
+    icon: <Sparkles size={14} strokeWidth={2.5} />,
   },
   running: {
     label: 'Running',
-    color: '#f2c94c',
-    icon: <Loader size={16} className="animate-spin" strokeWidth={2.1} />,
+    color: 'var(--ds-amber-700)',
+    icon: <Loader size={14} className="animate-spin" strokeWidth={2.5} />,
   },
   pass: {
     label: 'Pass',
-    color: '#4f9c6b',
-    icon: <CheckCircle2 size={16} strokeWidth={2.1} />,
+    color: 'var(--ds-green-700)',
+    icon: <CheckCircle2 size={14} strokeWidth={2.5} />,
   },
   fail: {
     label: 'Fail',
-    color: '#c94a4a',
-    icon: <XCircle size={16} strokeWidth={2.1} />,
+    color: 'var(--ds-red-800)',
+    icon: <XCircle size={14} strokeWidth={2.5} />,
   },
 };
 
@@ -44,8 +44,8 @@ export const CASE_STATUS_META: Record<CaseStatus, StatusMeta> = {
   ...STATUS_META,
   skip: {
     label: 'Skip',
-    color: '#9ca3af',
-    icon: <CircleDashed size={16} strokeWidth={2.1} />,
+    color: 'var(--accents-4)',
+    icon: <CircleDashed size={14} strokeWidth={2.5} />,
   },
 };
 
