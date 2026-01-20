@@ -18,6 +18,8 @@ export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
 // Types
 export type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
   FormattedError,
   ListCommandResult,
   ProjectContext,

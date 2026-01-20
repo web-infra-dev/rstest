@@ -1,7 +1,9 @@
-import type { Rstest } from '@rstest/core/browser';
+import type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
+  Rstest,
+} from '@rstest/core/browser';
 import {
-  type BrowserTestRunOptions,
-  type BrowserTestRunResult,
   type ListBrowserTestsResult,
   listBrowserTests as listBrowserTestsImpl,
   runBrowserController,

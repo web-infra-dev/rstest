@@ -4,6 +4,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import {
+  type BrowserTestRunOptions,
+  type BrowserTestRunResult,
   color,
   type FormattedError,
   getSetupFiles,
@@ -1175,39 +1177,6 @@ const createBrowserRuntime = async ({
     wss,
   };
 };
-
-// ============================================================================
-// Types for Browser Test Run
-// ============================================================================
-
-/**
- * Options for running browser tests.
- */
-export interface BrowserTestRunOptions {
-  /**
-   * If true, browser mode will not call onTestRunEnd reporter hook.
-   * This allows the caller to unify reporter output with node mode tests.
-   */
-  skipOnTestRunEnd?: boolean;
-}
-
-/**
- * Result from running browser tests.
- */
-export interface BrowserTestRunResult {
-  /** Test file results */
-  results: TestFileResult[];
-  /** Individual test case results */
-  testResults: TestResult[];
-  /** Duration information */
-  duration: {
-    totalTime: number;
-    buildTime: number;
-    testTime: number;
-  };
-  /** Whether the test run had failures */
-  hasFailure: boolean;
-}
 
 // ============================================================================
 // Main Entry Point
