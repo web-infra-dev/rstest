@@ -1568,7 +1568,7 @@ export const runBrowserController = async (
       waitUntil: 'load',
     });
 
-    logger.debug(
+    logger.log(
       color.cyan(`\nBrowser mode opened at http://localhost:${port}/\n`),
     );
   }
