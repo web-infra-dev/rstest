@@ -2,7 +2,7 @@ import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
 import { clearScreen, color, getTestEntries, logger } from '../utils';
-import { loadBrowserModule } from './browserLoader';
+import { type BrowserTestRunResult, loadBrowserModule } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -21,12 +21,22 @@ export async function runTests(context: Rstest): Promise<void> {
     context.normalizedConfig.browser.enabled || browserProjects.length > 0;
   const hasNodeTests = nodeProjects.length > 0;
 
+  const isWatchMode = context.command === 'watch';
+
+  // For non-watch mode with both browser and node tests, we need to unify reporter output
+  const shouldUnifyReporter = !isWatchMode && hasBrowserTests && hasNodeTests;
+
+  let browserResult: BrowserTestRunResult | void;
+
   // Run browser mode tests
   if (hasBrowserTests) {
     // Pass project roots to resolve @rstest/browser from project-specific node_modules
     const projectRoots = browserProjects.map((p) => p.rootPath);
     const { runBrowserTests } = await loadBrowserModule({ projectRoots });
-    await runBrowserTests(context);
+    // Skip onTestRunEnd if we need to unify with node tests
+    browserResult = await runBrowserTests(context, {
+      skipOnTestRunEnd: shouldUnifyReporter,
+    });
   }
 
   // Skip node mode tests if no node mode projects
@@ -107,8 +117,6 @@ export async function runTests(context: Rstest): Promise<void> {
     setupFiles,
     globalSetupFiles,
   );
-
-  const isWatchMode = command === 'watch';
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
@@ -277,11 +285,19 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const testTime = Date.now() - testStart!;
 
-    const duration = {
-      totalTime: testTime + buildTime,
-      buildTime,
-      testTime,
-    };
+    // When unifying reporter output, combine browser and node durations
+    const duration =
+      shouldUnifyReporter && browserResult
+        ? {
+            totalTime: testTime + buildTime + browserResult.duration.totalTime,
+            buildTime: buildTime + browserResult.duration.buildTime,
+            testTime: testTime + browserResult.duration.testTime,
+          }
+        : {
+            totalTime: testTime + buildTime,
+            buildTime,
+            testTime,
+          };
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
@@ -292,6 +308,11 @@ export async function runTests(context: Rstest): Promise<void> {
       testResults,
       currentDeletedEntries,
     );
+
+    // Check for failures including browser results when unified
+    const nodeHasFailure =
+      results.some((r) => r.status === 'fail') || errors.length;
+    const browserHasFailure = shouldUnifyReporter && browserResult?.hasFailure;
 
     if (results.length === 0 && !errors.length) {
       if (command === 'watch') {
@@ -336,7 +357,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    const isFailure = results.some((r) => r.status === 'fail') || errors.length;
+    const isFailure = nodeHasFailure || browserHasFailure;
 
     if (isFailure) {
       process.exitCode = 1;
