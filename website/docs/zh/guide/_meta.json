@@ -11,6 +11,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "browser-testing",
+    "label": "浏览器测试"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "进阶"
   },

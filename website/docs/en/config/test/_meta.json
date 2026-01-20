@@ -23,6 +23,7 @@
   "pool",
   "isolate",
   "test-environment",
+  "browser",
   "clear-mocks",
   "reset-mocks",
   "restore-mocks",

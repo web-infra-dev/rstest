@@ -1,0 +1,291 @@
+# browser
+
+- **类型：**
+
+```ts
+type BrowserModeConfig = {
+  enabled?: boolean;
+  provider: 'playwright';
+  browser?: 'chromium' | 'firefox' | 'webkit';
+  headless?: boolean;
+  port?: number;
+  strictPort?: boolean;
+};
+```
+
+- **默认值：**
+
+```ts
+const defaultBrowser = {
+  enabled: false,
+  provider: 'playwright',
+  browser: 'chromium',
+  headless: true, // CI 环境；本地开发为 false
+  port: undefined, // 随机可用端口
+  strictPort: false,
+};
+```
+
+浏览器模式配置。启用后，测试将在真实浏览器中运行，而非 Node.js 环境。
+
+## 选项
+
+### enabled
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+启用浏览器模式。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+:::tip
+启用浏览器模式需要安装 `@rstest/browser` 包和 Playwright 浏览器。
+
+```bash
+npm add @rstest/browser -D
+npx playwright install chromium
+```
+
+:::
+
+### provider
+
+- **类型：** `'playwright'`
+- **默认值：** `'playwright'`
+
+浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+### browser
+
+- **类型：** `'chromium' | 'firefox' | 'webkit'`
+- **默认值：** `'chromium'`
+
+用于测试的浏览器类型。
+
+- `chromium` - Google Chrome、Microsoft Edge
+- `firefox` - Mozilla Firefox
+- `webkit` - Safari
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    browser: 'firefox',
+  },
+});
+```
+
+使用前需要安装对应的浏览器：
+
+```bash
+# 安装 Chromium
+npx playwright install chromium
+
+# 安装 Firefox
+npx playwright install firefox
+
+# 安装 WebKit
+npx playwright install webkit
+
+# 安装所有浏览器
+npx playwright install
+```
+
+### headless
+
+- **类型：** `boolean`
+- **默认值：** CI 环境为 `true`，本地开发为 `false`
+
+是否以无界面模式运行浏览器。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue="rstest.config.ts">
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+  },
+});
+```
+  </Tab>
+  <Tab label="CI (GitHub Actions)">
+```yaml
+# .github/workflows/test.yml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install
+      - run: npx playwright install chromium
+      - run: npm test
+```
+  </Tab>
+</Tabs>
+
+在本地开发时，设置 `headless: false` 可以看到浏览器窗口，便于调试。
+
+:::tip 根据环境动态配置
+如果你希望本地调试时使用 headed 模式，CI 中使用 headless，可以通过环境变量控制：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: process.env.CI === 'true',
+  },
+});
+```
+
+:::
+
+### port
+
+- **类型：** `number`
+- **默认值：** `undefined`（自动选择可用端口）
+
+浏览器模式 Dev Server 的端口号。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    port: 5173,
+  },
+});
+```
+
+如果指定了 `port` 且端口已被占用，是否报错由 `strictPort` 控制：当 `strictPort: true` 时会报错退出；当 `strictPort: false` 时会尝试使用其他可用端口。如果未指定 `port`，则始终会自动选择一个可用端口。
+
+### strictPort
+
+- **类型：** `boolean`
+- **默认值：** `false`
+
+当指定 `port` 时，是否要求端口必须可用：
+
+- `true`：如果端口被占用则直接报错退出
+- `false`：如果端口被占用则自动回退到其他可用端口
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    port: 5173,
+    strictPort: true,
+  },
+});
+```
+
+## 多浏览器测试
+
+通过 [projects](/config/test/projects) 配置可以同时在多个浏览器中运行测试：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'chromium',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'chromium',
+      },
+    },
+    {
+      name: 'firefox',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'firefox',
+      },
+    },
+    {
+      name: 'webkit',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'webkit',
+      },
+    },
+  ],
+});
+```
+
+## 与 Node 测试混合
+
+可以同时配置浏览器测试和 Node.js 测试：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'browser',
+      include: ['src/**/*.browser.test.ts'],
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+      },
+    },
+    {
+      name: 'node',
+      include: ['src/**/*.node.test.ts'],
+      testEnvironment: 'node',
+    },
+    {
+      name: 'jsdom',
+      include: ['src/**/*.test.ts'],
+      exclude: ['src/**/*.browser.test.ts', 'src/**/*.node.test.ts'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+## 相关链接
+
+- [浏览器模式指南](/guide/browser-testing/) - 浏览器模式介绍和使用指南
+- [快速开始](/guide/browser-testing/getting-started) - 配置浏览器模式测试

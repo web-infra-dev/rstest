@@ -154,6 +154,11 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--hookTimeout <value>`         | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hook-timeout)                                                                                     |
 | `--retry <retry>`               | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                      |
 | `--bail [number]`               | Abort the test run after the specified number of test failures, see [bail](/config/test/bail)                                                                     |
+| `--browser, --browser.enabled`  | Run tests in Browser Mode, see [browser](/config/test/browser)                                                                                                    |
+| `--browser.name <name>`         | Browser to use: `chromium`, `firefox`, `webkit` (default: `chromium`), see [browser](/config/test/browser)                                                        |
+| `--browser.headless`            | Run browser in headless mode (default: `true` in CI), see [browser](/config/test/browser)                                                                         |
+| `--browser.port <port>`         | Port for the Browser Mode dev server, see [browser](/config/test/browser)                                                                                         |
+| `--browser.strictPort`          | Exit if the specified port is already in use, see [browser](/config/test/browser)                                                                                 |
 | `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                            |
 | `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                     |
 | `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                      |
