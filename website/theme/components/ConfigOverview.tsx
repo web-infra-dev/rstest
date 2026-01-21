@@ -55,6 +55,16 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: ['pool', 'isolate', 'testEnvironment'],
   },
   {
+    name: 'browser',
+    items: [
+      'browser.enabled',
+      'browser.provider',
+      'browser.browser',
+      'browser.headless',
+      'browser.port',
+    ],
+  },
+  {
     name: 'snapshot',
     items: ['update', 'snapshotFormat', 'resolveSnapshotPath'],
   },
@@ -89,9 +99,13 @@ export default function Overview() {
       text: item.name,
       link: '',
       items: item.items?.map((item) => {
+        const [page, anchor] = item.split('.');
+        const target = page ?? item;
+        const hash = anchor ? `#${camelToKebab(anchor)}` : '';
+
         return {
-          link: tUrl(`/config/test/${camelToKebab(item)}`),
-          text: item,
+          link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),
+          text: anchor ?? item,
         };
       }),
     })),
