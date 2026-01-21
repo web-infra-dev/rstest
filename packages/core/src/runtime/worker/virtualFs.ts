@@ -16,6 +16,7 @@ type VirtualFiles = Record<string, string>;
 
 let installed = false;
 let virtualFiles: VirtualFiles = {};
+let hasVirtualFiles = false;
 
 const originals: {
   readFileSync?: typeof fs.readFileSync;
@@ -45,17 +46,29 @@ const toFsPath = (p: string | URL): string => {
 const findVirtualContent = (
   p: string | URL,
 ): { content: string; isWasm: boolean } | null => {
-  if (!virtualFiles || Object.keys(virtualFiles).length === 0) return null;
+  if (!hasVirtualFiles) return null;
 
   const raw = toFsPath(p);
   const normalized = path.normalize(raw);
   const alt = normalized.replace(/\\/g, '/');
 
+  const maybeDecode = (value: string): string | null => {
+    if (!value.includes('%')) return null;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const decodedNormalized = maybeDecode(normalized);
+  const decodedAlt = alt !== normalized ? maybeDecode(alt) : null;
+
   const content =
     virtualFiles[normalized] ??
     virtualFiles[alt] ??
-    virtualFiles[decodeURIComponent(normalized)] ??
-    virtualFiles[decodeURIComponent(alt)];
+    (decodedNormalized ? virtualFiles[decodedNormalized] : undefined) ??
+    (decodedAlt ? virtualFiles[decodedAlt] : undefined);
 
   if (typeof content !== 'string') return null;
 
@@ -67,10 +80,12 @@ const findVirtualContent = (
 
 export const setVirtualFiles = (files: VirtualFiles): void => {
   virtualFiles = files || {};
+  hasVirtualFiles = Object.keys(virtualFiles).length > 0;
 };
 
 export const clearVirtualFiles = (): void => {
   virtualFiles = {};
+  hasVirtualFiles = false;
 };
 
 const makeFakeStats = (size: number): any => {
