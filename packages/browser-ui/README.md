@@ -1,6 +1,6 @@
 # @rstest/browser-ui
 
-Prebuilt browser container UI for Rstest's browser mode testing. This package provides the visual interface that displays test files, execution status, and results when running tests in browser mode.
+Prebuilt browser container UI for Rstest's browser mode (experimental) testing. This package provides the visual interface that displays test files, execution status, and results when running tests in browser mode.
 
 ## Tech stack
 
@@ -25,7 +25,7 @@ pnpm --filter @rstest/browser-ui build
 pnpm --filter @rstest/browser-ui typecheck
 ```
 
-### Developing with browser mode projects
+### Developing with browser mode (experimental) projects
 
 When developing the UI, you can use a local dev server instead of the prebuilt assets:
 
@@ -37,7 +37,7 @@ When developing the UI, you can use a local dev server instead of the prebuilt a
 
    The dev server runs at `http://localhost:7392/` by default.
 
-2. In any browser mode project, set the environment variable to use the local dev server:
+2. In any browser mode (experimental) project, set the environment variable to use the local dev server:
 
    ```bash
    RSTEST_CONTAINER_DEV_SERVER=http://localhost:7392/ pnpm test
