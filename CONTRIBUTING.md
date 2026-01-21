@@ -70,7 +70,7 @@ npx nx build @rstest/core --watch
 
 Repository maintainers can publish new versions of changed packages.
 
-1. Run the local release command `pnpm bump` to bump the target package group:
+1. Run the local release command `pnpm bump` to bump the target package group.
 2. The command will prompt for a package group and then a bump type. It creates a local commit only (no tag, no push).
 3. Open a pull request with a title like `release: 0.7.10` or `release: @rstest/coverage-istanbul 0.1.7` and ensure CI passes.
 4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) to publish packages to npm.
