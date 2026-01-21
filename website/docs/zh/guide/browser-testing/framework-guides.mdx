@@ -1,0 +1,221 @@
+# 框架指南
+
+本指南提供各前端框架在浏览器模式下的测试配置示例。
+
+:::tip 前置条件
+在继续之前，请确保你已完成浏览器模式的基础配置。你可以通过以下两种方式初始化：
+
+- **自动初始化**：运行 `npx rstest init browser` 命令
+- **手动配置**：参考 [快速开始](/guide/browser-testing/getting-started#手动配置) 指南
+
+完成后再按照本页指南进行框架特定的配置。
+:::
+
+:::info 框架支持
+目前浏览器模式仅对 React 提供开箱即用的支持，其他框架（如 Vue、Svelte 等）将在未来支持。
+:::
+
+import { PackageManagerTabs } from '@theme';
+
+## React
+
+### 安装依赖
+
+<PackageManagerTabs command="add @rstest/browser-react -D" />
+
+[@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) 是 Rstest 浏览器模式下测试 React 的官方工具包，它提供：
+
+- `render`：将 React 组件渲染到真实浏览器的 DOM 中，返回容器元素供你查询和断言
+- `renderHook`：在不创建包装组件的情况下测试自定义 Hook
+- 自动清理：每个测试前自动卸载上一个测试渲染的组件，避免测试间相互影响
+
+### 组件测试
+
+`render` 函数将组件渲染到 DOM 后，返回 `container`（组件的容器元素）。你可以用原生 DOM API 或 Testing Library 查询元素并进行断言：
+
+```tsx title="src/Counter.test.tsx"
+import { render } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { Counter } from './Counter';
+
+test('renders and increments', async () => {
+  const { container } = await render(<Counter />);
+
+  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
+    '0',
+  );
+
+  container.querySelector('button')!.click();
+  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
+    '1',
+  );
+});
+```
+
+如果组件依赖 Context（如 Theme、Auth、Store），使用 `wrapper` 选项包裹 Provider：
+
+```tsx
+const Wrapper = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider theme="dark">{children}</ThemeProvider>
+);
+
+test('renders with theme context', async () => {
+  const { container } = await render(<MyComponent />, { wrapper: Wrapper });
+  // ...
+});
+```
+
+### Hook 测试
+
+`renderHook` 让你无需编写包装组件就能测试自定义 Hook。它返回：
+
+- `result.current`：Hook 的当前返回值，会随 Hook 更新而变化
+- `act`：用于包裹会触发状态更新的操作，确保断言在更新完成后执行
+- `rerender`：使用新的 props 重新调用 Hook
+
+```tsx title="src/useCounter.test.tsx"
+import { renderHook } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { useCounter } from './useCounter';
+
+test('useCounter increments', async () => {
+  const { result, act } = await renderHook(() => useCounter(0));
+
+  expect(result.current.count).toBe(0);
+
+  await act(() => result.current.increment());
+  expect(result.current.count).toBe(1);
+});
+```
+
+如果 Hook 依赖 props，使用 `initialProps` 传入初始值，`rerender` 模拟 props 变化：
+
+```tsx
+test('hook reacts to prop changes', async () => {
+  const { result, rerender } = await renderHook(
+    (props) => useMultiplier(props?.value ?? 0),
+    { initialProps: { value: 5 } },
+  );
+
+  expect(result.current).toBe(10);
+
+  await rerender({ value: 10 });
+  expect(result.current).toBe(20);
+});
+```
+
+### 更多配置
+
+- **React Strict Mode**：使用 `configure({ reactStrictMode: true })` 启用，帮助发现潜在问题
+- **手动清理**：默认每个测试前自动清理。如需手动控制清理时机，从 `@rstest/browser-react/pure` 导入并调用 `cleanup()`
+
+完整 API 请参考包文档。
+
+## Vanilla JS/TS
+
+对于不使用框架的项目，可以直接使用原生 DOM API 进行测试。
+
+### 安装依赖（可选）
+
+如果你希望使用 Testing Library 的查询方法，可以安装以下依赖：
+
+<PackageManagerTabs command="add @testing-library/dom @testing-library/user-event -D" />
+
+### 示例测试
+
+使用原生 DOM API 测试：
+
+```ts title="src/counter.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('counter increments on click', () => {
+  // Create DOM structure
+  const container = document.createElement('div');
+  container.innerHTML = `
+    <span id="count">0</span>
+    <button id="increment">+</button>
+  `;
+  document.body.appendChild(container);
+
+  // Setup event handler
+  let count = 0;
+  const countEl = container.querySelector('#count')!;
+  const button = container.querySelector('#increment')!;
+
+  button.addEventListener('click', () => {
+    count++;
+    countEl.textContent = String(count);
+  });
+
+  // Test interaction
+  button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  expect(countEl.textContent).toBe('1');
+});
+```
+
+使用 Testing Library 测试：
+
+```ts title="src/dropdown.test.ts"
+import { expect, test } from '@rstest/core';
+import { getByRole, queryByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { createDropdown } from './dropdown';
+
+test('toggles dropdown on click', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  createDropdown(container);
+
+  const trigger = getByRole(container, 'button');
+
+  // Initial state: menu hidden
+  expect(queryByRole(container, 'menu')).toBeNull();
+
+  // Click to open menu
+  await userEvent.click(trigger);
+  expect(getByRole(container, 'menu')).toBeTruthy();
+});
+```
+
+### 测试 Web components
+
+```ts title="src/my-element.test.ts"
+import { expect, test } from '@rstest/core';
+import './my-element'; // Register custom element
+
+test('renders content in shadow DOM', () => {
+  const el = document.createElement('my-element');
+  el.setAttribute('name', 'World');
+  document.body.appendChild(el);
+
+  const shadowRoot = el.shadowRoot!;
+  expect(shadowRoot.textContent).toContain('Hello, World!');
+});
+```
+
+## 多框架项目
+
+如果你的项目同时包含多个框架，可以使用 [projects](/config/test/projects) 配置为不同框架设置独立的测试环境：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'react',
+      include: ['src/react/**/*.test.{ts,tsx}'],
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+      },
+    },
+    {
+      name: 'node',
+      include: ['src/utils/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+  ],
+});
+```

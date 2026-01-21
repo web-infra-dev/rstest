@@ -1,0 +1,110 @@
+# User interactions
+
+This guide covers how to simulate user interactions in Browser Mode tests.
+
+In Browser Mode, you can choose between Testing Library or native DOM APIs. Testing Library better simulates real user behavior by automatically handling complete event sequences and focus management, making it suitable for most UI tests. Native DOM APIs are lighter and allow precise control over event properties, but require manual event sequencing—ideal for verifying low-level event logic or special interaction details.
+
+import { PackageManagerTabs } from '@theme';
+
+## Testing library (Recommended)
+
+[Testing Library](https://testing-library.com/) is a testing utility library focused on user behavior. It encourages writing tests that mirror how users actually interact with your application, rather than relying on implementation details. In Browser Mode, we recommend using these two packages together:
+
+- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro): Provides query methods like `getByRole`, `getByText`, and `getByLabelText` that let you find elements from a user's perspective (e.g., "find the input labeled Username") rather than relying on CSS selectors or test-specific attributes
+- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro): Simulates real user interactions by triggering complete event sequences (e.g., `click` fires `mousedown`, `focus`, `mouseup`, `click` in order) and automatically handling focus, cursor position, and other details
+
+### Installation
+
+<PackageManagerTabs command="add @testing-library/dom @testing-library/user-event -D" />
+
+### Example
+
+Here's a complete form submission test example demonstrating common user interaction methods:
+
+```tsx title="src/LoginForm.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render } from '@rstest/browser-react';
+import { getByLabelText, getByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { LoginForm } from './LoginForm';
+
+test('submits login form with user credentials', async () => {
+  const user = userEvent.setup();
+  const onSubmit = rstest.fn();
+
+  const { container } = await render(<LoginForm onSubmit={onSubmit} />);
+
+  // Type into input fields
+  await user.type(getByLabelText(container, 'Username'), 'alice');
+  await user.type(getByLabelText(container, 'Password'), 'secret123');
+
+  // Check the "remember me" checkbox
+  await user.click(getByLabelText(container, 'Remember me'));
+
+  // Submit the form
+  await user.click(getByRole(container, 'button', { name: 'Login' }));
+
+  // Assert the form was submitted with correct data
+  expect(onSubmit).toHaveBeenCalledWith({
+    username: 'alice',
+    password: 'secret123',
+    rememberMe: true,
+  });
+});
+```
+
+Testing Library offers a rich set of interaction methods including click, text input, keyboard events, dropdown selection, drag and drop, and more. For detailed usage, see the [user-event documentation](https://testing-library.com/docs/user-event/intro).
+
+## Native DOM APIs
+
+If you prefer not to add extra dependencies, or need lower-level event control (such as precisely specifying `clientX`, `ctrlKey`, etc.), you can use native browser DOM APIs directly.
+
+### Example
+
+The following example demonstrates common native event operations including click, input, and keyboard events:
+
+```ts title="src/native-events.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('handles click and input events', () => {
+  // Create elements
+  const button = document.createElement('button');
+  const input = document.createElement('input');
+  document.body.append(button, input);
+
+  // Click event
+  let clicked = false;
+  button.addEventListener('click', () => (clicked = true));
+  button.click();
+  expect(clicked).toBe(true);
+
+  // Input event
+  input.focus();
+  input.value = 'hello';
+  input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  expect(input.value).toBe('hello');
+});
+
+test('handles keyboard shortcuts', () => {
+  let shortcutTriggered = false;
+
+  document.addEventListener('keydown', (e) => {
+    // Detect Ctrl+S shortcut
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      shortcutTriggered = true;
+    }
+  });
+
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 's',
+      code: 'KeyS',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+  );
+
+  expect(shortcutTriggered).toBe(true);
+});
+```
