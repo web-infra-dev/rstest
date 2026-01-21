@@ -19,7 +19,6 @@ import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
-import { pluginFederationCompat } from './plugins/federation';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
@@ -76,9 +75,6 @@ export const prepareRsbuild = async (
   const projects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
   );
-  const hasFederation = projects.some((project) =>
-    Boolean(project.normalizedConfig.federation),
-  );
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
@@ -117,7 +113,6 @@ export const prepareRsbuild = async (
       ),
       plugins: [
         pluginBasic(context),
-        hasFederation ? pluginFederationCompat(context) : null,
         pluginIgnoreResolveError,
         pluginMockRuntime,
         pluginCSSFilter(),

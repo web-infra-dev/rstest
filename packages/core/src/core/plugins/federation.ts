@@ -1,5 +1,4 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type { RstestContext } from '../../types';
 import { logger } from '../../utils';
 
 // Note: ModuleFederationPlugin configuration should include
@@ -23,63 +22,63 @@ export const shouldKeepBundledForFederation = (request: string): boolean => {
   return false;
 };
 
-export const pluginFederationCompat: (context: RstestContext) => RsbuildPlugin =
-  (context) => ({
-    name: 'rstest:federation-compat',
-    setup: (api) => {
-      api.modifyEnvironmentConfig(
-        async (config, { mergeEnvironmentConfig, name }) => {
-          const project = context.projects.find(
-            (p) => p.environmentName === name,
-          );
-          if (!project?.normalizedConfig.federation) return config;
+/**
+ * Enable Rstest's Module Federation compatibility mode for the current Rsbuild
+ * environment.
+ *
+ * Add this to your `rstest.config.*`:
+ *
+ * ```ts
+ * import { defineConfig, federation } from '@rstest/core';
+ * export default defineConfig({
+ *   federation: true,
+ *   plugins: [federation()],
+ * });
+ * ```
+ */
+export const federation = (): RsbuildPlugin => ({
+  name: 'rstest:federation',
+  setup: (api) => {
+    api.modifyEnvironmentConfig(async (config, { mergeEnvironmentConfig }) => {
+      // Ensure CommonJS output at the Rsbuild environment config level.
+      // This propagates to normalized config so other plugins can respect
+      // `outputModule` consistently.
+      const merged = mergeEnvironmentConfig(config, {
+        output: {
+          module: false,
+        },
+        tools: {
+          rspack: (rspackConfig) => {
+            // Tests run in Node workers even for DOM-like environments.
+            // Use async-node target and avoid splitChunks for federation.
+            rspackConfig.target = 'async-node';
+            rspackConfig.optimization ??= {};
+            rspackConfig.optimization.splitChunks = false;
 
-          // Ensure CommonJS output at the Rstest environment config level.
-          // This propagates to normalized config so other plugins (e.g. externals)
-          // can respect `outputModule` consistently.
-          // `mergeEnvironmentConfig` is synchronous in Rsbuild's API; avoid `await`
-          // to satisfy `@typescript-eslint/await-thenable`.
-          const merged = mergeEnvironmentConfig(config, {
-            output: {
-              module: false,
-            },
-            tools: {
-              rspack: (rspackConfig) => {
-                // Tests run in Node workers even for DOM-like environments.
-                // Use async-node target and avoid splitChunks for federation.
-                rspackConfig.target = 'async-node';
-                rspackConfig.optimization ??= {};
-                rspackConfig.optimization.splitChunks = false;
-
-                // Validate that ModuleFederationPlugin instances have the correct config
-                if (rspackConfig.plugins) {
-                  for (const plugin of rspackConfig.plugins) {
-                    // Check if this looks like a ModuleFederationPlugin
-                    if (
-                      plugin &&
-                      typeof plugin === 'object' &&
-                      plugin.constructor?.name === 'ModuleFederationPlugin'
-                    ) {
-                      const options = (plugin as any)._options;
-                      if (options && typeof options === 'object') {
-                        // Validate experiments.optimization.target is set to 'node'
-                        if (
-                          options.experiments?.optimization?.target !== 'node'
-                        ) {
-                          logger.warn(
-                            `[Rstest Federation] ModuleFederationPlugin "${options.name || 'unnamed'}" should have experiments.optimization.target set to 'node' for JSDOM test environments.`,
-                          );
-                        }
-                      }
+            // Validate that ModuleFederationPlugin instances have the correct config.
+            if (rspackConfig.plugins) {
+              for (const plugin of rspackConfig.plugins) {
+                if (
+                  plugin &&
+                  typeof plugin === 'object' &&
+                  plugin.constructor?.name === 'ModuleFederationPlugin'
+                ) {
+                  const options = (plugin as any)._options;
+                  if (options && typeof options === 'object') {
+                    if (options.experiments?.optimization?.target !== 'node') {
+                      logger.warn(
+                        `[Rstest Federation] ModuleFederationPlugin "${options.name || 'unnamed'}" should have experiments.optimization.target set to 'node' for JSDOM test environments.`,
+                      );
                     }
                   }
                 }
-              },
-            },
-          });
-
-          return merged;
+              }
+            }
+          },
         },
-      );
-    },
-  });
+      });
+
+      return merged;
+    });
+  },
+});

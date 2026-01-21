@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { ModuleFederationPlugin } from '@module-federation/enhanced/rspack';
 import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
+import { defineConfig, federation } from '@rstest/core';
 
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
   testEnvironment: 'node',
-  plugins: [pluginReact()],
+  plugins: [pluginReact(), federation()],
   testTimeout: 15000,
   federation: true,
   tools: {
