@@ -5,10 +5,6 @@
 ```ts
 type ChaiConfig = {
   /**
-   * @default false
-   */
-  includeStack: boolean;
-  /**
    * @default true
    */
   showDiff: boolean;
@@ -22,8 +18,6 @@ type ChaiConfig = {
 - **Default:** `undefined`
 
 Customize the [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js).
-
-## Field Details
 
 ### truncateThreshold
 
@@ -43,57 +37,21 @@ export default defineConfig({
 });
 ```
 
-#### Before (default truncateThreshold: 40)
+With the default value （40）, long arrays or objects get truncated:
 
-With the default value, long arrays or objects get truncated:
-
-```
+```ts
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
-#### After (truncateThreshold: 100)
+If you set a higher threshold, you see the full structure:
 
-With a higher threshold, you see the full structure:
-
-```
+```ts
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
 This allows you to see the exact values that don't match, making debugging easier.
-
-### includeStack
-
-Includes the stack trace in assertion errors.
-
-- **Default:** `false`
-
-Enable this to see where the assertion was called from:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  chaiConfig: {
-    includeStack: true, // Include stack trace in errors
-  },
-});
-```
-
-#### Without stack (default)
-
-```
-AssertionError: expected 5 to equal 10
-```
-
-#### With stack (includeStack: true)
-
-```
-AssertionError: expected 5 to equal 10
-    at Context.<anonymous> (file:///path/to/test.ts:10:5)
-    at processTicksAndRejections (internal/timers.ts:32:1)
-```
 
 ### showDiff
 
@@ -113,9 +71,9 @@ export default defineConfig({
 });
 ```
 
-#### With diff (default showDiff: true)
+By default, Rstest shows a diff of expected vs actual values in assertion failures:
 
-```
+```ts
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   + expected
   - actual
@@ -127,8 +85,8 @@ AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   }
 ```
 
-#### Without diff (showDiff: false)
+If you set `showDiff: false`, Rstest will show plain assertion messages without diffs:
 
-```
+```ts
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

@@ -5,10 +5,6 @@
 ```ts
 type ChaiConfig = {
   /**
-   * @default false
-   */
-  includeStack: boolean;
-  /**
    * @default true
    */
   showDiff: boolean;
@@ -22,8 +18,6 @@ type ChaiConfig = {
 - **默认值：** `undefined`
 
 自定义 [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js)。
-
-## 字段说明
 
 ### truncateThreshold
 
@@ -43,56 +37,18 @@ export default defineConfig({
 });
 ```
 
-#### 配置前（默认 truncateThreshold: 40）
-
 使用默认值时，长数组或对象会被截断：
 
-```
+```ts
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
-#### 配置后（truncateThreshold: 100）
-
 使用更高的阈值时，你可以看到完整的结构：
 
-```
+```ts
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
-```
-
-这样可以看到具体不匹配的值，更便于调试。
-
-### includeStack
-
-在断言错误中包含堆栈跟踪。
-
-- **默认值：** `false`
-
-启用此选项可以看到断言调用的位置：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  chaiConfig: {
-    includeStack: true, // 在错误中包含堆栈跟踪
-  },
-});
-```
-
-#### 不显示堆栈（默认）
-
-```
-AssertionError: expected 5 to equal 10
-```
-
-#### 显示堆栈（includeStack: true）
-
-```
-AssertionError: expected 5 to equal 10
-    at Context.<anonymous> (file:///path/to/test.ts:10:5)
-    at processTicksAndRejections (internal/timers.ts:32:1)
 ```
 
 ### showDiff
@@ -113,9 +69,9 @@ export default defineConfig({
 });
 ```
 
-#### 显示差异（默认 showDiff: true）
+默认情况下，Rstest 会显示差异，帮助你快速定位问题。
 
-```
+```ts
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   + expected
   - actual
@@ -127,8 +83,8 @@ AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   }
 ```
 
-#### 不显示差异（showDiff: false）
+你可以将 `showDiff: false`，此时 Rstest 将只显示纯文本的断言消息：
 
-```
+```ts
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```
