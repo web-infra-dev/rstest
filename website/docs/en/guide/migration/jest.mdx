@@ -1,4 +1,4 @@
-# Migrating from jest
+# Migrating from Jest
 
 Rstest is designed to be Jest-compatible, making migration from Jest projects straightforward. Here's how to migrate your Jest project to Rstest:
 
@@ -21,7 +21,7 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 
 ## Configuration migration
 
-Update your jest config file (e.g., `jest.config.js` or `jest.config.ts`) to a `rstest.config.ts` file.
+Update your Jest config file (e.g., `jest.config.js` or `jest.config.ts`) to a `rstest.config.ts` file.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -107,7 +107,7 @@ Your existing Jest test files should work with minimal changes since Rstest prov
 + import { describe, expect, it, test } from '@rstest/core';
 ```
 
-Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/).
+Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
 
 ```diff
 - const fn = jest.fn();

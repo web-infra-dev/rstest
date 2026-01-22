@@ -1,0 +1,291 @@
+# browser (experimental)
+
+- **Type:**
+
+```ts
+type BrowserModeConfig = {
+  enabled?: boolean;
+  provider: 'playwright';
+  browser?: 'chromium' | 'firefox' | 'webkit';
+  headless?: boolean;
+  port?: number;
+  strictPort?: boolean;
+};
+```
+
+- **Default:**
+
+```ts
+const defaultBrowser = {
+  enabled: false,
+  provider: 'playwright',
+  browser: 'chromium',
+  headless: true, // CI environment; false for local development
+  port: undefined, // Random available port
+  strictPort: false,
+};
+```
+
+Browser Mode configuration. When enabled, tests run in a real browser instead of the Node.js environment.
+
+## Options
+
+### enabled
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Enable Browser Mode.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+:::tip
+Enabling Browser Mode requires installing the `@rstest/browser` package and Playwright browsers.
+
+```bash
+npm add @rstest/browser -D
+npx playwright install chromium
+```
+
+:::
+
+### provider
+
+- **Type:** `'playwright'`
+- **Default:** `'playwright'`
+
+Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+### browser
+
+- **Type:** `'chromium' | 'firefox' | 'webkit'`
+- **Default:** `'chromium'`
+
+The browser type to use for testing.
+
+- `chromium` - Google Chrome, Microsoft Edge
+- `firefox` - Mozilla Firefox
+- `webkit` - Safari
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    browser: 'firefox',
+  },
+});
+```
+
+You need to install the corresponding browser before use:
+
+```bash
+# Install chromium
+npx playwright install chromium
+
+# Install Firefox
+npx playwright install firefox
+
+# Install WebKit
+npx playwright install webkit
+
+# Install all browsers
+npx playwright install
+```
+
+### headless
+
+- **Type:** `boolean`
+- **Default:** `true` in CI environments, `false` for local development
+
+Whether to run the browser in headless mode (without UI).
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue="rstest.config.ts">
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true,
+  },
+});
+```
+  </Tab>
+  <Tab label="CI (GitHub Actions)">
+```yaml
+# .github/workflows/test.yml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install
+      - run: npx playwright install chromium
+      - run: npm test
+```
+  </Tab>
+</Tabs>
+
+During local development, setting `headless: false` shows the browser window for easier debugging.
+
+:::tip Dynamic Configuration Based on Environment
+If you want headed mode for local debugging and headless in CI, control it with environment variables:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: process.env.CI === 'true',
+  },
+});
+```
+
+:::
+
+### port
+
+- **Type:** `number`
+- **Default:** `undefined` (automatically selects an available port)
+
+The port number for the Browser Mode Dev Server.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    port: 5173,
+  },
+});
+```
+
+If you set `port` and the port is already in use, the behavior is controlled by `strictPort`: when `strictPort: true`, Rstest throws an error and exits; when `strictPort: false`, it falls back to another available port. If `port` is not specified, an available port is always selected automatically.
+
+### strictPort
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+When `port` is specified, whether the port must be available:
+
+- `true`: throw an error and exit if the port is in use
+- `false`: fall back to another available port if the port is in use
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    port: 5173,
+    strictPort: true,
+  },
+});
+```
+
+## Multi-Browser Testing
+
+Use [projects](/config/test/projects) configuration to run tests in multiple browsers simultaneously:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'chromium',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'chromium',
+      },
+    },
+    {
+      name: 'firefox',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'firefox',
+      },
+    },
+    {
+      name: 'webkit',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        browser: 'webkit',
+      },
+    },
+  ],
+});
+```
+
+## Mixing with node tests
+
+You can configure both browser tests and Node.js tests together:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'browser',
+      include: ['src/**/*.browser.test.ts'],
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+      },
+    },
+    {
+      name: 'node',
+      include: ['src/**/*.node.test.ts'],
+      testEnvironment: 'node',
+    },
+    {
+      name: 'jsdom',
+      include: ['src/**/*.test.ts'],
+      exclude: ['src/**/*.browser.test.ts', 'src/**/*.node.test.ts'],
+      testEnvironment: 'jsdom',
+    },
+  ],
+});
+```
+
+## Related links
+
+- [Browser Mode Guide](/guide/browser-testing/) - Introduction and usage guide for Browser Mode
+- [Getting Started](/guide/browser-testing/getting-started) - Configure Browser Mode tests

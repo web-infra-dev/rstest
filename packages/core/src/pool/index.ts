@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join } from 'pathe';
 import type {
@@ -18,6 +19,7 @@ import type {
 } from '../types';
 import {
   color,
+  isDeno,
   needFlagExperimentalDetectModule,
   serializableConfig,
 } from '../utils';
@@ -68,7 +70,11 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   } = context.normalizedConfig;
 
   return {
-    env,
+    env: {
+      // get process.env correctly when globalSetup modified it
+      ...process.env,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -106,6 +112,22 @@ const filterAssetsByEntry = async (
   const neededSourceMaps = await getSourceMaps(assetNames);
 
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+};
+
+const getNodeExecArgv = () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
+
+  return [
+    '--experimental-vm-modules',
+    '--experimental-import-meta-resolve',
+    needFlagExperimentalDetectModule()
+      ? '--experimental-detect-module'
+      : undefined,
+    '--require',
+    suppressFile,
+  ].filter(Boolean) as string[];
 };
 
 export const createPool = async ({
@@ -193,18 +215,13 @@ export const createPool = async ({
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
-      '--experimental-vm-modules',
-      '--experimental-import-meta-resolve',
-      '--no-warnings',
-      needFlagExperimentalDetectModule()
-        ? '--experimental-detect-module'
-        : undefined,
-    ].filter(Boolean) as string[],
+      ...(isDeno ? [] : getNodeExecArgv()),
+    ],
     env: {
+      ...process.env,
       NODE_ENV: 'test',
       // enable diff color by default
       FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
-      ...process.env,
     },
   });
 
@@ -276,7 +293,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const projectName = context.normalizedConfig.name;
+      const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 

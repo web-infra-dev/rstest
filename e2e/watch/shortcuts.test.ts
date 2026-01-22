@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, rs } from '@rstest/core';
-import { prepareFixtures, runRstestCli } from '../scripts/';
+import { prepareFixtures, runRstestCli, sleep } from '../scripts/';
 
 rs.setConfig({
   retry: 3,
@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 describe('CLI shortcuts', () => {
   it('CLI shortcuts should display and work as expected', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
     await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures-shortcuts`,
       fixturesTargetPath,
@@ -53,11 +53,15 @@ describe('CLI shortcuts', () => {
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
     expect(cli.stdout).toMatch('Run all tests');
 
+    cli.exec.process!.stdin!.write('q');
+
+    await sleep(1000);
+
     cli.exec.kill();
   });
 
   it('shortcut `f` should work as expected', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
     await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures-shortcuts`,
       fixturesTargetPath,
@@ -90,6 +94,10 @@ describe('CLI shortcuts', () => {
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed');
     expect(cli.stdout).toMatch('Run filtered tests');
+
+    cli.exec.process!.stdin!.write('q');
+
+    await sleep(1000);
 
     cli.exec.kill();
   });

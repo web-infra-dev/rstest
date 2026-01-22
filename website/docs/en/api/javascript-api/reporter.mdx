@@ -1,0 +1,120 @@
+---
+title: Reporter
+---
+
+# Reporter API
+
+The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
+
+> **Note**: For usage examples and configuration guidance, see the [Reporters guide](/guide/basic/reporters).
+
+## Using custom reporter
+
+Create a custom reporter by implementing the `Reporter` interface:
+
+```ts
+import type { Reporter, TestFileResult } from '@rstest/core';
+
+const customReporter: Reporter = {
+  onTestFileStart(test) {
+    console.log(`Starting: ${test.testPath}`);
+  },
+
+  onTestFileResult(result) {
+    console.log(`Finished: ${result.testPath}`);
+  },
+
+  onTestRunEnd({ results, duration }) {
+    console.log(`All tests completed in ${duration.totalTime}ms`);
+  },
+};
+```
+
+Use the custom reporter in your configuration:
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { customReporter } from './path/to/custom-reporter';
+
+export default defineConfig({
+  reporters: [customReporter],
+});
+```
+
+## Interface overview
+
+The `Reporter` interface provides lifecycle hooks for test execution. Each hook is called at specific points during the test run.
+
+> **Important**: For the most up-to-date interface definition and complete type signatures, please refer to the [source code](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts).
+
+### Hook categories
+
+- **File-level hooks**: `onTestFileStart`, `onTestFileReady`, `onTestFileResult`
+- **Suite-level hooks**: `onTestSuiteStart`, `onTestSuiteResult`
+- **Case-level hooks**: `onTestCaseStart`, `onTestCaseResult`
+- **Run-level hooks**: `onTestRunStart`, `onTestRunEnd`, `onUserConsoleLog`, `onExit`
+
+### Basic interface structure
+
+```ts
+interface Reporter {
+  onTestFileStart?(test: TestFileInfo): void;
+  onTestFileReady?(test: TestFileInfo): void;
+  onTestFileResult?(test: TestFileResult): void;
+  onTestSuiteStart?(test: TestSuiteInfo): void;
+  onTestSuiteResult?(result: TestResult): void;
+  onTestCaseStart?(test: TestCaseInfo): void;
+  onTestCaseResult?(result: TestResult): void;
+  onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
+  onUserConsoleLog?(log: UserConsoleLog): void;
+  onExit?(): void;
+}
+```
+
+## Examples
+
+### Simple custom reporter
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const simpleReporter: Reporter = {
+  onTestFileStart(test) {
+    console.log(`📁 ${test.testPath}`);
+  },
+
+  onTestCaseResult(result) {
+    const status = result.status === 'pass' ? '✅' : '❌';
+    console.log(`${status} ${result.name}`);
+  },
+
+  onTestRunEnd({ results }) {
+    const passed = results.filter((r) => r.status === 'pass').length;
+    const failed = results.filter((r) => r.status === 'fail').length;
+    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+  },
+};
+```
+
+### File output reporter
+
+```ts
+import { writeFileSync } from 'node:fs';
+import type { Reporter } from '@rstest/core';
+
+const jsonReporter: Reporter = {
+  onTestRunEnd({ results }) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      results: results.map((r) => ({
+        path: r.testPath,
+        status: r.status,
+        duration: r.duration,
+        errors: r.errors,
+      })),
+    };
+
+    writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```

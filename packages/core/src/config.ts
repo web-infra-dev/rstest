@@ -5,7 +5,8 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
-import type { NormalizedConfig, RstestConfig } from './types';
+import { isCI } from 'std-env';
+import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
   castArray,
   color,
@@ -73,8 +74,27 @@ export async function loadConfig({
     loader: configLoader,
   });
 
-  return { content: content as RstestConfig, filePath: configFilePath };
+  let config = content as RstestConfig;
+
+  // Handle extends configuration
+  if (config.extends) {
+    const extendsConfig =
+      typeof config.extends === 'function'
+        ? await config.extends(Object.freeze({ ...config }))
+        : config.extends;
+    // @ts-expect-error: double check
+    delete extendsConfig.projects;
+    config = mergeRstestConfig(extendsConfig, config);
+  }
+
+  return { content: config, filePath: configFilePath };
 }
+
+export const mergeProjectConfig = (
+  ...configs: ProjectConfig[]
+): ProjectConfig => {
+  return mergeRstestConfig(...configs) as ProjectConfig;
+};
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
@@ -91,6 +111,13 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     if (!Array.isArray(config.exclude) && config.exclude?.override) {
       merged.exclude = {
         patterns: config.exclude.patterns,
+      };
+    }
+
+    if (config.browser) {
+      merged.browser = {
+        ...(merged.browser || {}),
+        ...config.browser,
       };
     }
 
@@ -119,6 +146,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     override: false,
   },
   setupFiles: [],
+  globalSetup: [],
   includeSource: [],
   pool: {
     type: 'forks',
@@ -129,7 +157,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: 5_000,
   hookTimeout: 10_000,
-  testEnvironment: 'node',
+  testEnvironment: {
+    name: 'node',
+  },
   retry: 0,
   reporters:
     process.env.GITHUB_ACTIONS === 'true'
@@ -147,13 +177,20 @@ const createDefaultConfig = (): NormalizedConfig => ({
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
+  hideSkippedTestFiles: false,
   logHeapUsage: false,
   bail: 0,
   includeTaskLocation: false,
+  browser: {
+    enabled: false,
+    provider: 'playwright',
+    browser: 'chromium',
+    headless: isCI,
+    strictPort: false,
+  },
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/[.]*',
       '**/dist/**',
       '**/test/**',
       '**/__tests__/**',
@@ -176,12 +213,31 @@ const createDefaultConfig = (): NormalizedConfig => ({
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
+  // Validate browser config when browser mode is enabled.
+  if (config.browser?.enabled === true) {
+    if (!config.browser.provider) {
+      throw new Error(
+        'browser.provider is required when browser.enabled is true.',
+      );
+    }
+
+    // Keep runtime validation even though TypeScript narrows the type, since
+    // config can be loaded from JS or forced via `as unknown as RstestConfig`.
+    const supportedProviders = ['playwright'] as const;
+    if (!supportedProviders.includes(config.browser.provider)) {
+      throw new Error(
+        `browser.provider must be one of: ${supportedProviders.join(', ')}.`,
+      );
+    }
+  }
+
   const merged = mergeRstestConfig(
     createDefaultConfig(),
     config,
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
+  merged.globalSetup = castArray(merged.globalSetup);
 
   merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
 
@@ -200,6 +256,22 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
         }
       : merged.pool;
 
+  merged.testEnvironment =
+    typeof config.testEnvironment === 'string'
+      ? {
+          name: config.testEnvironment,
+        }
+      : merged.testEnvironment;
+
+  merged.browser = {
+    enabled: merged.browser?.enabled ?? false,
+    provider: merged.browser?.provider ?? 'playwright',
+    browser: merged.browser?.browser ?? 'chromium',
+    headless: merged.browser?.headless ?? isCI,
+    port: merged.browser?.port,
+    strictPort: merged.browser?.strictPort ?? false,
+  };
+
   return {
     ...merged,
     include: merged.include.map((p) => formatRootStr(p, merged.root)),
@@ -210,6 +282,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       ),
     },
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
+    globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
       formatRootStr(p, merged.root),
     ),

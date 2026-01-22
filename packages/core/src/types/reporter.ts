@@ -37,10 +37,19 @@ export type DefaultReporterOptions = {
    * @default process.stdout/process.stderr
    */
   logger?: WindowRendererOptionsOptions['logger'];
+
+  /**
+   * prints out project name in test file title
+   * show project name by default when running multiple projects
+   */
+  showProjectName?: boolean;
 };
+
+export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  verbose: VerboseReporterOptions;
 };
 
 export type ReporterWithOptions<
@@ -81,6 +90,10 @@ export interface Reporter {
    */
   onTestCaseStart?: (test: TestCaseInfo) => void;
   /**
+   * Called before all tests start
+   */
+  onTestRunStart?: () => MaybePromise<void>;
+  /**
    * Called after all tests have finished running.
    */
   onTestRunEnd?: ({
@@ -89,11 +102,13 @@ export interface Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     snapshotSummary: SnapshotSummary;
     filterRerunTestPaths?: string[];
   }) => MaybePromise<void>;

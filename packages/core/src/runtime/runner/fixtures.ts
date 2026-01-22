@@ -4,7 +4,7 @@ import type {
   NormalizedFixtures,
   TestCase,
 } from '../../types';
-import { isObject } from '../../utils';
+import { isObject } from '../../utils/helper';
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -103,7 +103,7 @@ export const handleFixtures = async (
       }
     }
 
-    // This API behavior follows vitest & playwright
+    // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
     await new Promise<void>((fixtureResolve) => {
       let useDone: (() => void) | undefined;

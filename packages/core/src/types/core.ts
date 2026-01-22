@@ -27,6 +27,7 @@ export type ProjectContext = {
   outputModule: boolean;
   configFilePath?: string;
   normalizedConfig: NormalizedProjectConfig;
+  _globalSetups: boolean;
 };
 
 type RunningModules = Map<
@@ -40,6 +41,8 @@ type RunningModules = Map<
 export type RstestTestState = {
   getRunningModules: () => RunningModules;
   getTestModules: () => TestFileResult[];
+  /** Get the test files paths. return `undefined` in watch mode. */
+  getTestFiles: () => string[] | undefined;
 };
 
 export type RstestContext = {

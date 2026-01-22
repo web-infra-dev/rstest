@@ -1,4 +1,6 @@
+import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
@@ -9,7 +11,7 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18'],
+      syntax: ['node 18.12.0'],
       experiments: {
         advancedEsm: true,
       },
@@ -75,10 +77,9 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
-        },
-        define: {
-          RSTEST_VERSION: JSON.stringify(version),
+          globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
       },
       tools: {
@@ -90,6 +91,10 @@ export default defineConfig({
                 {
                   from: 'src/core/plugins/mockRuntimeCode.js',
                   to: 'mockRuntimeCode.js',
+                },
+                {
+                  from: 'src/pool/rstestSuppressWarnings.cjs',
+                  to: 'rstestSuppressWarnings.cjs',
                 },
                 {
                   from: 'src/core/plugins/importActualLoader.mjs',
@@ -118,9 +123,57 @@ export default defineConfig({
         },
       },
     },
+    {
+      id: 'browser_runtime',
+      format: 'esm',
+      syntax: 'es2021',
+      dts: {
+        bundle: true,
+      },
+      source: {
+        entry: {
+          index: './src/browserRuntime.ts',
+        },
+      },
+      output: {
+        target: 'web',
+        distPath: 'dist/browser-runtime',
+        // Enable sourcemap for browser runtime to support inline snapshot
+        // When compiled by @rstest/browser, extractSourceMap merges this sourcemap
+        sourceMap: true,
+        minify: {
+          jsOptions: {
+            minimizerOptions: {
+              mangle: false,
+              minify: false,
+              compress: {
+                defaults: false,
+                unused: true,
+                dead_code: true,
+                toplevel: true,
+                // fix `Couldn't infer stack frame for inline snapshot` error
+                // should keep function name __INLINE_SNAPSHOT__ used to filter stack trace
+                keep_fnames: true,
+              },
+              format: {
+                comments: 'some',
+                preserve_annotations: true,
+              },
+            },
+          },
+        },
+      },
+      plugins: [pluginNodePolyfill()],
+    },
   ],
   performance: {
     printFileSize: !isBuildWatch,
+  },
+  source: {
+    define: {
+      RSTEST_VERSION: JSON.stringify(version),
+      PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
+    },
   },
   tools: {
     rspack: {

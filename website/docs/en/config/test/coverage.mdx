@@ -38,7 +38,7 @@ All files |     100 |      100 |     100 |     100 |
 
 - **Type:** `boolean`
 - **Default:** `false`
-- **CLI:** `--coverage`, `--coverage=false`
+- **CLI:** `--coverage`, `--coverage=false`, `--no-coverage`
 
 Enable or disable test coverage collection.
 
@@ -125,7 +125,6 @@ export default defineConfig({
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
-  '**/[.]*',
   '**/*.d.ts',
   '**/*.{test,spec}.[jt]s',
   '**/*.{test,spec}.[cm][jt]s',

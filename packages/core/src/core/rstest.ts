@@ -43,7 +43,7 @@ export class Rstest implements RstestContext {
   public command: RstestCommand;
   public fileFilters?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter | JUnitReporter)[];
+  public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public version: string;
   public rootPath: string;
@@ -61,6 +61,13 @@ export class Rstest implements RstestContext {
   public testState: RstestTestState = {
     getRunningModules: () => this.stateManager.runningModules,
     getTestModules: () => this.stateManager.testModules,
+    getTestFiles: () => {
+      // TODO: support collecting test files in watch mode
+      if (this.command === 'watch') {
+        return undefined;
+      }
+      return this.stateManager.testFiles;
+    },
   };
 
   public projects: ProjectContext[] = [];
@@ -89,18 +96,10 @@ export class Rstest implements RstestContext {
       root: rootPath,
     });
 
-    const reporters =
-      command !== 'list'
-        ? createReporters(rstestConfig.reporters, {
-            rootPath,
-            config: rstestConfig,
-            testState: this.testState,
-          })
-        : [];
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
-    this.reporters = reporters;
+
     this.snapshotManager = snapshotManager;
     this.version = RSTEST_VERSION;
     this.rootPath = rootPath;
@@ -136,9 +135,10 @@ export class Rstest implements RstestContext {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
+            _globalSetups: false,
             outputModule:
               config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE === 'true',
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
             environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
@@ -147,14 +147,28 @@ export class Rstest implements RstestContext {
           {
             configFilePath,
             rootPath,
+            _globalSetups: false,
             name: rstestConfig.name,
             outputModule:
               rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE === 'true',
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
         ];
+
+    const reporters =
+      command !== 'list'
+        ? createReporters(rstestConfig.reporters, {
+            rootPath,
+            config: rstestConfig,
+            testState: this.testState,
+            options: {
+              showProjectName: projects.length > 1,
+            },
+          })
+        : [];
+    this.reporters = reporters;
   }
 
   public updateReporterResultState(
@@ -211,7 +225,7 @@ export type BuiltInReporterNames = keyof typeof reportersMap;
 
 export function createReporters(
   reporters: RstestConfig['reporters'],
-  initOptions: any = {},
+  initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
@@ -221,8 +235,11 @@ export function createReporters(
       if (name in reportersMap) {
         const Reporter = reportersMap[name];
         return new Reporter({
-          ...initOptions,
-          options,
+          ...initConfig,
+          options: {
+            ...(initConfig.options || {}),
+            ...options,
+          },
         });
       }
 

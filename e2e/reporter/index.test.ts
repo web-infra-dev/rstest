@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -7,14 +7,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe.concurrent('reporters', () => {
-  it('default', async ({ onTestFinished }) => {
+  it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'index'],
       onTestFinished,
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('✗ basic > b');
+    // should show all test cases when running a single test file
+    expect(cli.stdout).toContain('- basic > c');
+  });
+
+  it('default - multiple files', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
         },
       },
     });
@@ -58,6 +76,23 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('- basic > c');
   });
 
+  it('hideSkippedTestFiles', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--hideSkippedTestFiles'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('index.test.ts');
+    expect(cli.stdout).not.toContain('allSkipped.test.ts');
+  });
+
   it('custom', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
@@ -94,6 +129,7 @@ describe.concurrent('reporters', () => {
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);
 
+    expect(cli.stdout).toContain('[custom reporter] onTestRunStart');
     expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
   });
 

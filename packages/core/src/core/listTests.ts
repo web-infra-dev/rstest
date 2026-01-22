@@ -2,33 +2,49 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { createPool } from '../pool';
 import type {
+  FormattedError,
   ListCommandOptions,
   ListCommandResult,
   Location,
+  ProjectContext,
   RstestContext,
   Test,
 } from '../types';
 import {
   bgColor,
   color,
-  getSetupFiles,
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
 } from '../utils';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-const collectTests = async ({
+/**
+ * Collect tests from node mode projects using Rsbuild and worker pool.
+ */
+const collectNodeTests = async ({
   context,
+  nodeProjects,
   globTestSourceEntries,
 }: {
   context: RstestContext;
+  nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+  if (nodeProjects.length === 0) {
+    return {
+      list: [],
+      getSourceMap: async (_name: string) => null,
+      close: async () => {},
+    };
+  }
+
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    nodeProjects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -39,17 +55,32 @@ const collectTests = async ({
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
+    globalSetupFiles,
+    isWatchMode: false,
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      projects: nodeProjects.map((p) => p.normalizedConfig),
     },
     setupFiles,
     rsbuildInstance,
@@ -63,14 +94,43 @@ const collectTests = async ({
   const updateSnapshot = context.snapshotManager.options.updateSnapshot;
 
   const returns = await Promise.all(
-    context.projects.map(async (project) => {
+    nodeProjects.map(async (project) => {
       const {
         entries,
         setupEntries,
+        globalSetupEntries,
         getSourceMaps,
         getAssetFiles,
         assetNames,
       } = await getRsbuildStats({ environmentName: project.environmentName });
+
+      if (
+        entries.length &&
+        globalSetupEntries.length &&
+        !project._globalSetups
+      ) {
+        project._globalSetups = true;
+        const files = globalSetupEntries.flatMap((e) => e.files!);
+        const assetFiles = await getAssetFiles(files);
+
+        const sourceMaps = await getSourceMaps(files);
+
+        const { success, errors } = await runGlobalSetup({
+          globalSetupEntries,
+          assetFiles,
+          sourceMaps,
+          interopDefault: true,
+          outputModule: project.outputModule,
+        });
+        if (!success) {
+          return {
+            list: [],
+            errors,
+            assetNames,
+            getSourceMaps: () => null,
+          };
+        }
+      }
 
       const list = await pool.collectTests({
         entries,
@@ -91,15 +151,46 @@ const collectTests = async ({
 
   return {
     list: returns.flatMap((r) => r.list),
+    errors: returns.flatMap((r) => r.errors || []),
     getSourceMap: async (name: string) => {
       const resource = returns.find((r) => r.assetNames.includes(name));
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
+      await runGlobalTeardown();
       await closeServer();
       await pool.close();
     },
   };
+};
+
+/**
+ * Collect tests from browser mode projects using headless browser.
+ */
+const collectBrowserTests = async ({
+  context,
+  browserProjects,
+}: {
+  context: RstestContext;
+  browserProjects: ProjectContext[];
+}): Promise<{
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+}> => {
+  if (browserProjects.length === 0) {
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
+
+  const { loadBrowserModule } = await import('./browserLoader');
+  // Pass project roots to resolve @rstest/browser from project-specific node_modules
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { listBrowserTests } = await loadBrowserModule({ projectRoots });
+  // Cast to any because listBrowserTests expects Rstest but we have RstestContext
+  // In practice, context is always a Rstest instance
+  return listBrowserTests(context as any);
 };
 
 const collectTestFiles = async ({
@@ -122,8 +213,55 @@ const collectTestFiles = async ({
   }
   return {
     close: async () => {},
+    errors: [],
     list,
     getSourceMap: async (_name: string) => null,
+  };
+};
+
+/**
+ * Collect all tests by separating browser and node mode projects.
+ */
+const collectAllTests = async ({
+  context,
+  globTestSourceEntries,
+}: {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+}): Promise<{
+  errors?: FormattedError[];
+  list: ListCommandResult[];
+  getSourceMap: (name: string) => Promise<string | null | undefined>;
+  close: () => Promise<void>;
+}> => {
+  // Separate browser and node mode projects
+  const browserProjects = context.projects.filter(
+    (p) => p.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (p) => !p.normalizedConfig.browser.enabled,
+  );
+
+  // Collect from both in parallel
+  const [nodeResult, browserResult] = await Promise.all([
+    collectNodeTests({
+      context,
+      nodeProjects,
+      globTestSourceEntries,
+    }),
+    collectBrowserTests({
+      context,
+      browserProjects,
+    }),
+  ]);
+
+  return {
+    errors: nodeResult.errors,
+    list: [...nodeResult.list, ...browserResult.list],
+    getSourceMap: nodeResult.getSourceMap,
+    close: async () => {
+      await Promise.all([nodeResult.close(), browserResult.close()]);
+    },
   };
 };
 
@@ -159,12 +297,17 @@ export async function listTests(
     return entries;
   };
 
-  const { list, close, getSourceMap } = filesOnly
+  const {
+    list,
+    close,
+    getSourceMap,
+    errors = [],
+  } = filesOnly
     ? await collectTestFiles({
         context,
         globTestSourceEntries,
       })
-    : await collectTests({
+    : await collectAllTests({
         context,
         globTestSourceEntries,
       });
@@ -201,7 +344,7 @@ export async function listTests(
     }
   };
 
-  const hasError = list.some((file) => file.errors?.length);
+  const hasError = list.some((file) => file.errors?.length) || errors.length;
   const showProject = context.projects.length > 1;
 
   if (hasError) {
@@ -224,6 +367,21 @@ export async function listTests(
             rootPath,
           );
         }
+      }
+    }
+
+    if (errors.length) {
+      const { printError } = await import('../utils/error');
+      for (const error of errors || []) {
+        logger.stderr(bgColor('bgRed', ' Unhandled Error '));
+        await printError(
+          error,
+          async (name) => {
+            const sourceMap = await getSourceMap(name);
+            return sourceMap ? JSON.parse(sourceMap) : null;
+          },
+          rootPath,
+        );
       }
     }
 

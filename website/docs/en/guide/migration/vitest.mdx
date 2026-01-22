@@ -1,4 +1,4 @@
-# Migrating from vitest
+# Migrating from Vitest
 
 If you are using the Rstack (Rsbuild / Rslib / Rspack, etc.) toolchain, migrating to Rstest will bring you a consistent development experience.
 
@@ -68,7 +68,7 @@ Rstest provides Vitest-compatible APIs. Therefore, you only need to change the i
 + import { describe, expect, it, test } from '@rstest/core';
 ```
 
-Rstest provides the `rstest` API, which you can use to access Rstest's utility functions, such as `rstest.fn()` and `rstest.mock()`. Just like Vitest's `vi.fn()` and `vi.mock()`. More utility functions can be found in [Rstest APIs](/api/).
+Rstest provides the `rstest` API, which you can use to access Rstest's utility functions, such as `rstest.fn()` and `rstest.mock()`. Just like Vitest's `vi.fn()` and `vi.mock()`. More utility functions can be found in [Rstest APIs](/api/runtime-api/).
 
 ```diff
 - const fn = vi.fn();
@@ -81,7 +81,7 @@ fn.mockResolvedValue('foo');
 
 When you need to mock a module's return value, Rstest does not support returning an async function.
 
-As an alternative, Rstest provides synchronous [importActual](/api/rstest/mock-modules#rsimportactual) capability, allowing you to import the unmocked module implementation through static import statements:
+As an alternative, Rstest provides synchronous [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) capability, allowing you to import the unmocked module implementation through static import statements:
 
 ```ts
 import * as apiActual from './api' with { rstest: 'importActual' };

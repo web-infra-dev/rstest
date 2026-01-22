@@ -33,7 +33,7 @@ export async function waitForConfigValue<T>({
 export function waitFor<T = void>(
   cb: () => T,
   {
-    timeoutMs = 2000,
+    timeoutMs = 10_000,
     pollMs = 25,
   }: {
     timeoutMs?: number;
@@ -68,6 +68,22 @@ export function getProjectItems(testController: vscode.TestController) {
   const folders = getTestItems(testController.items);
   assert.equal(folders.length, 1);
   return getTestItems(folders[0].children);
+}
+
+export function getTestItemByLabels(
+  collection: vscode.TestItemCollection,
+  labels: string[],
+) {
+  const item = labels.reduce(
+    (item, label) =>
+      item &&
+      getTestItems(item.children).find((child) => child.label === label),
+    {
+      children: collection,
+    } as vscode.TestItem | undefined,
+  );
+  assert.ok(item);
+  return item;
 }
 
 // Helper: recursively transform a TestItem into a label-only tree.

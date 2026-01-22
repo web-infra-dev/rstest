@@ -37,8 +37,9 @@ export class Worker {
           ...initializedConfig,
           ...overrideConfig,
           reporters: [
-            new ProgressReporter(),
+            // place default reporter first to ensure output is flushed
             ['default', { logger: new ProgressLogger() }],
+            new ProgressReporter(),
           ],
           coverage: {
             ...initializedConfig.coverage,
@@ -79,6 +80,12 @@ export class Worker {
       logger.error('Test run failed', error);
       throw error;
     }
+  }
+
+  public async listTests(data: WorkerInitOptions) {
+    const rstest = await this.init({ ...data, command: 'list' });
+    const res = await rstest.listTests({});
+    return res;
   }
 }
 

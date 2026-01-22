@@ -154,6 +154,11 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--hookTimeout <value>`         | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hook-timeout)                                                                                     |
 | `--retry <retry>`               | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                      |
 | `--bail [number]`               | Abort the test run after the specified number of test failures, see [bail](/config/test/bail)                                                                     |
+| `--browser, --browser.enabled`  | Run tests in Browser Mode, see [browser](/config/test/browser)                                                                                                    |
+| `--browser.name <name>`         | Browser to use: `chromium`, `firefox`, `webkit` (default: `chromium`), see [browser](/config/test/browser)                                                        |
+| `--browser.headless`            | Run browser in headless mode (default: `true` in CI), see [browser](/config/test/browser)                                                                         |
+| `--browser.port <port>`         | Port for the Browser Mode dev server, see [browser](/config/test/browser)                                                                                         |
+| `--browser.strictPort`          | Exit if the specified port is already in use, see [browser](/config/test/browser)                                                                                 |
 | `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                            |
 | `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                     |
 | `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                      |
@@ -164,6 +169,7 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--includeSource <pattern>`     | Specify in-source testing file matching pattern, see [includeSource](/config/test/include-source)                                                                 |
 | `--logHeapUsage`                | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                   |
 | `--hideSkippedTests`            | Do not display skipped test logs, see [hideSkippedTests](/config/test/hide-skipped-tests)                                                                         |
+| `--hideSkippedTestFiles`        | Do not display skipped test file logs, see [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                           |
 | `--chaiConfig <config>`         | Customize Chai configuration, see [chaiConfig](/config/test/chai-config)                                                                                          |
 | `--env <key=value>`             | Set environment variables, see [env](/config/test/env)                                                                                                            |
 | `--pool <options>`              | Configure test pool options, see [pool](/config/test/pool)                                                                                                        |
@@ -175,6 +181,21 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--projects <projects>`         | Configure multi-project testing, see [projects](/config/test/projects)                                                                                            |
 | `-h, --help`                    | Display help for command                                                                                                                                          |
 | `-v, --version`                 | Display version                                                                                                                                                   |
+
+### Boolean option negation
+
+For boolean options, you can use the `--no-<option>` prefix to set them to `false`. For example:
+
+```bash
+# These are equivalent:
+npx rstest --isolate false
+npx rstest --no-isolate
+
+# More examples:
+npx rstest --no-coverage      # Disable coverage
+npx rstest --no-globals        # Disable global APIs
+npx rstest --no-clearMocks     # Disable auto-clearing mocks
+```
 
 ## CLI shortcuts
 

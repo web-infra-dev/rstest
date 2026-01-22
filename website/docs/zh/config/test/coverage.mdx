@@ -38,7 +38,7 @@ All files |     100 |      100 |     100 |     100 |
 
 - **类型：** `boolean`
 - **默认值：** `false`
-- **CLI：** `--coverage`, `--coverage=false`
+- **CLI：** `--coverage`, `--coverage=false`, `--no-coverage`
 
 启用或禁用测试覆盖率收集。
 
@@ -125,7 +125,6 @@ export default defineConfig({
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
-  '**/[.]*',
   '**/*.d.ts',
   '**/*.{test,spec}.[jt]s',
   '**/*.{test,spec}.[cm][jt]s',

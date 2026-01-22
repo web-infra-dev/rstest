@@ -1,5 +1,6 @@
+import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import path from 'pathe';
+import pathe from 'pathe';
 import type { RstestContext } from '../../types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
 
@@ -15,6 +16,15 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:basic',
   setup: (api) => {
+    api.modifyBundlerChain((chain, { CHAIN_ID }) => {
+      // Rsbuild sets splitChunks to false for the node target.
+      // Use modifyBundlerChain to re-enable it so users can override it.
+      chain.optimization.splitChunks({ chunks: 'all' });
+
+      // Port https://github.com/web-infra-dev/rsbuild/pull/5955 before it merged into Rsbuild.
+      // Use Rspack default behavior
+      chain.module.rule(CHAIN_ID.RULE.JS).delete('type');
+    });
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
         const {
@@ -68,7 +78,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
             tools: {
               rspack: (config, { isProd, rspack }) => {
-                config.context = rootPath;
+                // keep windows path as native path
+                config.context = path.resolve(rootPath);
                 // treat `test` as development mode
                 config.mode = isProd ? 'production' : 'development';
                 config.output ??= {};
@@ -89,9 +100,16 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                     injectModulePathName: true,
                     importMetaPathName: true,
                     hoistMockModule: true,
-                    manualMockRoot: path.resolve(rootPath, '__mocks__'),
+                    manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
                   }),
                 );
+
+                config.module.rules ??= [];
+                config.module.rules.push({
+                  test: /\.mts$/,
+                  // Treated mts as strict ES modules.
+                  type: 'javascript/esm',
+                });
 
                 if (outputModule) {
                   config.plugins.push(
@@ -131,7 +149,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
                 config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
 
-                if (testEnvironment === 'node') {
+                if (testEnvironment.name === 'node') {
                   // skip `module` field in Node.js environment.
                   // ESM module resolved by module field is not always a native ESM module
                   config.resolve.mainFields = config.resolve.mainFields?.filter(

@@ -22,6 +22,7 @@ export class DefaultReporter implements Reporter {
   protected config: NormalizedConfig;
   private options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  private testState: RstestTestState;
 
   constructor({
     rootPath,
@@ -37,29 +38,51 @@ export class DefaultReporter implements Reporter {
     this.rootPath = rootPath;
     this.config = config;
     this.options = options;
-    if (isTTY() || options.logger) {
+    this.testState = testState;
+    // Note: StatusRenderer is created lazily in onTestFileStart() to avoid
+    // intercepting stdout/stderr too early. This ensures that errors occurring
+    // before tests start (e.g., Playwright browser not installed) are visible
+    // and not cleared by WindowRenderer's TTY control sequences.
+  }
+
+  /**
+   * Lazily create StatusRenderer on first test file start.
+   * This avoids intercepting stdout/stderr before tests actually begin,
+   * ensuring early errors (like missing Playwright browsers) remain visible.
+   */
+  private ensureStatusRenderer(): void {
+    if (this.statusRenderer) return;
+    if (isTTY() || this.options.logger) {
       this.statusRenderer = new StatusRenderer(
-        rootPath,
-        testState,
-        options.logger,
+        this.rootPath,
+        this.testState,
+        this.options.logger,
       );
     }
   }
 
   onTestFileStart(): void {
+    this.ensureStatusRenderer();
     this.statusRenderer?.onTestFileStart();
   }
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
 
+    if (this.config.hideSkippedTestFiles && test.status === 'skip') {
+      return;
+    }
+
     const relativePath = relative(this.rootPath, test.testPath);
     const { slowTestThreshold } = this.config;
 
-    logFileTitle(test, relativePath);
+    logFileTitle(test, relativePath, false, this.options.showProjectName);
+    // Always display all test cases when running a single test file
+    const showAllCases = this.testState.getTestFiles()?.length === 1;
 
     for (const result of test.results) {
       const isDisplayed =
+        showAllCases ||
         result.status === 'fail' ||
         (result.duration ?? 0) > slowTestThreshold ||
         (result.retryCount ?? 0) > 0;
@@ -118,12 +141,14 @@ export class DefaultReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     filterRerunTestPaths,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
@@ -135,6 +160,7 @@ export class DefaultReporter implements Reporter {
     await printSummaryErrorLogs({
       testResults,
       results,
+      unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
       filterRerunTestPaths,

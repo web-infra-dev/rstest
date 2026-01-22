@@ -12,12 +12,16 @@ import { parseErrorStacktrace } from '../../core/src/utils/error';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
+import { TestFile, testData } from './testTree';
 
 export class TestRunReporter implements Reporter {
   constructor(
     private run?: vscode.TestRun,
     private project?: Project,
     private path: string[] = [],
+    private coverageEnabled?: boolean,
+    private onFinish?: () => void,
+    private createTestRun?: () => vscode.TestRun,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -60,6 +64,17 @@ export class TestRunReporter implements Reporter {
     if (!fileItem) return;
 
     this.run?.started(fileItem);
+  }
+  onTestFileReady(test: TestFileInfo) {
+    const fileTestItem = this.project?.testFiles.get(
+      vscode.Uri.file(test.testPath).toString(),
+    )?.testItem;
+    if (fileTestItem) {
+      const data = testData.get(fileTestItem);
+      if (data instanceof TestFile) {
+        data.updateFromList(test.tests);
+      }
+    }
   }
   onTestFileResult(test: TestFileResult) {
     // only update test file result when explicit run itself or parent
@@ -138,6 +153,34 @@ export class TestRunReporter implements Reporter {
         break;
       }
     }
+  }
+
+  private isFirstRun = true;
+
+  async onTestRunStart() {
+    if (!this.isFirstRun) {
+      this.run = this.createTestRun?.();
+    }
+  }
+
+  async onTestRunEnd() {
+    if (this.coverageEnabled) return;
+
+    if (this.isFirstRun) {
+      this.onFinish?.();
+    } else {
+      this.run?.end();
+    }
+    this.isFirstRun = false;
+  }
+
+  async onCoverageEnd() {
+    if (this.isFirstRun) {
+      this.onFinish?.();
+    } else {
+      this.run?.end();
+    }
+    this.isFirstRun = false;
   }
 
   async onCoverage(

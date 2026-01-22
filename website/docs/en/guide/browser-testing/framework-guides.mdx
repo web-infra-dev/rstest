@@ -1,0 +1,221 @@
+# Framework guides
+
+This guide provides testing configuration examples for various frontend frameworks in Browser Mode.
+
+:::tip Prerequisites
+Before continuing, make sure you've completed the basic Browser Mode setup. You can initialize using either method:
+
+- **Automatic initialization**: Run `npx rstest init browser`
+- **Manual configuration**: Follow the [Getting Started](/guide/browser-testing/getting-started#manual-configuration) guide
+
+Then follow this guide for framework-specific configuration.
+:::
+
+:::info Framework Support
+Currently, Browser Mode only provides out-of-the-box support for React. Other frameworks (Vue, Svelte, etc.) will be supported in the future.
+:::
+
+import { PackageManagerTabs } from '@theme';
+
+## React
+
+### Install dependencies
+
+<PackageManagerTabs command="add @rstest/browser-react -D" />
+
+[@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) is the official toolkit for testing React in Rstest Browser Mode. It provides:
+
+- `render`: Renders React components to the real browser DOM and returns a container element for querying and assertions
+- `renderHook`: Tests custom Hooks without creating wrapper components
+- Automatic cleanup: Automatically unmounts components from previous tests before each new test, preventing test interference
+
+### Component testing
+
+After the `render` function renders a component to the DOM, it returns `container` (the component's container element). You can use native DOM APIs or Testing Library to query elements and make assertions:
+
+```tsx title="src/Counter.test.tsx"
+import { render } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { Counter } from './Counter';
+
+test('renders and increments', async () => {
+  const { container } = await render(<Counter />);
+
+  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
+    '0',
+  );
+
+  container.querySelector('button')!.click();
+  expect(container.querySelector('[data-testid="count"]')?.textContent).toBe(
+    '1',
+  );
+});
+```
+
+If a component depends on Context (like Theme, Auth, or Store), use the `wrapper` option to wrap it with Providers:
+
+```tsx
+const Wrapper = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider theme="dark">{children}</ThemeProvider>
+);
+
+test('renders with theme context', async () => {
+  const { container } = await render(<MyComponent />, { wrapper: Wrapper });
+  // ...
+});
+```
+
+### Hook testing
+
+`renderHook` lets you test custom Hooks without writing wrapper components. It returns:
+
+- `result.current`: The Hook's current return value, which updates as the Hook changes
+- `act`: Wraps operations that trigger state updates, ensuring assertions run after updates complete
+- `rerender`: Calls the Hook again with new props
+
+```tsx title="src/useCounter.test.tsx"
+import { renderHook } from '@rstest/browser-react';
+import { expect, test } from '@rstest/core';
+import { useCounter } from './useCounter';
+
+test('useCounter increments', async () => {
+  const { result, act } = await renderHook(() => useCounter(0));
+
+  expect(result.current.count).toBe(0);
+
+  await act(() => result.current.increment());
+  expect(result.current.count).toBe(1);
+});
+```
+
+If a Hook depends on props, use `initialProps` to pass initial values, and `rerender` to simulate prop changes:
+
+```tsx
+test('hook reacts to prop changes', async () => {
+  const { result, rerender } = await renderHook(
+    (props) => useMultiplier(props?.value ?? 0),
+    { initialProps: { value: 5 } },
+  );
+
+  expect(result.current).toBe(10);
+
+  await rerender({ value: 10 });
+  expect(result.current).toBe(20);
+});
+```
+
+### Additional configuration
+
+- **React Strict Mode**: Enable with `configure({ reactStrictMode: true })` to help catch potential issues
+- **Manual cleanup**: Automatic cleanup runs before each test by default. For manual control, import from `@rstest/browser-react/pure` and call `cleanup()`
+
+See the package documentation for the complete API.
+
+## Vanilla JS/TS
+
+For projects without a framework, you can test directly using native DOM APIs.
+
+### Install dependencies (Optional)
+
+If you want to use Testing Library's query methods, install these dependencies:
+
+<PackageManagerTabs command="add @testing-library/dom @testing-library/user-event -D" />
+
+### Example tests
+
+Testing with native DOM APIs:
+
+```ts title="src/counter.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('counter increments on click', () => {
+  // Create DOM structure
+  const container = document.createElement('div');
+  container.innerHTML = `
+    <span id="count">0</span>
+    <button id="increment">+</button>
+  `;
+  document.body.appendChild(container);
+
+  // Setup event handler
+  let count = 0;
+  const countEl = container.querySelector('#count')!;
+  const button = container.querySelector('#increment')!;
+
+  button.addEventListener('click', () => {
+    count++;
+    countEl.textContent = String(count);
+  });
+
+  // Test interaction
+  button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  expect(countEl.textContent).toBe('1');
+});
+```
+
+Testing with Testing Library:
+
+```ts title="src/dropdown.test.ts"
+import { expect, test } from '@rstest/core';
+import { getByRole, queryByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { createDropdown } from './dropdown';
+
+test('toggles dropdown on click', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  createDropdown(container);
+
+  const trigger = getByRole(container, 'button');
+
+  // Initial state: menu hidden
+  expect(queryByRole(container, 'menu')).toBeNull();
+
+  // Click to open menu
+  await userEvent.click(trigger);
+  expect(getByRole(container, 'menu')).toBeTruthy();
+});
+```
+
+### Testing web components
+
+```ts title="src/my-element.test.ts"
+import { expect, test } from '@rstest/core';
+import './my-element'; // Register custom element
+
+test('renders content in shadow DOM', () => {
+  const el = document.createElement('my-element');
+  el.setAttribute('name', 'World');
+  document.body.appendChild(el);
+
+  const shadowRoot = el.shadowRoot!;
+  expect(shadowRoot.textContent).toContain('Hello, World!');
+});
+```
+
+## Multi-Framework Projects
+
+If your project includes multiple frameworks, you can use [projects](/config/test/projects) configuration to set up independent test environments for each:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'react',
+      include: ['src/react/**/*.test.{ts,tsx}'],
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+      },
+    },
+    {
+      name: 'node',
+      include: ['src/utils/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+  ],
+});
+```

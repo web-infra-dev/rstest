@@ -35,6 +35,10 @@ class MyReporter implements Reporter {
     reporterResult.push('[custom reporter] onTestCaseResult');
   }
 
+  onTestRunStart() {
+    reporterResult.push('[custom reporter] onTestRunStart');
+  }
+
   onTestRunEnd({
     results: _results,
     testResults: _testResults,

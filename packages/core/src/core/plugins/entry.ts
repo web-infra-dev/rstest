@@ -30,12 +30,14 @@ export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
   isWatch,
   globTestSourceEntries,
   setupFiles,
+  globalSetupFiles,
   context,
 }) => ({
   name: 'rstest:entry-watch',
@@ -48,10 +50,13 @@ export const pluginEntryWatch: (params: {
           return {
             ...sourceEntries,
             ...setupFiles[environment.name],
+            ...(globalSetupFiles?.[environment.name] || {}),
           };
         };
 
         config.watchOptions ??= {};
+        // FIXME: Temporarily default to 5 to debounce rerun in watch mode.
+        config.watchOptions.aggregateTimeout = 5;
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
@@ -68,6 +73,8 @@ export const pluginEntryWatch: (params: {
         config.watchOptions.ignored.push(
           TEMP_RSTEST_OUTPUT_DIR_GLOB,
           context.normalizedConfig.coverage.reportsDirectory,
+          // ignore global setup files since they are only run once
+          ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
 
@@ -87,6 +94,7 @@ export const pluginEntryWatch: (params: {
         const sourceEntries = await globTestSourceEntries(environment.name);
         config.entry = {
           ...setupFiles[environment.name],
+          ...(globalSetupFiles?.[environment.name] || {}),
           ...sourceEntries,
         };
       }

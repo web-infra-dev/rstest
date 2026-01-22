@@ -23,6 +23,13 @@ describe('jsdom', () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'jsdom');
     await expectExecSuccess();
   });
+
+  it('should run test correctly with custom environment options', async () => {
+    const { expectExecSuccess } = await runCli('test/envOptions', undefined, {
+      args: ['--config', 'rstest.envOptions.config.ts'],
+    });
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
@@ -45,6 +52,11 @@ describe('happy-dom', () => {
 
   it('should run test correctly with jest-dom', async () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should run TextEncoder correctly in happy-dom', async () => {
+    const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
     await expectExecSuccess();
   });
 });

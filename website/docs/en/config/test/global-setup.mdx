@@ -1,0 +1,125 @@
+# globalSetup
+
+- **Type:** `string | string[]`
+- **Default:** `undefined`
+
+The `globalSetup` option in Rstest allows you to run setup and teardown code that executes once before all tests and after all tests complete. This is useful for:
+
+- Starting and stopping databases
+- Initializing test services
+- Cleaning up resources after test runs
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./global-setup.ts'],
+  // or multiple files
+  globalSetup: ['./setup-db.ts', './setup-server.ts'],
+  // your other config...
+});
+```
+
+## Global setup file formats
+
+You can write global setup files in two formats:
+
+### Named functions (recommended)
+
+```ts
+// global-setup.ts
+
+export async function setup() {
+  console.log('Setting up test environment...');
+
+  // Initialize database, start services, etc.
+  // await startDatabase();
+}
+
+export async function teardown() {
+  console.log('Tearing down test environment...');
+
+  // Cleanup resources
+  // await stopDatabase();
+}
+```
+
+### Default function returning teardown
+
+```ts
+// global-setup.ts
+export default async function globalSetup() {
+  console.log('Setting up test environment...');
+
+  // Initialize resources
+  const database = await connectDatabase();
+  const server = await startTestServer();
+
+  // Return teardown function
+  return async () => {
+    console.log('Cleaning up resources...');
+    await server.stop();
+    await database.disconnect();
+  };
+}
+```
+
+:::note
+Global setup is running in a different global context, so your tests don't have access to variables defined here.
+:::
+
+## Multiple global setup files
+
+When using multiple global setup files:
+
+- Setup functions execute sequentially in the order provided
+- Teardown functions execute in reverse order (LIFO - Last In, First Out)
+- If any setup fails, the entire test run fails
+
+## Differences from setupFiles
+
+| Feature   | globalSetup                           | setupFiles                |
+| --------- | ------------------------------------- | ------------------------- |
+| Execution | Once before all tests                 | Before each test file     |
+| Teardown  | Supported                             | Not supported             |
+| Use Case  | Global resources, databases, services | Per-test utilities, mocks |
+
+## Example: database setup
+
+```ts
+// db-setup.ts
+let dbConnection: any;
+
+export async function setup() {
+  const { MongoClient } = await import('mongodb');
+  const client = new MongoClient(process.env.TEST_MONGODB_URI!);
+  await client.connect();
+
+  dbConnection = client.db('test');
+
+  // Seed test data
+  await dbConnection.collection('users').insertMany([
+    { name: 'John', email: 'john@example.com' },
+    { name: 'Jane', email: 'jane@example.com' },
+  ]);
+
+  console.log('✓ Database connected and seeded');
+}
+
+export async function teardown() {
+  if (dbConnection) {
+    await dbConnection.dropDatabase();
+    await dbConnection.client.close();
+    console.log('✓ Database cleaned up');
+  }
+}
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  globalSetup: ['./db-setup.ts'],
+  include: ['**/*.test.ts'],
+});
+```

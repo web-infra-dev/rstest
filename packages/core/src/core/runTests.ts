@@ -1,22 +1,78 @@
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo } from '../types';
-import {
-  clearScreen,
-  color,
-  getSetupFiles,
-  getTestEntries,
-  logger,
-} from '../utils';
+import { clearScreen, color, getTestEntries, logger } from '../utils';
+import { type BrowserTestRunResult, loadBrowserModule } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
+/**
+ * Run browser mode tests.
+ * Returns the result for unified reporter output.
+ */
+async function runBrowserModeTests(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+  options: { skipOnTestRunEnd: boolean },
+): Promise<BrowserTestRunResult | void> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  return runBrowserTests(context, options);
+}
+
 export async function runTests(context: Rstest): Promise<void> {
+  // Separate browser mode and node mode projects
+  const browserProjects = context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
+
+  const hasBrowserTests =
+    context.normalizedConfig.browser.enabled || browserProjects.length > 0;
+  const hasNodeTests = nodeProjects.length > 0;
+
+  const isWatchMode = context.command === 'watch';
+
+  // For non-watch mode with both browser and node tests, we need to unify reporter output
+  const shouldUnifyReporter = !isWatchMode && hasBrowserTests && hasNodeTests;
+
+  // If only browser tests, run them and return
+  if (hasBrowserTests && !hasNodeTests) {
+    await runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: false,
+    });
+    return;
+  }
+
+  // If only node tests, run them (handled below)
+  // If both, run them in parallel
+
+  let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
+
+  if (hasBrowserTests) {
+    // Start browser tests in parallel (don't await yet)
+    browserResultPromise = runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: shouldUnifyReporter,
+    });
+  }
+
+  // Skip node mode tests if no node mode projects
+  if (!hasNodeTests) {
+    if (browserResultPromise) {
+      await browserResultPromise;
+    }
+    return;
+  }
+
+  const projects = nodeProjects;
+
   const {
     rootPath,
     reporters,
-    projects,
     snapshotManager,
     command,
     normalizedConfig: { coverage },
@@ -53,8 +109,10 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    projects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -65,38 +123,52 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      projects: projects.map((p) => p.normalizedConfig),
     },
-    globTestSourceEntries:
-      command === 'watch'
-        ? globTestSourceEntries
-        : async (name) => {
-            if (entriesCache.has(name)) {
-              return entriesCache.get(name)!.entries;
-            }
-            return globTestSourceEntries(name);
-          },
+    isWatchMode,
+    globTestSourceEntries: isWatchMode
+      ? globTestSourceEntries
+      : async (name) => {
+          if (entriesCache.has(name)) {
+            return entriesCache.get(name)!.entries;
+          }
+          return globTestSourceEntries(name);
+        },
     setupFiles,
+    globalSetupFiles,
     rsbuildInstance,
     rootPath,
   });
 
+  const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+    (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+    [],
+  );
+
   const recommendWorkerCount =
-    command === 'watch'
-      ? Number.POSITIVE_INFINITY
-      : Array.from(entriesCache.values()).reduce(
-          (acc, entry) => acc + Object.keys(entry.entries).length,
-          0,
-        );
+    command === 'watch' ? Number.POSITIVE_INFINITY : entryFiles.length;
 
   const pool = await createPool({
     context,
@@ -126,18 +198,26 @@ export async function runTests(context: Rstest): Promise<void> {
     mode?: Mode;
     buildStart?: number;
   } = {}) => {
+    for (const reporter of reporters) {
+      await reporter.onTestRunStart?.();
+    }
+
     let testStart: number;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
     context.stateManager.reset();
 
+    // TODO: this is not the best practice for collecting test files
+    context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
+
     const returns = await Promise.all(
-      context.projects.map(async (p) => {
+      projects.map(async (p) => {
         const {
           assetNames,
           entries,
           setupEntries,
+          globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
           affectedEntries,
@@ -148,6 +228,33 @@ export async function runTests(context: Rstest): Promise<void> {
         });
 
         testStart ??= Date.now();
+
+        // Global setup only run once per project
+        // Global setup runs only if there is at least one running test
+        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
+          p._globalSetups = true;
+          const files = globalSetupEntries.flatMap((e) => e.files!);
+          const assetFiles = await getAssetFiles(files);
+          const sourceMaps = await getSourceMaps(files);
+
+          const { success, errors } = await runGlobalSetup({
+            globalSetupEntries,
+            assetFiles,
+            sourceMaps,
+            interopDefault: true,
+            outputModule: p.outputModule,
+          });
+          if (!success) {
+            return {
+              results: [],
+              testResults: [],
+              errors,
+              assetNames,
+              // sourcemap is useless since we install source-map-support in worker
+              getSourceMaps: () => null,
+            };
+          }
+        }
 
         currentDeletedEntries.push(...deletedEntries);
 
@@ -202,14 +309,28 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const testTime = Date.now() - testStart!;
 
-    const duration = {
-      totalTime: testTime + buildTime,
-      buildTime,
-      testTime,
-    };
+    // Wait for browser tests to complete if running in parallel
+    const browserResult = browserResultPromise
+      ? await browserResultPromise
+      : undefined;
+
+    // When unifying reporter output, combine browser and node durations
+    const duration =
+      shouldUnifyReporter && browserResult
+        ? {
+            totalTime: testTime + buildTime + browserResult.duration.totalTime,
+            buildTime: buildTime + browserResult.duration.buildTime,
+            testTime: testTime + browserResult.duration.testTime,
+          }
+        : {
+            totalTime: testTime + buildTime,
+            buildTime,
+            testTime,
+          };
 
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
+    const errors = returns.flatMap((r) => r.errors || []);
 
     context.updateReporterResultState(
       results,
@@ -217,7 +338,12 @@ export async function runTests(context: Rstest): Promise<void> {
       currentDeletedEntries,
     );
 
-    if (results.length === 0) {
+    // Check for failures including browser results when unified
+    const nodeHasFailure =
+      results.some((r) => r.status === 'fail') || errors.length;
+    const browserHasFailure = shouldUnifyReporter && browserResult?.hasFailure;
+
+    if (results.length === 0 && !errors.length) {
       if (command === 'watch') {
         if (mode === 'on-demand') {
           logger.log(color.yellow('No test files need re-run.'));
@@ -241,11 +367,13 @@ export async function runTests(context: Rstest): Promise<void> {
           );
         }
 
-        context.projects.forEach((p) => {
-          if (context.projects.length > 1) {
+        projects.forEach((p) => {
+          if (projects.length > 1) {
             logger.log('');
             logger.log(color.gray('project:'), p.name);
           }
+          logger.log(color.gray('root:'), p.rootPath);
+
           logger.log(
             color.gray('include:'),
             p.normalizedConfig.include.join(color.gray(', ')),
@@ -258,7 +386,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    const isFailure = results.some((r) => r.status === 'fail');
+    const isFailure = nodeHasFailure || browserHasFailure;
 
     if (isFailure) {
       process.exitCode = 1;
@@ -268,6 +396,7 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
         testResults: context.reporterResults.testResults,
+        unhandledErrors: errors,
         snapshotSummary: snapshotManager.summary,
         duration,
         getSourcemap: async (name: string) => {
@@ -305,6 +434,33 @@ export async function runTests(context: Rstest): Promise<void> {
   if (command === 'watch') {
     const enableCliShortcuts = isCliShortcutsEnabled();
 
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
 
@@ -325,6 +481,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const { onBeforeRestart } = await import('./restart');
 
     onBeforeRestart(async () => {
+      await runGlobalTeardown();
       await pool.close();
       await closeServer();
     });
@@ -463,6 +620,22 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   } else {
     let isTeardown = false;
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
 
     const unExpectedExit = (code?: number) => {
       if (isTeardown) {
@@ -477,15 +650,39 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
+
+        // Run global teardown before exit
+        runGlobalTeardown().catch((error) => {
+          logger.log(color.red(`Error in global teardown: ${error}`));
+        });
+
         process.exitCode = 1;
       }
     };
-    process.on('exit', unExpectedExit);
 
-    await run();
-    isTeardown = true;
-    await pool.close();
-    await closeServer();
-    process.off('exit', unExpectedExit);
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    };
+
+    process.on('exit', unExpectedExit);
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+
+    try {
+      await run();
+      isTeardown = true;
+      await pool.close();
+      await closeServer();
+
+      // Run global teardown after all tests are done
+      await runGlobalTeardown();
+    } finally {
+      process.off('exit', unExpectedExit);
+      process.off('SIGINT', handleSignal);
+      process.off('SIGTERM', handleSignal);
+    }
   }
 }

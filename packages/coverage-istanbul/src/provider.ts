@@ -6,7 +6,11 @@ import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
-import { readInitialCoverage } from './utils';
+import {
+  readInitialCoverage,
+  registerSourceMapURL,
+  transformCoverage,
+} from './utils';
 
 const { createCoverageMap } = istanbulLibCoverage;
 
@@ -17,6 +21,8 @@ declare global {
 
 export class CoverageProvider implements RstestCoverageProvider {
   private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
+  // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
+  private sourcemapUrlCache = new Map<string, string | undefined>();
 
   constructor(private options: NormalizedCoverageOptions) {}
 
@@ -47,11 +53,13 @@ export class CoverageProvider implements RstestCoverageProvider {
             content,
             file,
           );
+          registerSourceMapURL(file, code, this.sourcemapUrlCache);
           return readInitialCoverage(code);
         } catch (e) {
           console.error(
             `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
           );
+          process.exitCode = 1;
           return undefined;
         }
       }),
@@ -84,14 +92,13 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {
-    if (!coverageMap || coverageMap.files().length === 0) {
-      return;
-    }
-
     try {
       const context = createContext({
         dir: this.options.reportsDirectory,
-        coverageMap: createCoverageMap(coverageMap.toJSON()),
+        coverageMap: await transformCoverage(
+          coverageMap,
+          this.sourcemapUrlCache,
+        ),
       });
       const reportersList = this.options.reporters;
       for (const reporter of reportersList) {

@@ -7,6 +7,7 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+import type { MaybePromise } from './utils';
 
 export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
@@ -35,8 +36,57 @@ export type ProjectConfig = Omit<
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
   | 'hideSkippedTests'
+  | 'hideSkippedTestFiles'
   | 'bail'
 >;
+
+/**
+ * Supported browser types for browser mode testing.
+ *
+ * - `chromium` - Google Chrome, Microsoft Edge
+ * - `firefox` - Mozilla Firefox
+ * - `webkit` - Safari
+ */
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
+export type BrowserModeConfig = {
+  /**
+   * Enable browser mode when running tests.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Browser provider to use for running tests.
+   *
+   * Currently only 'playwright' is supported.
+   */
+  provider: 'playwright';
+  /**
+   * Which browser to use for testing.
+   *
+   * @default 'chromium'
+   */
+  browser?: BrowserName;
+  /**
+   * Run browser in headless mode.
+   *
+   * @default Inferred from CI environment. `true` in CI, `false` otherwise.
+   */
+  headless?: boolean;
+  /**
+   * Port for the browser mode dev server.
+   *
+   * If not specified, a random available port will be used.
+   */
+  port?: number;
+  /**
+   * Whether to exit if the specified port is already in use.
+   *
+   * @default false
+   */
+  strictPort?: boolean;
+};
 
 type SnapshotFormat = Omit<
   NonNullable<SnapshotStateOptions['snapshotFormat']>,
@@ -54,7 +104,29 @@ type SnapshotFormat = Omit<
 type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
+type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
+  reporters?: any;
+};
+
+export type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<LooseRstestConfig>,
+) => MaybePromise<ExtendConfig>;
+
+export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+
+export type EnvironmentWithOptions = {
+  name: EnvironmentName;
+  options?: Record<string, any>;
+};
+
 export interface RstestConfig {
+  /**
+   * Extend configuration from adapters
+   */
+  extends?: ExtendConfigFn | ExtendConfig;
+
   /**
    * Project root
    *
@@ -104,6 +176,13 @@ export interface RstestConfig {
   setupFiles?: string[] | string;
 
   /**
+   * Path to global setup files, relative to project root.
+   * A global setup file can either export named functions `setup` and `teardown`
+   * or a `default` function that returns a teardown function.
+   */
+  globalSetup?: string[] | string;
+
+  /**
    * Retry the test specific number of times if it fails.
    * @default 0
    */
@@ -136,7 +215,7 @@ export interface RstestConfig {
    *
    * @default 'node'
    */
-  testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+  testEnvironment?: EnvironmentName | EnvironmentWithOptions;
 
   /**
    * Stop running tests after n failures.
@@ -185,6 +264,12 @@ export interface RstestConfig {
    * @default false
    */
   hideSkippedTests?: boolean;
+  /**
+   * Hide skipped test files logs.
+   *
+   * @default false
+   */
+  hideSkippedTestFiles?: boolean;
   /**
    * Run only tests with a name that matches the regex.
    */
@@ -265,6 +350,11 @@ export interface RstestConfig {
   env?: Partial<NodeJS.ProcessEnv>;
 
   /**
+   * Browser mode configuration.
+   */
+  browser?: BrowserModeConfig;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;
@@ -319,18 +409,40 @@ type OptionalKeys =
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
-  | 'resolveSnapshotPath';
+  | 'hideSkippedTestFiles'
+  | 'resolveSnapshotPath'
+  | 'extends';
+
+export type NormalizedBrowserModeConfig = {
+  enabled: boolean;
+  provider: 'playwright';
+  browser: BrowserName;
+  headless: boolean;
+  port?: number;
+  strictPort: boolean;
+};
 
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'globalSetup'
+    | 'exclude'
+    | 'testEnvironment'
+    | 'browser'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
+    testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
+    browser: NormalizedBrowserModeConfig;
     setupFiles: string[];
+    globalSetup: string[];
     exclude: {
       patterns: string[];
       override?: boolean;
@@ -340,9 +452,15 @@ export type NormalizedConfig = Required<
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
-    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+    | OptionalKeys
+    | 'projects'
+    | 'reporters'
+    | 'pool'
+    | 'setupFiles'
+    | 'globalSetup'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
+    globalSetup: string[];
   };

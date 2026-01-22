@@ -42,7 +42,7 @@ const registerGlobalApi = (api: Rstest) => {
   }, {});
 };
 
-const listeners: (() => void)[] = [];
+const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
@@ -56,6 +56,12 @@ const preparePool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']) => {
+  // Reset globalCleanups only when preparePool is called again (running without isolation)
+  globalCleanups.forEach((fn) => {
+    fn();
+  });
+  globalCleanups.length = 0;
+
   setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
@@ -68,9 +74,21 @@ const preparePool = async ({
 
   const originalConsole = global.console;
 
-  const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
-    originalConsole,
+  const disposeFns: (() => void)[] = [];
+  const { rpc } = createRuntimeRpc(
+    createForksRpcOptions({ dispose: disposeFns }),
+    {
+      originalConsole,
+    },
+  );
+
+  globalCleanups.push(() => {
+    disposeFns.forEach((fn) => {
+      fn();
+    });
+    rpc.$close();
   });
+
   const {
     runtimeConfig: {
       globals,
@@ -113,12 +131,6 @@ const preparePool = async ({
 
   const { createRstestRuntime } = await import('../api');
 
-  // Reset listeners only when preparePool is called again (running without isolation)
-  listeners.forEach((fn) => {
-    fn();
-  });
-  listeners.length = 0;
-
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: Error | string, type: string) => {
@@ -141,30 +153,36 @@ const preparePool = async ({
   process.on('uncaughtException', uncaughtException);
   process.on('unhandledRejection', unhandledRejection);
 
-  listeners.push(() => {
+  globalCleanups.push(() => {
     process.off('uncaughtException', uncaughtException);
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = createRstestRuntime(workerState);
+  const { api, runner } = await createRstestRuntime(workerState);
 
-  switch (testEnvironment) {
+  switch (testEnvironment.name) {
     case 'node':
       break;
     case 'jsdom': {
       const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(global, {});
+      const { teardown } = await environment.setup(
+        global,
+        testEnvironment.options || {},
+      );
       cleanupFns.push(() => teardown(global));
       break;
     }
     case 'happy-dom': {
       const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(global, {});
+      const { teardown } = await environment.setup(
+        global,
+        testEnvironment.options || {},
+      );
       cleanupFns.push(async () => teardown(global));
       break;
     }
     default:
-      throw new Error(`Unknown test environment: ${testEnvironment}`);
+      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
   }
 
   if (globals) {
@@ -212,12 +230,13 @@ const loadFiles = async ({
   isolate: boolean;
   outputModule: boolean;
 }): Promise<void> => {
-  const { loadModule } = outputModule
+  const { loadModule, updateLatestAssetFiles } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
   // clean rstest core cache manually
   if (!isolate) {
+    updateLatestAssetFiles(assetFiles);
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -300,6 +319,7 @@ const runInPool = async (
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
+    // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
     isTeardown = true;
   };
