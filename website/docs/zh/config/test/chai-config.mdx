@@ -23,12 +23,112 @@ type ChaiConfig = {
 
 自定义 [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js)。
 
+## 字段说明
+
+### truncateThreshold
+
+设置在断言失败时显示的字符数。当断言失败并显示对象或数组时，如果输出超过此阈值，Rstest 将截断输出以保持错误消息的可读性。
+
+- **默认值：** `40`
+
+更高的值会在断言失败时显示更多细节，对调试复杂数据结构很有用：
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   chaiConfig: {
-    truncateThreshold: 100,
+    truncateThreshold: 100, // 显示最多 100 个字符
   },
 });
+```
+
+#### 配置前（默认 truncateThreshold: 40）
+
+使用默认值时，长数组或对象会被截断：
+
+```
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+#### 配置后（truncateThreshold: 100）
+
+使用更高的阈值时，你可以看到完整的结构：
+
+```
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+这样可以看到具体不匹配的值，更便于调试。
+
+### includeStack
+
+在断言错误中包含堆栈跟踪。
+
+- **默认值：** `false`
+
+启用此选项可以看到断言调用的位置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    includeStack: true, // 在错误中包含堆栈跟踪
+  },
+});
+```
+
+#### 不显示堆栈（默认）
+
+```
+AssertionError: expected 5 to equal 10
+```
+
+#### 显示堆栈（includeStack: true）
+
+```
+AssertionError: expected 5 to equal 10
+    at Context.<anonymous> (file:///path/to/test.ts:10:5)
+    at processTicksAndRejections (internal/timers.ts:32:1)
+```
+
+### showDiff
+
+在断言失败时显示期望值与实际值的差异。
+
+- **默认值：** `true`
+
+禁用此选项可以只看到纯文本的断言消息，而不显示差异：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    showDiff: false, // 隐藏差异输出
+  },
+});
+```
+
+#### 显示差异（默认 showDiff: true）
+
+```
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
+  + expected
+  - actual
+
+  {
+    "a": 1
++   "b": 3
+-   "b": 2
+  }
+```
+
+#### 不显示差异（showDiff: false）
+
+```
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

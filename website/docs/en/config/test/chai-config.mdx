@@ -23,12 +23,112 @@ type ChaiConfig = {
 
 Customize the [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js).
 
+## Field Details
+
+### truncateThreshold
+
+Sets the number of characters to display when showing large values in assertions. When an assertion fails and displays objects or arrays, Chai will truncate the output if it exceeds this threshold to keep error messages readable.
+
+- **Default:** `40`
+
+A higher value shows more details in assertion failures, useful for debugging complex data structures:
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   chaiConfig: {
-    truncateThreshold: 100,
+    truncateThreshold: 100, // Show up to 100 characters
   },
 });
+```
+
+#### Before (default truncateThreshold: 40)
+
+With the default value, long arrays or objects get truncated:
+
+```
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+#### After (truncateThreshold: 100)
+
+With a higher threshold, you see the full structure:
+
+```
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+This allows you to see the exact values that don't match, making debugging easier.
+
+### includeStack
+
+Includes the stack trace in assertion errors.
+
+- **Default:** `false`
+
+Enable this to see where the assertion was called from:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    includeStack: true, // Include stack trace in errors
+  },
+});
+```
+
+#### Without stack (default)
+
+```
+AssertionError: expected 5 to equal 10
+```
+
+#### With stack (includeStack: true)
+
+```
+AssertionError: expected 5 to equal 10
+    at Context.<anonymous> (file:///path/to/test.ts:10:5)
+    at processTicksAndRejections (internal/timers.ts:32:1)
+```
+
+### showDiff
+
+Show a diff of expected vs actual values in assertion failures.
+
+- **Default:** `true`
+
+Disable this if you want to see plain assertion messages without diffs:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    showDiff: false, // Hide diff output
+  },
+});
+```
+
+#### With diff (default showDiff: true)
+
+```
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
+  + expected
+  - actual
+
+  {
+    "a": 1
++   "b": 3
+-   "b": 2
+  }
+```
+
+#### Without diff (showDiff: false)
+
+```
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```
