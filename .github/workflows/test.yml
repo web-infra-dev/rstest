@@ -156,3 +156,15 @@ jobs:
 
       - name: VS Code Extension Test
         run: pnpm run test:vscode
+
+  # ======== gate ========
+  test-gate:
+    needs: [prepare, ut, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test requirement
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ needs.prepare.outputs.changed }}" = "true" ]; then
+            [ "${{ needs.ut.result }}" = "success" ] && [ "${{ needs.e2e.result }}" = "success" ]
+          fi
