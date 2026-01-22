@@ -6,9 +6,9 @@ import { PackageManagerTabs } from '@theme';
 
 ## 自动初始化
 
-最快速的方式是使用 `rstest init browser` 命令自动完成配置：
+最快速的方式是使用 `@rstest/core init browser` 命令自动完成配置：
 
-<PackageManagerTabs command="rstest init browser" dlx />
+<PackageManagerTabs command="@rstest/core init browser" dlx />
 
 ### 初始化过程
 
@@ -26,7 +26,7 @@ import { PackageManagerTabs } from '@theme';
 以下是 React 项目的初始化输出示例：
 
 ```bash
-◆ rstest init browser
+◆ @rstest/core init browser
 
   Detecting project...
   ✓ Found React 19.0.0
@@ -55,7 +55,7 @@ import { PackageManagerTabs } from '@theme';
 在 CI 或其他非交互式环境中，可以添加 `--yes` 参数跳过所有提示，直接使用嗅探到的配置：
 
 ```bash
-npx rstest init browser --yes
+npx @rstest/core init browser --yes
 ```
 
 :::
