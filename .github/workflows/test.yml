@@ -43,6 +43,7 @@ jobs:
 
   # ======== ut ========
   ut:
+    name: Unit Test - ${{ matrix.os }}
     needs: prepare
     if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
     runs-on: ${{ matrix.os }}
@@ -100,6 +101,7 @@ jobs:
 
   # ======== e2e ========
   e2e:
+    name: E2E Test - ${{ matrix.os }} - ${{ matrix.node_version }}
     needs: [prepare, ut]
     if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
     runs-on: ${{ matrix.os }}
