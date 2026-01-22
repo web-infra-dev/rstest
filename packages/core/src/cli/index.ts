@@ -7,7 +7,6 @@ export { initCli } from './init';
 export async function runCLI(): Promise<void> {
   // make it easier to identify the process via activity monitor or other tools
   process.title = 'rstest-node';
-
   prepareCli();
 
   try {

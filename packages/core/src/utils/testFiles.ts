@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
 import type { Project } from '../types';
-import { castArray, color, parsePosix } from './helper';
+import { castArray, parsePosix } from './helper';
+import { color } from './logger';
 
 export const filterFiles = (
   testFiles: string[],
