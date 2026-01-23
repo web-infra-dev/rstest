@@ -172,6 +172,12 @@ test('calculate calls add with correct arguments', () => {
 });
 ```
 
+:::note ESM and CommonJS modules
+
+- **ESM modules**: All named exports are wrapped in spy functions.
+- **CommonJS modules**: In addition to wrapping exports, a `default` export is automatically added (pointing to the module itself) to preserve `import x from 'cjs-module'` behavior.
+  :::
+
 ### Type enhancement with `Promise<T>`
 
 `rs.mock` supports passing a `Promise<T>` (via dynamic import) as the first parameter to get better type hints in IDEs. This only enhances type hints and has no impact on the module mocking capabilities.

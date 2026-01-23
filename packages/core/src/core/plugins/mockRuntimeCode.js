@@ -77,7 +77,13 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
     if (modFactory.spy !== true) {
       throw new Error('[Rstest] rs.mock() options must be { spy: true }');
     }
-    const originalModule = requiredModule || {};
+    if (!requiredModule) {
+      throw new Error(
+        `[Rstest] rs.mock('${id}', { spy: true }) failed: cannot load original module`,
+      );
+    }
+    const originalModule = requiredModule;
+    const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: true,
@@ -92,6 +98,12 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
       for (const key in mockedModule) {
         __webpack_require__.d(__webpack_exports__, {
           [key]: () => mockedModule[key],
+        });
+      }
+      // For CJS modules, add default export to preserve default-import behavior
+      if (!isEsModule && !('default' in mockedModule)) {
+        __webpack_require__.d(__webpack_exports__, {
+          default: () => mockedModule,
         });
       }
     };
@@ -144,12 +156,24 @@ __webpack_require__.rstest_mock_require = (id, modFactory) => {
         '[Rstest] rs.mockRequire() options must be { spy: true }',
       );
     }
-    const originalModule = requiredModule || {};
+    if (!requiredModule) {
+      throw new Error(
+        `[Rstest] rs.mockRequire('${id}', { spy: true }) failed: cannot load original module`,
+      );
+    }
+    const originalModule = requiredModule;
+    const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: true,
       }) || originalModule;
-    __webpack_require__.r(mockedModule);
+    // Only mark as ESM if original was ESM
+    if (isEsModule) {
+      __webpack_require__.r(mockedModule);
+    } else if (!('default' in mockedModule)) {
+      // For CJS modules, add default export
+      mockedModule.default = mockedModule;
+    }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
     return;
   }
@@ -182,12 +206,24 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
     if (modFactory.spy !== true) {
       throw new Error('[Rstest] rs.doMock() options must be { spy: true }');
     }
-    const originalModule = requiredModule || {};
+    if (!requiredModule) {
+      throw new Error(
+        `[Rstest] rs.doMock('${id}', { spy: true }) failed: cannot load original module`,
+      );
+    }
+    const originalModule = requiredModule;
+    const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: true,
       }) || originalModule;
-    __webpack_require__.r(mockedModule);
+    // Only mark as ESM if original was ESM
+    if (isEsModule) {
+      __webpack_require__.r(mockedModule);
+    } else if (!('default' in mockedModule)) {
+      // For CJS modules, add default export
+      mockedModule.default = mockedModule;
+    }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
     return;
   }
@@ -221,12 +257,24 @@ __webpack_require__.rstest_do_mock_require = (id, modFactory) => {
         '[Rstest] rs.doMockRequire() options must be { spy: true }',
       );
     }
-    const originalModule = requiredModule || {};
+    if (!requiredModule) {
+      throw new Error(
+        `[Rstest] rs.doMockRequire('${id}', { spy: true }) failed: cannot load original module`,
+      );
+    }
+    const originalModule = requiredModule;
+    const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: true,
       }) || originalModule;
-    __webpack_require__.r(mockedModule);
+    // Only mark as ESM if original was ESM
+    if (isEsModule) {
+      __webpack_require__.r(mockedModule);
+    } else if (!('default' in mockedModule)) {
+      // For CJS modules, add default export
+      mockedModule.default = mockedModule;
+    }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
     return;
   }

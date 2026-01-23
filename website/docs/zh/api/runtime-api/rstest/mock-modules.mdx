@@ -172,6 +172,12 @@ test('calculate 使用正确的参数调用 add', () => {
 });
 ```
 
+:::note ESM 和 CommonJS 模块
+
+- **ESM 模块**：所有命名导出都会被包装在 spy 函数中。
+- **CommonJS 模块**：除了包装导出外，还会自动添加一个 `default` 导出（指向模块本身），以保持 `import x from 'cjs-module'` 的行为。
+  :::
+
 ### 使用 `Promise<T>` 增强类型
 
 `rs.mock` 支持第一个参数传入一个 `Promise<T>`（通过动态 import），以获得更好的 IDE 类型提示。传入 `Promise<T>` 除对类型提示有增强外，对 mock 模块能力没有任何影响。
