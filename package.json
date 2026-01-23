@@ -7,15 +7,14 @@
     "test:vscode": "pnpm --filter ./packages/vscode test",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "test": "rstest",
-    "change": "changeset",
-    "changeset": "changeset",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
     "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
     "prepare": "pnpm run build && simple-git-hooks",
-    "test:federation": "pnpm -C examples/federation test"
+    "test:federation": "pnpm -C examples/federation test",
+    "bump": "node --experimental-strip-types scripts/version.mts"
   },
   "simple-git-hooks": {
     "pre-commit": "npx nano-staged"
@@ -33,13 +32,13 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
-    "@changesets/cli": "^2.29.8",
     "@rsdoctor/rspack-plugin": "^1.4.0",
     "@rslint/core": "^0.1.14",
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.16.5",
+    "bumpp": "^10.4.0",
     "check-dependency-version-consistency": "^5.0.1",
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
