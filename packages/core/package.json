@@ -90,7 +90,7 @@
     "chokidar": "^4.0.3",
     "happy-dom": "^20.0.11",
     "jest-diff": "^30.2.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^27.4.0",
     "memfs": "^4.51.1",
     "package-manager-detector": "^1.6.0",
     "pathe": "^2.0.3",
