@@ -205,9 +205,12 @@ export const loadModule = async ({
       lineOffset: 0,
       columnOffset: 0,
       initializeImportMeta: (meta) => {
-        meta.url = pathToFileURL(
-          distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
-        ).toString();
+        const fileName = distPath.endsWith('rstest-runtime.mjs')
+          ? distPath
+          : testPath;
+        meta.url = pathToFileURL(fileName).toString();
+        meta.dirname = path.dirname(fileName);
+        meta.filename = fileName;
         // @ts-expect-error
         meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
           assetFiles,
