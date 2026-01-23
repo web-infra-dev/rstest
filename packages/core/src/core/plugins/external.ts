@@ -2,7 +2,6 @@ import { isBuiltin } from 'node:module';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
-import { shouldKeepBundledForFederation } from './federation';
 
 const autoExternalNodeModules: (
   outputModule: boolean,
@@ -32,7 +31,13 @@ const autoExternalNodeModules: (
     // local project. When federation is enabled, those requests must stay
     // bundled so the MF runtime can handle them at runtime.
     if (federation) {
-      if (shouldKeepBundledForFederation(request)) {
+      if (
+        // loader-style `!=!data:text/javascript,...` specifiers
+        /!=!data:text\/javascript(?:;|,)/i.test(request) ||
+        request.startsWith('@module-federation/') ||
+        // remote specifiers are not resolvable locally (e.g. `remote/Button`)
+        request.includes('/')
+      ) {
         return callback();
       }
     }
@@ -140,32 +145,6 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
             rspack: (config) => {
               // Make sure that externals configuration is not modified by users
               config.externals = castArray(config.externals) || [];
-
-              if (federation) {
-                // Wrap externals functions so Module Federation "loader-style"
-                // requests are never externalized (they must be processed by
-                // the bundler to inline the runtime).
-                config.externals = config.externals.map((ext) => {
-                  if (typeof ext !== 'function') return ext;
-                  return (data: any, callback: any) => {
-                    const req =
-                      typeof data === 'string'
-                        ? data
-                        : data && typeof data.request === 'string'
-                          ? data.request
-                          : undefined;
-
-                    if (
-                      typeof req === 'string' &&
-                      shouldKeepBundledForFederation(req)
-                    ) {
-                      return callback();
-                    }
-
-                    return (ext as any)(data, callback);
-                  };
-                });
-              }
 
               config.externals.unshift({
                 '@rstest/core': 'global @rstest/core',

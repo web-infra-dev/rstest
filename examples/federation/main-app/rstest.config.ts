@@ -9,12 +9,7 @@ export default defineConfig({
   testEnvironment: 'jsdom',
   plugins: [pluginReact(), federation()],
   federation: true,
-  output: {
-    module: false,
-  },
-  dev: {
-    writeToDisk: true,
-  },
+  // `federation()` already enforces CommonJS output (`output.module: false`).
   tools: {
     rspack: (config) => {
       config.plugins ??= [];

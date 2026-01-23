@@ -9,7 +9,7 @@ export const shouldKeepBundledForFederation = (request: string): boolean => {
   // Module Federation runtimes can generate "loader-style" requests that embed
   // inline JS via a `data:` URL (e.g. `something!=!data:text/javascript,...`).
   // Externalizing those breaks because Node can't resolve them via require/import.
-  if (request.includes('!=!data:') && request.includes('javascript')) {
+  if (/!=!data:text\/javascript(?:;|,)/i.test(request)) {
     return true;
   }
 

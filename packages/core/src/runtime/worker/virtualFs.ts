@@ -18,6 +18,8 @@ let installed = false;
 let virtualFiles: VirtualFiles = {};
 let hasVirtualFiles = false;
 
+// Keep references so we can fully restore the original fs behavior when
+// federation mode is toggled off in non-isolated workers/watch mode.
 const originals: {
   readFileSync?: typeof fs.readFileSync;
   readFile?: typeof fs.readFile;
@@ -113,10 +115,13 @@ export const installVirtualFs = (): void => {
   originals.statSync = fs.statSync;
   originals.createReadStream = fs.createReadStream;
 
-  originals.promisesReadFile = fs.promises.readFile.bind(fs.promises);
-  originals.promisesAccess = fs.promises.access.bind(fs.promises);
-  originals.promisesStat = fs.promises.stat.bind(fs.promises);
+  originals.promisesReadFile = fs.promises.readFile;
+  originals.promisesAccess = fs.promises.access;
+  originals.promisesStat = fs.promises.stat;
 
+  // Important: this patches Node's builtin `fs` export object globally. This is
+  // only intended for federation mode workers so the MF runtime can read assets
+  // from Rstest's in-memory output without requiring `dev.writeToDisk = true`.
   mutableFs.readFileSync = ((filePath: any, options?: any) => {
     const v = findVirtualContent(filePath);
     if (v) {
@@ -204,7 +209,7 @@ export const installVirtualFs = (): void => {
         : Buffer.from(v.content, 'utf-8');
       return encoding ? buffer.toString(encoding) : buffer;
     }
-    return originals.promisesReadFile!(filePath, options);
+    return originals.promisesReadFile!.call(fs.promises, filePath, options);
   }) as typeof fs.promises.readFile;
 
   (mutableFs.promises as Mutable<typeof fs.promises>).access = (async (
@@ -212,7 +217,7 @@ export const installVirtualFs = (): void => {
     mode?: any,
   ) => {
     if (findVirtualContent(filePath)) return;
-    return originals.promisesAccess!(filePath, mode);
+    return originals.promisesAccess!.call(fs.promises, filePath, mode);
   }) as typeof fs.promises.access;
 
   (mutableFs.promises as Mutable<typeof fs.promises>).stat = (async (
@@ -226,6 +231,35 @@ export const installVirtualFs = (): void => {
         : Buffer.byteLength(v.content, 'utf-8');
       return makeFakeStats(size);
     }
-    return originals.promisesStat!(filePath, options);
+    return originals.promisesStat!.call(fs.promises, filePath, options);
   }) as typeof fs.promises.stat;
+};
+
+export const uninstallVirtualFs = (): void => {
+  if (!installed) return;
+
+  // Always reset virtual state, even if restoration below throws for any reason.
+  clearVirtualFiles();
+
+  if (originals.readFileSync) mutableFs.readFileSync = originals.readFileSync;
+  if (originals.readFile) mutableFs.readFile = originals.readFile;
+  if (originals.existsSync) mutableFs.existsSync = originals.existsSync;
+  if (originals.statSync) mutableFs.statSync = originals.statSync;
+  if (originals.createReadStream)
+    mutableFs.createReadStream = originals.createReadStream;
+
+  if (originals.promisesReadFile) {
+    (mutableFs.promises as Mutable<typeof fs.promises>).readFile =
+      originals.promisesReadFile;
+  }
+  if (originals.promisesAccess) {
+    (mutableFs.promises as Mutable<typeof fs.promises>).access =
+      originals.promisesAccess;
+  }
+  if (originals.promisesStat) {
+    (mutableFs.promises as Mutable<typeof fs.promises>).stat =
+      originals.promisesStat;
+  }
+
+  installed = false;
 };

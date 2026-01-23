@@ -15,9 +15,9 @@ import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
 import {
-  clearVirtualFiles,
   installVirtualFs,
   setVirtualFiles,
+  uninstallVirtualFs,
 } from './virtualFs';
 
 let sourceMaps: Record<string, string> = {};
@@ -259,7 +259,7 @@ const loadFiles = async ({
     setVirtualFiles(assetFiles);
   } else {
     // Avoid affecting non-federation runs, especially when `isolate: false`.
-    clearVirtualFiles();
+    uninstallVirtualFs();
   }
 
   // clean rstest core cache manually
