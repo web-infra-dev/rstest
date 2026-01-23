@@ -19,6 +19,10 @@ process.env.GITHUB_ACTIONS === 'true'
 
 Configure which reporters to use for test result output.
 
+:::info AI agent environments
+If you haven't explicitly configured any reporters (no `reporters` in config and no `--reporter` flags), Rstest defaults to `['md']` and outputs AI agent-friendly markdown to stdout.
+:::
+
 ### Usage
 
 #### Basic example
