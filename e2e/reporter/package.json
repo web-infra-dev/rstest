@@ -3,6 +3,7 @@
   "name": "@rstest/tests-repoter",
   "version": "1.0.0",
   "devDependencies": {
-    "@rstest/core": "workspace:*"
+    "@rstest/core": "workspace:*",
+    "@rstest/reporter-agent-md": "workspace:*"
   }
 }

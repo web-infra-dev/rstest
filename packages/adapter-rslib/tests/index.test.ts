@@ -47,7 +47,7 @@ export default defineConfig({
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
-    expect(config.testEnvironment).toBe('node');
+    expect(config.testEnvironment).toBe('node1');
   });
 
   it('should allow modification of rslib config', async () => {

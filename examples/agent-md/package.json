@@ -1,0 +1,16 @@
+{
+  "name": "@examples/agent-md",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "rstest",
+    "test:agent": "OPENCODE=1 rstest",
+    "test:human": "rstest"
+  },
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "@rstest/reporter-agent-md": "workspace:*",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.3"
+  }
+}

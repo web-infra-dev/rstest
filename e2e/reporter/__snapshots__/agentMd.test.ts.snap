@@ -1,0 +1,137 @@
+// Rstest Snapshot v1
+
+exports[`agent-md > labels snapshot mismatch errors 1`] = `
+"
+  Rstest v0.8.0
+
+---
+tool: "rstest"
+toolVersion: "0.8.0"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/snapshotMismatch.test.ts :: agent-md > fails with snapshot mismatch
+
+repro:
+\`\`\`bash
+pnpm dlx rstest 'fixtures/agent-md/snapshotMismatch.test.ts' --testNamePattern 'agent-md > fails with snapshot mismatch'
+\`\`\`
+
+details:
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/snapshotMismatch.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with snapshot mismatch",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "SnapshotMismatchError",
+      "message": "Snapshot \`agent-md > fails with snapshot mismatch 1\` mismatched",
+      "expected": "{\\n  \\"a\\": 2,\\n}",
+      "actual": "{\\n  \\"a\\": 1,\\n}",
+      "topFrame": {
+        "file": "fixtures/agent-md/snapshotMismatch.test.ts",
+        "line": 5,
+        "column": 22,
+        "method": "<unknown>"
+      },
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+"
+`;
+
+exports[`agent-md > outputs markdown report 1`] = `
+"
+  Rstest v0.8.0
+
+---
+tool: "rstest"
+toolVersion: "0.8.0"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+
+repro:
+\`\`\`bash
+pnpm dlx rstest 'fixtures/agent-md/index.test.ts' --testNamePattern 'agent-md > fails with diff'
+\`\`\`
+
+details:
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/index.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with diff",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "AssertionError",
+      "message": "expected 2 to be 3 // Object.is equality",
+      "expected": "3",
+      "actual": "2",
+      "topFrame": {
+        "file": "fixtures/agent-md/index.test.ts",
+        "line": 5,
+        "column": 19,
+        "method": "<unknown>"
+      },
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+"
+`;
