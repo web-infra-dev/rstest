@@ -18,6 +18,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import {
+  ansiEnabled,
   color,
   isDeno,
   needFlagExperimentalDetectModule,
@@ -218,10 +219,10 @@ export const createPool = async ({
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
     env: {
-      ...process.env,
       NODE_ENV: 'test',
+      ...process.env,
       // enable diff color by default
-      FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
+      FORCE_COLOR: ansiEnabled() ? (process.env.FORCE_COLOR ?? '1') : '0',
     },
   });
 

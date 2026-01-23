@@ -802,9 +802,6 @@ importers:
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
-      '@vercel/detect-agent':
-        specifier: ^1.0.0
-        version: 1.0.0
       '@vitest/expect':
         specifier: ^3.2.4
         version: 3.2.4
@@ -877,6 +874,9 @@ importers:
       webpack-license-plugin:
         specifier: ^4.5.1
         version: 4.5.1(webpack@5.103.0(@swc/core@1.15.7(@swc/helpers@0.5.18)))
+      yn:
+        specifier: ^5.1.0
+        version: 5.1.0
 
   packages/coverage-istanbul:
     dependencies:
@@ -3258,10 +3258,6 @@ packages:
     resolution: {integrity: sha512-pW00tkOneGGTEJp5UeVkVWmti4VecLj0rIje5AqcBs0AoglSxc18LGGKi9Exd098++GzVouhkGo1Ch02YnZS7g==}
     peerDependencies:
       react: '>=18.3.1'
-
-  '@vercel/detect-agent@1.0.0':
-    resolution: {integrity: sha512-AIPgNkmtFcDgPCl+xvTT1ga90OL7OTX2RKM4zu0PMpwBthPfN2DpdHy10n3bh8K+CA22GDU0/ncjzprZsrk0sw==}
-    engines: {node: '>=14'}
 
   '@vercel/oidc@3.0.3':
     resolution: {integrity: sha512-yNEQvPcVrK9sIe637+I0jD6leluPxzwJKx/Haw6F4H77CdDsszUn5V3o96LPziXkSNE2B83+Z3mjqGKBK/R6Gg==}
@@ -7325,6 +7321,10 @@ packages:
   yazl@2.5.1:
     resolution: {integrity: sha512-phENi2PLiHnHb6QBVot+dJnaAZ0xosj7p3fWl+znIjBDlnMI2PsZCJZ306BPTFOaHf5qdDEI8x5qFrSOBN5vrw==}
 
+  yn@5.1.0:
+    resolution: {integrity: sha512-TfXLvT6eVsBNIm8rAXTwJYdQFtOXaHQ+rA7LU8HL8C/BFfaSfhvFE5T1rHAdBCbAj808HaqjXVkmo8jmeGOqhw==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -9947,8 +9947,6 @@ snapshots:
     dependencies:
       react: 19.2.3
       unhead: 2.0.19
-
-  '@vercel/detect-agent@1.0.0': {}
 
   '@vercel/oidc@3.0.3': {}
 
@@ -14686,6 +14684,8 @@ snapshots:
   yazl@2.5.1:
     dependencies:
       buffer-crc32: 0.2.13
+
+  yn@5.1.0: {}
 
   yocto-queue@0.1.0: {}
 

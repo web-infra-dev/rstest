@@ -1,7 +1,6 @@
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { determineAgent } from '@vercel/detect-agent';
-import color from 'picocolors';
+import { color, determineAgent } from '../../../utils';
 import { detectProject } from './detect';
 import type { BrowserProvider, Framework } from './templates';
 import {
@@ -50,7 +49,7 @@ export async function create(options: CreateOptions = {}): Promise<void> {
   const projectInfo = await detectProject(cwd);
 
   // Check if running in AI agent environment
-  const { isAgent } = await determineAgent();
+  const { isAgent } = determineAgent();
 
   if (nonInteractive) {
     // Non-interactive mode

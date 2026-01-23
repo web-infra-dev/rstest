@@ -1,7 +1,7 @@
 import { isAbsolute, join, normalize, parse, sep } from 'pathe';
-import color from 'picocolors';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
+import { color } from './logger';
 
 export const formatRootStr = (rootStr: string, root: string): string => {
   return rootStr.includes('<rootDir>')
@@ -195,8 +195,6 @@ export const bgColor = (background: BackgroundColor, str: string): string => {
   }
   return color[background](color.blackBright(color.bold(str)));
 };
-
-export { color };
 
 /**
  * Check if running in a TTY context

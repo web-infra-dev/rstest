@@ -4,8 +4,7 @@ import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
 import { globalApis } from './constants';
-import { color } from './helper';
-import { isDebug, logger } from './logger';
+import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
 export const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);

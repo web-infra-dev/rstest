@@ -5,8 +5,7 @@ import type {
   RstestCommand,
   RstestInstance,
 } from '../types';
-import { formatError } from '../utils/helper';
-import { logger } from '../utils/logger';
+import { color, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -262,7 +261,6 @@ export function setupCommands(): void {
         // If no project specified, show selection menu
         if (!selectedProject) {
           const { select, isCancel } = await import('@clack/prompts');
-          const color = (await import('picocolors')).default;
 
           console.log();
           const selected = await select({

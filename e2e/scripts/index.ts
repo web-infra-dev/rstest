@@ -96,12 +96,14 @@ export async function runRstestCli({
   command,
   options,
   args = [],
+  stripAnsi,
   onTestFinished,
   onTestFailed,
 }: {
   command: string;
   options?: Partial<Options>;
   args?: string[];
+  stripAnsi?: boolean;
   onTestFinished?: typeof onRstestFinished;
   onTestFailed?: typeof onRstestFailed;
 }) {
@@ -126,7 +128,8 @@ export async function runRstestCli({
       },
     },
   } as Options);
-  const cli = new Cli(exec);
+
+  const cli = new Cli(exec, { stripAnsi });
 
   (onTestFinished || onRstestFinished)(() => {
     !cli.exec.killed && cli.exec.kill();

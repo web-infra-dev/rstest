@@ -1,7 +1,7 @@
 import './setup';
 import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
-import { color } from '../../utils/helper';
+import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
