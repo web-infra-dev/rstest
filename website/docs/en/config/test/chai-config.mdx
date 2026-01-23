@@ -5,10 +5,6 @@
 ```ts
 type ChaiConfig = {
   /**
-   * @default false
-   */
-  includeStack: boolean;
-  /**
    * @default true
    */
   showDiff: boolean;
@@ -23,12 +19,74 @@ type ChaiConfig = {
 
 Customize the [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js).
 
+### truncateThreshold
+
+Sets the number of characters to display when showing large values in assertions. When an assertion fails and displays objects or arrays, Chai will truncate the output if it exceeds this threshold to keep error messages readable.
+
+- **Default:** `40`
+
+A higher value shows more details in assertion failures, useful for debugging complex data structures:
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   chaiConfig: {
-    truncateThreshold: 100,
+    truncateThreshold: 100, // Show up to 100 characters
   },
 });
+```
+
+With the default value (40), long arrays or objects get truncated:
+
+```ts
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+If you set a higher threshold, you see the full structure:
+
+```ts
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+This allows you to see the exact values that don't match, making debugging easier.
+
+### showDiff
+
+Show a diff of expected vs actual values in assertion failures.
+
+- **Default:** `true`
+
+Disable this if you want to see plain assertion messages without diffs:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    showDiff: false, // Hide diff output
+  },
+});
+```
+
+By default, Rstest shows a diff of expected vs actual values in assertion failures:
+
+```ts
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
+  + expected
+  - actual
+
+  {
+    "a": 1
++   "b": 3
+-   "b": 2
+  }
+```
+
+If you set `showDiff: false`, Rstest will show plain assertion messages without diffs:
+
+```ts
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

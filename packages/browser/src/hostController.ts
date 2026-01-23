@@ -4,6 +4,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import {
+  type BrowserTestRunOptions,
+  type BrowserTestRunResult,
   color,
   type FormattedError,
   getSetupFiles,
@@ -1180,7 +1182,11 @@ const createBrowserRuntime = async ({
 // Main Entry Point
 // ============================================================================
 
-export const runBrowserController = async (context: Rstest): Promise<void> => {
+export const runBrowserController = async (
+  context: Rstest,
+  options?: BrowserTestRunOptions,
+): Promise<BrowserTestRunResult | void> => {
+  const { skipOnTestRunEnd = false } = options ?? {};
   const buildStart = Date.now();
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -1639,14 +1645,24 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
     ensureProcessExitCode(1);
   }
 
-  for (const reporter of context.reporters) {
-    await reporter.onTestRunEnd?.({
-      results: context.reporterResults.results,
-      testResults: context.reporterResults.testResults,
-      duration,
-      snapshotSummary: context.snapshotManager.summary,
-      getSourcemap: async () => null,
-    });
+  const result: BrowserTestRunResult = {
+    results: reporterResults,
+    testResults: caseResults,
+    duration,
+    hasFailure: isFailure,
+  };
+
+  // Only call onTestRunEnd if not skipped (for unified reporter output)
+  if (!skipOnTestRunEnd) {
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunEnd?.({
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
+        duration,
+        snapshotSummary: context.snapshotManager.summary,
+        getSourcemap: async () => null,
+      });
+    }
   }
 
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
@@ -1656,6 +1672,8 @@ export const runBrowserController = async (context: Rstest): Promise<void> => {
       color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
     );
   }
+
+  return result;
 };
 
 // ============================================================================

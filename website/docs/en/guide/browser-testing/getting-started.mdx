@@ -1,0 +1,174 @@
+# Getting started
+
+This guide will help you configure and run Browser Mode tests in your project.
+
+import { PackageManagerTabs } from '@theme';
+
+## Automatic initialization
+
+The quickest way is to use the `rstest init browser` command for automatic configuration:
+
+<PackageManagerTabs command="rstest init browser" dlx />
+
+### Initialization process
+
+When you run the command, Rstest automatically:
+
+1. **Generates boilerplate code**: Rstest detects your project's framework (for example, React), language (for example, TypeScript or JavaScript), test directory (for example, common directories like `tests/`, `test/`, or `__tests__/`, depending on what is detected), and package manager, then generates sample components and test files. The generated files adapt based on detection results:
+   - Test directory: Files are placed in the detected test directory
+   - Framework: React projects get JSX component tests, others get native DOM examples
+   - Language: TypeScript projects get `.ts`/`.tsx` files, others get `.js`/`.jsx` files
+
+2. **Creates configuration file**: Creates `rstest.browser.config.ts` in your project root with basic Browser Mode configuration.
+
+3. **Updates package.json**: Adds a `test:browser` script.
+
+Here's an example output for a React project:
+
+```bash
+◆ rstest init browser
+
+  Detecting project...
+  ✓ Found React 19.0.0
+  ✓ Using playwright as browser provider
+  ✓ Test directory: tests/
+
+  Created files:
+    - rstest.browser.config.ts
+    - tests/Counter.jsx
+    - tests/Counter.test.jsx
+    - Updated package.json
+
+  Next steps:
+    pnpm i
+    pnpm dlx playwright install --with-deps
+    pnpm run test:browser
+
+└ Done!
+```
+
+### Next steps
+
+After initialization, follow the "Next steps" instructions in the output: install project dependencies, install browser drivers, then run tests.
+
+:::tip Non-interactive Environments
+In CI or other non-interactive environments, add the `--yes` flag to skip all prompts and use detected configuration:
+
+```bash
+npx rstest init browser --yes
+```
+
+:::
+
+## Manual configuration
+
+### 1. Install dependencies
+
+First, install the Rstest core package and Browser Mode support package:
+
+<PackageManagerTabs command="add @rstest/core @rstest/browser -D" />
+
+Browser Mode requires Playwright as the browser driver. Install the corresponding browser:
+
+```bash
+npx playwright install chromium
+```
+
+You can also install other browsers:
+
+```bash
+# Install Firefox
+npx playwright install firefox
+
+# Install WebKit (Safari)
+npx playwright install webkit
+
+# Install all browsers
+npx playwright install
+```
+
+### 2. Create configuration file
+
+Create or update your `rstest.config.ts` configuration file:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+### 3. Write tests
+
+Create a simple browser test file:
+
+```ts title="src/dom.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('should work with DOM APIs', () => {
+  const div = document.createElement('div');
+  div.textContent = 'Hello Browser!';
+  document.body.appendChild(div);
+
+  expect(document.body.textContent).toContain('Hello Browser!');
+});
+
+test('should have real browser APIs', () => {
+  // These APIs may be incomplete or missing in jsdom
+  expect(typeof window.requestAnimationFrame).toBe('function');
+  expect(typeof window.IntersectionObserver).toBe('function');
+  expect(typeof window.ResizeObserver).toBe('function');
+});
+```
+
+### 4. Run tests
+
+```bash
+npx rstest
+```
+
+You should see output similar to:
+
+```bash
+ ✓ src/dom.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 1.2s
+```
+
+## Headless vs headed mode
+
+By default, Browser Mode automatically selects the running mode based on the environment:
+
+- **CI environment**: Automatically uses headless mode (no UI)
+- **Local development**: Uses headed mode by default (shows browser window)
+
+### Configuring headless mode
+
+You can explicitly specify this in your configuration file:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true, // Always use headless mode
+  },
+});
+```
+
+## Configuration reference
+
+For complete configuration reference, see [browser configuration](/config/test/browser).
+
+## Next steps
+
+- [Framework Guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
+- [User Interactions](/guide/browser-testing/user-interactions) - Simulate user actions

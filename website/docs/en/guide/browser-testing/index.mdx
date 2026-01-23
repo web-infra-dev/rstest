@@ -1,0 +1,66 @@
+# Browser mode (experimental)
+
+Rstest provides Browser Mode, allowing you to run tests in a real browser instead of simulated environments like jsdom or happy-dom.
+
+<div
+  style={{
+    width: '100%',
+    borderRadius: 8,
+    overflow: 'hidden',
+    aspectRatio: '160 / 82', // 1920x984
+  }}
+>
+  <video
+    src="https://assets.rspack.rs/rstest/assets/browser-mode-intro.mp4"
+    controls
+    playsInline
+    preload="metadata"
+    style={{ width: '100%', height: '100%', display: 'block' }}
+  />
+</div>
+
+## What is browser Mode?
+
+Browser Mode uses [Playwright](https://playwright.dev/) to execute your test code in real browsers (Chromium, Firefox, or WebKit). This means your tests run with the exact same browser APIs and behaviors as in production.
+
+## When to use browser mode
+
+Use this decision tree to determine if you need Browser Mode:
+
+```
+Depends on real browser APIs? ─── Yes ─▶ ✅ Browser Mode
+         │ No
+         ▼
+Need cross-browser testing?  ─── Yes ─▶ ✅ Browser Mode
+         │ No
+         ▼
+Unexpected behavior in jsdom? ── Yes ─▶ ✅ Browser Mode
+         │ No
+         ▼
+    💡 jsdom is fine
+```
+
+:::tip Recommendation
+Even if your tests work fine in jsdom, we still **recommend using Browser Mode**. See the comparison table below for specific advantages.
+:::
+
+## Browser mode vs jsdom/happy-dom
+
+Browser Mode and jsdom/happy-dom represent different trade-offs: Browser Mode provides full browser compatibility and visual debugging but consumes more resources; jsdom/happy-dom runs faster and lighter but can only simulate a subset of browser APIs.
+
+| Feature               | Browser Mode         | jsdom / happy-dom                |
+| --------------------- | -------------------- | -------------------------------- |
+| Browser API coverage  | ✅ Full support      | ⚠️ Partial simulation            |
+| Canvas / WebGL        | ✅ Native support    | ❌ Unsupported or needs polyfill |
+| CSS computed styles   | ✅ Real rendering    | ⚠️ Limited support               |
+| Web Workers           | ✅ Native support    | ❌ Unsupported                   |
+| Execution speed       | ⚠️ Slower            | ✅ Faster                        |
+| Resource usage        | ⚠️ Higher            | ✅ Lower                         |
+| Debugging experience  | ✅ Visual debugging  | ⚠️ Console only                  |
+| Cross-browser testing | ✅ Multiple browsers | ❌ Unsupported                   |
+
+## Next steps
+
+- [Getting Started](/guide/browser-testing/getting-started) - Configure and run your first browser test
+- [Framework Guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
+- [User Interactions](/guide/browser-testing/user-interactions) - Simulate user clicks, typing, and other actions

@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.7.9",
+  "version": "0.8.0",
   "description": "Browser mode support for Rstest testing framework.",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"

@@ -254,7 +254,12 @@ describe('resolveProjects', () => {
 
       const disabledProjects = await resolveProjects({
         config: {
-          projects: [{ name: 'test-project', browser: { enabled: true } }],
+          projects: [
+            {
+              name: 'test-project',
+              browser: { enabled: true, provider: 'playwright' },
+            },
+          ],
         },
         root: rootPath,
         options: { browser: false },
@@ -283,6 +288,7 @@ describe('resolveProjects', () => {
 
       expect(projects[0]!.config.browser).toEqual({
         enabled: true,
+        provider: 'playwright',
         browser: 'webkit',
         headless: false,
         port: 4000,
@@ -297,6 +303,7 @@ describe('resolveProjects', () => {
             name: 'test-project',
             browser: {
               enabled: true,
+              provider: 'playwright',
               browser: 'chromium',
               headless: true,
               port: 5000,

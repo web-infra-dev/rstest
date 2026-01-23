@@ -5,10 +5,6 @@
 ```ts
 type ChaiConfig = {
   /**
-   * @default false
-   */
-  includeStack: boolean;
-  /**
    * @default true
    */
   showDiff: boolean;
@@ -23,12 +19,72 @@ type ChaiConfig = {
 
 自定义 [Chai config](https://github.com/chaijs/chai/blob/5.x.x/lib/chai/config.js)。
 
+### truncateThreshold
+
+设置在断言失败时显示的字符数。当断言失败并显示对象或数组时，如果输出超过此阈值，Rstest 将截断输出以保持错误消息的可读性。
+
+- **默认值：** `40`
+
+更高的值会在断言失败时显示更多细节，对调试复杂数据结构很有用：
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   chaiConfig: {
-    truncateThreshold: 100,
+    truncateThreshold: 100, // 显示最多 100 个字符
   },
 });
+```
+
+使用默认值时，长数组或对象会被截断：
+
+```ts
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+使用更高的阈值时，你可以看到完整的结构：
+
+```ts
+AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
+[ 1, 2, [ 3 ] ]
+```
+
+### showDiff
+
+在断言失败时显示期望值与实际值的差异。
+
+- **默认值：** `true`
+
+禁用此选项可以只看到纯文本的断言消息，而不显示差异：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  chaiConfig: {
+    showDiff: false, // 隐藏差异输出
+  },
+});
+```
+
+默认情况下，Rstest 会显示差异，帮助你快速定位问题。
+
+```ts
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
+  + expected
+  - actual
+
+  {
+    "a": 1
++   "b": 3
+-   "b": 2
+  }
+```
+
+你可以设置 `showDiff: false`，此时 Rstest 将只显示纯文本的断言消息：
+
+```ts
+AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

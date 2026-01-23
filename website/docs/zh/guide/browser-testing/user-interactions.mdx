@@ -1,0 +1,110 @@
+# 浏览器交互
+
+本指南介绍如何在浏览器模式测试中模拟用户交互。
+
+在浏览器模式下，你可以选择 Testing Library 或原生 DOM API。Testing Library 更贴近真实用户行为，能自动处理完整事件序列与焦点细节，适合大多数 UI 测试；原生 DOM API 更轻量、可精确控制事件属性，但需要手动拼装事件流程，适合验证底层事件逻辑或特殊交互细节。
+
+import { PackageManagerTabs } from '@theme';
+
+## Testing Library（推荐）
+
+[Testing Library](https://testing-library.com/) 是一套专注于用户行为的测试工具库，它鼓励你以用户实际操作的方式编写测试，而非依赖内部实现细节。在浏览器模式下，我们推荐配合使用以下两个包：
+
+- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro)：提供 `getByRole`、`getByText`、`getByLabelText` 等查询方法，让你能以用户视角查找元素（如"找到标签为 Username 的输入框"），而非依赖 CSS 选择器或测试专用属性
+- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro)：模拟真实用户交互，会触发完整的事件序列（如 `click` 会依次触发 `mousedown`、`focus`、`mouseup`、`click`），并自动处理焦点、光标位置等细节
+
+### 安装
+
+<PackageManagerTabs command="add @testing-library/dom @testing-library/user-event -D" />
+
+### 示例
+
+以下是一个完整的表单提交测试示例，展示了常用的用户交互方法：
+
+```tsx title="src/LoginForm.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render } from '@rstest/browser-react';
+import { getByLabelText, getByRole } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+import { LoginForm } from './LoginForm';
+
+test('submits login form with user credentials', async () => {
+  const user = userEvent.setup();
+  const onSubmit = rstest.fn();
+
+  const { container } = await render(<LoginForm onSubmit={onSubmit} />);
+
+  // Type into input fields
+  await user.type(getByLabelText(container, 'Username'), 'alice');
+  await user.type(getByLabelText(container, 'Password'), 'secret123');
+
+  // Check the "remember me" checkbox
+  await user.click(getByLabelText(container, 'Remember me'));
+
+  // Submit the form
+  await user.click(getByRole(container, 'button', { name: 'Login' }));
+
+  // Assert the form was submitted with correct data
+  expect(onSubmit).toHaveBeenCalledWith({
+    username: 'alice',
+    password: 'secret123',
+    rememberMe: true,
+  });
+});
+```
+
+Testing Library 还提供了丰富的交互方法，包括点击、文本输入、键盘事件、下拉选择、拖拽等。详细用法请参考 [user-event 官方文档](https://testing-library.com/docs/user-event/intro)。
+
+## 原生 DOM API
+
+如果你不想引入额外依赖，或者需要更底层的事件控制（如精确指定 `clientX`、`ctrlKey` 等属性），可以直接使用浏览器原生 DOM API。
+
+### 示例
+
+以下示例展示了常见的原生事件操作，包括点击、输入和键盘事件：
+
+```ts title="src/native-events.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('handles click and input events', () => {
+  // Create elements
+  const button = document.createElement('button');
+  const input = document.createElement('input');
+  document.body.append(button, input);
+
+  // Click event
+  let clicked = false;
+  button.addEventListener('click', () => (clicked = true));
+  button.click();
+  expect(clicked).toBe(true);
+
+  // Input event
+  input.focus();
+  input.value = 'hello';
+  input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  expect(input.value).toBe('hello');
+});
+
+test('handles keyboard shortcuts', () => {
+  let shortcutTriggered = false;
+
+  document.addEventListener('keydown', (e) => {
+    // Detect Ctrl+S shortcut
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      shortcutTriggered = true;
+    }
+  });
+
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 's',
+      code: 'KeyS',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+  );
+
+  expect(shortcutTriggered).toBe(true);
+});
+```

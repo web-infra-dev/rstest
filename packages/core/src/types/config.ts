@@ -9,6 +9,7 @@ import type {
 } from './reporter';
 import type { MaybePromise } from './utils';
 
+// TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
 >;
@@ -60,10 +61,8 @@ export type BrowserModeConfig = {
    * Browser provider to use for running tests.
    *
    * Currently only 'playwright' is supported.
-   *
-   * @default 'playwright'
    */
-  provider?: 'playwright';
+  provider: 'playwright';
   /**
    * Which browser to use for testing.
    *

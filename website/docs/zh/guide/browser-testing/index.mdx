@@ -1,0 +1,66 @@
+# 浏览器模式（实验性）
+
+Rstest 提供了浏览器模式（Browser Mode），允许你在真实浏览器中运行测试，而不是使用 jsdom 或 happy-dom 等模拟环境。
+
+<div
+  style={{
+    width: '100%',
+    borderRadius: 8,
+    overflow: 'hidden',
+    aspectRatio: '160 / 82', // 1920x984
+  }}
+>
+  <video
+    src="https://assets.rspack.rs/rstest/assets/browser-mode-intro.mp4"
+    controls
+    playsInline
+    preload="metadata"
+    style={{ width: '100%', height: '100%', display: 'block' }}
+  />
+</div>
+
+## 什么是浏览器模式？
+
+浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行你的测试代码。这意味着你的测试将在与生产环境完全一致的浏览器 API 和行为下运行。
+
+## 何时使用浏览器模式
+
+使用以下决策树来判断是否需要浏览器模式：
+
+```
+依赖真实浏览器 API? ─── 是 ─▶ ✅ 浏览器模式
+         │ 否
+         ▼
+需要跨浏览器测试?  ─── 是 ─▶ ✅ 浏览器模式
+         │ 否
+         ▼
+jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
+         │ 否
+         ▼
+    💡 可用 jsdom
+```
+
+:::tip 推荐
+即使你的测试在 jsdom 中能正常运行，我们仍然**推荐使用浏览器模式**。具体优势见下方对比表。
+:::
+
+## 浏览器模式 vs jsdom/happy-dom
+
+浏览器模式与 jsdom/happy-dom 是两种不同的权衡：浏览器模式提供完整的浏览器兼容性和可视化调试，但会消耗更多资源；jsdom/happy-dom 运行更快、更轻量，但只能模拟部分浏览器 API。
+
+| 特性              | 浏览器模式      | jsdom / happy-dom      |
+| ----------------- | --------------- | ---------------------- |
+| 浏览器 API 完整性 | ✅ 完整支持     | ⚠️ 部分模拟            |
+| Canvas / WebGL    | ✅ 原生支持     | ❌ 不支持或需 polyfill |
+| CSS 计算样式      | ✅ 真实渲染     | ⚠️ 有限支持            |
+| Web Workers       | ✅ 原生支持     | ❌ 不支持              |
+| 执行速度          | ⚠️ 较慢         | ✅ 更快                |
+| 资源消耗          | ⚠️ 较高         | ✅ 较低                |
+| 调试体验          | ✅ 可视化调试   | ⚠️ 仅控制台            |
+| 跨浏览器测试      | ✅ 支持多浏览器 | ❌ 不支持              |
+
+## 下一步
+
+- [快速开始](/guide/browser-testing/getting-started) - 配置并运行你的第一个浏览器测试
+- [框架指南](/guide/browser-testing/framework-guides) - 各框架的完整配置和组件测试示例
+- [用户交互](/guide/browser-testing/user-interactions) - 模拟用户点击、输入等操作

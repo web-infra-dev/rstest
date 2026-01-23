@@ -1,0 +1,174 @@
+# 快速开始
+
+本指南将帮助你在项目中配置并运行浏览器模式测试。
+
+import { PackageManagerTabs } from '@theme';
+
+## 自动初始化
+
+最快速的方式是使用 `rstest init browser` 命令自动完成配置：
+
+<PackageManagerTabs command="rstest init browser" dlx />
+
+### 初始化过程
+
+运行命令后，Rstest 会自动完成以下工作：
+
+1. **生成样板代码**：Rstest 会自动嗅探项目的框架（例如 React 等）、语言（例如 TypeScript 或 JavaScript）、测试目录（例如常见的 `tests/`、`test/`、`__tests__/` 等目录，实际以嗅探结果为准）和包管理器，然后生成示例组件和测试文件，方便你快速上手。生成的文件会根据嗅探结果调整：
+   - 测试目录：文件生成在嗅探到的测试目录下
+   - 框架：React 项目生成 JSX 组件测试，否则生成原生 DOM 操作示例
+   - 语言：TypeScript 项目生成 `.ts`/`.tsx` 文件，否则生成 `.js`/`.jsx` 文件
+
+2. **创建配置文件**：在项目根目录创建 `rstest.browser.config.ts`，包含启用浏览器模式的基本配置。
+
+3. **更新 package.json**：添加 `test:browser` 脚本。
+
+以下是 React 项目的初始化输出示例：
+
+```bash
+◆ rstest init browser
+
+  Detecting project...
+  ✓ Found React 19.0.0
+  ✓ Using playwright as browser provider
+  ✓ Test directory: tests/
+
+  Created files:
+    - rstest.browser.config.ts
+    - tests/Counter.jsx
+    - tests/Counter.test.jsx
+    - Updated package.json
+
+  Next steps:
+    pnpm i
+    pnpm dlx playwright install --with-deps
+    pnpm run test:browser
+
+└ Done!
+```
+
+### 后续步骤
+
+初始化完成后，按照输出中的 "Next steps" 提示操作即可：安装项目依赖、安装浏览器驱动，然后运行测试。
+
+:::tip 非交互式环境
+在 CI 或其他非交互式环境中，可以添加 `--yes` 参数跳过所有提示，直接使用嗅探到的配置：
+
+```bash
+npx rstest init browser --yes
+```
+
+:::
+
+## 手动配置
+
+### 1. 安装依赖
+
+首先，安装 Rstest 核心包和浏览器模式支持包：
+
+<PackageManagerTabs command="add @rstest/core @rstest/browser -D" />
+
+浏览器模式需要 Playwright 作为浏览器驱动，请安装对应的浏览器：
+
+```bash
+npx playwright install chromium
+```
+
+你也可以安装其他浏览器：
+
+```bash
+# 安装 Firefox
+npx playwright install firefox
+
+# 安装 WebKit (Safari)
+npx playwright install webkit
+
+# 安装所有浏览器
+npx playwright install
+```
+
+### 2. 创建配置文件
+
+创建或更新 `rstest.config.ts` 配置文件：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+### 3. 编写测试
+
+创建一个简单的浏览器测试文件：
+
+```ts title="src/dom.test.ts"
+import { expect, test } from '@rstest/core';
+
+test('should work with DOM APIs', () => {
+  const div = document.createElement('div');
+  div.textContent = 'Hello Browser!';
+  document.body.appendChild(div);
+
+  expect(document.body.textContent).toContain('Hello Browser!');
+});
+
+test('should have real browser APIs', () => {
+  // These APIs may be incomplete or missing in jsdom
+  expect(typeof window.requestAnimationFrame).toBe('function');
+  expect(typeof window.IntersectionObserver).toBe('function');
+  expect(typeof window.ResizeObserver).toBe('function');
+});
+```
+
+### 4. 运行测试
+
+```bash
+npx rstest
+```
+
+你应该看到类似以下的输出：
+
+```bash
+ ✓ src/dom.test.ts (2)
+
+ Test Files 1 passed
+      Tests 2 passed
+   Duration 1.2s
+```
+
+## headless vs headed 模式
+
+默认情况下，浏览器模式会根据环境自动选择运行方式：
+
+- **CI 环境**：自动使用 headless 模式（无界面）
+- **本地开发**：默认使用 headed 模式（显示浏览器窗口）
+
+### 配置 headless 模式
+
+你可以在配置文件中明确指定：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    headless: true, // 始终使用无界面模式
+  },
+});
+```
+
+## 配置参考
+
+完整配置参考请查看 [browser 配置](/config/test/browser)。
+
+## 下一步
+
+- [框架指南](/guide/browser-testing/framework-guides) - 各框架的完整配置和组件测试示例
+- [用户交互](/guide/browser-testing/user-interactions) - 模拟用户操作
