@@ -52,7 +52,16 @@ const findVirtualContent = (
 
   const raw = toFsPath(p);
   const normalized = path.normalize(raw);
-  const alt = normalized.replace(/\\/g, '/');
+
+  // `pathe` normalizes to POSIX separators even on Windows, but Node's `fs`
+  // callers may pass native backslash paths. Try a few common variants.
+  const candidates = new Set<string>();
+  candidates.add(raw);
+  candidates.add(normalized);
+  candidates.add(raw.replace(/\\/g, '/'));
+  candidates.add(normalized.replace(/\\/g, '/'));
+  candidates.add(raw.replace(/\//g, '\\'));
+  candidates.add(normalized.replace(/\//g, '\\'));
 
   const maybeDecode = (value: string): string | null => {
     if (!value.includes('%')) return null;
@@ -63,20 +72,36 @@ const findVirtualContent = (
     }
   };
 
-  const decodedNormalized = maybeDecode(normalized);
-  const decodedAlt = alt !== normalized ? maybeDecode(alt) : null;
+  for (const value of Array.from(candidates)) {
+    const decoded = maybeDecode(value);
+    if (decoded) candidates.add(decoded);
 
-  const content =
-    virtualFiles[normalized] ??
-    virtualFiles[alt] ??
-    (decodedNormalized ? virtualFiles[decodedNormalized] : undefined) ??
-    (decodedAlt ? virtualFiles[decodedAlt] : undefined);
+    // Windows drive letters are case-insensitive. Keep lookups resilient when
+    // one side has `C:` and the other has `c:`.
+    if (/^[A-Za-z]:[\\/]/.test(value)) {
+      candidates.add(value.toLowerCase());
+    }
+  }
+
+  let content: string | undefined;
+  for (const key of candidates) {
+    const maybe = virtualFiles[key];
+    if (typeof maybe === 'string') {
+      content = maybe;
+      break;
+    }
+  }
 
   if (typeof content !== 'string') return null;
 
+  const isWasm =
+    Array.from(candidates).some((candidate) => candidate.endsWith('.wasm')) ||
+    normalized.endsWith('.wasm') ||
+    raw.endsWith('.wasm');
+
   return {
     content,
-    isWasm: normalized.endsWith('.wasm') || alt.endsWith('.wasm'),
+    isWasm,
   };
 };
 
