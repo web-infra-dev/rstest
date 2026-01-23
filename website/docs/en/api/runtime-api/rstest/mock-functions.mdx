@@ -193,7 +193,7 @@ A type helper for TypeScript that wraps an object with mock types without changi
 ```ts
 import { myModule } from './myModule';
 
-rs.mock('./myModule');
+rs.mock('./myModule', { spy: true });
 
 // TypeScript now knows myModule.method is a MockInstance
 const mockedModule = rstest.mocked(myModule);
