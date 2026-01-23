@@ -1,0 +1,331 @@
+// Rstest Snapshot v1
+
+exports[`md > formats thrown errors 1`] = `
+"---
+tool: "@rstest/core@0.8.1"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/throw.test.ts :: agent-md > fails with thrown error
+
+details:
+
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/throw.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with thrown error",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "Error",
+      "message": "boom",
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+
+"
+`;
+
+exports[`md > includes console output when enabled 1`] = `
+"---
+tool: "@rstest/core@0.8.1"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/console.test.ts :: agent-md > fails with console output
+
+details:
+
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/console.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with console output",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "AssertionError",
+      "message": "expected 1 to be 2 // Object.is equality",
+      "expected": "2",
+      "actual": "1",
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+
+codeFrame (error 1):
+
+\`\`\`text
+ 6 |     console.warn('hello from console.warn');
+ 7 |     console.error('hello from console.error');
+ 8 |     expect(1).toBe(2);
+   |               ^
+ 9 |   });
+10 | });
+\`\`\`
+
+console:
+
+\`\`\`text
+[stdout] log: hello from console.log
+[stderr] warn: hello from console.warn
+[stderr] error: hello from console.error
+\`\`\`
+
+"
+`;
+
+exports[`md > labels snapshot mismatch errors 1`] = `
+"---
+tool: "@rstest/core@0.8.1"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 1,
+    "removed": 0,
+    "unchecked": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/snapshotMismatch.test.ts :: agent-md > fails with snapshot mismatch
+
+details:
+
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/snapshotMismatch.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with snapshot mismatch",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "SnapshotMismatchError",
+      "message": "Snapshot \`agent-md > fails with snapshot mismatch 1\` mismatched",
+      "expected": "{\\n  \\"a\\": 2,\\n}",
+      "actual": "{\\n  \\"a\\": 1,\\n}",
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+
+"
+`;
+
+exports[`md > labels timeout errors 1`] = `
+"---
+tool: "@rstest/core@0.8.1"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/timeout.test.ts :: agent-md > fails with timeout
+
+details:
+
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/timeout.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with timeout",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "Error",
+      "message": "test timed out in 20ms (no expect assertions completed)",
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+
+"
+`;
+
+exports[`md > outputs markdown report 1`] = `
+"---
+tool: "@rstest/core@0.8.1"
+timestamp: "<timestamp>"
+---
+
+# Rstest Agent Report
+
+## Summary
+
+\`\`\`json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1
+  },
+  "durationMs": {
+    "total": 0,
+    "build": 0,
+    "tests": 0
+  },
+  "snapshot": {
+    "added": 0,
+    "updated": 0,
+    "unmatched": 0,
+    "removed": 0,
+    "unchecked": 0
+  }
+}
+\`\`\`
+
+## Failures
+
+### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+
+details:
+
+\`\`\`json
+{
+  "testPath": "fixtures/agent-md/index.test.ts",
+  "project": "rstest",
+  "fullName": "agent-md > fails with diff",
+  "status": "fail",
+  "duration": 0,
+  "retryCount": 0,
+  "errors": [
+    {
+      "type": "AssertionError",
+      "message": "expected 2 to be 3 // Object.is equality",
+      "expected": "3",
+      "actual": "2",
+      "stackFrames": []
+    }
+  ]
+}
+\`\`\`
+
+"
+`;

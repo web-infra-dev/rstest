@@ -6,6 +6,7 @@ import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { JUnitReporter } from '../reporter/junit';
+import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -214,11 +215,13 @@ const reportersMap: {
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  md: typeof MdReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  md: MdReporter,
 };
 
 export type BuiltInReporterNames = keyof typeof reportersMap;
