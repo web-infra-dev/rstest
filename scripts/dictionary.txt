@@ -86,6 +86,7 @@ ntqry
 onclosetag
 onopentag
 ontext
+opencode
 osascript
 outbase
 outro

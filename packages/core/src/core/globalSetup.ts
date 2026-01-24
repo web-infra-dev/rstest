@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
 import type { EntryInfo } from '../types';
-import { bgColor, color } from '../utils';
+import { ansiEnabled, bgColor, color } from '../utils';
 
 let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
 
@@ -35,9 +35,9 @@ async function createSetupPool() {
     isolateWorkers: false,
     env: {
       NODE_ENV: 'test',
-      // enable diff color by default
-      FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
       ...process.env,
+      // enable diff color by default
+      FORCE_COLOR: ansiEnabled() ? (process.env.FORCE_COLOR ?? '1') : '0',
     },
   };
 

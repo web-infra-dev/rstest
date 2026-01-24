@@ -10,7 +10,7 @@ describe.concurrent('reporters', () => {
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index'],
+      args: ['run', 'index.test.ts', '--exclude', 'ansi/**'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -45,7 +45,7 @@ describe.concurrent('reporters', () => {
   it('verbose', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '--reporter=verbose'],
+      args: ['run', 'fixtures/index.test.ts', '--reporter=verbose'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -62,7 +62,12 @@ describe.concurrent('reporters', () => {
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '--reporter=verbose', '--hideSkippedTests'],
+      args: [
+        'run',
+        'fixtures/index.test.ts',
+        '--reporter=verbose',
+        '--hideSkippedTests',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -96,7 +101,12 @@ describe.concurrent('reporters', () => {
   it('custom', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '-c', './rstest.customReporterConfig.ts'],
+      args: [
+        'run',
+        'fixtures/index.test.ts',
+        '-c',
+        './rstest.customReporterConfig.ts',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {

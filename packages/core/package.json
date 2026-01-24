@@ -66,6 +66,7 @@
   },
   "devDependencies": {
     "@babel/code-frame": "^7.27.1",
+    "@clack/prompts": "^0.10.1",
     "@jridgewell/trace-mapping": "0.3.31",
     "@microsoft/api-extractor": "^7.55.2",
     "@rsbuild/plugin-node-polyfill": "^1.3.0",
@@ -80,8 +81,6 @@
     "@types/jsdom": "^21.1.7",
     "@types/picomatch": "^4.0.2",
     "@types/sinonjs__fake-timers": "^8.1.5",
-    "@clack/prompts": "^0.10.1",
-    "@vercel/detect-agent": "^1.0.0",
     "@types/source-map-support": "^0.5.10",
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
@@ -106,7 +105,8 @@
     "tinyglobby": "^0.2.15",
     "tinyspy": "^4.0.4",
     "url-extras": "^0.1.0",
-    "webpack-license-plugin": "^4.5.1"
+    "webpack-license-plugin": "^4.5.1",
+    "yn": "^5.1.0"
   },
   "peerDependencies": {
     "happy-dom": "*",

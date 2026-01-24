@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { rspack } from '@rsbuild/core';
 import pathe from 'pathe';
-import { color, getAbsolutePath } from './helper';
+import { getAbsolutePath } from './helper';
+import { color } from './logger';
 import { formatTestEntryName } from './testFiles';
 
 const tryResolve = (request: string, rootPath: string) => {

@@ -174,6 +174,88 @@ export interface Mock<T extends FunctionLike = FunctionLike>
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
+/**
+ * Options for mockObject
+ */
+export interface MockOptions {
+  /**
+   * If `true`, the original implementation will be kept.
+   * All methods will call the original implementation, but you can still track the calls.
+   */
+  spy?: boolean;
+}
+
+// Helper types for mocking
+type MockProcedure = (...args: any[]) => any;
+
+// Type for class constructors
+type Constructor<T = any> = new (...args: any[]) => T;
+
+// Mocked class constructor type - preserves both the constructor signature and mock capabilities
+export type MockedClass<T extends Constructor> = Mock<
+  (...args: ConstructorParameters<T>) => InstanceType<T>
+> & {
+  new (...args: ConstructorParameters<T>): InstanceType<T>;
+  prototype: InstanceType<T>;
+};
+
+type Methods<T> = {
+  [K in keyof T]: T[K] extends MockProcedure ? K : never;
+}[keyof T];
+
+type Properties<T> = {
+  [K in keyof T]: T[K] extends MockProcedure ? never : K;
+}[keyof T];
+
+export type MockedFunction<T extends MockProcedure> = Mock<T> & {
+  [K in keyof T]: T[K];
+};
+
+export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
+  MockedObjectDeep<T>;
+
+export type MockedObject<T> = {
+  [K in Methods<T>]: T[K] extends MockProcedure ? MockedFunction<T[K]> : T[K];
+} & { [K in Properties<T>]: T[K] };
+
+export type MockedObjectDeep<T> = {
+  [K in Methods<T>]: T[K] extends MockProcedure
+    ? MockedFunctionDeep<T[K]>
+    : T[K];
+} & { [K in Properties<T>]: MaybeMockedDeep<T[K]> };
+
+export type MaybeMocked<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunction<T>
+    : T extends object
+      ? MockedObject<T>
+      : T;
+
+export type MaybeMockedDeep<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunctionDeep<T>
+    : T extends object
+      ? MockedObjectDeep<T>
+      : T;
+
+export type MaybePartiallyMocked<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunction<T>
+    : T extends object
+      ? MockedObject<T>
+      : T;
+
+export type MaybePartiallyMockedDeep<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunctionDeep<T>
+    : T extends object
+      ? MockedObjectDeep<T>
+      : T;
+
 export interface RstestUtilities {
   /**
    * Creates a spy on a function.
@@ -192,6 +274,81 @@ export interface RstestUtilities {
    * Determines if the given function is a mocked function.
    */
   isMockFunction: (fn: any) => fn is MockInstance;
+
+  /**
+   * Deeply mocks properties and methods of a given object
+   * in the same way as `rstest.mock()` mocks module exports.
+   *
+   * @example
+   * ```ts
+   * const original = {
+   *   simple: () => 'value',
+   *   nested: {
+   *     method: () => 'real'
+   *   },
+   *   prop: 'foo',
+   * }
+   *
+   * const mocked = rstest.mockObject(original)
+   * expect(mocked.simple()).toBe(undefined)
+   * expect(mocked.nested.method()).toBe(undefined)
+   * expect(mocked.prop).toBe('foo')
+   *
+   * mocked.simple.mockReturnValue('mocked')
+   * expect(mocked.simple()).toBe('mocked')
+   *
+   * // With spy option to keep original implementations
+   * const spied = rstest.mockObject(original, { spy: true })
+   * expect(spied.simple()).toBe('value')
+   * expect(spied.simple).toHaveBeenCalled()
+   * ```
+   *
+   * @param value - The object to be mocked
+   * @param options - Mock options
+   * @returns A deeply mocked version of the input object
+   */
+  mockObject: <T>(value: T, options?: MockOptions) => MaybeMockedDeep<T>;
+
+  /**
+   * Type helper for TypeScript. Just returns the object that was passed.
+   *
+   * When `partial` is `true` it will expect a `Partial<T>` as a return value.
+   * By default, this will only make TypeScript believe that the first level values are mocked.
+   * You can pass down `{ deep: true }` as a second argument to tell TypeScript
+   * that the whole object is mocked, if it actually is.
+   *
+   * @example
+   * ```ts
+   * import example from './example.js'
+   *
+   * rstest.mock('./example.js')
+   *
+   * test('1 + 1 equals 10', async () => {
+   *   rstest.mocked(example.calc).mockReturnValue(10)
+   *   expect(example.calc(1, '+', 1)).toBe(10)
+   * })
+   * ```
+   * @param item - Anything that can be mocked
+   * @returns The same item with mocked type
+   */
+  mocked: (<T>(item: T, deep?: false) => MaybeMocked<T>) &
+    (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
+    (<T>(
+      item: T,
+      options: { partial?: false; deep?: false },
+    ) => MaybeMocked<T>) &
+    (<T>(
+      item: T,
+      options: { partial?: false; deep: true },
+    ) => MaybeMockedDeep<T>) &
+    (<T>(
+      item: T,
+      options: { partial: true; deep?: false },
+    ) => MaybePartiallyMocked<T>) &
+    (<T>(
+      item: T,
+      options: { partial: true; deep: true },
+    ) => MaybePartiallyMockedDeep<T>);
 
   /**
    * Calls `.mockClear()` on all spies.

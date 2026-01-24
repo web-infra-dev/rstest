@@ -1229,11 +1229,14 @@ export const runBrowserController = async (
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    logger.log(
-      color[code ? 'red' : 'yellow'](
-        `No test files found, exiting with code ${code}.`,
-      ),
-    );
+    if (!skipOnTestRunEnd) {
+      logger.log(
+        color[code ? 'red' : 'yellow'](
+          `No test files found, exiting with code ${code}.`,
+        ),
+      );
+    }
+
     if (code !== 0) {
       ensureProcessExitCode(code);
     }
