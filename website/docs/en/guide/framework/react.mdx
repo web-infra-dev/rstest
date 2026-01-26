@@ -1,0 +1,187 @@
+# React
+
+This guide covers how to test React applications and components with Rstest. Rstest supports testing React in two environments:
+
+- **Node (with happy-dom or jsdom)**: Fast, lightweight tests running in Node.js with a simulated DOM
+- **Browser Mode**: Real browser testing with Playwright for accurate DOM behavior
+
+## Node Testing
+
+Node-based testing uses DOM simulators like [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to provide a DOM environment in Node.js. This approach is faster and suitable for most component testing scenarios.
+
+### Quick start
+
+#### 1. Install dependencies
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core @rsbuild/plugin-react @testing-library/react @testing-library/jest-dom happy-dom -D" />
+
+#### 2. Configure rstest
+
+Create `rstest.config.ts`:
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  testEnvironment: 'happy-dom',
+});
+```
+
+#### 3. Setup test matchers (Optional)
+
+For enhanced DOM assertions with jest-dom matchers, create a setup file:
+
+```ts title="rstest.setup.ts"
+import { afterEach, expect } from '@rstest/core';
+import { cleanup } from '@testing-library/react';
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+
+expect.extend(jestDomMatchers);
+
+// Cleanup after each test to prevent test pollution
+afterEach(() => {
+  cleanup();
+});
+```
+
+Then add it to your config:
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  testEnvironment: 'happy-dom',
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+#### 4. Write your first test
+
+```tsx title="src/App.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders greeting', () => {
+  render(<App />);
+  expect(screen.getByText('Hello World')).toBeInTheDocument();
+});
+```
+
+### Reusing Rsbuild configuration
+
+If your project already uses Rsbuild, you can reuse your existing configuration with [@rstest/adapter-rsbuild](/guide/integration/rsbuild):
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+```ts title="rstest.config.ts"
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  testEnvironment: 'happy-dom',
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+This will automatically inherit your Rsbuild plugins, aliases, and other build configuration.
+
+### Testing components
+
+Use [@testing-library/react](https://testing-library.com/docs/react-testing-library/intro/) to render and query components:
+
+```tsx title="src/Counter.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render, screen, fireEvent } from '@testing-library/react';
+import Counter from './Counter';
+
+test('increments counter on click', () => {
+  render(<Counter />);
+
+  const button = screen.getByRole('button');
+  expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+  fireEvent.click(button);
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
+});
+```
+
+### Mocking modules
+
+Use `rs.mock()` to mock dependencies:
+
+```tsx title="src/UserProfile.test.tsx"
+import { expect, rs, test } from '@rstest/core';
+import { render, screen } from '@testing-library/react';
+import UserProfile from './UserProfile';
+
+rs.mock('./api', () => ({
+  fetchUser: () => Promise.resolve({ name: 'John Doe' }),
+}));
+
+test('renders user name', async () => {
+  render(<UserProfile userId="1" />);
+  expect(await screen.findByText('John Doe')).toBeInTheDocument();
+});
+```
+
+## SSR Testing
+
+Rstest supports testing React Server-Side Rendering (SSR) scenarios. You can test your server render functions using `react-dom/server`.
+
+### Example
+
+First, create a server render function:
+
+```tsx title="src/index.server.tsx"
+import React from 'react';
+import ReactDOMServer from 'react-dom/server';
+import App from './App';
+
+export function render() {
+  return ReactDOMServer.renderToString(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}
+```
+
+Then test it:
+
+```ts title="test/ssr.test.ts"
+import { expect, test } from '@rstest/core';
+import { render } from '../src/index.server';
+
+test('renders correctly on server', () => {
+  const html = render();
+  expect(html).toContain('Hello World');
+  expect(html).toMatchSnapshot();
+});
+```
+
+SSR tests run in Node.js environment without a DOM simulator, which is the default `testEnvironment: 'node'` setting.
+
+## Browser Mode Testing
+
+For scenarios requiring real browser behavior (e.g., CSS rendering, Web APIs, visual testing), use Rstest's Browser Mode with Playwright.
+
+See the [Browser Testing - Framework Guides](/guide/browser-testing/framework-guides#react) for detailed setup and usage instructions.
+
+**Recommendations:**
+
+- Use **Node testing** for unit tests, logic-heavy components, and fast feedback
+- Use **Browser Mode** for integration tests, visual behavior, and when you need real browser APIs
+
+## Example Projects
+
+- [react](https://github.com/web-infra-dev/rstest/tree/main/examples/react) - React testing with happy-dom (includes component, hook, and SSR tests)
+- [react-rsbuild](https://github.com/web-infra-dev/rstest/tree/main/examples/react-rsbuild) - React testing with Rsbuild adapter
+- [browser-react](https://github.com/web-infra-dev/rstest/tree/main/examples/browser-react) - React testing in Browser Mode

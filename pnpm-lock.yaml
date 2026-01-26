@@ -547,6 +547,46 @@ importers:
       '@rsbuild/plugin-react':
         specifier: ^1.4.2
         version: 1.4.2(@rsbuild/core@1.7.2)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.1
+        version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.7)
+      happy-dom:
+        specifier: ^20.0.11
+        version: 20.0.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  examples/react-rsbuild:
+    dependencies:
+      react:
+        specifier: ^19.2.3
+        version: 19.2.3
+      react-dom:
+        specifier: ^19.2.3
+        version: 19.2.3(react@19.2.3)
+    devDependencies:
+      '@rsbuild/core':
+        specifier: 1.7.2
+        version: 1.7.2
+      '@rsbuild/plugin-react':
+        specifier: ^1.4.2
+        version: 1.4.2(@rsbuild/core@1.7.2)
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
         version: link:../../packages/adapter-rsbuild

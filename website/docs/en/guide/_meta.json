@@ -16,6 +16,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "framework",
+    "label": "Framework"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "Advanced"
   },

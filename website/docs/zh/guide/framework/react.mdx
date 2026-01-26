@@ -1,0 +1,187 @@
+# React
+
+本指南介绍如何使用 Rstest 测试 React 应用和组件。Rstest 支持在两种环境中测试 React：
+
+- **Node（使用 happy-dom 或 jsdom）**：在 Node.js 中使用模拟 DOM 进行快速、轻量的测试
+- **浏览器模式**：使用 Playwright 进行真实浏览器测试，获得准确的 DOM 行为
+
+## Node 测试
+
+基于 Node 的测试使用 DOM 模拟器如 [happy-dom](https://github.com/niciodev/happy-dom) 或 [jsdom](https://github.com/jsdom/jsdom) 在 Node.js 中提供 DOM 环境。这种方式更快，适用于大多数组件测试场景。
+
+### 快速开始
+
+#### 1. 安装依赖
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core @rsbuild/plugin-react @testing-library/react @testing-library/jest-dom happy-dom -D" />
+
+#### 2. 配置 rstest
+
+创建 `rstest.config.ts`：
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  testEnvironment: 'happy-dom',
+});
+```
+
+#### 3. 设置测试匹配器（可选）
+
+如需使用 jest-dom 匹配器增强 DOM 断言，创建一个 setup 文件：
+
+```ts title="rstest.setup.ts"
+import { afterEach, expect } from '@rstest/core';
+import { cleanup } from '@testing-library/react';
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+
+expect.extend(jestDomMatchers);
+
+// 每个测试后清理以防止测试污染
+afterEach(() => {
+  cleanup();
+});
+```
+
+然后添加到配置中：
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  testEnvironment: 'happy-dom',
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+#### 4. 编写第一个测试
+
+```tsx title="src/App.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render, screen } from '@testing-library/react';
+import App from './App';
+
+test('renders greeting', () => {
+  render(<App />);
+  expect(screen.getByText('Hello World')).toBeInTheDocument();
+});
+```
+
+### 复用 Rsbuild 配置
+
+如果你的项目已经使用 Rsbuild，可以通过 [@rstest/adapter-rsbuild](/guide/integration/rsbuild) 复用现有配置：
+
+<PackageManagerTabs command="add @rstest/adapter-rsbuild -D" />
+
+```ts title="rstest.config.ts"
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: withRsbuildConfig(),
+  testEnvironment: 'happy-dom',
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+这将自动继承你的 Rsbuild 插件、别名和其他构建配置。
+
+### 测试组件
+
+使用 [@testing-library/react](https://testing-library.com/docs/react-testing-library/intro/) 渲染和查询组件：
+
+```tsx title="src/Counter.test.tsx"
+import { expect, test } from '@rstest/core';
+import { render, screen, fireEvent } from '@testing-library/react';
+import Counter from './Counter';
+
+test('increments counter on click', () => {
+  render(<Counter />);
+
+  const button = screen.getByRole('button');
+  expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+  fireEvent.click(button);
+  expect(screen.getByText('Count: 1')).toBeInTheDocument();
+});
+```
+
+### 模拟模块
+
+使用 `rs.mock()` 模拟依赖：
+
+```tsx title="src/UserProfile.test.tsx"
+import { expect, rs, test } from '@rstest/core';
+import { render, screen } from '@testing-library/react';
+import UserProfile from './UserProfile';
+
+rs.mock('./api', () => ({
+  fetchUser: () => Promise.resolve({ name: 'John Doe' }),
+}));
+
+test('renders user name', async () => {
+  render(<UserProfile userId="1" />);
+  expect(await screen.findByText('John Doe')).toBeInTheDocument();
+});
+```
+
+## SSR 测试
+
+Rstest 支持测试 React 服务端渲染（SSR）场景。你可以使用 `react-dom/server` 测试服务端渲染函数。
+
+### 示例
+
+首先，创建一个服务端渲染函数：
+
+```tsx title="src/index.server.tsx"
+import React from 'react';
+import ReactDOMServer from 'react-dom/server';
+import App from './App';
+
+export function render() {
+  return ReactDOMServer.renderToString(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}
+```
+
+然后测试它：
+
+```ts title="test/ssr.test.ts"
+import { expect, test } from '@rstest/core';
+import { render } from '../src/index.server';
+
+test('renders correctly on server', () => {
+  const html = render();
+  expect(html).toContain('Hello World');
+  expect(html).toMatchSnapshot();
+});
+```
+
+SSR 测试在 Node.js 环境中运行，不需要 DOM 模拟器，使用默认的 `testEnvironment: 'node'` 设置即可。
+
+## 浏览器模式测试
+
+对于需要真实浏览器行为的场景（例如 CSS 渲染、Web API、视觉测试），使用 Rstest 的浏览器模式配合 Playwright。
+
+详细的配置和使用说明请参阅[浏览器测试 - 框架指南](/guide/browser-testing/framework-guides#react)。
+
+**建议：**
+
+- 使用 **Node 测试** 进行单元测试、逻辑密集型组件和快速反馈
+- 使用 **浏览器模式** 进行集成测试、视觉行为测试以及需要真实浏览器 API 的场景
+
+## 示例项目
+
+- [react](https://github.com/web-infra-dev/rstest/tree/main/examples/react) - 使用 happy-dom 的 React 测试（包含组件、Hook 和 SSR 测试）
+- [react-rsbuild](https://github.com/web-infra-dev/rstest/tree/main/examples/react-rsbuild) - 使用 Rsbuild adapter 的 React 测试
+- [browser-react](https://github.com/web-infra-dev/rstest/tree/main/examples/browser-react) - 浏览器模式下的 React 测试

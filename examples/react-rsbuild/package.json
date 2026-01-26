@@ -1,14 +1,11 @@
 {
-  "name": "@examples/react",
+  "name": "@examples/react-rsbuild",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "rsbuild dev --open",
     "build": "rsbuild build",
     "preview": "rsbuild preview",
     "test": "rstest",
-    "test:client": "rstest --project react",
-    "test:server": "rstest --project react-ssr",
     "test:watch": "rstest --watch"
   },
   "dependencies": {
@@ -18,7 +15,7 @@
   "devDependencies": {
     "@rsbuild/core": "1.7.2",
     "@rsbuild/plugin-react": "^1.4.2",
-    "@rstest/core": "workspace:*",
+    "@rstest/adapter-rsbuild": "workspace:*",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
