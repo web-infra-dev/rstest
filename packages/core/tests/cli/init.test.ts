@@ -328,4 +328,89 @@ describe('resolveProjects', () => {
       });
     });
   });
+
+  describe('pool CLI options', () => {
+    it('should apply --pool shorthand (string) and preserve other pool fields', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+          pool: { type: 'forks', maxWorkers: '50%' },
+        },
+        root: rootPath,
+        options: { pool: 'forks' },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        type: 'forks',
+      });
+    });
+
+    it('should convert string config.pool and apply --pool shorthand', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+          pool: 'forks',
+        },
+        root: rootPath,
+        options: { pool: 'forks' },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({ type: 'forks' });
+    });
+
+    it('should merge pool.* options into string config.pool', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+          pool: 'forks',
+        },
+        root: rootPath,
+        options: {
+          pool: {
+            minWorkers: 1,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        minWorkers: 1,
+      });
+    });
+
+    it('should cast pool.execArgv to array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+        },
+        root: rootPath,
+        options: {
+          pool: {
+            execArgv: '--conditions=development',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        execArgv: ['--conditions=development'],
+      });
+    });
+
+    it('should keep pool.execArgv array when passed multiple times', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [{ name: 'test-project' }],
+        },
+        root: rootPath,
+        options: {
+          pool: {
+            execArgv: ['--conditions=development', '--no-warnings'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.pool).toEqual({
+        execArgv: ['--conditions=development', '--no-warnings'],
+      });
+    });
+  });
 });

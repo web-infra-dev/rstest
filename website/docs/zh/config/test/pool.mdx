@@ -7,9 +7,11 @@ overviewHeaders: []
 - **类型：**
 
 ```ts
+export type RstestPoolType = 'forks';
+
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
-  type?: 'fork';
+  type?: RstestPoolType;
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
   /** 最小运行的线程池的数量或百分比 */
@@ -17,21 +19,49 @@ export type RstestPoolOptions = {
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
 };
+
+export type RstestConfig = {
+  /** 用于运行测试的线程池 */
+  pool?: RstestPoolType | RstestPoolOptions;
+};
 ```
 
 - **默认值：**
 
 ```ts
 const defaultPool = {
-  type: 'fork'
-  maxWorkers: available CPUs
-  minWorkers: available CPUs
-}
+  type: 'forks',
+  // maxWorkers/minWorkers 会根据 CPU 数量和运行模式自动计算
+};
 ```
 
 用于运行测试的线程池的选项。
 
 ## 示例
+
+### Shorthand
+
+你可以使用 string shorthand 来设置 pool type：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'forks',
+});
+```
+
+等价于：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    type: 'forks',
+  },
+});
+```
 
 在单个子进程中运行所有测试。
 

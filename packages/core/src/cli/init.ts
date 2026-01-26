@@ -18,6 +18,19 @@ export type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
   /**
+   * Pool options.
+   * - `string`: shorthand for `{ type: string }` (from `--pool` flag)
+   * - `object`: detailed pool config (from `--pool.*` options)
+   */
+  pool?:
+    | string
+    | {
+        type?: string;
+        maxWorkers?: string | number;
+        minWorkers?: string | number;
+        execArgv?: string[] | string;
+      };
+  /**
    * Browser mode options.
    * - `boolean`: shorthand for `{ enabled: boolean }` (from `--browser` flag)
    * - `object`: detailed browser config (from `--browser.*` options)
@@ -137,6 +150,51 @@ function mergeWithCLIOptions(
       }
       if (options.browser.strictPort !== undefined) {
         config.browser.strictPort = options.browser.strictPort;
+      }
+    }
+  }
+
+  if (options.pool !== undefined) {
+    const poolFromCli = options.pool;
+
+    if (typeof poolFromCli === 'string') {
+      if (typeof config.pool === 'string') {
+        config.pool = { type: config.pool };
+      }
+
+      config.pool ??= {};
+      if (typeof config.pool !== 'object') {
+        config.pool = {};
+      }
+
+      const pool = config.pool;
+      pool.type = poolFromCli as any;
+    } else {
+      if (typeof config.pool === 'string') {
+        config.pool = { type: config.pool };
+      }
+
+      config.pool ??= {};
+      if (typeof config.pool !== 'object') {
+        config.pool = {};
+      }
+
+      const pool = config.pool;
+
+      if (poolFromCli.type !== undefined) {
+        pool.type = poolFromCli.type as any;
+      }
+
+      if (poolFromCli.maxWorkers !== undefined) {
+        pool.maxWorkers = poolFromCli.maxWorkers as any;
+      }
+
+      if (poolFromCli.minWorkers !== undefined) {
+        pool.minWorkers = poolFromCli.minWorkers as any;
+      }
+
+      if (poolFromCli.execArgv !== undefined) {
+        pool.execArgv = castArray(poolFromCli.execArgv);
       }
     }
   }
