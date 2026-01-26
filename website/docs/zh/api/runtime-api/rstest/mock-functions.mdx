@@ -193,7 +193,7 @@ type Mocked = <T>(
 ```ts
 import { myModule } from './myModule';
 
-rs.mock('./myModule');
+rs.mock('./myModule', { spy: true });
 
 // TypeScript 现在知道 myModule.method 是一个 MockInstance
 const mockedModule = rstest.mocked(myModule);
