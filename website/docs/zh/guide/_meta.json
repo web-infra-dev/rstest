@@ -16,6 +16,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "framework",
+    "label": "框架"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "进阶"
   },
