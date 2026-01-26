@@ -6,7 +6,7 @@ This guide covers how to test React applications and components with Rstest. Rst
 - **SSR (Server-Side Rendering)**: Test server render functions in pure Node.js environment
 - **Browser Mode**: Real browser testing with Playwright for accurate DOM behavior
 
-## Node Testing
+## Node testing
 
 Node-based testing uses DOM simulators like [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to provide a DOM environment in Node.js. This approach is faster and suitable for most component testing scenarios.
 
@@ -133,7 +133,7 @@ test('renders user name', async () => {
 });
 ```
 
-## SSR Testing
+## SSR testing
 
 Rstest supports testing React Server-Side Rendering (SSR) scenarios. You can test your server render functions using `react-dom/server`.
 
@@ -170,7 +170,7 @@ test('renders correctly on server', () => {
 
 SSR tests run in Node.js environment without a DOM simulator, which is the default `testEnvironment: 'node'` setting.
 
-## Browser Mode Testing
+## Browser mode testing
 
 For scenarios requiring real browser behavior (e.g., CSS rendering, Web APIs, visual testing), use Rstest's Browser Mode with Playwright.
 
@@ -181,7 +181,7 @@ See the [Browser Testing - Framework Guides](/guide/browser-testing/framework-gu
 - Use **Node testing** for unit tests, logic-heavy components, and fast feedback
 - Use **Browser Mode** for integration tests, visual behavior, and when you need real browser APIs
 
-## Example Projects
+## Example projects
 
 - [react](https://github.com/web-infra-dev/rstest/tree/main/examples/react) - React testing with happy-dom (includes component, hook, and SSR tests)
 - [react-rsbuild](https://github.com/web-infra-dev/rstest/tree/main/examples/react-rsbuild) - React testing with Rsbuild adapter
