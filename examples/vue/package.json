@@ -1,0 +1,24 @@
+{
+  "name": "@examples/vue",
+  "private": true,
+  "scripts": {
+    "dev": "rsbuild dev",
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "vue": "^3.5.26"
+  },
+  "devDependencies": {
+    "@rsbuild/plugin-babel": "^1.0.6",
+    "@rsbuild/plugin-vue": "^1.2.2",
+    "@rsbuild/plugin-vue-jsx": "^1.1.1",
+    "@rsbuild/core": "1.7.2",
+    "@rstest/core": "workspace:*",
+    "@vue/compiler-dom": "^3.5.26",
+    "@vue/server-renderer": "^3.5.26",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^20.0.11",
+    "typescript": "^5.9.3"
+  }
+}
