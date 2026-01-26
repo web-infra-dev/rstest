@@ -7,5 +7,4 @@ export default defineConfig({
   name: 'react-ssr',
   testEnvironment: 'node',
   include: ['test/**/*.server.test.{ts,tsx}'],
-  setupFiles: ['./test/rstest.setup.ts'],
 });
