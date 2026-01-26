@@ -26,8 +26,8 @@ import { PackageManagerTabs } from '@theme';
 创建 `rstest.config.ts`：
 
 ```ts title="rstest.config.ts"
-import { defineConfig } from '@rsbuild/core';
 import { pluginVue } from '@rsbuild/plugin-vue';
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   plugins: [pluginVue()],
@@ -38,10 +38,10 @@ export default defineConfig({
 如需支持 Vue JSX：
 
 ```ts title="rstest.config.ts"
-import { defineConfig } from '@rsbuild/core';
 import { pluginBabel } from '@rsbuild/plugin-babel';
 import { pluginVue } from '@rsbuild/plugin-vue';
 import { pluginVueJsx } from '@rsbuild/plugin-vue-jsx';
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   plugins: [
