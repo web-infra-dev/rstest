@@ -12,9 +12,9 @@
  * This convention helps distinguish between normal operations
  * and important alerts that require attention.
  */
-import { createColors } from 'picocolors';
+import { createColors, isColorSupported } from 'picocolors';
 import { type Logger, logger as rslog } from 'rslog';
-import { determineAgent } from './agent';
+import { isTTY } from './helper';
 
 export const isDebug = (): boolean => {
   if (!process.env.DEBUG) {
@@ -27,21 +27,22 @@ export const isDebug = (): boolean => {
   );
 };
 
-export const ansiEnabled = (): boolean => {
-  const isColorSupported = createColors().isColorSupported;
-  return !determineAgent().isAgent && isColorSupported;
+export const ansiEnabled: boolean = isColorSupported;
+
+export const getForceColorEnv = (): { FORCE_COLOR?: '1' } => {
+  const shouldForceColor =
+    isTTY('stdout') &&
+    ansiEnabled &&
+    process.env.NO_COLOR === undefined &&
+    process.env.FORCE_COLOR === undefined;
+
+  return shouldForceColor ? { FORCE_COLOR: '1' } : {};
 };
 
 /**
- * Create a picocolors instance that respects runtime FORCE_COLOR / TTY / ansiEnabled().
- * We use createColors() instead of the default export because:
- * 1. The default export evaluates isColorSupported at module load time
- * 2. When bundled, this evaluation happens at build time, not runtime
- * 3. By using createColors(), we can evaluate the color support at runtime
+ * Create a picocolors instance using default runtime detection.
  */
-export const color: ReturnType<typeof createColors> = createColors(
-  ansiEnabled(),
-);
+export const color: ReturnType<typeof createColors> = createColors();
 
 if (isDebug()) {
   rslog.level = 'verbose';
@@ -56,15 +57,6 @@ function getTime() {
   return `${hours}:${minutes}:${seconds}`;
 }
 
-const rslogGreet = rslog.greet;
-rslog.greet = (message: string) => {
-  if (!ansiEnabled()) {
-    console.log(message);
-    return;
-  }
-  return rslogGreet(message);
-};
-
 rslog.override({
   debug: (message, ...args) => {
     if (rslog.level !== 'verbose') {
@@ -76,9 +68,7 @@ rslog.override({
 });
 
 export const clearScreen = (force = false): void => {
-  if (!ansiEnabled()) {
-    return;
-  }
+  if (!isTTY('stdout')) return;
   if (!isDebug() || force) {
     // clear screen
     console.log('\x1Bc');

@@ -874,9 +874,6 @@ importers:
       webpack-license-plugin:
         specifier: ^4.5.1
         version: 4.5.1(webpack@5.103.0(@swc/core@1.15.7(@swc/helpers@0.5.18)))
-      yn:
-        specifier: ^5.1.0
-        version: 5.1.0
 
   packages/coverage-istanbul:
     dependencies:
@@ -7320,10 +7317,6 @@ packages:
 
   yazl@2.5.1:
     resolution: {integrity: sha512-phENi2PLiHnHb6QBVot+dJnaAZ0xosj7p3fWl+znIjBDlnMI2PsZCJZ306BPTFOaHf5qdDEI8x5qFrSOBN5vrw==}
-
-  yn@5.1.0:
-    resolution: {integrity: sha512-TfXLvT6eVsBNIm8rAXTwJYdQFtOXaHQ+rA7LU8HL8C/BFfaSfhvFE5T1rHAdBCbAj808HaqjXVkmo8jmeGOqhw==}
-    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
@@ -14684,8 +14677,6 @@ snapshots:
   yazl@2.5.1:
     dependencies:
       buffer-crc32: 0.2.13
-
-  yn@5.1.0: {}
 
   yocto-queue@0.1.0: {}
 
