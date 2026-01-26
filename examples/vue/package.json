@@ -2,6 +2,7 @@
   "name": "@examples/vue",
   "private": true,
   "scripts": {
+    "dev": "rsbuild dev",
     "test": "rstest",
     "test:watch": "rstest --watch"
   },
