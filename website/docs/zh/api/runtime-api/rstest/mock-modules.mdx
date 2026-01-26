@@ -8,15 +8,19 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.mock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true }) => void`
 
-调用 `rs.mock` 时，Rstest 会对第一个参数对应的模块进行 mock 替换。`rs.mock` 将根据是否提供了第二个 mock 工厂函数来决定如何处理被 mock 的模块，下面会详细介绍这两种情况。
+对第一个参数对应的模块进行 mock 替换。
 
-**需要注意的是：**`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
+:::tip 提升（Hoisting）
+`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
+:::
 
-根据提供的第二个参数，`rs.mock` 有两种行为：
+### 使用工厂函数
 
-1. 如果 `rs.mock` 方法的第二个参数提供了一个工厂函数，则替换为工厂函数的返回值作为被 mock 的模块的实现。
+如果第二个参数提供了一个工厂函数，则替换为工厂函数的返回值作为被 mock 的模块的实现。
+
+#### 基础示例
 
 <div style={{ display: 'flex', gap: '1rem' }}>
   <div>
@@ -42,71 +46,172 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
   </div>
 </div>
 
-2. 如果 `rs.mock` 方法调用时没有提供工厂函数，则会尝试去解析与被 mock 的模块在同级的 `__mocks__` 目录下的同名模块，具体的 mock 的解析的规则如下：
-   1. 如果被 mock 的模块不是 npm 依赖，并且如果有一个 `__mocks__` 文件夹与正在 mock 的文件同级，其中 `__mocks__` 文件夹包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 的实现。
-   2. 如果被 mock 的模块是 npm 依赖，并且在根目录中有一个 `__mocks__` 文件夹，其中包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 实现。
-   3. 如果被 mock 的模块是 Node.js 的内置模块（如 `fs`、`path` 等），并且在根目录中有一个 `__mocks__` 文件夹，其中包含一个与内置模块同名的文件（如 `__mocks__/fs.mjs`、`__mocks__/path.ts` 等），则 Rstest 将使用该文件作为对应的 mock 实现（使用 `node:` 协议导入内置模块时将忽略 `node:` 前缀）。
+#### 使用 `rs.fn()` 追踪调用
 
-   例如项目中有这样的文件结构：
+使用 `rs.fn()` 创建可以追踪调用并配置返回值的 mock 函数：
 
-   ```txt
-   ├── __mocks__
-   │   └── lodash.js
-   ├── src
-   │   ├── multiple.ts
-   │   └── __mocks__
-   │       └── multiple.ts
-   └── __test__
-       └── multiple.test.ts
-   ```
+```ts title="src/api.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { fetchUser, fetchPosts } from './api';
 
-   那么在如下的测试文件中尝试 mock `lodash` 和 `src/multiple` 模块，他们会被替换为 `__mocks__/lodash.js` 和 `src/__mocks__/multiple.ts` 中的实现。
+rs.mock('./api', () => ({
+  fetchUser: rs.fn().mockResolvedValue({ id: 1, name: 'John' }),
+  fetchPosts: rs.fn().mockResolvedValue([{ id: 1, title: 'Hello' }]),
+}));
 
-   ```ts title="src/multiple.test.ts"
-   import { rs } from '@rstest/core';
+test('获取用户数据', async () => {
+  const user = await fetchUser(1);
+  expect(user).toEqual({ id: 1, name: 'John' });
+  expect(fetchUser).toHaveBeenCalledWith(1);
+});
+```
 
-   // lodash is a default export from `__mocks__/lodash.js`
-   import lodash from 'lodash';
+#### 使用 `rs.mockObject()` 自动 mock
 
-   // multiple is a named export from `src/__mocks__/multiple.ts`
-   import { multiple } from '../src/multiple';
+使用 `rs.mockObject()` 自动 mock 对象的所有属性：
 
-   rs.mock('lodash');
-   rs.mock('../src/multiple');
+```ts title="src/service.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { userService } from './userService';
 
-   lodash.random(multiple(1, 2), multiple(3, 4));
-   ```
+rs.mock('./userService', () => ({
+  // 自动 mock 所有方法，它们将返回 undefined 并追踪调用
+  userService: rs.mockObject({
+    getUser: () => {},
+    updateUser: () => {},
+    deleteUser: () => {},
+  }),
+}));
 
-   `rs.mock` 和 `rs.doMock` 也支持第一个参数传入一个 `Promise<T>`，并将这个 `T` 的类型作为第二个工厂函数 await 后的返回值（`Promise<T>`），这能够让 IDE 获得更好的类型提示，并对工厂函数的返回值做类型校验。传入 `Promise<T>` 除对类型提示有增强外，对 mock 模块能力没有任何影响。
+test('服务方法被 mock', () => {
+  userService.getUser(1);
+  expect(userService.getUser).toHaveBeenCalledWith(1);
+});
+```
 
-   ```ts
-   // Compared to rs.mock('../src/b', ...) the type is enhanced.
-   rs.mock(import('../src/b'), () => {
-     return {
-       b: 222,
-     };
-   });
-   ```
+#### 使用 `importActual` 部分 mock
+
+使用 [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` 加载原始模块，然后结合 `rs.mock` 保留部分原始实现：
+
+```ts title="src/utils.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import * as dateUtils from './dateUtils' with { rstest: 'importActual' };
+import { formatDate, parseDate } from './dateUtils';
+
+rs.mock('./dateUtils', () => ({
+  ...dateUtils,
+  // 只 mock formatDate，保留其他
+  formatDate: rs.fn().mockReturnValue('2024-01-01'),
+}));
+
+test('formatDate 被 mock，parseDate 保持原实现', () => {
+  expect(formatDate(new Date())).toBe('2024-01-01');
+  // parseDate 使用原始实现
+  expect(parseDate('2024-01-01')).toBeInstanceOf(Date);
+});
+```
+
+### 使用 `__mocks__` 目录
+
+如果 `rs.mock` 调用时没有提供工厂函数，则会尝试去解析与被 mock 的模块在同级的 `__mocks__` 目录下的同名模块。
+
+**解析规则：**
+
+1. **本地模块**：如果有一个 `__mocks__` 文件夹与正在 mock 的文件同级，其中包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 的实现。
+2. **npm 依赖**：如果在根目录中有一个 `__mocks__` 文件夹，其中包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 实现。
+3. **Node.js 内置模块**：如果在根目录中有一个 `__mocks__` 文件夹，其中包含一个与内置模块同名的文件（如 `__mocks__/fs.mjs`、`__mocks__/path.ts`），则 Rstest 将使用该文件。使用 `node:` 协议导入时将忽略 `node:` 前缀。
+
+**示例：**
+
+```txt
+├── __mocks__
+│   └── lodash.js
+├── src
+│   ├── multiple.ts
+│   └── __mocks__
+│       └── multiple.ts
+└── __test__
+    └── multiple.test.ts
+```
+
+```ts title="src/multiple.test.ts"
+import { rs } from '@rstest/core';
+
+// lodash 是来自 `__mocks__/lodash.js` 的默认导出
+import lodash from 'lodash';
+
+// multiple 是来自 `src/__mocks__/multiple.ts` 的命名导出
+import { multiple } from '../src/multiple';
+
+rs.mock('lodash');
+rs.mock('../src/multiple');
+
+lodash.random(multiple(1, 2), multiple(3, 4));
+```
+
+### 使用 `{ spy: true }` 选项
+
+如果第二个参数提供了 `{ spy: true }`，模块将被自动 mock，但原始实现会被保留。所有导出都会被包装在 spy 函数中，这些函数会追踪调用同时仍然执行原始代码。
+
+这在你想要断言一个函数是否被正确调用而不想替换其实现时非常有用。
+
+```ts title="src/calculator.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { calculate, add } from './calculator';
+
+rs.mock('./calculator', { spy: true });
+
+test('calculate 使用正确的参数调用 add', () => {
+  // 原始实现仍然有效
+  const result = calculate(1, 2);
+  expect(result).toBe(3);
+
+  // 但我们也可以断言调用情况
+  expect(add).toHaveBeenCalledWith(1, 2);
+  expect(add).toHaveReturnedWith(3);
+});
+```
+
+:::note ESM 和 CommonJS 模块
+
+- **ESM 模块**：所有命名导出都会被包装在 spy 函数中。
+- **CommonJS 模块**：除了包装导出外，还会自动添加一个 `default` 导出（指向模块本身），以保持 `import x from 'cjs-module'` 的行为。
+  :::
+
+### 使用 `Promise<T>` 增强类型
+
+`rs.mock` 支持第一个参数传入一个 `Promise<T>`（通过动态 import），以获得更好的 IDE 类型提示。传入 `Promise<T>` 除对类型提示有增强外，对 mock 模块能力没有任何影响。
+
+```ts
+// 相比于 rs.mock('../src/b', ...)，类型得到增强
+rs.mock(import('../src/b'), () => {
+  return {
+    b: 222,
+  };
+});
+```
 
 ## rs.doMock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, moduleFactory?: (() => Partial<T>)) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true }) => void`
 
-与 `rs.mock` 类似，`rs.doMock` 也会 mock 模块，但它不会被提升到模块顶部。它会在被执行到时调用，这意味着，如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
+与 `rs.mock` 类似，但它**不会被提升**到模块顶部。它会在被执行到时调用，这意味着如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
-    ```ts title="src/sum.test.ts"
-    import { rs } from '@rstest/core';
-    import { sum } from './sum';
+支持与 `rs.mock` 相同的选项：工厂函数、`__mocks__` 目录和 `{ spy: true }`。
 
-    it('test', async () => {
-        // sum is imported before executing doMock, it's not mocked yet
-        expect(sum(1, 2)).toBe(3); // PASS
-        rs.doMock('./sum')
-        const { sum: mockedSum } = await import('./sum');
-        // sum is imported after executing doMock, it's mocked now
-        expect(mockedSum(1, 2)).toBe(3); // FAILED
-    })
-    ```
+```ts title="src/sum.test.ts"
+import { rs } from '@rstest/core';
+import { sum } from './sum';
+
+it('test', async () => {
+  // sum 在执行 doMock 之前导入，所以还没有被 mock
+  expect(sum(1, 2)).toBe(3); // PASS
+  rs.doMock('./sum');
+  const { sum: mockedSum } = await import('./sum');
+  // sum 在执行 doMock 之后导入，现在已经被 mock 了
+  expect(mockedSum(1, 2)).toBe(3); // FAILED
+});
+```
 
 ## rs.hoisted
 

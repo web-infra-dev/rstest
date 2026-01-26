@@ -185,6 +185,18 @@ export interface MockOptions {
   spy?: boolean;
 }
 
+/**
+ * Options for rs.mock module mocking.
+ * Only `{ spy: true }` is supported.
+ */
+export interface MockModuleOptions {
+  /**
+   * If `true`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
+   */
+  spy: true;
+}
+
 // Helper types for mocking
 type MockProcedure = (...args: any[]) => any;
 
@@ -364,35 +376,51 @@ export interface RstestUtilities {
   restoreAllMocks: () => RstestUtilities;
 
   /**
-   * Mock a module
+   * Mock a module.
+   *
+   * When called with a factory function, the module will be replaced with the return value of the factory.
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
+   *
+   * @example
+   * ```ts
+   * // Replace module with factory
+   * rs.mock('./module', () => ({ fn: rs.fn() }))
+   *
+   * // Auto-mock with spy mode - keeps original implementations
+   * rs.mock('./module', { spy: true })
+   * ```
    */
   mock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module
+   * Mock a module (CommonJS require)
    */
   mockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
 
   /**
    * Mock a module, not hoisted.
+   *
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
    */
   doMock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module, not hoisted.
+   * Mock a module, not hoisted (CommonJS require).
    */
   doMockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
 
   /**
