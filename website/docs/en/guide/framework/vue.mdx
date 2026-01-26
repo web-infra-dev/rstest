@@ -1,0 +1,163 @@
+# Vue
+
+This guide covers how to test Vue applications and components with Rstest. Rstest supports testing Vue in multiple scenarios:
+
+- **Node (with happy-dom or jsdom)**: Fast, lightweight tests running in Node.js with a simulated DOM
+- **Browser Mode**: Real browser testing with Playwright for accurate DOM behavior
+
+## Node testing
+
+Node-based testing uses DOM simulators like [happy-dom](https://github.com/niciodev/happy-dom) or [jsdom](https://github.com/jsdom/jsdom) to provide a DOM environment in Node.js. This approach is faster and suitable for most component testing scenarios.
+
+### Quick start
+
+#### 1. Install dependencies
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/core @rsbuild/plugin-vue @vue/test-utils happy-dom -D" />
+
+If you want to use Vue JSX, also install:
+
+<PackageManagerTabs command="add @rsbuild/plugin-babel @rsbuild/plugin-vue-jsx -D" />
+
+#### 2. Configure rstest
+
+Create `rstest.config.ts`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rsbuild/core';
+import { pluginVue } from '@rsbuild/plugin-vue';
+
+export default defineConfig({
+  plugins: [pluginVue()],
+  testEnvironment: 'happy-dom',
+});
+```
+
+For Vue JSX support:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rsbuild/core';
+import { pluginBabel } from '@rsbuild/plugin-babel';
+import { pluginVue } from '@rsbuild/plugin-vue';
+import { pluginVueJsx } from '@rsbuild/plugin-vue-jsx';
+
+export default defineConfig({
+  plugins: [
+    pluginBabel({
+      include: /\.(?:jsx|tsx)$/,
+    }),
+    pluginVue(),
+    pluginVueJsx(),
+  ],
+  testEnvironment: 'happy-dom',
+});
+```
+
+#### 3. Write your first test
+
+```ts title="test/App.test.ts"
+import { expect, test } from '@rstest/core';
+import { mount } from '@vue/test-utils';
+import App from '../src/App.vue';
+
+test('renders correctly', () => {
+  const wrapper = mount(App);
+  expect(wrapper.text()).toContain('Hello World');
+});
+```
+
+### Testing components
+
+Use [@vue/test-utils](https://test-utils.vuejs.org/) to mount and interact with components:
+
+```ts title="test/Counter.test.ts"
+import { expect, test } from '@rstest/core';
+import { mount } from '@vue/test-utils';
+import Counter from '../src/Counter.vue';
+
+test('increments counter on click', async () => {
+  const wrapper = mount(Counter);
+
+  expect(wrapper.text()).toContain('Count: 0');
+
+  await wrapper.find('button').trigger('click');
+  expect(wrapper.text()).toContain('Count: 1');
+});
+```
+
+### Testing events
+
+```ts title="test/Button.test.ts"
+import { expect, test } from '@rstest/core';
+import { mount } from '@vue/test-utils';
+import Button from '../src/Button.vue';
+
+test('emits click event', async () => {
+  const wrapper = mount(Button);
+
+  await wrapper.find('button').trigger('click');
+  expect(wrapper.emitted('click')).toBeTruthy();
+  expect(wrapper.emitted('click')).toHaveLength(1);
+});
+```
+
+### Testing Vue JSX components
+
+Vue JSX components can be tested the same way as SFC components:
+
+```ts title="test/JsxComponent.test.ts"
+import { expect, test } from '@rstest/core';
+import { mount } from '@vue/test-utils';
+import App from '../src/App.tsx';
+
+test('renders JSX component correctly', async () => {
+  const wrapper = mount(App);
+
+  await wrapper.find('button').trigger('click');
+  expect(wrapper.emitted('clickApp')).toBeTruthy();
+});
+```
+
+### Mocking modules
+
+Use `rs.mock()` to mock dependencies:
+
+```ts title="test/UserProfile.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { mount, flushPromises } from '@vue/test-utils';
+import UserProfile from '../src/UserProfile.vue';
+
+rs.mock('../src/api', () => ({
+  fetchUser: () => Promise.resolve({ name: 'John Doe' }),
+}));
+
+test('renders user name', async () => {
+  const wrapper = mount(UserProfile, {
+    props: { userId: '1' },
+  });
+
+  await flushPromises();
+  expect(wrapper.text()).toContain('John Doe');
+});
+```
+
+## Browser mode testing
+
+For scenarios requiring real browser behavior (e.g., CSS rendering, Web APIs, visual testing), use Rstest's Browser Mode with Playwright.
+
+See the [Browser Testing - Getting Started](/guide/browser-testing/getting-started) for detailed setup instructions.
+
+:::info
+Browser Mode currently provides out-of-the-box support for React. Vue support in Browser Mode will be added in the future.
+:::
+
+**Recommendations:**
+
+- Use **Node testing** for unit tests, logic-heavy components, and fast feedback
+- Use **Browser Mode** for integration tests, visual behavior, and when you need real browser APIs
+
+## Example projects
+
+- [vue](https://github.com/web-infra-dev/rstest/tree/main/examples/vue) - Vue testing with happy-dom (includes SFC and JSX tests)

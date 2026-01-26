@@ -612,6 +612,43 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  examples/vue:
+    dependencies:
+      vue:
+        specifier: ^3.5.26
+        version: 3.5.26(typescript@5.9.3)
+    devDependencies:
+      '@rsbuild/core':
+        specifier: 1.7.2
+        version: 1.7.2
+      '@rsbuild/plugin-babel':
+        specifier: ^1.0.6
+        version: 1.0.6(@rsbuild/core@1.7.2)
+      '@rsbuild/plugin-vue':
+        specifier: ^1.2.2
+        version: 1.2.2(@rsbuild/core@1.7.2)(@swc/core@1.15.7(@swc/helpers@0.5.18))(vue@3.5.26(typescript@5.9.3))
+      '@rsbuild/plugin-vue-jsx':
+        specifier: ^1.1.1
+        version: 1.1.1(@babel/core@7.28.3)(@rsbuild/core@1.7.2)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@vue/compiler-dom':
+        specifier: ^3.5.26
+        version: 3.5.26
+      '@vue/server-renderer':
+        specifier: ^3.5.26
+        version: 3.5.26(vue@3.5.26(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.6
+        version: 2.4.6(@vue/compiler-dom@3.5.26)(@vue/server-renderer@3.5.26(vue@3.5.26(typescript@5.9.3)))(vue@3.5.26(typescript@5.9.3))
+      happy-dom:
+        specifier: ^20.0.11
+        version: 20.0.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/adapter-rsbuild:
     devDependencies:
       '@rsbuild/core':
