@@ -99,6 +99,7 @@ export async function runRstestCli({
   stripAnsi,
   onTestFinished,
   onTestFailed,
+  unsetEnv,
 }: {
   command: string;
   options?: Partial<Options>;
@@ -106,6 +107,7 @@ export async function runRstestCli({
   stripAnsi?: boolean;
   onTestFinished?: typeof onRstestFinished;
   onTestFailed?: typeof onRstestFailed;
+  unsetEnv?: string[];
 }) {
   // fix get accurate test when no-isolate
   const {
@@ -118,12 +120,17 @@ export async function runRstestCli({
     args.push('--isolate', 'false');
   }
 
+  const baseEnv: Record<string, string | undefined> = { ...process.env };
+  for (const key of unsetEnv ?? []) {
+    delete baseEnv[key];
+  }
+
   const exec = x(command, args, {
     ...options,
     nodeOptions: {
       ...(options?.nodeOptions || {}),
       env: {
-        ...process.env,
+        ...baseEnv,
         ...(options?.nodeOptions?.env || {}),
       },
     },
