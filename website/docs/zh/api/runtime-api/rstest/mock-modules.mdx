@@ -8,7 +8,7 @@ Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块�
 
 ## rs.mock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true }) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 对第一个参数对应的模块进行 mock 替换。
 
@@ -176,7 +176,40 @@ test('calculate 使用正确的参数调用 add', () => {
 
 - **ESM 模块**：所有命名导出都会被包装在 spy 函数中。
 - **CommonJS 模块**：除了包装导出外，还会自动添加一个 `default` 导出（指向模块本身），以保持 `import x from 'cjs-module'` 的行为。
-  :::
+
+:::
+
+### 使用 `{ mock: true }` 选项
+
+如果第二个参数提供了 `{ mock: true }`，模块将被自动 mock，所有函数导出都会被替换为 mock 函数。与 `{ spy: true }` 不同，原始实现**不会**被保留 - mock 函数默认返回 `undefined`。
+
+这在你想要完全替换模块的行为并配置 mock 返回值或实现时非常有用。
+
+```ts title="src/math.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { add, multiply } from './math';
+
+rs.mock('./math', { mock: true });
+
+test('mock functions return undefined by default', () => {
+  // Original implementation is NOT preserved
+  expect(add(1, 2)).toBeUndefined();
+  expect(multiply(3, 4)).toBeUndefined();
+
+  // Functions are mock functions
+  expect(rs.isMockFunction(add)).toBe(true);
+});
+
+test('can configure mock implementations', () => {
+  // Configure return values
+  rs.mocked(add).mockReturnValue(100);
+  expect(add(1, 2)).toBe(100);
+
+  // Configure implementations
+  rs.mocked(multiply).mockImplementation((a, b) => a * b * 2);
+  expect(multiply(3, 4)).toBe(24);
+});
+```
 
 ### 使用 `Promise<T>` 增强类型
 
@@ -193,11 +226,11 @@ rs.mock(import('../src/b'), () => {
 
 ## rs.doMock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true }) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 与 `rs.mock` 类似，但它**不会被提升**到模块顶部。它会在被执行到时调用，这意味着如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
-支持与 `rs.mock` 相同的选项：工厂函数、`__mocks__` 目录和 `{ spy: true }`。
+支持与 `rs.mock` 相同的选项：工厂函数、`__mocks__` 目录、`{ spy: true }` 和 `{ mock: true }`。
 
 ```ts title="src/sum.test.ts"
 import { rs } from '@rstest/core';
