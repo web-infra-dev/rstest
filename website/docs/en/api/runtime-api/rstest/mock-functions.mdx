@@ -182,10 +182,10 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 - **Type:**
 
 ```ts
-type Mocked = <T>(
+type MockedFn = <T>(
   item: T,
   deep?: boolean | { partial?: boolean; deep?: boolean },
-) => MaybeMockedDeep<T>;
+) => Mocked<T>;
 ```
 
 A type helper for TypeScript that wraps an object with mock types without changing its runtime behavior. This is useful when you have mocked a module and want proper type hints for the mock methods.

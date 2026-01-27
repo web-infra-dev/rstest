@@ -244,7 +244,7 @@ export type MockedObjectDeep<T> = {
     : T[K];
 } & { [K in Properties<T>]: MaybeMockedDeep<T[K]> };
 
-export type MaybeMocked<T> = T extends Constructor
+export type Mocked<T> = T extends Constructor
   ? MockedClass<T>
   : T extends MockProcedure
     ? MockedFunction<T>
@@ -351,12 +351,9 @@ export interface RstestUtilities {
    * @param item - Anything that can be mocked
    * @returns The same item with mocked type
    */
-  mocked: (<T>(item: T, deep?: false) => MaybeMocked<T>) &
+  mocked: (<T>(item: T, deep?: false) => Mocked<T>) &
     (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
-    (<T>(
-      item: T,
-      options: { partial?: false; deep?: false },
-    ) => MaybeMocked<T>) &
+    (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
     (<T>(
       item: T,
       options: { partial?: false; deep: true },
