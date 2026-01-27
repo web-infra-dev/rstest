@@ -82,9 +82,9 @@ export type MdReporterOptions = {
 
   /**
    * Failure output controls.
-   * @default { max: 50, includeTruncatedList: true }
+   * @default { max: 50 }
    */
-  failures?: { max?: number; includeTruncatedList?: boolean };
+  failures?: { max?: number };
 
   /**
    * Code frame controls.
@@ -101,6 +101,7 @@ export type MdReporterOptions = {
    * - `'top'`: include only the top frame
    * - `number`: include up to N stack frames
    * - `'full'`: include a large default number of stack frames
+   * @default 'top'
    */
   stack?: number | false | 'full' | 'top';
 
@@ -118,6 +119,7 @@ export type MdReporterOptions = {
    * - `false`: omit console logs
    * - `true`: include console logs with defaults
    * - object form: customize limits
+   * @default { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }
    */
   console?:
     | boolean
