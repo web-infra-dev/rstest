@@ -6,7 +6,7 @@ tool: "@rstest/core@0.8.1"
 timestamp: "<timestamp>"
 ---
 
-# Rstest Agent Report
+# Rstest Test Execution Report
 
 ## Summary
 
@@ -67,7 +67,7 @@ tool: "@rstest/core@0.8.1"
 timestamp: "<timestamp>"
 ---
 
-# Rstest Agent Report
+# Rstest Test Execution Report
 
 ## Summary
 
@@ -149,7 +149,7 @@ tool: "@rstest/core@0.8.1"
 timestamp: "<timestamp>"
 ---
 
-# Rstest Agent Report
+# Rstest Test Execution Report
 
 ## Summary
 
@@ -212,7 +212,7 @@ tool: "@rstest/core@0.8.1"
 timestamp: "<timestamp>"
 ---
 
-# Rstest Agent Report
+# Rstest Test Execution Report
 
 ## Summary
 
@@ -273,7 +273,7 @@ tool: "@rstest/core@0.8.1"
 timestamp: "<timestamp>"
 ---
 
-# Rstest Agent Report
+# Rstest Test Execution Report
 
 ## Summary
 

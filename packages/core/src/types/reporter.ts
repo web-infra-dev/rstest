@@ -1,6 +1,5 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
-import type { BuiltInReporterNames } from '../core/rstest';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type {
   TestCaseInfo,
@@ -24,7 +23,12 @@ export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
 
-export type { BuiltInReporterNames };
+export type BuiltInReporterNames =
+  | 'default'
+  | 'verbose'
+  | 'md'
+  | 'github-actions'
+  | 'junit';
 
 export type DefaultReporterOptions = {
   /**
