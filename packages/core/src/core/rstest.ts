@@ -165,6 +165,7 @@ export class Rstest implements RstestContext {
             rootPath,
             config: rstestConfig,
             testState: this.testState,
+            fileFilters: this.fileFilters,
             options: {
               showProjectName: projects.length > 1,
             },

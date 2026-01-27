@@ -32,6 +32,8 @@ export default defineConfig({
 
 更多配置方式请参考 [报告器配置](/config/test/reporters)。
 
+内置报告器的 options 类型定义在 TypeScript types 中：[`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+
 ## 内置报告器
 
 Rstest 提供了多种内置报告器：
@@ -208,6 +210,13 @@ Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout
 
 在 agent 环境中，只有当你没有显式配置 reporters 时，Rstest 才会默认使用 `md`。
 
+默认 preset 为 `normal`，主要针对 agent 工作流做了取舍：
+
+- 每个失败用例都会输出 repro 命令（`file+name`），方便 agent 精准复跑某一个失败 case。
+- stack 默认使用 `top`（稳定的定位锚点），而不是输出完整的 stack frames。
+- console 默认开启，但带有严格的输出上限，避免报告体积失控。
+- 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
+
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
@@ -224,6 +233,26 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+你也可以通过 reporter options 进一步调整输出：
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    [
+      'md',
+      {
+        preset: 'normal',
+        failures: { max: 50 },
+        stack: 'top',
+        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+      },
+    ],
+  ],
+});
+```
 
 ## 自定义报告器
 

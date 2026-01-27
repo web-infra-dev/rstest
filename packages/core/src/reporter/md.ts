@@ -1,3 +1,57 @@
+/**
+ * Markdown reporter contract (behavior spec)
+ *
+ * This reporter is designed to be both human-readable and agent/LLM-friendly.
+ * The output is intentionally structured and stable; behavior changes should be
+ * reflected in the e2e snapshots under `e2e/reporter/md.test.ts`.
+ *
+ * Output sections (top to bottom)
+ *
+ * - Front Matter (YAML)
+ *   - Always printed.
+ *   - Fields: `tool`, `timestamp`.
+ *   - `runtime` is printed only when `options.header.env === true`.
+ *
+ * - Title
+ *   - Always printed.
+ *   - `# Rstest Test Execution Report`
+ *
+ * - Summary
+ *   - Always printed.
+ *   - `## Summary` followed by a fenced `json` block.
+ *
+ * - Tests
+ *   - Printed only when `status === 'pass' && focusedRun === true`.
+ *   - Contains `### Passed` and `### Skipped` lists; `### Todo` is printed only
+ *     when `todoTests.length > 0`.
+ *   - Lists are truncated to `DEFAULT_TEST_LIST_MAX_ITEMS` and may include a
+ *     truncation note.
+ *
+ * - Failures
+ *   - Always printed.
+ *   - When there are no failures (`failures.length === 0`):
+ *     - Prints `No test failures reported.`
+ *     - Additionally prints `Note: all tests passed. Lists omitted for brevity.`
+ *       only when `status === 'pass' && focusedRun === false`.
+ *   - When failures exist:
+ *     - Prints failure details.
+ *     - If truncated (`failures.length > options.failures.max`), also prints a
+ *       `### Failure List` and a `### Failure Details (first N)` section.
+ *
+ * - Unhandled Errors
+ *   - Printed only when `options.errors.unhandled === true` and
+ *     `unhandledErrors?.length > 0`.
+ *
+ * Focused run detection
+ *
+ * `focusedRun` is used only to decide whether to print the `## Tests` section on
+ * passing runs.
+ *
+ * A run is considered focused when any of the following is true:
+ * - The user provided CLI file filters (`fileFilters.length > 0`).
+ * - The user provided a name filter (`config.testNamePattern`).
+ * - Heuristic: small result set (`testResults.length > 0 && testResults.length <= FOCUSED_RUN_MAX_TESTS`).
+ */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve as nodeResolve } from 'node:path';
@@ -31,7 +85,6 @@ type HeaderOptions = {
 
 type FailuresOptions = {
   max: number;
-  includeTruncatedList: boolean;
 };
 
 type CodeFrameResolved = {
@@ -68,6 +121,9 @@ type ResolvedOptions = {
   console: ConsoleResolved;
   errors: ErrorsResolved;
 };
+
+const DEFAULT_TEST_LIST_MAX_ITEMS = 50;
+const FOCUSED_RUN_MAX_TESTS = 10;
 
 type StackFrame = {
   file?: string;
@@ -107,22 +163,21 @@ const defaultOptions: ResolvedOptions = {
   reproduction: 'file+name',
   failures: {
     max: 50,
-    includeTruncatedList: true,
   },
   codeFrame: {
     enabled: true,
     linesAbove: 2,
     linesBelow: 2,
   },
-  stack: 'full',
+  stack: 'top',
   candidateFiles: {
     enabled: true,
     max: 5,
   },
   console: {
     enabled: true,
-    maxLogsPerTestPath: 50,
-    maxCharsPerEntry: 2000,
+    maxLogsPerTestPath: 10,
+    maxCharsPerEntry: 500,
   },
   errors: {
     unhandled: true,
@@ -148,7 +203,6 @@ const presetOptions: Record<
     },
     failures: {
       max: 20,
-      includeTruncatedList: defaultOptions.failures.includeTruncatedList,
     },
   },
   full: {
@@ -160,7 +214,6 @@ const presetOptions: Record<
     },
     failures: {
       max: 200,
-      includeTruncatedList: defaultOptions.failures.includeTruncatedList,
     },
     codeFrame: {
       enabled: defaultOptions.codeFrame.enabled,
@@ -197,10 +250,6 @@ const resolveFailures = (
   const presetFailures = preset?.failures;
   return {
     max: input?.max ?? presetFailures?.max ?? defaultOptions.failures.max,
-    includeTruncatedList:
-      input?.includeTruncatedList ??
-      presetFailures?.includeTruncatedList ??
-      defaultOptions.failures.includeTruncatedList,
   };
 };
 
@@ -340,6 +389,8 @@ const cleanString = (value: string): string => stripAnsi(value);
 
 const TRUNCATION_SUFFIX = '... [truncated]';
 
+const FAILURE_LIST_VALUE_MAX_CHARS = 200;
+
 const truncateString = (value: string, maxChars: number): string => {
   if (maxChars <= 0) return '';
   if (value.length <= maxChars) return value;
@@ -347,6 +398,21 @@ const truncateString = (value: string, maxChars: number): string => {
     return TRUNCATION_SUFFIX.slice(0, maxChars);
   }
   return `${value.slice(0, maxChars - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
+};
+
+const toSingleLine = (value: string): string => {
+  return value.replace(/\r?\n/g, '\\n').replace(/\s+/g, ' ').trim();
+};
+
+const formatFailureListValue = (value: unknown): string => {
+  if (value === undefined) return '';
+  if (value === null) return 'null';
+
+  const raw = typeof value === 'string' ? value : JSON.stringify(value);
+  return truncateString(
+    toSingleLine(cleanString(raw)),
+    FAILURE_LIST_VALUE_MAX_CHARS,
+  );
 };
 
 const getErrorType = (
@@ -596,7 +662,7 @@ const buildReproCommand = (
     args.push('--testNamePattern', fullName);
   }
 
-  const resolved = resolveCommand(agent, 'execute', args);
+  const resolved = resolveCommand(agent, 'execute-local', args);
   if (!resolved) {
     const formattedArgs = args
       .map((arg) =>
@@ -803,6 +869,7 @@ const createCodeFrame = (
 export class MdReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
+  private fileFilters: string[];
   private options: ResolvedOptions;
   private logsByTestPath = new Map<string, string[]>();
 
@@ -811,16 +878,67 @@ export class MdReporter implements Reporter {
     config,
     options,
     testState,
+    fileFilters,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: MdReporterOptions;
     testState: RstestTestState;
+    fileFilters?: string[];
   }) {
     this.rootPath = rootPath;
     this.config = config;
     void testState;
+    this.fileFilters = fileFilters ?? [];
     this.options = resolveOptions(options);
+  }
+
+  private isFocusedRun({
+    testResults,
+  }: {
+    testResults: TestResult[];
+  }): boolean {
+    if (this.fileFilters.length > 0) return true;
+    if (this.config.testNamePattern) return true;
+    if (testResults.length > 0 && testResults.length <= FOCUSED_RUN_MAX_TESTS) {
+      return true;
+    }
+    return false;
+  }
+
+  private pushTestList({
+    lines,
+    heading,
+    tests,
+    maxItems,
+  }: {
+    lines: string[];
+    heading: string;
+    tests: TestResult[];
+    maxItems: number;
+  }): void {
+    pushHeading(lines, 3, heading);
+
+    if (!tests.length) {
+      lines.push('None.');
+      return;
+    }
+
+    const limit = Math.max(0, maxItems);
+    const truncated = limit > 0 && tests.length > limit;
+    const displayed = truncated ? tests.slice(0, limit) : tests;
+
+    for (const test of displayed) {
+      const relativePath = relative(this.rootPath, test.testPath);
+      const fullName = formatFullTestName(test);
+      const title = fullName ? `${relativePath} :: ${fullName}` : relativePath;
+      lines.push(`- ${title}`);
+    }
+
+    if (truncated) {
+      ensureSingleBlankLine(lines);
+      lines.push(`Note: list truncated (showing ${limit} of ${tests.length}).`);
+    }
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
@@ -862,11 +980,20 @@ export class MdReporter implements Reporter {
     const failedTests = testResults.filter(
       (result) => result.status === 'fail',
     );
+    const passedTests = testResults.filter(
+      (result) => result.status === 'pass',
+    );
+    const skippedTests = testResults.filter(
+      (result) => result.status === 'skip',
+    );
+    const todoTests = testResults.filter((result) => result.status === 'todo');
     const failedFiles = results.filter((result) => result.status === 'fail');
     const status =
       failedTests.length || failedFiles.length || unhandledErrors?.length
         ? 'fail'
         : 'pass';
+
+    const focusedRun = this.isFocusedRun({ testResults });
 
     const summaryPayload: Record<string, unknown> = {
       status,
@@ -875,6 +1002,9 @@ export class MdReporter implements Reporter {
         failedFiles: failedFiles.length,
         tests: testResults.length,
         failedTests: failedTests.length,
+        passedTests: passedTests.length,
+        skippedTests: skippedTests.length,
+        todoTests: todoTests.length,
       },
       durationMs: {
         total: duration.totalTime,
@@ -908,31 +1038,110 @@ export class MdReporter implements Reporter {
     pushHeading(lines, 1, 'Rstest Test Execution Report');
     pushHeading(lines, 2, 'Summary');
     pushFencedBlock(lines, 'json', stringifyJson(summaryPayload));
+
+    if (status === 'pass') {
+      if (focusedRun) {
+        pushHeading(lines, 2, 'Tests');
+        this.pushTestList({
+          lines,
+          heading: 'Passed',
+          tests: passedTests,
+          maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+        });
+        this.pushTestList({
+          lines,
+          heading: 'Skipped',
+          tests: skippedTests,
+          maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+        });
+        if (todoTests.length) {
+          this.pushTestList({
+            lines,
+            heading: 'Todo',
+            tests: todoTests,
+            maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+          });
+        }
+      }
+    }
+
     pushHeading(lines, 2, 'Failures');
 
     if (!failures.length) {
       lines.push('No test failures reported.');
+      if (status === 'pass' && !focusedRun) {
+        ensureSingleBlankLine(lines);
+        lines.push('Note: all tests passed. Lists omitted for brevity.');
+      }
     } else {
-      const failureTitles = failures.map((failure, index) => {
-        const relativePath = relative(rootPath, failure.test.testPath);
-        const fullName = formatFullTestName(failure.test);
-        const title = fullName
-          ? `${relativePath} :: ${fullName}`
-          : relativePath;
-        return `[F${String(index + 1).padStart(2, '0')}] ${title}`;
-      });
-
       const maxFailures = Math.max(0, this.options.failures.max);
-      const shouldTruncate = failureTitles.length > maxFailures;
+      const shouldTruncate = failures.length > maxFailures;
       const displayedFailures = shouldTruncate
         ? failures.slice(0, maxFailures)
         : failures;
 
-      if (shouldTruncate && this.options.failures.includeTruncatedList) {
-        pushHeading(lines, 3, 'Failure List (truncated)');
-        for (const title of failureTitles) {
-          lines.push(`- ${title}`);
+      if (shouldTruncate) {
+        ensureSingleBlankLine(lines);
+        lines.push(
+          `Truncated failures: showing full details for first ${maxFailures} of ${failures.length} failures.`,
+        );
+        lines.push(
+          `For failures beyond ${maxFailures}, only minimal fields are shown in the failure list. Use the repro command to rerun a specific failure for full details.`,
+        );
+        lines.push('');
+
+        pushHeading(lines, 3, 'Failure List');
+        for (let index = 0; index < failures.length; index += 1) {
+          const failure = failures[index];
+          if (!failure) continue;
+
+          const relativePath = relative(rootPath, failure.test.testPath);
+          const fullName = formatFullTestName(failure.test);
+          const title = fullName
+            ? `${relativePath} :: ${fullName}`
+            : relativePath;
+          const formattedId = String(index + 1).padStart(2, '0');
+
+          lines.push(`- [F${formattedId}] ${title}`);
+
+          const primaryError = failure.errors[0] || {
+            message: 'Unknown error',
+          };
+
+          const type = getErrorType({
+            name: primaryError.name,
+            message: primaryError.message || '',
+          });
+
+          lines.push(`  - type: ${type}`);
+          if (primaryError.message) {
+            lines.push(
+              `  - message: ${formatFailureListValue(primaryError.message)}`,
+            );
+          }
+          if (primaryError.expected !== undefined) {
+            lines.push(
+              `  - expected: ${formatFailureListValue(primaryError.expected)}`,
+            );
+          }
+          if (primaryError.actual !== undefined) {
+            lines.push(
+              `  - actual: ${formatFailureListValue(primaryError.actual)}`,
+            );
+          }
+
+          if (this.options.reproduction) {
+            lines.push(
+              `  - repro: ${buildReproCommand(
+                relativePath,
+                fullName,
+                this.options.reproduction,
+                packageManagerAgent,
+              )}`,
+            );
+          }
         }
+
         pushHeading(lines, 3, `Failure Details (first ${maxFailures})`);
       }
 
@@ -945,10 +1154,7 @@ export class MdReporter implements Reporter {
         const title = fullName
           ? `${relativePath} :: ${fullName}`
           : relativePath;
-        const failureId = shouldTruncate
-          ? index + 1
-          : failures.indexOf(failure) + 1;
-        const formattedId = String(failureId).padStart(2, '0');
+        const formattedId = String(index + 1).padStart(2, '0');
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {
