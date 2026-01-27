@@ -21,6 +21,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
+import type { BuiltInReporterNames } from '../types/reporter';
 import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
@@ -224,7 +225,7 @@ const reportersMap: {
   md: MdReporter,
 };
 
-export type BuiltInReporterNames = keyof typeof reportersMap;
+export type { BuiltInReporterNames };
 
 export function createReporters(
   reporters: RstestConfig['reporters'],

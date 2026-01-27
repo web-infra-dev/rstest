@@ -338,9 +338,15 @@ const formatFullTestName = (test: Pick<TestResult, 'name' | 'parentNames'>) => {
 
 const cleanString = (value: string): string => stripAnsi(value);
 
+const TRUNCATION_SUFFIX = '... [truncated]';
+
 const truncateString = (value: string, maxChars: number): string => {
+  if (maxChars <= 0) return '';
   if (value.length <= maxChars) return value;
-  return `${value.slice(0, Math.max(0, maxChars - 12))}... [truncated]`;
+  if (maxChars <= TRUNCATION_SUFFIX.length) {
+    return TRUNCATION_SUFFIX.slice(0, maxChars);
+  }
+  return `${value.slice(0, maxChars - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
 };
 
 const getErrorType = (

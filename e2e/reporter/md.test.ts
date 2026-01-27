@@ -36,7 +36,7 @@ describe('md', () => {
 
     const normalized = normalizeStdout(cli.stdout);
     const logs = normalized.split('\n').filter(Boolean);
-    expectLog('# Rstest Agent Report', logs);
+    expectLog('# Rstest Test Execution Report', logs);
     expect(normalized).toMatchSnapshot();
   });
 
