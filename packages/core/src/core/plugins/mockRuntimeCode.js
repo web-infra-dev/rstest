@@ -72,21 +72,26 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
       __webpack_modules__[id];
   }
 
-  // Handle options object: { spy: true }
+  // Handle options object: { spy: true } or { mock: true }
   if (modFactory && typeof modFactory === 'object') {
-    if (modFactory.spy !== true) {
-      throw new Error('[Rstest] rs.mock() options must be { spy: true }');
+    const isSpy = modFactory.spy === true;
+    const isMock = modFactory.mock === true;
+    if (!isSpy && !isMock) {
+      throw new Error(
+        '[Rstest] rs.mock() options must be { spy: true } or { mock: true }',
+      );
     }
     if (!requiredModule) {
+      const optionName = isSpy ? 'spy' : 'mock';
       throw new Error(
-        `[Rstest] rs.mock('${id}', { spy: true }) failed: cannot load original module`,
+        `[Rstest] rs.mock('${id}', { ${optionName}: true }) failed: cannot load original module`,
       );
     }
     const originalModule = requiredModule;
     const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
-        spy: true,
+        spy: isSpy,
       }) || originalModule;
 
     const finalModFactory = function (
@@ -149,23 +154,26 @@ __webpack_require__.rstest_mock_require = (id, modFactory) => {
       __webpack_modules__[id];
   }
 
-  // Handle options object: { spy: true }
+  // Handle options object: { spy: true } or { mock: true }
   if (modFactory && typeof modFactory === 'object') {
-    if (modFactory.spy !== true) {
+    const isSpy = modFactory.spy === true;
+    const isMock = modFactory.mock === true;
+    if (!isSpy && !isMock) {
       throw new Error(
-        '[Rstest] rs.mockRequire() options must be { spy: true }',
+        '[Rstest] rs.mockRequire() options must be { spy: true } or { mock: true }',
       );
     }
     if (!requiredModule) {
+      const optionName = isSpy ? 'spy' : 'mock';
       throw new Error(
-        `[Rstest] rs.mockRequire('${id}', { spy: true }) failed: cannot load original module`,
+        `[Rstest] rs.mockRequire('${id}', { ${optionName}: true }) failed: cannot load original module`,
       );
     }
     const originalModule = requiredModule;
     const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
-        spy: true,
+        spy: isSpy,
       }) || originalModule;
     // Only mark as ESM if original was ESM
     if (isEsModule) {
@@ -201,21 +209,26 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
       __webpack_modules__[id];
   }
 
-  // Handle options object: { spy: true }
+  // Handle options object: { spy: true } or { mock: true }
   if (modFactory && typeof modFactory === 'object') {
-    if (modFactory.spy !== true) {
-      throw new Error('[Rstest] rs.doMock() options must be { spy: true }');
+    const isSpy = modFactory.spy === true;
+    const isMock = modFactory.mock === true;
+    if (!isSpy && !isMock) {
+      throw new Error(
+        '[Rstest] rs.doMock() options must be { spy: true } or { mock: true }',
+      );
     }
     if (!requiredModule) {
+      const optionName = isSpy ? 'spy' : 'mock';
       throw new Error(
-        `[Rstest] rs.doMock('${id}', { spy: true }) failed: cannot load original module`,
+        `[Rstest] rs.doMock('${id}', { ${optionName}: true }) failed: cannot load original module`,
       );
     }
     const originalModule = requiredModule;
     const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
-        spy: true,
+        spy: isSpy,
       }) || originalModule;
     // Only mark as ESM if original was ESM
     if (isEsModule) {
@@ -250,23 +263,26 @@ __webpack_require__.rstest_do_mock_require = (id, modFactory) => {
       __webpack_modules__[id];
   }
 
-  // Handle options object: { spy: true }
+  // Handle options object: { spy: true } or { mock: true }
   if (modFactory && typeof modFactory === 'object') {
-    if (modFactory.spy !== true) {
+    const isSpy = modFactory.spy === true;
+    const isMock = modFactory.mock === true;
+    if (!isSpy && !isMock) {
       throw new Error(
-        '[Rstest] rs.doMockRequire() options must be { spy: true }',
+        '[Rstest] rs.doMockRequire() options must be { spy: true } or { mock: true }',
       );
     }
     if (!requiredModule) {
+      const optionName = isSpy ? 'spy' : 'mock';
       throw new Error(
-        `[Rstest] rs.doMockRequire('${id}', { spy: true }) failed: cannot load original module`,
+        `[Rstest] rs.doMockRequire('${id}', { ${optionName}: true }) failed: cannot load original module`,
       );
     }
     const originalModule = requiredModule;
     const isEsModule = originalModule.__esModule === true;
     const mockedModule =
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
-        spy: true,
+        spy: isSpy,
       }) || originalModule;
     // Only mark as ESM if original was ESM
     if (isEsModule) {

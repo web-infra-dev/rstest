@@ -187,15 +187,23 @@ export interface MockOptions {
 
 /**
  * Options for rs.mock module mocking.
- * Only `{ spy: true }` is supported.
+ * Supports `{ spy: true }` or `{ mock: true }`.
  */
-export interface MockModuleOptions {
-  /**
-   * If `true`, the module will be auto-mocked but the original implementations
-   * will be preserved - all exports will be wrapped in spy functions that track calls.
-   */
-  spy: true;
-}
+export type MockModuleOptions =
+  | {
+      /**
+       * If `true`, the module will be auto-mocked but the original implementations
+       * will be preserved - all exports will be wrapped in spy functions that track calls.
+       */
+      spy: true;
+    }
+  | {
+      /**
+       * If `true`, the module will be auto-mocked with all exports replaced by mock functions.
+       * Original implementations will NOT be preserved.
+       */
+      mock: true;
+    };
 
 // Helper types for mocking
 type MockProcedure = (...args: any[]) => any;
