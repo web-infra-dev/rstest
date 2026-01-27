@@ -1,3 +1,0 @@
-// Rstest Snapshot v1
-
-exports[`browser snapshot update > should match updatable snapshot 1`] = `"ORIGINAL_VALUE"`;

@@ -1,3 +1,0 @@
-// Rstest Snapshot v1
-
-exports[`browser snapshot - error > should match error snapshot 1`] = `[Error: Test error message]`;
