@@ -1,0 +1,40 @@
+// Rstest Snapshot v1
+
+exports[`browser snapshot > should match DOM element snapshot 1`] = `"<div class="container"><span>Test Content</span></div>"`;
+
+exports[`browser snapshot > should match array snapshot 1`] = `
+[
+  "apple",
+  "banana",
+  "cherry",
+]
+`;
+
+exports[`browser snapshot > should match nested object snapshot 1`] = `
+{
+  "meta": {
+    "page": 1,
+    "total": 2,
+  },
+  "users": [
+    {
+      "id": 1,
+      "name": "John",
+    },
+    {
+      "id": 2,
+      "name": "Jane",
+    },
+  ],
+}
+`;
+
+exports[`browser snapshot > should match object snapshot 1`] = `
+{
+  "age": 30,
+  "email": "alice@example.com",
+  "name": "Alice",
+}
+`;
+
+exports[`browser snapshot > should match string snapshot 1`] = `"Hello, Browser World!"`;
