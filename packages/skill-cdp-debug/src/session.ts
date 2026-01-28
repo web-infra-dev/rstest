@@ -1,15 +1,8 @@
 import type { ChildProcess } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  GREATEST_LOWER_BOUND,
-  generatedPositionFor,
-  LEAST_UPPER_BOUND,
-  TraceMap,
-} from '@jridgewell/trace-mapping';
+import { BreakpointInstaller } from './breakpointInstaller';
 import { createCdpClient, evaluateExpressions } from './cdp';
 import type { CliOptions, OutputWriter } from './plan';
+import { ScriptPriorityQueue } from './scriptQueue';
 import type {
   CdpClient,
   DebugResult,
@@ -20,219 +13,9 @@ import type {
 } from './types';
 import {
   DEFAULT_BREAKPOINT_RESOLVE_TIMEOUT_MS,
-  DEFAULT_FIRST_PAUSE_GRACE_MS,
   DEFAULT_INACTIVITY_TIMEOUT_MS,
-  MAX_DEBUG_MAPPING,
   MAX_DEBUG_SCRIPTS,
-  MAX_MAPPING_DIAGNOSTICS,
 } from './types';
-
-// ============================================================================
-// Source Map Resolution
-// ============================================================================
-
-const INLINE_SOURCEMAP_REGEX =
-  /\/\/[#@]\s*sourceMappingURL=data:application\/json(?:;charset=[^;]+)?;base64,([^\s]+)/;
-const FILE_SOURCEMAP_REGEX = /\/\/[#@]\s*sourceMappingURL=([^\s]+)/;
-
-const normalizePath = (value: string) => value.replace(/\\/g, '/');
-
-/**
- * Normalize source paths from sourcemaps.
- * Handles webpack/rspack prefixes like:
- * - webpack:///./src/foo.ts
- * - webpack://<project>/./src/foo.ts
- */
-const normalizeMapSourcePath = (value: string) => {
-  if (!value) return '';
-  if (value.startsWith('file://')) {
-    try {
-      return normalizePath(fileURLToPath(value));
-    } catch {
-      // fall through
-    }
-  }
-  let source = normalizePath(value);
-  source = source.replace(/^[a-zA-Z]+:\/\/\/+/, '');
-  const firstSlash = source.indexOf('/');
-  if (firstSlash >= 0) source = source.slice(firstSlash + 1);
-  source = source.replace(/^\.(\/|\\)/, '');
-  return source;
-};
-
-const matchesSource = (source: string, target: string, rootDir?: string) => {
-  const sourceValue = normalizeMapSourcePath(source);
-  const targetValue = normalizePath(target);
-  const targetRelative = rootDir
-    ? normalizePath(path.relative(rootDir, targetValue))
-    : '';
-  const candidates = [targetValue, targetRelative].filter(Boolean);
-  const targetBase = path.posix.basename(targetValue);
-
-  return (
-    candidates.some(
-      (c) =>
-        sourceValue === c || sourceValue.endsWith(c) || c.endsWith(sourceValue),
-    ) ||
-    (targetBase && sourceValue.endsWith(`/${targetBase}`)) ||
-    sourceValue === targetBase
-  );
-};
-
-/** Try line and adjacent lines to handle minification offset */
-const hintTaskLines = (task: TaskDefinition) =>
-  [task.line, task.line - 1, task.line + 1].filter((v) => v > 0);
-
-const parseSourceMap = (source: string, scriptUrl?: string) => {
-  // Inline base64 sourcemap
-  const inlineMatch = source.match(INLINE_SOURCEMAP_REGEX);
-  if (inlineMatch?.[1]) {
-    const json = Buffer.from(inlineMatch[1], 'base64').toString('utf-8');
-    return JSON.parse(json);
-  }
-  // External sourcemap file
-  const fileMatch = source.match(FILE_SOURCEMAP_REGEX);
-  if (!fileMatch?.[1] || !scriptUrl?.startsWith('file://')) return null;
-  const scriptPath = fileURLToPath(scriptUrl);
-  const mapPath = path.resolve(path.dirname(scriptPath), fileMatch[1]);
-  return JSON.parse(readFileSync(mapPath, 'utf-8'));
-};
-
-type BreakpointResolution = {
-  location: {
-    scriptId: string;
-    lineNumber: number;
-    columnNumber: number;
-  } | null;
-  diagnostics: MappingDiagnostics;
-};
-
-const resolveBreakpoint = async ({
-  cdp,
-  scriptId,
-  url,
-  task,
-  rootDir,
-}: {
-  cdp: CdpClient;
-  scriptId: string;
-  url?: string;
-  task: TaskDefinition;
-  rootDir?: string;
-}): Promise<BreakpointResolution> => {
-  try {
-    const { scriptSource } = await cdp.send<{ scriptSource: string }>(
-      'Debugger.getScriptSource',
-      { scriptId },
-    );
-    const sourceMap = parseSourceMap(scriptSource, url);
-    if (!sourceMap) {
-      return {
-        location: null,
-        diagnostics: {
-          scriptId,
-          url,
-          taskId: task.id,
-          reason: 'no-sourcemap',
-          hasSourceMapComment: FILE_SOURCEMAP_REGEX.test(scriptSource),
-        },
-      };
-    }
-
-    const traceMap = new TraceMap(sourceMap);
-    const matchedSource = traceMap.sources.find(
-      (s) => s && matchesSource(s, task.sourcePath, rootDir),
-    );
-    if (!matchedSource) {
-      return {
-        location: null,
-        diagnostics: {
-          scriptId,
-          url,
-          taskId: task.id,
-          reason: 'source-mismatch',
-          sourcesSample: traceMap.sources
-            .filter((s): s is string => Boolean(s))
-            .slice(0, 3),
-        },
-      };
-    }
-
-    // Try multiple column/line combinations to find a valid mapping
-    const columns = [task.column ?? 0, 0, Math.max((task.column ?? 0) - 1, 0)];
-    let generated: { line: number; column: number } | null = null;
-
-    outer: for (const col of columns) {
-      for (const line of hintTaskLines(task)) {
-        const primary = generatedPositionFor(traceMap, {
-          source: matchedSource,
-          line,
-          column: col,
-          bias: GREATEST_LOWER_BOUND,
-        });
-        const fallback = generatedPositionFor(traceMap, {
-          source: matchedSource,
-          line,
-          column: col,
-          bias: LEAST_UPPER_BOUND,
-        });
-        const resolved = primary?.line ? primary : fallback;
-        if (resolved?.line) {
-          generated = { line: resolved.line, column: resolved.column };
-          break outer;
-        }
-      }
-    }
-
-    if (!generated?.line || generated.column == null) {
-      return {
-        location: null,
-        diagnostics: {
-          scriptId,
-          url,
-          taskId: task.id,
-          reason: 'generated-position-missing',
-          matchedSource,
-        },
-      };
-    }
-
-    return {
-      location: {
-        scriptId,
-        lineNumber: generated.line - 1, // CDP uses 0-based line numbers
-        columnNumber: generated.column,
-      },
-      diagnostics: {
-        scriptId,
-        url,
-        taskId: task.id,
-        reason: 'ok',
-        matchedSource,
-        generatedLine: generated.line,
-        generatedColumn: generated.column,
-      },
-    };
-  } catch (error) {
-    return {
-      location: null,
-      diagnostics: {
-        scriptId,
-        url,
-        taskId: task.id,
-        reason: 'script-error',
-        error: error instanceof Error ? error.message : String(error),
-      },
-    };
-  }
-};
-
-// ============================================================================
-// Debug Session
-// ============================================================================
-
-const wait = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const readWorkspacePath = (filePath: string, rootPath: string) =>
   filePath.replace(rootPath, '').replace(/^\//, '').replace(/\\/g, '/');
@@ -249,9 +32,21 @@ export type DebugSessionContext = {
 
 type DebuggerScriptParsedParams = { scriptId: string; url?: string };
 type DebuggerPausedParams = {
-  callFrames?: Array<{ callFrameId: string }>;
+  reason?: string;
+  callFrames?: Array<{
+    callFrameId: string;
+    location?: {
+      scriptId: string;
+      lineNumber: number;
+      columnNumber?: number;
+    };
+  }>;
   hitBreakpoints?: string[];
 };
+
+type InstrumentationName =
+  | 'beforeScriptExecution'
+  | 'beforeScriptWithSourceMapExecution';
 
 export class DebugSession {
   private readonly plan: Plan;
@@ -262,23 +57,29 @@ export class DebugSession {
   private readonly debugLog: (...args: unknown[]) => void;
 
   private readonly remaining: TaskDefinition[];
+  private readonly initialTaskCount: number;
   private readonly results: DebugResult['results'] = [];
   private readonly errors: ExecutionError[] = [];
   private readonly mappingDiagnostics: MappingDiagnostics[] = [];
 
   private readonly scripts = new Set<string>();
-  private readonly triedScripts = new Set<string>();
+  private readonly attemptedInstalls = new Set<string>();
   private readonly breakpoints = new Map<string, TaskDefinition>();
+
+  private readonly scriptUrlById = new Map<string, string>();
+
+  private readonly scriptQueue: ScriptPriorityQueue;
+  private readonly breakpointInstaller: BreakpointInstaller;
+  private drainingQueue = false;
+
+  private instrumentationBreakpointId: string | null = null;
+  private readonly armedTaskIds = new Set<string>();
 
   private finished = false;
   private breakpointTimeout: ReturnType<typeof setTimeout> | null = null;
   private inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   private pausedOnce = false;
-  private breakpointReadyResolve: (() => void) | null = null;
-  private readonly breakpointReady = new Promise<void>((resolve) => {
-    this.breakpointReadyResolve = resolve;
-  });
 
   private scriptCount = 0;
 
@@ -290,6 +91,24 @@ export class DebugSession {
     this.output = ctx.output;
     this.debugLog = ctx.debugLog;
     this.remaining = [...ctx.tasks];
+    this.initialTaskCount = ctx.tasks.length;
+
+    this.scriptQueue = new ScriptPriorityQueue({
+      cwd: this.plan.runner.cwd,
+      tasks: ctx.tasks,
+    });
+
+    this.breakpointInstaller = new BreakpointInstaller({
+      cdp: this.cdp,
+      rootDir: this.plan.runner.cwd,
+      options: this.options,
+      debugLog: this.debugLog,
+      attemptedInstalls: this.attemptedInstalls,
+      breakpoints: this.breakpoints,
+      armedTaskIds: this.armedTaskIds,
+      mappingDiagnostics: this.mappingDiagnostics,
+      errors: this.errors,
+    });
   }
 
   /** Start listening for CDP events and set up timeout */
@@ -316,6 +135,14 @@ export class DebugSession {
   async enableAndRun(): Promise<void> {
     await this.cdp.send('Runtime.enable');
     await this.cdp.send('Debugger.enable');
+    const { breakpointId } = await this.cdp.send<{ breakpointId: string }>(
+      'Debugger.setInstrumentationBreakpoint',
+      {
+        instrumentation:
+          'beforeScriptWithSourceMapExecution' satisfies InstrumentationName,
+      },
+    );
+    this.instrumentationBreakpointId = breakpointId;
     await this.cdp.send('Runtime.runIfWaitingForDebugger');
   }
 
@@ -378,6 +205,13 @@ export class DebugSession {
     }, DEFAULT_INACTIVITY_TIMEOUT_MS);
   }
 
+  private clearBreakpointResolveTimeoutIfNeeded(installedCount: number): void {
+    if (installedCount <= 0) return;
+    if (!this.breakpointTimeout) return;
+    clearTimeout(this.breakpointTimeout);
+    this.breakpointTimeout = null;
+  }
+
   private async onScriptParsed(
     params: DebuggerScriptParsedParams,
   ): Promise<void> {
@@ -392,92 +226,113 @@ export class DebugSession {
     // Skip internal Node.js scripts
     if (params.url?.startsWith('node:')) return;
 
-    const tasksToResolve = this.remaining.filter(
-      (task) => !this.triedScripts.has(`${params.scriptId}:${task.id}`),
-    );
+    if (params.url) {
+      this.scriptUrlById.set(params.scriptId, params.url);
+    }
 
-    await Promise.all(
-      tasksToResolve.map(async (task) => {
-        this.triedScripts.add(`${params.scriptId}:${task.id}`);
-        const resolution = await resolveBreakpoint({
-          cdp: this.cdp,
-          scriptId: params.scriptId,
-          url: params.url,
-          task,
-          rootDir: this.plan.runner.cwd,
+    // Queue scripts for prioritized breakpoint resolution. Correctness is
+    // guaranteed by the instrumentation breakpoint; this queue reduces the
+    // number of instrumentation pauses by arming tasks early.
+    this.scriptQueue.enqueue({ scriptId: params.scriptId, url: params.url });
+    void this.drainScriptQueue();
+  }
+
+  private async drainScriptQueue(): Promise<void> {
+    if (this.drainingQueue || this.finished) return;
+    this.drainingQueue = true;
+    try {
+      while (
+        !this.finished &&
+        this.remaining.length &&
+        this.armedTaskIds.size < this.initialTaskCount
+      ) {
+        const next = this.scriptQueue.takeNext();
+        if (!next) break;
+        const installedCount = await this.breakpointInstaller.installForScript({
+          scriptId: next.scriptId,
+          url: next.url,
+          tasks: this.remaining,
         });
-
-        if (this.mappingDiagnostics.length < MAX_MAPPING_DIAGNOSTICS) {
-          this.mappingDiagnostics.push(resolution.diagnostics);
-        }
-
-        if (!resolution.location) {
-          if (
-            this.options.debug &&
-            this.mappingDiagnostics.length <= MAX_DEBUG_MAPPING
-          ) {
-            this.debugLog('mapping', resolution.diagnostics);
-          }
-          return;
-        }
-
-        try {
-          const result = await this.cdp.send<{ breakpointId: string }>(
-            'Debugger.setBreakpoint',
-            { location: resolution.location },
-          );
-          this.breakpoints.set(result.breakpointId, task);
-          this.debugLog(
-            `breakpoint set for ${task.id} at ${resolution.location.scriptId}`,
-            `${resolution.location.lineNumber}:${resolution.location.columnNumber}`,
-          );
-          if (this.breakpointTimeout) {
-            clearTimeout(this.breakpointTimeout);
-            this.breakpointTimeout = null;
-          }
-        } catch (error) {
-          this.errors.push({
-            taskId: task.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }),
-    );
-
-    if (this.breakpoints.size) {
-      this.breakpointReadyResolve?.();
+        this.clearBreakpointResolveTimeoutIfNeeded(installedCount);
+      }
+    } finally {
+      this.drainingQueue = false;
     }
   }
 
   private async onPaused(params: DebuggerPausedParams): Promise<void> {
-    // First pause: wait for breakpoints to be ready, then resume
     if (!this.pausedOnce) {
-      this.pausedOnce = true;
-      await Promise.race([
-        this.breakpointReady,
-        wait(DEFAULT_FIRST_PAUSE_GRACE_MS),
-      ]);
-      await this.cdp.send('Debugger.resume');
-      if (this.breakpoints.size) this.resetInactivityTimer();
+      await this.handleInitialPause();
       return;
     }
 
     this.resetInactivityTimer();
 
+    if (this.isInstrumentationPause(params)) {
+      await this.handleInstrumentationPause(params);
+      return;
+    }
+
+    await this.handleBreakpointPause(params);
+  }
+
+  private isInstrumentationPause(params: DebuggerPausedParams): boolean {
+    if (params.reason === 'instrumentation') return true;
+    if (!this.instrumentationBreakpointId) return false;
+    return Boolean(
+      params.hitBreakpoints?.includes(this.instrumentationBreakpointId),
+    );
+  }
+
+  private async handleInitialPause(): Promise<void> {
+    // First pause comes from `--inspect-brk`.
+    this.pausedOnce = true;
+    await this.cdp.send('Debugger.resume');
+  }
+
+  private async handleInstrumentationPause(
+    params: DebuggerPausedParams,
+  ): Promise<void> {
+    const scriptId = params.callFrames?.[0]?.location?.scriptId;
+    if (scriptId) {
+      const installedCount = await this.breakpointInstaller.installForScript({
+        scriptId,
+        url: this.scriptUrlById.get(scriptId),
+        tasks: this.remaining,
+      });
+      this.clearBreakpointResolveTimeoutIfNeeded(installedCount);
+
+      if (
+        this.instrumentationBreakpointId &&
+        this.armedTaskIds.size >= this.initialTaskCount
+      ) {
+        await this.cdp.send('Debugger.removeBreakpoint', {
+          breakpointId: this.instrumentationBreakpointId,
+        });
+        this.instrumentationBreakpointId = null;
+      }
+    }
+
+    await this.cdp.send('Debugger.resume');
+  }
+
+  private async handleBreakpointPause(
+    params: DebuggerPausedParams,
+  ): Promise<void> {
     const frame = params.callFrames?.[0];
-    const hitBreakpointId = params.hitBreakpoints?.[0];
-    if (!frame || !hitBreakpointId) {
+    const breakpointId = params.hitBreakpoints?.[0];
+
+    if (!frame || !breakpointId) {
       await this.cdp.send('Debugger.resume');
       return;
     }
 
-    const task = this.breakpoints.get(hitBreakpointId);
+    const task = this.breakpoints.get(breakpointId);
     if (!task) {
       await this.cdp.send('Debugger.resume');
       return;
     }
 
-    // Check condition if specified
     if (task.condition) {
       const condResult = await this.cdp.send<{ result?: { value?: unknown } }>(
         'Debugger.evaluateOnCallFrame',
@@ -493,7 +348,6 @@ export class DebugSession {
       }
     }
 
-    // Determine expressions to evaluate
     const expressions = task.expressions?.length
       ? task.expressions
       : this.options.expression
@@ -505,7 +359,6 @@ export class DebugSession {
       return;
     }
 
-    // Evaluate and record result
     const evaluated = await evaluateExpressions({
       cdp: this.cdp,
       callFrameId: frame.callFrameId,
@@ -521,7 +374,6 @@ export class DebugSession {
       values: evaluated,
     });
 
-    // Track hits and remove completed tasks
     task.hits = (task.hits ?? 0) + 1;
     if (task.hits >= (task.hitLimit ?? 1)) {
       const index = this.remaining.findIndex((t) => t.id === task.id);
