@@ -133,12 +133,12 @@ rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
 
 ### 按正则表达式匹配
 
-该模式被视为一个正则表达式。你可以用它来进行更复杂的过滤。
+当需要更精确地匹配测试名称时，你可以将模式视为一个正则表达式。这对于复杂的过滤场景非常有用。
 
-例如，在 `suite-bar` 中运行 `test-baz`，但不在 `suite-bar1` 中运行：
+例如，如果你想精确匹配 `suite-bar > test-baz`，而不是任何包含此字符串的测试，可以使用正则表达式的起始符 `^` 和结束符 `$`：
 
 ```bash
-rstest foo.test.ts -t '^suite-foo > suite-bar > test-baz$'
+rstest foo.test.ts -t '^suite-bar > test-baz$'
 ```
 
 ## 根据项目名称过滤

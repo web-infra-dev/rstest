@@ -135,10 +135,10 @@ rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
 
 The pattern is treated as a regular expression. You can use this for more complex filtering.
 
-For example, to run `test-baz` in `suite-bar` but not in `suite-bar1`:
+For example, if you want to precisely match `suite-bar > test-baz`, rather than any test containing this string, you can use the regex start `^` and end `$` anchors:
 
 ```bash
-rstest foo.test.ts -t '^suite-foo > suite-bar > test-baz$'
+rstest foo.test.ts -t '^suite-bar > test-baz$'
 ```
 
 ## Filter by project name
