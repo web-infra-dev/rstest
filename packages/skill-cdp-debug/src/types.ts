@@ -91,6 +91,11 @@ export type CdpClient = {
     method: string,
     handler: (params: TParams) => void,
   ): void;
+  /**
+   * Create a session-scoped CDP client (Target domain, flatten mode).
+   * The returned client shares the underlying websocket connection.
+   */
+  session?(sessionId: string): CdpClient;
   close(): void;
 };
 

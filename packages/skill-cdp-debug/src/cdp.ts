@@ -27,36 +27,70 @@ const stripJsonRpcField = (payload: unknown): unknown => {
 export const createCdpClient = async (wsUrl: string): Promise<CdpClient> => {
   const socket = new WebSocket(wsUrl);
 
-  const client = new JSONRPCClient<void>((payload) => {
-    const raw = JSON.stringify(stripJsonRpcField(payload));
-    return new Promise<void>((resolve, reject) => {
-      socket.send(raw, (error) => (error ? reject(error) : resolve()));
+  type Endpoint = {
+    client: JSONRPCClient<void>;
+    requester: ReturnType<JSONRPCClient<void>['timeout']>;
+    listeners: Map<string, (params: unknown) => void>;
+  };
+
+  const endpoints = new Map<string, Endpoint>();
+
+  const getEndpoint = (sessionId: string): Endpoint => {
+    const existing = endpoints.get(sessionId);
+    if (existing) return existing;
+
+    const client = new JSONRPCClient<void>((payload) => {
+      const rawPayload = stripJsonRpcField(payload) as Record<string, unknown>;
+      const framed =
+        sessionId && sessionId !== ''
+          ? { ...rawPayload, sessionId }
+          : rawPayload;
+
+      const raw = JSON.stringify(framed);
+      return new Promise<void>((resolve, reject) => {
+        socket.send(raw, (error) => (error ? reject(error) : resolve()));
+      });
     });
-  });
 
-  const requester = client.timeout(REQUEST_TIMEOUT_MS, (id) =>
-    createJSONRPCErrorResponse(id, -32000, 'CDP request timed out.'),
-  );
+    const requester = client.timeout(REQUEST_TIMEOUT_MS, (id) =>
+      createJSONRPCErrorResponse(id, -32000, 'CDP request timed out.'),
+    );
 
-  const listeners = new Map<string, (params: unknown) => void>();
+    const endpoint: Endpoint = {
+      client,
+      requester,
+      listeners: new Map<string, (params: unknown) => void>(),
+    };
+    endpoints.set(sessionId, endpoint);
+    return endpoint;
+  };
+
+  // Create root endpoint
+  getEndpoint('');
 
   socket.on('message', (raw) => {
     let message: unknown;
     try {
       message = JSON.parse(raw.toString());
     } catch (error) {
-      client.rejectAllPendingRequests(
-        `Invalid CDP message: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      for (const endpoint of endpoints.values()) {
+        endpoint.client.rejectAllPendingRequests(
+          `Invalid CDP message: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       socket.close();
       return;
     }
     if (!isObject(message)) return;
 
+    const sessionId =
+      typeof message.sessionId === 'string' ? message.sessionId : '';
+    const endpoint = getEndpoint(sessionId);
+
     // Response to a request
     if ('id' in message) {
-      client.receive(
-        message as unknown as Parameters<typeof client.receive>[0],
+      endpoint.client.receive(
+        message as unknown as Parameters<typeof endpoint.client.receive>[0],
       );
       return;
     }
@@ -64,18 +98,22 @@ export const createCdpClient = async (wsUrl: string): Promise<CdpClient> => {
     // Event notification
     const method = message.method;
     if (typeof method === 'string') {
-      listeners.get(method)?.(message.params);
+      endpoint.listeners.get(method)?.(message.params);
     }
   });
 
   socket.on('error', (error) => {
-    client.rejectAllPendingRequests(
-      error instanceof Error ? error.message : String(error),
-    );
+    for (const endpoint of endpoints.values()) {
+      endpoint.client.rejectAllPendingRequests(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   });
 
   socket.on('close', () => {
-    client.rejectAllPendingRequests('CDP websocket closed.');
+    for (const endpoint of endpoints.values()) {
+      endpoint.client.rejectAllPendingRequests('CDP websocket closed.');
+    }
   });
 
   // Wait for connection
@@ -83,17 +121,26 @@ export const createCdpClient = async (wsUrl: string): Promise<CdpClient> => {
     socket.once('open', () => resolve());
     socket.once('error', (err) => reject(err));
   });
-
-  return {
-    send: (method, params = {}) =>
-      Promise.resolve(requester.request(method, params, undefined)),
-    on: (method, handler) =>
-      listeners.set(method, handler as (params: unknown) => void),
-    close: () => {
-      client.rejectAllPendingRequests('CDP client closed.');
-      socket.close();
-    },
+  const makeClient = (sessionId: string): CdpClient => {
+    const endpoint = getEndpoint(sessionId);
+    return {
+      send: (method, params = {}) =>
+        Promise.resolve(endpoint.requester.request(method, params, undefined)),
+      on: (method, handler) =>
+        endpoint.listeners.set(method, handler as (params: unknown) => void),
+      session: (childSessionId: string) => makeClient(childSessionId),
+      close: () => {
+        // Only the root client should close the websocket.
+        if (sessionId) return;
+        for (const ep of endpoints.values()) {
+          ep.client.rejectAllPendingRequests('CDP client closed.');
+        }
+        socket.close();
+      },
+    };
   };
+
+  return makeClient('');
 };
 
 // ============================================================================

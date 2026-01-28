@@ -20,6 +20,14 @@ export class BreakpointInstaller {
 
   private readonly mappingDiagnostics: MappingDiagnostics[];
   private readonly errors: ExecutionError[];
+  private readonly onTaskMapped?: (
+    taskId: string,
+    location: {
+      scriptId: string;
+      lineNumber: number;
+      columnNumber: number;
+    },
+  ) => void;
 
   constructor({
     cdp,
@@ -31,6 +39,7 @@ export class BreakpointInstaller {
     armedTaskIds,
     mappingDiagnostics,
     errors,
+    onTaskMapped,
   }: {
     cdp: CdpClient;
     rootDir: string;
@@ -41,6 +50,14 @@ export class BreakpointInstaller {
     armedTaskIds: Set<string>;
     mappingDiagnostics: MappingDiagnostics[];
     errors: ExecutionError[];
+    onTaskMapped?: (
+      taskId: string,
+      location: {
+        scriptId: string;
+        lineNumber: number;
+        columnNumber: number;
+      },
+    ) => void;
   }) {
     this.cdp = cdp;
     this.rootDir = rootDir;
@@ -51,6 +68,7 @@ export class BreakpointInstaller {
     this.armedTaskIds = armedTaskIds;
     this.mappingDiagnostics = mappingDiagnostics;
     this.errors = errors;
+    this.onTaskMapped = onTaskMapped;
   }
 
   async installForScript({
@@ -98,16 +116,40 @@ export class BreakpointInstaller {
         }
 
         try {
-          const result = await this.cdp.send<{ breakpointId: string }>(
-            'Debugger.setBreakpoint',
-            { location: resolution.location },
+          const location = await this.findBreakableLocation(
+            resolution.location,
           );
+
+          // Record the mapped location early so error-pauses (exceptions / promise
+          // rejections) can be matched even if they happen before breakpoints are
+          // fully armed.
+          this.onTaskMapped?.(task.id, location);
+
+          const result = await this.cdp.send<{
+            breakpointId: string;
+            actualLocation?: {
+              scriptId: string;
+              lineNumber: number;
+              columnNumber: number;
+            };
+          }>('Debugger.setBreakpoint', { location });
+
+          const finalLocation = result.actualLocation ?? location;
+          this.onTaskMapped?.(task.id, finalLocation);
+
           this.breakpoints.set(result.breakpointId, task);
           this.armedTaskIds.add(task.id);
           this.debugLog(
-            `breakpoint set for ${task.id} at ${resolution.location.scriptId}`,
-            `${resolution.location.lineNumber}:${resolution.location.columnNumber}`,
+            `breakpoint set for ${task.id} at ${location.scriptId}`,
+            `${location.lineNumber}:${location.columnNumber}`,
           );
+          if (this.options.debug && result.actualLocation) {
+            this.debugLog(
+              'actualLocation',
+              `${result.actualLocation.scriptId}`,
+              `${result.actualLocation.lineNumber}:${result.actualLocation.columnNumber}`,
+            );
+          }
           return true;
         } catch (error) {
           this.errors.push({
@@ -120,5 +162,52 @@ export class BreakpointInstaller {
     );
 
     return installed.filter(Boolean).length;
+  }
+
+  private async findBreakableLocation(location: {
+    scriptId: string;
+    lineNumber: number;
+    columnNumber: number;
+  }): Promise<{ scriptId: string; lineNumber: number; columnNumber: number }> {
+    // `setBreakpoint` can succeed even when the exact location is not breakable,
+    // which results in a breakpoint that never hits. Use `getPossibleBreakpoints`
+    // to snap to an actual breakable location near the mapped position.
+    try {
+      const startLine = Math.max(location.lineNumber - 1, 0);
+      const endLine = location.lineNumber + 3;
+      const { locations } = await this.cdp.send<{
+        locations: Array<{
+          scriptId: string;
+          lineNumber: number;
+          columnNumber: number;
+        }>;
+      }>('Debugger.getPossibleBreakpoints', {
+        start: {
+          scriptId: location.scriptId,
+          lineNumber: startLine,
+          columnNumber: 0,
+        },
+        end: {
+          scriptId: location.scriptId,
+          lineNumber: endLine,
+          columnNumber: 0,
+        },
+        restrictToFunction: false,
+      });
+
+      if (!locations?.length) return location;
+
+      const preferred = locations.find(
+        (l) =>
+          l.scriptId === location.scriptId &&
+          (l.lineNumber > location.lineNumber ||
+            (l.lineNumber === location.lineNumber &&
+              l.columnNumber >= location.columnNumber)),
+      );
+
+      return preferred ?? locations[0] ?? location;
+    } catch {
+      return location;
+    }
   }
 }
