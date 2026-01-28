@@ -99,7 +99,7 @@ const getTaskNames = (
 export const getTaskNameWithPrefix = (
   test: Pick<TestResult, 'name' | 'parentNames'>,
   delimiter: string = TEST_DELIMITER,
-): string => getTaskNames(test).join(` ${delimiter} `);
+): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 

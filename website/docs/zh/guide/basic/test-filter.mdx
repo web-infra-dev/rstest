@@ -70,14 +70,75 @@ rstest --include test/a/*.test.ts --include test/b/*.test.ts
 
 ## 根据测试名称过滤
 
-如果你只想运行名称中包含特定关键字的测试用例，可以使用 [testNamePattern](/config/test/test-name-pattern)。
+如果你只想运行某些测试用例，可以使用 `--testNamePattern`（简写为 `-t`）选项。它会运行名称与给定模式匹配的测试。
 
-如，只运行名称包含 "login" 的测试用例：
+### 按关键字匹配
+
+这是最简单的方法。它将运行完整名称包含给定关键字的测试用例或测试套件。
+
+例如，只运行名称包含 "bar" 的测试用例：
 
 ```bash
-rstest --testNamePattern login
-# 或
-rstest -t login
+rstest -t bar
+```
+
+如果套件名称匹配，则其中的所有测试都将被运行。
+
+你还可以提供多个由空格分隔的关键字。这将匹配完整名称中出现所有关键字的测试用例。例如，要运行套件路径中出现 `'suite-bar'` 且测试名称中包含 `'test-baz'` 的测试：
+
+```bash
+rstest -t 'suite-bar test-baz'
+```
+
+### 按完整测试名称匹配
+
+你也可以提供完整的测试名称来运行特定的测试用例。
+
+为了更好的输出可读性，Rstest 使用 `>` 来连接测试套件和测试用例的名称。完整的测试名称是测试套件从外到内的名称和测试用例名称的拼接，用 `>` 分隔。
+
+例如，参考以下测试结构及其输出：
+
+```ts
+// foo.test.ts
+import { describe, test } from '@rstest/core';
+
+describe('suite-foo', () => {
+  describe('suite-bar', () => {
+    test('test-baz', () => {
+      // ...
+    });
+
+    describe('suite-bar1', () => {
+      test('test-baz', () => {
+        // ...
+      });
+    });
+  });
+});
+```
+
+输出:
+
+```bash
+✓ foo.test.ts
+  ✓ suite-foo > suite-bar > test-baz
+  ✓ suite-foo > suite-bar > suite-bar1 > test-baz
+```
+
+如果希望只运行 `suite-bar` 中的 `test-baz` 测试用例，你可以使用：
+
+```bash
+rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
+```
+
+### 按正则表达式匹配
+
+该模式被视为一个正则表达式。你可以用它来进行更复杂的过滤。
+
+例如，在 `suite-bar` 中运行 `test-baz`，但不在 `suite-bar1` 中运行：
+
+```bash
+rstest foo.test.ts -t '^suite-foo > suite-bar > test-baz$'
 ```
 
 ## 根据项目名称过滤
