@@ -30,9 +30,9 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.10",
-    "@rsdoctor/rspack-plugin": "^1.4.0",
-    "@rslint/core": "^0.1.14",
+    "@biomejs/biome": "^2.3.13",
+    "@rsdoctor/rspack-plugin": "^1.5.1",
+    "@rslint/core": "^0.2.0",
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
     "@types/fs-extra": "^11.0.4",
@@ -46,9 +46,9 @@
     "nano-staged": "^0.9.0",
     "nx": "^21.6.10",
     "path-serializer": "0.5.1",
-    "playwright": "^1.49.1",
-    "prettier": "^3.7.4",
-    "prettier-plugin-packagejson": "^2.5.20",
+    "playwright": "^1.58.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-packagejson": "^2.5.22",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^5.9.3"
   },
