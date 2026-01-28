@@ -95,7 +95,7 @@ test('should be mocked', () => {
 });
 ```
 
-Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will error if one isn't found. To achieve auto-mocking, you must explicitly pass the `{ mock: true }` option.
+Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will throw an error if one isn't found. To achieve auto-mocking, you must explicitly pass the `{ mock: true }` option.
 
 ```ts
 // Rstest
@@ -111,7 +111,7 @@ test('should be mocked', () => {
 });
 ```
 
-This distinction is important: Vitest has implicit auto-mocking as a fallback, while Rstest requires explicit configuration for the same behavior. For more details, see [`rs.mock()` with `{ mock: true }`](/api/runtime-api/rstest/mock-modules#with-mock-true-option).
+This distinction is important: Vitest has implicit auto-mocking as a fallback, while Rstest requires explicit configuration for the same behavior. For more details, see [`rs.mock()` with `{ mock: true }`](/api/runtime-api/rstest/mock-modules#with--mock-true--option).
 
 ### Mock async modules
 
