@@ -77,6 +77,42 @@ Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函�
 fn.mockResolvedValue('foo');
 ```
 
+### 自动模拟模块
+
+在 Vitest 中，只调用 `vi.mock()` 并传入模块路径时，它会首先尝试从对应的 `__mocks__` 目录加载手动模拟。如果没有找到手动模拟，它会自动模拟该模块，将其所有导出替换为空的模拟函数。
+
+```ts
+// Vitest
+import { vi, test, expect } from 'vitest';
+import { someFunction } from './module';
+
+// 优先查找 __mocks__/module.js，然后进行自动模拟。
+vi.mock('./module');
+
+test('should be mocked', () => {
+  expect(vi.isMockFunction(someFunction)).toBe(true);
+  someFunction(); // 返回 undefined
+});
+```
+
+Rstest 的处理方式不同。只调用 `rs.mock()` 并传入模块路径时，它将**只**从 `__mocks__` 目录查找模拟，如果未找到则会报错。要实现自动模拟，你必须显式传递 `{ mock: true }` 选项。
+
+```ts
+// Rstest
+import { rs, test, expect } from '@rstest/core';
+import { someFunction } from './module';
+
+// 因为传递了 { mock: true }，所以会自动模拟该模块。
+rs.mock('./module', { mock: true });
+
+test('should be mocked', () => {
+  expect(rs.isMockFunction(someFunction)).toBe(true);
+  someFunction(); // 返回 undefined
+});
+```
+
+这种区别很重要：Vitest 默认提供了隐式的自动模拟回退，而 Rstest 则需要显式配置才能实现相同的行为。更多详细信息，请参阅 [`rs.mock()` 的 `{ mock: true }` 选项](/api/runtime-api/rstest/mock-modules#with-mock-true-option)。
+
 ### Mock 异步模块
 
 当你需要 mock 一个模块返回值时，Rstest 不支持返回一个异步函数。

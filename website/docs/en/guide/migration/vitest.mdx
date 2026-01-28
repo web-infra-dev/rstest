@@ -77,6 +77,42 @@ Rstest provides the `rstest` API, which you can use to access Rstest's utility f
 fn.mockResolvedValue('foo');
 ```
 
+### Auto-mocking modules
+
+In Vitest, calling `vi.mock()` with just the module path first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all its exports with empty mock functions.
+
+```ts
+// Vitest
+import { vi, test, expect } from 'vitest';
+import { someFunction } from './module';
+
+// Looks for __mocks__/module.js first, then auto-mocks.
+vi.mock('./module');
+
+test('should be mocked', () => {
+  expect(vi.isMockFunction(someFunction)).toBe(true);
+  someFunction(); // returns undefined
+});
+```
+
+Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will error if one isn't found. To achieve auto-mocking, you must explicitly pass the `{ mock: true }` option.
+
+```ts
+// Rstest
+import { rs, test, expect } from '@rstest/core';
+import { someFunction } from './module';
+
+// Auto-mocks the module because { mock: true } is passed.
+rs.mock('./module', { mock: true });
+
+test('should be mocked', () => {
+  expect(rs.isMockFunction(someFunction)).toBe(true);
+  someFunction(); // returns undefined
+});
+```
+
+This distinction is important: Vitest has implicit auto-mocking as a fallback, while Rstest requires explicit configuration for the same behavior. For more details, see [`rs.mock()` with `{ mock: true }`](/api/runtime-api/rstest/mock-modules#with-mock-true-option).
+
 ### Mock async modules
 
 When you need to mock a module's return value, Rstest does not support returning an async function.
