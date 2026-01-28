@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "target": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["@rstest/core"],
+    "strict": true
+  },
+  "include": ["src", "test", "rstest.config.ts"]
+}
