@@ -32,16 +32,19 @@ export default defineConfig({
 
 更多配置方式请参考 [报告器配置](/config/test/reporters)。
 
+内置报告器的 options 类型定义在 TypeScript types 中：[`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+
 ## 内置报告器
 
 Rstest 提供了多种内置报告器：
 
-| 报告器           | 用途               | 使用场景              |
-| ---------------- | ------------------ | --------------------- |
-| `default`        | 带颜色的控制台输出 | 本地开发              |
-| `verbose`        | 详细的测试用例输出 | 调试测试失败          |
-| `github-actions` | CI 错误注释        | GitHub Actions 工作流 |
-| `junit`          | JUnit XML 格式     | CI/CD 集成            |
+| 报告器           | 用途                | 使用场景              |
+| ---------------- | ------------------- | --------------------- |
+| `default`        | 带颜色的控制台输出  | 本地开发              |
+| `verbose`        | 详细的测试用例输出  | 调试测试失败          |
+| `github-actions` | CI 错误注释         | GitHub Actions 工作流 |
+| `junit`          | JUnit XML 格式      | CI/CD 集成            |
+| `md`             | Markdown agent 报告 | Agent / LLM 集成      |
 
 ### 默认报告器
 
@@ -200,6 +203,56 @@ JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 - `fail`: 测试失败，生成 `<failure>` 标签
 - `skip`: 测试跳过，生成 `<skipped>` 标签
 - `todo`: 测试待办，生成 `<skipped>` 标签
+
+### Markdown 报告器
+
+Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout，主要用于 agent / LLM 场景。
+
+在 agent 环境中，只有当你没有显式配置 reporters 时，Rstest 才会默认使用 `md`。
+
+默认 preset 为 `normal`，主要针对 agent 工作流做了取舍：
+
+- 每个失败用例都会输出 repro 命令（`file+name`），方便 agent 精准复跑某一个失败 case。
+- stack 默认使用 `top`（稳定的定位锚点），而不是输出完整的 stack frames。
+- console 默认开启，但带有严格的输出上限，避免报告体积失控。
+- 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=md
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['md'],
+});
+```
+  </Tab>
+</Tabs>
+
+你也可以通过 reporter options 进一步调整输出：
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    [
+      'md',
+      {
+        preset: 'normal',
+        failures: { max: 50 },
+        stack: 'top',
+        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+      },
+    ],
+  ],
+});
+```
 
 ## 自定义报告器
 

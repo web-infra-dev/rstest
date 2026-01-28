@@ -1,6 +1,5 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
-import type { BuiltInReporterNames } from '../core/rstest';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type {
   TestCaseInfo,
@@ -24,7 +23,12 @@ export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
 
-export type { BuiltInReporterNames };
+export type BuiltInReporterNames =
+  | 'default'
+  | 'verbose'
+  | 'md'
+  | 'github-actions'
+  | 'junit';
 
 export type DefaultReporterOptions = {
   /**
@@ -47,9 +51,93 @@ export type DefaultReporterOptions = {
 
 export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
+export type MdReporterOptions = {
+  /**
+   * Output detail level preset.
+   * - `'normal'`: balanced output with code frames, repro commands, and candidate files
+   * - `'compact'`: minimal output without code frames, candidate files, or full stack traces
+   * - `'full'`: verbose output including console logs and environment info
+   * @default 'normal'
+   */
+  preset?: 'normal' | 'compact' | 'full';
+
+  /**
+   * Header section controls.
+   * - `false`: omit all header extras (runtime/env)
+   * - `true`: include all default header extras
+   * - object form: toggle individual parts
+   * @default { env: true }
+   */
+  header?: boolean | { env?: boolean };
+
+  /**
+   * Reproduction command controls.
+   * - `false`: omit reproduction commands
+   * - `'file'`: only include the test file path
+   * - `'file+name'`: include both file path and `--testNamePattern`
+   * - `true`: same as `'file+name'`
+   * @default 'file+name'
+   */
+  reproduction?: boolean | 'file' | 'file+name';
+
+  /**
+   * Failure output controls.
+   * @default { max: 50 }
+   */
+  failures?: { max?: number };
+
+  /**
+   * Code frame controls.
+   * - `false`: disable code frames
+   * - `true`: enable with default line window
+   * - object form: customize line window
+   * @default { linesAbove: 2, linesBelow: 2 }
+   */
+  codeFrame?: boolean | { linesAbove?: number; linesBelow?: number };
+
+  /**
+   * Stack output controls.
+   * - `false`: omit stack info
+   * - `'top'`: include only the top frame
+   * - `number`: include up to N stack frames
+   * - `'full'`: include a large default number of stack frames
+   * @default 'top'
+   */
+  stack?: number | false | 'full' | 'top';
+
+  /**
+   * Candidate files controls (best-effort files extracted from stack traces).
+   * - `false`: omit candidate files
+   * - `true`: enable with defaults
+   * - object form: customize max items
+   * @default { max: 5 }
+   */
+  candidateFiles?: boolean | { max?: number };
+
+  /**
+   * Console output controls.
+   * - `false`: omit console logs
+   * - `true`: include console logs with defaults
+   * - object form: customize limits
+   * @default { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }
+   */
+  console?:
+    | boolean
+    | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
+
+  /**
+   * Error section controls.
+   * @default { unhandled: true }
+   */
+  errors?: boolean | { unhandled?: boolean };
+};
+
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
   verbose: VerboseReporterOptions;
+  md: MdReporterOptions;
+  'github-actions': Record<string, unknown>;
+  junit: Record<string, unknown>;
 };
 
 export type ReporterWithOptions<

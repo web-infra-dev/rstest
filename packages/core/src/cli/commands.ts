@@ -5,7 +5,7 @@ import type {
   RstestCommand,
   RstestInstance,
 } from '../types';
-import { color, formatError, logger } from '../utils';
+import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -203,7 +203,9 @@ export function setupCommands(): void {
           watch?: boolean;
         },
       ) => {
-        showRstest();
+        if (!determineAgent().isAgent) {
+          showRstest();
+        }
         if (options.watch) {
           await runRest({ options, filters, command: 'watch' });
         } else {
@@ -215,14 +217,18 @@ export function setupCommands(): void {
   cli
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
+      if (!determineAgent().isAgent) {
+        showRstest();
+      }
       await runRest({ options, filters, command: 'run' });
     });
 
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
+      if (!determineAgent().isAgent) {
+        showRstest();
+      }
       await runRest({ options, filters, command: 'watch' });
     });
 

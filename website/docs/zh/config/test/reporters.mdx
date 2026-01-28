@@ -12,6 +12,8 @@ type Reporter = ReporterName | [ReporterName, ReporterOptions];
 type Reporters = Reporter | Reporter[];
 ```
 
+- **Reporter options 参考：** 各报告器的 options 类型定义在 [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+
 - **默认值：**
 
 ```ts
@@ -23,6 +25,10 @@ process.env.GITHUB_ACTIONS === 'true'
 - **CLI：** `--reporter=<name> --reporter=<name1>`
 
 配置用于测试结果输出的报告器。
+
+:::info AI agent 环境
+未显式配置 reporters（配置文件无 `reporters`，且 CLI 未传 `--reporter`）时，Rstest 会默认使用 `['md']`，将更适合 AI agent 的 markdown 输出到 stdout。
+:::
 
 ### 使用方法
 
