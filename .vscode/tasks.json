@@ -22,7 +22,17 @@
       "type": "npm",
       "script": "dev",
       "path": "packages/core",
-      "problemMatcher": "$rslib-watch",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build complete, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
       "isBackground": true,
       "group": {
         "kind": "build"
@@ -33,7 +43,17 @@
       "type": "npm",
       "script": "dev",
       "path": "packages/coverage-istanbul",
-      "problemMatcher": "$rslib-watch",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build complete, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
       "isBackground": true,
       "dependsOn": ["core dev"],
       "dependsOrder": "parallel",
@@ -46,7 +66,17 @@
       "type": "npm",
       "script": "watch:local",
       "path": "packages/vscode",
-      "problemMatcher": "$rslib-watch",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build complete, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
       "isBackground": true,
       "group": {
         "kind": "build",
