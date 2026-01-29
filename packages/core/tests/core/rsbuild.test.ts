@@ -22,6 +22,7 @@ describe('prepareRsbuild', () => {
           testEnvironment: {
             name: 'jsdom',
           },
+          pool: { type: 'forks' },
         },
         projects: [
           {
@@ -70,6 +71,7 @@ describe('prepareRsbuild', () => {
             name: 'node',
           },
           isolate: true,
+          pool: { type: 'forks' },
         },
         projects: [
           {
@@ -110,6 +112,7 @@ describe('prepareRsbuild', () => {
         normalizedConfig: {
           root: rootPath,
           name: 'test',
+          pool: { type: 'forks' },
         },
         projects: [
           {
@@ -179,6 +182,7 @@ describe('prepareRsbuild', () => {
           },
           output: {},
           tools: {},
+          pool: { type: 'forks' },
         },
         projects: [
           {
@@ -245,6 +249,7 @@ describe('prepareRsbuild', () => {
           coverage: {
             reportsDirectory: join(rootPath, './coverage'),
           },
+          pool: { type: 'forks' },
         },
         projects: [
           {
@@ -293,6 +298,7 @@ describe('prepareRsbuild', () => {
           testEnvironment: {
             name: 'node',
           },
+          pool: { type: 'forks' },
         },
         projects: [
           {
