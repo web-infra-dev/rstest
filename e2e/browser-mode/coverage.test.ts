@@ -11,9 +11,9 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout).toMatch(/Coverage enabled with istanbul/);
 
     // sum.ts should have 100% coverage (tested)
-    expect(cli.stdout).toMatch(/sum\.ts.*100/);
+    expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
 
     // multiply.ts should have 0% coverage (untested)
-    expect(cli.stdout).toMatch(/multiply\.ts.*0/);
+    expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|0|0|0');
   });
 });
