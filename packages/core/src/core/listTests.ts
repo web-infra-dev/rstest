@@ -121,6 +121,7 @@ const collectNodeTests = async ({
           sourceMaps,
           interopDefault: true,
           outputModule: project.outputModule,
+          federation: Boolean(project.normalizedConfig.federation),
         });
         if (!success) {
           return {

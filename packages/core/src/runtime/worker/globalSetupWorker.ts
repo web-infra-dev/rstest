@@ -43,6 +43,7 @@ const runGlobalSetup = async (data: {
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation?: boolean;
 }): Promise<{
   success: boolean;
   hasTeardown: boolean;
@@ -72,6 +73,14 @@ const runGlobalSetup = async (data: {
     // Start tracking environment changes
     trackEnvChanges();
 
+    // Keep behavior changes minimally scoped: only enable federation-specific
+    // runtime shims for global setup when federation mode is explicitly enabled.
+    try {
+      (globalThis as any).__rstest_federation__ = Boolean(data.federation);
+    } catch {
+      // ignore
+    }
+
     for (const entry of data.entries) {
       const { distPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
@@ -90,6 +99,7 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
+        federation: Boolean(data.federation),
       });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;
