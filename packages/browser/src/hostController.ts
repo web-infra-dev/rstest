@@ -12,6 +12,7 @@ import {
   getTestEntries,
   isDebug,
   type ListCommandResult,
+  loadCoverageProvider,
   logger,
   type ProjectContext,
   type Reporter,
@@ -817,6 +818,8 @@ const createBrowserRuntime = async ({
   const firstProject = browserProjects[0];
   const userPlugins = firstProject?.normalizedConfig.plugins || [];
   const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
+  const browserConfig =
+    firstProject?.normalizedConfig.browser ?? context.normalizedConfig.browser;
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -841,8 +844,8 @@ const createBrowserRuntime = async ({
       plugins: userPlugins,
       server: {
         printUrls: false,
-        port: context.normalizedConfig.browser.port ?? 4000,
-        strictPort: context.normalizedConfig.browser.strictPort,
+        port: browserConfig.port ?? 4000,
+        strictPort: browserConfig.strictPort,
       },
       dev: {
         client: {
@@ -850,7 +853,7 @@ const createBrowserRuntime = async ({
         },
       },
       environments: {
-        web: {},
+        [firstProject?.environmentName || 'web']: {},
       },
     },
   });
@@ -968,6 +971,16 @@ const createBrowserRuntime = async ({
         },
       },
     ]);
+  }
+
+  // Register coverage plugin for browser mode
+  const coverage = firstProject?.normalizedConfig.coverage;
+  if (coverage?.enabled && context.command !== 'list') {
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 
   const devServer = await rsbuildInstance.createDevServer({
@@ -1134,7 +1147,7 @@ const createBrowserRuntime = async ({
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
   let browserLauncher: BrowserType;
-  const browserName = context.normalizedConfig.browser.browser;
+  const browserName = browserConfig.browser;
   try {
     const playwright = await import('playwright');
     browserLauncher = playwright[browserName];
@@ -1147,7 +1160,7 @@ const createBrowserRuntime = async ({
   let browser: BrowserInstance;
   try {
     browser = await browserLauncher.launch({
-      headless: forceHeadless ?? context.normalizedConfig.browser.headless,
+      headless: forceHeadless ?? browserConfig.headless,
       // Chromium-specific args (ignored by other browsers)
       args:
         browserName === 'chromium'

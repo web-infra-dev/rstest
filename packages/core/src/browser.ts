@@ -10,6 +10,8 @@ export { rsbuild };
 
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
+// Coverage support for browser mode
+export { loadCoverageProvider } from './coverage';
 // Runtime API
 export { createRstestRuntime } from './runtime/api';
 // Public runtime API (for browser client usage)
