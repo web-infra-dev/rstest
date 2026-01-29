@@ -55,6 +55,21 @@ describe.concurrent('test exit code', () => {
     expectStderrLog(/Unknown option `-a`/);
   });
 
+  it('should support --pool shorthand', async ({ onTestFinished }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'success.test.ts', '--pool', 'forks'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {

@@ -18,8 +18,8 @@ import type {
   UserConsoleLog,
 } from '../types';
 import {
-  ansiEnabled,
   color,
+  getForceColorEnv,
   isDeno,
   needFlagExperimentalDetectModule,
   serializableConfig,
@@ -223,8 +223,7 @@ export const createPool = async ({
     env: {
       NODE_ENV: 'test',
       ...process.env,
-      // enable diff color by default
-      FORCE_COLOR: ansiEnabled() ? (process.env.FORCE_COLOR ?? '1') : '0',
+      ...getForceColorEnv(),
     },
   });
 

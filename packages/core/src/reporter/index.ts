@@ -12,7 +12,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { ansiEnabled, color, isTTY, logger } from '../utils';
+import { color, isTTY, logger } from '../utils';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle } from './utils';
@@ -52,9 +52,6 @@ export class DefaultReporter implements Reporter {
    */
   private ensureStatusRenderer(): void {
     if (this.statusRenderer) return;
-    if (!ansiEnabled()) {
-      return;
-    }
     if (isTTY() || this.options.logger) {
       this.statusRenderer = new StatusRenderer(
         this.rootPath,

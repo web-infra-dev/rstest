@@ -63,6 +63,17 @@ pnpm --filter @rstest/core typecheck
 - Use `npx rstest --globals` for running tests
 - Update snapshots with `-- --updateSnapshot` only when behavior changes
 
+### E2E note (build required)
+
+All E2E tests execute `rstest` via `@rstest/core`'s built output (e.g. `packages/core/dist` / `packages/core/bin`), not the TypeScript sources under `packages/core/src`.
+
+That means: if you change anything in `@rstest/core`, you must rebuild before running E2E tests, otherwise E2E will run against stale output.
+
+```bash
+pnpm --filter @rstest/core build
+cd e2e && pnpm rstest
+```
+
 ## Good examples
 
 - Runner implementation: `src/runtime/runner/runner.ts`

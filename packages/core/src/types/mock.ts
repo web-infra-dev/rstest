@@ -185,6 +185,26 @@ export interface MockOptions {
   spy?: boolean;
 }
 
+/**
+ * Options for rs.mock module mocking.
+ * Supports `{ spy: true }` or `{ mock: true }`.
+ */
+export type MockModuleOptions =
+  | {
+      /**
+       * If `true`, the module will be auto-mocked but the original implementations
+       * will be preserved - all exports will be wrapped in spy functions that track calls.
+       */
+      spy: true;
+    }
+  | {
+      /**
+       * If `true`, the module will be auto-mocked with all exports replaced by mock functions.
+       * Original implementations will NOT be preserved.
+       */
+      mock: true;
+    };
+
 // Helper types for mocking
 type MockProcedure = (...args: any[]) => any;
 
@@ -224,7 +244,7 @@ export type MockedObjectDeep<T> = {
     : T[K];
 } & { [K in Properties<T>]: MaybeMockedDeep<T[K]> };
 
-export type MaybeMocked<T> = T extends Constructor
+export type Mocked<T> = T extends Constructor
   ? MockedClass<T>
   : T extends MockProcedure
     ? MockedFunction<T>
@@ -331,12 +351,9 @@ export interface RstestUtilities {
    * @param item - Anything that can be mocked
    * @returns The same item with mocked type
    */
-  mocked: (<T>(item: T, deep?: false) => MaybeMocked<T>) &
+  mocked: (<T>(item: T, deep?: false) => Mocked<T>) &
     (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
-    (<T>(
-      item: T,
-      options: { partial?: false; deep?: false },
-    ) => MaybeMocked<T>) &
+    (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
     (<T>(
       item: T,
       options: { partial?: false; deep: true },
@@ -364,35 +381,51 @@ export interface RstestUtilities {
   restoreAllMocks: () => RstestUtilities;
 
   /**
-   * Mock a module
+   * Mock a module.
+   *
+   * When called with a factory function, the module will be replaced with the return value of the factory.
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
+   *
+   * @example
+   * ```ts
+   * // Replace module with factory
+   * rs.mock('./module', () => ({ fn: rs.fn() }))
+   *
+   * // Auto-mock with spy mode - keeps original implementations
+   * rs.mock('./module', { spy: true })
+   * ```
    */
   mock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module
+   * Mock a module (CommonJS require)
    */
   mockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
 
   /**
    * Mock a module, not hoisted.
+   *
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
    */
   doMock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module, not hoisted.
+   * Mock a module, not hoisted (CommonJS require).
    */
   doMockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
 
   /**

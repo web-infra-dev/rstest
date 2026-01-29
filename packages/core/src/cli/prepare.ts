@@ -1,4 +1,3 @@
-import { initAgentEnv } from '../utils/agent';
 import { logger } from '../utils/logger';
 
 function initNodeEnv() {
@@ -9,7 +8,7 @@ function initNodeEnv() {
 
 export function prepareCli(): void {
   initNodeEnv();
-  initAgentEnv();
+
   process.env.RSTEST = 'true';
 
   // Print a blank line to keep the greet log nice.

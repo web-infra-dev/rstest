@@ -182,10 +182,10 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 - **类型：**
 
 ```ts
-type Mocked = <T>(
+type MockedFn = <T>(
   item: T,
   deep?: boolean | { partial?: boolean; deep?: boolean },
-) => MaybeMockedDeep<T>;
+) => Mocked<T>;
 ```
 
 一个 TypeScript 类型辅助函数，用于将对象包装为 mock 类型而不改变其运行时行为。当你 mock 了一个模块并想要获得正确的 mock 方法类型提示时，这很有用。
@@ -193,7 +193,7 @@ type Mocked = <T>(
 ```ts
 import { myModule } from './myModule';
 
-rs.mock('./myModule');
+rs.mock('./myModule', { spy: true });
 
 // TypeScript 现在知道 myModule.method 是一个 MockInstance
 const mockedModule = rstest.mocked(myModule);

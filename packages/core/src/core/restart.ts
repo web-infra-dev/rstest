@@ -17,7 +17,7 @@ export const onBeforeRestart = (cleaner: Cleaner): void => {
 };
 
 const clearConsole = () => {
-  if (isTTY() && !process.env.DEBUG && ansiEnabled()) {
+  if (isTTY() && !process.env.DEBUG && ansiEnabled) {
     process.stdout.write('\x1B[H\x1B[2J');
   }
 };

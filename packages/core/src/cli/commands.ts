@@ -107,6 +107,22 @@ const applyCommonOptions = (cli: CAC) => {
       '--includeTaskLocation',
       'Collect test and suite locations. This might increase the running time.',
     );
+
+  cli
+    .option('--pool <type>', 'Shorthand for --pool.type')
+    .option('--pool.type <type>', 'Specify the test pool type (e.g. forks)')
+    .option(
+      '--pool.maxWorkers <value>',
+      'Maximum number or percentage of workers (e.g. 4 or 50%)',
+    )
+    .option(
+      '--pool.minWorkers <value>',
+      'Minimum number or percentage of workers (e.g. 1 or 25%)',
+    )
+    .option(
+      '--pool.execArgv <arg>',
+      'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
+    );
 };
 
 const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {

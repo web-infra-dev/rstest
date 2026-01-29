@@ -7,13 +7,17 @@ import { getConfigValue } from './config';
 import { logger } from './logger';
 import type { Project } from './project';
 import { TestRunReporter } from './testRunReporter';
+import {
+  formatCoreVersionWarningMessage,
+  shouldWarnCoreVersion,
+} from './versionCheck';
 import type { Worker } from './worker';
 
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
 
 export class RstestApi {
   private childProcess: ChildProcess | null = null;
-  private versionMismatchWarned = false;
+  private coreVersionTooLowWarned = false;
 
   constructor(
     private workspace: vscode.WorkspaceFolder,
@@ -86,15 +90,17 @@ export class RstestApi {
         | undefined;
       const coreVersion = corePackageJson.version;
 
-      if (
-        coreVersion &&
-        extensionVersion &&
-        coreVersion !== extensionVersion &&
-        !this.versionMismatchWarned
-      ) {
-        this.versionMismatchWarned = true;
+      if (coreVersion && extensionVersion && coreVersion !== extensionVersion) {
+        logger.debug('Local @rstest/core version differs from extension', {
+          coreVersion,
+          extensionVersion,
+        });
+      }
+
+      if (shouldWarnCoreVersion(coreVersion) && !this.coreVersionTooLowWarned) {
+        this.coreVersionTooLowWarned = true;
         vscode.window.showWarningMessage(
-          `Rstest extension v${extensionVersion} does not match local @rstest/core v${coreVersion}. We're still stabilizing, so please upgrade Rstest or install an extension version that matches @rstest/core. We'll relax this requirement once things are stable.`,
+          formatCoreVersionWarningMessage(coreVersion),
         );
       }
 

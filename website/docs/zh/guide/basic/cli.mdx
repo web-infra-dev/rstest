@@ -172,7 +172,11 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--hideSkippedTestFiles`        | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                  |
 | `--chaiConfig <config>`         | 自定义 Chai 配置，详见 [chaiConfig](/config/test/chai-config)                                                                                |
 | `--env <key=value>`             | 设置环境变量，详见 [env](/config/test/env)                                                                                                   |
-| `--pool <options>`              | 配置测试线程池选项，详见 [pool](/config/test/pool)                                                                                           |
+| `--pool <type>`                 | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                   |
+| `--pool.type <type>`            | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                                                           |
+| `--pool.maxWorkers <value>`     | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                     |
+| `--pool.minWorkers <value>`     | 最小 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                     |
+| `--pool.execArgv <arg>`         | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                        |
 | `--setupFiles <files>`          | 指定 setup 文件列表，详见 [setupFiles](/config/test/setup-files)                                                                             |
 | `--snapshotFormat <options>`    | 自定义快照格式，详见 [snapshotFormat](/config/test/snapshot-format)                                                                          |
 | `--resolveSnapshotPath`         | 自定义快照路径解析，详见 [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                           |
