@@ -15,6 +15,7 @@ export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
 // Types for browser runtime
 export type {
+  CoverageMapData,
   RunnerHooks,
   RuntimeConfig,
   Test,

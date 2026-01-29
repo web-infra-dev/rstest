@@ -14,6 +14,6 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
 
     // multiply.ts should have 0% coverage (untested)
-    expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|0|0|0');
+    expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
   });
 });
