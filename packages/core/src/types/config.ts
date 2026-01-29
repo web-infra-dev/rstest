@@ -39,6 +39,7 @@ export type ProjectConfig = Omit<
   | 'hideSkippedTests'
   | 'hideSkippedTestFiles'
   | 'bail'
+  | 'shard'
 >;
 
 /**
@@ -227,6 +228,15 @@ export interface RstestConfig {
   bail?: number;
 
   /**
+   * Split tests into several shards.
+   * This is useful for running tests in parallel on multiple machines.
+   */
+  shard?: {
+    count: number;
+    index: number;
+  };
+
+  /**
    * print console traces when calling any console method.
    *
    * @default false
@@ -412,7 +422,8 @@ type OptionalKeys =
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
-  | 'extends';
+  | 'extends'
+  | 'shard';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;

@@ -1,0 +1,42 @@
+# shard
+
+- **Type:** `{ count: number; index: number }`
+- **Default:** `undefined`
+- **CLI:** `--shard <count>/<index>`
+
+Shards test files for parallel execution.
+`count` represents the total number of shards, and `index` represents the index of the current shard (1-based).
+
+This option can only be set at the root level of your configuration, not within individual projects.
+
+This is particularly useful for parallelizing tests in CI/CD environments, allowing you to split the test suite into multiple parts and run them independently across different jobs, thereby reducing overall test time.
+
+::: warning Important Notes
+
+- When using the `--shard` option, ensure that the `count` and `index` values are valid.
+- Test files will be sorted by their path to ensure consistent sharding across different runs.
+- Sharding occurs during the test file scanning phase, prior to the build process, to optimize performance.
+  :::
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  # Split tests into 3 shards, run the 1st shard
+  npx rstest --shard 3/1
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  shard: {
+    count: 3,
+    index: 1,
+  },
+});
+```
+  </Tab>
+</Tabs>

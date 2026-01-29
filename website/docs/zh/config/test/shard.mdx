@@ -1,0 +1,43 @@
+# shard
+
+- **类型：** `{ count: number; index: number }`
+- **默认值：** `undefined`
+- **CLI：** `--shard <count>/<index>`
+
+将测试文件分片以进行并行运行。
+
+`count` 表示总的 shard 数量，`index` 表示当前 shard 的索引（从 1 开始）。
+
+该选项只能在配置文件的顶层设置，不能在单个 project 中设置。
+
+这对于在 CI/CD 环境中并行化测试非常有用，可以将测试套件分成多个部分，并在不同的作业中独立运行它们，从而减少整体测试时间。
+
+::: warning 注意事项
+
+- 当使用 `--shard` 选项时，请确保 `count` 和 `index` 的值是有效的。
+- 测试文件将按其路径进行排序，以确保在不同的运行中 sharding 结果一致。
+- sharding 发生在测试文件扫描阶段，早于构建过程，以优化性能。
+  :::
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  # 将测试分成 3 个 shard，运行第 1 个 shard
+  npx rstest --shard 3/1
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  shard: {
+    count: 3,
+    index: 1,
+  },
+});
+```
+  </Tab>
+</Tabs>

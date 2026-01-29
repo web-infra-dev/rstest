@@ -92,7 +92,7 @@ describe('test projects', () => {
   });
 
   it('should run test failed when test file not found', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', '404-file', '--globals'],
       options: {
@@ -102,14 +102,9 @@ describe('test projects', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
+    await expectExecFailed();
     // test log print
-    expect(
-      logs.find((log) => log.includes('No test files found')),
-    ).toBeTruthy();
+    expectStderrLog('No test files found');
   });
 
   it('should run test success when test file not found with passWithNoTests flag', async () => {
