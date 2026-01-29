@@ -130,7 +130,7 @@ export const prepareRsbuild = async (
               }).flatMap((files) => Object.values(files)),
             )
           : null,
-        pluginInspect({ poolExecArgv: pool?.execArgv }),
+        pluginInspect({ poolExecArgv: pool.execArgv }),
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
