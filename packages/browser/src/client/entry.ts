@@ -593,7 +593,7 @@ const run = async () => {
 
       // Collect coverage data from global __coverage__ object
       if (globalThis.__coverage__) {
-        result.coverage = globalThis.__coverage__ as any;
+        result.coverage = globalThis.__coverage__ as Record<string, unknown>;
       }
 
       send({
