@@ -14,6 +14,11 @@ import type {
   TestResult,
 } from './testSuite';
 
+export type ProjectEntries = {
+  entries: Record<string, string>;
+  fileFilters?: string[];
+};
+
 export type RstestCommand = 'watch' | 'run' | 'list';
 
 export type Project = { config: RstestConfig; configFilePath?: string };
