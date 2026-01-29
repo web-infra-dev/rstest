@@ -484,7 +484,7 @@ export async function runTests(context: Rstest): Promise<void> {
         if (code === 0) {
           logger.log(color.yellow(message));
         } else {
-          logger.error(color.red(`${message}`));
+          logger.error(color.red(message));
         }
 
         process.exitCode = code;
