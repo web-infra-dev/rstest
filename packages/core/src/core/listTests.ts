@@ -271,6 +271,7 @@ export async function listTests(
 ): Promise<ListCommandResult[]> {
   const { rootPath } = context;
 
+  // TODO: support shard when list tests
   const testEntries: Record<string, Record<string, string>> = {};
 
   const globTestSourceEntries = async (
