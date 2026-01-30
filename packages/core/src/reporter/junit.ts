@@ -1,4 +1,5 @@
-import { writeFile } from 'node:fs/promises';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
@@ -249,8 +250,19 @@ export class JUnitReporter implements Reporter {
     const xmlContent = this.generateJUnitXml(report);
 
     if (this.outputPath) {
+      const dirname = path.dirname(this.outputPath);
+
+      // Create directory tree if not exists
       try {
-        await writeFile(this.outputPath, xmlContent, 'utf-8');
+        await fs.mkdir(dirname, { recursive: true });
+      } catch (error: any) {
+        if (error?.code !== 'EEXIST') {
+          throw error;
+        }
+      }
+
+      try {
+        await fs.writeFile(this.outputPath, xmlContent, 'utf-8');
         logger.log(`JUnit XML report written to: ${this.outputPath}`);
       } catch (error) {
         logger.stderr(
