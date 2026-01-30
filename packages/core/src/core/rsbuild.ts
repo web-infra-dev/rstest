@@ -78,7 +78,9 @@ export const prepareRsbuild = async (
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
-
+  // Keep the default fast in-memory dev output; federation mode installs a
+  // worker-level virtual FS layer to satisfy runtimes that try to read chunks
+  // from disk paths.
   const writeToDisk = dev.writeToDisk || debugMode;
 
   const rsbuildInstance = await createRsbuild({

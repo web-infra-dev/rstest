@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "typecheck": "cross-env NX_DAEMON=false nx run-many -t typecheck --exclude @examples/* --parallel=10",
-    "build": "cross-env NX_DAEMON=false nx run-many -t build --exclude @examples/* @rstest/tests-* --parallel=10",
+    "build": "cross-env NX_DAEMON=false nx run-many -t build --exclude @examples/* @rstest/tests-* rstest_example* --parallel=10",
     "test:vscode": "pnpm --filter ./packages/vscode test",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "test": "rstest",
@@ -13,6 +13,7 @@
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
     "prepare": "pnpm run build && simple-git-hooks",
+    "test:federation": "pnpm -C examples/federation test",
     "bump": "node --experimental-strip-types scripts/version.mts"
   },
   "simple-git-hooks": {

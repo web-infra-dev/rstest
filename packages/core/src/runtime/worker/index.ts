@@ -15,6 +15,11 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
+import {
+  installVirtualFs,
+  setVirtualFiles,
+  uninstallVirtualFs,
+} from './virtualFs';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -65,6 +70,17 @@ const preparePool = async ({
 
   setRealTimers();
   context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
+
+  // Expose a simple flag on the worker global so low-level helpers can gate
+  // federation-specific behavior without threading config through every call.
+  // This is best-effort and scoped to the worker process.
+  try {
+    (globalThis as any).__rstest_federation__ = Boolean(
+      context.runtimeConfig.federation,
+    );
+  } catch {
+    // ignore
+  }
 
   // Prefer public env var from tinypool, fallback to context.taskId
   process.env.RSTEST_WORKER_ID = String(
@@ -221,6 +237,7 @@ const loadFiles = async ({
   interopDefault,
   isolate,
   outputModule,
+  federation,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: Record<string, string>;
@@ -230,10 +247,21 @@ const loadFiles = async ({
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<void> => {
   const { loadModule, updateLatestAssetFiles } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
+
+  // Allow runtimes (e.g. Module Federation) to read compiled artifacts from the
+  // in-memory bundler output even when rsbuild does not write to disk.
+  if (federation) {
+    installVirtualFs();
+    setVirtualFiles(assetFiles);
+  } else {
+    // Avoid affecting non-federation runs, especially when `isolate: false`.
+    uninstallVirtualFs();
+  }
 
   // clean rstest core cache manually
   if (!isolate) {
@@ -247,6 +275,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      federation,
     });
   }
 
@@ -261,6 +290,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      federation,
     });
   }
 
@@ -271,6 +301,7 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
+    federation,
   });
 };
 
@@ -350,6 +381,7 @@ const runInPool = async (
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
+        federation: Boolean(options.context.runtimeConfig.federation),
       });
       const tests = await runner.collectTests();
       return {
@@ -417,6 +449,7 @@ const runInPool = async (
       interopDefault,
       isolate,
       outputModule: options.context.outputModule,
+      federation: Boolean(options.context.runtimeConfig.federation),
     });
     const results = await runner.runTests(
       testPath,

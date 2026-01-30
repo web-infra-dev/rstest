@@ -22,14 +22,14 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         console: console && global.console ? global.console : undefined,
       });
 
+      // Patch the real window first so that the `installGlobal` bindings to
+      // `addEventListener`/`removeEventListener` see the patched versions.
+      const cleanupHandler = addDefaultErrorHandler(win as unknown as Window);
+
       const cleanupGlobal = installGlobal(global, win, {
         // jsdom doesn't support Request and Response, but happy-dom does
         additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch'],
       });
-
-      const cleanupHandler = addDefaultErrorHandler(
-        global as unknown as Window,
-      );
 
       return {
         async teardown() {
