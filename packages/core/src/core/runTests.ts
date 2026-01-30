@@ -131,7 +131,6 @@ export async function runTests(context: Rstest): Promise<void> {
   const isWatchMode = context.command === 'watch';
 
   // For non-watch mode with both browser and node tests, we need to unify reporter output
-<<<<<<< HEAD
   const shouldUnifyReporter =
     !isWatchMode && hasBrowserProjects && hasNodeProjects;
 
