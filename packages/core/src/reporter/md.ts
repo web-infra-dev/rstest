@@ -9,7 +9,7 @@
  *
  * - Front Matter (YAML)
  *   - Always printed.
- *   - Fields: `tool`, `timestamp`.
+ *   - Fields: `tool`, `timestamp`, `runtime` (conditional).
  *   - `runtime` is printed only when `options.header.env === true`.
  *
  * - Title
@@ -19,6 +19,8 @@
  * - Summary
  *   - Always printed.
  *   - `## Summary` followed by a fenced `json` block.
+ *   - Contains: status, counts (testFiles, failedFiles, tests, failedTests,
+ *     passedTests, skippedTests, todoTests), durationMs, snapshot.
  *
  * - Tests
  *   - Printed only when `status === 'pass' && focusedRun === true`.
@@ -28,19 +30,37 @@
  *     truncation note.
  *
  * - Failures
- *   - Always printed.
+ *   - Always printed (`## Failures` heading).
  *   - When there are no failures (`failures.length === 0`):
  *     - Prints `No test failures reported.`
  *     - Additionally prints `Note: all tests passed. Lists omitted for brevity.`
  *       only when `status === 'pass' && focusedRun === false`.
  *   - When failures exist:
- *     - Prints failure details.
- *     - If truncated (`failures.length > options.failures.max`), also prints a
- *       `### Failure List` and a `### Failure Details (first N)` section.
+ *     - If truncated (`failures.length > options.failures.max`):
+ *       - Prints truncation note with counts.
+ *       - Prints `### Failure List` with all failures in minimal format:
+ *         `- [FXX] <title>` followed by nested `type`, `message`, `expected`,
+ *         `actual`, `repro` fields.
+ *       - Prints `### Failure Details (first N)` heading before detailed blocks.
+ *     - For each displayed failure (up to `options.failures.max`):
+ *       - `### [FXX] <testPath> :: <fullName>` heading.
+ *       - `repro:` bash block (when `options.reproduction !== false`).
+ *       - `details:` JSON block containing testPath, project, fullName, status,
+ *         duration, retryCount, errors array (each with type, message,
+ *         expected/actual when no diff, topFrame or stackFrames based on
+ *         `options.stack`), and candidateFiles (when enabled and available).
+ *       - `diff:` diff block per error (only when error has diff; expected/actual
+ *         omitted from JSON in this case).
+ *       - `codeFrame (error N):` text block per error (when
+ *         `options.codeFrame.enabled === true` and topFrame has file/line).
+ *       - `console:` text block (when `options.console.enabled === true` and
+ *         logs exist for this test path).
  *
  * - Unhandled Errors
  *   - Printed only when `options.errors.unhandled === true` and
  *     `unhandledErrors?.length > 0`.
+ *   - `## Unhandled Errors` heading followed by `### Unhandled Error N` for each,
+ *     with a JSON block containing name, message, stack.
  *
  * Focused run detection
  *
@@ -223,17 +243,26 @@ const presetOptions: Record<
   },
 };
 
-const resolveHeader = (input: MdReporterOptions['header']): HeaderOptions => {
-  if (input === false) {
-    return { env: false };
-  }
-  if (input === true || input === undefined) {
-    return { ...defaultOptions.header };
-  }
-  return {
-    env: input.env ?? defaultOptions.header.env,
-  };
+/**
+ * Resolves a boolean-or-object option with preset support.
+ * - `false` → disabled config
+ * - `true` / `undefined` → defaults merged with preset
+ * - object → user values merged over preset and defaults
+ */
+const resolveToggleOption = <T extends Record<string, unknown>>(
+  input: boolean | Partial<T> | undefined,
+  defaults: T,
+  disabled: T,
+  preset?: Partial<T>,
+): T => {
+  if (input === false) return { ...disabled };
+  const base = preset ? { ...defaults, ...preset } : defaults;
+  if (input === true || input === undefined) return { ...base };
+  return { ...base, ...input };
 };
+
+const resolveHeader = (input: MdReporterOptions['header']): HeaderOptions =>
+  resolveToggleOption(input, defaultOptions.header, { env: false });
 
 const resolveReproduction = (
   input: MdReporterOptions['reproduction'],
@@ -246,122 +275,50 @@ const resolveReproduction = (
 const resolveFailures = (
   input: MdReporterOptions['failures'],
   preset: Partial<ResolvedOptions> | undefined,
-): FailuresOptions => {
-  const presetFailures = preset?.failures;
-  return {
-    max: input?.max ?? presetFailures?.max ?? defaultOptions.failures.max,
-  };
-};
+): FailuresOptions => ({
+  max: input?.max ?? preset?.failures?.max ?? defaultOptions.failures.max,
+});
 
 const resolveCodeFrame = (
   input: MdReporterOptions['codeFrame'],
   preset: Partial<ResolvedOptions> | undefined,
-): CodeFrameResolved => {
-  const presetFrame = preset?.codeFrame;
-  if (input === false) {
-    return {
-      enabled: false,
-      linesAbove:
-        presetFrame?.linesAbove ?? defaultOptions.codeFrame.linesAbove,
-      linesBelow:
-        presetFrame?.linesBelow ?? defaultOptions.codeFrame.linesBelow,
-    };
-  }
-  if (input === true || input === undefined) {
-    return {
-      enabled: presetFrame?.enabled ?? defaultOptions.codeFrame.enabled,
-      linesAbove:
-        presetFrame?.linesAbove ?? defaultOptions.codeFrame.linesAbove,
-      linesBelow:
-        presetFrame?.linesBelow ?? defaultOptions.codeFrame.linesBelow,
-    };
-  }
-  return {
-    enabled: true,
-    linesAbove:
-      input.linesAbove ??
-      presetFrame?.linesAbove ??
-      defaultOptions.codeFrame.linesAbove,
-    linesBelow:
-      input.linesBelow ??
-      presetFrame?.linesBelow ??
-      defaultOptions.codeFrame.linesBelow,
-  };
-};
+): CodeFrameResolved =>
+  resolveToggleOption(
+    input,
+    defaultOptions.codeFrame,
+    { ...defaultOptions.codeFrame, enabled: false },
+    preset?.codeFrame,
+  );
 
 const resolveCandidateFiles = (
   input: MdReporterOptions['candidateFiles'],
-): CandidateFilesResolved => {
-  if (input === false) {
-    return { enabled: false, max: defaultOptions.candidateFiles.max };
-  }
-  if (input === true || input === undefined) {
-    return { ...defaultOptions.candidateFiles };
-  }
-  return {
-    enabled: true,
-    max: input.max ?? defaultOptions.candidateFiles.max,
-  };
-};
+): CandidateFilesResolved =>
+  resolveToggleOption(input, defaultOptions.candidateFiles, {
+    ...defaultOptions.candidateFiles,
+    enabled: false,
+  });
 
 const resolveConsole = (
   input: MdReporterOptions['console'],
   preset: Partial<ResolvedOptions> | undefined,
-): ConsoleResolved => {
-  const presetConsole = preset?.console;
-  if (input === false) {
-    return {
-      enabled: false,
-      maxLogsPerTestPath:
-        presetConsole?.maxLogsPerTestPath ??
-        defaultOptions.console.maxLogsPerTestPath,
-      maxCharsPerEntry:
-        presetConsole?.maxCharsPerEntry ??
-        defaultOptions.console.maxCharsPerEntry,
-    };
-  }
-  if (input === true || input === undefined) {
-    return {
-      enabled: presetConsole?.enabled ?? defaultOptions.console.enabled,
-      maxLogsPerTestPath:
-        presetConsole?.maxLogsPerTestPath ??
-        defaultOptions.console.maxLogsPerTestPath,
-      maxCharsPerEntry:
-        presetConsole?.maxCharsPerEntry ??
-        defaultOptions.console.maxCharsPerEntry,
-    };
-  }
-  return {
-    enabled: true,
-    maxLogsPerTestPath:
-      input.maxLogsPerTestPath ??
-      presetConsole?.maxLogsPerTestPath ??
-      defaultOptions.console.maxLogsPerTestPath,
-    maxCharsPerEntry:
-      input.maxCharsPerEntry ??
-      presetConsole?.maxCharsPerEntry ??
-      defaultOptions.console.maxCharsPerEntry,
-  };
-};
+): ConsoleResolved =>
+  resolveToggleOption(
+    input,
+    defaultOptions.console,
+    { ...defaultOptions.console, enabled: false },
+    preset?.console,
+  );
 
-const resolveErrors = (input: MdReporterOptions['errors']): ErrorsResolved => {
-  if (input === false) return { unhandled: false };
-  if (input === true || input === undefined)
-    return { ...defaultOptions.errors };
-  return {
-    unhandled: input.unhandled ?? defaultOptions.errors.unhandled,
-  };
-};
+const resolveErrors = (input: MdReporterOptions['errors']): ErrorsResolved =>
+  resolveToggleOption(input, defaultOptions.errors, { unhandled: false });
 
 const resolveStack = (
   input: MdReporterOptions['stack'],
   preset: Partial<ResolvedOptions> | undefined,
-): StackMode => {
-  if (input !== undefined) return input;
-  return preset?.stack ?? defaultOptions.stack;
-};
+): StackMode => input ?? preset?.stack ?? defaultOptions.stack;
 
-const resolveOptions = (
+/** @internal Exported for testing only. */
+export const resolveOptions = (
   userOptions: MdReporterOptions = {},
 ): ResolvedOptions => {
   const presetName = userOptions.preset ?? defaultOptions.preset;
@@ -383,6 +340,26 @@ const resolveOptions = (
 const formatFullTestName = (test: Pick<TestResult, 'name' | 'parentNames'>) => {
   const names = (test.parentNames || []).concat(test.name).filter(Boolean);
   return names.join(' > ');
+};
+
+const formatFailureTitle = (
+  failure: FailureItem,
+  index: number,
+  rootPath: string,
+): {
+  relativePath: string;
+  fullName: string;
+  title: string;
+  formattedId: string;
+} => {
+  const relativePath = relative(rootPath, failure.test.testPath);
+  const fullName = formatFullTestName(failure.test);
+  return {
+    relativePath,
+    fullName,
+    title: fullName ? `${relativePath} :: ${fullName}` : relativePath,
+    formattedId: String(index + 1).padStart(2, '0'),
+  };
 };
 
 const cleanString = (value: string): string => stripAnsi(value);
@@ -637,18 +614,16 @@ const stringifyYamlValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-const quoteShellValue = (value: string): string => {
-  if (value.length === 0) {
-    return "''";
-  }
-  if (/[^A-Za-z0-9_\-./]/.test(value)) {
+/**
+ * Quotes a shell argument. When `alwaysQuote` is true, the value is always
+ * wrapped in single quotes (useful for file paths that may contain spaces).
+ */
+const quoteShellArg = (value: string, alwaysQuote = false): string => {
+  if (value.length === 0) return "''";
+  if (alwaysQuote || /[^A-Za-z0-9_\-./]/.test(value)) {
     return `'${value.replace(/'/g, "'\\''")}'`;
   }
   return value;
-};
-
-const quoteShellPath = (value: string): string => {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 };
 
 const buildReproCommand = (
@@ -665,17 +640,13 @@ const buildReproCommand = (
   const resolved = resolveCommand(agent, 'execute-local', args);
   if (!resolved) {
     const formattedArgs = args
-      .map((arg) =>
-        arg === relativePath ? quoteShellPath(arg) : quoteShellValue(arg),
-      )
+      .map((arg) => quoteShellArg(arg, arg === relativePath))
       .join(' ');
     return `npx ${formattedArgs}`;
   }
 
   const formattedArgs = resolved.args
-    .map((arg) =>
-      arg === relativePath ? quoteShellPath(arg) : quoteShellValue(arg),
-    )
+    .map((arg) => quoteShellArg(arg, arg === relativePath))
     .join(' ');
 
   return formattedArgs.length
@@ -949,6 +920,76 @@ export class MdReporter implements Reporter {
     this.logsByTestPath.set(log.testPath, logs);
   }
 
+  private renderFrontMatter(lines: string[]): void {
+    const frontMatter: Record<string, unknown> = {
+      tool: `@rstest/core@${RSTEST_VERSION}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (this.options.header.env) {
+      frontMatter.runtime = {
+        node: process.version,
+        platform: process.platform,
+        cwd: process.cwd(),
+      };
+    }
+
+    lines.push('---');
+    for (const [key, value] of Object.entries(frontMatter)) {
+      lines.push(`${key}: ${stringifyYamlValue(value)}`);
+    }
+    lines.push('---');
+    lines.push('');
+  }
+
+  private renderTestsSection(
+    lines: string[],
+    tests: { passed: TestResult[]; skipped: TestResult[]; todo: TestResult[] },
+  ): void {
+    pushHeading(lines, 2, 'Tests');
+    this.pushTestList({
+      lines,
+      heading: 'Passed',
+      tests: tests.passed,
+      maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+    });
+    this.pushTestList({
+      lines,
+      heading: 'Skipped',
+      tests: tests.skipped,
+      maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+    });
+    if (tests.todo.length) {
+      this.pushTestList({
+        lines,
+        heading: 'Todo',
+        tests: tests.todo,
+        maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
+      });
+    }
+  }
+
+  private renderUnhandledErrors(lines: string[], errors?: Error[]): void {
+    if (!this.options.errors.unhandled || !errors?.length) return;
+
+    pushHeading(lines, 2, 'Unhandled Errors');
+    for (let index = 0; index < errors.length; index += 1) {
+      const error = errors[index];
+      if (!error) continue;
+
+      pushHeading(lines, 3, `Unhandled Error ${index + 1}`);
+      pushFencedBlock(
+        lines,
+        'json',
+        stringifyJson({
+          name: error.name || 'Error',
+          message: cleanString(error.message),
+          stack: error.stack ? cleanString(error.stack) : undefined,
+        }),
+      );
+    }
+  }
+
   async onTestRunEnd({
     results,
     testResults,
@@ -1015,54 +1056,18 @@ export class MdReporter implements Reporter {
 
     summaryPayload.snapshot = pickSnapshotSummary(snapshotSummary);
 
-    const frontMatter: Record<string, unknown> = {
-      tool: `@rstest/core@${RSTEST_VERSION}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    if (this.options.header.env) {
-      frontMatter.runtime = {
-        node: process.version,
-        platform: process.platform,
-        cwd: process.cwd(),
-      };
-    }
-
     const lines: string[] = [];
-    lines.push('---');
-    for (const [key, value] of Object.entries(frontMatter)) {
-      lines.push(`${key}: ${stringifyYamlValue(value)}`);
-    }
-    lines.push('---');
-    lines.push('');
+    this.renderFrontMatter(lines);
     pushHeading(lines, 1, 'Rstest Test Execution Report');
     pushHeading(lines, 2, 'Summary');
     pushFencedBlock(lines, 'json', stringifyJson(summaryPayload));
 
-    if (status === 'pass') {
-      if (focusedRun) {
-        pushHeading(lines, 2, 'Tests');
-        this.pushTestList({
-          lines,
-          heading: 'Passed',
-          tests: passedTests,
-          maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
-        });
-        this.pushTestList({
-          lines,
-          heading: 'Skipped',
-          tests: skippedTests,
-          maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
-        });
-        if (todoTests.length) {
-          this.pushTestList({
-            lines,
-            heading: 'Todo',
-            tests: todoTests,
-            maxItems: DEFAULT_TEST_LIST_MAX_ITEMS,
-          });
-        }
-      }
+    if (status === 'pass' && focusedRun) {
+      this.renderTestsSection(lines, {
+        passed: passedTests,
+        skipped: skippedTests,
+        todo: todoTests,
+      });
     }
 
     pushHeading(lines, 2, 'Failures');
@@ -1095,12 +1100,8 @@ export class MdReporter implements Reporter {
           const failure = failures[index];
           if (!failure) continue;
 
-          const relativePath = relative(rootPath, failure.test.testPath);
-          const fullName = formatFullTestName(failure.test);
-          const title = fullName
-            ? `${relativePath} :: ${fullName}`
-            : relativePath;
-          const formattedId = String(index + 1).padStart(2, '0');
+          const { relativePath, fullName, title, formattedId } =
+            formatFailureTitle(failure, index, rootPath);
 
           lines.push(`- [F${formattedId}] ${title}`);
 
@@ -1149,12 +1150,8 @@ export class MdReporter implements Reporter {
         const failure = displayedFailures[index];
         if (!failure) continue;
 
-        const relativePath = relative(rootPath, failure.test.testPath);
-        const fullName = formatFullTestName(failure.test);
-        const title = fullName
-          ? `${relativePath} :: ${fullName}`
-          : relativePath;
-        const formattedId = String(index + 1).padStart(2, '0');
+        const { relativePath, fullName, title, formattedId } =
+          formatFailureTitle(failure, index, rootPath);
         pushHeading(lines, 3, `[F${formattedId}] ${title}`);
 
         if (this.options.reproduction) {
@@ -1226,17 +1223,16 @@ export class MdReporter implements Reporter {
               method: frame.methodName,
             }));
 
+            // Prefer diff over full expected/actual to reduce output size
+            // (especially for large snapshot mismatches).
+            // Diff is output separately as a fenced block to avoid JSON escaping.
+            const hasDiff = Boolean(error.diff);
+
             return {
               type: getErrorType(error),
               message: cleanString(error.message),
-              diff:
-                error.expected !== undefined && error.actual !== undefined
-                  ? undefined
-                  : error.diff
-                    ? cleanString(error.diff)
-                    : undefined,
-              expected: error.expected,
-              actual: error.actual,
+              expected: hasDiff ? undefined : error.expected,
+              actual: hasDiff ? undefined : error.actual,
               ...resolveStackPayload({
                 rootPath,
                 topFrame,
@@ -1250,6 +1246,23 @@ export class MdReporter implements Reporter {
 
         lines.push('details:');
         pushFencedBlock(lines, 'json', stringifyJson(failurePayload));
+
+        // Output diff in separate fenced block (avoids JSON escaping)
+        for (
+          let errorIndex = 0;
+          errorIndex < errorEntries.length;
+          errorIndex += 1
+        ) {
+          const entry = errorEntries[errorIndex];
+          if (entry?.error.diff) {
+            const label =
+              errorEntries.length > 1
+                ? `diff (error ${errorIndex + 1}):`
+                : 'diff:';
+            lines.push(label);
+            pushFencedBlock(lines, 'diff', cleanString(entry.error.diff));
+          }
+        }
 
         if (this.options.codeFrame.enabled) {
           for (
@@ -1292,24 +1305,7 @@ export class MdReporter implements Reporter {
       }
     }
 
-    if (this.options.errors.unhandled && unhandledErrors?.length) {
-      pushHeading(lines, 2, 'Unhandled Errors');
-      for (let index = 0; index < unhandledErrors.length; index += 1) {
-        const error = unhandledErrors[index];
-        if (!error) continue;
-
-        pushHeading(lines, 3, `Unhandled Error ${index + 1}`);
-        pushFencedBlock(
-          lines,
-          'json',
-          stringifyJson({
-            name: error.name || 'Error',
-            message: cleanString(error.message),
-            stack: error.stack ? cleanString(error.stack) : undefined,
-          }),
-        );
-      }
-    }
+    this.renderUnhandledErrors(lines, unhandledErrors);
 
     const output = lines.join('\n');
     process.stdout.write(`${output}\n`);

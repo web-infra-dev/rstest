@@ -18,7 +18,9 @@ const normalizeStdout = (stdout: string) =>
     .replace(/"duration": \d+/g, '"duration": 0');
 
 describe('md', () => {
-  it('outputs markdown report', async ({ onTestFinished }) => {
+  it('formats assertion errors with expected/actual', async ({
+    onTestFinished,
+  }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'agent-md/index', '-c', './rstest.agentMd.config.ts'],
@@ -92,12 +94,20 @@ describe('md', () => {
           {
             "type": "AssertionError",
             "message": "expected 2 to be 3 // Object.is equality",
-            "expected": "3",
-            "actual": "2",
             "stackFrames": []
           }
         ]
       }
+      \`\`\`
+
+      diff:
+
+      \`\`\`diff
+      - Expected
+      + Received
+
+      - 3
+      + 2
       \`\`\`
 
       "
@@ -183,12 +193,22 @@ describe('md', () => {
           {
             "type": "SnapshotMismatchError",
             "message": "Snapshot \`agent-md > fails with snapshot mismatch 1\` mismatched",
-            "expected": "{\\n  \\"a\\": 2,\\n}",
-            "actual": "{\\n  \\"a\\": 1,\\n}",
             "stackFrames": []
           }
         ]
       }
+      \`\`\`
+
+      diff:
+
+      \`\`\`diff
+      - Expected
+      + Received
+
+        {
+      -   "a": 2,
+      +   "a": 1,
+        }
       \`\`\`
 
       "
@@ -274,12 +294,20 @@ describe('md', () => {
           {
             "type": "AssertionError",
             "message": "expected 1 to be 2 // Object.is equality",
-            "expected": "2",
-            "actual": "1",
             "stackFrames": []
           }
         ]
       }
+      \`\`\`
+
+      diff:
+
+      \`\`\`diff
+      - Expected
+      + Received
+
+      - 2
+      + 1
       \`\`\`
 
       codeFrame (error 1):
@@ -603,12 +631,20 @@ describe('md', () => {
           {
             "type": "AssertionError",
             "message": "expected 1 to be 2 // Object.is equality",
-            "expected": "2",
-            "actual": "1",
             "stackFrames": []
           }
         ]
       }
+      \`\`\`
+
+      diff:
+
+      \`\`\`diff
+      - Expected
+      + Received
+
+      - 2
+      + 1
       \`\`\`
 
       ### [F02] fixtures/agent-md/truncated.test.ts :: agent-md > truncated case 2
@@ -633,12 +669,20 @@ describe('md', () => {
           {
             "type": "AssertionError",
             "message": "expected 2 to be 3 // Object.is equality",
-            "expected": "3",
-            "actual": "2",
             "stackFrames": []
           }
         ]
       }
+      \`\`\`
+
+      diff:
+
+      \`\`\`diff
+      - Expected
+      + Received
+
+      - 3
+      + 2
       \`\`\`
 
       "
@@ -796,5 +840,37 @@ describe('md', () => {
       No test failures reported.
       "
     `);
+  });
+
+  it('reports uncaught exceptions as file failures', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'agent-md/unhandled',
+        '-c',
+        './rstest.agentMd.unhandled.config.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            AI_AGENT: 'rstest-e2e',
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const normalized = normalizeStdout(cli.stdout);
+    // uncaughtException is reported as a file failure, not unhandled error
+    expect(normalized).toContain('"failedFiles": 1');
+    expect(normalized).toContain('"type": "uncaughtException"');
+    expect(normalized).toContain('unhandled async error');
   });
 });
