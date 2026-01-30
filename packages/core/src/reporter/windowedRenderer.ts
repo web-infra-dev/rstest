@@ -28,6 +28,11 @@ export interface Options {
   logger: {
     outputStream: Writable;
     errorStream: Writable;
+    /**
+     * When enabled, all intercepted `process.stderr` output will be forwarded
+     * to `outputStream` (stdout) instead of `errorStream` (stderr).
+     */
+    mergeStderrToStdout?: boolean;
     getColumns: () => number;
   };
   interval?: number;
@@ -69,7 +74,10 @@ export class WindowRenderer {
 
     this.cleanups.push(
       this.interceptStream(process.stdout, 'output'),
-      this.interceptStream(process.stderr, 'error'),
+      this.interceptStream(
+        process.stderr,
+        this.options.logger.mergeStderrToStdout ? 'output' : 'error',
+      ),
     );
 
     this.start();

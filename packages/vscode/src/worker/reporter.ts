@@ -22,6 +22,7 @@ export class ProgressReporter implements Reporter {
 }
 
 export class ProgressLogger {
+  mergeStderrToStdout = true;
   outputStream = new Writable({
     decodeStrings: false,
     write: (chunk, _encoding, cb) => {
