@@ -1191,6 +1191,32 @@ const createBrowserRuntime = async ({
   };
 };
 
+async function resolveProjectEntries(
+  context: Rstest,
+  shardedEntries?: Map<string, { entries: Record<string, string> }>,
+): Promise<BrowserProjectEntries[]> {
+  if (shardedEntries) {
+    const browserProjects = getBrowserProjects(context);
+    const projectEntries: BrowserProjectEntries[] = [];
+    for (const project of browserProjects) {
+      const entryInfo = shardedEntries.get(project.environmentName);
+      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
+        const setup = getSetupFiles(
+          project.normalizedConfig.setupFiles,
+          project.rootPath,
+        );
+        projectEntries.push({
+          project,
+          setupFiles: Object.values(setup),
+          testFiles: Object.values(entryInfo.entries),
+        });
+      }
+    }
+    return projectEntries;
+  }
+  return collectProjectEntries(context);
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -1232,31 +1258,10 @@ export const runBrowserController = async (
     }
   }
 
-  let projectEntries: BrowserProjectEntries[];
-
-  if (options?.shardedEntries) {
-    // Use pre-sharded entries if provided
-    const shardedEntries = options.shardedEntries;
-    const browserProjects = getBrowserProjects(context);
-    projectEntries = [];
-    for (const project of browserProjects) {
-      const entryInfo = shardedEntries.get(project.environmentName);
-      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
-        const setup = getSetupFiles(
-          project.normalizedConfig.setupFiles,
-          project.rootPath,
-        );
-        projectEntries.push({
-          project,
-          setupFiles: Object.values(setup),
-          testFiles: Object.values(entryInfo.entries),
-        });
-      }
-    }
-  } else {
-    // Fallback to collecting entries if not sharded
-    projectEntries = await collectProjectEntries(context);
-  }
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -1738,8 +1743,14 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: Rstest,
+  options?: {
+    shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  },
 ): Promise<ListBrowserTestsResult> => {
-  const projectEntries = await collectProjectEntries(context);
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,

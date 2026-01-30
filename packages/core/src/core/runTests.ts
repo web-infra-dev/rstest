@@ -1,7 +1,13 @@
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo } from '../types';
-import { clearScreen, color, getTestEntries, logger } from '../utils';
+import type { EntryInfo, ProjectEntries } from '../types';
+import {
+  clearScreen,
+  color,
+  getTestEntries,
+  logger,
+  resolveShardedEntries,
+} from '../utils';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -11,27 +17,6 @@ import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
-
-/**
- * Distributes test files into a specific shard.
- */
-function getShardedFiles<T extends { testPath: string }>(
-  files: T[],
-  shard: { count: number; index: number },
-): T[] {
-  const { count, index } = shard;
-  if (count <= 1) {
-    return files;
-  }
-  const size = Math.ceil(files.length / count);
-  const start = (index - 1) * size;
-  const end = start + size;
-
-  // Sort files to ensure consistent sharding across runs
-  return files
-    .sort((a, b) => a.testPath.localeCompare(b.testPath))
-    .slice(start, end);
-}
 
 /**
  * Run browser mode tests.
@@ -47,74 +32,6 @@ async function runBrowserModeTests(
   return runBrowserTests(context, options);
 }
 
-async function handleSharding(
-  context: Rstest,
-  entriesCache: Map<
-    string,
-    { entries: Record<string, string>; fileFilters?: string[] }
-  >,
-) {
-  const {
-    normalizedConfig,
-    projects: allProjects,
-    rootPath,
-    fileFilters,
-  } = context;
-  const { shard } = normalizedConfig;
-
-  if (!shard) {
-    return;
-  }
-
-  const allTestEntriesBeforeSharding = (
-    await Promise.all(
-      allProjects.map(async (p) => {
-        const { include, exclude, includeSource, root } = p.normalizedConfig;
-        const entries = await getTestEntries({
-          include,
-          exclude: exclude.patterns,
-          includeSource,
-          rootPath,
-          projectRoot: root,
-          fileFilters: fileFilters || [],
-        });
-        return Object.entries(entries).map(([alias, testPath]) => ({
-          project: p.environmentName,
-          alias,
-          testPath,
-        }));
-      }),
-    )
-  ).flat();
-
-  const shardedEntries = getShardedFiles(allTestEntriesBeforeSharding, shard);
-
-  const totalTestFileCount = allTestEntriesBeforeSharding.length;
-  const testFilesInShardCount = shardedEntries.length;
-
-  logger.log(
-    color.green(
-      `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} tests)\n`,
-    ),
-  );
-
-  const shardedEntriesByProject = new Map<string, Record<string, string>>();
-  for (const { project, alias, testPath } of shardedEntries) {
-    if (!shardedEntriesByProject.has(project)) {
-      shardedEntriesByProject.set(project, {});
-    }
-    shardedEntriesByProject.get(project)![alias] = testPath;
-  }
-
-  // Populate entriesCache for all projects (node and browser)
-  for (const p of allProjects) {
-    entriesCache.set(p.environmentName, {
-      entries: shardedEntriesByProject.get(p.environmentName) || {},
-      fileFilters: fileFilters,
-    });
-  }
-}
-
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
@@ -124,8 +41,7 @@ export async function runTests(context: Rstest): Promise<void> {
     (project) => !project.normalizedConfig.browser.enabled,
   );
 
-  const hasBrowserProjects =
-    context.normalizedConfig.browser.enabled || browserProjects.length > 0;
+  const hasBrowserProjects = browserProjects.length > 0;
   const hasNodeProjects = nodeProjects.length > 0;
 
   const isWatchMode = context.command === 'watch';
@@ -179,15 +95,8 @@ export async function runTests(context: Rstest): Promise<void> {
     context;
   const { coverage, shard } = normalizedConfig;
 
-  const entriesCache = new Map<
-    string,
-    {
-      entries: Record<string, string>;
-      fileFilters?: string[];
-    }
-  >();
-
-  await handleSharding(context, entriesCache);
+  const entriesCache: Map<string, ProjectEntries> =
+    (await resolveShardedEntries(context)) || new Map();
 
   // Define globTestSourceEntries after entriesCache is potentially populated
   const globTestSourceEntries = async (
@@ -326,17 +235,24 @@ export async function runTests(context: Rstest): Promise<void> {
     [],
   );
 
+  const getRecommendWorkerCount = (): number => {
+    // TODO: the best way is to create workers on demand
+    const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
+      const project = projects.find((p) => p.environmentName === key);
+      return project?.normalizedConfig.browser.enabled !== true;
+    });
+
+    return nodeEntries.flatMap(
+      ([_key, entry]) => Object.values(entry.entries) || [],
+    ).length;
+  };
+
   const recommendWorkerCount =
-    command === 'watch' ? Number.POSITIVE_INFINITY : entryFiles.length;
+    command === 'watch' ? Number.POSITIVE_INFINITY : getRecommendWorkerCount();
 
   const pool = await createPool({
     context,
-    // TODO: filter node projects only
-    // Ensure at least 1 worker if there are browser tests, even if no node tests
-    recommendWorkerCount: Math.max(
-      recommendWorkerCount,
-      hasBrowserTestsToRun ? 1 : 0,
-    ),
+    recommendWorkerCount,
   });
 
   // Initialize coverage collector

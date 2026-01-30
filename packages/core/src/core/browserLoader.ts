@@ -17,7 +17,12 @@ export interface BrowserModule {
     context: unknown,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
-  listBrowserTests: (context: unknown) => Promise<{
+  listBrowserTests: (
+    context: unknown,
+    options?: {
+      shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    },
+  ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
   }>;
