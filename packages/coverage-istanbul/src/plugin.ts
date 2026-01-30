@@ -43,6 +43,7 @@ export const pluginCoverage: (
           .use(CHAIN_ID.USE.SWC)
           .get('options') || {};
 
+        swcOptions.jsc ??= {};
         swcOptions.jsc.experimental ??= {};
         swcOptions.jsc.experimental.plugins ??= [];
 
