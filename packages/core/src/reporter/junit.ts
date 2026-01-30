@@ -207,6 +207,17 @@ export class JUnitReporter implements Reporter {
     return xmlDeclaration + testsuitesXml + testsuiteXmls + testsuitesEnd;
   }
 
+  async tryMkdir(dirname: string): Promise<void> {
+    // Create directory tree if not exists
+    try {
+      await fs.mkdir(dirname, { recursive: true });
+    } catch (error: any) {
+      if (error?.code !== 'EEXIST') {
+        throw error;
+      }
+    }
+  }
+
   async onTestRunEnd({
     results,
     testResults,
@@ -250,18 +261,9 @@ export class JUnitReporter implements Reporter {
     const xmlContent = this.generateJUnitXml(report);
 
     if (this.outputPath) {
-      const dirname = path.dirname(this.outputPath);
-
-      // Create directory tree if not exists
       try {
-        await fs.mkdir(dirname, { recursive: true });
-      } catch (error: any) {
-        if (error?.code !== 'EEXIST') {
-          throw error;
-        }
-      }
-
-      try {
+        const dirname = path.dirname(this.outputPath);
+        await this.tryMkdir(dirname);
         await fs.writeFile(this.outputPath, xmlContent, 'utf-8');
         logger.log(`JUnit XML report written to: ${this.outputPath}`);
       } catch (error) {
