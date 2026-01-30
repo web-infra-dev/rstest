@@ -16,4 +16,18 @@ describe('browser mode - coverage', () => {
     // multiply.ts should have 0% coverage (untested)
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
   });
+
+  it('should collect coverage data successfully without include option', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.noInclude.config.ts'],
+    });
+
+    await expectExecSuccess();
+
+    // Verify coverage report is generated
+    expect(cli.stdout).toMatch(/Coverage enabled with istanbul/);
+
+    // sum.ts should have 100% coverage (tested)
+    expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
+  });
 });
