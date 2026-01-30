@@ -22,17 +22,15 @@ export class ProgressReporter implements Reporter {
 }
 
 export class ProgressLogger {
-  mergeStderrToStdout = true;
-  outputStream = new Writable({
+  stream = new Writable({
     decodeStrings: false,
     write: (chunk, _encoding, cb) => {
       masterApi.onOutput.asEvent(chunk);
       cb(null);
     },
   });
-  errorStream = new Writable({
-    write: (_chunk, _encoding, cb) => cb(null),
-  });
+  outputStream = this.stream;
+  errorStream = this.stream;
   getColumns = () => Number.POSITIVE_INFINITY;
 }
 
