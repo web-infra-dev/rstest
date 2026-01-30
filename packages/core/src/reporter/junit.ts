@@ -207,8 +207,8 @@ export class JUnitReporter implements Reporter {
     return xmlDeclaration + testsuitesXml + testsuiteXmls + testsuitesEnd;
   }
 
+  /** Create directory tree if not exists */
   async tryMkdir(dirname: string): Promise<void> {
-    // Create directory tree if not exists
     try {
       await fs.mkdir(dirname, { recursive: true });
     } catch (error: any) {
