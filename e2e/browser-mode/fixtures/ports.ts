@@ -4,6 +4,7 @@ export const BROWSER_PORTS = {
   config: 5184,
   console: 5192,
   'browser-coverage': 5200,
+  'browser-coverage-no-include': 5210,
   error: 5182,
   isolation: 5188,
   'setup-files': 5190,
