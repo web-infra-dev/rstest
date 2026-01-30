@@ -1027,6 +1027,9 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.2
         version: 4.0.2
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       '@types/vscode':
         specifier: 1.97.0
         version: 1.97.0
@@ -1054,6 +1057,9 @@ importers:
       picomatch:
         specifier: ^4.0.3
         version: 4.0.3
+      semver:
+        specifier: ^7.7.3
+        version: 7.7.3
       tinyglobby:
         specifier: ^0.2.15
         version: 0.2.15
@@ -3284,6 +3290,9 @@ packages:
 
   '@types/sarif@2.1.7':
     resolution: {integrity: sha512-kRz0VEkJqWLf1LLVN4pT1cg1Z9wAuvI6L97V3m2f5B76Tg8d413ddvLBPTEHAZJlnn4XSvu0FkZtViCQGVyrXQ==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@types/sinonjs__fake-timers@8.1.5':
     resolution: {integrity: sha512-mQkU2jY8jJEF7YHjHvsQO8+3ughTL1mcnn96igfhONmR+fUPSKIkefQYpSe8bsly2Ep7oQbn/6VG5/9/0qcArQ==}
@@ -9970,6 +9979,8 @@ snapshots:
       csstype: 3.2.3
 
   '@types/sarif@2.1.7': {}
+
+  '@types/semver@7.7.1': {}
 
   '@types/sinonjs__fake-timers@8.1.5': {}
 

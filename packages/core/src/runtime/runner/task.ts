@@ -7,7 +7,7 @@ import type {
   TestSuite,
   TestSuiteListeners,
 } from '../../types';
-import { ROOT_SUITE_NAME } from '../../utils/constants';
+import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 
@@ -42,9 +42,13 @@ const shouldTestSkip = (
     return true;
   }
 
+  const delimiter = testNamePattern?.toString().includes(TEST_DELIMITER)
+    ? TEST_DELIMITER
+    : '';
+
   if (
     testNamePattern &&
-    !getTaskNameWithPrefix(test, '').match(testNamePattern)
+    !getTaskNameWithPrefix(test, delimiter).match(testNamePattern)
   ) {
     return true;
   }

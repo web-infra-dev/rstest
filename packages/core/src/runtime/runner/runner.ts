@@ -219,6 +219,8 @@ export class TestRunner {
             result.errors.push(...formatTestError(error));
           }
         }
+        // should not be updated for snapshots that have not been run when the test run fails
+        snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
 
       this.resetCurrentTest();

@@ -7,6 +7,7 @@ import {
   projectTestContexts,
 } from '@rstest/browser-manifest';
 import type {
+  CoverageMapData,
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
@@ -35,6 +36,8 @@ declare global {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
     __rstest_dispatch__?: (message: BrowserClientMessage) => void;
   }
+  // eslint-disable-next-line no-var
+  var __coverage__: Record<string, unknown> | undefined;
 }
 
 /**
@@ -588,6 +591,11 @@ const run = async () => {
         runnerHooks,
         runtime.api,
       );
+
+      // Collect coverage data from global __coverage__ object
+      if (globalThis.__coverage__) {
+        result.coverage = globalThis.__coverage__ as CoverageMapData;
+      }
 
       send({
         type: 'file-complete',

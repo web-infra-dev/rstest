@@ -70,14 +70,75 @@ rstest --include test/a/*.test.ts --include test/b/*.test.ts
 
 ## Filter by test name
 
-If you only want to run test cases whose names contain a specific keyword, you can use [testNamePattern](/config/test/test-name-pattern).
+If you only want to run some test cases, you can use the `--testNamePattern` (`-t` for short) option. It will run tests with names that match the given pattern.
 
-For example, to only run test cases whose names contain "login":
+### Match by keyword
+
+This is the simplest way. It will run test cases or test suites whose full names contain the given keyword.
+
+For example, to only run test cases whose names contain "bar":
 
 ```bash
-rstest --testNamePattern login
-# or
-rstest -t login
+rstest -t bar
+```
+
+If a suite name matches, all tests inside it will be run.
+
+You can also provide multiple keywords separated by spaces. This will match test cases where all keywords appear in the full name. For example, to run tests where `'suite-bar'` appears in the suite path and `'test-baz'` is in the test name:
+
+```bash
+rstest -t 'suite-bar test-baz'
+```
+
+### Match by full test name
+
+You can also provide a full test name to run a specific test case.
+
+Rstest uses `>` to connect test suite and test case names for better output readability. The full test name is the concatenation of the names of the test suites from the outside in and the test case name, separated by `>`.
+
+For example, consider the following test structure and its output:
+
+```ts
+// foo.test.ts
+import { describe, test } from '@rstest/core';
+
+describe('suite-foo', () => {
+  describe('suite-bar', () => {
+    test('test-baz', () => {
+      // ...
+    });
+
+    describe('suite-bar1', () => {
+      test('test-baz', () => {
+        // ...
+      });
+    });
+  });
+});
+```
+
+Output:
+
+```bash
+✓ foo.test.ts
+  ✓ suite-foo > suite-bar > test-baz
+  ✓ suite-foo > suite-bar > suite-bar1 > test-baz
+```
+
+To run only the `test-baz` test case in `suite-bar`, you can use:
+
+```bash
+rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
+```
+
+### Match by regular expression
+
+The pattern is treated as a regular expression. You can use this for more complex filtering.
+
+For example, if you want to precisely match `suite-bar > test-baz`, rather than any test containing this string, you can use the regex start `^` and end `$` anchors:
+
+```bash
+rstest foo.test.ts -t '^suite-bar > test-baz$'
 ```
 
 ## Filter by project name

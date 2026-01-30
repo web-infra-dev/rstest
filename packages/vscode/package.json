@@ -113,6 +113,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.2",
+    "@types/semver": "^7.7.1",
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
@@ -122,6 +123,7 @@
     "mocha": "^11.7.5",
     "ovsx": "^0.10.7",
     "picomatch": "^4.0.3",
+    "semver": "^7.7.3",
     "tinyglobby": "^0.2.15",
     "typescript": "^5.9.3",
     "valibot": "^1.2.0"

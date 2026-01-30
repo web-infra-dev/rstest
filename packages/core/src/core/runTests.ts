@@ -131,8 +131,46 @@ export async function runTests(context: Rstest): Promise<void> {
   const isWatchMode = context.command === 'watch';
 
   // For non-watch mode with both browser and node tests, we need to unify reporter output
+<<<<<<< HEAD
   const shouldUnifyReporter =
     !isWatchMode && hasBrowserProjects && hasNodeProjects;
+
+  // If only browser tests, run them and generate coverage
+  if (hasBrowserProjects && !hasNodeProjects) {
+    const { coverage } = context.normalizedConfig;
+
+    if (coverage.enabled) {
+      logger.log(
+        ` ${color.gray('Coverage enabled with')} %s\n`,
+        color.yellow(coverage.provider),
+      );
+    }
+
+    const browserResult = await runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: false,
+    });
+
+    // Generate coverage reports for browser-only tests
+    if (coverage.enabled && browserResult?.results) {
+      const coverageProvider = await createCoverageProvider(
+        coverage,
+        context.rootPath,
+      );
+      if (coverageProvider) {
+        const { generateCoverage } = await import('../coverage/generate');
+        await generateCoverage(
+          context,
+          browserResult.results,
+          coverageProvider,
+        );
+      }
+    }
+
+    return;
+  }
+
+  // If only node tests, run them (handled below)
+  // If both, run them in parallel
 
   let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
 
@@ -458,6 +496,16 @@ export async function runTests(context: Rstest): Promise<void> {
     const results = returns.flatMap((r) => r.results);
     const testResults = returns.flatMap((r) => r.testResults);
     const errors = returns.flatMap((r) => r.errors || []);
+
+    // Merge browser test results for coverage collection (only when unifying reporter output)
+    // In watch mode, browser and node tests run independently with their own reporters,
+    // so we should not merge stale browser results into node results
+    if (shouldUnifyReporter && browserResult?.results) {
+      results.push(...browserResult.results);
+    }
+    if (shouldUnifyReporter && browserResult?.testResults) {
+      testResults.push(...browserResult.testResults);
+    }
 
     context.updateReporterResultState(
       results,

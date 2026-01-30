@@ -1,57 +1,65 @@
 import fs from 'node:fs';
-import path, { dirname } from 'node:path';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
-import { runBrowserCli } from './utils';
+import treeKill from 'tree-kill';
+import { prepareFixtures } from '../scripts';
+import { runBrowserCliWithCwd } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const fixtureDir = path.join(__dirname, 'fixtures', 'snapshot');
-const snapshotDir = path.join(fixtureDir, 'tests', '__snapshots__');
-const fileSnapshotDir = path.join(fixtureDir, '__file_snapshots__');
+const __dirname = path.dirname(__filename);
 
 describe('browser mode - snapshot', () => {
-  // Clean up snapshots before each test to ensure a clean state
-  beforeEach(() => {
-    if (fs.existsSync(snapshotDir)) {
-      fs.rmSync(snapshotDir, { recursive: true });
+  const fixturesTargetPath = `${__dirname}/fixtures-test-snapshot${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+  let fixtureDir = '';
+  let snapshotDir = '';
+  let fileSnapshotDir = '';
+  let fixturesFs: Awaited<ReturnType<typeof prepareFixtures>>['fs'] | undefined;
+  let cliToKill:
+    | Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli']
+    | undefined;
+
+  const runSnapshot = async (args?: string[]) => {
+    const result = await runBrowserCliWithCwd(fixtureDir, {
+      args,
+    });
+    cliToKill = result.cli;
+    return result;
+  };
+
+  beforeEach(async () => {
+    const { fs: preparedFs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+    fixturesFs = preparedFs;
+
+    fixtureDir = path.join(fixturesTargetPath, 'snapshot');
+    snapshotDir = path.join(fixtureDir, 'tests', '__snapshots__');
+    fileSnapshotDir = path.join(fixtureDir, '__file_snapshots__');
+  });
+
+  afterEach(async () => {
+    // Kill the process tree (best-effort).
+    // Snapshot runs should exit on their own, but failures/timeouts may leave
+    // child processes (e.g. browser) running and locking files on Windows.
+    const pid = cliToKill?.exec.process?.pid;
+    const exitCode = cliToKill?.exec.process?.exitCode;
+    if (pid && (exitCode === null || exitCode === undefined)) {
+      treeKill(pid, 'SIGKILL');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    if (fs.existsSync(fileSnapshotDir)) {
-      fs.rmSync(fileSnapshotDir, { recursive: true });
+    cliToKill = undefined;
+
+    try {
+      fixturesFs?.delete(fixturesTargetPath);
+    } catch (err) {
+      if (process.platform !== 'win32') {
+        throw err;
+      }
     }
-  });
 
-  // Clean up after tests
-  afterEach(() => {
-    // Restore update.test.ts to original state if modified
-    const updateTestPath = path.join(fixtureDir, 'tests', 'update.test.ts');
-    const originalContent = `import { describe, expect, it } from '@rstest/core';
-
-describe('browser snapshot update', () => {
-  it('should match updatable snapshot', () => {
-    const value = 'ORIGINAL_VALUE';
-    expect(value).toMatchSnapshot();
-  });
-});
-`;
-    fs.writeFileSync(updateTestPath, originalContent);
-
-    // Restore inlineUpdate.test.ts to original state if modified
-    const inlineUpdateTestPath = path.join(
-      fixtureDir,
-      'tests',
-      'inlineUpdate.test.ts',
-    );
-    const inlineUpdateOriginalContent = `import { describe, expect, it } from '@rstest/core';
-
-describe('browser snapshot - inline update', () => {
-  it('should update inline snapshot', () => {
-    expect('original').toMatchInlineSnapshot();
-  });
-});
-`;
-    fs.writeFileSync(inlineUpdateTestPath, inlineUpdateOriginalContent);
+    fixturesFs = undefined;
   });
 
   describe('Create - initial snapshot creation', () => {
@@ -59,9 +67,9 @@ describe('browser snapshot - inline update', () => {
       // Snapshot directory should not exist initially
       expect(fs.existsSync(snapshotDir)).toBe(false);
 
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/snapshot.test.ts'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/snapshot.test.ts',
+      ]);
 
       await expectExecSuccess();
 
@@ -96,12 +104,9 @@ describe('browser snapshot - inline update', () => {
   describe('Read - snapshot matching', () => {
     it('should match existing snapshots on subsequent runs', async () => {
       // First run: create snapshots
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/snapshot.test.ts'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/snapshot.test.ts',
+      ]);
       await firstExecSuccess();
 
       // Verify snapshot file exists
@@ -109,9 +114,9 @@ describe('browser snapshot - inline update', () => {
       expect(fs.existsSync(snapshotFile)).toBe(true);
 
       // Second run: should match existing snapshots
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/snapshot.test.ts'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/snapshot.test.ts',
+      ]);
 
       await expectExecSuccess();
       expect(cli.stdout).toMatch(/Tests.*passed/);
@@ -122,12 +127,9 @@ describe('browser snapshot - inline update', () => {
 
     it('should fail when snapshot does not match', async () => {
       // First run: create initial snapshot
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/update.test.ts'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/update.test.ts',
+      ]);
       await firstExecSuccess();
 
       // Modify the test file to change the value
@@ -144,9 +146,7 @@ describe('browser snapshot update', () => {
       fs.writeFileSync(updateTestPath, modifiedContent);
 
       // Second run: should fail because snapshot doesn't match
-      const { cli } = await runBrowserCli('snapshot', {
-        args: ['tests/update.test.ts'],
-      });
+      const { cli } = await runSnapshot(['tests/update.test.ts']);
 
       await cli.exec;
       expect(cli.exec.exitCode).toBe(1);
@@ -157,12 +157,9 @@ describe('browser snapshot update', () => {
   describe('Update - snapshot update with --update flag', () => {
     it('should update snapshots when using --update flag', async () => {
       // First run: create initial snapshot
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/update.test.ts'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/update.test.ts',
+      ]);
       await firstExecSuccess();
 
       // Verify initial snapshot content
@@ -184,9 +181,10 @@ describe('browser snapshot update', () => {
       fs.writeFileSync(updateTestPath, modifiedContent);
 
       // Run with --update flag to update the snapshot
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/update.test.ts', '--update'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/update.test.ts',
+        '--update',
+      ]);
 
       await expectExecSuccess();
 
@@ -203,8 +201,7 @@ describe('browser snapshot update', () => {
   describe('Delete - obsolete snapshot removal', () => {
     it('should report obsolete snapshots when test is removed', async () => {
       // First run: create snapshots for both tests
-      const { expectExecSuccess: firstExecSuccess } =
-        await runBrowserCli('snapshot');
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot();
       await firstExecSuccess();
 
       // Verify both snapshot files exist
@@ -217,9 +214,9 @@ describe('browser snapshot update', () => {
 
       // Now run only one test file - the other snapshots become obsolete
       // Note: obsolete detection might depend on running with specific flags
-      const { expectExecSuccess } = await runBrowserCli('snapshot', {
-        args: ['tests/snapshot.test.ts'],
-      });
+      const { expectExecSuccess } = await runSnapshot([
+        'tests/snapshot.test.ts',
+      ]);
 
       await expectExecSuccess();
       // Both files should still exist (obsolete snapshots are not auto-deleted)
@@ -231,9 +228,9 @@ describe('browser snapshot update', () => {
 
   describe('Multiple snapshots in single test', () => {
     it('should handle multiple snapshots in the same test file', async () => {
-      const { expectExecSuccess } = await runBrowserCli('snapshot', {
-        args: ['tests/snapshot.test.ts'],
-      });
+      const { expectExecSuccess } = await runSnapshot([
+        'tests/snapshot.test.ts',
+      ]);
 
       await expectExecSuccess();
 
@@ -250,12 +247,9 @@ describe('browser snapshot update', () => {
   describe('Error snapshot - toThrowErrorMatchingSnapshot', () => {
     it('should create and match error snapshots', async () => {
       // First run: create error snapshot
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/error.test.ts'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/error.test.ts',
+      ]);
       await firstExecSuccess();
 
       // Verify error snapshot file was created
@@ -267,9 +261,9 @@ describe('browser snapshot update', () => {
       expect(content).toContain('should match error snapshot');
 
       // Second run: should match existing snapshot
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/error.test.ts'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/error.test.ts',
+      ]);
 
       await expectExecSuccess();
       expect(cli.stdout).toMatch(/Tests.*passed/);
@@ -282,12 +276,9 @@ describe('browser snapshot update', () => {
       expect(fs.existsSync(fileSnapshotDir)).toBe(false);
 
       // First run: create file snapshot
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/file.test.ts'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/file.test.ts',
+      ]);
       await firstExecSuccess();
 
       // Verify file snapshot was created
@@ -299,9 +290,9 @@ describe('browser snapshot update', () => {
       expect(data).toEqual({ key: 'value', count: 42 });
 
       // Second run: should match existing file snapshot
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/file.test.ts'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/file.test.ts',
+      ]);
 
       await expectExecSuccess();
       expect(cli.stdout).toMatch(/Tests.*passed/);
@@ -310,9 +301,9 @@ describe('browser snapshot update', () => {
 
   describe('Inline snapshot - toMatchInlineSnapshot', () => {
     it('should work with inline snapshots in browser mode', async () => {
-      const { expectExecSuccess, cli } = await runBrowserCli('snapshot', {
-        args: ['tests/inline.test.ts'],
-      });
+      const { expectExecSuccess, cli } = await runSnapshot([
+        'tests/inline.test.ts',
+      ]);
 
       await expectExecSuccess();
       expect(cli.stdout).toMatch(/Tests.*passed/);
@@ -326,12 +317,10 @@ describe('browser snapshot update', () => {
       );
 
       // Step 1: Run with --update to create initial inline snapshot
-      const { expectExecSuccess: firstExecSuccess } = await runBrowserCli(
-        'snapshot',
-        {
-          args: ['tests/inlineUpdate.test.ts', '--update'],
-        },
-      );
+      const { expectExecSuccess: firstExecSuccess } = await runSnapshot([
+        'tests/inlineUpdate.test.ts',
+        '--update',
+      ]);
 
       await firstExecSuccess();
 
@@ -357,9 +346,7 @@ describe('browser snapshot - inline update', () => {
       // Step 3: Run with --update again - the snapshot is now at a different line
       // The source map must correctly map the new line position
       const { expectExecSuccess: secondExecSuccess, cli: secondCli } =
-        await runBrowserCli('snapshot', {
-          args: ['tests/inlineUpdate.test.ts', '--update'],
-        });
+        await runSnapshot(['tests/inlineUpdate.test.ts', '--update']);
 
       await secondExecSuccess();
 

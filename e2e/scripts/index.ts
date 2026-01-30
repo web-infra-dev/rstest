@@ -122,7 +122,10 @@ export async function runRstestCli({
 
   const baseEnv: Record<string, string | undefined> = { ...process.env };
   for (const key of unsetEnv ?? []) {
-    delete baseEnv[key];
+    // tinyexec merges env as `{ ...process.env, ...options.env }`, so deleting the
+    // key here is not enough if the parent process has it set (e.g. FORCE_COLOR).
+    // Setting it to `undefined` ensures it is treated as unset in the spawned process.
+    baseEnv[key] = undefined;
   }
 
   const exec = x(command, args, {

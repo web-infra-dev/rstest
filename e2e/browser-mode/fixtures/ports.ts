@@ -3,6 +3,7 @@ export const BROWSER_PORTS = {
   'browser-react': 5202,
   config: 5184,
   console: 5192,
+  'browser-coverage': 5200,
   error: 5182,
   isolation: 5188,
   'setup-files': 5190,

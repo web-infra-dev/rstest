@@ -18,7 +18,7 @@ describe('test snapshot', () => {
       force: true,
     });
 
-    await runRstestCli({
+    const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-u', 'fixtures/index.test.ts'],
       options: {
@@ -27,6 +27,8 @@ describe('test snapshot', () => {
         },
       },
     });
+
+    await expectExecSuccess();
 
     await expectFile(snapshotFilePath, 3000);
 
@@ -38,6 +40,32 @@ describe('test snapshot', () => {
       );
 
     fs.rmSync(snapshotFilePath);
+  });
+
+  it('should not update failed snapshots with -u', async () => {
+    const snapshotFilePath = join(
+      __dirname,
+      'fixtures/__snapshots__/error.test.ts.snap',
+    );
+
+    const { expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-u', 'fixtures/error.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    // should generator snapshot name correctly
+    await expect
+      .poll(() => fs.readFileSync(snapshotFilePath, 'utf-8'))
+      .toContain(
+        '[`test snapshot - error > test snapshot update 1`] = `"hello world1"`;',
+      );
   });
 
   it('resolveSnapshotPath', async () => {
