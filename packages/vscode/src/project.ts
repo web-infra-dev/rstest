@@ -190,7 +190,8 @@ export class Project implements vscode.Disposable {
         this.testItem = this.testController.createTestItem(
           this.configFileUri.toString(),
           path.relative(this.workspaceFolder.uri.path, this.configFileUri.path),
-          this.configFileUri,
+          // Do not set `uri`, so that VSCode’s “Run Tests” works correctly.
+          // https://github.com/microsoft/vscode/blob/3b42759b8b501e68106c72b5683dcc114ed789e1/src/vs/workbench/contrib/testing/common/testService.ts#L278-L280
         );
         testData.set(this.testItem, this);
       }
