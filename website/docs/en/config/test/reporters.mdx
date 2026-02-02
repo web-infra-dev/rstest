@@ -7,6 +7,8 @@ type Reporter = ReporterName | [ReporterName, ReporterOptions];
 type Reporters = Reporter | Reporter[];
 ```
 
+- **Reporter options reference:** Reporter option types are defined in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+
 - **Default:**
 
 ```ts
@@ -18,6 +20,10 @@ process.env.GITHUB_ACTIONS === 'true'
 - **CLI:** `--reporter=<name> --reporter=<name1>`
 
 Configure which reporters to use for test result output.
+
+:::info AI agent environments
+If you haven't explicitly configured any reporters (no `reporters` in config and no `--reporter` flags), Rstest defaults to `['md']` and outputs AI agent-friendly markdown to stdout.
+:::
 
 ### Usage
 
