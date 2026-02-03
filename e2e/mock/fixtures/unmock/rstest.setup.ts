@@ -7,3 +7,9 @@ rs.mock('node:crypto', () => {
     randomFill: 'mocked_randomFill',
   };
 });
+
+rs.mock('./a', () => {
+  return {
+    a: 2,
+  };
+});

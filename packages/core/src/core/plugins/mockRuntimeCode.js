@@ -202,14 +202,6 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
 
     __webpack_modules__[id] = finalModFactory;
 
-    // For Node.js built-in modules (node:*), also set cache directly
-    // so that subsequent imports get the mocked version without re-executing the factory
-    if (typeof id === 'string' && id.startsWith('node:')) {
-      const exports = modFactory();
-      __webpack_require__.r(exports);
-      __webpack_module_cache__[id] = { exports, id, loaded: true };
-    }
-
     __webpack_require__.rstest_clear_dependents(id);
   }
 };
