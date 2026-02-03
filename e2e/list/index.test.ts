@@ -53,7 +53,7 @@ describe('test list command', () => {
 
     expect(logs).toMatchInlineSnapshot(`
       [
-        "Running shard 1 of 2 (2 of 3 tests)",
+        "Running shard 1 of 2 (2 of 3 test files)",
         "a.test.ts > test a > test a-1",
         "a.test.ts > test a-2",
         "b.test.ts > test b > test b-1",

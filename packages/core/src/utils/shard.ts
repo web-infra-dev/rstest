@@ -70,7 +70,7 @@ export async function resolveShardedEntries(
 
   logger.log(
     color.green(
-      `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} tests)\n`,
+      `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
     ),
   );
 

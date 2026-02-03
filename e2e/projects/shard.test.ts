@@ -22,7 +22,7 @@ describe('test projects sharding', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     // Check log message
-    expectLog('Running shard 1 of 2 (3 of 6 tests)', logs);
+    expectLog('Running shard 1 of 2 (3 of 6 test files)', logs);
 
     // Check that only files from the first shard are run
     expectLog('packages/client/test/App.test.tsx', logs);
@@ -56,7 +56,7 @@ describe('test projects sharding', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     // Check log message
-    expectLog('Running shard 2 of 2 (3 of 6 tests)', logs);
+    expectLog('Running shard 2 of 2 (3 of 6 test files)', logs);
 
     // Check that files from the first shard are NOT run
     expect(
@@ -81,7 +81,7 @@ describe('test projects sharding', () => {
     const { expectExecFailed, expectLog, expectStderrLog } = await runRstestCli(
       {
         command: 'rstest',
-        args: ['run', '--shard', '7/7', '--globals'], // Total 6 tests, so 7th shard is empty
+        args: ['run', '--shard', '7/7', '--globals'], // Total 6 test files, so 7th shard is empty
         options: {
           nodeOptions: {
             cwd: join(__dirname, 'fixtures'),
@@ -93,7 +93,7 @@ describe('test projects sharding', () => {
     await expectExecFailed();
 
     // Check log message
-    expectLog('Running shard 7 of 7 (0 of 6 tests)');
+    expectLog('Running shard 7 of 7 (0 of 6 test files)');
     expectStderrLog('No test files found, exiting with code 1.');
   });
 });
