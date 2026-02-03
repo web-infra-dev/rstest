@@ -87,6 +87,10 @@ suite('Test Progress Reporting', () => {
     assert.match(output, /1 passed/);
     assert.match(output, /1 skipped/);
 
+    // should include stderr output from test file
+    assert.match(output, /stdout: progress\.test\.ts/);
+    assert.match(output, /stderr: progress\.test\.ts/);
+
     assert.equal(passedItems.length, 1);
     assert.equal(skippedItems.length, 1);
     assert.equal(failedMessages.length, 5);
@@ -122,6 +126,43 @@ suite('Test Progress Reporting', () => {
 
     assert.equal(failedMessages[3].message, 'after suite');
     assert.equal(failedMessages[4].message, 'after root suite');
+  });
+
+  test('can run a single test case', async () => {
+    const extension = vscode.extensions.getExtension('rstack.rstest');
+    assert.ok(extension, 'Extension should be present');
+    if (extension && !extension.isActive) {
+      await extension.activate();
+    }
+
+    const rstestInstance: any = extension?.exports;
+    const testController: vscode.TestController =
+      rstestInstance?.testController;
+    assert.ok(testController, 'Test controller should be exported');
+
+    const item = await waitFor(() =>
+      getTestItemByLabels(testController.items, [
+        'test',
+        'index.test.ts',
+        'Index',
+        'should add two numbers correctly',
+      ]),
+    );
+
+    rstestInstance.startTestRun(
+      new vscode.TestRunRequest([item], undefined, rstestInstance.runProfile),
+      new vscode.CancellationTokenSource().token,
+      false,
+      createMockRun,
+    );
+
+    await promise;
+
+    assert.equal(failedMessages.length, 0);
+    assert.equal(skippedItems.length, 0);
+    assert.equal(passedItems.length, 1);
+    assert.equal(passedItems[0]?.label, 'should add two numbers correctly');
+    assert.match(output, /1 passed/);
   });
 
   test('reports test progress with continuous run', async () => {

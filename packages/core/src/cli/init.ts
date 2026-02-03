@@ -7,6 +7,7 @@ import type { BrowserName, Project, RstestConfig } from '../types';
 import {
   castArray,
   color,
+  determineAgent,
   filterProjects,
   formatRootStr,
   getAbsolutePath,
@@ -429,6 +430,16 @@ export async function initCli(options: CommonOptions): Promise<{
     ...options,
     cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
   });
+
+  // In agent environments, default to markdown output when the user didn't
+  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+  if (
+    determineAgent().isAgent &&
+    !options.reporter &&
+    config.reporters == null
+  ) {
+    config.reporters = ['md'];
+  }
 
   const projects = await resolveProjects({ config, root, options });
 

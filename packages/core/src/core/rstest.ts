@@ -6,6 +6,7 @@ import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { JUnitReporter } from '../reporter/junit';
+import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -20,6 +21,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
+import type { BuiltInReporterNames } from '../types/reporter';
 import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
@@ -183,6 +185,7 @@ export class Rstest implements RstestContext {
             rootPath,
             config: rstestConfig,
             testState: this.testState,
+            fileFilters: this.fileFilters,
             options: {
               showProjectName: projects.length > 1,
             },
@@ -234,14 +237,16 @@ const reportersMap: {
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  md: typeof MdReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  md: MdReporter,
 };
 
-export type BuiltInReporterNames = keyof typeof reportersMap;
+export type { BuiltInReporterNames };
 
 export function createReporters(
   reporters: RstestConfig['reporters'],
