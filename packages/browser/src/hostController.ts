@@ -1274,7 +1274,7 @@ export const runBrowserController = async (
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
-        logger.error(color.red(`${message}`));
+        logger.error(color.red(message));
       }
     }
 
