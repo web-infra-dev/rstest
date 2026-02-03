@@ -22,7 +22,7 @@ import type {
   TestResult,
 } from '../types';
 import type { BuiltInReporterNames } from '../types/reporter';
-import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
+import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -98,6 +98,11 @@ export class Rstest implements RstestContext {
       root: rootPath,
     });
 
+    if (command === 'watch' && rstestConfig.shard) {
+      logger.error('Test sharding is not supported in watch mode.');
+      process.exit(1);
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
@@ -110,6 +115,21 @@ export class Rstest implements RstestContext {
     this.projects = projects.length
       ? projects.map((project) => {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
+          if (
+            project.config.shard &&
+            (project.config.shard.count !== rstestConfig.shard?.count ||
+              project.config.shard.index !== rstestConfig.shard?.index)
+          ) {
+            logger.error(
+              'The `shard` option is a global option and cannot be set per-project.\n' +
+                'global `shard` option:\n' +
+                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
+                `project "${project.config.name}" shard option:\n` +
+                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
+            );
+            process.exit(1);
+          }
 
           // TODO: support extend projects config
           const config = withDefaultConfig(

@@ -70,6 +70,10 @@ const applyCommonOptions = (cli: CAC) => {
       '--bail [number]',
       'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
     )
+    .option(
+      '--shard <index/count>',
+      'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
+    )
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(
       '--clearMocks',

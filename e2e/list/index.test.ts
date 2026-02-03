@@ -36,6 +36,32 @@ describe('test list command', () => {
     `);
   });
 
+  it('should list tests correctly with test shard', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--shard=1/2'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "Running shard 1 of 2 (2 of 3 test files)",
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+        "b.test.ts > test b > test b-1",
+        "b.test.ts > test b-2",
+      ]
+    `);
+  });
+
   it('should list tests correctly with file filter', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

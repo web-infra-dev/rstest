@@ -1191,6 +1191,32 @@ const createBrowserRuntime = async ({
   };
 };
 
+async function resolveProjectEntries(
+  context: Rstest,
+  shardedEntries?: Map<string, { entries: Record<string, string> }>,
+): Promise<BrowserProjectEntries[]> {
+  if (shardedEntries) {
+    const browserProjects = getBrowserProjects(context);
+    const projectEntries: BrowserProjectEntries[] = [];
+    for (const project of browserProjects) {
+      const entryInfo = shardedEntries.get(project.environmentName);
+      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
+        const setup = getSetupFiles(
+          project.normalizedConfig.setupFiles,
+          project.rootPath,
+        );
+        projectEntries.push({
+          project,
+          setupFiles: Object.values(setup),
+          testFiles: Object.values(entryInfo.entries),
+        });
+      }
+    }
+    return projectEntries;
+  }
+  return collectProjectEntries(context);
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -1232,7 +1258,10 @@ export const runBrowserController = async (
     }
   }
 
-  const projectEntries = await collectProjectEntries(context);
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -1241,11 +1270,12 @@ export const runBrowserController = async (
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      logger.log(
-        color[code ? 'red' : 'yellow'](
-          `No test files found, exiting with code ${code}.`,
-        ),
-      );
+      const message = `No test files found, exiting with code ${code}.`;
+      if (code === 0) {
+        logger.log(color.yellow(message));
+      } else {
+        logger.error(color.red(message));
+      }
     }
 
     if (code !== 0) {
@@ -1713,8 +1743,14 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: Rstest,
+  options?: {
+    shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  },
 ): Promise<ListBrowserTestsResult> => {
-  const projectEntries = await collectProjectEntries(context);
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,

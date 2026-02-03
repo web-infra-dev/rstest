@@ -1,8 +1,18 @@
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo } from '../types';
-import { clearScreen, color, getTestEntries, logger } from '../utils';
-import { type BrowserTestRunResult, loadBrowserModule } from './browserLoader';
+import type { EntryInfo, ProjectEntries } from '../types';
+import {
+  clearScreen,
+  color,
+  getTestEntries,
+  logger,
+  resolveShardedEntries,
+} from '../utils';
+import {
+  type BrowserTestRunOptions,
+  type BrowserTestRunResult,
+  loadBrowserModule,
+} from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -15,7 +25,7 @@ import type { Rstest } from './rstest';
 async function runBrowserModeTests(
   context: Rstest,
   browserProjects: typeof context.projects,
-  options: { skipOnTestRunEnd: boolean },
+  options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { runBrowserTests } = await loadBrowserModule({ projectRoots });
@@ -31,17 +41,17 @@ export async function runTests(context: Rstest): Promise<void> {
     (project) => !project.normalizedConfig.browser.enabled,
   );
 
-  const hasBrowserTests =
-    context.normalizedConfig.browser.enabled || browserProjects.length > 0;
-  const hasNodeTests = nodeProjects.length > 0;
+  const hasBrowserProjects = browserProjects.length > 0;
+  const hasNodeProjects = nodeProjects.length > 0;
 
   const isWatchMode = context.command === 'watch';
 
   // For non-watch mode with both browser and node tests, we need to unify reporter output
-  const shouldUnifyReporter = !isWatchMode && hasBrowserTests && hasNodeTests;
+  const shouldUnifyReporter =
+    !isWatchMode && hasBrowserProjects && hasNodeProjects;
 
   // If only browser tests, run them and generate coverage
-  if (hasBrowserTests && !hasNodeTests) {
+  if (hasBrowserProjects && !hasNodeProjects) {
     const { coverage } = context.normalizedConfig;
 
     if (coverage.enabled) {
@@ -79,43 +89,23 @@ export async function runTests(context: Rstest): Promise<void> {
 
   let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
 
-  if (hasBrowserTests) {
-    // Start browser tests in parallel (don't await yet)
-    browserResultPromise = runBrowserModeTests(context, browserProjects, {
-      skipOnTestRunEnd: shouldUnifyReporter,
-    });
-  }
+  const allProjects = context.projects;
 
-  // Skip node mode tests if no node mode projects
-  if (!hasNodeTests) {
-    if (browserResultPromise) {
-      await browserResultPromise;
-    }
-    return;
-  }
+  const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
+    context;
+  const { coverage, shard } = normalizedConfig;
 
-  const projects = nodeProjects;
+  const entriesCache: Map<string, ProjectEntries> =
+    (await resolveShardedEntries(context)) || new Map();
 
-  const {
-    rootPath,
-    reporters,
-    snapshotManager,
-    command,
-    normalizedConfig: { coverage },
-  } = context;
-
-  const entriesCache = new Map<
-    string,
-    {
-      entries: Record<string, string>;
-      fileFilters?: string[];
-    }
-  >();
-
+  // Define globTestSourceEntries after entriesCache is potentially populated
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
-    const { include, exclude, includeSource, root } = projects.find(
+    if (!isWatchMode && shard && entriesCache.has(name)) {
+      return entriesCache.get(name)!.entries;
+    }
+    const { include, exclude, includeSource, root } = allProjects.find(
       (p) => p.environmentName === name,
     )!.normalizedConfig;
     const entries = await getTestEntries({
@@ -135,6 +125,63 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
+  let browserProjectsToRun = browserProjects;
+  let nodeProjectsToRun = nodeProjects;
+
+  if (shard) {
+    browserProjectsToRun = browserProjects.filter((p) => {
+      return (
+        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
+        0
+      );
+    });
+    nodeProjectsToRun = nodeProjects.filter((p) => {
+      return (
+        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
+        0
+      );
+    });
+  }
+
+  const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
+  const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
+
+  // If there are browser tests to run, start them.
+  if (hasBrowserTestsToRun) {
+    const browserEntries = new Map();
+    if (shard) {
+      for (const p of browserProjectsToRun) {
+        browserEntries.set(
+          p.environmentName,
+          entriesCache.get(p.environmentName),
+        );
+      }
+    }
+    browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
+      skipOnTestRunEnd: shouldUnifyReporter,
+      shardedEntries: shard ? browserEntries : undefined,
+    });
+  }
+
+  // If there are no node tests to run, we can potentially exit early.
+  if (!hasNodeTestsToRun) {
+    if (browserResultPromise) {
+      await browserResultPromise;
+    }
+    // If only browser tests were to run and they ran, we should return.
+    if (hasBrowserTestsToRun) {
+      return;
+    }
+    // If no node projects at all, and no browser tests to run,
+    // then nothing to do here. This handles the original early exit for no node projects.
+    if (!hasNodeProjects) {
+      return;
+    }
+  }
+
+  // The `projects` variable now refers to node projects that have tests to run.
+  const projects = nodeProjectsToRun;
+
   const { getSetupFiles } = await import('../utils/getSetupFiles');
 
   const setupFiles = Object.fromEntries(
@@ -150,6 +197,7 @@ export async function runTests(context: Rstest): Promise<void> {
   );
 
   const globalSetupFiles = Object.fromEntries(
+    // Global setup still applies to all original projects in context
     context.projects.map((project) => {
       const {
         environmentName,
@@ -171,17 +219,11 @@ export async function runTests(context: Rstest): Promise<void> {
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
+      // Pass only the relevant node projects for Rsbuild processing
       projects: projects.map((p) => p.normalizedConfig),
     },
     isWatchMode,
-    globTestSourceEntries: isWatchMode
-      ? globTestSourceEntries
-      : async (name) => {
-          if (entriesCache.has(name)) {
-            return entriesCache.get(name)!.entries;
-          }
-          return globTestSourceEntries(name);
-        },
+    globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
     rsbuildInstance,
@@ -193,8 +235,20 @@ export async function runTests(context: Rstest): Promise<void> {
     [],
   );
 
+  const getRecommendWorkerCount = (): number => {
+    // TODO: the best way is to create workers on demand
+    const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
+      const project = projects.find((p) => p.environmentName === key);
+      return project?.normalizedConfig.browser.enabled !== true;
+    });
+
+    return nodeEntries.flatMap(
+      ([_key, entry]) => Object.values(entry.entries) || [],
+    ).length;
+  };
+
   const recommendWorkerCount =
-    command === 'watch' ? Number.POSITIVE_INFINITY : entryFiles.length;
+    command === 'watch' ? Number.POSITIVE_INFINITY : getRecommendWorkerCount();
 
   const pool = await createPool({
     context,
@@ -388,11 +442,14 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       } else {
         const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-        logger.log(
-          color[code ? 'red' : 'yellow'](
-            `No test files found, exiting with code ${code}.`,
-          ),
-        );
+
+        const message = `No test files found, exiting with code ${code}.`;
+        if (code === 0) {
+          logger.log(color.yellow(message));
+        } else {
+          logger.error(color.red(message));
+        }
+
         process.exitCode = code;
       }
       if (mode === 'all') {
@@ -403,8 +460,8 @@ export async function runTests(context: Rstest): Promise<void> {
           );
         }
 
-        projects.forEach((p) => {
-          if (projects.length > 1) {
+        allProjects.forEach((p) => {
+          if (allProjects.length > 1) {
             logger.log('');
             logger.log(color.gray('project:'), p.name);
           }
