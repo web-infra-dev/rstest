@@ -1,0 +1,98 @@
+{
+  "type": "object",
+  "properties": {
+    "runner": {
+      "type": "object",
+      "properties": {
+        "cmd": {
+          "type": "string",
+          "description": "Runner command. Example: \"pnpm\"."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Runner arguments. Example: [\"rstest\", \"run\", ...]."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the runner process."
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables passed to the runner. Default: {}."
+        }
+      },
+      "required": ["cmd", "args", "cwd"],
+      "description": "Runner configuration used to execute the test command."
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Task id. If omitted, the CLI assigns \"task-<n>\"."
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable task description."
+          },
+          "sourcePath": {
+            "type": "string",
+            "description": "Absolute source file path in the runner workspace. Used for sourcemap mapping."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based line number in the source file."
+          },
+          "column": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "0-based column number in the source file. Default: 0."
+          },
+          "expressions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Expressions to evaluate on the paused call frame when this breakpoint is hit."
+          },
+          "hitLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Stop after this many hits. Default: 1."
+          },
+          "condition": {
+            "type": "string",
+            "description": "Conditional breakpoint expression (evaluated by the debugger). The breakpoint pauses only when this evaluates to a truthy value."
+          },
+          "order": {
+            "type": "integer",
+            "description": "Optional ordering hint (lower values run first)."
+          },
+          "hits": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Internal hit counter. Default: 0."
+          }
+        },
+        "required": ["sourcePath", "line"]
+      },
+      "minItems": 1,
+      "description": "List of breakpoint tasks. Must be non-empty."
+    }
+  },
+  "required": ["runner", "tasks"],
+  "description": "Plan JSON passed to the CLI via --plan <path|->.",
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

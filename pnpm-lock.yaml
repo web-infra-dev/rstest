@@ -163,6 +163,36 @@ importers:
 
   e2e/build/runtimeImport: {}
 
+  e2e/cdp/fixtures/basic:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
+  e2e/cdp/fixtures/basic-no-debug:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
+  e2e/cdp/fixtures/invalid-line:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
+  e2e/cdp/fixtures/mismatch:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
+  e2e/cdp/fixtures/multi:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
   e2e/cli:
     devDependencies:
       '@rstest/core':
@@ -997,6 +1027,36 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/skill-cdp:
+    devDependencies:
+      '@jridgewell/trace-mapping':
+        specifier: 0.3.31
+        version: 0.3.31
+      '@rslib/core':
+        specifier: ^0.19.0
+        version: 0.19.0(@microsoft/api-extractor@7.55.2(@types/node@22.18.6))(typescript@5.9.3)
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      '@valibot/to-json-schema':
+        specifier: ^1.2.0
+        version: 1.5.0(valibot@1.2.0(typescript@5.9.3))
+      cac:
+        specifier: ^6.7.14
+        version: 6.7.14
+      json-rpc-2.0:
+        specifier: ^1.7.1
+        version: 1.7.1
+      valibot:
+        specifier: ^1.2.0
+        version: 1.2.0(typescript@5.9.3)
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
 
   packages/vscode:
     devDependencies:
@@ -3342,6 +3402,11 @@ packages:
     peerDependencies:
       react: '>=18.3.1'
 
+  '@valibot/to-json-schema@1.5.0':
+    resolution: {integrity: sha512-GE7DmSr1C2UCWPiV0upRH6mv0cCPsqYGs819fb6srCS1tWhyXrkGGe+zxUiwzn/L1BOfADH4sNjY/YHCuP8phQ==}
+    peerDependencies:
+      valibot: ^1.2.0
+
   '@vercel/oidc@3.0.3':
     resolution: {integrity: sha512-yNEQvPcVrK9sIe637+I0jD6leluPxzwJKx/Haw6F4H77CdDsszUn5V3o96LPziXkSNE2B83+Z3mjqGKBK/R6Gg==}
     engines: {node: '>= 20'}
@@ -5204,6 +5269,9 @@ packages:
 
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
+
+  json-rpc-2.0@1.7.1:
+    resolution: {integrity: sha512-JqZjhjAanbpkXIzFE7u8mE/iFblawwlXtONaCvRqI+pyABVz7B4M1EUNpyVW+dZjqgQ2L5HFmZCmOCgUKm00hg==}
 
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
@@ -10029,6 +10097,10 @@ snapshots:
       react: 19.2.3
       unhead: 2.0.19
 
+  '@valibot/to-json-schema@1.5.0(valibot@1.2.0(typescript@5.9.3))':
+    dependencies:
+      valibot: 1.2.0(typescript@5.9.3)
+
   '@vercel/oidc@3.0.3': {}
 
   '@vitest/expect@3.2.4':
@@ -12201,6 +12273,8 @@ snapshots:
   jsesc@3.1.0: {}
 
   json-parse-even-better-errors@2.3.1: {}
+
+  json-rpc-2.0@1.7.1: {}
 
   json-schema-traverse@1.0.0: {}
 

@@ -1,0 +1,41 @@
+{
+  "name": "@rstest/cdp",
+  "version": "0.1.0",
+  "description": "CDP-based debugger CLI for rstest, used by agent-skills.",
+  "type": "module",
+  "bin": "./dist/rstest-cdp.cjs",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "postbuild": "pnpm run gen:schema",
+    "dev": "rslib build --watch",
+    "gen:schema": "node --experimental-strip-types ./scripts/genPlanSchema.mts && prettier -w ./schema/plan.schema.json",
+    "prepare": "pnpm run gen:schema",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@jridgewell/trace-mapping": "0.3.31",
+    "@rslib/core": "^0.19.0",
+    "@rstest/tsconfig": "workspace:*",
+    "@valibot/to-json-schema": "^1.2.0",
+    "@types/ws": "^8.18.1",
+    "cac": "^6.7.14",
+    "json-rpc-2.0": "^1.7.1",
+    "valibot": "^1.2.0",
+    "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=18.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/skill-cdp"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "name": "@rstest/tests-cdp-mismatch",
+  "type": "module",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@rstest/core": "workspace:*"
+  }
+}
