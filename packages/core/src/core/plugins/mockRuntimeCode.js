@@ -2,8 +2,35 @@
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
 const originalWebpackRequire = __webpack_require__;
+let currentLoadingModule = null; // Track which module is currently loading
+
 __webpack_require__ = new Proxy(
   function (...args) {
+    const moduleId = args[0];
+    const previousLoadingModule = currentLoadingModule;
+
+    // Track dependency: currentLoadingModule depends on moduleId
+    if (currentLoadingModule && moduleId) {
+      if (
+        !__webpack_require__.rstest_module_dependencies[currentLoadingModule]
+      ) {
+        __webpack_require__.rstest_module_dependencies[currentLoadingModule] =
+          [];
+      }
+      if (
+        !__webpack_require__.rstest_module_dependencies[
+          currentLoadingModule
+        ].includes(moduleId)
+      ) {
+        __webpack_require__.rstest_module_dependencies[
+          currentLoadingModule
+        ].push(moduleId);
+      }
+    }
+
+    // Set current module for nested requires
+    currentLoadingModule = moduleId;
+
     try {
       return originalWebpackRequire(...args);
     } catch (e) {
@@ -12,6 +39,8 @@ __webpack_require__ = new Proxy(
         throw new Error(`[Rstest] Cannot find module "${args[0]}"`);
       }
       throw e;
+    } finally {
+      currentLoadingModule = previousLoadingModule;
     }
   },
   {
@@ -31,6 +60,23 @@ __webpack_require__ = new Proxy(
 
 __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_factories = {};
+__webpack_require__.rstest_module_dependencies = {}; // Track which modules depend on which
+
+// Helper to clear a module and all its dependents from cache
+__webpack_require__.rstest_clear_dependents = (id) => {
+  // Clear the module itself
+  delete __webpack_module_cache__[id];
+
+  // Find and clear all modules that depend on this one
+  for (const dependentId in __webpack_require__.rstest_module_dependencies) {
+    const dependencies =
+      __webpack_require__.rstest_module_dependencies[dependentId];
+    if (dependencies?.includes(id)) {
+      // Recursively clear dependents
+      __webpack_require__.rstest_clear_dependents(dependentId);
+    }
+  }
+};
 
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id) => {
@@ -61,12 +107,17 @@ __webpack_require__.rstest_require_actual =
 
 // #region rs.mock
 __webpack_require__.rstest_mock = (id, modFactory) => {
-  let requiredModule;
-  try {
-    requiredModule = __webpack_require__(id);
-  } catch {
-    // TODO: non-resolved module
-  } finally {
+  // Only load the module if it's already in cache (to avoid side effects)
+  let requiredModule = __webpack_module_cache__[id]?.exports;
+  const wasAlreadyLoaded = !!requiredModule;
+
+  if (!requiredModule) {
+    // Module hasn't been loaded yet, so we can't get the original
+    // But we still need to save the original factory if it exists
+    __webpack_require__.rstest_original_module_factories[id] =
+      __webpack_modules__[id];
+  } else {
+    // Module was already loaded, save it
     __webpack_require__.rstest_original_modules[id] = requiredModule;
     __webpack_require__.rstest_original_module_factories[id] =
       __webpack_modules__[id];
@@ -81,6 +132,20 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
         '[Rstest] rs.mock() options must be { spy: true } or { mock: true }',
       );
     }
+
+    // For spy/mock options, we need the original module
+    // If it wasn't already loaded, load it now (unavoidable for this feature)
+    if (!wasAlreadyLoaded) {
+      try {
+        requiredModule = __webpack_require__(id);
+      } catch {
+        const optionName = isSpy ? 'spy' : 'mock';
+        throw new Error(
+          `[Rstest] rs.mock('${id}', { ${optionName}: true }) failed: cannot load original module`,
+        );
+      }
+    }
+
     if (!requiredModule) {
       const optionName = isSpy ? 'spy' : 'mock';
       throw new Error(
@@ -114,7 +179,7 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
     };
 
     __webpack_modules__[id] = finalModFactory;
-    delete __webpack_module_cache__[id];
+    __webpack_require__.rstest_clear_dependents(id);
     return;
   }
 
@@ -136,7 +201,16 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
     };
 
     __webpack_modules__[id] = finalModFactory;
-    delete __webpack_module_cache__[id];
+
+    // For Node.js built-in modules (node:*), also set cache directly
+    // so that subsequent imports get the mocked version without re-executing the factory
+    if (typeof id === 'string' && id.startsWith('node:')) {
+      const exports = modFactory();
+      __webpack_require__.r(exports);
+      __webpack_module_cache__[id] = { exports, id, loaded: true };
+    }
+
+    __webpack_require__.rstest_clear_dependents(id);
   }
 };
 // #endregion
@@ -183,16 +257,19 @@ __webpack_require__.rstest_mock_require = (id, modFactory) => {
       mockedModule.default = mockedModule;
     }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
+    __webpack_require__.rstest_clear_dependents(id);
     return;
   }
 
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
   } else if (typeof modFactory === 'function') {
+    // For mockRequire, we directly set the cache since it's meant for CommonJS-style require
     const exports = modFactory();
     __webpack_require__.r(exports);
     __webpack_module_cache__[id] = { exports, id, loaded: true };
   }
+  // Don't clear cache for mockRequire - we want the cached value to persist for require()
 };
 // #endregion
 
@@ -230,24 +307,51 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: isSpy,
       }) || originalModule;
-    // Only mark as ESM if original was ESM
-    if (isEsModule) {
-      __webpack_require__.r(mockedModule);
-    } else if (!('default' in mockedModule)) {
-      // For CJS modules, add default export
-      mockedModule.default = mockedModule;
-    }
-    __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
+
+    const finalModFactory = function (
+      __unused_webpack_module,
+      __webpack_exports__,
+      __webpack_require__,
+    ) {
+      __webpack_require__.r(__webpack_exports__);
+      for (const key in mockedModule) {
+        __webpack_require__.d(__webpack_exports__, {
+          [key]: () => mockedModule[key],
+        });
+      }
+      // For CJS modules, add default export to preserve default-import behavior
+      if (!isEsModule && !('default' in mockedModule)) {
+        __webpack_require__.d(__webpack_exports__, {
+          default: () => mockedModule,
+        });
+      }
+    };
+
+    __webpack_modules__[id] = finalModFactory;
+    __webpack_require__.rstest_clear_dependents(id);
     return;
   }
 
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
   } else if (typeof modFactory === 'function') {
-    const exports = modFactory();
-    __webpack_require__.r(exports);
-    __webpack_module_cache__[id] = { exports, id, loaded: true };
+    const finalModFactory = function (
+      __unused_webpack_module,
+      __webpack_exports__,
+      __webpack_require__,
+    ) {
+      __webpack_require__.r(__webpack_exports__);
+      const res = modFactory();
+      for (const key in res) {
+        __webpack_require__.d(__webpack_exports__, {
+          [key]: () => res[key],
+        });
+      }
+    };
+
+    __webpack_modules__[id] = finalModFactory;
   }
+  __webpack_require__.rstest_clear_dependents(id);
 };
 
 // #region rs.doMockRequire
@@ -284,24 +388,27 @@ __webpack_require__.rstest_do_mock_require = (id, modFactory) => {
       globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
         spy: isSpy,
       }) || originalModule;
-    // Only mark as ESM if original was ESM
+    // For doMockRequire with spy/mock, we set cache directly (CommonJS behavior)
+    // But we also update the factory so future requires get the mock
     if (isEsModule) {
       __webpack_require__.r(mockedModule);
     } else if (!('default' in mockedModule)) {
-      // For CJS modules, add default export
       mockedModule.default = mockedModule;
     }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
+    // Don't clear cache - we want this cached value to persist
     return;
   }
 
   if (typeof modFactory === 'string' || typeof modFactory === 'number') {
     __webpack_module_cache__[id] = { exports: __webpack_require__(modFactory) };
   } else if (typeof modFactory === 'function') {
+    // For mockRequire, we directly set the cache since it's meant for CommonJS-style require
     const exports = modFactory();
     __webpack_require__.r(exports);
     __webpack_module_cache__[id] = { exports, id, loaded: true };
   }
+  // Don't clear cache for doMockRequire - we want the cached value to persist for require()
 };
 
 //#region rs.reset_modules
