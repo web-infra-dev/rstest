@@ -19,7 +19,7 @@ describe('browser mode - no tests', () => {
     });
 
     await expectExecFailed();
-    expect(cli.stdout).toContain('No test files found, exiting with code 1.');
+    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
   });
 
   it('should exit with code 0 when passWithNoTests flag is enabled', async () => {
