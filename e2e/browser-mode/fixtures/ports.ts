@@ -1,6 +1,10 @@
 export const BROWSER_PORTS = {
   basic: 5180,
   'browser-react': 5202,
+  list: 5204,
+  'no-tests': 5206,
+  'entry-override': 5208,
+  env: 5212,
   config: 5184,
   console: 5192,
   'browser-coverage': 5200,
