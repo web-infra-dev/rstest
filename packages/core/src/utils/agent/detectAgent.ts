@@ -80,6 +80,11 @@ export const KNOWN_AGENTS: {
 };
 
 export function determineAgent(): AgentResult {
+  // Allow explicit opt-out of agent detection (e.g., for self-testing)
+  if (process.env.RSTEST_NO_AGENT === '1') {
+    return { isAgent: false, agent: undefined };
+  }
+
   if (process.env.AI_AGENT) {
     const name = process.env.AI_AGENT.trim();
     if (name) {
