@@ -2,35 +2,9 @@
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
 const originalWebpackRequire = __webpack_require__;
-let currentLoadingModule = null; // Track which module is currently loading
 
 __webpack_require__ = new Proxy(
   function (...args) {
-    const moduleId = args[0];
-    const previousLoadingModule = currentLoadingModule;
-
-    // Track dependency: currentLoadingModule depends on moduleId
-    if (currentLoadingModule && moduleId) {
-      if (
-        !__webpack_require__.rstest_module_dependencies[currentLoadingModule]
-      ) {
-        __webpack_require__.rstest_module_dependencies[currentLoadingModule] =
-          [];
-      }
-      if (
-        !__webpack_require__.rstest_module_dependencies[
-          currentLoadingModule
-        ].includes(moduleId)
-      ) {
-        __webpack_require__.rstest_module_dependencies[
-          currentLoadingModule
-        ].push(moduleId);
-      }
-    }
-
-    // Set current module for nested requires
-    currentLoadingModule = moduleId;
-
     try {
       return originalWebpackRequire(...args);
     } catch (e) {
@@ -39,8 +13,6 @@ __webpack_require__ = new Proxy(
         throw new Error(`[Rstest] Cannot find module "${args[0]}"`);
       }
       throw e;
-    } finally {
-      currentLoadingModule = previousLoadingModule;
     }
   },
   {
@@ -60,23 +32,6 @@ __webpack_require__ = new Proxy(
 
 __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_factories = {};
-__webpack_require__.rstest_module_dependencies = {}; // Track which modules depend on which
-
-// Helper to clear a module and all its dependents from cache
-__webpack_require__.rstest_clear_dependents = (id) => {
-  // Clear the module itself
-  delete __webpack_module_cache__[id];
-
-  // Find and clear all modules that depend on this one
-  for (const dependentId in __webpack_require__.rstest_module_dependencies) {
-    const dependencies =
-      __webpack_require__.rstest_module_dependencies[dependentId];
-    if (dependencies?.includes(id)) {
-      // Recursively clear dependents
-      __webpack_require__.rstest_clear_dependents(dependentId);
-    }
-  }
-};
 
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id) => {
@@ -179,7 +134,7 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
     };
 
     __webpack_modules__[id] = finalModFactory;
-    __webpack_require__.rstest_clear_dependents(id);
+    delete __webpack_module_cache__[id];
     return;
   }
 
@@ -201,8 +156,7 @@ __webpack_require__.rstest_mock = (id, modFactory) => {
     };
 
     __webpack_modules__[id] = finalModFactory;
-
-    __webpack_require__.rstest_clear_dependents(id);
+    delete __webpack_module_cache__[id];
   }
 };
 // #endregion
@@ -249,7 +203,6 @@ __webpack_require__.rstest_mock_require = (id, modFactory) => {
       mockedModule.default = mockedModule;
     }
     __webpack_module_cache__[id] = { exports: mockedModule, id, loaded: true };
-    __webpack_require__.rstest_clear_dependents(id);
     return;
   }
 
@@ -320,7 +273,7 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
     };
 
     __webpack_modules__[id] = finalModFactory;
-    __webpack_require__.rstest_clear_dependents(id);
+    delete __webpack_module_cache__[id];
     return;
   }
 
@@ -343,7 +296,7 @@ __webpack_require__.rstest_do_mock = (id, modFactory) => {
 
     __webpack_modules__[id] = finalModFactory;
   }
-  __webpack_require__.rstest_clear_dependents(id);
+  delete __webpack_module_cache__[id];
 };
 
 // #region rs.doMockRequire
