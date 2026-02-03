@@ -94,10 +94,13 @@ import type {
   Reporter,
   RstestTestState,
   SnapshotSummary,
+  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
 } from '../types';
+import { isTTY } from '../utils';
+import { StatusRenderer } from './statusRenderer';
 
 type HeaderOptions = {
   env: boolean;
@@ -840,8 +843,10 @@ const createCodeFrame = (
 export class MdReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
+  private testState: RstestTestState;
   private fileFilters: string[];
   private options: ResolvedOptions;
+  private statusRenderer: StatusRenderer | undefined;
   private logsByTestPath = new Map<string, string[]>();
 
   constructor({
@@ -859,9 +864,41 @@ export class MdReporter implements Reporter {
   }) {
     this.rootPath = rootPath;
     this.config = config;
-    void testState;
+    this.testState = testState;
     this.fileFilters = fileFilters ?? [];
     this.options = resolveOptions(options);
+  }
+
+  /** Lazily enable a minimal TTY overview window. */
+  private ensureStatusRenderer(): void {
+    if (this.statusRenderer) return;
+    if (!isTTY()) return;
+
+    this.statusRenderer = new StatusRenderer(
+      this.rootPath,
+      this.testState,
+      undefined,
+      {
+        showRunningModules: false,
+      },
+    );
+  }
+
+  onTestFileStart(_test: TestFileInfo): void {
+    this.ensureStatusRenderer();
+    this.statusRenderer?.onTestFileStart();
+  }
+
+  onTestCaseResult(_result: TestResult): void {
+    this.statusRenderer?.onTestCaseResult();
+  }
+
+  onTestFileResult(_test: TestFileResult): void {
+    this.statusRenderer?.onTestFileResult();
+  }
+
+  onExit(): void {
+    this.statusRenderer?.clear();
   }
 
   private isFocusedRun({
@@ -1007,6 +1044,8 @@ export class MdReporter implements Reporter {
     unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
+    this.statusRenderer?.clear();
+
     const rootPath = this.rootPath || process.cwd();
     const failures = collectFailures({
       results,

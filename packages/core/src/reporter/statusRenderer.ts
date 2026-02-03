@@ -24,13 +24,18 @@ export class StatusRenderer {
   private renderer: WindowRenderer;
   private startTime: number | undefined = undefined;
   private testState: RstestTestState;
+  private showRunningModules: boolean;
 
   constructor(
     rootPath: string,
     state: RstestTestState,
     logger?: WindowRendererOptions['logger'],
+    options?: {
+      showRunningModules?: boolean;
+    },
   ) {
     this.rootPath = rootPath;
+    this.showRunningModules = options?.showRunningModules ?? true;
     this.renderer = new WindowRenderer({
       getWindow: () => this.getContent(),
       logger: logger ?? {
@@ -58,23 +63,25 @@ export class StatusRenderer {
       );
     };
 
-    for (const [module, { runningTests }] of runningModules.entries()) {
-      const relativePath = relative(this.rootPath, module);
-      summary.push(
-        `${bgColor('bgYellow', ' RUNS ')} ${prettyTestPath(relativePath)}`,
-      );
-      if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
-        let caseLog = ` ${color.gray(POINTER)} ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
+    if (this.showRunningModules) {
+      for (const [module, { runningTests }] of runningModules.entries()) {
+        const relativePath = relative(this.rootPath, module);
+        summary.push(
+          `${bgColor('bgYellow', ' RUNS ')} ${prettyTestPath(relativePath)}`,
+        );
+        if (runningTests.length && shouldDisplayRunningTests(runningTests)) {
+          let caseLog = ` ${color.gray(POINTER)} ${getTaskNameWithPrefix(runningTests[0]!)} ${color.magenta(prettyTime(now - runningTests[0]!.startTime!))}`;
 
-        if (runningTests.length > 1) {
-          caseLog += color.gray(` and ${runningTests.length - 1} more cases`);
+          if (runningTests.length > 1) {
+            caseLog += color.gray(` and ${runningTests.length - 1} more cases`);
+          }
+
+          summary.push(caseLog);
         }
-
-        summary.push(caseLog);
       }
-    }
 
-    summary.push('');
+      summary.push('');
+    }
 
     if (testModules.length === 0) {
       summary.push(`${TestFileSummaryLabel} ${runningModules.size} total`);
