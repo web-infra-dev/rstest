@@ -36,8 +36,6 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'hideSkippedTests'
-  | 'hideSkippedTestFiles'
   | 'bail'
   | 'shard'
 >;

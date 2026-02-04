@@ -179,6 +179,11 @@ export class Rstest implements RstestContext {
           },
         ];
 
+    // Create a map of project name to project config for reporters
+    const projectConfigs = new Map(
+      this.projects.map((p) => [p.name, p.normalizedConfig]),
+    );
+
     const reporters =
       command !== 'list'
         ? createReporters(rstestConfig.reporters, {
@@ -186,6 +191,7 @@ export class Rstest implements RstestContext {
             config: rstestConfig,
             testState: this.testState,
             fileFilters: this.fileFilters,
+            projectConfigs,
             options: {
               showProjectName: projects.length > 1,
             },
