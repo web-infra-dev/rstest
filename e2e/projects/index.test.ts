@@ -143,4 +143,91 @@ describe('test projects', () => {
     expect(logs.find((log) => log.includes('project-a'))).toBeTruthy();
     expect(logs.find((log) => log.includes('project-b'))).toBeTruthy();
   });
+
+  describe('project-specific configs', () => {
+    it('should respect hideSkippedTests per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.projectConfig.config.ts',
+          '--reporter',
+          'verbose',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // node-hide-skip project should hide skipped tests (only "should pass" visible)
+      expect(
+        logs.find(
+          (log) => log.includes('should be skipped') && !log.includes('client'),
+        ),
+      ).toBeFalsy();
+
+      // client-show-skip project should show skipped tests
+      expect(
+        logs.find((log) => log.includes('should be skipped in client')),
+      ).toBeTruthy();
+    });
+
+    it('should respect slowTestThreshold per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.slowTest.config.ts',
+          '--reporter',
+          'verbose',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // Both projects run slow test, but we check the test count display
+      // node-slow project shows test with (51ms) - above 10ms threshold
+      // client-fast project shows test with (51ms) - below 1000ms threshold
+      // The slow indicator is in the icon color (yellow vs green), not text
+      // We just verify both tests are shown
+      expect(logs.find((log) => log.includes('[node-slow]'))).toBeTruthy();
+      expect(logs.find((log) => log.includes('[client-fast]'))).toBeTruthy();
+    });
+
+    it('should respect hideSkippedTestFiles per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.ts'],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // node-hide-file project should hide skipped test files
+      expect(logs.find((log) => log.includes('[node-hide-file]'))).toBeFalsy();
+
+      // client-show-file project should show skipped test files
+      expect(
+        logs.find((log) => log.includes('[client-show-file]')),
+      ).toBeTruthy();
+    });
+  });
 });

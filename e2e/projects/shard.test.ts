@@ -13,7 +13,7 @@ describe('test projects sharding', () => {
       args: ['run', '--shard', '1/2', '--globals'],
       options: {
         nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
+          cwd: join(__dirname, 'fixtures-shard'),
         },
       },
     });
@@ -47,7 +47,7 @@ describe('test projects sharding', () => {
       args: ['run', '--shard', '2/2', '--globals'],
       options: {
         nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
+          cwd: join(__dirname, 'fixtures-shard'),
         },
       },
     });
@@ -84,7 +84,7 @@ describe('test projects sharding', () => {
         args: ['run', '--shard', '7/7', '--globals'], // Total 6 test files, so 7th shard is empty
         options: {
           nodeOptions: {
-            cwd: join(__dirname, 'fixtures'),
+            cwd: join(__dirname, 'fixtures-shard'),
           },
         },
       },

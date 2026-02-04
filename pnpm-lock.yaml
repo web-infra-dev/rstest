@@ -307,6 +307,77 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/coverage-istanbul
 
+  e2e/projects/fixtures-shard:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../packages/coverage-istanbul
+
+  e2e/projects/fixtures-shard/packages/client:
+    dependencies:
+      react:
+        specifier: ^19.2.3
+        version: 19.2.3
+      react-dom:
+        specifier: ^19.2.3
+        version: 19.2.3(react@19.2.3)
+    devDependencies:
+      '@rsbuild/core':
+        specifier: ^1.7.3
+        version: 1.7.3
+      '@rsbuild/plugin-react':
+        specifier: ^1.4.2
+        version: 1.4.2(@rsbuild/core@1.7.3)
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.1
+        version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@types/react':
+        specifier: ^19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.7)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  e2e/projects/fixtures-shard/packages/client-vue:
+    dependencies:
+      vue:
+        specifier: ^3.5.26
+        version: 3.5.26(typescript@5.9.3)
+    devDependencies:
+      '@rsbuild/core':
+        specifier: ^1.7.3
+        version: 1.7.3
+      '@rsbuild/plugin-vue':
+        specifier: ^1.2.2
+        version: 1.2.2(@rsbuild/core@1.7.3)(@swc/core@1.15.7(@swc/helpers@0.5.18))(vue@3.5.26(typescript@5.9.3))
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../../packages/core
+      '@vue/compiler-dom':
+        specifier: ^3.5.26
+        version: 3.5.26
+      '@vue/server-renderer':
+        specifier: ^3.5.26
+        version: 3.5.26(vue@3.5.26(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.6
+        version: 2.4.6(@vue/compiler-dom@3.5.26)(@vue/server-renderer@3.5.26(vue@3.5.26(typescript@5.9.3)))(vue@3.5.26(typescript@5.9.3))
+
   e2e/projects/fixtures/packages/client:
     dependencies:
       react:
