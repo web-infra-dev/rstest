@@ -54,9 +54,19 @@ __webpack_require__.rstest_do_unmock = __webpack_require__.rstest_unmock;
 __webpack_require__.rstest_require_actual =
   __webpack_require__.rstest_import_actual = (id) => {
     const originalModule = __webpack_require__.rstest_original_modules[id];
+
+    if (originalModule) {
+      return originalModule;
+    }
+    if (id in __webpack_require__.rstest_original_module_factories) {
+      const mod = __webpack_require__.rstest_original_module_factories[id];
+      const moduleInstance = { exports: {} };
+      mod(moduleInstance, moduleInstance.exports, __webpack_require__);
+      __webpack_require__.rstest_original_modules[id] = moduleInstance.exports;
+      return moduleInstance.exports;
+    }
     // Use fallback module if the module is not mocked.
-    const fallbackMod = __webpack_require__(id);
-    return originalModule ? originalModule : fallbackMod;
+    return __webpack_require__(id);
   };
 //#endregion
 
