@@ -271,6 +271,9 @@ export async function prepareFixtures({
   await fs.promises.cp(fixturesPath, distPath, {
     recursive: true,
     force: true,
+    // Exclude temp fixture directories created by other parallel tests
+    // to avoid race conditions (e.g., ENOENT when a directory is deleted mid-copy)
+    filter: (src) => !path.basename(src).startsWith('fixtures-test-'),
   });
 
   const update = (
