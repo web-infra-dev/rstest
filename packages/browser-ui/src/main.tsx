@@ -1,5 +1,11 @@
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -14,6 +20,8 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
   SnapshotRpcRequest,
   SnapshotRpcResponse,
   TestFileInfo,
@@ -50,6 +58,24 @@ const iframeUrlFor = (
     url.searchParams.set('testNamePattern', testNamePattern);
   }
   return url.toString();
+};
+
+const formatRpcError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error) {
+    const msg = (error as { message?: unknown }).message;
+    if (typeof msg === 'string') {
+      return msg;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      // ignore
+    }
+  }
+  return String(error);
 };
 
 // ============================================================================
@@ -211,6 +237,45 @@ const BrowserRunner: React.FC<{
     handleReloadTestFile,
   );
 
+  const pendingBrowserRpc = useRef<
+    Array<{ request: BrowserRpcRequest; sourceWindow: Window }>
+  >([]);
+
+  const flushPendingBrowserRpc = useCallback(async () => {
+    if (!rpc) {
+      return;
+    }
+    const queue = pendingBrowserRpc.current.splice(0);
+    if (queue.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      queue.map(async ({ request, sourceWindow }) => {
+        const sendResponse = (response: BrowserRpcResponse) => {
+          sourceWindow.postMessage(
+            { type: '__rstest_browser_rpc_response__', payload: response },
+            '*',
+          );
+        };
+
+        try {
+          const result = await rpc.dispatchBrowserRpc(request);
+          sendResponse({ id: request.id, result });
+        } catch (error) {
+          sendResponse({
+            id: request.id,
+            error: formatRpcError(error),
+          });
+        }
+      }),
+    );
+  }, [rpc]);
+
+  useEffect(() => {
+    void flushPendingBrowserRpc();
+  }, [flushPendingBrowserRpc]);
+
   // Consolidated effect for handling testFiles changes
   // Handles statusMap, caseMap, openFiles initialization and cleanup
   useEffect(() => {
@@ -330,6 +395,10 @@ const BrowserRunner: React.FC<{
           };
           const testPath = payload.testPath;
           if (typeof testPath === 'string') {
+            // Ensure the currently running file's iframe is visible.
+            // Playwright-style assertions and actions rely on layout visibility,
+            // and hidden iframes would make `toBeVisible()`/click hang.
+            setActive(testPath);
             setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
             setCaseMap((prev) => {
               const prevFile = prev[testPath] ?? {};
@@ -450,7 +519,45 @@ const BrowserRunner: React.FC<{
             } catch (error) {
               sendResponse({
                 id: request.id,
-                error: error instanceof Error ? error.message : String(error),
+                error: formatRpcError(error),
+              });
+            }
+          })();
+        } else if (message?.type === 'browser-rpc-request') {
+          const request = message.payload as BrowserRpcRequest;
+          const sourceWindow = event.source as Window | null;
+
+          if (!sourceWindow) {
+            return;
+          }
+
+          logger.debug(
+            '[Container] browser-rpc-request:',
+            request.kind,
+            request.method,
+          );
+
+          if (!rpc) {
+            logger.debug('[Container] browser-rpc queued (rpc not ready)');
+            pendingBrowserRpc.current.push({ request, sourceWindow });
+            return;
+          }
+
+          const sendResponse = (response: BrowserRpcResponse) => {
+            sourceWindow.postMessage(
+              { type: '__rstest_browser_rpc_response__', payload: response },
+              '*',
+            );
+          };
+
+          (async () => {
+            try {
+              const result = await rpc.dispatchBrowserRpc(request);
+              sendResponse({ id: request.id, result });
+            } catch (error) {
+              sendResponse({
+                id: request.id,
+                error: formatRpcError(error),
               });
             }
           })();

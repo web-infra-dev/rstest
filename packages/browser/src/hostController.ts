@@ -30,14 +30,22 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
 import * as picomatch from 'picomatch';
-import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
+  BrowserRpcRequest,
   TestFileInfo,
 } from './protocol';
+import {
+  type BrowserProvider,
+  type BrowserProviderBrowser,
+  type BrowserProviderContext,
+  type BrowserProviderImplementation,
+  type BrowserProviderPage,
+  getBrowserProviderImplementation,
+} from './providers';
 
 const { createRsbuild, rspack } = rsbuild;
 type RsbuildDevServer = rsbuild.RsbuildDevServer;
@@ -53,14 +61,15 @@ type VirtualModulesPluginInstance = InstanceType<
   (typeof rspack.experiments)['VirtualModulesPlugin']
 >;
 
-type PlaywrightModule = typeof import('playwright');
-type BrowserType = PlaywrightModule['chromium'];
-type BrowserInstance = Awaited<ReturnType<BrowserType['launch']>>;
-
 type BrowserProjectEntries = {
   project: ProjectContext;
   setupFiles: string[];
   testFiles: string[];
+};
+
+type BrowserProviderProject = {
+  rootPath: string;
+  provider: BrowserProvider;
 };
 
 /** Payload for test file start event */
@@ -99,6 +108,8 @@ type HostRpcMethods = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Browser API proxy operations
+  dispatchBrowserRpc: (request: BrowserRpcRequest) => Promise<unknown>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
@@ -224,14 +235,14 @@ class ContainerRpcManager {
 type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
-  browser: BrowserInstance;
+  browser: BrowserProviderBrowser;
   port: number;
   wsPort: number;
   manifestPath: string;
   tempDir: string;
   manifestPlugin: VirtualModulesPluginInstance;
-  containerPage?: Page;
-  containerContext?: BrowserContext;
+  containerPage?: BrowserProviderPage;
+  containerContext?: BrowserProviderContext;
   setContainerOptions: (options: BrowserHostConfig) => void;
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
@@ -517,6 +528,30 @@ const getRuntimeConfigFromProject = (
 const getBrowserProjects = (context: Rstest): ProjectContext[] => {
   return context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
+  );
+};
+
+const resolveProviderForTestPath = ({
+  testPath,
+  browserProjects,
+}: {
+  testPath: string;
+  browserProjects: BrowserProviderProject[];
+}): BrowserProvider => {
+  const normalizedTestPath = normalize(testPath);
+  const sortedProjects = [...browserProjects].sort(
+    (a, b) => b.rootPath.length - a.rootPath.length,
+  );
+
+  for (const project of sortedProjects) {
+    if (normalizedTestPath.startsWith(project.rootPath)) {
+      return project.provider;
+    }
+  }
+
+  throw new Error(
+    `Cannot resolve browser provider for test path: ${JSON.stringify(testPath)}. ` +
+      `Known project roots: ${JSON.stringify(sortedProjects.map((p) => p.rootPath))}`,
   );
 };
 
@@ -835,6 +870,8 @@ const createBrowserRuntime = async ({
     '@rstest/browser-manifest': manifestPath,
     // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
+    // User test code: import { page } from '@rstest/browser'
+    '@rstest/browser': resolveBrowserFile('browser.ts'),
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/browser-runtime': browserRuntimePath,
@@ -1151,49 +1188,32 @@ const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  let browserLauncher: BrowserType;
-  const browserName = browserConfig.browser;
+  const browserName = browserConfig.browser ?? 'chromium';
   try {
-    const playwright = await import('playwright');
-    browserLauncher = playwright[browserName];
-  } catch (_error) {
-    wss.close();
-    await devServer.close();
-    throw _error;
-  }
-
-  let browser: BrowserInstance;
-  try {
-    browser = await browserLauncher.launch({
+    const providerImplementation = getBrowserProviderImplementation(
+      browserConfig.provider,
+    );
+    const runtime = await providerImplementation.launchRuntime({
+      browserName,
       headless: forceHeadless ?? browserConfig.headless,
-      // Chromium-specific args (ignored by other browsers)
-      args:
-        browserName === 'chromium'
-          ? [
-              '--disable-popup-blocking',
-              '--no-first-run',
-              '--no-default-browser-check',
-            ]
-          : undefined,
     });
+    return {
+      rsbuildInstance,
+      devServer,
+      browser: runtime.browser,
+      port,
+      wsPort,
+      manifestPath,
+      tempDir,
+      manifestPlugin: virtualManifestPlugin,
+      setContainerOptions,
+      wss,
+    };
   } catch (_error) {
     wss.close();
     await devServer.close();
     throw _error;
   }
-
-  return {
-    rsbuildInstance,
-    devServer,
-    browser,
-    port,
-    wsPort,
-    manifestPath,
-    tempDir,
-    manifestPlugin: virtualManifestPlugin,
-    setContainerOptions,
-    wss,
-  };
 };
 
 async function resolveProjectEntries(
@@ -1367,6 +1387,24 @@ export const runBrowserController = async (
   // Only include browser mode projects in runtime configs
   // Normalize projectRoot to posix format for cross-platform compatibility
   const browserProjectsForRuntime = getBrowserProjects(context);
+  const implementationByProvider = new Map<
+    BrowserProvider,
+    BrowserProviderImplementation
+  >();
+  for (const project of browserProjectsForRuntime) {
+    const provider = project.normalizedConfig.browser.provider;
+    if (!implementationByProvider.has(provider)) {
+      implementationByProvider.set(
+        provider,
+        getBrowserProviderImplementation(provider),
+      );
+    }
+  }
+  const browserProviderProjects: BrowserProviderProject[] =
+    browserProjectsForRuntime.map((project) => ({
+      rootPath: normalize(project.rootPath),
+      provider: project.normalizedConfig.browser.provider,
+    }));
   const projectRuntimeConfigs: BrowserProjectRuntime[] =
     browserProjectsForRuntime.map((project: ProjectContext) => ({
       name: project.name,
@@ -1410,8 +1448,8 @@ export const runBrowserController = async (
   });
 
   // Open a container page for user to view (reuse in watch mode)
-  let containerContext: BrowserContext;
-  let containerPage: Page;
+  let containerContext: BrowserProviderContext;
+  let containerPage: BrowserProviderPage;
   let isNewPage = false;
 
   if (isWatchMode && runtime.containerPage && runtime.containerContext) {
@@ -1426,11 +1464,11 @@ export const runBrowserController = async (
     containerPage = await containerContext.newPage();
 
     // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: Page) => {
+    containerPage.on('popup', async (popup: BrowserProviderPage) => {
       await popup.close().catch(() => {});
     });
 
-    containerContext.on('page', async (page: Page) => {
+    containerContext.on('page', async (page: BrowserProviderPage) => {
       if (page !== containerPage) {
         await page.close().catch(() => {});
       }
@@ -1442,7 +1480,7 @@ export const runBrowserController = async (
     }
 
     // Forward browser console to terminal
-    containerPage.on('console', (msg: ConsoleMessage) => {
+    containerPage.on('console', (msg) => {
       const text = msg.text();
       if (text.includes('[Container]') || text.includes('[Runner]')) {
         logger.log(color.gray(`[Browser Console] ${text}`));
@@ -1559,6 +1597,36 @@ export const runBrowserController = async (
         await fs.unlink(filepath);
       } catch {
         // ignore if file doesn't exist
+      }
+    },
+
+    async dispatchBrowserRpc(request: BrowserRpcRequest) {
+      if (!containerPage) {
+        throw new Error('Browser container page is not initialized');
+      }
+      const timeoutFallbackMs = context.normalizedConfig.testTimeout ?? 5000;
+      const provider = resolveProviderForTestPath({
+        testPath: request.testPath,
+        browserProjects: browserProviderProjects,
+      });
+      const implementation = implementationByProvider.get(provider);
+      if (!implementation) {
+        throw new Error(
+          `Browser provider implementation not found: ${provider}`,
+        );
+      }
+      try {
+        return await implementation.dispatchRpc({
+          containerPage,
+          request,
+          timeoutFallbackMs,
+        });
+      } catch (error) {
+        // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
+        if (error instanceof Error) {
+          throw error.message;
+        }
+        throw String(error);
       }
     },
   });
@@ -1781,6 +1849,7 @@ export const listBrowserTests = async (
     manifestPath,
     entries: projectEntries,
   });
+  const browserProjects = getBrowserProjects(context);
 
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
@@ -1796,9 +1865,14 @@ export const listBrowserTests = async (
       forceHeadless: true, // Always use headless for list command
     });
   } catch (error) {
+    const providers = [
+      ...new Set(
+        browserProjects.map((p) => p.normalizedConfig.browser.provider),
+      ),
+    ];
     logger.error(
       color.red(
-        'Failed to load Playwright. Please install "playwright" to use browser mode.',
+        `Failed to initialize browser provider runtime (${providers.join(', ')}).`,
       ),
       error,
     );
@@ -1809,7 +1883,6 @@ export const listBrowserTests = async (
 
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
-  const browserProjects = getBrowserProjects(context);
   const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
     (project: ProjectContext) => ({
       name: project.name,

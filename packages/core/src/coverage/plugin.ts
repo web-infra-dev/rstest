@@ -10,7 +10,10 @@ export const pluginCoverageCore: (
     api.onBeforeDevCompile(({ isFirstCompile }) => {
       if (isFirstCompile && coverageOptions.clean) {
         if (fs.existsSync(coverageOptions.reportsDirectory)) {
-          fs.rmSync(coverageOptions.reportsDirectory, { recursive: true });
+          fs.rmSync(coverageOptions.reportsDirectory, {
+            recursive: true,
+            force: true,
+          });
         }
       }
     });
