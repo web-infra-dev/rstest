@@ -716,6 +716,11 @@ const htmlTemplate = `<!DOCTYPE html>
 </html>
 `;
 
+// Workaround for noisy "removed ..." logs caused by VirtualModulesPlugin.
+// Rsbuild suppresses the removed-file log if all removed paths include "virtual":
+// https://github.com/web-infra-dev/rsbuild/blob/1258fa9dba5c321a4629b591a6dadbd2e26c6963/packages/core/src/createCompiler.ts#L73-L76
+const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
+
 // ============================================================================
 // Browser Runtime Lifecycle
 // ============================================================================
@@ -1296,8 +1301,8 @@ export const runBrowserController = async (
             'browser',
             Date.now().toString(),
           );
-  const manifestPath = join(tempDir, 'manifest.ts');
 
+  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
   const manifestSource = generateManifestModule({
     manifestPath,
     entries: projectEntries,
@@ -1769,8 +1774,8 @@ export const listBrowserTests = async (
     'browser',
     `list-${Date.now()}`,
   );
-  const manifestPath = join(tempDir, 'manifest.ts');
 
+  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
   const manifestSource = generateManifestModule({
     manifestPath,
     entries: projectEntries,
