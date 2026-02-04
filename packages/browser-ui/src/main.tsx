@@ -1,5 +1,11 @@
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -8,13 +14,20 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
+import {
+  canPostMessageSource,
+  createStaleBrowserRpcResponse,
+  isStaleBrowserRpcRequest,
+} from './core/browserRpc';
 import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunnerUrl } from './core/runtime';
+import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
   FatalPayload,
   LogPayload,
   SnapshotRpcRequest,
@@ -40,6 +53,22 @@ const getDisplayName = (testFile: string): string => {
   return parts[parts.length - 1] || testFile;
 };
 
+const formatRpcError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
+
+const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
+  try {
+    const url = new URL(frame.src, window.location.href);
+    return url.searchParams.get('runId') ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 // ============================================================================
 // App Component
 // ============================================================================
@@ -61,6 +90,9 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
+  const [runIdByTestFile, setRunIdByTestFile] = useState<
+    Record<string, string>
+  >({});
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -172,6 +204,11 @@ const BrowserRunner: React.FC<{
       );
       logger.debug('[Container] Found iframe:', iframe);
       if (iframe) {
+        const nextRunId = createRunId();
+        setRunIdByTestFile((prev) => ({
+          ...prev,
+          [testFile]: nextRunId,
+        }));
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
           const prevFile = prev[testFile] ?? {};
@@ -185,6 +222,8 @@ const BrowserRunner: React.FC<{
           testFile,
           options.runnerUrl,
           testNamePattern,
+          false,
+          nextRunId,
         );
         logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
@@ -198,6 +237,56 @@ const BrowserRunner: React.FC<{
     options?.wsPort,
     handleReloadTestFile,
   );
+
+  const pendingBrowserRpc = useRef<
+    Array<{ request: BrowserRpcRequest; sourceWindow: Window }>
+  >([]);
+  const runIdByTestFileRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    runIdByTestFileRef.current = runIdByTestFile;
+  }, [runIdByTestFile]);
+
+  const flushPendingBrowserRpc = useCallback(async () => {
+    if (!rpc) {
+      return;
+    }
+    const queue = pendingBrowserRpc.current.splice(0);
+    if (queue.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      queue.map(async ({ request, sourceWindow }) => {
+        const sendResponse = (response: BrowserRpcResponse) => {
+          sourceWindow.postMessage(
+            { type: '__rstest_browser_rpc_response__', payload: response },
+            '*',
+          );
+        };
+
+        const currentRunId = runIdByTestFileRef.current[request.testPath];
+        if (isStaleBrowserRpcRequest(request, currentRunId)) {
+          sendResponse(createStaleBrowserRpcResponse(request, currentRunId));
+          return;
+        }
+
+        try {
+          const result = await rpc.dispatchBrowserRpc(request);
+          sendResponse({ id: request.id, result });
+        } catch (error) {
+          sendResponse({
+            id: request.id,
+            error: formatRpcError(error),
+          });
+        }
+      }),
+    );
+  }, [rpc]);
+
+  useEffect(() => {
+    void flushPendingBrowserRpc();
+  }, [flushPendingBrowserRpc]);
 
   // Consolidated effect for handling testFiles changes
   // Handles statusMap, caseMap, openFiles initialization and cleanup
@@ -216,6 +305,14 @@ const BrowserRunner: React.FC<{
       const next: Record<string, Record<string, CaseInfo>> = {};
       for (const file of testFiles) {
         next[file.testPath] = prev[file.testPath] ?? {};
+      }
+      return next;
+    });
+
+    setRunIdByTestFile((prev) => {
+      const next: Record<string, string> = {};
+      for (const file of testFiles) {
+        next[file.testPath] = prev[file.testPath] ?? createRunId();
       }
       return next;
     });
@@ -387,11 +484,36 @@ const BrowserRunner: React.FC<{
           message.payload as SnapshotRpcRequest,
           event.source,
         );
+      } else if (message.type === 'browser-rpc-request') {
+        const sourceWindow = event.source;
+        if (!canPostMessageSource(sourceWindow)) {
+          return;
+        }
+
+        const request = message.payload as BrowserRpcRequest;
+        const sendResponse = (response: BrowserRpcResponse) => {
+          sourceWindow.postMessage(
+            { type: '__rstest_browser_rpc_response__', payload: response },
+            '*',
+          );
+        };
+
+        const currentRunId = runIdByTestFileRef.current[request.testPath];
+        if (isStaleBrowserRpcRequest(request, currentRunId)) {
+          sendResponse(createStaleBrowserRpcResponse(request, currentRunId));
+          return;
+        }
+
+        pendingBrowserRpc.current.push({
+          request,
+          sourceWindow,
+        });
+        void flushPendingBrowserRpc();
       }
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase, mapCaseStatus, rpc]);
+  }, [active, upsertCase, mapCaseStatus, rpc, flushPendingBrowserRpc]);
 
   // Computed values - case level statistics
   const caseCounts = useMemo(() => {
@@ -629,6 +751,10 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
+                  const runId = runIdByTestFile[fileInfo.testPath];
+                  if (!runId) {
+                    return null;
+                  }
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -638,6 +764,7 @@ const BrowserRunner: React.FC<{
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
                     const frame = event.currentTarget;
+                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
@@ -645,6 +772,7 @@ const BrowserRunner: React.FC<{
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,
+                            runId: frameRunId,
                           },
                         },
                         '*',
@@ -685,6 +813,9 @@ const BrowserRunner: React.FC<{
                           src={createRunnerUrl(
                             fileInfo.testPath,
                             options.runnerUrl,
+                            undefined,
+                            false,
+                            runId,
                           )}
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}

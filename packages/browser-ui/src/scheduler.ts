@@ -1,6 +1,12 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
+import {
+  canPostMessageSource,
+  createStaleBrowserRpcResponse,
+  isStaleBrowserRpcRequest,
+} from './core/browserRpc';
 import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
 import {
+  createRunId,
   createRunnerUrl,
   createWebSocketUrl,
   RECONNECT_DELAYS,
@@ -10,6 +16,8 @@ import type {
   BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
   ContainerRPC,
   FatalPayload,
   HostRPC,
@@ -37,10 +45,20 @@ let reconnectAttempt = 0;
 let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 const iframeMap = new Map<string, HTMLIFrameElement>();
 const fileProjectMap = new Map<string, string>();
+const fileRunIdMap = new Map<string, string>();
 
 const debugLog = (...args: unknown[]) => {
   if (debug) {
     console.log('[Scheduler]', ...args);
+  }
+};
+
+const setActiveRunnerFrame = (testFile: string): void => {
+  for (const [path, frame] of iframeMap.entries()) {
+    const isActive = path === testFile;
+    frame.style.opacity = isActive ? '1' : '0';
+    frame.style.pointerEvents = isActive ? 'auto' : 'none';
+    frame.style.zIndex = isActive ? '1' : '0';
   }
 };
 
@@ -77,6 +95,8 @@ const resolveViewport = (
 
 const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
   const projectName = fileProjectMap.get(testFile) || '';
+  const runId = fileRunIdMap.get(testFile) || createRunId();
+  fileRunIdMap.set(testFile, runId);
   frame.contentWindow?.postMessage(
     {
       type: 'RSTEST_CONFIG',
@@ -84,6 +104,7 @@ const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
         ...options,
         testFile,
         projectName,
+        runId,
       },
     },
     '*',
@@ -91,6 +112,9 @@ const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
 };
 
 const mountRunner = (testFile: string, testNamePattern?: string): void => {
+  const runId = createRunId();
+  fileRunIdMap.set(testFile, runId);
+
   let iframe = iframeMap.get(testFile);
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -109,6 +133,8 @@ const mountRunner = (testFile: string, testNamePattern?: string): void => {
     iframeMap.set(testFile, iframe);
   }
 
+  setActiveRunnerFrame(testFile);
+
   const viewport = resolveViewport(testFile);
   if (viewport) {
     iframe.style.width = `${viewport.width}px`;
@@ -123,6 +149,7 @@ const mountRunner = (testFile: string, testNamePattern?: string): void => {
     options?.runnerUrl,
     testNamePattern,
     true,
+    runId,
   );
 };
 
@@ -133,6 +160,7 @@ const unmountRemovedFiles = (nextFiles: TestFileInfo[]): void => {
       frame.remove();
       iframeMap.delete(testFile);
       fileProjectMap.delete(testFile);
+      fileRunIdMap.delete(testFile);
     }
   }
 };
@@ -159,7 +187,11 @@ const forwardClientMessage = async (
   try {
     switch (message.type) {
       case 'file-start':
-        await rpc.onTestFileStart(message.payload as TestFileStartPayload);
+        {
+          const payload = message.payload as TestFileStartPayload;
+          setActiveRunnerFrame(payload.testPath);
+          await rpc.onTestFileStart(payload);
+        }
         break;
       case 'case-result':
         await rpc.onTestCaseResult(message.payload as BrowserClientTestResult);
@@ -276,6 +308,47 @@ window.addEventListener('message', (event: MessageEvent) => {
       message.payload as SnapshotRpcRequest,
       event.source,
     );
+    return;
+  }
+  if (message.type === 'browser-rpc-request') {
+    if (!canPostMessageSource(event.source)) {
+      return;
+    }
+
+    const request = message.payload as BrowserRpcRequest;
+    const sourceWindow = event.source;
+    const sendResponse = (response: BrowserRpcResponse) => {
+      sourceWindow.postMessage(
+        { type: '__rstest_browser_rpc_response__', payload: response },
+        '*',
+      );
+    };
+
+    const currentRunId = fileRunIdMap.get(request.testPath);
+    if (isStaleBrowserRpcRequest(request, currentRunId)) {
+      sendResponse(createStaleBrowserRpcResponse(request, currentRunId));
+      return;
+    }
+
+    if (!rpc) {
+      sendResponse({
+        id: request.id,
+        error: 'Scheduler host RPC is not connected yet.',
+      });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const result = await rpc.dispatchBrowserRpc(request);
+        sendResponse({ id: request.id, result });
+      } catch (error) {
+        sendResponse({
+          id: request.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
     return;
   }
   void forwardClientMessage(message);

@@ -6,6 +6,17 @@ import type {
   TestResult,
 } from '@rstest/core/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { BrowserRpcRequest, SnapshotRpcRequest } from './rpcProtocol';
+
+export type {
+  BrowserLocatorIR,
+  BrowserLocatorStep,
+  BrowserLocatorText,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+  SnapshotRpcRequest,
+  SnapshotRpcResponse,
+} from './rpcProtocol';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
@@ -47,6 +58,11 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /**
+   * Per-run identifier assigned by the container.
+   * Used by browser RPC calls to prevent stale requests from previous reruns.
+   */
+  runId?: string;
   /**
    * Base URL for runner (iframe) pages.
    */
@@ -103,39 +119,9 @@ export type BrowserClientMessage =
   | {
       type: 'snapshot-rpc-request';
       payload: SnapshotRpcRequest;
+    }
+  // Browser API RPC requests (from runner iframe to container)
+  | {
+      type: 'browser-rpc-request';
+      payload: BrowserRpcRequest;
     };
-
-/**
- * Snapshot RPC request from runner iframe.
- * The container will forward these to the host via WebSocket RPC.
- */
-export type SnapshotRpcRequest =
-  | {
-      id: string;
-      method: 'resolveSnapshotPath';
-      args: { testPath: string };
-    }
-  | {
-      id: string;
-      method: 'readSnapshotFile';
-      args: { filepath: string };
-    }
-  | {
-      id: string;
-      method: 'saveSnapshotFile';
-      args: { filepath: string; content: string };
-    }
-  | {
-      id: string;
-      method: 'removeSnapshotFile';
-      args: { filepath: string };
-    };
-
-/**
- * Snapshot RPC response from container to runner iframe.
- */
-export type SnapshotRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
-};

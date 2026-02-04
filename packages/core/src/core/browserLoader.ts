@@ -10,7 +10,7 @@ import { color, logger } from '../utils';
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 
 /**
- * Type definition for the @rstest/browser package exports.
+ * Type definition for the @rstest/browser internal exports.
  */
 export interface BrowserModule {
   validateBrowserConfig: (context: unknown) => void;
@@ -38,7 +38,7 @@ export interface LoadBrowserModuleOptions {
 }
 
 /**
- * Load @rstest/browser package with version validation.
+ * Load @rstest/browser internal module with version validation.
  * Throws an error if the package is not installed or version mismatches.
  *
  * Resolution strategy (in order):
@@ -73,7 +73,7 @@ export async function loadBrowserModule(
   for (const base of uniqueBases) {
     try {
       const userRequire = createRequire(base);
-      const browserPath = userRequire.resolve('@rstest/browser');
+      const browserPath = userRequire.resolve('@rstest/browser/internal');
       const browserPkgPath = userRequire.resolve(
         '@rstest/browser/package.json',
       );
