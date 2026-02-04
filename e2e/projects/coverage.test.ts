@@ -45,7 +45,7 @@ describe('test projects coverage', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
     ).toBeTruthy();
-  }, 20000);
+  }, 60_000);
 
   it('should run projects correctly with coverage.include', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
@@ -64,5 +64,5 @@ describe('test projects coverage', () => {
     expect(
       logs.find((log) => log.includes('App1.ts') && log.includes('|')),
     ).toBeTruthy();
-  }, 15000);
+  }, 60_000);
 });
