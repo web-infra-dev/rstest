@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "@rstest/tests-projects-shard",
+  "sideEffects": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "@rstest/coverage-istanbul": "workspace:*"
+  }
+}
