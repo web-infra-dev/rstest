@@ -6,6 +6,8 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const UNSET_ENV = ['RSTEST_NO_AGENT'];
+
 const normalizeStdout = (stdout: string) =>
   stdout
     .trimStart()
@@ -25,6 +27,7 @@ describe('md', () => {
       command: 'rstest',
       args: ['run', 'agent-md/index', '-c', './rstest.agentMd.config.ts'],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -124,6 +127,7 @@ describe('md', () => {
         './rstest.agentMd.snapshotMismatch.config.ts',
       ],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -225,6 +229,7 @@ describe('md', () => {
         './rstest.agentMd.console.config.ts',
       ],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -338,6 +343,7 @@ describe('md', () => {
       command: 'rstest',
       args: ['run', 'agent-md/throw', '-c', './rstest.agentMd.throw.config.ts'],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -427,6 +433,7 @@ describe('md', () => {
         './rstest.agentMd.timeout.config.ts',
       ],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -518,6 +525,7 @@ describe('md', () => {
         './rstest.agentMd.truncated.config.ts',
       ],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -694,6 +702,7 @@ describe('md', () => {
       command: 'rstest',
       args: ['run', '-c', './rstest.agentMd.pass.config.ts'],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -762,6 +771,7 @@ describe('md', () => {
       command: 'rstest',
       args: ['run', 'agent-md-pass', '-c', './rstest.agentMd.pass.config.ts'],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -854,6 +864,7 @@ describe('md', () => {
         './rstest.agentMd.unhandled.config.ts',
       ],
       onTestFinished,
+      unsetEnv: UNSET_ENV,
       options: {
         nodeOptions: {
           cwd: __dirname,

@@ -220,8 +220,8 @@ export const createPool = async ({
     ],
     env: {
       NODE_ENV: 'test',
-      ...process.env,
       ...getForceColorEnv(),
+      ...process.env,
     },
   });
 

@@ -14,7 +14,10 @@
  */
 import { createColors, isColorSupported } from 'picocolors';
 import { type Logger, logger as rslog } from 'rslog';
+import { determineAgent } from './agent/detectAgent';
 import { isTTY } from './helper';
+
+export { isColorSupported };
 
 export const isDebug = (): boolean => {
   if (!process.env.DEBUG) {
@@ -27,16 +30,29 @@ export const isDebug = (): boolean => {
   );
 };
 
-export const ansiEnabled: boolean = isColorSupported;
+export const getForceColorEnv = (): {
+  FORCE_COLOR?: '0' | '1';
+  NO_COLOR?: '1';
+} => {
+  // User env should always win; we only provide defaults for child processes.
+  if (process.env.FORCE_COLOR !== undefined) {
+    return {};
+  }
 
-export const getForceColorEnv = (): { FORCE_COLOR?: '1' } => {
-  const shouldForceColor =
-    isTTY('stdout') &&
-    ansiEnabled &&
-    process.env.NO_COLOR === undefined &&
-    process.env.FORCE_COLOR === undefined;
+  const noColorEnabled = process.env.NO_COLOR === '1';
 
-  return shouldForceColor ? { FORCE_COLOR: '1' } : {};
+  // In agent environments, prefer stable plain output by default.
+  const isAgent = determineAgent().isAgent;
+
+  if (noColorEnabled) {
+    return { FORCE_COLOR: '0' };
+  }
+
+  if (isAgent || !isColorSupported) {
+    return { NO_COLOR: '1', FORCE_COLOR: '0' };
+  }
+
+  return { FORCE_COLOR: '1' };
 };
 
 /**

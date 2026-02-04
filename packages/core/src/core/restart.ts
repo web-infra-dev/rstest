@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runRest } from '../cli/commands';
 import type { RstestInstance } from '../types';
-import { ansiEnabled, color, isTTY, logger } from '../utils';
+import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
 type Cleaner = () => unknown;
@@ -17,7 +17,7 @@ export const onBeforeRestart = (cleaner: Cleaner): void => {
 };
 
 const clearConsole = () => {
-  if (isTTY() && !process.env.DEBUG && ansiEnabled) {
+  if (isTTY() && !process.env.DEBUG && isColorSupported) {
     process.stdout.write('\x1B[H\x1B[2J');
   }
 };
