@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 
 export type RunnerSessionRecord = {
   id: string;
@@ -7,8 +7,8 @@ export type RunnerSessionRecord = {
   runToken: number;
   mode: 'headless-page' | 'headed-iframe';
   createdAt: number;
-  context?: BrowserContext;
-  page?: Page;
+  context?: BrowserProviderContext;
+  page?: BrowserProviderPage;
   metadata?: Record<string, unknown>;
 };
 

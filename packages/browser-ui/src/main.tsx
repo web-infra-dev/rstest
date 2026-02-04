@@ -15,7 +15,7 @@ import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunnerUrl } from './core/runtime';
+import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
@@ -43,6 +43,15 @@ import './index.css';
 const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
+};
+
+const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
+  try {
+    const url = new URL(frame.src, window.location.href);
+    return url.searchParams.get('runId') ?? undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 // ============================================================================
@@ -75,6 +84,9 @@ const BrowserRunner: React.FC<{
       }
     >
   >(new Map());
+  const [runIdByTestFile, setRunIdByTestFile] = useState<
+    Record<string, string>
+  >({});
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -205,7 +217,11 @@ const BrowserRunner: React.FC<{
           );
           return;
         }
-
+        const nextRunId = createRunId();
+        setRunIdByTestFile((prev) => ({
+          ...prev,
+          [testFile]: nextRunId,
+        }));
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
           const prevFile = prev[testFile] ?? {};
@@ -219,6 +235,8 @@ const BrowserRunner: React.FC<{
           testFile,
           options.runnerUrl,
           testNamePattern,
+          false,
+          nextRunId,
         );
         logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
@@ -265,6 +283,14 @@ const BrowserRunner: React.FC<{
       const next: Record<string, Record<string, CaseInfo>> = {};
       for (const file of testFiles) {
         next[file.testPath] = prev[file.testPath] ?? {};
+      }
+      return next;
+    });
+
+    setRunIdByTestFile((prev) => {
+      const next: Record<string, string> = {};
+      for (const file of testFiles) {
+        next[file.testPath] = prev[file.testPath] ?? createRunId();
       }
       return next;
     });
@@ -689,6 +715,10 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
+                  const runId = runIdByTestFile[fileInfo.testPath];
+                  if (!runId) {
+                    return null;
+                  }
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -698,6 +728,7 @@ const BrowserRunner: React.FC<{
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
                     const frame = event.currentTarget;
+                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
@@ -705,6 +736,7 @@ const BrowserRunner: React.FC<{
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,
+                            runId: frameRunId,
                           },
                         },
                         '*',
@@ -745,6 +777,9 @@ const BrowserRunner: React.FC<{
                           src={createRunnerUrl(
                             fileInfo.testPath,
                             options.runnerUrl,
+                            undefined,
+                            false,
+                            runId,
                           )}
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}

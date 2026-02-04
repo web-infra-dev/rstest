@@ -369,6 +369,7 @@ const run = async () => {
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
+  const urlRunId = urlParams.get('runId');
   const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
@@ -376,6 +377,13 @@ const run = async () => {
     options = {
       ...options,
       testFile: urlTestFile,
+    };
+  }
+
+  if (urlRunId && options) {
+    options = {
+      ...options,
+      runId: urlRunId,
     };
   }
 

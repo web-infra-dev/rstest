@@ -33,6 +33,8 @@ import { PackageManagerTabs } from '@theme';
 
 `render` 函数将组件渲染到 DOM 后，返回 `container`（组件的容器元素）。你可以用原生 DOM API 或 Testing Library 查询元素并进行断言：
 
+如果你偏好 Playwright 风格写法，也可以结合 `@rstest/browser` 的 `page` 与 `expect.element`，详见 [浏览器交互](/guide/browser-testing/user-interactions#locator-api)。
+
 ```tsx title="src/Counter.test.tsx"
 import { render } from '@rstest/browser-react';
 import { expect, test } from '@rstest/core';

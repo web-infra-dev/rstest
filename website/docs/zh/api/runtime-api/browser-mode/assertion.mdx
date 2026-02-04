@@ -1,0 +1,331 @@
+---
+title: Assertion
+overviewHeaders: [2, 3]
+---
+
+# Assertion
+
+`expect.element` 是 Browser Mode 中用于 [Locator](/api/runtime-api/browser-mode/locator) 断言的 API。它接收 `Locator`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
+
+当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。它提供 Playwright-style 的 Locator 断言体验，并在 `timeout` 时间内自动重试，直到断言通过或超时失败。这让查询、交互、断言围绕同一 `Locator` 组织，减少手写轮询与时序抖动，失败信息也更聚焦于元素状态。
+
+下面这个最小示例展示了常见用法：先断言可见，再验证勾选状态变化，最后校验元素属性。
+
+```ts title="src/assertion.test.ts"
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('asserts element states in browser mode', async () => {
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toBeVisible();
+
+  await expect.element(page.getByLabel('Agree')).toBeUnchecked();
+  await page.getByLabel('Agree').check();
+  await expect.element(page.getByLabel('Agree')).toBeChecked();
+
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toHaveAttribute('id', 'save-btn');
+});
+```
+
+## 类型签名
+
+```ts
+expect.element(locator: Locator): BrowserElementExpect
+```
+
+## 输入约束
+
+- `locator` 必须是 `@rstest/browser` 返回的 `Locator`。这样运行时才能识别并回放完整查询链路；手写对象或其他库的 locator 无法被这套机制解析。
+- 在非 Browser Mode 中，`expect.element` 不可用。因为它依赖 Browser Mode 的浏览器运行时与通信通道来执行元素断言；纯 Node 测试环境只支持普通 `expect(value)` 断言。
+
+## 元素断言
+
+### not
+
+- **类型：** `BrowserElementExpect`
+
+对后续断言取反。
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .not.toBeDisabled();
+```
+
+以下 matcher 都支持可选参数 `options?: { timeout?: number }`（除非类型签名里另有说明）。
+
+### toBeVisible
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+`Locator` 在 `timeout` 内解析到已挂载且 visible 的元素。
+
+visible 的判定：元素具有非空 bounding box，且 `visibility` 不是 `hidden`。例如 `display: none` 或尺寸为 `0` 不算 visible；`opacity: 0` 仍算 visible。
+
+```ts
+await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
+```
+
+### toBeHidden
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+`Locator` 在 `timeout` 内满足以下任一条件：不匹配任何 DOM 节点，或匹配到 non-visible 节点。
+
+可把它理解为 `toBeVisible` 的反面条件；例如仅设置 `opacity: 0` 通常不会让 `toBeHidden` 通过。
+
+```ts
+await expect.element(page.getByTestId('loading')).toBeHidden();
+```
+
+### toBeEnabled
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+元素不处于 disabled 状态。
+
+disabled 判定：原生表单控件带 `disabled`、处于 `disabled` 的 `fieldset` 中，或处于 `aria-disabled=true` 的语义禁用上下文，都可能被视为 disabled。
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .toBeEnabled();
+```
+
+### toBeDisabled
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+元素被判定为 disabled。
+
+判定规则与 `toBeEnabled` 相同，只是结果相反；推荐在按钮提交、防重复点击等场景里使用。
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .toBeDisabled();
+```
+
+### toBeChecked
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+checkbox 或 radio 的 `checked` 状态为 `true`。
+
+常用于验证用户勾选行为或默认选中状态是否生效。
+
+```ts
+await expect.element(page.getByLabel('Agree')).toBeChecked();
+```
+
+### toBeUnchecked
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+checkbox 或 radio 的 `checked` 状态为 `false`。
+
+适合与 `check` / `uncheck` 连用，验证交互前后状态变化。
+
+```ts
+await expect.element(page.getByLabel('Agree')).toBeUnchecked();
+```
+
+### toBeAttached
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+`Locator` 指向的节点与 `Document` 或 `ShadowRoot` 保持连接（可理解为 `Node.isConnected === true`）。
+
+这个断言只关注“是否在 DOM 树中”，不要求元素可见。
+
+```ts
+await expect.element(page.locator('#toast')).toBeAttached();
+```
+
+### toBeDetached
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+`Locator` 不再指向已连接的 DOM 节点。
+
+常见于条件渲染、异步卸载或删除操作后的校验。
+
+```ts
+await expect.element(page.locator('#toast')).toBeDetached();
+```
+
+### toBeEditable
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+元素同时满足 enabled 且非 readonly。
+
+readonly 的判断既包括原生 `readonly`，也包括支持该语义的 `aria-readonly=true` 场景。
+
+```ts
+await expect.element(page.getByLabel('Bio')).toBeEditable();
+```
+
+### toBeFocused
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+该元素是当前文档的焦点目标（active element）。
+
+适合验证键盘导航、自动聚焦或表单切换焦点行为。
+
+```ts
+await expect.element(page.getByLabel('Username')).toBeFocused();
+```
+
+### toBeEmpty
+
+- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+
+可编辑元素内容为空，或普通 DOM 节点没有文本内容。
+
+它关注“内容是否为空”，而不是“元素是否存在”或“是否可见”。
+
+```ts
+await expect.element(page.locator('#empty-state')).toBeEmpty();
+```
+
+### toBeInViewport
+
+- **类型：** `(options?: { timeout?: number; ratio?: number }) => Promise<void>`
+
+元素与 viewport 有交集（基于 Intersection Observer 语义）。
+
+`ratio` 表示最小交集比例；例如 `ratio: 0.5` 表示至少一半区域进入视口。
+
+```ts
+await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
+```
+
+### toHaveText
+
+- **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+元素文本与期望值完整匹配（支持 `string` / `RegExp`）。
+
+文本计算会包含嵌套子元素内容；当期望值是 `string` 时，会对空白与换行做归一化后再匹配。
+
+```ts
+await expect.element(page.getByRole('status')).toHaveText('Saved');
+```
+
+### toContainText
+
+- **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+元素文本包含期望子串，或匹配给定正则。
+
+和 `toHaveText` 的区别是：`toContainText` 做子串匹配，`toHaveText` 做完整匹配。
+
+```ts
+await expect.element(page.getByRole('status')).toContainText('Save');
+```
+
+### toHaveValue
+
+- **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+表单控件的当前 `value` 与期望值匹配（支持 `string` / `RegExp`）。
+
+适用于 `input`、`textarea`、`select` 等可取值元素。
+
+```ts
+await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
+```
+
+### toHaveId
+
+- **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+元素的 `id` 与期望值匹配（支持 `string` / `RegExp`）。
+
+适合校验动态生成 ID 或组件挂载后注入的固定 ID。
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveId('save-btn');
+```
+
+### toHaveClass
+
+- **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+元素 `class` 属性与期望值匹配（支持 `string` / `RegExp`）。
+
+当传入 `string` 时，按整体 `class` 字符串匹配；若只关心某个 class，建议使用更有针对性的正则。
+
+```ts
+await expect.element(page.getByRole('alert')).toHaveClass(/error/);
+```
+
+### toHaveAttribute
+
+- **类型：**
+  - `(name: string, options?: { timeout?: number }) => Promise<void>`
+  - `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+只传 `name` 时，断言属性存在；传 `name + value` 时，断言属性值匹配（`value` 支持 `string` / `RegExp`）。
+
+常见用法是校验 `type`、`disabled`、`aria-*` 等结构性属性。
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveAttribute('type');
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveAttribute('type', 'submit');
+```
+
+### toHaveCount
+
+- **类型：** `(count: number, options?: { timeout?: number }) => Promise<void>`
+
+`Locator` 解析出的元素数量与 `count` 完全一致。
+
+适合列表渲染、过滤结果和分页条目数等场景。
+
+```ts
+await expect.element(page.getByRole('listitem')).toHaveCount(3);
+```
+
+### toHaveCSS
+
+- **类型：** `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+元素的 computed style 中，指定 CSS 属性值与期望值匹配。
+
+`name` 必须是非空字符串；`value` 支持 `string` / `RegExp`。
+
+```ts
+await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
+```
+
+### toHaveJSProperty
+
+- **类型：** `(name: string, value: unknown, options?: { timeout?: number }) => Promise<void>`
+
+元素上的 JS property 与期望值匹配。
+
+`name` 必须是非空字符串；`value` 需要可被 JSON 序列化（断言参数会通过 Browser Mode 通道传输）。
+
+```ts
+await expect
+  .element(page.getByLabel('Agree'))
+  .toHaveJSProperty('checked', true);
+```
+
+## 相关 API
+
+- [Locator](/api/runtime-api/browser-mode/locator)
+- [Page（Locator 入口）](/api/runtime-api/browser-mode/locator#page)
+- [Expect](/api/runtime-api/test-api/expect)

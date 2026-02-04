@@ -1,8 +1,13 @@
+import type {
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+} from '@rstest/browser/protocol';
+
 /**
  * Browser UI types
  *
- * These types are derived from @rstest/core's protocol types but simplified
- * for the browser UI's needs. The UI only needs a subset of the full config.
+ * Keep protocol types (locator IR + snapshot/browser RPC) in sync with
+ * @rstest/browser by importing from the shared source.
  */
 
 export type BrowserProjectRuntime = {
@@ -35,6 +40,8 @@ export type BrowserHostConfig = {
   };
   /** If provided, only run this specific test file */
   testFile?: string;
+  /** Per-run identifier for stale browser RPC protection */
+  runId?: string;
   /** Base URL for runner (iframe) pages */
   runnerUrl?: string;
   /** WebSocket port for container RPC */
@@ -141,3 +148,5 @@ export type BrowserDispatchResponse = {
   stale?: boolean;
   [key: string]: unknown;
 };
+
+export type { BrowserRpcRequest, BrowserRpcResponse };

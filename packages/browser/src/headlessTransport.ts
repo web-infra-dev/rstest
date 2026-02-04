@@ -1,9 +1,9 @@
-import type { Page } from 'playwright';
 import type {
   BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserDispatchResponse,
 } from './protocol';
+import type { BrowserProviderPage } from './providers';
 
 type HeadlessRunnerTransportHandlers = {
   onDispatchMessage: (message: BrowserClientMessage) => Promise<void>;
@@ -17,7 +17,7 @@ type HeadlessRunnerTransportHandlers = {
  * This only binds page bridge functions and delegates all scheduling decisions upstream.
  */
 export const attachHeadlessRunnerTransport = async (
-  page: Page,
+  page: BrowserProviderPage,
   handlers: HeadlessRunnerTransportHandlers,
 ): Promise<void> => {
   // Fire-and-forget runner lifecycle messages (ready/log/result/fatal).

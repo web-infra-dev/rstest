@@ -530,6 +530,21 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  examples/browser-playwright-api:
+    devDependencies:
+      '@rstest/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      playwright:
+        specifier: ^1.49.1
+        version: 1.57.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   examples/browser-projects:
     devDependencies:
       '@rstest/browser':
