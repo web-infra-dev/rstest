@@ -802,7 +802,7 @@ const createBrowserRuntime = async ({
 
   const optionsPlaceholder = '__RSTEST_OPTIONS_PLACEHOLDER__';
   const containerHtmlTemplate = containerDistPath
-    ? await fs.readFile(join(containerDistPath, 'container.html'), 'utf-8')
+    ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
     : null;
 
   let injectedContainerHtml: string | null = null;
@@ -996,7 +996,7 @@ const createBrowserRuntime = async ({
   const serveContainer = containerDistPath
     ? sirv(containerDistPath, {
         dev: false,
-        single: 'container.html',
+        single: 'index.html',
       })
     : null;
 
@@ -1373,6 +1373,7 @@ export const runBrowserController = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      viewport: project.normalizedConfig.browser.viewport,
     }));
 
   // Get max testTimeout from all browser projects for RPC timeout
@@ -1815,6 +1816,7 @@ export const listBrowserTests = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      viewport: project.normalizedConfig.browser.viewport,
     }),
   );
 

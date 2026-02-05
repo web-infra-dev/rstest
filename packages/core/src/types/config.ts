@@ -1,6 +1,7 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
+import type { BROWSER_VIEWPORT_PRESET_IDS } from '../utils/constants';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -49,6 +50,20 @@ export type ProjectConfig = Omit<
  */
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
+/**
+ * Device presets aligned with Chrome DevTools device toolbar.
+ *
+ * These values are stable identifiers (not user-facing labels).
+ */
+export type DevicePreset = (typeof BROWSER_VIEWPORT_PRESET_IDS)[number];
+
+export type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
+
 export type BrowserModeConfig = {
   /**
    * Enable browser mode when running tests.
@@ -80,6 +95,13 @@ export type BrowserModeConfig = {
    * If not specified, a random available port will be used.
    */
   port?: number;
+
+  /**
+   * Default runner iframe viewport.
+   *
+   * When not specified, the browser UI fills the preview panel.
+   */
+  viewport?: BrowserViewport;
   /**
    * Whether to exit if the specified port is already in use.
    *
@@ -430,6 +452,7 @@ export type NormalizedBrowserModeConfig = {
   headless: boolean;
   port?: number;
   strictPort: boolean;
+  viewport?: BrowserViewport;
 };
 
 export type NormalizedConfig = Required<

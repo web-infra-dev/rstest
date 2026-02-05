@@ -1,3 +1,4 @@
+import type { DevicePreset } from '@rstest/core/browser';
 import type {
   RuntimeConfig,
   Test,
@@ -8,11 +9,19 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
+export type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
+
 export type BrowserProjectRuntime = {
   name: string;
   environmentName: string;
   projectRoot: string;
   runtimeConfig: SerializedRuntimeConfig;
+  viewport?: BrowserViewport;
 };
 
 /**

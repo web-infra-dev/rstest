@@ -21,6 +21,26 @@ export const DEFAULT_CONFIG_EXTENSIONS = [
   '.cts',
 ] as const;
 
+export const BROWSER_VIEWPORT_PRESET_IDS = [
+  'iPhoneSE',
+  'iPhoneXR',
+  'iPhone12Pro',
+  'iPhone14ProMax',
+  'Pixel7',
+  'SamsungGalaxyS8Plus',
+  'SamsungGalaxyS20Ultra',
+  'iPadMini',
+  'iPadAir',
+  'iPadPro',
+  'SurfacePro7',
+  'SurfaceDuo',
+  'GalaxyZFold5',
+  'AsusZenbookFold',
+  'SamsungGalaxyA51A71',
+  'NestHub',
+  'NestHubMax',
+] as const;
+
 export const globalApis: (keyof Rstest)[] = [
   'test',
   'describe',

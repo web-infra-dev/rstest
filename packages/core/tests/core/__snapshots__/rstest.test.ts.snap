@@ -10,6 +10,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     "port": undefined,
     "provider": "playwright",
     "strictPort": false,
+    "viewport": undefined,
   },
   "clearMocks": false,
   "coverage": {
@@ -97,6 +98,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "port": undefined,
     "provider": "playwright",
     "strictPort": false,
+    "viewport": undefined,
   },
   "clearMocks": false,
   "coverage": {
@@ -187,6 +189,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "port": undefined,
     "provider": "playwright",
     "strictPort": false,
+    "viewport": undefined,
   },
   "clearMocks": false,
   "coverage": {

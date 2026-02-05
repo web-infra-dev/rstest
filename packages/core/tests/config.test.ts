@@ -122,6 +122,32 @@ describe('withDefaultConfig browser validation', () => {
     expect(() => withDefaultConfig(config)).not.toThrow();
   });
 
+  it('should throw when browser.viewport preset id is invalid', () => {
+    const config = {
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        viewport: 'iPhone99',
+      },
+    } as unknown as RstestConfig;
+
+    expect(() => withDefaultConfig(config)).toThrow(
+      'browser.viewport must be a valid preset id.',
+    );
+  });
+
+  it('should not throw when browser.viewport preset id is valid', () => {
+    const config: RstestConfig = {
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        viewport: 'iPhone12Pro',
+      },
+    };
+
+    expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+
   it('should not throw when browser.enabled is false without provider', () => {
     const config = {
       browser: { enabled: false },

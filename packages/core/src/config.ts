@@ -8,14 +8,55 @@ import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
 import {
+  BROWSER_VIEWPORT_PRESET_IDS,
   castArray,
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
   formatRootStr,
+  isPlainObject,
   logger,
   TEMP_RSTEST_OUTPUT_DIR_GLOB,
 } from './utils';
+
+const VALID_BROWSER_VIEWPORT_PRESETS = new Set<string>(
+  BROWSER_VIEWPORT_PRESET_IDS,
+);
+
+const validateBrowserViewport = (viewport: unknown): void => {
+  if (viewport == null) {
+    return;
+  }
+
+  if (typeof viewport === 'string') {
+    const presetId = viewport.trim();
+    if (!presetId) {
+      throw new Error('browser.viewport must be a non-empty preset id.');
+    }
+    if (!VALID_BROWSER_VIEWPORT_PRESETS.has(presetId)) {
+      throw new Error(
+        `browser.viewport must be a valid preset id. Received: ${viewport}`,
+      );
+    }
+    return;
+  }
+
+  if (isPlainObject(viewport)) {
+    const width = (viewport as any).width;
+    const height = (viewport as any).height;
+    if (!Number.isFinite(width) || width <= 0) {
+      throw new Error('browser.viewport.width must be a positive number.');
+    }
+    if (!Number.isFinite(height) || height <= 0) {
+      throw new Error('browser.viewport.height must be a positive number.');
+    }
+    return;
+  }
+
+  throw new Error(
+    'browser.viewport must be either a preset id or { width, height }.',
+  );
+};
 
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
@@ -229,6 +270,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
         `browser.provider must be one of: ${supportedProviders.join(', ')}.`,
       );
     }
+
+    // Validate viewport (optional)
+    validateBrowserViewport((config.browser as any).viewport);
   }
 
   const merged = mergeRstestConfig(
@@ -270,6 +314,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     headless: merged.browser?.headless ?? isCI,
     port: merged.browser?.port,
     strictPort: merged.browser?.strictPort ?? false,
+    viewport: merged.browser?.viewport,
   };
 
   return {
