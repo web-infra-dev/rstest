@@ -45,7 +45,7 @@ describe('test projects', () => {
       await expectExecFailed();
       // test log print
       expectStderrLog('it is not defined');
-    }, 15_000);
+    });
   });
 
   it('should run project correctly with specified config root', async () => {

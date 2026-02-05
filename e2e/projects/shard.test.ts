@@ -39,7 +39,7 @@ describe('test projects sharding', () => {
     expect(
       logs.some((log) => log.includes('packages/node/test/mockFs.test.ts')),
     ).toBeFalsy();
-  }, 30000);
+  });
 
   it('should run the second shard of 2', async () => {
     const { cli, expectExecSuccess, expectLog } = await runRstestCli({
@@ -75,7 +75,7 @@ describe('test projects sharding', () => {
     expectLog('packages/client/test/node.test.ts', logs);
     expectLog('packages/node/test/index.test.ts', logs);
     expectLog('packages/node/test/mockFs.test.ts', logs);
-  }, 30000);
+  });
 
   it('should run failed on an empty shard', async () => {
     const { expectExecFailed, expectLog, expectStderrLog } = await runRstestCli(
