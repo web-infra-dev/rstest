@@ -52,5 +52,41 @@ jobs:
         run: pnpm install
 
       - name: Publish Preview
+        id: publish
         if: steps.changes.outputs.changed == 'true'
         run: pnpx pkg-pr-new publish --pnpm ./packages/*
+
+      - name: Preview summary
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          sha='${{ steps.publish.outputs.sha }}'
+          packages='${{ steps.publish.outputs.packages }}'
+          urls='${{ steps.publish.outputs.urls }}'
+
+          shaDisplay="${sha:-N/A}"
+
+          {
+            echo "## pkg.pr.new preview"
+            echo ""
+            echo "**sha**: \`$shaDisplay\`"
+
+            if [ -n "$packages" ]; then
+              echo ""
+              echo "### packages"
+              echo ""
+              for pkg in $packages; do
+                echo "- \`$pkg\`"
+              done
+            fi
+
+            if [ -n "$urls" ]; then
+              echo ""
+              echo "### URLs"
+              echo ""
+              for url in $urls; do
+                echo "- <$url>"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::notice title=pkg.pr.new::sha=$shaDisplay (see Summary for packages/urls)"
