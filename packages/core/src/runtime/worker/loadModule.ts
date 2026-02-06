@@ -6,14 +6,6 @@ import path from 'pathe';
 import { logger } from '../../utils/logger';
 import { asModule, interopModule, shouldInterop } from './interop';
 
-let latestAssetFiles: Record<string, string> = {};
-
-export const updateLatestAssetFiles = (
-  assetFiles: Record<string, string>,
-): void => {
-  latestAssetFiles = assetFiles;
-};
-
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const createRequire = (
@@ -39,7 +31,7 @@ const createRequire = (
       ? path.join(currentDirectory, id)
       : id;
 
-    const content = assetFiles[joinedPath] || latestAssetFiles[joinedPath];
+    const content = assetFiles[joinedPath];
 
     if (content) {
       try {
@@ -201,9 +193,7 @@ export const loadModule = ({
       const joinedPath = isRelativePath(wasmPath)
         ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
-      const content =
-        assetFiles[path.normalize(joinedPath)] ||
-        latestAssetFiles[path.normalize(joinedPath)];
+      const content = assetFiles[path.normalize(joinedPath)];
 
       if (content) {
         callback(null, Buffer.from(content, 'base64'));
@@ -274,3 +264,5 @@ export const cacheableLoadModule = ({
   moduleCache.set(testPath, mod);
   return mod;
 };
+
+export const clearModuleCache = (): void => moduleCache.clear();
