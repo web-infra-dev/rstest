@@ -22,6 +22,7 @@ export { setRealTimers } from './runtime/util';
 export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  DevicePreset,
   FormattedError,
   ListCommandResult,
   ProjectContext,

@@ -10,6 +10,12 @@ export type BrowserProjectRuntime = {
   environmentName: string;
   projectRoot: string;
   runtimeConfig: Record<string, unknown>;
+  viewport?:
+    | {
+        width: number;
+        height: number;
+      }
+    | string;
 };
 
 /**

@@ -4,12 +4,16 @@ import { Copy, FileCode, SquareArrowOutUpRight } from 'lucide-react';
 import React from 'react';
 import { openInEditor, toRelativePath } from '../utils';
 import { STATUS_META, type TestStatus } from '../utils/constants';
+import type { ViewportSelection } from '../utils/viewport';
+import { ViewportSelector } from './ViewportSelector';
 
 type PreviewHeaderProps = {
   token: GlobalToken;
   activeFile?: string;
   rootPath?: string;
   status?: TestStatus;
+  viewport?: ViewportSelection;
+  onViewportChange?: (next: ViewportSelection) => void;
 };
 
 export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
@@ -17,6 +21,8 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
   activeFile,
   rootPath,
   status,
+  viewport,
+  onViewportChange,
 }) => {
   const { message } = App.useApp();
   const meta = status ? STATUS_META[status] : undefined;
@@ -113,18 +119,28 @@ export const PreviewHeader: React.FC<PreviewHeaderProps> = ({
         </div>
       </div>
 
-      {meta && colorKey && (
-        <div
-          className="flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wider transition-colors shrink-0"
-          style={{
-            backgroundColor: `var(--ds-${colorKey}-100)`,
-            color: `var(--ds-${colorKey}-900)`,
-            border: `1px solid var(--ds-${colorKey}-300)`,
-          }}
-        >
-          {meta.label.toUpperCase()}
-        </div>
-      )}
+      <div className="flex items-center gap-3 shrink-0">
+        {viewport && onViewportChange && (
+          <ViewportSelector
+            token={token}
+            value={viewport}
+            onChange={onViewportChange}
+          />
+        )}
+
+        {meta && colorKey && (
+          <div
+            className="flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wider transition-colors shrink-0"
+            style={{
+              backgroundColor: `var(--ds-${colorKey}-100)`,
+              color: `var(--ds-${colorKey}-900)`,
+              border: `1px solid var(--ds-${colorKey}-300)`,
+            }}
+          >
+            {meta.label.toUpperCase()}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
