@@ -33,4 +33,6 @@ export interface BrowserTestRunResult {
   };
   /** Whether the test run had failures */
   hasFailure: boolean;
+  /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
+  unhandledErrors?: Error[];
 }
