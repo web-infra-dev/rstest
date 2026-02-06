@@ -18,7 +18,7 @@ export default defineConfig({
   },
   source: {
     entry: {
-      container: './src/main.tsx',
+      index: './src/main.tsx',
     },
   },
   output: {

@@ -13,15 +13,6 @@ export enum EsmMode {
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
-// fix get assetFiles error when no-isolate
-let latestAssetFiles: Record<string, string> = {};
-
-export const updateLatestAssetFiles = (
-  assetFiles: Record<string, string>,
-): void => {
-  latestAssetFiles = assetFiles;
-};
-
 const defineRstestDynamicImport =
   ({
     distPath,
@@ -45,7 +36,7 @@ const defineRstestDynamicImport =
       ? path.join(currentDirectory, specifier)
       : specifier;
 
-    const content = assetFiles[joinedPath] || latestAssetFiles[joinedPath];
+    const content = assetFiles[joinedPath];
 
     if (content) {
       try {
@@ -226,9 +217,7 @@ export const loadModule = async ({
             ? path.join(path.dirname(distPath), wasmPath.pathname)
             : wasmPath.pathname;
 
-          const content =
-            assetFiles[path.normalize(joinedPath)] ||
-            latestAssetFiles[path.normalize(joinedPath)];
+          const content = assetFiles[path.normalize(joinedPath)];
 
           if (content) {
             callback(null, Buffer.from(content, 'base64'));
@@ -285,3 +274,5 @@ export const loadModule = async ({
 
   return ns.default && ns.default instanceof Promise ? ns.default : ns;
 };
+
+export const clearModuleCache = (): void => esmCache.clear();

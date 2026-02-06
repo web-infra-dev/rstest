@@ -15,4 +15,6 @@ export const BROWSER_PORTS = {
   snapshot: 5196,
   watch: 5186,
   webkit: 5198,
+  viewport: 5214,
+  'viewport-preset': 5216,
 } as const;

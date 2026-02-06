@@ -31,28 +31,20 @@ export const isDebug = (): boolean => {
 };
 
 export const getForceColorEnv = (): {
-  FORCE_COLOR?: '0' | '1';
+  FORCE_COLOR?: '0';
   NO_COLOR?: '1';
 } => {
-  // User env should always win; we only provide defaults for child processes.
-  if (process.env.FORCE_COLOR !== undefined) {
-    return {};
-  }
+  // In agent environments, disable colors for stable output
+  // (unless user explicitly set color env vars)
+  const userSetColorEnv =
+    process.env.FORCE_COLOR !== undefined || process.env.NO_COLOR !== undefined;
 
-  const noColorEnabled = process.env.NO_COLOR === '1';
-
-  // In agent environments, prefer stable plain output by default.
-  const isAgent = determineAgent().isAgent;
-
-  if (noColorEnabled) {
-    return { FORCE_COLOR: '0' };
-  }
-
-  if (isAgent || !isColorSupported) {
+  if (determineAgent().isAgent && !userSetColorEnv) {
     return { NO_COLOR: '1', FORCE_COLOR: '0' };
   }
 
-  return { FORCE_COLOR: '1' };
+  // Otherwise, don't intervene - let child processes decide (like vitest)
+  return {};
 };
 
 /**

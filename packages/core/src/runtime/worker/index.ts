@@ -231,13 +231,12 @@ const loadFiles = async ({
   isolate: boolean;
   outputModule: boolean;
 }): Promise<void> => {
-  const { loadModule, updateLatestAssetFiles } = outputModule
+  const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
   // clean rstest core cache manually
   if (!isolate) {
-    updateLatestAssetFiles(assetFiles);
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -322,6 +321,14 @@ const runInPool = async (
 
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
+
+    if (!isolate) {
+      const { clearModuleCache } = options.context.outputModule
+        ? await import('./loadEsModule')
+        : await import('./loadModule');
+      clearModuleCache();
+    }
+
     isTeardown = true;
   };
 
