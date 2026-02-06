@@ -15,6 +15,7 @@
  */
 import type { Writable } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
+import { emitStderr } from '../pool/stderrCapture';
 
 const DEFAULT_RENDER_INTERVAL_MS = 1_000;
 
@@ -197,10 +198,16 @@ export class WindowRenderer {
     // @ts-expect-error -- not sure how 2 overloads should be typed
     stream.write = (chunk, _, callback) => {
       if (chunk) {
+        const message = chunk.toString();
         if (this.finished) {
-          this.write(chunk.toString(), type);
+          this.write(message, type);
         } else {
-          this.buffer.push({ type, message: chunk.toString() });
+          // Emit event immediately so other interceptors (e.g. forks pool stderr capture)
+          // can see the data without waiting for the render cycle
+          if (type === 'error') {
+            emitStderr(message);
+          }
+          this.buffer.push({ type, message });
         }
       }
       callback?.();

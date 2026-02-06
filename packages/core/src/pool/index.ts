@@ -26,6 +26,7 @@ import {
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
+import { createStderrCapture } from './stderrCapture';
 
 const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
@@ -208,6 +209,9 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
+  const { enhanceWorkerError, cleanup: cleanupStderrCapture } =
+    createStderrCapture();
+
   const pool = createForksPool({
     ...poolOptions,
     isolate,
@@ -336,7 +340,8 @@ export const createPool = async ({
                   ),
               },
             })
-            .catch((err: unknown) => {
+            .catch(async (err: unknown) => {
+              await enhanceWorkerError(err);
               (err as any).fullStack = true;
               if (err instanceof Error) {
                 if (err.message.includes('Worker exited unexpectedly')) {
@@ -454,6 +459,9 @@ export const createPool = async ({
         }),
       );
     },
-    close: () => pool.close(),
+    close: async () => {
+      cleanupStderrCapture();
+      await pool.close();
+    },
   };
 };
