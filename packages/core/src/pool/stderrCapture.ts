@@ -8,7 +8,7 @@ export const emitStderr = (msg: string): void => {
   stderrBus.emit(STDERR_EVENT, msg);
 };
 
-const MAX_STDERR_LINES = 100;
+const MAX_STDERR_LINES = 5;
 
 /**
  * Captures stderr output from child processes so that it can be
@@ -25,19 +25,26 @@ export function createStderrCapture(): {
   enhanceWorkerError: (err: unknown) => Promise<unknown>;
   cleanup: () => void;
 } {
-  const stderrBuffer: string[] = [];
+  const stderrBuffer: string[][] = [];
 
-  const captureStderr = (text: string) => {
-    const lines = text.split('\n');
-    for (const line of lines) {
-      if (line.length > 0) {
-        stderrBuffer.push(line);
-      }
+  const captureStderr = (text: string): string => {
+    // only capture stderr which is not already tagged as coming from a worker
+    if (text.includes('[Worker:stderr]')) {
+      return text.replace(/\[Worker:stderr\] /g, '');
     }
+    const lines = text.split('\n');
+    if (!lines.length) {
+      return text;
+    }
+
+    stderrBuffer.push(lines.filter((line) => line.length > 0));
+
     // Keep only the most recent lines
     while (stderrBuffer.length > MAX_STDERR_LINES) {
       stderrBuffer.shift();
     }
+
+    return text;
   };
 
   // Intercept process.stderr.write
@@ -47,8 +54,8 @@ export function createStderrCapture(): {
     ...args: any[]
   ): boolean => {
     const text = typeof chunk === 'string' ? chunk : chunk.toString();
-    captureStderr(text);
-    return originalStderrWrite(chunk, ...args);
+    const stderr = captureStderr(text);
+    return originalStderrWrite(stderr, ...args);
   };
 
   // Also listen for stderr data forwarded by WindowRenderer,
@@ -60,7 +67,7 @@ export function createStderrCapture(): {
   stderrBus.on(STDERR_EVENT, onStderrEvent);
 
   const flushStderrBuffer = (): string => {
-    const captured = stderrBuffer.join('\n');
+    const captured = stderrBuffer.flat().join('\n');
     stderrBuffer.length = 0;
     return captured;
   };
@@ -80,7 +87,7 @@ export function createStderrCapture(): {
       // still arriving, so we reliably capture everything regardless of load.
       const CHECK_INTERVAL = 10;
       const STABLE_THRESHOLD = 3; // require 3 consecutive stable checks (~30ms quiet)
-      const MAX_WAIT = 500; // never wait longer than 500ms total
+      const MAX_WAIT = 300; // never wait longer than 300ms total
 
       let prevLength = stderrBuffer.length;
       let stableCount = 0;
@@ -100,7 +107,7 @@ export function createStderrCapture(): {
 
       const stderr = flushStderrBuffer();
       if (stderr) {
-        err.message += `\n\nCaptured worker stderr:\n${stderr}`;
+        err.message += `\n\nMaybe related stderr:\n${stderr}`;
       }
     }
     return err;
