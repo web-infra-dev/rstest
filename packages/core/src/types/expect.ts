@@ -61,61 +61,6 @@ type Promisify<O> = {
 
 type PromisifyAssertion<T> = Promisify<Assertion<T>>;
 
-export type BrowserElementExpect = {
-  not: BrowserElementExpect;
-  toBeVisible: (options?: { timeout?: number }) => Promise<void>;
-  toBeHidden: (options?: { timeout?: number }) => Promise<void>;
-  toBeEnabled: (options?: { timeout?: number }) => Promise<void>;
-  toBeDisabled: (options?: { timeout?: number }) => Promise<void>;
-  toBeChecked: (options?: { timeout?: number }) => Promise<void>;
-  toBeUnchecked: (options?: { timeout?: number }) => Promise<void>;
-  toBeAttached: (options?: { timeout?: number }) => Promise<void>;
-  toBeDetached: (options?: { timeout?: number }) => Promise<void>;
-  toBeEditable: (options?: { timeout?: number }) => Promise<void>;
-  toBeFocused: (options?: { timeout?: number }) => Promise<void>;
-  toBeEmpty: (options?: { timeout?: number }) => Promise<void>;
-  toBeInViewport: (options?: {
-    timeout?: number;
-    ratio?: number;
-  }) => Promise<void>;
-  toHaveText: (
-    text: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toContainText: (
-    text: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveValue: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveId: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveAttribute: (
-    name: string,
-    value?: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveClass: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveCount: (count: number, options?: { timeout?: number }) => Promise<void>;
-  toHaveCSS: (
-    name: string,
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveJSProperty: (
-    name: string,
-    value: unknown,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-};
-
 export interface Assertion<T = any> extends VitestAssertion<T> {
   // Snapshots are extended in @vitest/snapshot and are not part of @vitest/expect
   matchSnapshot: SnapshotMatcher<T>;
@@ -180,13 +125,6 @@ export interface ExpectStatic extends VitestExpectStatic {
   <T>(actual: T, message?: string): Assertion<T>;
   unreachable: (message?: string) => never;
   soft: <T>(actual: T, message?: string) => Assertion<T>;
-  /**
-   * Browser-mode element assertions (Playwright style).
-   *
-   * This API is implemented by @rstest/browser in browser mode.
-   * In non-browser environments it may throw.
-   */
-  element: (locator: unknown) => BrowserElementExpect;
   poll: <T>(
     actual: () => T,
     options?: ExpectPollOptions,

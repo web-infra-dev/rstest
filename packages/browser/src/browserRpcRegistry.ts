@@ -25,7 +25,7 @@ const supportedSet = (
  * Capability gaps (non-exhaustive):
  * - Locator query/interop: filter({ hasNot, hasNotText }), locator.selector/length,
  *   locator.query()/element()/elements()/all(), page.elementLocator(element), locators.extend(...)
- * - Locator actions: tripleClick, unhover, drag/drop helpers
+ * - Locator actions: tripleClick, hover out, drag/drop helpers
  * - Assertions: a11y matchers (accessible name/description), toHaveRole, toHaveValues
  * - Artifacts intentionally excluded for now: screenshot/toMatchScreenshot/trace/video
  */

@@ -104,7 +104,7 @@ export function createExpect({
 
   expect.poll = createExpectPoll(expect);
 
-  expect.element = () => {
+  (expect as any).element = () => {
     throw new Error(
       'expect.element() is only available in browser mode. ' +
         'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',

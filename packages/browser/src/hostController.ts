@@ -72,6 +72,11 @@ type BrowserProviderProject = {
   provider: BrowserProvider;
 };
 
+type BrowserLaunchOptions = Pick<
+  ProjectContext['normalizedConfig']['browser'],
+  'provider' | 'browser' | 'headless' | 'port' | 'strictPort'
+>;
+
 /** Payload for test file start event */
 type TestFileStartPayload = {
   testPath: string;
@@ -531,6 +536,45 @@ const getBrowserProjects = (context: Rstest): ProjectContext[] => {
   );
 };
 
+const getBrowserLaunchOptions = (
+  project: ProjectContext,
+): BrowserLaunchOptions => ({
+  provider: project.normalizedConfig.browser.provider,
+  browser: project.normalizedConfig.browser.browser,
+  headless: project.normalizedConfig.browser.headless,
+  port: project.normalizedConfig.browser.port,
+  strictPort: project.normalizedConfig.browser.strictPort,
+});
+
+const ensureConsistentBrowserLaunchOptions = (
+  projects: ProjectContext[],
+): BrowserLaunchOptions => {
+  if (projects.length === 0) {
+    throw new Error('No browser-enabled projects found.');
+  }
+
+  const firstProject = projects[0]!;
+  const firstOptions = getBrowserLaunchOptions(firstProject);
+
+  for (const project of projects.slice(1)) {
+    const options = getBrowserLaunchOptions(project);
+    if (
+      options.provider !== firstOptions.provider ||
+      options.browser !== firstOptions.browser ||
+      options.headless !== firstOptions.headless ||
+      options.port !== firstOptions.port ||
+      options.strictPort !== firstOptions.strictPort
+    ) {
+      throw new Error(
+        `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
+          'All browser-enabled projects in one run must share provider/browser/headless/port/strictPort.',
+      );
+    }
+  }
+
+  return firstOptions;
+};
+
 const resolveProviderForTestPath = ({
   testPath,
   browserProjects,
@@ -853,13 +897,15 @@ const createBrowserRuntime = async ({
     }
   };
 
-  // Get user Rsbuild config from the first browser project
   const browserProjects = getBrowserProjects(context);
-  const firstProject = browserProjects[0];
-  const userPlugins = firstProject?.normalizedConfig.plugins || [];
-  const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
-  const browserConfig =
-    firstProject?.normalizedConfig.browser ?? context.normalizedConfig.browser;
+  const projectByEnvironmentName = new Map(
+    browserProjects.map((project) => [project.environmentName, project]),
+  );
+  const userPlugins = browserProjects.flatMap(
+    (project) => project.normalizedConfig.plugins || [],
+  );
+  const browserLaunchOptions =
+    ensureConsistentBrowserLaunchOptions(browserProjects);
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -886,8 +932,8 @@ const createBrowserRuntime = async ({
       plugins: userPlugins,
       server: {
         printUrls: false,
-        port: browserConfig.port ?? 4000,
-        strictPort: browserConfig.strictPort,
+        port: browserLaunchOptions.port ?? 4000,
+        strictPort: browserLaunchOptions.strictPort,
       },
       dev: {
         client: {
@@ -895,7 +941,9 @@ const createBrowserRuntime = async ({
         },
       },
       environments: {
-        [firstProject?.environmentName || 'web']: {},
+        ...Object.fromEntries(
+          browserProjects.map((project) => [project.environmentName, {}]),
+        ),
       },
     },
   });
@@ -906,7 +954,13 @@ const createBrowserRuntime = async ({
       name: 'rstest:browser-user-config',
       setup(api) {
         api.modifyEnvironmentConfig({
-          handler: (config, { mergeEnvironmentConfig }) => {
+          handler: (config, { mergeEnvironmentConfig, name }) => {
+            const project = projectByEnvironmentName.get(name);
+            if (!project) {
+              return config;
+            }
+
+            const userRsbuildConfig = project.normalizedConfig;
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
             const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
               resolve: {
@@ -1016,7 +1070,9 @@ const createBrowserRuntime = async ({
   }
 
   // Register coverage plugin for browser mode
-  const coverage = firstProject?.normalizedConfig.coverage;
+  const coverage = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
   if (coverage?.enabled && context.command !== 'list') {
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
@@ -1188,14 +1244,14 @@ const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  const browserName = browserConfig.browser ?? 'chromium';
+  const browserName = browserLaunchOptions.browser ?? 'chromium';
   try {
     const providerImplementation = getBrowserProviderImplementation(
-      browserConfig.provider,
+      browserLaunchOptions.provider,
     );
     const runtime = await providerImplementation.launchRuntime({
       browserName,
-      headless: forceHeadless ?? browserConfig.headless,
+      headless: forceHeadless ?? browserLaunchOptions.headless,
     });
     return {
       rsbuildInstance,

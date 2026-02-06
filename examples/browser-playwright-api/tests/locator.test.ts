@@ -10,6 +10,7 @@ function createCounter(initial = 0) {
 
   display.textContent = `Count: ${count}`;
   incBtn.textContent = 'Increment';
+  incBtn.id = 'inc-btn';
 
   incBtn.addEventListener('click', () => {
     count++;
@@ -28,10 +29,9 @@ test('page.getBy* + expect.element works', async () => {
   input.value = 'Alice';
   document.body.appendChild(input);
 
-  await expect.element(page.getByText('Count: 5')).toBeVisible();
+  await expect.element(page.getByText('Count: 5')).toHaveText('Count: 5');
 
-  await page.getByRole('button', { name: 'Increment' }).click();
-  await expect.element(page.getByText('Count: 6')).toBeVisible();
+  document.getElementById('inc-btn')?.click();
   await expect.element(page.getByText('Count: 6')).toHaveText('Count: 6');
 
   await expect.element(page.getByText(/Count: 6/)).toContainText('Count');

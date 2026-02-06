@@ -7,7 +7,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "types": ["@rstest/core"]
   },
   "include": ["tests", "rstest.config.ts"]
 }
