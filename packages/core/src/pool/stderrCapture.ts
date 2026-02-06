@@ -33,7 +33,7 @@ export function createStderrCapture(): {
       return text.replace(/\[Worker:stderr\] /g, '');
     }
     const lines = text.split('\n');
-    if (!lines.length) {
+    if (text.length === 0) {
       return text;
     }
 
