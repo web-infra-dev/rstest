@@ -115,7 +115,6 @@ export function createStderrCapture(): {
 
   const cleanup = (): void => {
     process.stderr.write = originalStderrWrite;
-    stderrBus.removeAllListeners(STDERR_EVENT);
     stderrBus.off(STDERR_EVENT, onStderrEvent);
   };
 
