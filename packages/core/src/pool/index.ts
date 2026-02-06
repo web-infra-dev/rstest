@@ -340,8 +340,36 @@ export const createPool = async ({
               (err as any).fullStack = true;
               if (err instanceof Error) {
                 if (err.message.includes('Worker exited unexpectedly')) {
-                  delete err.stack;
+                  const exitCodeMatch = err.message.match(/code[:\s]+(\d+)/i);
+                  const signalMatch = err.message.match(/signal[:\s]+(\w+)/i);
+
+                  if (exitCodeMatch?.[1]) {
+                    const exitCode = exitCodeMatch[1];
+                    const exitReasons: Record<string, string> = {
+                      '1': 'Uncaught exception',
+                      '3': 'Internal JavaScript parse error',
+                      '4': 'Internal JavaScript evaluation failure',
+                      '5': 'Fatal error',
+                      '6': 'Non-function internal exception handler',
+                      '7': 'Internal exception handler run-time failure',
+                      '9': 'Invalid argument',
+                      '10': 'Internal JavaScript run-time failure',
+                      '12': 'Invalid debug argument',
+                      '13': 'Unfinished top-level await',
+                      '137':
+                        'Killed by SIGKILL (out of memory or force killed)',
+                      '139': 'Segmentation fault',
+                    };
+                    const reason = exitReasons[exitCode] || 'Unknown reason';
+                    err.message = `${err.message}\n${color.yellow(`Exit code ${exitCode}: ${reason}`)}`;
+                  }
+
+                  if (signalMatch?.[1]) {
+                    const signal = signalMatch[1];
+                    err.message = `${err.message}\n${color.yellow(`Terminated by signal: ${signal}`)}`;
+                  }
                 }
+
                 const runningModule = context.stateManager.runningModules.get(
                   entryInfo.testPath,
                 );

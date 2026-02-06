@@ -134,29 +134,117 @@ const preparePool = async ({
 
   const unhandledErrors: Error[] = [];
 
+  const getWorkerDebugInfo = () => {
+    const memUsage = process.memoryUsage();
+    return {
+      workerId: process.env.RSTEST_WORKER_ID,
+      pid: process.pid,
+      timestamp: new Date().toISOString(),
+      testPath,
+      memory: {
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+        external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+      },
+    };
+  };
+
   const handleError = (e: Error | string, type: string) => {
     const error: Error = typeof e === 'string' ? new Error(e) : e;
-
     error.name = type;
 
+    const debugInfo = getWorkerDebugInfo();
+    const debugMsg = `\n${color.gray(`[Worker ${debugInfo.workerId} | PID ${debugInfo.pid} | ${debugInfo.timestamp}]`)}\n${color.gray(`Memory: heap ${debugInfo.memory.heapUsed}/${debugInfo.memory.heapTotal}, RSS ${debugInfo.memory.rss}`)}`;
+
     if (isTeardown) {
-      error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
+      error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}${debugMsg}`;
       console.error(error);
     } else {
       console.error(error);
+      console.error(debugMsg);
       unhandledErrors.push(error);
     }
   };
 
-  const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
-  const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
+  const uncaughtException = (e: Error) => {
+    console.error(
+      color.red(
+        `[RSTEST WORKER ${process.env.RSTEST_WORKER_ID}] Uncaught Exception`,
+      ),
+    );
+    handleError(e, 'uncaughtException');
+  };
+
+  const unhandledRejection = (e: Error) => {
+    console.error(
+      color.red(
+        `[RSTEST WORKER ${process.env.RSTEST_WORKER_ID}] Unhandled Rejection`,
+      ),
+    );
+    handleError(e, 'unhandledRejection');
+  };
+
+  const beforeExit = (code: number) => {
+    if (code !== 0 && !isTeardown) {
+      const debugInfo = getWorkerDebugInfo();
+      console.error(
+        color.red(
+          `[RSTEST WORKER ${debugInfo.workerId}] Process about to exit with code ${code}`,
+        ),
+      );
+      console.error(color.gray(JSON.stringify(debugInfo, null, 2)));
+    }
+  };
+
+  const processExit = (code: number) => {
+    if (code !== 0) {
+      const memUsage = process.memoryUsage();
+      console.error(
+        color.red(
+          `[RSTEST WORKER ${process.env.RSTEST_WORKER_ID}] Process exiting with code ${code}`,
+        ),
+      );
+      console.error(
+        color.gray(
+          `Final memory: heap ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB, RSS ${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+        ),
+      );
+    }
+  };
+
+  const sigterm = () => {
+    console.error(
+      color.red(
+        `[RSTEST WORKER ${process.env.RSTEST_WORKER_ID}] Received SIGTERM`,
+      ),
+    );
+    console.error(color.gray(JSON.stringify(getWorkerDebugInfo(), null, 2)));
+  };
+
+  const sigint = () => {
+    console.error(
+      color.red(
+        `[RSTEST WORKER ${process.env.RSTEST_WORKER_ID}] Received SIGINT`,
+      ),
+    );
+    console.error(color.gray(JSON.stringify(getWorkerDebugInfo(), null, 2)));
+  };
 
   process.on('uncaughtException', uncaughtException);
   process.on('unhandledRejection', unhandledRejection);
+  process.on('beforeExit', beforeExit);
+  process.on('exit', processExit);
+  process.on('SIGTERM', sigterm);
+  process.on('SIGINT', sigint);
 
   globalCleanups.push(() => {
     process.off('uncaughtException', uncaughtException);
     process.off('unhandledRejection', unhandledRejection);
+    process.off('beforeExit', beforeExit);
+    process.off('exit', processExit);
+    process.off('SIGTERM', sigterm);
+    process.off('SIGINT', sigint);
   });
 
   const { api, runner } = await createRstestRuntime(workerState);
