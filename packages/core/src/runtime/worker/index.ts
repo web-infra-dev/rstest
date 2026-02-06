@@ -322,10 +322,12 @@ const runInPool = async (
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
 
-    const { clearModuleCache } = options.context.outputModule
-      ? await import('./loadEsModule')
-      : await import('./loadModule');
-    clearModuleCache();
+    if (!isolate) {
+      const { clearModuleCache } = options.context.outputModule
+        ? await import('./loadEsModule')
+        : await import('./loadModule');
+      clearModuleCache();
+    }
 
     isTeardown = true;
   };
