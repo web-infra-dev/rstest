@@ -79,7 +79,7 @@ export function createStderrCapture(): {
   const enhanceWorkerError = async (err: unknown): Promise<unknown> => {
     if (
       err instanceof Error &&
-      err.message.startsWith('Worker exited unexpectedly')
+      err.message.includes('Worker exited unexpectedly')
     ) {
       // The child process stderr is piped via streams, so data may still be
       // in the pipe buffer when the 'exit' event fires and the error is rejected.
