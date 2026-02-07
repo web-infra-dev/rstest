@@ -104,6 +104,13 @@ export function createExpect({
 
   expect.poll = createExpectPoll(expect);
 
+  (expect as any).element = () => {
+    throw new Error(
+      'expect.element() is only available in browser mode. ' +
+        'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
+    );
+  };
+
   expect.unreachable = (message?: string) => {
     chai.assert.fail(
       `expected ${message ? `"${message}" ` : ''}not to be reached`,

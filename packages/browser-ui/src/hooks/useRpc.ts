@@ -46,6 +46,8 @@ export type HostRPC = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Browser API RPC operations (iframe -> host via container)
+  dispatchBrowserRpc: (request: unknown) => Promise<unknown>;
 };
 
 export type ContainerRPC = {
