@@ -28,7 +28,10 @@ async function runBrowserModeTests(
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
   return runBrowserTests(context, options);
 }
 
@@ -166,6 +169,10 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
     });
+
+    // Prevent an unhandled rejection window in mixed node+browser runs.
+    // We still await the original promise later to surface the error.
+    browserResultPromise.catch(() => {});
   }
 
   // If there are no node tests to run, we can potentially exit early.

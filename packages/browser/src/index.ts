@@ -9,6 +9,14 @@ import {
   runBrowserController,
 } from './hostController';
 
+export { validateBrowserConfig } from './configValidation';
+
+export {
+  BROWSER_VIEWPORT_PRESET_DIMENSIONS,
+  BROWSER_VIEWPORT_PRESET_IDS,
+  resolveBrowserViewportPreset,
+} from './viewportPresets';
+
 export async function runBrowserTests(
   context: Rstest,
   options?: BrowserTestRunOptions,

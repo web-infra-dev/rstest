@@ -13,6 +13,7 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
  * Type definition for the @rstest/browser package exports.
  */
 export interface BrowserModule {
+  validateBrowserConfig: (context: unknown) => void;
   runBrowserTests: (
     context: unknown,
     options?: BrowserTestRunOptions,
