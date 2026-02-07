@@ -7,4 +7,13 @@ describe('browser mode - config options', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
+
+  it('should fail early when browser provider is invalid', async () => {
+    const { expectExecFailed, expectStderrLog, cli } =
+      await runBrowserCli('invalid-provider');
+
+    await expectExecFailed();
+    expectStderrLog(/browser\.provider must be one of: playwright\./);
+    expect(cli.stdout).not.toMatch(/Browser mode opened at/);
+  });
 });

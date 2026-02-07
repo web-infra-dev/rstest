@@ -190,7 +190,10 @@ const collectBrowserTests = async ({
   const { loadBrowserModule } = await import('./browserLoader');
   // Pass project roots to resolve @rstest/browser from project-specific node_modules
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { listBrowserTests } = await loadBrowserModule({ projectRoots });
+  const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context as any);
   // Cast to any because listBrowserTests expects Rstest but we have RstestContext
   // In practice, context is always a Rstest instance
   return listBrowserTests(context as any, { shardedEntries });

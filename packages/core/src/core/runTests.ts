@@ -28,7 +28,10 @@ async function runBrowserModeTests(
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
   return runBrowserTests(context, options);
 }
 
