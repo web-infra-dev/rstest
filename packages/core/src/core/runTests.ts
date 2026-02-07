@@ -65,8 +65,13 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: false,
     });
 
-    // Generate coverage reports for browser-only tests
-    if (coverage.enabled && browserResult?.results) {
+    // Generate coverage reports for browser-only tests when execution produced test results.
+    // Skip coverage on early startup failures surfaced via unhandledErrors.
+    if (
+      coverage.enabled &&
+      browserResult?.results.length &&
+      !browserResult.unhandledErrors?.length
+    ) {
       const coverageProvider = await createCoverageProvider(
         coverage,
         context.rootPath,
@@ -420,6 +425,9 @@ export async function runTests(context: Rstest): Promise<void> {
     }
     if (shouldUnifyReporter && browserResult?.testResults) {
       testResults.push(...browserResult.testResults);
+    }
+    if (shouldUnifyReporter && browserResult?.unhandledErrors) {
+      errors.push(...browserResult.unhandledErrors);
     }
 
     context.updateReporterResultState(

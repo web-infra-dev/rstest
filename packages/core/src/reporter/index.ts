@@ -44,30 +44,16 @@ export class DefaultReporter implements Reporter {
     this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
     this.testState = testState;
-    // Note: StatusRenderer is created lazily in onTestFileStart() to avoid
-    // intercepting stdout/stderr too early. This ensures that errors occurring
-    // before tests start (e.g., Playwright browser not installed) are visible
-    // and not cleared by WindowRenderer's TTY control sequences.
-  }
-
-  /**
-   * Lazily create StatusRenderer on first test file start.
-   * This avoids intercepting stdout/stderr before tests actually begin,
-   * ensuring early errors (like missing Playwright browsers) remain visible.
-   */
-  private ensureStatusRenderer(): void {
-    if (this.statusRenderer) return;
-    if (isTTY() || this.options.logger) {
+    if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
-        this.rootPath,
-        this.testState,
-        this.options.logger,
+        rootPath,
+        testState,
+        options.logger,
       );
     }
   }
 
   onTestFileStart(): void {
-    this.ensureStatusRenderer();
     this.statusRenderer?.onTestFileStart();
   }
 
