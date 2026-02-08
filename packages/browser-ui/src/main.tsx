@@ -8,14 +8,16 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
+import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
+import { createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
-  BrowserClientMessage,
   BrowserClientTestResult,
   BrowserHostConfig,
+  FatalPayload,
+  LogPayload,
   SnapshotRpcRequest,
-  SnapshotRpcResponse,
   TestFileInfo,
 } from './types';
 import type {
@@ -36,20 +38,6 @@ import './index.css';
 const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
-};
-
-const iframeUrlFor = (
-  testFile: string,
-  runnerBase?: string,
-  testNamePattern?: string,
-): string => {
-  const base = runnerBase || window.location.origin;
-  const url = new URL('/runner.html', base);
-  url.searchParams.set('testFile', testFile);
-  if (testNamePattern) {
-    url.searchParams.set('testNamePattern', testNamePattern);
-  }
-  return url.toString();
 };
 
 // ============================================================================
@@ -193,7 +181,7 @@ const BrowserRunner: React.FC<{
           }
           return { ...prev, [testFile]: updatedCases };
         });
-        const newSrc = iframeUrlFor(
+        const newSrc = createRunnerUrl(
           testFile,
           options.runnerUrl,
           testNamePattern,
@@ -321,140 +309,84 @@ const BrowserRunner: React.FC<{
   // Handle messages from test runner iframes
   useEffect(() => {
     const listener = (event: MessageEvent) => {
-      if (event.data?.type === '__rstest_dispatch__') {
-        const message = event.data.payload as BrowserClientMessage | undefined;
-        if (message?.type === 'file-start') {
-          const payload = message.payload as {
-            testPath?: string;
-            projectName?: string;
-          };
-          const testPath = payload.testPath;
-          if (typeof testPath === 'string') {
-            setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
-            setCaseMap((prev) => {
-              const prevFile = prev[testPath] ?? {};
-              const updatedCases: Record<string, CaseInfo> = {};
-              for (const [key, caseInfo] of Object.entries(prevFile)) {
-                updatedCases[key] = { ...caseInfo, status: 'running' };
-              }
-              return { ...prev, [testPath]: updatedCases };
-            });
-            // Forward to host via RPC
-            rpc?.onTestFileStart({
-              testPath,
-              projectName: payload.projectName ?? '',
-            });
-          }
-        } else if (message?.type === 'case-result') {
-          const payload = message.payload as BrowserClientTestResult;
-          if (payload?.testPath) {
-            upsertCase(payload.testPath, payload);
-            // Forward to host via RPC
-            rpc?.onTestCaseResult(payload);
-          }
-        } else if (message?.type === 'file-complete') {
-          const payload = message.payload as BrowserClientFileResult;
-          const testPath = payload.testPath;
-          if (typeof testPath === 'string') {
-            const passed =
-              payload.status === 'pass' || payload.status === 'skip';
-            setStatusMap((prev) => ({
-              ...prev,
-              [testPath]: passed ? 'pass' : 'fail',
-            }));
-            // Replace the caseMap for this file with only the cases that exist in the results
-            // This ensures deleted test cases are removed from the UI
-            setCaseMap((prev) => {
-              const newCases: Record<string, CaseInfo> = {};
-              for (const result of payload.results ?? []) {
-                if (result?.testId) {
-                  const parentNames = (result.parentNames ?? []).filter(
-                    Boolean,
-                  );
-                  const fullName =
-                    [...parentNames, result.name].join('  ') || result.name;
-                  newCases[result.testId] = {
-                    id: result.testId,
-                    name: result.name,
-                    parentNames,
-                    fullName,
-                    status: mapCaseStatus(result.status),
-                    filePath: result.testPath || testPath,
-                    location: result.location,
-                  };
-                }
-              }
-              return { ...prev, [testPath]: newCases };
-            });
-            // Forward to host via RPC
-            rpc?.onTestFileComplete(payload);
-          }
-        } else if (message?.type === 'fatal') {
-          if (active) {
-            setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
-          }
-          const payload = message.payload as {
-            message: string;
-            stack?: string;
-          };
-          // Forward to host via RPC
-          rpc?.onFatal(payload);
-        } else if (message?.type === 'log') {
-          const payload = message.payload as {
-            level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-            content: string;
-            testPath: string;
-            type: 'stdout' | 'stderr';
-            trace?: string;
-          };
-          // Forward to host via RPC
-          rpc?.onLog(payload);
-        } else if (message?.type === 'snapshot-rpc-request') {
-          // Handle snapshot RPC requests from runner iframes
-          const request = message.payload as SnapshotRpcRequest;
-          const sourceWindow = event.source as Window | null;
+      const message = readDispatchMessage(event);
+      if (!message) {
+        return;
+      }
 
-          if (!rpc || !sourceWindow) {
-            return;
-          }
-
-          // Forward to host and send response back to iframe
-          const sendResponse = (response: SnapshotRpcResponse) => {
-            sourceWindow.postMessage(
-              { type: '__rstest_snapshot_response__', payload: response },
-              '*',
-            );
-          };
-
-          (async () => {
-            try {
-              let result: unknown;
-              switch (request.method) {
-                case 'resolveSnapshotPath':
-                  result = await rpc.resolveSnapshotPath(request.args.testPath);
-                  break;
-                case 'readSnapshotFile':
-                  result = await rpc.readSnapshotFile(request.args.filepath);
-                  break;
-                case 'saveSnapshotFile':
-                  result = await rpc.saveSnapshotFile(
-                    request.args.filepath,
-                    request.args.content,
-                  );
-                  break;
-                case 'removeSnapshotFile':
-                  result = await rpc.removeSnapshotFile(request.args.filepath);
-                  break;
-              }
-              sendResponse({ id: request.id, result });
-            } catch (error) {
-              sendResponse({
-                id: request.id,
-                error: error instanceof Error ? error.message : String(error),
-              });
+      if (message.type === 'file-start') {
+        const payload = message.payload as {
+          testPath?: string;
+          projectName?: string;
+        };
+        const testPath = payload.testPath;
+        if (typeof testPath === 'string') {
+          setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
+          setCaseMap((prev) => {
+            const prevFile = prev[testPath] ?? {};
+            const updatedCases: Record<string, CaseInfo> = {};
+            for (const [key, caseInfo] of Object.entries(prevFile)) {
+              updatedCases[key] = { ...caseInfo, status: 'running' };
             }
-          })();
+            return { ...prev, [testPath]: updatedCases };
+          });
+          rpc?.onTestFileStart({
+            testPath,
+            projectName: payload.projectName ?? '',
+          });
         }
+      } else if (message.type === 'case-result') {
+        const payload = message.payload as BrowserClientTestResult;
+        if (payload?.testPath) {
+          upsertCase(payload.testPath, payload);
+          rpc?.onTestCaseResult(payload);
+        }
+      } else if (message.type === 'file-complete') {
+        const payload = message.payload as BrowserClientFileResult;
+        const testPath = payload.testPath;
+        if (typeof testPath === 'string') {
+          const passed = payload.status === 'pass' || payload.status === 'skip';
+          setStatusMap((prev) => ({
+            ...prev,
+            [testPath]: passed ? 'pass' : 'fail',
+          }));
+          setCaseMap((prev) => {
+            const newCases: Record<string, CaseInfo> = {};
+            for (const result of payload.results ?? []) {
+              if (result?.testId) {
+                const parentNames = (result.parentNames ?? []).filter(Boolean);
+                const fullName =
+                  [...parentNames, result.name].join('  ') || result.name;
+                newCases[result.testId] = {
+                  id: result.testId,
+                  name: result.name,
+                  parentNames,
+                  fullName,
+                  status: mapCaseStatus(result.status),
+                  filePath: result.testPath || testPath,
+                  location: result.location,
+                };
+              }
+            }
+            return { ...prev, [testPath]: newCases };
+          });
+          rpc?.onTestFileComplete(payload);
+        }
+      } else if (message.type === 'fatal') {
+        if (active) {
+          setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
+        }
+        const payload = message.payload as FatalPayload;
+        rpc?.onFatal(payload);
+      } else if (message.type === 'log') {
+        const payload = message.payload as LogPayload;
+        rpc?.onLog(payload);
+      } else if (message.type === 'snapshot-rpc-request') {
+        void forwardSnapshotRpcRequest(
+          rpc,
+          message.payload as SnapshotRpcRequest,
+          event.source,
+        );
       }
     };
     window.addEventListener('message', listener);
@@ -750,7 +682,7 @@ const BrowserRunner: React.FC<{
                         <iframe
                           data-test-file={fileInfo.testPath}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
-                          src={iframeUrlFor(
+                          src={createRunnerUrl(
                             fileInfo.testPath,
                             options.runnerUrl,
                           )}
