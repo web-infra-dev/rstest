@@ -11,6 +11,7 @@ declare const PLAYWRIGHT_VERSION: string;
 declare module '@rstest/browser' {
   import type { ListCommandResult, RstestContext } from './types';
 
+  export function validateBrowserConfig(context: RstestContext): void;
   export function runBrowserTests(context: RstestContext): Promise<void>;
   export function listBrowserTests(context: RstestContext): Promise<{
     list: ListCommandResult[];
