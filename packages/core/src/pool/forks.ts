@@ -12,11 +12,19 @@ import type {
   Test,
   TestFileResult,
 } from '../types';
+import {
+  createWorkerStderrCapture,
+  isWorkerMetaMessage,
+  type WorkerMetaMessage,
+} from './stderrCapture';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-function createChannel(rpcMethods: RuntimeRPC) {
+function createChannel(
+  rpcMethods: RuntimeRPC,
+  onWorkerMeta?: (message: WorkerMetaMessage) => void,
+) {
   const emitter = new EventEmitter();
   const cleanup = () => emitter.removeAllListeners();
 
@@ -26,6 +34,10 @@ function createChannel(rpcMethods: RuntimeRPC) {
       emitter.on(events.message, callback);
     },
     postMessage: (message: any) => {
+      if (isWorkerMetaMessage(message)) {
+        onWorkerMeta?.(message);
+        return;
+      }
       emitter.emit(events.response, message);
     },
   };
@@ -81,25 +93,46 @@ export const createForksPool = (poolOptions: {
   };
 
   const pool = new Tinypool(options);
+  const stderrCapture = createWorkerStderrCapture(pool);
+  let nextTaskId = 0;
 
   return {
     name: 'forks',
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
-      const { channel, cleanup } = createChannel(rpcMethods);
+      const taskId = ++nextTaskId;
+      stderrCapture.createTask(taskId);
+      const { channel, cleanup } = createChannel(rpcMethods, ({ pid }) => {
+        stderrCapture.bindTaskToPid(taskId, pid);
+      });
       try {
         return await pool.run(options, { channel });
+      } catch (err) {
+        await stderrCapture.enhanceWorkerExitError(taskId, err);
+        throw err;
       } finally {
         cleanup();
+        stderrCapture.clearTask(taskId);
       }
     },
     collectTests: async ({ options, rpcMethods }: RunWorkerOptions) => {
-      const { channel, cleanup } = createChannel(rpcMethods);
+      const taskId = ++nextTaskId;
+      stderrCapture.createTask(taskId);
+      const { channel, cleanup } = createChannel(rpcMethods, ({ pid }) => {
+        stderrCapture.bindTaskToPid(taskId, pid);
+      });
       try {
         return await pool.run(options, { channel });
+      } catch (err) {
+        await stderrCapture.enhanceWorkerExitError(taskId, err);
+        throw err;
       } finally {
         cleanup();
+        stderrCapture.clearTask(taskId);
       }
     },
-    close: () => pool.destroy(),
+    close: async () => {
+      stderrCapture.cleanup();
+      await pool.destroy();
+    },
   };
 };

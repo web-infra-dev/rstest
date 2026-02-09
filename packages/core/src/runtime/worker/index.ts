@@ -282,6 +282,13 @@ const runInPool = async (
     }
   | TestFileResult
 > => {
+  if (typeof process.send === 'function') {
+    process.send({
+      __rstest_worker_meta__: true,
+      pid: process.pid,
+    });
+  }
+
   isTeardown = false;
   const {
     entryInfo: { distPath, testPath },
