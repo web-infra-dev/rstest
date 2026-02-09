@@ -28,7 +28,10 @@ async function runBrowserModeTests(
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { runBrowserTests } = await loadBrowserModule({ projectRoots });
+  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
   return runBrowserTests(context, options);
 }
 
@@ -65,8 +68,13 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: false,
     });
 
-    // Generate coverage reports for browser-only tests
-    if (coverage.enabled && browserResult?.results) {
+    // Generate coverage reports for browser-only tests when execution produced test results.
+    // Skip coverage on early startup failures surfaced via unhandledErrors.
+    if (
+      coverage.enabled &&
+      browserResult?.results.length &&
+      !browserResult.unhandledErrors?.length
+    ) {
       const coverageProvider = await createCoverageProvider(
         coverage,
         context.rootPath,
@@ -161,6 +169,10 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
     });
+
+    // Prevent an unhandled rejection window in mixed node+browser runs.
+    // We still await the original promise later to surface the error.
+    browserResultPromise.catch(() => {});
   }
 
   // If there are no node tests to run, we can potentially exit early.
@@ -420,6 +432,9 @@ export async function runTests(context: Rstest): Promise<void> {
     }
     if (shouldUnifyReporter && browserResult?.testResults) {
       testResults.push(...browserResult.testResults);
+    }
+    if (shouldUnifyReporter && browserResult?.unhandledErrors) {
+      errors.push(...browserResult.unhandledErrors);
     }
 
     context.updateReporterResultState(

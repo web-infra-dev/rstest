@@ -1232,6 +1232,52 @@ export const runBrowserController = async (
 ): Promise<BrowserTestRunResult | void> => {
   const { skipOnTestRunEnd = false } = options ?? {};
   const buildStart = Date.now();
+
+  /**
+   * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
+   * Used for early-exit error paths to ensure errors reach the summary report.
+   */
+  const buildErrorResult = async (
+    error: Error,
+  ): Promise<BrowserTestRunResult> => {
+    const elapsed = Math.max(0, Date.now() - buildStart);
+    const errorResult: BrowserTestRunResult = {
+      results: [],
+      testResults: [],
+      duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
+      hasFailure: true,
+      unhandledErrors: [error],
+    };
+
+    if (!skipOnTestRunEnd) {
+      for (const reporter of context.reporters) {
+        await (reporter as Reporter).onTestRunEnd?.({
+          results: [],
+          testResults: [],
+          duration: errorResult.duration,
+          snapshotSummary: context.snapshotManager.summary,
+          getSourcemap: async () => null,
+          unhandledErrors: errorResult.unhandledErrors,
+        });
+      }
+    }
+
+    return errorResult;
+  };
+
+  const toError = (error: unknown): Error => {
+    return error instanceof Error ? error : new Error(String(error));
+  };
+
+  const failWithError = async (
+    error: unknown,
+    cleanup?: () => Promise<void>,
+  ): Promise<BrowserTestRunResult> => {
+    ensureProcessExitCode(1);
+    await cleanup?.();
+    return buildErrorResult(toError(error));
+  };
+
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
   let containerDistPath: string | undefined;
@@ -1243,13 +1289,9 @@ export const runBrowserController = async (
         `[Browser UI] Using dev server for container: ${containerDevServer}`,
       );
     } catch (error) {
-      logger.error(
-        color.red(
-          `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${String(error)}`,
-        ),
-      );
-      ensureProcessExitCode(1);
-      return;
+      const originalError = toError(error);
+      originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
+      return failWithError(originalError);
     }
   }
 
@@ -1257,9 +1299,7 @@ export const runBrowserController = async (
     try {
       containerDistPath = resolveContainerDist();
     } catch (error) {
-      logger.error(color.red(String(error)));
-      ensureProcessExitCode(1);
-      return;
+      return failWithError(error);
     }
   }
 
@@ -1340,10 +1380,9 @@ export const runBrowserController = async (
         containerDevServer,
       });
     } catch (error) {
-      logger.error(error instanceof Error ? error : new Error(String(error)));
-      ensureProcessExitCode(1);
-      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-      return;
+      return failWithError(error, async () => {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      });
     }
 
     if (isWatchMode) {
@@ -1675,11 +1714,7 @@ export const runBrowserController = async (
   }
 
   if (fatalError) {
-    logger.error(
-      color.red(`Browser test run failed: ${(fatalError as Error).message}`),
-    );
-    ensureProcessExitCode(1);
-    return;
+    return failWithError(fatalError);
   }
 
   const duration = {

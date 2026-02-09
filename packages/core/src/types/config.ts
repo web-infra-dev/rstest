@@ -1,7 +1,6 @@
 import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
-import type { BROWSER_VIEWPORT_PRESET_IDS } from '../utils/constants';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
 import type {
   BuiltInReporterNames,
@@ -54,8 +53,32 @@ export type BrowserName = 'chromium' | 'firefox' | 'webkit';
  * Device presets aligned with Chrome DevTools device toolbar.
  *
  * These values are stable identifiers (not user-facing labels).
+ *
+ * IMPORTANT: Keep this union in sync with
+ * `@rstest/browser` preset runtime source:
+ * `packages/browser/src/viewportPresets.ts`.
+ *
+ * `@rstest/core` owns `defineConfig` typing, while `@rstest/browser` owns
+ * runtime validation and resolution for preset ids.
  */
-export type DevicePreset = (typeof BROWSER_VIEWPORT_PRESET_IDS)[number];
+export type DevicePreset =
+  | 'iPhoneSE'
+  | 'iPhoneXR'
+  | 'iPhone12Pro'
+  | 'iPhone14ProMax'
+  | 'Pixel7'
+  | 'SamsungGalaxyS8Plus'
+  | 'SamsungGalaxyS20Ultra'
+  | 'iPadMini'
+  | 'iPadAir'
+  | 'iPadPro'
+  | 'SurfacePro7'
+  | 'SurfaceDuo'
+  | 'GalaxyZFold5'
+  | 'AsusZenbookFold'
+  | 'SamsungGalaxyA51A71'
+  | 'NestHub'
+  | 'NestHubMax';
 
 export type BrowserViewport =
   | {
