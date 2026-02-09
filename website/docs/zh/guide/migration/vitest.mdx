@@ -74,9 +74,10 @@ export default defineConfig({
 
 Rstest 使用 Rsbuild 作为默认测试编译工具，而不是 Vite。你可以在 [Build Configurations](/config/#build-configurations) 查看全部编译配置项。
 
-在大多数项目中，编译侧主要有这两类改动：
+大部分的配置可以直接迁移(如，`resolve.alias`、`resolve.extensions` 等)，但需要注意以下几点：
 
 - 使用 `source.define` 替代 `define`。
+- 使用 `output.externals`替代 `ssr.external`。
 - 使用 Rsbuild 插件替代 Vite 插件。
 
 ```diff
@@ -111,8 +112,8 @@ export default defineConfig({
 2. 将 `vi` 或 `vitest` 的工具 API 替换为 `rs`。
 
 ```diff
-- import { describe, expect, it, test, vi } from 'vitest';
-+ import { describe, expect, it, test, rs } from '@rstest/core';
+- import { describe, expect, it, test, vi, type Mock } from 'vitest';
++ import { describe, expect, it, test, rs, type Mock } from '@rstest/core';
 ```
 
 ```diff
@@ -153,13 +154,15 @@ test('should be mocked', () => {
 
 Rstest 的行为不同。调用 `rs.mock()` 且只传模块路径时，**只会**查找 `__mocks__`，若未找到会报错。要启用自动 mock，需要显式传入 `{ mock: true }`。
 
-```ts
+```diff
 // Rstest
 import { rs, test, expect } from '@rstest/core';
 import { someFunction } from './module';
 
-// 传入 { mock: true } 后会自动 mock 模块。
-rs.mock('./module', { mock: true });
+- // 优先查找 __mocks__/module.js，然后自动 mock。
+- vi.mock('./module');
++ // 传入 { mock: true } 后会自动 mock 模块。
++ rs.mock('./module', { mock: true });
 
 test('should be mocked', () => {
   expect(rs.isMockFunction(someFunction)).toBe(true);
@@ -167,20 +170,25 @@ test('should be mocked', () => {
 });
 ```
 
-主要差异在于：Vitest 默认有隐式自动 mock 回退，而 Rstest 需要显式配置。更多细节见 [`rs.mock()` 的 `{ mock: true }` 选项](/api/runtime-api/rstest/mock-modules#使用--mock-true--选项)。
-
 ### Mock 异步模块
 
 当你需要 mock 模块返回值时，Rstest 不支持返回异步函数。
 
 作为替代，Rstest 提供了同步 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，你可以通过静态 import 导入未 mock 的真实实现：
 
-```ts
-import * as apiActual from './api' with { rstest: 'importActual' };
+```diff
++ import * as apiActual from './api' with { rstest: 'importActual' };
 
-// 部分 mock './api' 模块
-rs.mock('./api', () => ({
-  ...apiActual,
+- vi.mock('./api', async (importOriginal) => {
+-   const original = await importOriginal();
+-    return {
+-     ...original,
+-    fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
+-  };
+- });
+
++ rs.mock('./api', () => ({
++  ...apiActual,
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```
