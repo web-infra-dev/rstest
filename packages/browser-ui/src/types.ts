@@ -41,6 +41,8 @@ export type BrowserHostConfig = {
   wsPort?: number;
   /** Debug mode. When true, enables verbose logging in browser */
   debug?: boolean;
+  /** Timeout for RPC operations in milliseconds */
+  rpcTimeout?: number;
 };
 
 export type BrowserClientTestResult = {
@@ -60,11 +62,29 @@ export type BrowserClientFileResult = BrowserClientTestResult & {
   results: BrowserClientTestResult[];
 };
 
+export type TestFileStartPayload = {
+  testPath: string;
+  projectName: string;
+};
+
+export type LogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
+
+export type FatalPayload = {
+  message: string;
+  stack?: string;
+};
+
 export type BrowserClientMessage =
   | { type: 'ready' }
   | {
       type: 'file-start';
-      payload: { testPath: string; projectName: string };
+      payload: TestFileStartPayload;
     }
   | {
       type: 'case-result';
@@ -76,13 +96,36 @@ export type BrowserClientMessage =
     }
   | {
       type: 'fatal';
-      payload: { message: string; stack?: string };
+      payload: FatalPayload;
+    }
+  | {
+      type: 'log';
+      payload: LogPayload;
     }
   | {
       type: 'snapshot-rpc-request';
       payload: SnapshotRpcRequest;
     }
   | { type: string; payload?: unknown };
+
+export type HostRPC = {
+  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
+  getTestFiles: () => Promise<TestFileInfo[]>;
+  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
+  onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
+  onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
+  onLog: (payload: LogPayload) => Promise<void>;
+  onFatal: (payload: FatalPayload) => Promise<void>;
+  resolveSnapshotPath: (testPath: string) => Promise<string>;
+  readSnapshotFile: (filepath: string) => Promise<string | null>;
+  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
+  removeSnapshotFile: (filepath: string) => Promise<void>;
+};
+
+export type ContainerRPC = {
+  onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
+  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
+};
 
 /**
  * Snapshot RPC request from runner iframe.
