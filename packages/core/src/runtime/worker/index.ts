@@ -9,6 +9,7 @@ import type {
 import './setup';
 import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
+import { createWorkerMetaMessage } from '../../pool/workerMeta';
 import { globalApis } from '../../utils/constants';
 import { undoSerializableConfig } from '../../utils/helper';
 import { color } from '../../utils/logger';
@@ -282,6 +283,10 @@ const runInPool = async (
     }
   | TestFileResult
 > => {
+  if (typeof process.send === 'function') {
+    process.send(createWorkerMetaMessage(process.pid));
+  }
+
   isTeardown = false;
   const {
     entryInfo: { distPath, testPath },

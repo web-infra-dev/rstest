@@ -25,4 +25,22 @@ describe('test worker behavior', () => {
     // ExperimentalWarning should be suppressed
     expect(cli.log).not.toContain('ExperimentalWarning');
   });
+
+  it('should include worker stderr in summary when worker exits unexpectedly', async () => {
+    const marker = 'RSTEST_WORKER_PANIC_MARKER';
+    const { expectExecFailed, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'worker.panic.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(cli.log).toContain('Worker exited unexpectedly');
+    expect(cli.log).toContain('Maybe related stderr');
+    expect(cli.log).toContain(marker);
+  });
 });
