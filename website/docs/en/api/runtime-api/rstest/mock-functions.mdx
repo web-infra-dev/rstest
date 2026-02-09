@@ -59,6 +59,19 @@ expect(hi.sayHi()).toBe('hi');
 expect(spy).toHaveBeenCalled();
 ```
 
+If you call `rstest.spyOn` multiple times for the same method, Rstest reuses the existing spy instead of redefining it.
+
+```ts
+const hi = {
+  sayHi: () => 'hi',
+};
+rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+
+expect(hi.sayHi()).toBe('hello');
+// should get the same spy instance
+expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
+```
+
 ## rstest.isMockFunction
 
 - **Alias:** `rs.isMockFunction`
