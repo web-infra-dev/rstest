@@ -59,6 +59,20 @@ expect(hi.sayHi()).toBe('hi');
 expect(spy).toHaveBeenCalled();
 ```
 
+对同一个方法重复调用 `rstest.spyOn` 时，会返回已有的 spy，而不是重新定义。
+
+```ts
+const hi = {
+  sayHi: () => 'hi',
+};
+rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+
+expect(hi.sayHi()).toBe('hello');
+
+// 返回的 spy 实例与第一次调用相同
+expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
+```
+
 ## rstest.isMockFunction
 
 - **别名：** `rs.isMockFunction`
