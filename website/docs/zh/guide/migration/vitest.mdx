@@ -1,6 +1,6 @@
 # 从 Vitest 迁移
 
-如果你正在使用 Rstack (Rsbuild / Rslib / Rspack 等)工具链，迁移到 Rstest 将会为你带来一致的开发体验。
+如果你正在使用 Rstack 工具链（Rsbuild / Rslib / Rspack 等），迁移到 Rstest 可以带来更一致的开发体验。
 
 ## 安装依赖
 
@@ -14,14 +14,23 @@ import { PackageManagerTabs } from '@theme';
 
 ```diff
 "scripts": {
--  "test": "vitest run"
+-  "test": "vitest run" // 或 "vitest --run"
 +  "test": "rstest"
+}
+```
+
+`rstest` 没有 `--run` 参数。直接运行 `rstest` 就会执行一次测试并退出；如果你想使用 watch 模式，可以加上 `--watch`：
+
+```diff
+"scripts": {
+-  "test": "vitest"
++  "test": "rstest --watch"
 }
 ```
 
 ## 配置迁移
 
-将你的 Vitest 配置文件（例如 `vite.config.ts` 或 `vitest.config.ts`）更新为 `rstest.config.ts` 文件：
+将你的 Vitest 配置文件（例如 `vite.config.ts` 或 `vitest.config.ts`）迁移为 `rstest.config.ts`：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -33,60 +42,107 @@ export default defineConfig({
 
 ### 测试配置
 
-Rstest 测试配置与 Vitest 基本相同，需要注意的是，你不需要将测试配置放在 `test` 字段下。
+Rstest 的测试配置和 Vitest 基本一致。
 
-此外，有一些配置变化需要注意，如 `test.environment` 需要更改为 `testEnvironment`。
+迁移配置时，重点关注这两点：
 
-你可以通过 [Test Configurations](/config/#test-configurations) 查看所有可用的测试配置选项。
+- 移除 `test` 字段，将其内部配置提升到顶层。
+- 一些字段名的调整（例如 `test.environment` -> `testEnvironment`）。
+
+你可以在 [Test Configurations](/config/#test-configurations) 查看全部测试配置项。
 
 ```diff
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
 -  test: {
-     include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+-    include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+-    exclude: ['dist/**'],
+-    setupFiles: ['./test/setup.ts'],
+-    globals: true,
 -    environment: 'node',
-+    testEnvironment: 'node',
--  }
+-  },
++  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
++  exclude: ['dist/**'],
++  setupFiles: ['./test/setup.ts'],
++  globals: true,
++  testEnvironment: 'node',
 });
 ```
 
 ### 编译配置
 
-Rstest 使用 Rsbuild 作为默认的测试编译工具，而不是 Vite。因此，你需要将编译配置从 Vite 配置迁移到 Rstest 配置中。你可以通过 [Build Configurations](/config/#build-configurations) 查看所有可用的编译配置选项。
+Rstest 使用 Rsbuild 作为默认测试编译工具，而不是 Vite。你可以在 [Build Configurations](/config/#build-configurations) 查看全部编译配置项。
 
-如果你需要了解更多关于 Vite 编译配置迁移的信息，请参考 [Rsbuild - Vite 迁移文档](https://rsbuild.rs/zh/guide/migration/vite#%E9%85%8D%E7%BD%AE%E8%BF%81%E7%A7%BB)。
+在大多数项目中，编译侧主要有这两类改动：
 
-## 更新测试 API
-
-### 测试 API
-
-Rstest 提供了与 Vitest 兼容的 API。因此，你只需将导入从 Vitest 更改为 Rstest：
+- 使用 `source.define` 替代 `define`。
+- 使用 Rsbuild 插件替代 Vite 插件。
 
 ```diff
-- import { describe, expect, it, test } from 'vitest';
-+ import { describe, expect, it, test } from '@rstest/core';
+import { defineConfig } from '@rstest/core';
+- import react from '@vitejs/plugin-react'
++ import { pluginReact } from '@rsbuild/plugin-react';
+
+export default defineConfig({
+-  plugins: [react()],
+-  define: {
+-    __DEV__: true,
+-  },
++  plugins: [pluginReact()],
++  source: {
++    define: {
++      __DEV__: true,
++    },
++  },
+});
 ```
 
-Rstest 提供了 `rstest` API，你可以使用它来访问 Rstest 的工具函数，如 `rstest.fn()` 和 `rstest.mock()`。就像 Vitest 的 `vi.fn()` 和 `vi.mock()` 一样。更多工具函数可以在 [Rstest APIs](/api/runtime-api/) 中找到。
+如果你使用的是 Rslib 或 Rsbuild，也可以直接复用对应配置：
+
+- Rslib 项目（存在 `rslib.config.*`）使用 `@rstest/adapter-rslib`，并在 `extends` 中配置 `withRslibConfig()`（参考 [Rslib 集成文档](/guide/integration/rslib)）。
+- Rsbuild 项目（存在 `rsbuild.config.*`）使用 `@rstest/adapter-rsbuild`，并在 `extends` 中配置 `withRsbuildConfig()`（参考 [Rsbuild 集成文档](/guide/integration/rsbuild)）。
+
+## 替换测试导入与 API
+
+测试 API 的迁移通常只需要两步：
+
+1. 将 `vitest` 的导入替换为 `@rstest/core`。
+2. 将 `vi` 或 `vitest` 的工具 API 替换为 `rs`。
 
 ```diff
-- const fn = vi.fn();
-+ const fn = rstest.fn();
-
-fn.mockResolvedValue('foo');
+- import { describe, expect, it, test, vi } from 'vitest';
++ import { describe, expect, it, test, rs } from '@rstest/core';
 ```
+
+```diff
+- vi.fn()
++ rs.fn()
+
+- vi.mock('./foo')
++ rs.mock('./foo')
+
+- vi.spyOn(console, 'error')
++ rs.spyOn(console, 'error')
+```
+
+```diff
+- vitest.fn()
++ rs.fn()
+```
+
+完整工具 API 请参考 [Rstest APIs](/api/runtime-api/)。
 
 ### 自动模拟模块
 
-在 Vitest 中，只调用 `vi.mock()` 并传入模块路径时，它会首先尝试从对应的 `__mocks__` 目录加载手动模拟。如果没有找到手动模拟，它会自动模拟该模块，将其所有导出替换为空的模拟函数。
+在 Vitest 中，调用 `vi.mock()` 且只传模块路径时，会先尝试从对应 `__mocks__` 目录加载手动 mock；如果没找到，再自动 mock 整个模块，把导出替换为空 mock 函数。
 
 ```ts
 // Vitest
 import { vi, test, expect } from 'vitest';
 import { someFunction } from './module';
 
-// 优先查找 __mocks__/module.js，然后进行自动模拟。
+// 优先查找 __mocks__/module.js，然后自动 mock。
 vi.mock('./module');
 
 test('should be mocked', () => {
@@ -95,14 +151,14 @@ test('should be mocked', () => {
 });
 ```
 
-Rstest 的处理方式不同。只调用 `rs.mock()` 并传入模块路径时，它将**只**从 `__mocks__` 目录查找模拟，如果未找到则会报错。要实现自动模拟，你必须显式传递 `{ mock: true }` 选项。
+Rstest 的行为不同。调用 `rs.mock()` 且只传模块路径时，**只会**查找 `__mocks__`，若未找到会报错。要启用自动 mock，需要显式传入 `{ mock: true }`。
 
 ```ts
 // Rstest
 import { rs, test, expect } from '@rstest/core';
 import { someFunction } from './module';
 
-// 因为传递了 { mock: true }，所以会自动模拟该模块。
+// 传入 { mock: true } 后会自动 mock 模块。
 rs.mock('./module', { mock: true });
 
 test('should be mocked', () => {
@@ -111,18 +167,18 @@ test('should be mocked', () => {
 });
 ```
 
-这种区别很重要：Vitest 默认提供了隐式的自动模拟回退，而 Rstest 则需要显式配置才能实现相同的行为。更多详细信息，请参阅 [`rs.mock()` 的 `{ mock: true }` 选项](/api/runtime-api/rstest/mock-modules#使用--mock-true--选项)。
+主要差异在于：Vitest 默认有隐式自动 mock 回退，而 Rstest 需要显式配置。更多细节见 [`rs.mock()` 的 `{ mock: true }` 选项](/api/runtime-api/rstest/mock-modules#使用--mock-true--选项)。
 
 ### Mock 异步模块
 
-当你需要 mock 一个模块返回值时，Rstest 不支持返回一个异步函数。
+当你需要 mock 模块返回值时，Rstest 不支持返回异步函数。
 
-作为替代方案，Rstest 提供了同步的 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，允许你通过 static import 语句导入未被 mock 的模块实现：
+作为替代，Rstest 提供了同步 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，你可以通过静态 import 导入未 mock 的真实实现：
 
 ```ts
 import * as apiActual from './api' with { rstest: 'importActual' };
 
-// Partially mock the './api' module
+// 部分 mock './api' 模块
 rs.mock('./api', () => ({
   ...apiActual,
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
