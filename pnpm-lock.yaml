@@ -799,8 +799,8 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4
       birpc:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: ^4.0.0
+        version: 4.0.0
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -844,8 +844,8 @@ importers:
         specifier: ^6.2.0
         version: 6.2.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       birpc:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: ^4.0.0
+        version: 4.0.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1114,8 +1114,8 @@ importers:
         specifier: 3.7.1
         version: 3.7.1
       birpc:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: ^4.0.0
+        version: 4.0.0
       core-js-pure:
         specifier: ^3.47.0
         version: 3.47.0
@@ -3607,9 +3607,6 @@ packages:
   binaryextensions@6.11.0:
     resolution: {integrity: sha512-sXnYK/Ij80TO3lcqZVV2YgfKN5QjUWIRk/XSm2J/4bd/lPko3lvk0O4ZppH6m+6hB2/GTu+ptNwVFe1xh+QLQw==}
     engines: {node: '>=4'}
-
-  birpc@2.9.0:
-    resolution: {integrity: sha512-KrayHS5pBi69Xi9JmvoqrIgYGDkD6mcSe/i6YKi3w5kekCLzrX4+nawcXqrj2tIp50Kw/mT/s3p+GVK0A0sKxw==}
 
   birpc@4.0.0:
     resolution: {integrity: sha512-LShSxJP0KTmd101b6DRyGBj57LZxSDYWKitQNW/mi8GRMvZb078Uf9+pveax1DrVL89vm7mWe+TovdI/UDOuPw==}
@@ -10178,8 +10175,6 @@ snapshots:
   binaryextensions@6.11.0:
     dependencies:
       editions: 6.22.0
-
-  birpc@2.9.0: {}
 
   birpc@4.0.0: {}
 
