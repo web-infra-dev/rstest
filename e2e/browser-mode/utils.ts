@@ -17,6 +17,12 @@ const defaultEnvOverrides: Record<string, string> = {
   GITHUB_ACTIONS: '',
 };
 
+export const canRunHeadedBrowser =
+  process.platform === 'darwin' ||
+  process.platform === 'win32' ||
+  (process.platform === 'linux' &&
+    Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
+
 /**
  * Run browser mode CLI with specified fixture
  */
