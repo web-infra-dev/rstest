@@ -18,19 +18,28 @@ import { parseWorkerMetaMessage, type WorkerMetaMessage } from './workerMeta';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-function createChannel(
+export type ForksChannel = {
+  onMessage: (callback: (...args: any[]) => void) => void;
+  postMessage: (message: any) => void;
+};
+
+export type ForksChannelContext = {
+  channel: ForksChannel;
+  cleanup: () => void;
+};
+
+export function createForksChannel(
   rpcMethods: RuntimeRPC,
   onWorkerMeta?: (message: WorkerMetaMessage) => void,
-) {
+  createBirpcImpl: typeof createBirpc = createBirpc,
+): ForksChannelContext {
   const emitter = new EventEmitter();
-  const cleanup = () => emitter.removeAllListeners();
-
   const events = { message: 'message', response: 'response' };
-  const channel = {
-    onMessage: (callback: any) => {
+  const channel: ForksChannel = {
+    onMessage: (callback: (...args: any[]) => void): void => {
       emitter.on(events.message, callback);
     },
-    postMessage: (message: any) => {
+    postMessage: (message: any): void => {
       const workerMeta = parseWorkerMetaMessage(message);
       if (workerMeta) {
         onWorkerMeta?.(workerMeta);
@@ -40,9 +49,10 @@ function createChannel(
     },
   };
 
-  createBirpc<ServerRPC, RuntimeRPC>(rpcMethods, {
+  const rpc = createBirpcImpl<ServerRPC, RuntimeRPC>(rpcMethods, {
     serialize: v8.serialize,
     deserialize: (v) => v8.deserialize(Buffer.from(v)),
+    timeout: -1,
     post(v) {
       emitter.emit(events.message, v);
     },
@@ -51,7 +61,12 @@ function createChannel(
     },
   });
 
-  return { channel, cleanup };
+  const cleanup = (): void => {
+    rpc.$close(new Error('[rstest-pool]: Pending methods while closing rpc'));
+    emitter.removeAllListeners();
+  };
+
+  return { channel: channel, cleanup: cleanup };
 }
 
 export const createForksPool = (poolOptions: {
@@ -99,7 +114,7 @@ export const createForksPool = (poolOptions: {
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
       const taskId = ++nextTaskId;
       stderrCapture.createTask(taskId);
-      const { channel, cleanup } = createChannel(rpcMethods, ({ pid }) => {
+      const { channel, cleanup } = createForksChannel(rpcMethods, ({ pid }) => {
         stderrCapture.bindTaskToPid(taskId, pid);
       });
       try {
@@ -115,7 +130,7 @@ export const createForksPool = (poolOptions: {
     collectTests: async ({ options, rpcMethods }: RunWorkerOptions) => {
       const taskId = ++nextTaskId;
       stderrCapture.createTask(taskId);
-      const { channel, cleanup } = createChannel(rpcMethods, ({ pid }) => {
+      const { channel, cleanup } = createForksChannel(rpcMethods, ({ pid }) => {
         stderrCapture.bindTaskToPid(taskId, pid);
       });
       try {

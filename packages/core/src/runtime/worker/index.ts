@@ -74,14 +74,9 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const originalConsole = global.console;
-
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
     createForksRpcOptions({ dispose: disposeFns }),
-    {
-      originalConsole,
-    },
   );
 
   globalCleanups.push(() => {
