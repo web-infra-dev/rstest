@@ -342,3 +342,13 @@ expect.extend({
 
 expect(10).toBeDivisibleBy(2);
 ```
+
+If you want to add TypeScript typings for your custom matchers, you can extend the `Assertion` interface in the `@rstest/core` module:
+
+```ts
+declare module '@rstest/core' {
+  interface Assertion<T> {
+    toBeDivisibleBy(argument: number): void;
+  }
+}
+```
