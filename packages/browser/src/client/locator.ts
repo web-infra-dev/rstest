@@ -12,6 +12,112 @@ export const serializeText = (value: string | RegExp): BrowserLocatorText => {
   return { type: 'regexp', source: value.source, flags: value.flags };
 };
 
+export type LocatorGetByRoleOptions = {
+  name?: string | RegExp;
+  exact?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  expanded?: boolean;
+  selected?: boolean;
+  pressed?: boolean;
+  includeHidden?: boolean;
+  level?: number;
+};
+
+export type LocatorTextOptions = {
+  exact?: boolean;
+};
+
+export type LocatorKeyboardModifier =
+  | 'Alt'
+  | 'Control'
+  | 'ControlOrMeta'
+  | 'Meta'
+  | 'Shift';
+
+export type LocatorMouseButton = 'left' | 'right' | 'middle';
+
+export type LocatorPosition = {
+  x: number;
+  y: number;
+};
+
+export type LocatorClickOptions = {
+  button?: LocatorMouseButton;
+  clickCount?: number;
+  delay?: number;
+  force?: boolean;
+  modifiers?: LocatorKeyboardModifier[];
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+export type LocatorDblclickOptions = Omit<LocatorClickOptions, 'clickCount'>;
+
+export type LocatorHoverOptions = Pick<
+  LocatorClickOptions,
+  'force' | 'modifiers' | 'position' | 'timeout' | 'trial'
+>;
+
+export type LocatorPressOptions = {
+  delay?: number;
+  timeout?: number;
+};
+
+export type LocatorFillOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+export type LocatorCheckOptions = {
+  force?: boolean;
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+export type LocatorFocusOptions = {
+  timeout?: number;
+};
+
+export type LocatorBlurOptions = {
+  timeout?: number;
+};
+
+export type LocatorScrollIntoViewIfNeededOptions = {
+  timeout?: number;
+};
+
+export type LocatorWaitForOptions = {
+  state?: 'attached' | 'detached' | 'visible' | 'hidden';
+  timeout?: number;
+};
+
+export type BrowserSerializable =
+  | null
+  | boolean
+  | number
+  | string
+  | BrowserSerializable[]
+  | { [key: string]: BrowserSerializable };
+
+export type LocatorDispatchEventInit = BrowserSerializable;
+
+export type LocatorSelectOptionOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+export type LocatorSetInputFilesOptions = {
+  timeout?: number;
+};
+
+export type LocatorFilterOptions = {
+  hasText?: string | RegExp;
+  has?: Locator;
+};
+
 export class Locator {
   readonly ir: BrowserLocatorIR;
 
@@ -19,10 +125,7 @@ export class Locator {
     this.ir = ir;
   }
 
-  getByRole(
-    role: string,
-    options?: { name?: string | RegExp; [k: string]: unknown },
-  ): Locator {
+  getByRole(role: string, options?: LocatorGetByRoleOptions): Locator {
     const next = {
       steps: [
         ...this.ir.steps,
@@ -47,7 +150,7 @@ export class Locator {
     });
   }
 
-  getByText(text: string | RegExp, options?: { exact?: boolean }): Locator {
+  getByText(text: string | RegExp, options?: LocatorTextOptions): Locator {
     return new Locator({
       steps: [
         ...this.ir.steps,
@@ -56,7 +159,7 @@ export class Locator {
     });
   }
 
-  getByLabel(text: string | RegExp, options?: { exact?: boolean }): Locator {
+  getByLabel(text: string | RegExp, options?: LocatorTextOptions): Locator {
     return new Locator({
       steps: [
         ...this.ir.steps,
@@ -67,7 +170,7 @@ export class Locator {
 
   getByPlaceholder(
     text: string | RegExp,
-    options?: { exact?: boolean },
+    options?: LocatorTextOptions,
   ): Locator {
     return new Locator({
       steps: [
@@ -77,7 +180,7 @@ export class Locator {
     });
   }
 
-  getByAltText(text: string | RegExp, options?: { exact?: boolean }): Locator {
+  getByAltText(text: string | RegExp, options?: LocatorTextOptions): Locator {
     return new Locator({
       steps: [
         ...this.ir.steps,
@@ -86,7 +189,7 @@ export class Locator {
     });
   }
 
-  getByTitle(text: string | RegExp, options?: { exact?: boolean }): Locator {
+  getByTitle(text: string | RegExp, options?: LocatorTextOptions): Locator {
     return new Locator({
       steps: [
         ...this.ir.steps,
@@ -104,7 +207,7 @@ export class Locator {
     });
   }
 
-  filter(options: { hasText?: string | RegExp; has?: Locator }): Locator {
+  filter(options: LocatorFilterOptions): Locator {
     return new Locator({
       steps: [
         ...this.ir.steps,
@@ -164,26 +267,26 @@ export class Locator {
     return new Locator({ steps: [...this.ir.steps, { type: 'last' }] });
   }
 
-  async click(options?: unknown): Promise<void> {
+  async click(options?: LocatorClickOptions): Promise<void> {
     await this.callLocator('click', options === undefined ? [] : [options]);
   }
 
-  async dblclick(options?: unknown): Promise<void> {
+  async dblclick(options?: LocatorDblclickOptions): Promise<void> {
     await this.callLocator('dblclick', options === undefined ? [] : [options]);
   }
 
-  async fill(value: string, options?: unknown): Promise<void> {
+  async fill(value: string, options?: LocatorFillOptions): Promise<void> {
     await this.callLocator(
       'fill',
       options === undefined ? [value] : [value, options],
     );
   }
 
-  async hover(options?: unknown): Promise<void> {
+  async hover(options?: LocatorHoverOptions): Promise<void> {
     await this.callLocator('hover', options === undefined ? [] : [options]);
   }
 
-  async press(key: string, options?: unknown): Promise<void> {
+  async press(key: string, options?: LocatorPressOptions): Promise<void> {
     await this.callLocator(
       'press',
       options === undefined ? [key] : [key, options],
@@ -194,34 +297,39 @@ export class Locator {
     await this.callLocator('clear', []);
   }
 
-  async check(options?: unknown): Promise<void> {
+  async check(options?: LocatorCheckOptions): Promise<void> {
     await this.callLocator('check', options === undefined ? [] : [options]);
   }
 
-  async uncheck(options?: unknown): Promise<void> {
+  async uncheck(options?: LocatorCheckOptions): Promise<void> {
     await this.callLocator('uncheck', options === undefined ? [] : [options]);
   }
 
-  async focus(options?: unknown): Promise<void> {
+  async focus(options?: LocatorFocusOptions): Promise<void> {
     await this.callLocator('focus', options === undefined ? [] : [options]);
   }
 
-  async blur(options?: unknown): Promise<void> {
+  async blur(options?: LocatorBlurOptions): Promise<void> {
     await this.callLocator('blur', options === undefined ? [] : [options]);
   }
 
-  async scrollIntoViewIfNeeded(options?: unknown): Promise<void> {
+  async scrollIntoViewIfNeeded(
+    options?: LocatorScrollIntoViewIfNeededOptions,
+  ): Promise<void> {
     await this.callLocator(
       'scrollIntoViewIfNeeded',
       options === undefined ? [] : [options],
     );
   }
 
-  async waitFor(options?: unknown): Promise<void> {
+  async waitFor(options?: LocatorWaitForOptions): Promise<void> {
     await this.callLocator('waitFor', options === undefined ? [] : [options]);
   }
 
-  async dispatchEvent(type: string, eventInit?: unknown): Promise<void> {
+  async dispatchEvent(
+    type: string,
+    eventInit?: LocatorDispatchEventInit,
+  ): Promise<void> {
     if (typeof type !== 'string' || !type) {
       throw new TypeError(
         'Locator.dispatchEvent() expects a non-empty event type string.',
@@ -235,7 +343,7 @@ export class Locator {
 
   async selectOption(
     value: string | string[],
-    options?: unknown,
+    options?: LocatorSelectOptionOptions,
   ): Promise<void> {
     if (
       typeof value !== 'string' &&
@@ -253,7 +361,7 @@ export class Locator {
 
   async setInputFiles(
     files: string | string[],
-    options?: unknown,
+    options?: LocatorSetInputFilesOptions,
   ): Promise<void> {
     if (
       typeof files !== 'string' &&
@@ -279,7 +387,32 @@ export class Locator {
   }
 }
 
-export const page = new Locator({ steps: [] });
+const browserPageQueryMethods = [
+  'locator',
+  'getByRole',
+  'getByText',
+  'getByLabel',
+  'getByPlaceholder',
+  'getByAltText',
+  'getByTitle',
+  'getByTestId',
+] as const;
+
+type BrowserPageQueryMethod = (typeof browserPageQueryMethods)[number];
+
+export type BrowserPage = Pick<Locator, BrowserPageQueryMethod>;
+
+const rootLocator = new Locator({ steps: [] });
+
+const createBrowserPage = (): BrowserPage => {
+  return Object.fromEntries(
+    browserPageQueryMethods.map((methodName) => {
+      return [methodName, rootLocator[methodName].bind(rootLocator)];
+    }),
+  ) as BrowserPage;
+};
+
+export const page: BrowserPage = createBrowserPage();
 
 export const isLocator = (value: unknown): value is Locator => {
   return value instanceof Locator;

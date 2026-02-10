@@ -2,6 +2,14 @@ import { describe, expect, it } from '@rstest/core';
 import { page } from '../src/client/locator';
 
 describe('browser locator IR', () => {
+  it('should expose query-only page entry', () => {
+    expect((page as any).click).toBeUndefined();
+    expect((page as any).fill).toBeUndefined();
+
+    const locator = page.getByRole('button', { name: 'Submit' });
+    expect((locator.ir.steps[0] as any).type).toBe('getByRole');
+  });
+
   it('should build nested filter({ has }) IR', () => {
     const base = page.locator('section');
     const has = page.locator('h2').filter({ hasText: 'Profile' });

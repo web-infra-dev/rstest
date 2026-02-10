@@ -253,6 +253,35 @@ export default defineConfig({
 });
 ```
 
+## 多项目配置隔离
+
+在 Browser Mode 下使用 `projects` 时，每个项目都会按自己的配置独立编译和执行，不会复用其他项目的 Browser 配置。
+
+这意味着你可以安全地让不同项目拥有不同的插件、`include` 规则和框架设置。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
 ## 与 Node 测试混合
 
 可以同时配置浏览器测试和 Node.js 测试：
@@ -289,3 +318,4 @@ export default defineConfig({
 
 - [浏览器模式指南](/guide/browser-testing/) - 浏览器模式介绍和使用指南
 - [快速开始](/guide/browser-testing/getting-started) - 配置浏览器模式测试
+- [浏览器交互](/guide/browser-testing/user-interactions#locator-api) - 使用 `page` + `expect.element` 编写语义化测试

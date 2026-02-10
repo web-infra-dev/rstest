@@ -1,0 +1,51 @@
+---
+title: Browser mode
+---
+
+# Browser mode
+
+Browser Mode API 由 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 提供，目标是让你在浏览器测试中使用 Playwright 风格的 Locator 工作流。
+
+## 导出 API
+
+`@rstest/browser` 提供的是 Browser Mode 的运行时入口能力，核心职责是**定位元素并驱动交互**。
+
+其中，`page` 是查询起点，`Locator` 负责链式组合与动作执行，`BrowserPage` 用来描述 `page` 支持的查询 API。
+
+以下是 `@rstest/browser` 当前导出的 API：
+
+- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` 查询入口（仅查询）
+- [`Locator`](/api/runtime-api/browser-mode/locator) - 链式查询与交互的核心类
+- [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - `page` 的类型定义
+
+## 断言 API
+
+断言入口是 `expect.element(locator)`。
+
+当你在 Browser Mode 测试里导入 `@rstest/browser`（例如 `import { page } from '@rstest/browser'`）时，`expect` 会自动具备 `element` 能力。
+
+它的职责是对 `Locator` 执行 web-first assertion（带自动等待），例如 `toBeVisible`、`toHaveText`。
+
+两者关系可以理解为：`@rstest/browser` 负责**找元素和操作元素**，`expect.element` 负责**验证元素状态**。
+
+- [`expect.element(locator)`](/api/runtime-api/browser-mode/assertion) - 对 `Locator` 执行自动等待断言
+
+## 示例：查询、交互与断言
+
+```ts title="browser-example.test.ts"
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('submits form', async () => {
+  await page.getByLabel('Email').fill('dev@rstest.rs');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect.element(page.getByText('Done')).toBeVisible();
+});
+```
+
+这个例子里，`page` 先生成 `Locator`，`Locator` 执行 `fill/click`，最后 `expect.element(locator)` 对结果做可见性断言，形成完整测试闭环。
+
+## 详细参考
+
+- [Locator](/api/runtime-api/browser-mode/locator)
+- [Assertion](/api/runtime-api/browser-mode/assertion)

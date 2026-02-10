@@ -235,4 +235,27 @@ const installExpectElement = (): void => {
 
 installExpectElement();
 
+export type {
+  BrowserPage,
+  BrowserSerializable,
+  LocatorBlurOptions,
+  LocatorCheckOptions,
+  LocatorClickOptions,
+  LocatorDblclickOptions,
+  LocatorDispatchEventInit,
+  LocatorFillOptions,
+  LocatorFilterOptions,
+  LocatorFocusOptions,
+  LocatorGetByRoleOptions,
+  LocatorHoverOptions,
+  LocatorKeyboardModifier,
+  LocatorMouseButton,
+  LocatorPosition,
+  LocatorPressOptions,
+  LocatorScrollIntoViewIfNeededOptions,
+  LocatorSelectOptionOptions,
+  LocatorSetInputFilesOptions,
+  LocatorTextOptions,
+  LocatorWaitForOptions,
+} from './locator';
 export { Locator, page };
