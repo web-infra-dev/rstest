@@ -1,6 +1,7 @@
 import { relative } from 'pathe';
 import type {
   NormalizedConfig,
+  NormalizedProjectConfig,
   RstestTestState,
   TestFileResult,
   VerboseReporterOptions,
@@ -16,11 +17,13 @@ export class VerboseReporter extends DefaultReporter {
     options,
     config,
     testState,
+    projectConfigs,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: VerboseReporterOptions;
     testState: RstestTestState;
+    projectConfigs?: Map<string, NormalizedProjectConfig>;
   }) {
     super({
       rootPath,
@@ -30,6 +33,7 @@ export class VerboseReporter extends DefaultReporter {
       },
       config,
       testState,
+      projectConfigs,
     });
     this.verboseOptions = options;
   }
@@ -37,19 +41,26 @@ export class VerboseReporter extends DefaultReporter {
   override onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
 
-    if (this.config.hideSkippedTestFiles && test.status === 'skip') {
+    const projectConfig = this.projectConfigs.get(test.project);
+    const hideSkippedTestFiles =
+      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+
+    if (hideSkippedTestFiles && test.status === 'skip') {
       return;
     }
 
     const relativePath = relative(this.rootPath, test.testPath);
-    const { slowTestThreshold } = this.config;
+    const slowTestThreshold =
+      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
+    const hideSkippedTests =
+      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
     logFileTitle(test, relativePath, true, this.verboseOptions.showProjectName);
 
     for (const result of test.results) {
       logCase(result, {
         slowTestThreshold,
-        hideSkippedTests: this.config.hideSkippedTests,
+        hideSkippedTests,
       });
     }
   }

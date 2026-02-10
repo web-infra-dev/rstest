@@ -18,6 +18,7 @@ import {
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
+  resolveShardedEntries,
 } from '../utils';
 import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -170,9 +171,11 @@ const collectNodeTests = async ({
 const collectBrowserTests = async ({
   context,
   browserProjects,
+  shardedEntries,
 }: {
   context: RstestContext;
   browserProjects: ProjectContext[];
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
 }): Promise<{
   list: ListCommandResult[];
   close: () => Promise<void>;
@@ -187,10 +190,11 @@ const collectBrowserTests = async ({
   const { loadBrowserModule } = await import('./browserLoader');
   // Pass project roots to resolve @rstest/browser from project-specific node_modules
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { listBrowserTests } = await loadBrowserModule({ projectRoots });
-  // Cast to any because listBrowserTests expects Rstest but we have RstestContext
-  // In practice, context is always a Rstest instance
-  return listBrowserTests(context as any);
+  const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
+  return listBrowserTests(context, { shardedEntries });
 };
 
 const collectTestFiles = async ({
@@ -225,9 +229,11 @@ const collectTestFiles = async ({
 const collectAllTests = async ({
   context,
   globTestSourceEntries,
+  shardedEntries,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
@@ -252,6 +258,7 @@ const collectAllTests = async ({
     collectBrowserTests({
       context,
       browserProjects,
+      shardedEntries,
     }),
   ]);
 
@@ -270,8 +277,28 @@ export async function listTests(
   { filesOnly, json, printLocation, includeSuites }: ListCommandOptions,
 ): Promise<ListCommandResult[]> {
   const { rootPath } = context;
+  const { shard } = context.normalizedConfig;
 
+  const shardedEntries = await resolveShardedEntries(context);
   const testEntries: Record<string, Record<string, string>> = {};
+  let shardedBrowserEntries:
+    | Map<string, { entries: Record<string, string> }>
+    | undefined;
+
+  if (shard && shardedEntries) {
+    for (const [key, value] of shardedEntries.entries()) {
+      testEntries[key] = value.entries;
+    }
+
+    shardedBrowserEntries = new Map();
+    for (const p of context.projects.filter(
+      (p) => p.normalizedConfig.browser.enabled,
+    )) {
+      shardedBrowserEntries.set(p.environmentName, {
+        entries: testEntries[p.environmentName] || {},
+      });
+    }
+  }
 
   const globTestSourceEntries = async (
     name: string,
@@ -310,6 +337,7 @@ export async function listTests(
     : await collectAllTests({
         context,
         globTestSourceEntries,
+        shardedEntries: shardedBrowserEntries,
       });
 
   const tests: {

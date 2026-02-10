@@ -18,7 +18,8 @@ export default defineConfig({
   },
   source: {
     entry: {
-      container: './src/main.tsx',
+      index: './src/main.tsx',
+      scheduler: './src/scheduler.ts',
     },
   },
   output: {

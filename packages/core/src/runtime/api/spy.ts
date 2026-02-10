@@ -226,6 +226,22 @@ export const initSpy = (): Pick<
     methodName: K,
     accessType?: 'get' | 'set',
   ): MockInstance<T[K]> => {
+    if (accessType) {
+      const descriptor = Object.getOwnPropertyDescriptor(obj, methodName);
+      const accessor =
+        accessType === 'get'
+          ? Reflect.get(descriptor ?? {}, 'get')
+          : Reflect.get(descriptor ?? {}, 'set');
+      if (typeof accessor === 'function' && isMockFunction(accessor)) {
+        return accessor as MockInstance<T[K]>;
+      }
+    } else {
+      const method = obj[methodName];
+      if (isMockFunction(method)) {
+        return method;
+      }
+    }
+
     const accessTypeMap = {
       get: 'getter',
       set: 'setter',

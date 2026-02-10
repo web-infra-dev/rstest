@@ -36,9 +36,8 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'hideSkippedTests'
-  | 'hideSkippedTestFiles'
   | 'bail'
+  | 'shard'
 >;
 
 /**
@@ -49,6 +48,44 @@ export type ProjectConfig = Omit<
  * - `webkit` - Safari
  */
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
+/**
+ * Device presets aligned with Chrome DevTools device toolbar.
+ *
+ * These values are stable identifiers (not user-facing labels).
+ *
+ * IMPORTANT: Keep this union in sync with
+ * `@rstest/browser` preset runtime source:
+ * `packages/browser/src/viewportPresets.ts`.
+ *
+ * `@rstest/core` owns `defineConfig` typing, while `@rstest/browser` owns
+ * runtime validation and resolution for preset ids.
+ */
+export type DevicePreset =
+  | 'iPhoneSE'
+  | 'iPhoneXR'
+  | 'iPhone12Pro'
+  | 'iPhone14ProMax'
+  | 'Pixel7'
+  | 'SamsungGalaxyS8Plus'
+  | 'SamsungGalaxyS20Ultra'
+  | 'iPadMini'
+  | 'iPadAir'
+  | 'iPadPro'
+  | 'SurfacePro7'
+  | 'SurfaceDuo'
+  | 'GalaxyZFold5'
+  | 'AsusZenbookFold'
+  | 'SamsungGalaxyA51A71'
+  | 'NestHub'
+  | 'NestHubMax';
+
+export type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
 
 export type BrowserModeConfig = {
   /**
@@ -81,6 +118,13 @@ export type BrowserModeConfig = {
    * If not specified, a random available port will be used.
    */
   port?: number;
+
+  /**
+   * Default runner iframe viewport.
+   *
+   * When not specified, the browser UI fills the preview panel.
+   */
+  viewport?: BrowserViewport;
   /**
    * Whether to exit if the specified port is already in use.
    *
@@ -225,6 +269,15 @@ export interface RstestConfig {
    * @default 0
    */
   bail?: number;
+
+  /**
+   * Split tests into several shards.
+   * This is useful for running tests in parallel on multiple machines.
+   */
+  shard?: {
+    count: number;
+    index: number;
+  };
 
   /**
    * print console traces when calling any console method.
@@ -412,7 +465,8 @@ type OptionalKeys =
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
-  | 'extends';
+  | 'extends'
+  | 'shard';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
@@ -421,6 +475,7 @@ export type NormalizedBrowserModeConfig = {
   headless: boolean;
   port?: number;
   strictPort: boolean;
+  viewport?: BrowserViewport;
 };
 
 export type NormalizedConfig = Required<

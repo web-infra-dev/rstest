@@ -184,7 +184,7 @@ export class RstestApi {
         fileFilters: fileFilter ? [fileFilter] : undefined,
         testNamePattern: testCaseNamePath
           ? new RegExp(
-              `^${regexpEscape(testCaseNamePath.join('  '))}${isSuite ? '  ' : '$'}`,
+              `^${regexpEscape(testCaseNamePath.join(' '))}${isSuite ? ' ' : '$'}`,
             )
           : undefined,
         update: updateSnapshot,

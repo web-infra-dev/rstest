@@ -19,5 +19,5 @@ describe('vue jsx', () => {
     });
 
     await expectExecSuccess();
-  }, 20000);
+  });
 });

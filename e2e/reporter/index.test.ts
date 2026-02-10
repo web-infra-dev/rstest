@@ -10,11 +10,11 @@ describe.concurrent('reporters', () => {
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index.test.ts', '--exclude', 'ansi/**'],
+      args: ['run', 'fixtures/index.test.ts', '--exclude', 'ansi/**'],
       onTestFinished,
       options: {
         nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
+          cwd: __dirname,
         },
       },
     });

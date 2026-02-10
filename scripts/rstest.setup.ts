@@ -2,6 +2,10 @@ import path from 'node:path';
 import { expect } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 
+// Prevent the test runner from being detected as an AI agent during self-testing.
+// This ensures consistent behavior regardless of the environment running the tests.
+process.env.RSTEST_NO_AGENT = '1';
+
 // The default path-serializer doesn't normalize pnpm global store paths (e.g.
 // `<HOME>/Library/pnpm/store/.../node_modules/pkg/...`) which makes snapshots
 // OS/host dependent. Keep existing snapshot patterns by mapping those store

@@ -17,6 +17,8 @@ class Cli {
   public log = '';
   private stdoutListeners: Array<() => void> = [];
   private stderrListeners: Array<() => void> = [];
+  private stdoutEnded: Promise<void>;
+  private stderrEnded: Promise<void>;
 
   constructor(
     exec: Result,
@@ -26,6 +28,25 @@ class Cli {
   ) {
     this.exec = exec;
     const strip = options?.stripAnsi ?? true;
+
+    this.stdoutEnded = new Promise((resolve) => {
+      if (!this.exec.process?.stdout) {
+        resolve();
+        return;
+      }
+      this.exec.process.stdout.once('end', resolve);
+      this.exec.process.stdout.once('error', resolve);
+    });
+
+    this.stderrEnded = new Promise((resolve) => {
+      if (!this.exec.process?.stderr) {
+        resolve();
+        return;
+      }
+      this.exec.process.stderr.once('end', resolve);
+      this.exec.process.stderr.once('error', resolve);
+    });
+
     this.exec.process?.stdout?.on('data', (data) => {
       const processStd = strip ? stripAnsi(data.toString()) : data.toString();
       this.stdout += processStd ?? '';
@@ -57,6 +78,14 @@ class Cli {
 
       return execKill();
     };
+  }
+
+  /**
+   * Wait for stdout and stderr streams to end.
+   * This ensures all output data has been received after the process exits.
+   */
+  waitForStreamsEnd() {
+    return Promise.all([this.stdoutEnded, this.stderrEnded]);
   }
 
   resetStd = (std?: IoType) => {
@@ -154,6 +183,7 @@ export async function runRstestCli({
 
   const expectExecSuccess = async () => {
     await cli.exec;
+    await cli.waitForStreamsEnd();
     const exitCode = cli.exec.process?.exitCode;
     if (exitCode !== 0) {
       const logs = cli.stdout.split('\n').filter(Boolean);
@@ -166,6 +196,7 @@ export async function runRstestCli({
 
   const expectExecFailed = async () => {
     await cli.exec;
+    await cli.waitForStreamsEnd();
     const exitCode = cli.exec.process?.exitCode;
     if (exitCode === 0) {
       const logs = cli.stdout.split('\n').filter(Boolean);
@@ -240,6 +271,9 @@ export async function prepareFixtures({
   await fs.promises.cp(fixturesPath, distPath, {
     recursive: true,
     force: true,
+    // Exclude temp fixture directories created by other parallel tests
+    // to avoid race conditions (e.g., ENOENT when a directory is deleted mid-copy)
+    filter: (src) => !path.basename(src).startsWith('fixtures-test-'),
   });
 
   const update = (

@@ -92,31 +92,52 @@ describe('mergeRstestConfig', () => {
   });
 });
 
-describe('withDefaultConfig browser validation', () => {
-  it('should throw error when browser.enabled is true but provider is missing', () => {
-    // Use 'as any' to bypass TypeScript check and test runtime validation
+describe('withDefaultConfig browser normalization', () => {
+  it('should not throw when browser.enabled is true and provider is missing', () => {
     const config = {
       browser: { enabled: true },
     } as RstestConfig;
 
-    expect(() => withDefaultConfig(config)).toThrow(
-      'browser.provider is required when browser.enabled is true.',
-    );
+    expect(() => withDefaultConfig(config)).not.toThrow();
   });
 
-  it('should throw error when browser.enabled is true but provider is invalid', () => {
+  it('should preserve custom provider value for browser loader validation', () => {
     const config = {
       browser: { enabled: true, provider: 'invalid' },
     } as unknown as RstestConfig;
 
-    expect(() => withDefaultConfig(config)).toThrow(
-      'browser.provider must be one of: playwright.',
-    );
+    const normalized = withDefaultConfig(config);
+    expect(normalized.browser.provider).toBe('invalid');
   });
 
   it('should not throw when browser.enabled is true and provider is playwright', () => {
     const config: RstestConfig = {
       browser: { enabled: true, provider: 'playwright' },
+    };
+
+    expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+
+  it('should preserve viewport value for browser loader validation', () => {
+    const config = {
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        viewport: 'iPhone99',
+      },
+    } as unknown as RstestConfig;
+
+    const normalized = withDefaultConfig(config);
+    expect(normalized.browser.viewport).toBe('iPhone99');
+  });
+
+  it('should not throw when browser.viewport preset id is valid', () => {
+    const config: RstestConfig = {
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        viewport: 'iPhone12Pro',
+      },
     };
 
     expect(() => withDefaultConfig(config)).not.toThrow();

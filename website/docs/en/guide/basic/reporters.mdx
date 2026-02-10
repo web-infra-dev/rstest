@@ -32,6 +32,8 @@ export default defineConfig({
 
 More configuration options can be found in the [Reporters Configuration](/config/test/reporters) documentation.
 
+Reporter options for built-in reporters are defined in the TypeScript types: [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+
 ## Built-in reporters
 
 Rstest provides several built-in reporters:
@@ -42,6 +44,7 @@ Rstest provides several built-in reporters:
 | `verbose`        | Detailed test case output  | Debugging test failures  |
 | `github-actions` | CI error annotations       | GitHub Actions workflows |
 | `junit`          | JUnit XML format           | CI/CD integration        |
+| `md`             | Markdown agent report      | Agent / LLM integrations |
 
 ### Default reporter
 
@@ -202,6 +205,56 @@ The JUnit reporter maps test case execution status to JUnit test status:
 - `fail`: Test failed, generates `<failure>` tag
 - `skip`: Test skipped, generates `<skipped>` tag
 - `todo`: Test todo, generates `<skipped>` tag
+
+### Markdown reporter
+
+The markdown reporter outputs a single markdown document to stdout, designed for agent / LLM consumption.
+
+In agent environments, Rstest defaults to `md` only when you didn't explicitly configure reporters.
+
+The default preset is `normal`, which is tuned for agent workflows:
+
+- Each failure includes a repro command (`file+name`) so an agent can rerun a single failing case.
+- Stack output defaults to `top` (a stable anchor frame) instead of full stack frames.
+- Console output is enabled by default, but limited to keep the report size under control.
+- When the number of failures exceeds `failures.max`, the reporter prints a full failure list with minimal fields (repro / type / message / expected / actual), and only expands full details for the first `failures.max` failures.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=md
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['md'],
+});
+```
+  </Tab>
+</Tabs>
+
+You can further tune the output via reporter options:
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    [
+      'md',
+      {
+        preset: 'normal',
+        failures: { max: 50 },
+        stack: 'top',
+        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+      },
+    ],
+  ],
+});
+```
 
 ## Custom reporters
 

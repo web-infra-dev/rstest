@@ -12,6 +12,7 @@ import {
   getTestEntries,
   isDebug,
   type ListCommandResult,
+  loadCoverageProvider,
   logger,
   type ProjectContext,
   type Reporter,
@@ -43,6 +44,19 @@ type RsbuildDevServer = rsbuild.RsbuildDevServer;
 type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Serialize JSON for inline <script> injection.
+ * Escapes '<' to prevent accidental </script> break-out.
+ * Escapes U+2028/U+2029 to keep script parsing safe.
+ */
+const serializeForInlineScript = (value: unknown): string => {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+};
 
 // ============================================================================
 // Type Definitions
@@ -715,6 +729,26 @@ const htmlTemplate = `<!DOCTYPE html>
 </html>
 `;
 
+const fallbackSchedulerHtmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Rstest Browser Scheduler</title>
+    <script>
+      window.__RSTEST_BROWSER_OPTIONS__ = ${OPTIONS_PLACEHOLDER};
+    </script>
+  </head>
+  <body>
+    <script type="module" src="/container-static/js/scheduler.js"></script>
+  </body>
+</html>
+`;
+
+// Workaround for noisy "removed ..." logs caused by VirtualModulesPlugin.
+// Rsbuild suppresses the removed-file log if all removed paths include "virtual":
+// https://github.com/web-infra-dev/rsbuild/blob/1258fa9dba5c321a4629b591a6dadbd2e26c6963/packages/core/src/createCompiler.ts#L73-L76
+const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
+
 // ============================================================================
 // Browser Runtime Lifecycle
 // ============================================================================
@@ -794,22 +828,30 @@ const createBrowserRuntime = async ({
     [manifestPath]: manifestSource,
   });
 
-  const optionsPlaceholder = '__RSTEST_OPTIONS_PLACEHOLDER__';
   const containerHtmlTemplate = containerDistPath
-    ? await fs.readFile(join(containerDistPath, 'container.html'), 'utf-8')
+    ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
+    : null;
+  const schedulerHtmlTemplate = containerDistPath
+    ? await fs
+        .readFile(join(containerDistPath, 'scheduler.html'), 'utf-8')
+        .catch(() => null)
     : null;
 
   let injectedContainerHtml: string | null = null;
+  let injectedSchedulerHtml: string | null = null;
   let serializedOptions = 'null';
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
-    serializedOptions = JSON.stringify(options).replace(/</g, '\\u003c');
+    serializedOptions = serializeForInlineScript(options);
     if (containerHtmlTemplate) {
       injectedContainerHtml = containerHtmlTemplate.replace(
-        optionsPlaceholder,
+        OPTIONS_PLACEHOLDER,
         serializedOptions,
       );
     }
+    injectedSchedulerHtml = (
+      schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate
+    ).replace(OPTIONS_PLACEHOLDER, serializedOptions);
   };
 
   // Get user Rsbuild config from the first browser project
@@ -817,6 +859,8 @@ const createBrowserRuntime = async ({
   const firstProject = browserProjects[0];
   const userPlugins = firstProject?.normalizedConfig.plugins || [];
   const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
+  const browserConfig =
+    firstProject?.normalizedConfig.browser ?? context.normalizedConfig.browser;
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -841,8 +885,8 @@ const createBrowserRuntime = async ({
       plugins: userPlugins,
       server: {
         printUrls: false,
-        port: context.normalizedConfig.browser.port ?? 4000,
-        strictPort: context.normalizedConfig.browser.strictPort,
+        port: browserConfig.port ?? 4000,
+        strictPort: browserConfig.strictPort,
       },
       dev: {
         client: {
@@ -850,7 +894,7 @@ const createBrowserRuntime = async ({
         },
       },
       environments: {
-        web: {},
+        [firstProject?.environmentName || 'web']: {},
       },
     },
   });
@@ -970,6 +1014,16 @@ const createBrowserRuntime = async ({
     ]);
   }
 
+  // Register coverage plugin for browser mode
+  const coverage = firstProject?.normalizedConfig.coverage;
+  if (coverage?.enabled && context.command !== 'list') {
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  }
+
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,
   });
@@ -978,7 +1032,7 @@ const createBrowserRuntime = async ({
   const serveContainer = containerDistPath
     ? sirv(containerDistPath, {
         dev: false,
-        single: 'container.html',
+        single: 'index.html',
       })
     : null;
 
@@ -1002,7 +1056,7 @@ const createBrowserRuntime = async ({
       }
 
       let html = await response.text();
-      html = html.replace(optionsPlaceholder, serializedOptions);
+      html = html.replace(OPTIONS_PLACEHOLDER, serializedOptions);
 
       res.statusCode = response.status;
       response.headers.forEach((value, key) => {
@@ -1079,14 +1133,26 @@ const createBrowserRuntime = async ({
       }
       return;
     }
-    if (url.pathname === '/') {
+    if (url.pathname === '/' || url.pathname === '/scheduler.html') {
       if (await respondWithDevServerHtml(url, res)) {
+        return;
+      }
+
+      if (url.pathname === '/scheduler.html') {
+        res.setHeader('Content-Type', 'text/html');
+        res.end(
+          injectedSchedulerHtml ||
+            (schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate).replace(
+              OPTIONS_PLACEHOLDER,
+              'null',
+            ),
+        );
         return;
       }
 
       const html =
         injectedContainerHtml ||
-        containerHtmlTemplate?.replace(optionsPlaceholder, 'null');
+        containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
 
       if (html) {
         res.setHeader('Content-Type', 'text/html');
@@ -1134,7 +1200,7 @@ const createBrowserRuntime = async ({
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
   let browserLauncher: BrowserType;
-  const browserName = context.normalizedConfig.browser.browser;
+  const browserName = browserConfig.browser;
   try {
     const playwright = await import('playwright');
     browserLauncher = playwright[browserName];
@@ -1147,7 +1213,7 @@ const createBrowserRuntime = async ({
   let browser: BrowserInstance;
   try {
     browser = await browserLauncher.launch({
-      headless: forceHeadless ?? context.normalizedConfig.browser.headless,
+      headless: forceHeadless ?? browserConfig.headless,
       // Chromium-specific args (ignored by other browsers)
       args:
         browserName === 'chromium'
@@ -1178,6 +1244,32 @@ const createBrowserRuntime = async ({
   };
 };
 
+async function resolveProjectEntries(
+  context: Rstest,
+  shardedEntries?: Map<string, { entries: Record<string, string> }>,
+): Promise<BrowserProjectEntries[]> {
+  if (shardedEntries) {
+    const browserProjects = getBrowserProjects(context);
+    const projectEntries: BrowserProjectEntries[] = [];
+    for (const project of browserProjects) {
+      const entryInfo = shardedEntries.get(project.environmentName);
+      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
+        const setup = getSetupFiles(
+          project.normalizedConfig.setupFiles,
+          project.rootPath,
+        );
+        projectEntries.push({
+          project,
+          setupFiles: Object.values(setup),
+          testFiles: Object.values(entryInfo.entries),
+        });
+      }
+    }
+    return projectEntries;
+  }
+  return collectProjectEntries(context);
+}
+
 // ============================================================================
 // Main Entry Point
 // ============================================================================
@@ -1188,6 +1280,56 @@ export const runBrowserController = async (
 ): Promise<BrowserTestRunResult | void> => {
   const { skipOnTestRunEnd = false } = options ?? {};
   const buildStart = Date.now();
+  const browserProjects = getBrowserProjects(context);
+  const useSchedulerPage = browserProjects.every(
+    (project) => project.normalizedConfig.browser.headless,
+  );
+
+  /**
+   * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
+   * Used for early-exit error paths to ensure errors reach the summary report.
+   */
+  const buildErrorResult = async (
+    error: Error,
+  ): Promise<BrowserTestRunResult> => {
+    const elapsed = Math.max(0, Date.now() - buildStart);
+    const errorResult: BrowserTestRunResult = {
+      results: [],
+      testResults: [],
+      duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
+      hasFailure: true,
+      unhandledErrors: [error],
+    };
+
+    if (!skipOnTestRunEnd) {
+      for (const reporter of context.reporters) {
+        await (reporter as Reporter).onTestRunEnd?.({
+          results: [],
+          testResults: [],
+          duration: errorResult.duration,
+          snapshotSummary: context.snapshotManager.summary,
+          getSourcemap: async () => null,
+          unhandledErrors: errorResult.unhandledErrors,
+        });
+      }
+    }
+
+    return errorResult;
+  };
+
+  const toError = (error: unknown): Error => {
+    return error instanceof Error ? error : new Error(String(error));
+  };
+
+  const failWithError = async (
+    error: unknown,
+    cleanup?: () => Promise<void>,
+  ): Promise<BrowserTestRunResult> => {
+    ensureProcessExitCode(1);
+    await cleanup?.();
+    return buildErrorResult(toError(error));
+  };
+
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
   let containerDistPath: string | undefined;
@@ -1199,13 +1341,9 @@ export const runBrowserController = async (
         `[Browser UI] Using dev server for container: ${containerDevServer}`,
       );
     } catch (error) {
-      logger.error(
-        color.red(
-          `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${String(error)}`,
-        ),
-      );
-      ensureProcessExitCode(1);
-      return;
+      const originalError = toError(error);
+      originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
+      return failWithError(originalError);
     }
   }
 
@@ -1213,13 +1351,14 @@ export const runBrowserController = async (
     try {
       containerDistPath = resolveContainerDist();
     } catch (error) {
-      logger.error(color.red(String(error)));
-      ensureProcessExitCode(1);
-      return;
+      return failWithError(error);
     }
   }
 
-  const projectEntries = await collectProjectEntries(context);
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -1228,11 +1367,12 @@ export const runBrowserController = async (
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      logger.log(
-        color[code ? 'red' : 'yellow'](
-          `No test files found, exiting with code ${code}.`,
-        ),
-      );
+      const message = `No test files found, exiting with code ${code}.`;
+      if (code === 0) {
+        logger.log(color.yellow(message));
+      } else {
+        logger.error(color.red(message));
+      }
     }
 
     if (code !== 0) {
@@ -1253,8 +1393,8 @@ export const runBrowserController = async (
             'browser',
             Date.now().toString(),
           );
-  const manifestPath = join(tempDir, 'manifest.ts');
 
+  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
   const manifestSource = generateManifestModule({
     manifestPath,
     entries: projectEntries,
@@ -1292,10 +1432,9 @@ export const runBrowserController = async (
         containerDevServer,
       });
     } catch (error) {
-      logger.error(error instanceof Error ? error : new Error(String(error)));
-      ensureProcessExitCode(1);
-      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
-      return;
+      return failWithError(error, async () => {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      });
     }
 
     if (isWatchMode) {
@@ -1318,20 +1457,19 @@ export const runBrowserController = async (
 
   // Only include browser mode projects in runtime configs
   // Normalize projectRoot to posix format for cross-platform compatibility
-  const browserProjectsForRuntime = getBrowserProjects(context);
-  const projectRuntimeConfigs: BrowserProjectRuntime[] =
-    browserProjectsForRuntime.map((project: ProjectContext) => ({
+  const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
+    (project: ProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
-    }));
+      viewport: project.normalizedConfig.browser.viewport,
+    }),
+  );
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjectsForRuntime.map(
-      (p) => p.normalizedConfig.testTimeout ?? 5000,
-    ),
+    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
   );
 
   const hostOptions: BrowserHostConfig = {
@@ -1395,7 +1533,11 @@ export const runBrowserController = async (
     // Forward browser console to terminal
     containerPage.on('console', (msg: ConsoleMessage) => {
       const text = msg.text();
-      if (text.includes('[Container]') || text.includes('[Runner]')) {
+      if (
+        text.startsWith('[Container]') ||
+        text.startsWith('[Runner]') ||
+        text.startsWith('[Scheduler]')
+      ) {
         logger.log(color.gray(`[Browser Console] ${text}`));
       }
     });
@@ -1536,21 +1678,28 @@ export const runBrowserController = async (
 
   // Only navigate on first creation
   if (isNewPage) {
-    await containerPage.goto(`http://localhost:${port}/`, {
+    const pagePath = useSchedulerPage ? '/scheduler.html' : '/';
+    if (useSchedulerPage) {
+      const serializedOptions = serializeForInlineScript(hostOptions);
+      await containerPage.addInitScript(
+        `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+      );
+    }
+    await containerPage.goto(`http://localhost:${port}${pagePath}`, {
       waitUntil: 'load',
     });
 
     logger.log(
-      color.cyan(`\nBrowser mode opened at http://localhost:${port}/\n`),
+      color.cyan(
+        `\nBrowser mode opened at http://localhost:${port}${pagePath}\n`,
+      ),
     );
   }
 
   // Wait for all tests to complete
   // Calculate total timeout based on config: max testTimeout * file count + buffer
   const maxTestTimeout = Math.max(
-    ...browserProjectsForRuntime.map(
-      (p) => p.normalizedConfig.testTimeout ?? 5000,
-    ),
+    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
   );
   const totalTimeoutMs = maxTestTimeout * allTestFiles.length + 30_000;
 
@@ -1622,15 +1771,21 @@ export const runBrowserController = async (
   }
 
   if (!isWatchMode) {
+    try {
+      await containerPage.close();
+    } catch {
+      // ignore
+    }
+    try {
+      await containerContext.close();
+    } catch {
+      // ignore
+    }
     await destroyBrowserRuntime(runtime);
   }
 
   if (fatalError) {
-    logger.error(
-      color.red(`Browser test run failed: ${(fatalError as Error).message}`),
-    );
-    ensureProcessExitCode(1);
-    return;
+    return failWithError(fatalError);
   }
 
   const duration = {
@@ -1700,8 +1855,14 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: Rstest,
+  options?: {
+    shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  },
 ): Promise<ListBrowserTestsResult> => {
-  const projectEntries = await collectProjectEntries(context);
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -1720,8 +1881,8 @@ export const listBrowserTests = async (
     'browser',
     `list-${Date.now()}`,
   );
-  const manifestPath = join(tempDir, 'manifest.ts');
 
+  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
   const manifestSource = generateManifestModule({
     manifestPath,
     entries: projectEntries,
@@ -1761,6 +1922,7 @@ export const listBrowserTests = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      viewport: project.normalizedConfig.browser.viewport,
     }),
   );
 
@@ -1841,10 +2003,7 @@ export const listBrowserTests = async (
   );
 
   // Inject host options before navigation so the runner can access them
-  const serializedOptions = JSON.stringify(hostOptions).replace(
-    /</g,
-    '\\u003c',
-  );
+  const serializedOptions = serializeForInlineScript(hostOptions);
   await page.addInitScript(
     `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
   );

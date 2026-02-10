@@ -13,11 +13,17 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
  * Type definition for the @rstest/browser package exports.
  */
 export interface BrowserModule {
+  validateBrowserConfig: (context: unknown) => void;
   runBrowserTests: (
     context: unknown,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
-  listBrowserTests: (context: unknown) => Promise<{
+  listBrowserTests: (
+    context: unknown,
+    options?: {
+      shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    },
+  ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
   }>;

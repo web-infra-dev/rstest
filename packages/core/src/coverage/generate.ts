@@ -121,12 +121,13 @@ export async function generateCoverage(
       });
       if (!thresholdResult.success) {
         logger.log('');
-        logger.log(thresholdResult.message);
+        logger.stderr(thresholdResult.message);
         process.exitCode = 1;
       }
     }
   } catch (error) {
-    logger.error('Failed to generate coverage reports:', error);
+    logger.stderr('Failed to generate coverage reports:', error);
+    process.exitCode = 1;
   }
 }
 

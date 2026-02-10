@@ -6,6 +6,7 @@ import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { JUnitReporter } from '../reporter/junit';
+import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -20,7 +21,8 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
+import type { BuiltInReporterNames } from '../types/reporter';
+import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -96,6 +98,11 @@ export class Rstest implements RstestContext {
       root: rootPath,
     });
 
+    if (command === 'watch' && rstestConfig.shard) {
+      logger.error('Test sharding is not supported in watch mode.');
+      process.exit(1);
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
@@ -108,6 +115,21 @@ export class Rstest implements RstestContext {
     this.projects = projects.length
       ? projects.map((project) => {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
+          if (
+            project.config.shard &&
+            (project.config.shard.count !== rstestConfig.shard?.count ||
+              project.config.shard.index !== rstestConfig.shard?.index)
+          ) {
+            logger.error(
+              'The `shard` option is a global option and cannot be set per-project.\n' +
+                'global `shard` option:\n' +
+                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
+                `project "${project.config.name}" shard option:\n` +
+                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
+            );
+            process.exit(1);
+          }
 
           // TODO: support extend projects config
           const config = withDefaultConfig(
@@ -157,12 +179,19 @@ export class Rstest implements RstestContext {
           },
         ];
 
+    // Create a map of project name to project config for reporters
+    const projectConfigs = new Map(
+      this.projects.map((p) => [p.name, p.normalizedConfig]),
+    );
+
     const reporters =
       command !== 'list'
         ? createReporters(rstestConfig.reporters, {
             rootPath,
             config: rstestConfig,
             testState: this.testState,
+            fileFilters: this.fileFilters,
+            projectConfigs,
             options: {
               showProjectName: projects.length > 1,
             },
@@ -214,14 +243,16 @@ const reportersMap: {
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  md: typeof MdReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  md: MdReporter,
 };
 
-export type BuiltInReporterNames = keyof typeof reportersMap;
+export type { BuiltInReporterNames };
 
 export function createReporters(
   reporters: RstestConfig['reporters'],

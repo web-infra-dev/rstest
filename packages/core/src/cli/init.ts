@@ -7,6 +7,7 @@ import type { BrowserName, Project, RstestConfig } from '../types';
 import {
   castArray,
   color,
+  determineAgent,
   filterProjects,
   formatRootStr,
   getAbsolutePath,
@@ -70,6 +71,7 @@ export type CommonOptions = {
   hideSkippedTests?: boolean;
   hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
+  shard?: string;
 };
 
 function mergeWithCLIOptions(
@@ -108,6 +110,26 @@ function mergeWithCLIOptions(
 
   if (options.reporter) {
     config.reporters = castArray(options.reporter) as typeof config.reporters;
+  }
+
+  if (options.shard) {
+    const [index, count] = options.shard.split('/').map(Number);
+    if (
+      !index ||
+      !count ||
+      Number.isNaN(index) ||
+      Number.isNaN(count) ||
+      index < 1 ||
+      index > count
+    ) {
+      throw new Error(
+        `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
+      );
+    }
+    config.shard = {
+      index,
+      count,
+    };
   }
 
   if (
@@ -408,6 +430,16 @@ export async function initCli(options: CommonOptions): Promise<{
     ...options,
     cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
   });
+
+  // In agent environments, default to markdown output when the user didn't
+  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+  if (
+    determineAgent().isAgent &&
+    !options.reporter &&
+    config.reporters == null
+  ) {
+    config.reporters = ['md'];
+  }
 
   const projects = await resolveProjects({ config, root, options });
 

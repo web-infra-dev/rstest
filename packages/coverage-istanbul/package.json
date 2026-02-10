@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Istanbul coverage provider for Rstest",
   "author": "Travis Zhang<https://github.com/travzhang>",

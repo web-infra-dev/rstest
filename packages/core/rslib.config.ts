@@ -138,9 +138,7 @@ export default defineConfig({
       output: {
         target: 'web',
         distPath: 'dist/browser-runtime',
-        // Enable sourcemap for browser runtime to support inline snapshot
-        // When compiled by @rstest/browser, extractSourceMap merges this sourcemap
-        sourceMap: true,
+        sourceMap: process.env.SOURCEMAP === 'true',
         minify: {
           jsOptions: {
             minimizerOptions: {

@@ -10,6 +10,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "port": undefined,
     "provider": "playwright",
     "strictPort": false,
+    "viewport": undefined,
   },
   "clearMocks": false,
   "coverage": {

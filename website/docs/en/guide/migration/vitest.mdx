@@ -1,6 +1,6 @@
 # Migrating from Vitest
 
-If you are using the Rstack (Rsbuild / Rslib / Rspack, etc.) toolchain, migrating to Rstest will bring you a consistent development experience.
+If you are using the Rstack toolchain (Rsbuild / Rslib / Rspack, etc.), migrating to Rstest gives you a more consistent development experience.
 
 ## Install dependencies
 
@@ -14,8 +14,17 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 
 ```diff
 "scripts": {
--  "test": "vitest run"
+-  "test": "vitest run" // or "vitest --run"
 +  "test": "rstest"
+}
+```
+
+`rstest` does not have a `--run` flag. Running `rstest` already executes tests once and exits. If you want watch mode, use `--watch`:
+
+```diff
+"scripts": {
+-  "test": "vitest"
++  "test": "rstest --watch"
 }
 ```
 
@@ -33,9 +42,12 @@ export default defineConfig({
 
 ### Test configuration
 
-Rstest test configuration is basically the same as Vitest, but note that you don't need to put test configuration under the `test` field.
+Rstest test configuration is basically the same as Vitest.
 
-Additionally, there are some configuration changes to be aware of, such as `test.environment` needs to be changed to `testEnvironment`.
+When migrating config, keep these changes in mind:
+
+- Remove the `test` field and move its nested properties to the top level.
+- Rename keys when required (for example, `test.environment` -> `testEnvironment`).
 
 You can view all available test configuration options through [Test Configurations](/config/#test-configurations).
 
@@ -44,38 +56,83 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
 -  test: {
-     include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+-    include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+-    exclude: ['dist/**'],
+-    setupFiles: ['./test/setup.ts'],
+-    globals: true,
 -    environment: 'node',
-+    testEnvironment: 'node',
--  }
+-  },
++  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
++  exclude: ['dist/**'],
++  setupFiles: ['./test/setup.ts'],
++  globals: true,
++  testEnvironment: 'node',
 });
 ```
 
 ### Build configuration
 
-Rstest uses Rsbuild as the default test build tool instead of Vite. Therefore, you need to migrate your build configuration from Vite configuration to Rstest configuration. You can view all available build configuration options through [Build Configurations](/config/#build-configurations).
+Rstest uses Rsbuild as the default test build tool instead of Vite. You can view all available build configuration options in [Build Configurations](/config/#build-configurations).
 
-If you need more information about Vite build configuration migration, please refer to [Rsbuild - Vite Migration Documentation](https://rsbuild.dev/guide/migration/vite#migrate-configuration).
+In most projects, these are the key build-side changes:
 
-## Update test APIs
-
-### Test APIs
-
-Rstest provides Vitest-compatible APIs. Therefore, you only need to change the import from Vitest to Rstest:
+- Use `source.define` instead of `define`.
+- Use `output.externals` instead of `ssr.external`.
+- Use Rsbuild plugins instead of Vite plugins.
 
 ```diff
-- import { describe, expect, it, test } from 'vitest';
-+ import { describe, expect, it, test } from '@rstest/core';
+import { defineConfig } from '@rstest/core';
+- import react from '@vitejs/plugin-react'
++ import { pluginReact } from '@rsbuild/plugin-react';
+
+export default defineConfig({
+-  plugins: [react()],
+-  define: {
+-    __DEV__: true,
+-  },
++  plugins: [pluginReact()],
++  source: {
++    define: {
++      __DEV__: true,
++    },
++  },
+});
 ```
 
-Rstest provides the `rstest` API, which you can use to access Rstest's utility functions, such as `rstest.fn()` and `rstest.mock()`. Just like Vitest's `vi.fn()` and `vi.mock()`. More utility functions can be found in [Rstest APIs](/api/runtime-api/).
+If you are using Rslib or Rsbuild, you can directly use the corresponding adapter:
+
+- For Rslib projects (with `rslib.config.*`), use `@rstest/adapter-rslib` with `extends: withRslibConfig()` (see [Rslib integration reference](/guide/integration/rslib)).
+- For Rsbuild projects (with `rsbuild.config.*`), use `@rstest/adapter-rsbuild` with `extends: withRsbuildConfig()` (see [Rsbuild integration reference](/guide/integration/rsbuild)).
+
+## Replace test imports and APIs
+
+For test APIs, migration is usually just two quick changes:
+
+1. Replace imports from `vitest` with imports from `@rstest/core`.
+2. Replace `vi` or `vitest` utility APIs with `rs` equivalents.
 
 ```diff
-- const fn = vi.fn();
-+ const fn = rstest.fn();
-
-fn.mockResolvedValue('foo');
+- import { describe, expect, it, test, vi, type Mock } from 'vitest';
++ import { describe, expect, it, test, rs, type Mock } from '@rstest/core';
 ```
+
+```diff
+- vi.fn()
++ rs.fn()
+
+- vi.mock('./foo')
++ rs.mock('./foo')
+
+- vi.spyOn(console, 'error')
++ rs.spyOn(console, 'error')
+```
+
+```diff
+- vitest.fn()
++ rs.fn()
+```
+
+For the full utility API list, see [Rstest APIs](/api/runtime-api/).
 
 ### Auto-mocking modules
 
@@ -97,21 +154,21 @@ test('should be mocked', () => {
 
 Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will throw an error if one isn't found. To achieve auto-mocking, you must explicitly pass the `{ mock: true }` option.
 
-```ts
+```diff
 // Rstest
 import { rs, test, expect } from '@rstest/core';
 import { someFunction } from './module';
 
-// Auto-mocks the module because { mock: true } is passed.
-rs.mock('./module', { mock: true });
+- // Looks for __mocks__/module.js first, then auto-mocks.
+- vi.mock('./module');
++ // Auto-mocks the module because { mock: true } is passed.
++ rs.mock('./module', { mock: true });
 
 test('should be mocked', () => {
   expect(rs.isMockFunction(someFunction)).toBe(true);
   someFunction(); // returns undefined
 });
 ```
-
-This distinction is important: Vitest has implicit auto-mocking as a fallback, while Rstest requires explicit configuration for the same behavior. For more details, see [`rs.mock()` with `{ mock: true }`](/api/runtime-api/rstest/mock-modules#with--mock-true--option).
 
 ### Mock async modules
 

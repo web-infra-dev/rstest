@@ -213,24 +213,6 @@ const createDefaultConfig = (): NormalizedConfig => ({
 });
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
-  // Validate browser config when browser mode is enabled.
-  if (config.browser?.enabled === true) {
-    if (!config.browser.provider) {
-      throw new Error(
-        'browser.provider is required when browser.enabled is true.',
-      );
-    }
-
-    // Keep runtime validation even though TypeScript narrows the type, since
-    // config can be loaded from JS or forced via `as unknown as RstestConfig`.
-    const supportedProviders = ['playwright'] as const;
-    if (!supportedProviders.includes(config.browser.provider)) {
-      throw new Error(
-        `browser.provider must be one of: ${supportedProviders.join(', ')}.`,
-      );
-    }
-  }
-
   const merged = mergeRstestConfig(
     createDefaultConfig(),
     config,
@@ -270,6 +252,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     headless: merged.browser?.headless ?? isCI,
     port: merged.browser?.port,
     strictPort: merged.browser?.strictPort ?? false,
+    viewport: merged.browser?.viewport,
   };
 
   return {
