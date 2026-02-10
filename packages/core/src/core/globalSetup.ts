@@ -35,8 +35,8 @@ async function createSetupPool() {
     isolateWorkers: false,
     env: {
       NODE_ENV: 'test',
-      ...process.env,
       ...getForceColorEnv(),
+      ...process.env,
     },
   };
 

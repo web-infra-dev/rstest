@@ -9,6 +9,7 @@ import type {
 import './setup';
 import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
+import { createWorkerMetaMessage } from '../../pool/workerMeta';
 import { globalApis } from '../../utils/constants';
 import { undoSerializableConfig } from '../../utils/helper';
 import { color } from '../../utils/logger';
@@ -89,14 +90,9 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const originalConsole = global.console;
-
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
     createForksRpcOptions({ dispose: disposeFns }),
-    {
-      originalConsole,
-    },
   );
 
   globalCleanups.push(() => {
@@ -249,7 +245,7 @@ const loadFiles = async ({
   outputModule: boolean;
   federation: boolean;
 }): Promise<void> => {
-  const { loadModule, updateLatestAssetFiles } = outputModule
+  const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
@@ -265,7 +261,6 @@ const loadFiles = async ({
 
   // clean rstest core cache manually
   if (!isolate) {
-    updateLatestAssetFiles(assetFiles);
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -314,6 +309,10 @@ const runInPool = async (
     }
   | TestFileResult
 > => {
+  if (typeof process.send === 'function') {
+    process.send(createWorkerMetaMessage(process.pid));
+  }
+
   isTeardown = false;
   const {
     entryInfo: { distPath, testPath },
@@ -353,6 +352,14 @@ const runInPool = async (
 
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
+
+    if (!isolate) {
+      const { clearModuleCache } = options.context.outputModule
+        ? await import('./loadEsModule')
+        : await import('./loadModule');
+      clearModuleCache();
+    }
+
     isTeardown = true;
   };
 

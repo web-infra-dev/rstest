@@ -68,7 +68,7 @@ export const prepareRsbuild = async (
 ): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {}, coverage },
+    normalizedConfig: { isolate, dev = {}, coverage, pool },
   } = context;
 
   // Filter out browser mode projects - this rsbuild is for node mode only
@@ -132,7 +132,7 @@ export const prepareRsbuild = async (
               }).flatMap((files) => Object.values(files)),
             )
           : null,
-        pluginInspect(),
+        pluginInspect({ poolExecArgv: pool.execArgv }),
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });

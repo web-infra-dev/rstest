@@ -208,9 +208,7 @@ export const loadModule = ({
       const joinedPath = isRelativePath(wasmPath)
         ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
-      const content =
-        assetFiles[path.normalize(joinedPath)] ||
-        latestAssetFiles[path.normalize(joinedPath)];
+      const content = assetFiles[path.normalize(joinedPath)];
 
       if (content) {
         callback(null, Buffer.from(content, 'base64'));
@@ -309,3 +307,5 @@ export const cacheableLoadModule = ({
   moduleCache.set(testPath, mod);
   return mod;
 };
+
+export const clearModuleCache = (): void => moduleCache.clear();

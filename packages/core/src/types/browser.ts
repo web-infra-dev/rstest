@@ -9,6 +9,12 @@ export interface BrowserTestRunOptions {
    * This allows the caller to unify reporter output with node mode tests.
    */
   skipOnTestRunEnd?: boolean;
+  /**
+   * Pre-calculated sharded entries for browser projects.
+   * If provided, the browser controller will use these instead of collecting its own.
+   * Key is project environmentName.
+   */
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
 }
 
 /**
@@ -27,4 +33,6 @@ export interface BrowserTestRunResult {
   };
   /** Whether the test run had failures */
   hasFailure: boolean;
+  /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
+  unhandledErrors?: Error[];
 }

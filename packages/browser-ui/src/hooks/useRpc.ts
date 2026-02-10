@@ -1,57 +1,8 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
-import type {
-  BrowserClientFileResult,
-  BrowserClientTestResult,
-  TestFileInfo,
-} from '../types';
+import { createWebSocketUrl, RECONNECT_DELAYS } from '../core/runtime';
+import type { ContainerRPC, HostRPC, TestFileInfo } from '../types';
 import { logger } from '../utils/logger';
-
-// ============================================================================
-// RPC Types
-// ============================================================================
-
-/** Payload for test file start event */
-export type TestFileStartPayload = {
-  testPath: string;
-  projectName: string;
-};
-
-/** Payload for log event */
-export type LogPayload = {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  content: string;
-  testPath: string;
-  type: 'stdout' | 'stderr';
-  trace?: string;
-};
-
-/** Payload for fatal error event */
-export type FatalPayload = {
-  message: string;
-  stack?: string;
-};
-
-export type HostRPC = {
-  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<TestFileInfo[]>;
-  // Test result callbacks from container
-  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-  onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
-  onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
-  onLog: (payload: LogPayload) => Promise<void>;
-  onFatal: (payload: FatalPayload) => Promise<void>;
-  // Snapshot file operations (for browser mode snapshot support)
-  resolveSnapshotPath: (testPath: string) => Promise<string>;
-  readSnapshotFile: (filepath: string) => Promise<string | null>;
-  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
-  removeSnapshotFile: (filepath: string) => Promise<void>;
-};
-
-export type ContainerRPC = {
-  onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
-};
 
 export type RpcState = {
   rpc: BirpcReturn<HostRPC, ContainerRPC> | null;
@@ -62,8 +13,6 @@ export type RpcState = {
 // ============================================================================
 // useRpc Hook - WebSocket connection with reconnect logic
 // ============================================================================
-
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000]; // Exponential backoff, max 30s
 
 export const useRpc = (
   setTestFiles: (files: TestFileInfo[]) => void,
@@ -104,9 +53,7 @@ export const useRpc = (
     const connect = () => {
       if (!isMounted) return;
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(createWebSocketUrl(wsPort));
       activeWsRef.current = ws;
 
       const methods: ContainerRPC = {

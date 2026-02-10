@@ -1,9 +1,19 @@
 import { defineConfig } from '@rstest/core';
 
+/**
+ * Test directories to skip in no-isolate mode.
+ *
+ * - watch: requires module isolation to test HMR/watch behavior
+ * - mock: requires module isolation for proper mock reset between tests
+ * - browser-mode: uses iframe as worker, completely unrelated to Node.js worker isolation
+ */
+const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
+
 export default defineConfig({
   setupFiles: ['../scripts/rstest.setup.ts'],
   // Increased timeout for CI to handle slower environments (e.g., Node.js 22 on Windows)
-  testTimeout: process.env.CI ? 30_000 : 10_000,
+  // and reduce flaky timeouts caused by resource contention under high parallelism.
+  testTimeout: process.env.CI ? 60_000 : 10_000,
   slowTestThreshold: 2_000,
   // Stabilize date/time based e2e fixtures across different runner timezones.
   // Some fixtures use `new Date('YYYY-MM-DD')` (UTC parsing) but assert on local
@@ -31,7 +41,5 @@ export default defineConfig({
     '**/dist/**',
     '**/fixtures/**',
     '**/fixtures-*/**',
-  ].concat(
-    process.env.ISOLATE === 'false' ? ['**/watch/**', '**/mock/**'] : [],
-  ),
+  ].concat(process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : []),
 });

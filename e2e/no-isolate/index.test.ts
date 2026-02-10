@@ -18,6 +18,9 @@ describe('test isolate false', () => {
       options: {
         nodeOptions: {
           cwd: join(__dirname, '../'),
+          env: {
+            ISOLATE: 'false',
+          },
         },
       },
     });

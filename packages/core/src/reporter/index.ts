@@ -5,6 +5,7 @@ import type {
   Duration,
   GetSourcemap,
   NormalizedConfig,
+  NormalizedProjectConfig,
   Reporter,
   RstestTestState,
   SnapshotSummary,
@@ -20,6 +21,7 @@ import { logCase, logFileTitle } from './utils';
 export class DefaultReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
+  protected projectConfigs: Map<string, NormalizedProjectConfig>;
   private options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
   private testState: RstestTestState;
@@ -29,56 +31,53 @@ export class DefaultReporter implements Reporter {
     options,
     config,
     testState,
+    projectConfigs,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: DefaultReporterOptions;
     testState: RstestTestState;
+    projectConfigs?: Map<string, NormalizedProjectConfig>;
   }) {
     this.rootPath = rootPath;
     this.config = config;
+    this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
     this.testState = testState;
-    // Note: StatusRenderer is created lazily in onTestFileStart() to avoid
-    // intercepting stdout/stderr too early. This ensures that errors occurring
-    // before tests start (e.g., Playwright browser not installed) are visible
-    // and not cleared by WindowRenderer's TTY control sequences.
-  }
-
-  /**
-   * Lazily create StatusRenderer on first test file start.
-   * This avoids intercepting stdout/stderr before tests actually begin,
-   * ensuring early errors (like missing Playwright browsers) remain visible.
-   */
-  private ensureStatusRenderer(): void {
-    if (this.statusRenderer) return;
-    if (isTTY() || this.options.logger) {
+    if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
-        this.rootPath,
-        this.testState,
-        this.options.logger,
+        rootPath,
+        testState,
+        options.logger,
       );
     }
   }
 
   onTestFileStart(): void {
-    this.ensureStatusRenderer();
     this.statusRenderer?.onTestFileStart();
   }
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
 
-    if (this.config.hideSkippedTestFiles && test.status === 'skip') {
+    const projectConfig = this.projectConfigs.get(test.project);
+    const hideSkippedTestFiles =
+      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+
+    if (hideSkippedTestFiles && test.status === 'skip') {
       return;
     }
 
     const relativePath = relative(this.rootPath, test.testPath);
-    const { slowTestThreshold } = this.config;
+    const slowTestThreshold =
+      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
 
     logFileTitle(test, relativePath, false, this.options.showProjectName);
     // Always display all test cases when running a single test file
     const showAllCases = this.testState.getTestFiles()?.length === 1;
+
+    const hideSkippedTests =
+      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
     for (const result of test.results) {
       const isDisplayed =
@@ -89,7 +88,7 @@ export class DefaultReporter implements Reporter {
       isDisplayed &&
         logCase(result, {
           slowTestThreshold,
-          hideSkippedTests: this.config.hideSkippedTests,
+          hideSkippedTests,
         });
     }
   }

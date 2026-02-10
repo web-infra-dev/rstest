@@ -3,6 +3,7 @@ antd
 apng
 apos
 applescript
+Asus
 atrules
 autodocs
 biomejs
@@ -166,3 +167,4 @@ vnode
 watchpack
 webm
 webp
+Zenbook

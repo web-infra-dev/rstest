@@ -5,7 +5,7 @@ import type {
   RstestCommand,
   RstestInstance,
 } from '../types';
-import { color, formatError, logger } from '../utils';
+import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -69,6 +69,10 @@ const applyCommonOptions = (cli: CAC) => {
     .option(
       '--bail [number]',
       'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
+    )
+    .option(
+      '--shard <index/count>',
+      'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
     )
     .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
     .option(
@@ -203,7 +207,9 @@ export function setupCommands(): void {
           watch?: boolean;
         },
       ) => {
-        showRstest();
+        if (!determineAgent().isAgent) {
+          showRstest();
+        }
         if (options.watch) {
           await runRest({ options, filters, command: 'watch' });
         } else {
@@ -215,14 +221,18 @@ export function setupCommands(): void {
   cli
     .command('run [...filters]', 'run tests without watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
+      if (!determineAgent().isAgent) {
+        showRstest();
+      }
       await runRest({ options, filters, command: 'run' });
     });
 
   cli
     .command('watch [...filters]', 'run tests in watch mode')
     .action(async (filters: string[], options: CommonOptions) => {
-      showRstest();
+      if (!determineAgent().isAgent) {
+        showRstest();
+      }
       await runRest({ options, filters, command: 'watch' });
     });
 

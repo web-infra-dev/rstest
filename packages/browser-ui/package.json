@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "antd": "^6.2.0",
-    "birpc": "2.9.0",
+    "birpc": "^4.0.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "react": "^19.2.3",
@@ -38,7 +38,7 @@
     "node": ">=18.12.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "1.7.2",
+    "@rsbuild/core": "^1.7.3",
     "@rsbuild/plugin-react": "^1.4.2",
     "@rsbuild/plugin-svgr": "^1.2.3",
     "@rstest/tsconfig": "workspace:*",

@@ -341,3 +341,13 @@ expect.extend({
 
 expect(10).toBeDivisibleBy(2);
 ```
+
+如果你想为自定义匹配器添加 TypeScript 类型定义，可以扩展 `@rstest/core` 模块中的 `Assertion` 接口声明：
+
+```ts
+declare module '@rstest/core' {
+  interface Assertion<T> {
+    toBeDivisibleBy(argument: number): void;
+  }
+}
+```

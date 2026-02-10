@@ -10,6 +10,9 @@ describe('s1', () => {
   });
 
   it('should pass', () => {
+    // Ensure stderr output is forwarded to VS Code test output.
+    console.log('stdout: progress.test.ts');
+    console.error('stderr: progress.test.ts');
     expect(1).equal(1);
   });
   it('should mismatch number', () => {

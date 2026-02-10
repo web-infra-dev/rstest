@@ -29,9 +29,7 @@ export class ProgressLogger {
       cb(null);
     },
   });
-  errorStream = new Writable({
-    write: (_chunk, _encoding, cb) => cb(null),
-  });
+  errorStream = this.outputStream;
   getColumns = () => Number.POSITIVE_INFINITY;
 }
 
