@@ -1778,9 +1778,50 @@ export const runBrowserController = async (
         return frame;
       };
 
+      // Helper to get current runId from iframe URL for stale-request protection
+      const getRunIdForTestFile = async (
+        file: string,
+      ): Promise<string | undefined> => {
+        const iframeElement = await getIframeElementForTestFile(file);
+        const src = await iframeElement.getAttribute('src');
+        if (!src) {
+          return undefined;
+        }
+
+        try {
+          const iframeUrl = new URL(
+            src,
+            hostOptions.runnerUrl || `http://localhost:${port}`,
+          );
+          return iframeUrl.searchParams.get('runId') ?? undefined;
+        } catch {
+          return undefined;
+        }
+      };
+
+      const requestRunId = pluginMessage.payload.request.runId;
+      const targetTestFile = pluginMessage.payload.testFile || testFile;
+      const currentRunId = await getRunIdForTestFile(targetTestFile);
+
+      if (!currentRunId || currentRunId !== requestRunId) {
+        const staleMessage =
+          'Ignored stale plugin request from previous run: ' +
+          `${pluginMessage.payload.namespace}.${pluginMessage.payload.request.method} ` +
+          `(testFile: ${targetTestFile}, requestRunId: ${requestRunId}, currentRunId: ${currentRunId ?? 'none'})`;
+
+        logger.debug(`[Plugin] ${staleMessage}`);
+        return {
+          namespace: pluginMessage.payload.namespace,
+          response: {
+            id: pluginMessage.payload.request.id,
+            error: staleMessage,
+          },
+        };
+      }
+
       // Build context for handlers
       const ctx: PluginMessageContext = {
-        testFile,
+        testFile: targetTestFile,
         message: pluginMessage,
         getContainerPage: () => {
           if (!containerPage) {

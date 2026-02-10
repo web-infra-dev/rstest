@@ -1,76 +1,43 @@
 /**
- * AI RPC communication layer for @rstest/midscene
+ * AI RPC communication layer for @rstest/midscene.
  *
- * This module handles the communication between the runner iframe and the
- * container/host for AI operations (aiTap, aiInput, aiAssert, etc.).
- *
- * Uses the generic plugin protocol with namespace 'midscene'.
+ * This module handles communication between the runner iframe and the
+ * container/host for AI operations.
  */
 
-import type { AiRpcMethod, AiRpcRequest, AiRpcResponse } from './protocol';
+import {
+  AI_RPC_TIMEOUT_MS,
+  type AiRpcMethod,
+  type AiRpcMethodArgs,
+  type AiRpcMethodResult,
+  type AiRpcRequest,
+  type AiRpcResponse,
+  MIDSCENE_NAMESPACE,
+} from './protocol';
 
-/** Plugin namespace for midscene */
-const MIDSCENE_NAMESPACE = 'midscene';
-
-/** Pending request callback */
 type PendingRequest = {
   resolve: (response: AiRpcResponse) => void;
   reject: (error: Error) => void;
+  timeoutHandle: ReturnType<typeof setTimeout>;
 };
 
-/** Request counter for generating unique IDs */
+type PluginResponseMessage = {
+  type: '__rstest_plugin_response__';
+  payload: {
+    namespace: string;
+    response: AiRpcResponse;
+  };
+};
+
 let requestCounter = 0;
-
-/** Map of pending requests by ID */
 const pendingRequests = new Map<string, PendingRequest>();
-
-/** Whether the RPC client is initialized */
 let initialized = false;
 
-/**
- * Generate a unique request ID
- */
 function generateRequestId(): string {
-  return `ai-rpc-${++requestCounter}-${Date.now()}`;
+  requestCounter += 1;
+  return `ai-rpc-${requestCounter}-${Date.now()}`;
 }
 
-/**
- * Initialize the AI RPC client.
- * This sets up the message listener for responses from the container.
- */
-export function initAiRpc(): void {
-  if (initialized) {
-    return;
-  }
-  initialized = true;
-
-  window.addEventListener('message', (event: MessageEvent) => {
-    // Listen for plugin response with midscene namespace
-    if (event.data?.type === '__rstest_plugin_response__') {
-      const { namespace, response } = event.data.payload as {
-        namespace: string;
-        response: AiRpcResponse;
-      };
-      // Only handle responses for our namespace
-      if (namespace !== MIDSCENE_NAMESPACE) {
-        return;
-      }
-      const pending = pendingRequests.get(response.id);
-      if (pending) {
-        pendingRequests.delete(response.id);
-        if (response.error) {
-          pending.reject(new Error(response.error));
-        } else {
-          pending.resolve(response);
-        }
-      }
-    }
-  });
-}
-
-/**
- * Get the current test file from URL params
- */
 function getTestFile(): string {
   const url = new URL(window.location.href);
   const testFile = url.searchParams.get('testFile');
@@ -83,56 +50,112 @@ function getTestFile(): string {
   return testFile;
 }
 
+function getRunId(): string {
+  const url = new URL(window.location.href);
+  const runId = url.searchParams.get('runId');
+  if (!runId) {
+    throw new Error(
+      '@rstest/midscene: Cannot determine runId from URL. ' +
+        'Make sure you are running with a compatible @rstest/browser version.',
+    );
+  }
+  return runId;
+}
+
+function onPluginResponse(response: AiRpcResponse): void {
+  const pending = pendingRequests.get(response.id);
+  if (!pending) {
+    return;
+  }
+
+  pendingRequests.delete(response.id);
+  clearTimeout(pending.timeoutHandle);
+
+  if (response.error) {
+    pending.reject(new Error(response.error));
+    return;
+  }
+
+  pending.resolve(response);
+}
+
+/**
+ * Initialize the AI RPC client.
+ */
+export function initAiRpc(): void {
+  if (initialized) {
+    return;
+  }
+  initialized = true;
+
+  window.addEventListener('message', (event: MessageEvent) => {
+    const data = event.data as PluginResponseMessage | undefined;
+    if (data?.type !== '__rstest_plugin_response__') {
+      return;
+    }
+
+    const { namespace, response } = data.payload;
+    if (namespace !== MIDSCENE_NAMESPACE) {
+      return;
+    }
+
+    onPluginResponse(response);
+  });
+}
+
 /**
  * Send an AI RPC request to the container/host.
- * The container will forward it to the host via WebSocket RPC.
- *
- * @param method - The AI method to call (e.g., 'aiTap', 'aiInput')
- * @param args - Arguments for the method
- * @returns Promise that resolves with the result
  */
-export function sendAiRpcRequest<T = unknown>(
-  method: AiRpcMethod,
-  args: unknown[],
-): Promise<T> {
-  // Ensure RPC is initialized
+export function sendAiRpcRequest<M extends AiRpcMethod>(
+  method: M,
+  args: AiRpcMethodArgs<M>,
+): Promise<AiRpcMethodResult<M>> {
   initAiRpc();
 
   const id = generateRequestId();
-  const request: AiRpcRequest = { id, method, args };
+  const request: AiRpcRequest<M> = {
+    id,
+    runId: getRunId(),
+    method,
+    args,
+  };
   const testFile = getTestFile();
 
-  return new Promise<T>((resolve, reject) => {
+  return new Promise<AiRpcMethodResult<M>>((resolve, reject) => {
+    const timeoutHandle = setTimeout(() => {
+      if (!pendingRequests.has(id)) {
+        return;
+      }
+
+      pendingRequests.delete(id);
+      reject(new Error(`AI RPC request timed out: ${method}`));
+    }, AI_RPC_TIMEOUT_MS);
+
     pendingRequests.set(id, {
-      resolve: (response) => resolve(response.result as T),
+      resolve: (response) => resolve(response.result as AiRpcMethodResult<M>),
       reject,
+      timeoutHandle,
     });
 
-    // Send via postMessage to parent (container) using generic plugin protocol
-    window.parent.postMessage(
-      {
-        type: '__rstest_dispatch__',
-        payload: {
-          type: 'plugin',
+    try {
+      window.parent.postMessage(
+        {
+          type: '__rstest_dispatch__',
           payload: {
-            testFile,
-            namespace: MIDSCENE_NAMESPACE,
-            request,
+            type: 'plugin',
+            payload: {
+              testFile,
+              namespace: MIDSCENE_NAMESPACE,
+              request,
+            },
           },
         },
-      },
-      '*',
-    );
-
-    // Set timeout for request (AI operations can take longer)
-    setTimeout(
-      () => {
-        if (pendingRequests.has(id)) {
-          pendingRequests.delete(id);
-          reject(new Error(`AI RPC request timed out: ${method}`));
-        }
-      },
-      120000, // 2 minutes timeout for AI operations
-    );
+        '*',
+      );
+    } catch (error) {
+      pendingRequests.delete(id);
+      clearTimeout(timeoutHandle);
+      reject(error as Error);
+    }
   });
 }

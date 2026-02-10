@@ -13,7 +13,7 @@ import {
   forwardSnapshotRpcRequest,
   readDispatchMessage,
 } from './core/channel';
-import { createRunnerUrl } from './core/runtime';
+import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
@@ -66,6 +66,7 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
+  const [runIdByFile, setRunIdByFile] = useState<Record<string, string>>({});
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -172,6 +173,11 @@ const BrowserRunner: React.FC<{
         testFile,
         testNamePattern,
       );
+      const nextRunId = createRunId();
+      setRunIdByFile((prev) => ({
+        ...prev,
+        [testFile]: nextRunId,
+      }));
       const iframe = document.querySelector<HTMLIFrameElement>(
         `iframe[data-test-file="${testFile}"]`,
       );
@@ -190,6 +196,8 @@ const BrowserRunner: React.FC<{
           testFile,
           options.runnerUrl,
           testNamePattern,
+          false,
+          nextRunId,
         );
         logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
@@ -228,6 +236,15 @@ const BrowserRunner: React.FC<{
     // Clean up openFiles: remove files that no longer exist
     const testPaths = testFiles.map((f) => f.testPath);
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
+
+    // Keep a stable runId per iframe and rotate it on explicit reload.
+    setRunIdByFile((prev) => {
+      const next: Record<string, string> = {};
+      for (const file of testFiles) {
+        next[file.testPath] = prev[file.testPath] ?? createRunId();
+      }
+      return next;
+    });
 
     // Auto-select first file if none selected
     setActive((prev) => {
@@ -640,6 +657,10 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
+                  const runId = runIdByFile[fileInfo.testPath];
+                  if (!runId) {
+                    return null;
+                  }
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -649,6 +670,15 @@ const BrowserRunner: React.FC<{
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
                     const frame = event.currentTarget;
+                    const frameRunId = (() => {
+                      try {
+                        return (
+                          new URL(frame.src).searchParams.get('runId') || runId
+                        );
+                      } catch {
+                        return runId;
+                      }
+                    })();
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
@@ -656,6 +686,7 @@ const BrowserRunner: React.FC<{
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,
+                            runId: frameRunId,
                           },
                         },
                         '*',
@@ -696,6 +727,9 @@ const BrowserRunner: React.FC<{
                           src={createRunnerUrl(
                             fileInfo.testPath,
                             options.runnerUrl,
+                            undefined,
+                            false,
+                            runId,
                           )}
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}

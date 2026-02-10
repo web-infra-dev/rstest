@@ -21,15 +21,23 @@
  * @packageDocumentation
  */
 
-// Export AgentProxy for AI-powered testing
-export {
-  AgentProxy,
-  agent,
-  type LocateResult,
-  type ScrollDirection,
-  type ScrollOptions,
-} from './agentProxy';
-// Export RPC utilities for advanced usage
+export { AgentProxy, agent } from './agentProxy';
 export { initAiRpc, sendAiRpcRequest } from './aiRpc';
-// Export types
-export type { AiRpcMethod, AiRpcRequest, AiRpcResponse } from './protocol';
+export type {
+  AiActOptions,
+  AiInputOptions,
+  AiKeyboardPressOptions,
+  AiRpcMethod,
+  AiRpcRequest,
+  AiRpcResponse,
+  AiWaitForOptions,
+  LocateActionOptions,
+  LocateResult,
+  PromptImage,
+  PromptInput,
+  QueryOptions,
+  RecordToReportOptions,
+  RunYamlResult,
+  ScrollDirection,
+  ScrollOptions,
+} from './protocol';

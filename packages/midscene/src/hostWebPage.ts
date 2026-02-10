@@ -8,52 +8,36 @@
 
 import type { ElementHandle, Frame, Page } from 'playwright';
 
-/**
- * Point type from Midscene (simplified)
- */
 type Point = {
   left: number;
   top: number;
 };
 
-/**
- * ElementInfo type for clearInput (simplified from Midscene)
- * Only the center coordinates are needed for our purposes
- */
 interface ElementInfo {
   center: [number, number];
 }
 
-/**
- * Size type for viewport
- */
 type Size = {
   width: number;
   height: number;
   dpr?: number;
 };
 
-/**
- * Mouse button type
- */
+type Rect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 type MouseButton = 'left' | 'right' | 'middle';
 
-/**
- * KeyInput type (simplified from Playwright)
- */
 type KeyInput = string;
 
-/**
- * LocateResultElement - simplified type for action parameters
- */
 interface LocateResultElement {
   center: [number, number];
 }
 
-/**
- * ActionScrollParam - simplified type for scroll action
- * Note: scrollType uses string to be compatible with all @midscene/core versions
- */
 interface ActionScrollParam {
   direction?: 'up' | 'down' | 'left' | 'right';
   scrollType?: string;
@@ -61,9 +45,6 @@ interface ActionScrollParam {
   locate?: LocateResultElement;
 }
 
-/**
- * MouseAction interface matching AbstractWebPage
- */
 interface MouseAction {
   click: (
     x: number,
@@ -78,9 +59,6 @@ interface MouseAction {
   ) => Promise<void>;
 }
 
-/**
- * KeyboardAction interface matching AbstractWebPage
- */
 interface KeyboardAction {
   type: (text: string) => Promise<void>;
   press: (
@@ -90,9 +68,15 @@ interface KeyboardAction {
   ) => Promise<void>;
 }
 
-/**
- * Sleep helper function
- */
+interface FileChooserBridge {
+  accept: (files: string[]) => Promise<void>;
+}
+
+interface FileChooserListenerRegistration {
+  dispose: () => void;
+  getError: () => Error | undefined;
+}
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -116,18 +100,16 @@ function normalizeKeyInputs(value: string | string[]): string[] {
     }
 
     let normalized = trimmed;
-    // Handle "Ctrl+A" style input - replace + with space
+    // Accept both "Ctrl+A" and "Ctrl A" styles.
     if (normalized.length > 1 && normalized.includes('+')) {
       normalized = normalized.replace(/\s*\+\s*/g, ' ');
     }
-    // Normalize whitespace
+
     if (/\s/.test(normalized)) {
       normalized = normalized.replace(/\s+/g, ' ');
     }
 
-    // Split by space and transform common key names
     const parts = normalized.split(' ').map((part) => {
-      // Map common key aliases
       if (part.toLowerCase() === 'ctrl') return 'Control';
       if (part.toLowerCase() === 'cmd' || part.toLowerCase() === 'command')
         return 'Meta';
@@ -171,7 +153,8 @@ function getKeyCommands(
  */
 async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
   try {
-    // Dynamically import to avoid bundling issues when @midscene/core is not available
+    // Keep this import dynamic to avoid hard failure when the host package is
+    // consumed without Midscene runtime dependencies.
     const {
       defineActionTap,
       defineActionRightClick,
@@ -186,7 +169,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
     } = await import('@midscene/core/device');
 
     return [
-      // Tap action
       defineActionTap(async (param: { locate: LocateResultElement }) => {
         const element = param.locate;
         if (!element) throw new Error('Element not found, cannot tap');
@@ -195,7 +177,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         });
       }),
 
-      // Right click action
       defineActionRightClick(async (param: { locate: LocateResultElement }) => {
         const element = param.locate;
         if (!element) throw new Error('Element not found, cannot right click');
@@ -204,7 +185,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         });
       }),
 
-      // Double click action
       defineActionDoubleClick(
         async (param: { locate: LocateResultElement }) => {
           const element = param.locate;
@@ -217,14 +197,12 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         },
       ),
 
-      // Hover action
       defineActionHover(async (param: { locate: LocateResultElement }) => {
         const element = param.locate;
         if (!element) throw new Error('Element not found, cannot hover');
         await page.mouse.move(element.center[0], element.center[1]);
       }),
 
-      // Input action
       defineActionInput(
         async (param: {
           value: string;
@@ -237,7 +215,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
           }
 
           if (param.mode === 'clear') {
-            // Clear mode removes existing text without entering new characters
             return;
           }
 
@@ -249,7 +226,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         },
       ),
 
-      // Keyboard press action
       defineActionKeyboardPress(
         async (param: { locate?: LocateResultElement; keyName: string }) => {
           const element = param.locate;
@@ -266,7 +242,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         },
       ),
 
-      // Scroll action
       defineActionScroll(async (param: ActionScrollParam) => {
         const element = param.locate;
         const startingPoint = element
@@ -296,7 +271,8 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
           } else {
             throw new Error(`Unknown scroll direction: ${param.direction}`);
           }
-          // Wait for scroll to complete
+
+          // Some scroll actions are async from the app's perspective.
           await sleep(500);
         } else {
           throw new Error(
@@ -307,7 +283,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         }
       }),
 
-      // Drag and drop action
       defineActionDragAndDrop(
         async (param: {
           from: LocateResultElement;
@@ -330,7 +305,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         },
       ),
 
-      // Long press action
       defineActionLongPress(
         async (param: { locate: LocateResultElement; duration?: number }) => {
           const element = param.locate;
@@ -340,7 +314,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
         },
       ),
 
-      // Clear input action
       defineActionClearInput(async (param: { locate: LocateResultElement }) => {
         const element = param.locate;
         if (!element) throw new Error('Element not found, cannot clear input');
@@ -348,7 +321,6 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
       }),
     ];
   } catch (error) {
-    // Fallback: return empty array if @midscene/core is not available
     console.warn(
       '[HostWebPage] @midscene/core/device not available, actionSpace is empty:',
       error,
@@ -358,11 +330,10 @@ async function buildActionSpace(page: HostWebPage): Promise<unknown[]> {
 }
 
 /**
- * HostWebPage implements Midscene's AbstractWebPage interface for rstest host-side.
+ * Host-side implementation of Midscene's interface contract for rstest browser mode.
  *
- * It uses Playwright's Page and Frame objects directly to control the browser iframe.
- * The actionSpace() method uses Midscene's defineAction* helpers to provide
- * the standard set of web actions (tap, click, input, scroll, etc.).
+ * Coordinates are always relative to the runner iframe and translated back to
+ * container-page coordinates before being sent to Playwright.
  */
 export class HostWebPage {
   readonly interfaceType: string = 'rstest-host';
@@ -399,21 +370,16 @@ export class HostWebPage {
     this.everMoved = false;
   }
 
-  /**
-   * Take a screenshot and return as base64 string
-   */
   async screenshotBase64(): Promise<string> {
     const buffer = await this.iframeElement.screenshot({
       type: 'jpeg',
       quality: 90,
     });
-    // Return with data URI prefix for Midscene compatibility
+
+    // Midscene expects a data URI payload.
     return `data:image/jpeg;base64,${buffer.toString('base64')}`;
   }
 
-  /**
-   * Get viewport size
-   */
   async size(): Promise<Size> {
     if (this.cachedSize) {
       return this.cachedSize;
@@ -429,9 +395,6 @@ export class HostWebPage {
     return this.cachedSize;
   }
 
-  /**
-   * Get iframe bounding box for coordinate offset calculation
-   */
   private async getIframeBoundingBox(): Promise<{ x: number; y: number }> {
     if (this.iframeBoundingBox) {
       return this.iframeBoundingBox;
@@ -447,19 +410,14 @@ export class HostWebPage {
   }
 
   /**
-   * Get available actions for this device.
-   * Uses Midscene's defineAction* helpers for standard web actions.
-   *
-   * Note: This is synchronous but we cache the result from the async build.
-   * The first call to agent methods will trigger the async build.
+   * Midscene reads actionSpace synchronously. We lazily start async construction
+   * and return an empty array until the promise resolves.
    */
   actionSpace(): unknown[] {
-    // If we have cached actions, return them
     if (this.actionSpaceCache) {
       return this.actionSpaceCache;
     }
 
-    // Start building if not already in progress
     if (!this.actionSpacePromise) {
       this.actionSpacePromise = buildActionSpace(this).then((actions) => {
         this.actionSpaceCache = actions;
@@ -467,14 +425,9 @@ export class HostWebPage {
       });
     }
 
-    // Return empty array for now - actions will be available after first screenshot
-    // This is a workaround for the sync/async mismatch in Midscene's interface
     return [];
   }
 
-  /**
-   * Ensure action space is built (call this before using the agent)
-   */
   async ensureActionSpace(): Promise<unknown[]> {
     if (this.actionSpaceCache) {
       return this.actionSpaceCache;
@@ -490,30 +443,176 @@ export class HostWebPage {
     return this.actionSpacePromise;
   }
 
-  /**
-   * Get current page URL
-   */
   async url(): Promise<string> {
     return this.frame.url();
   }
 
-  /**
-   * Describe the current page (returns URL)
-   */
   describe(): string {
     return this.frame.url();
   }
 
-  /**
-   * Evaluate JavaScript in the page context
-   */
   async evaluateJavaScript<T = unknown>(script: string): Promise<T> {
     return this.frame.evaluate(script) as Promise<T>;
   }
 
-  // ============================================================================
-  // Mouse interface (matches AbstractWebPage)
-  // ============================================================================
+  /**
+   * TODO(midscene-file-upload): bridge `filechooser` events from Playwright.
+   *
+   * Midscene's `fileChooserAccept` option requires this hook. In rstest browser
+   * mode we need to map container-page file chooser events back to the current
+   * runner iframe and keep isolation across test files/runs.
+   *
+   * This is intentionally unimplemented for now to avoid cross-iframe leakage.
+   */
+  async registerFileChooserListener(
+    _handler: (chooser: FileChooserBridge) => Promise<void>,
+  ): Promise<FileChooserListenerRegistration> {
+    throw new Error(
+      '[rstest:midscene] fileChooserAccept is not implemented in HostWebPage yet. ' +
+        'TODO: add a Playwright filechooser bridge with iframe-level isolation.',
+    );
+  }
+
+  /**
+   * Build stable locate cache hints for Midscene.
+   *
+   * We derive candidate selectors from the element under the provided rect center.
+   */
+  async cacheFeatureForRect(rect: Rect): Promise<Record<string, unknown>> {
+    return this.frame.evaluate((rawRect) => {
+      const clamp = (value: number, min: number, max: number): number =>
+        Math.min(Math.max(value, min), max);
+
+      const width = Math.max(1, window.innerWidth);
+      const height = Math.max(1, window.innerHeight);
+      const centerX = clamp(
+        rawRect.left + rawRect.width / 2,
+        0,
+        Math.max(0, width - 1),
+      );
+      const centerY = clamp(
+        rawRect.top + rawRect.height / 2,
+        0,
+        Math.max(0, height - 1),
+      );
+
+      const target = document.elementFromPoint(centerX, centerY);
+      if (!(target instanceof Element)) {
+        return {};
+      }
+
+      const xpaths: string[] = [];
+      const appendXPath = (xpath?: string | null): void => {
+        if (!xpath) {
+          return;
+        }
+        if (!xpaths.includes(xpath)) {
+          xpaths.push(xpath);
+        }
+      };
+
+      const quoteXPathLiteral = (value: string): string => {
+        if (!value.includes("'")) {
+          return `'${value}'`;
+        }
+        if (!value.includes('"')) {
+          return `"${value}"`;
+        }
+        return `concat('${value.replace(/'/g, `',"'",'`)}')`;
+      };
+
+      const toAbsoluteXPath = (element: Element): string => {
+        if (element.id) {
+          return `//*[@id=${quoteXPathLiteral(element.id)}]`;
+        }
+
+        const segments: string[] = [];
+        let current: Element | null = element;
+
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+          const tagName = current.tagName.toLowerCase();
+          if (!current.parentElement) {
+            segments.unshift(tagName);
+            break;
+          }
+
+          const siblings = Array.from(current.parentElement.children).filter(
+            (sibling) => sibling.tagName === current?.tagName,
+          );
+          const index = siblings.indexOf(current) + 1;
+          segments.unshift(`${tagName}[${index}]`);
+          current = current.parentElement;
+        }
+
+        return `/${segments.join('/')}`;
+      };
+
+      appendXPath(
+        target.id ? `//*[@id=${quoteXPathLiteral(target.id)}]` : null,
+      );
+
+      const testId = target.getAttribute('data-testid');
+      appendXPath(
+        testId ? `//*[@data-testid=${quoteXPathLiteral(testId)}]` : null,
+      );
+
+      const role = target.getAttribute('role');
+      appendXPath(role ? `//*[@role=${quoteXPathLiteral(role)}]` : null);
+
+      appendXPath(toAbsoluteXPath(target));
+
+      return xpaths.length > 0 ? { xpaths } : {};
+    }, rect);
+  }
+
+  /**
+   * Resolve cached selectors to the first visible element rectangle.
+   */
+  async rectMatchesCacheFeature(
+    feature: Record<string, unknown>,
+  ): Promise<Rect> {
+    return this.frame.evaluate((rawFeature) => {
+      const cacheFeature = rawFeature as { xpaths?: unknown };
+      const xpaths = Array.isArray(cacheFeature?.xpaths)
+        ? cacheFeature.xpaths.filter(
+            (item): item is string =>
+              typeof item === 'string' && item.length > 0,
+          )
+        : [];
+
+      if (xpaths.length === 0) {
+        throw new Error('Cache feature does not contain xpaths');
+      }
+
+      for (const xpath of xpaths) {
+        const node = document.evaluate(
+          xpath,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null,
+        ).singleNodeValue;
+
+        if (!(node instanceof Element)) {
+          continue;
+        }
+
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          continue;
+        }
+
+        return {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+
+      throw new Error('No matching element found for cache feature');
+    }, feature);
+  }
 
   get mouse(): MouseAction {
     const page = this;
@@ -566,7 +665,6 @@ export class HostWebPage {
         await page.containerPage.mouse.down();
         await sleep(300);
 
-        // Move in steps for smooth drag
         const steps = 20;
         for (let i = 1; i <= steps; i++) {
           const x = absoluteFromX + (absoluteToX - absoluteFromX) * (i / steps);
@@ -580,10 +678,6 @@ export class HostWebPage {
       },
     };
   }
-
-  // ============================================================================
-  // Keyboard interface (matches AbstractWebPage)
-  // ============================================================================
 
   get keyboard(): KeyboardAction {
     const page = this;
@@ -607,10 +701,6 @@ export class HostWebPage {
       },
     };
   }
-
-  // ============================================================================
-  // Scroll methods (required by AbstractWebPage)
-  // ============================================================================
 
   private async moveToPointBeforeScroll(point?: Point): Promise<void> {
     if (point) {
@@ -671,10 +761,6 @@ export class HostWebPage {
     await this.mouse.wheel(scrollDistance, 0);
   }
 
-  // ============================================================================
-  // Touch/gesture methods (required by AbstractWebPage)
-  // ============================================================================
-
   async longPress(x: number, y: number, duration = 500): Promise<void> {
     const box = await this.getIframeBoundingBox();
     const absoluteX = box.x + x;
@@ -732,12 +818,8 @@ export class HostWebPage {
     await this.containerPage.mouse.up({ button: 'left' });
   }
 
-  // ============================================================================
-  // Input helper methods
-  // ============================================================================
-
   /**
-   * Clear input field - clicks element and selects all then deletes
+   * Clear text by focusing, selecting all, then issuing Backspace.
    */
   async clearInput(element: ElementInfo): Promise<void> {
     if (!element) {
@@ -752,18 +834,15 @@ export class HostWebPage {
 
     const isMac = process.platform === 'darwin';
 
-    // Click the element
     await this.mouse.click(element.center[0], element.center[1], {
       button: 'left',
     });
 
-    // Triple-click to select all (works in most input fields)
     await this.mouse.click(element.center[0], element.center[1], {
       button: 'left',
       count: 1,
     });
 
-    // Select all with keyboard shortcut
     if (isMac) {
       await this.containerPage.keyboard.down('Meta');
       await this.containerPage.keyboard.press('a');
@@ -776,10 +855,6 @@ export class HostWebPage {
     await backspace();
   }
 
-  // ============================================================================
-  // Lifecycle methods
-  // ============================================================================
-
   async destroy(): Promise<void> {
     this.cachedSize = null;
     this.iframeBoundingBox = null;
@@ -788,13 +863,10 @@ export class HostWebPage {
   }
 
   async beforeInvokeAction(_name: string, _param: unknown): Promise<void> {
-    // Refresh iframe bounding box before each action in case it moved
+    // Layout can shift after each action, so refresh offsets aggressively.
     this.iframeBoundingBox = null;
-    // Ensure action space is ready
     await this.ensureActionSpace();
   }
 
-  async afterInvokeAction(_name: string, _param: unknown): Promise<void> {
-    // No-op
-  }
+  async afterInvokeAction(_name: string, _param: unknown): Promise<void> {}
 }

@@ -35,6 +35,8 @@ export type BrowserHostConfig = {
   };
   /** If provided, only run this specific test file */
   testFile?: string;
+  /** Runner instance identifier used for stale-request protection */
+  runId?: string;
   /** Base URL for runner (iframe) pages */
   runnerUrl?: string;
   /** WebSocket port for container RPC */
@@ -178,6 +180,11 @@ export type SnapshotRpcResponse = {
  */
 export type BrowserPluginRequest = {
   id: string;
+  /**
+   * Runner instance identifier for stale-request protection.
+   * Generated per iframe load/reload.
+   */
+  runId: string;
   method: string;
   args: unknown[];
 };

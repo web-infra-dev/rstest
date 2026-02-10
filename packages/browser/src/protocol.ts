@@ -48,6 +48,11 @@ export type BrowserHostConfig = {
   };
   testFile?: string; // Optional: if provided, only run this specific test file
   /**
+   * Runner instance identifier used for stale-request protection.
+   * Changes on each iframe load/reload.
+   */
+  runId?: string;
+  /**
    * Base URL for runner (iframe) pages.
    */
   runnerUrl?: string;
@@ -153,6 +158,11 @@ export type SnapshotRpcResponse = {
  */
 export type BrowserPluginRequest = {
   id: string;
+  /**
+   * Runner instance identifier for stale-request protection.
+   * Generated per iframe load/reload.
+   */
+  runId: string;
   method: string;
   args: unknown[];
 };

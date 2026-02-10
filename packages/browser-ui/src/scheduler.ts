@@ -5,6 +5,7 @@ import {
   readDispatchMessage,
 } from './core/channel';
 import {
+  createRunId,
   createRunnerUrl,
   createWebSocketUrl,
   RECONNECT_DELAYS,
@@ -42,6 +43,7 @@ let reconnectAttempt = 0;
 let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 const iframeMap = new Map<string, HTMLIFrameElement>();
 const fileProjectMap = new Map<string, string>();
+const runIdMap = new Map<string, string>();
 
 const debugLog = (...args: unknown[]) => {
   if (debug) {
@@ -82,6 +84,13 @@ const resolveViewport = (
 
 const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
   const projectName = fileProjectMap.get(testFile) || '';
+  const runId = (() => {
+    try {
+      return new URL(frame.src).searchParams.get('runId') || '';
+    } catch {
+      return runIdMap.get(testFile) || '';
+    }
+  })();
   frame.contentWindow?.postMessage(
     {
       type: 'RSTEST_CONFIG',
@@ -89,6 +98,7 @@ const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
         ...options,
         testFile,
         projectName,
+        runId,
       },
     },
     '*',
@@ -96,6 +106,9 @@ const postConfig = (frame: HTMLIFrameElement, testFile: string): void => {
 };
 
 const mountRunner = (testFile: string, testNamePattern?: string): void => {
+  const runId = createRunId();
+  runIdMap.set(testFile, runId);
+
   let iframe = iframeMap.get(testFile);
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -128,6 +141,7 @@ const mountRunner = (testFile: string, testNamePattern?: string): void => {
     options?.runnerUrl,
     testNamePattern,
     true,
+    runId,
   );
 };
 
@@ -138,6 +152,7 @@ const unmountRemovedFiles = (nextFiles: TestFileInfo[]): void => {
       frame.remove();
       iframeMap.delete(testFile);
       fileProjectMap.delete(testFile);
+      runIdMap.delete(testFile);
     }
   }
 };
