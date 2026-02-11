@@ -5,8 +5,15 @@ Browser mode support for Rstest. Provides browser test execution using Playwrigh
 ## Module structure
 
 - `src/index.ts` — Package entry, exports runBrowserTests and listBrowserTests
-- `src/hostController.ts` — Main browser mode controller (Rsbuild dev server, Playwright browser, WebSocket RPC)
+- `src/hostController.ts` — Main browser mode controller (runtime bootstrap + headless/headed scheduling)
 - `src/protocol.ts` — Type definitions for browser-host communication protocol
+- `src/dispatchRouter.ts` — Host-side dispatch namespace router
+- `src/dispatchCapabilities.ts` — Shared built-in dispatch capability registration (`runner`, `snapshot`, extension namespaces)
+- `src/runSession.ts` — Run token lifecycle and cancellation semantics
+- `src/sessionRegistry.ts` — Session index keyed by `sessionId`/`testFile`/`runToken`
+- `src/concurrency.ts` — Shared headless worker concurrency policy
+- `src/headlessTransport.ts` — Top-level headless page bridge wiring (`__rstest_dispatch__` / `__rstest_dispatch_rpc__`)
+- `src/watchRerunPlanner.ts` — Shared watch rerun planning logic across headless/headed paths
 - `src/client/` — Browser-side runtime code (runs in iframe)
   - `entry.ts` — Browser client entry point
   - `snapshot.ts` — Browser snapshot environment (proxies file ops to host)
@@ -34,8 +41,10 @@ pnpm --filter @rstest/browser typecheck
 │  │ Rsbuild Dev  │  │ Playwright│  │ WebSocket Server (RPC)  │  │
 │  │ Server       │  │ (Chromium)│  │ - rerunTest()           │  │
 │  │ - Bundle     │  │           │  │ - getTestFiles()        │  │
-│  │ - Lazy comp  │  │           │  │ - snapshot file ops     │  │
+│  │ - Lazy comp  │  │           │  │ - dispatch(request)     │  │
 │  └──────────────┘  └───────────┘  └─────────────────────────┘  │
+│  Headless: direct page transport + session-based scheduler      │
+│  Headed: container page + iframe runners                        │
 └─────────────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -78,5 +87,7 @@ This package requires `@rstest/core` as a peer dependency. The browser client co
 ## Key files
 
 - `src/index.ts` — Package entry
-- `src/hostController.ts` — Main orchestration (~1700 lines)
+- `src/hostController.ts` — Main scheduling flow
+- `src/dispatchCapabilities.ts` — Built-in dispatch namespace registration
+- `src/watchRerunPlanner.ts` — Shared watch rerun planner
 - `src/client/entry.ts` — Browser-side test runner entry
