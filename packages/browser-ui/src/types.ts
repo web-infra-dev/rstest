@@ -103,8 +103,10 @@ export type BrowserClientMessage =
       payload: LogPayload;
     }
   | {
-      type: 'snapshot-rpc-request';
-      payload: SnapshotRpcRequest;
+      // Keep browser-ui aligned with @rstest/browser dispatch protocol so new
+      // namespaces can be routed without introducing extra message variants.
+      type: 'dispatch-rpc-request';
+      payload: BrowserDispatchRequest;
     }
   | { type: string; payload?: unknown };
 
@@ -116,10 +118,9 @@ export type HostRPC = {
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
-  resolveSnapshotPath: (testPath: string) => Promise<string>;
-  readSnapshotFile: (filepath: string) => Promise<string | null>;
-  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
-  removeSnapshotFile: (filepath: string) => Promise<void>;
+  dispatch: (
+    request: BrowserDispatchRequest,
+  ) => Promise<BrowserDispatchResponse>;
 };
 
 export type ContainerRPC = {
@@ -127,37 +128,16 @@ export type ContainerRPC = {
   reloadTestFile: (testFile: string, testNamePattern?: string) => void;
 };
 
-/**
- * Snapshot RPC request from runner iframe.
- * The container will forward these to the host via WebSocket RPC.
- */
-export type SnapshotRpcRequest =
-  | {
-      id: string;
-      method: 'resolveSnapshotPath';
-      args: { testPath: string };
-    }
-  | {
-      id: string;
-      method: 'readSnapshotFile';
-      args: { filepath: string };
-    }
-  | {
-      id: string;
-      method: 'saveSnapshotFile';
-      args: { filepath: string; content: string };
-    }
-  | {
-      id: string;
-      method: 'removeSnapshotFile';
-      args: { filepath: string };
-    };
+export type BrowserDispatchRequest = {
+  requestId: string;
+  [key: string]: unknown;
+};
 
-/**
- * Snapshot RPC response from container to runner iframe.
- */
-export type SnapshotRpcResponse = {
-  id: string;
+export type BrowserDispatchResponse = {
+  requestId: string;
+  runToken?: number;
   result?: unknown;
   error?: string;
+  stale?: boolean;
+  [key: string]: unknown;
 };
