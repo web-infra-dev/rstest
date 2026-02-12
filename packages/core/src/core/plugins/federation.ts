@@ -1,11 +1,79 @@
-import type { RsbuildPlugin } from '@rsbuild/core';
-import { logger } from '../../utils';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import { castArray, logger } from '../../utils';
 
 // Note: ModuleFederationPlugin configuration should include
 // experiments.optimization.target: 'node' when used with Rstest
 // to ensure proper Node.js loading in JSDOM environments
 
-export const shouldKeepBundledForFederation = (request: string): boolean => {
+const addRemoteNames = (remotes: unknown, target: Set<string>): void => {
+  if (!remotes) return;
+
+  if (Array.isArray(remotes)) {
+    for (const entry of remotes) {
+      if (!entry) continue;
+      if (Array.isArray(entry)) {
+        const [name] = entry;
+        if (typeof name === 'string') target.add(name);
+        continue;
+      }
+      if (typeof entry === 'object') {
+        const maybeName = (entry as { name?: unknown; alias?: unknown }).name;
+        const maybeAlias = (entry as { alias?: unknown }).alias;
+        if (typeof maybeName === 'string') target.add(maybeName);
+        if (typeof maybeAlias === 'string') target.add(maybeAlias);
+      }
+    }
+    return;
+  }
+
+  if (typeof remotes === 'object') {
+    for (const key of Object.keys(remotes as Record<string, unknown>)) {
+      target.add(key);
+    }
+  }
+};
+
+const collectFederationRemoteNames = (
+  plugins: unknown[] | undefined,
+  target: Set<string>,
+): void => {
+  target.clear();
+  if (!plugins) return;
+
+  for (const plugin of plugins) {
+    if (!plugin || typeof plugin !== 'object') continue;
+    const ctorName = (plugin as { constructor?: { name?: string } }).constructor
+      ?.name;
+    if (ctorName !== 'ModuleFederationPlugin') continue;
+
+    const options =
+      (plugin as { _options?: unknown })._options ??
+      (plugin as { options?: unknown }).options;
+    if (!options || typeof options !== 'object') continue;
+
+    addRemoteNames((options as { remotes?: unknown }).remotes, target);
+  }
+};
+
+const isFederationRemoteRequest = (
+  request: string,
+  remoteNames: Set<string>,
+): boolean => {
+  if (!remoteNames.size) return false;
+
+  for (const name of remoteNames) {
+    if (request === name || request.startsWith(`${name}/`)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+export const shouldKeepBundledForFederation = (
+  request: string,
+  remoteNames?: Set<string>,
+): boolean => {
   // Module Federation runtimes can generate "loader-style" requests that embed
   // inline JS via a `data:` URL (e.g. `something!=!data:text/javascript,...`).
   // Externalizing those breaks because Node can't resolve them via require/import.
@@ -19,8 +87,37 @@ export const shouldKeepBundledForFederation = (request: string): boolean => {
     return true;
   }
 
+  // Webpack/Rspack Module Federation container reference request.
+  if (request.startsWith('webpack/container/reference/')) {
+    return true;
+  }
+
+  if (remoteNames && isFederationRemoteRequest(request, remoteNames)) {
+    return true;
+  }
+
   return false;
 };
+
+function federationExternalBypass(
+  remoteNames: Set<string>,
+): (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void {
+  return ({ request }, callback) => {
+    if (!request || !shouldKeepBundledForFederation(request, remoteNames)) {
+      return callback();
+    }
+
+    // `false` means: stop evaluating remaining externals and keep bundled.
+    return callback(undefined, false);
+  };
+}
 
 /**
  * Enable Rstest's Module Federation compatibility mode for the current Rsbuild
@@ -56,6 +153,16 @@ export const federation = (): RsbuildPlugin => ({
             rspackConfig.optimization.splitChunks = false;
 
             // Validate that ModuleFederationPlugin instances have the correct config.
+            const federationRemoteNames = new Set<string>();
+            collectFederationRemoteNames(
+              rspackConfig.plugins as unknown[] | undefined,
+              federationRemoteNames,
+            );
+            rspackConfig.externals = castArray(rspackConfig.externals) || [];
+            rspackConfig.externals.unshift(
+              federationExternalBypass(federationRemoteNames),
+            );
+
             if (rspackConfig.plugins) {
               for (const plugin of rspackConfig.plugins) {
                 if (
