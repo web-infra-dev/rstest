@@ -3,7 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
-const autoExternalNodeModules: (
+const createAutoExternalNodeModules: (
   outputModule: boolean,
   federation: boolean,
 ) => (
@@ -13,9 +13,11 @@ const autoExternalNodeModules: (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void =
-  (outputModule, federation) =>
-  ({ context, request, dependencyType, getResolve }, callback) => {
+) => void = (outputModule, federation) =>
+  function autoExternalNodeModules(
+    { context, request, dependencyType, getResolve },
+    callback,
+  ) {
     if (!request) {
       return callback();
     }
@@ -117,7 +119,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
           output: {
             externals:
               testEnvironment.name === 'node'
-                ? [autoExternalNodeModules(outputModule, federation)]
+                ? [createAutoExternalNodeModules(outputModule, federation)]
                 : undefined,
           },
           tools: {

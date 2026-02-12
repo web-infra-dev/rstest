@@ -99,17 +99,17 @@ export const shouldKeepBundledForFederation = (
   return false;
 };
 
-function federationExternalBypass(
+const createFederationExternalBypass = (
   remoteNames: Set<string>,
-): (
+): ((
   data: Rspack.ExternalItemFunctionData,
   callback: (
     err?: Error,
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void {
-  return ({ request }, callback) => {
+) => void) => {
+  return function federationExternalBypass({ request }, callback) {
     if (!request || !shouldKeepBundledForFederation(request, remoteNames)) {
       return callback();
     }
@@ -117,7 +117,7 @@ function federationExternalBypass(
     // `false` means: stop evaluating remaining externals and keep bundled.
     return callback(undefined, false);
   };
-}
+};
 
 /**
  * Enable Rstest's Module Federation compatibility mode for the current Rsbuild
@@ -160,7 +160,7 @@ export const federation = (): RsbuildPlugin => ({
             );
             rspackConfig.externals = castArray(rspackConfig.externals) || [];
             rspackConfig.externals.unshift(
-              federationExternalBypass(federationRemoteNames),
+              createFederationExternalBypass(federationRemoteNames),
             );
 
             if (rspackConfig.plugins) {
