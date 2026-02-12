@@ -101,6 +101,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                     importMetaPathName: true,
                     hoistMockModule: true,
                     manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                    preserveNewUrl: ['.wasm'],
                   }),
                 );
 
