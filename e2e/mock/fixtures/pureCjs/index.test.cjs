@@ -7,6 +7,5 @@ it('mocked cjs with named exports', () => {
 it.todo('mocked cjs with default export', () => {
   rs.doMockRequire('./defaultExport.js', () => () => 'hello');
   const e = require('./defaultExport.js');
-  console.log('e', e);
   expect(e()).toBe('hello');
 });
