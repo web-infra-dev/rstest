@@ -130,29 +130,26 @@ const getMockImplementation = (mockType = 'mock') => {
         }) || originalModule;
 
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
-        !isMockRequire && __webpack_require__.r(__webpack_exports__);
+        if (isMockRequire) {
+          __webpack_module__.exports = mockedModule;
+          return;
+        }
+
+        __webpack_require__.r(__webpack_exports__);
         for (const key in mockedModule) {
-          if (__webpack_require__.d) {
-            __webpack_require__.d(__webpack_exports__, {
-              [key]: () => mockedModule[key],
-            });
-          } else {
-            __webpack_exports__[key] = mockedModule[key];
-          }
+          __webpack_require__.d(__webpack_exports__, {
+            [key]: () => mockedModule[key],
+          });
         }
         // For CJS modules, add default export to preserve default-import behavior
         if (!isEsModule && !('default' in mockedModule)) {
-          if (__webpack_require__.d) {
-            __webpack_require__.d(__webpack_exports__, {
-              default: () => mockedModule,
-            });
-          } else {
-            __webpack_exports__.default = mockedModule;
-          }
+          __webpack_require__.d(__webpack_exports__, {
+            default: () => mockedModule,
+          });
         }
       };
 
@@ -167,20 +164,22 @@ const getMockImplementation = (mockType = 'mock') => {
       };
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
-        !isMockRequire && __webpack_require__.r(__webpack_exports__);
         const res = modFactory();
+
+        if (isMockRequire) {
+          __webpack_module__.exports = res;
+          return;
+        }
+
+        __webpack_require__.r(__webpack_exports__);
         for (const key in res) {
-          if (__webpack_require__.d) {
-            __webpack_require__.d(__webpack_exports__, {
-              [key]: () => res[key],
-            });
-          } else {
-            __webpack_exports__[key] = res[key];
-          }
+          __webpack_require__.d(__webpack_exports__, {
+            [key]: () => res[key],
+          });
         }
       };
 
