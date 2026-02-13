@@ -5,6 +5,9 @@ describe('setup files', () => {
     expect((globalThis as Record<string, unknown>).__SETUP_EXECUTED__).toBe(
       true,
     );
+    expect(
+      (globalThis as Record<string, unknown>).__SETUP_BEFORE_EACH_COUNT__,
+    ).toBe(1);
   });
 
   it('should have setup timestamp', () => {
@@ -12,6 +15,9 @@ describe('setup files', () => {
       .__SETUP_TIMESTAMP__ as number;
     expect(typeof timestamp).toBe('number');
     expect(timestamp).toBeLessThanOrEqual(Date.now());
+    expect(
+      (globalThis as Record<string, unknown>).__SETUP_BEFORE_EACH_COUNT__,
+    ).toBe(2);
   });
 
   it('should have custom helper from setup', () => {
@@ -20,5 +26,8 @@ describe('setup files', () => {
     ) => string;
     expect(typeof helper).toBe('function');
     expect(helper('hello')).toBe('HELLO');
+    expect(
+      (globalThis as Record<string, unknown>).__SETUP_BEFORE_EACH_COUNT__,
+    ).toBe(3);
   });
 });
