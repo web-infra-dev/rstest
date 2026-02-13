@@ -73,6 +73,8 @@ __webpack_require__.rstest_require_actual =
 //#endregion
 
 const getMockImplementation = (mockType = 'mock') => {
+  const isMockRequire =
+    mockType === 'mockRequire' || mockType === 'doMockRequire';
   // The mock and mockRequire will resolve to different module ids when the module is a dual package
   return (id, modFactory) => {
     // Only load the module if it's already in cache (to avoid side effects)
@@ -132,17 +134,25 @@ const getMockImplementation = (mockType = 'mock') => {
         __webpack_exports__,
         __webpack_require__,
       ) {
-        __webpack_require__.r(__webpack_exports__);
+        !isMockRequire && __webpack_require__.r(__webpack_exports__);
         for (const key in mockedModule) {
-          __webpack_require__.d(__webpack_exports__, {
-            [key]: () => mockedModule[key],
-          });
+          if (__webpack_require__.d) {
+            __webpack_require__.d(__webpack_exports__, {
+              [key]: () => mockedModule[key],
+            });
+          } else {
+            __webpack_exports__[key] = mockedModule[key];
+          }
         }
         // For CJS modules, add default export to preserve default-import behavior
         if (!isEsModule && !('default' in mockedModule)) {
-          __webpack_require__.d(__webpack_exports__, {
-            default: () => mockedModule,
-          });
+          if (__webpack_require__.d) {
+            __webpack_require__.d(__webpack_exports__, {
+              default: () => mockedModule,
+            });
+          } else {
+            __webpack_exports__.default = mockedModule;
+          }
         }
       };
 
@@ -161,12 +171,16 @@ const getMockImplementation = (mockType = 'mock') => {
         __webpack_exports__,
         __webpack_require__,
       ) {
-        __webpack_require__.r(__webpack_exports__);
+        !isMockRequire && __webpack_require__.r(__webpack_exports__);
         const res = modFactory();
         for (const key in res) {
-          __webpack_require__.d(__webpack_exports__, {
-            [key]: () => res[key],
-          });
+          if (__webpack_require__.d) {
+            __webpack_require__.d(__webpack_exports__, {
+              [key]: () => res[key],
+            });
+          } else {
+            __webpack_exports__[key] = res[key];
+          }
         }
       };
 
