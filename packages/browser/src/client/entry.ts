@@ -426,12 +426,13 @@ const run = async () => {
     return;
   }
 
-  // 1. Load setup files for this project
-  for (const loadSetup of currentSetupLoaders) {
-    await loadSetup();
-  }
+  const loadSetupFiles = async (): Promise<void> => {
+    for (const loadSetup of currentSetupLoaders) {
+      await loadSetup();
+    }
+  };
 
-  // 2. Determine which test files to run
+  // 1. Determine which test files to run
   let testKeysToRun: string[];
 
   if (targetTestFile) {
@@ -478,6 +479,9 @@ const run = async () => {
       }
 
       try {
+        // Load setup files for this project after runtime is ready.
+        await loadSetupFiles();
+
         // Load the test file dynamically (registers tests without running)
         await currentTestContext.loadTest(key);
 
@@ -512,7 +516,7 @@ const run = async () => {
     return;
   }
 
-  // 3. Run tests for each file
+  // 2. Run tests for each file
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, currentProject.projectRoot);
 
@@ -573,6 +577,9 @@ const run = async () => {
     });
 
     try {
+      // Load setup files for this project after runtime is ready.
+      await loadSetupFiles();
+
       // Record script URLs before loading the test file
       const beforeScripts = getScriptUrls();
 
