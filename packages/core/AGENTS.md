@@ -5,7 +5,7 @@ Core testing framework for Rstest. Provides CLI, test runner, reporter, and work
 ## Module structure
 
 - `src/cli/` — CLI commands, initialization
-- `src/core/` — Rsbuild integration, test orchestration, state management
+- `src/core/` — Rsbuild integration, test scheduling, state management
 - `src/core/plugins/` — Rsbuild plugins (mock loader, external handling)
 - `src/runtime/` — Test runtime (expect, spy, fakeTimers, fixtures)
 - `src/runtime/runner/` — Test runner implementation

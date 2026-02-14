@@ -46,8 +46,8 @@ describe('BrowserSnapshotEnvironment', () => {
     if (messageHandler) {
       messageHandler({
         data: {
-          type: '__rstest_snapshot_response__',
-          payload: { id, result },
+          type: '__rstest_dispatch_response__',
+          payload: { requestId: id, result },
         },
       } as MessageEvent);
     }
@@ -87,7 +87,7 @@ describe('BrowserSnapshotEnvironment', () => {
     // Get the request ID from the postMessage call
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.id;
+    const requestId = call[0].payload.payload.requestId;
 
     // Simulate response
     simulateRpcResponse(requestId, '/test/file.snap');
@@ -103,9 +103,11 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.id;
+    const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
+    expect(call[0].payload.type).toBe('dispatch-rpc-request');
+    expect(payload.namespace).toBe('snapshot');
     expect(payload.method).toBe('saveSnapshotFile');
     expect(payload.args).toEqual({
       filepath: '/test/snapshot.snap',
@@ -123,9 +125,11 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.id;
+    const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
+    expect(call[0].payload.type).toBe('dispatch-rpc-request');
+    expect(payload.namespace).toBe('snapshot');
     expect(payload.method).toBe('readSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
 
@@ -141,7 +145,7 @@ describe('BrowserSnapshotEnvironment', () => {
     const readPromise = env.readSnapshotFile('/non-existent');
 
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.id;
+    const requestId = call[0].payload.payload.requestId;
 
     simulateRpcResponse(requestId, null);
 
@@ -156,13 +160,110 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.id;
+    const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
+    expect(call[0].payload.type).toBe('dispatch-rpc-request');
+    expect(payload.namespace).toBe('snapshot');
     expect(payload.method).toBe('removeSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
 
     simulateRpcResponse(requestId, undefined);
     await removePromise;
+  });
+});
+
+describe('BrowserSnapshotEnvironment (top-level bridge)', () => {
+  let BrowserSnapshotEnvironment: any;
+  let mockSnapshotRpc: any;
+
+  beforeEach(async () => {
+    rstest.resetModules();
+    mockSnapshotRpc = rstest.fn();
+
+    const windowMock: Record<string, unknown> = {
+      addEventListener: rstest.fn(),
+      __RSTEST_BROWSER_OPTIONS__: {
+        rpcTimeout: 50,
+      },
+      __rstest_dispatch_rpc__: mockSnapshotRpc,
+    };
+    windowMock.parent = windowMock;
+
+    rstest.stubGlobal('window', windowMock);
+
+    const module = await import('../src/client/snapshot');
+    BrowserSnapshotEnvironment = module.BrowserSnapshotEnvironment;
+  });
+
+  afterEach(() => {
+    rstest.unstubAllGlobals();
+  });
+
+  it('should resolve path via top-level bridge', async () => {
+    const env = new BrowserSnapshotEnvironment();
+    mockSnapshotRpc.mockImplementation((request: { requestId: string }) =>
+      Promise.resolve({
+        requestId: request.requestId,
+        result: '/test/file.snap',
+      }),
+    );
+
+    await expect(env.resolvePath('/test/file.ts')).resolves.toBe(
+      '/test/file.snap',
+    );
+    expect(mockSnapshotRpc).toHaveBeenCalled();
+    const request = mockSnapshotRpc.mock.calls[0][0];
+    expect(request.method).toBe('resolveSnapshotPath');
+    expect(request.args).toEqual({ testPath: '/test/file.ts' });
+  });
+
+  it('should surface top-level bridge errors', async () => {
+    const env = new BrowserSnapshotEnvironment();
+    mockSnapshotRpc.mockRejectedValue(new Error('snapshot bridge failed'));
+
+    await expect(env.readSnapshotFile('/a.snap')).rejects.toThrow(
+      'snapshot bridge failed',
+    );
+  });
+
+  it('should timeout when top-level bridge does not respond', async () => {
+    const env = new BrowserSnapshotEnvironment();
+    mockSnapshotRpc.mockImplementation(
+      () => new Promise(() => undefined) as Promise<unknown>,
+    );
+
+    await expect(env.removeSnapshotFile('/a.snap')).rejects.toThrow(
+      'Snapshot RPC timeout',
+    );
+  });
+});
+
+describe('BrowserSnapshotEnvironment (top-level without bridge)', () => {
+  let BrowserSnapshotEnvironment: any;
+
+  beforeEach(async () => {
+    rstest.resetModules();
+
+    const windowMock: Record<string, unknown> = {
+      addEventListener: rstest.fn(),
+    };
+    windowMock.parent = windowMock;
+
+    rstest.stubGlobal('window', windowMock);
+
+    const module = await import('../src/client/snapshot');
+    BrowserSnapshotEnvironment = module.BrowserSnapshotEnvironment;
+  });
+
+  afterEach(() => {
+    rstest.unstubAllGlobals();
+  });
+
+  it('should throw when bridge is missing in top-level mode', async () => {
+    const env = new BrowserSnapshotEnvironment();
+    await expect(env.resolvePath('/test/file.ts')).rejects.toThrow(
+      'Dispatch RPC bridge is not available in top-level runner.',
+    );
   });
 });
