@@ -5,10 +5,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -229,7 +225,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -244,7 +240,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -260,7 +256,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -275,7 +271,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -291,7 +287,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -306,7 +302,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -322,7 +318,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -337,7 +333,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -361,7 +357,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -403,7 +399,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -420,7 +416,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -548,10 +544,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -771,7 +763,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -786,7 +778,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -802,7 +794,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -817,7 +809,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -833,7 +825,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -848,7 +840,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -864,7 +856,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -879,7 +871,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -903,7 +895,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -945,7 +937,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -962,7 +954,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -1072,10 +1064,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -1296,7 +1284,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1311,7 +1299,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1327,7 +1315,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1342,7 +1330,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1358,7 +1346,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1373,7 +1361,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1389,7 +1377,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1404,7 +1392,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1428,7 +1416,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -1470,7 +1458,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -1487,7 +1475,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -1599,10 +1587,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -1823,7 +1807,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1838,7 +1822,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1854,7 +1838,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1869,7 +1853,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1885,7 +1869,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1900,7 +1884,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1916,7 +1900,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -1931,7 +1915,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1955,7 +1939,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -1997,7 +1981,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -2014,7 +1998,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -2134,10 +2118,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -2357,7 +2337,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2372,7 +2352,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2388,7 +2368,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2403,7 +2383,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2419,7 +2399,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2434,7 +2414,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2450,7 +2430,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2465,7 +2445,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2489,7 +2469,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -2531,7 +2511,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -2548,7 +2528,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -2658,10 +2638,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-  },
   "externals": [
     [Function],
     {
@@ -2882,7 +2858,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2897,7 +2873,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2913,7 +2889,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2928,7 +2904,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2944,7 +2920,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2959,7 +2935,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2975,7 +2951,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
@@ -2990,7 +2966,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -3014,7 +2990,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -3056,7 +3032,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
     "bundlerInfo": {
       "force": false,
     },
@@ -3073,7 +3049,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test-node",
     "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
