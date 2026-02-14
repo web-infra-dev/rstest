@@ -11,7 +11,7 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18.12.0'],
+      syntax: 'es2023',
       experiments: {
         advancedEsm: true,
       },
@@ -110,7 +110,7 @@ export default defineConfig({
     {
       id: 'rstest_loaders',
       format: 'esm',
-      syntax: 'es2021',
+      syntax: 'es2023',
       dts: false,
       source: {
         entry: {
@@ -126,7 +126,7 @@ export default defineConfig({
     {
       id: 'browser_runtime',
       format: 'esm',
-      syntax: 'es2021',
+      syntax: 'es2023',
       dts: {
         bundle: true,
       },

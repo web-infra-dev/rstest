@@ -4,7 +4,7 @@ export default defineConfig({
   lib: [
     {
       format: 'esm',
-      syntax: ['node 18'],
+      syntax: 'es2023',
       dts: true,
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',

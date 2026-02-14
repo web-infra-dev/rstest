@@ -3,7 +3,7 @@ import { defineConfig } from '@rslib/core';
 export default defineConfig({
   lib: [
     {
-      syntax: ['node 20'],
+      syntax: 'es2023',
       source: {
         entry: {
           extension: './src/extension.ts',
@@ -26,7 +26,7 @@ export default defineConfig({
       },
     },
     {
-      syntax: ['node 20'],
+      syntax: 'es2023',
       format: 'cjs',
       source: {
         entry: {
