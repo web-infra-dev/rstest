@@ -6,7 +6,7 @@ export default defineConfig({
       format: 'esm',
       dts: true,
       bundle: true,
-      syntax: ['node 18.12.0'],
+      syntax: 'es2023',
       experiments: {
         advancedEsm: true,
       },
