@@ -14,7 +14,6 @@ export default defineConfig({
     client: {
       port: 7392,
     },
-    assetPrefix: 'http://localhost:7392/',
   },
   source: {
     entry: {
@@ -23,6 +22,7 @@ export default defineConfig({
     },
   },
   output: {
+    assetPrefix: 'http://localhost:7392/',
     distPath: {
       js: 'container-static/js',
       css: 'container-static/css',

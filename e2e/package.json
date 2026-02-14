@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "^1.7.3",
+    "@rsbuild/core": "^2.0.0-alpha.4",
+    "@rsbuild/plugin-react": "^1.4.5",
     "@rslib/core": "0.19.4",
-    "@rsbuild/plugin-react": "^1.4.2",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",

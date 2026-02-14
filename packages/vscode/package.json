@@ -104,7 +104,7 @@
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
-    "@rsbuild/core": "^1.7.3",
+    "@rsbuild/core": "^2.0.0-alpha.4",
     "@rslib/core": "^0.19.0",
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",

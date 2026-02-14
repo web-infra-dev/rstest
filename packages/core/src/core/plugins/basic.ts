@@ -33,7 +33,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             source,
             output,
             tools,
-            performance,
             dev,
             testEnvironment,
           },
@@ -43,7 +42,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         return mergeEnvironmentConfig(
           config,
           {
-            performance,
             tools,
             resolve,
             source,

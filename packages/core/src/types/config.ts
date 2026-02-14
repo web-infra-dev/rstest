@@ -432,11 +432,6 @@ export interface RstestConfig {
     'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
   >;
 
-  performance?: Pick<
-    NonNullable<RsbuildConfig['performance']>,
-    'bundleAnalyze'
-  >;
-
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
 
   output?: Pick<
@@ -458,7 +453,6 @@ type OptionalKeys =
   | 'source'
   | 'resolve'
   | 'output'
-  | 'performance'
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
