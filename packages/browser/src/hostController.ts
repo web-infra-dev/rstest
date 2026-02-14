@@ -1109,82 +1109,84 @@ const createBrowserRuntime = async ({
     }
   };
 
-  devServer.middlewares.use(async (req, res, next) => {
-    if (!req.url) {
+  devServer.middlewares.use(
+    async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+      if (!req.url) {
+        next();
+        return;
+      }
+      const url = new URL(req.url, 'http://localhost');
+      if (url.pathname === '/__open-in-editor') {
+        const file = url.searchParams.get('file');
+        if (!file) {
+          res.statusCode = 400;
+          res.end('Missing file');
+          return;
+        }
+        try {
+          await openEditor([{ file }]);
+          res.statusCode = 204;
+          res.end();
+        } catch (error) {
+          logger.debug(`[Browser UI] Failed to open editor: ${String(error)}`);
+          res.statusCode = 500;
+          res.end('Failed to open editor');
+        }
+        return;
+      }
+      if (url.pathname === '/' || url.pathname === '/scheduler.html') {
+        if (await respondWithDevServerHtml(url, res)) {
+          return;
+        }
+
+        if (url.pathname === '/scheduler.html') {
+          res.setHeader('Content-Type', 'text/html');
+          res.end(
+            injectedSchedulerHtml ||
+              (schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate).replace(
+                OPTIONS_PLACEHOLDER,
+                'null',
+              ),
+          );
+          return;
+        }
+
+        const html =
+          injectedContainerHtml ||
+          containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
+
+        if (html) {
+          res.setHeader('Content-Type', 'text/html');
+          res.end(html);
+          return;
+        }
+
+        res.statusCode = 502;
+        res.end('Container UI is not available.');
+        return;
+      }
+      if (url.pathname.startsWith('/container-static/')) {
+        if (await proxyDevServerAsset(req, res)) {
+          return;
+        }
+
+        if (serveContainer) {
+          serveContainer(req, res, next);
+          return;
+        }
+
+        res.statusCode = 502;
+        res.end('Container assets are not available.');
+        return;
+      }
+      if (url.pathname === '/runner.html') {
+        res.setHeader('Content-Type', 'text/html');
+        res.end(htmlTemplate);
+        return;
+      }
       next();
-      return;
-    }
-    const url = new URL(req.url, 'http://localhost');
-    if (url.pathname === '/__open-in-editor') {
-      const file = url.searchParams.get('file');
-      if (!file) {
-        res.statusCode = 400;
-        res.end('Missing file');
-        return;
-      }
-      try {
-        await openEditor([{ file }]);
-        res.statusCode = 204;
-        res.end();
-      } catch (error) {
-        logger.debug(`[Browser UI] Failed to open editor: ${String(error)}`);
-        res.statusCode = 500;
-        res.end('Failed to open editor');
-      }
-      return;
-    }
-    if (url.pathname === '/' || url.pathname === '/scheduler.html') {
-      if (await respondWithDevServerHtml(url, res)) {
-        return;
-      }
-
-      if (url.pathname === '/scheduler.html') {
-        res.setHeader('Content-Type', 'text/html');
-        res.end(
-          injectedSchedulerHtml ||
-            (schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate).replace(
-              OPTIONS_PLACEHOLDER,
-              'null',
-            ),
-        );
-        return;
-      }
-
-      const html =
-        injectedContainerHtml ||
-        containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
-
-      if (html) {
-        res.setHeader('Content-Type', 'text/html');
-        res.end(html);
-        return;
-      }
-
-      res.statusCode = 502;
-      res.end('Container UI is not available.');
-      return;
-    }
-    if (url.pathname.startsWith('/container-static/')) {
-      if (await proxyDevServerAsset(req, res)) {
-        return;
-      }
-
-      if (serveContainer) {
-        serveContainer(req, res, next);
-        return;
-      }
-
-      res.statusCode = 502;
-      res.end('Container assets are not available.');
-      return;
-    }
-    if (url.pathname === '/runner.html') {
-      res.setHeader('Content-Type', 'text/html');
-      res.end(htmlTemplate);
-      return;
-    }
-    next();
-  });
+    },
+  );
 
   const { port } = await devServer.listen();
 

@@ -155,10 +155,6 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'dev',
     items: ['dev.writeToDisk'],
   },
-  {
-    name: 'performance',
-    items: ['performance.bundleAnalyze'],
-  },
 ];
 
 export function BuildOverview() {
