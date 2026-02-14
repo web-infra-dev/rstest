@@ -138,7 +138,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -681,7 +680,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -1207,7 +1205,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -1735,7 +1732,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -2270,7 +2266,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -2796,7 +2791,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/source",
           },
           {
-            "type": "javascript/auto",
             "use": [
               {
                 "loader": "builtin:swc-loader",
@@ -3212,7 +3206,6 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
         "type": "asset/source",
       },
       {
-        "type": "javascript/auto",
         "use": [
           {
             "loader": "builtin:swc-loader",

@@ -23,7 +23,10 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
 
       // Port https://github.com/web-infra-dev/rsbuild/pull/5955 before it merged into Rsbuild.
       // Use Rspack default behavior
-      chain.module.rule(CHAIN_ID.RULE.JS).delete('type');
+      chain.module
+        .rule(CHAIN_ID.RULE.JS)
+        .oneOf(CHAIN_ID.ONE_OF.JS_MAIN)
+        .delete('type');
     });
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
