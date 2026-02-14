@@ -54,6 +54,7 @@ export type RuntimeConfig = Pick<
   | 'printConsoleTrace'
   | 'disableConsoleIntercept'
   | 'testEnvironment'
+  | 'federation'
   | 'isolate'
   | 'hookTimeout'
   | 'coverage'

@@ -13,6 +13,7 @@
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
     "prepare": "pnpm run build && simple-git-hooks",
+    "test:federation": "pnpm -C examples/federation test",
     "bump": "node --experimental-strip-types scripts/version.mts"
   },
   "simple-git-hooks": {
