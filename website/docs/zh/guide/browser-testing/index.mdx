@@ -23,6 +23,14 @@ Rstest 提供了浏览器模式（Browser Mode），允许你在真实浏览器�
 
 浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行你的测试代码。这意味着你的测试将在与生产环境完全一致的浏览器 API 和行为下运行。
 
+## Locator API
+
+Browser Mode 现在支持 Playwright 风格的 Locator 工作流：你可以使用 `page.getBy*` 进行元素定位，再通过 `expect.element(locator)` 完成自动等待断言。
+
+这种写法适合希望使用语义化定位（role/label/text）和链式断言的场景，让组件测试和 DOM 测试更接近真实用户交互语义。
+
+详细用法见 [浏览器交互](/guide/browser-testing/user-interactions#locator-api)。
+
 ## 何时使用浏览器模式
 
 使用以下决策树来判断是否需要浏览器模式：
@@ -62,5 +70,6 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
 ## 下一步
 
 - [快速开始](/guide/browser-testing/getting-started) - 配置并运行你的第一个浏览器测试
+- [浏览器交互](/guide/browser-testing/user-interactions#locator-api) - 使用 `page` + `expect.element` 编写语义化测试
 - [框架指南](/guide/browser-testing/framework-guides) - 各框架的完整配置和组件测试示例
 - [用户交互](/guide/browser-testing/user-interactions) - 模拟用户点击、输入等操作

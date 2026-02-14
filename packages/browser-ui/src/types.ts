@@ -1,8 +1,13 @@
+import type {
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+} from '@rstest/browser/protocol';
+
 /**
  * Browser UI types
  *
- * These types are derived from @rstest/core's protocol types but simplified
- * for the browser UI's needs. The UI only needs a subset of the full config.
+ * Keep protocol types (locator IR + snapshot/browser RPC) in sync with
+ * @rstest/browser by importing from the shared source.
  */
 
 export type BrowserProjectRuntime = {
@@ -35,6 +40,8 @@ export type BrowserHostConfig = {
   };
   /** If provided, only run this specific test file */
   testFile?: string;
+  /** Per-run identifier for stale browser RPC protection */
+  runId?: string;
   /** Base URL for runner (iframe) pages */
   runnerUrl?: string;
   /** WebSocket port for container RPC */
@@ -106,6 +113,10 @@ export type BrowserClientMessage =
       type: 'snapshot-rpc-request';
       payload: SnapshotRpcRequest;
     }
+  | {
+      type: 'browser-rpc-request';
+      payload: BrowserRpcRequest;
+    }
   | { type: string; payload?: unknown };
 
 export type HostRPC = {
@@ -120,6 +131,7 @@ export type HostRPC = {
   readSnapshotFile: (filepath: string) => Promise<string | null>;
   saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
   removeSnapshotFile: (filepath: string) => Promise<void>;
+  dispatchBrowserRpc: (request: BrowserRpcRequest) => Promise<unknown>;
 };
 
 export type ContainerRPC = {
@@ -161,3 +173,5 @@ export type SnapshotRpcResponse = {
   result?: unknown;
   error?: string;
 };
+
+export type { BrowserRpcRequest, BrowserRpcResponse };

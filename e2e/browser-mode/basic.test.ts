@@ -40,12 +40,11 @@ describe('browser mode - basic', () => {
   it.runIf(canRunHeadedBrowser)(
     'should run headed mode without scheduler page and exit with code 0',
     async () => {
-      const { cli } = await runBrowserCli('basic', {
+      const { expectExecSuccess, cli } = await runBrowserCli('basic', {
         args: ['--browser.headless', 'false', 'tests/dom.test.ts'],
       });
 
-      await cli.exec;
-      expect(cli.exec.exitCode).toBe(0);
+      await expectExecSuccess();
       expect(cli.stdout).not.toContain('/scheduler.html');
     },
   );
