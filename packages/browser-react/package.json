@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "type": "module",
   "description": "React component testing support for Rstest browser mode",
   "license": "MIT",
