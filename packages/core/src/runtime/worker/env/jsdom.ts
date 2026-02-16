@@ -49,7 +49,12 @@ export const environment: TestEnvironment<typeof globalThis> = {
 
     const cleanupGlobal = installGlobal(global, dom.window);
 
-    const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
+    // Attach to the actual DOM window object. Userland code typically calls
+    // `window.addEventListener('error', ...)` (not `globalThis.addEventListener`),
+    // so we must patch the real window to correctly detect user listeners.
+    const cleanupHandler = addDefaultErrorHandler(
+      dom.window as unknown as Window,
+    );
 
     return {
       teardown() {

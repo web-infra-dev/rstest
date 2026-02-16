@@ -44,7 +44,6 @@ const defineRstestDynamicImport =
           codeContent: content,
           testPath,
           distPath: joinedPath,
-          rstestContext: {},
           assetFiles,
           interopDefault,
           esmMode,
@@ -179,14 +178,15 @@ export const loadModule = async ({
   assetFiles,
   interopDefault,
   esmMode = EsmMode.Unknown,
+  federation,
 }: {
   esmMode?: EsmMode;
   interopDefault: boolean;
   codeContent: string;
   distPath: string;
   testPath: string;
-  rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  federation?: boolean;
 }): Promise<any> => {
   const code = codeContent;
   let esm = esmCache.get(distPath);
@@ -199,8 +199,7 @@ export const loadModule = async ({
         meta.url = pathToFileURL(
           distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
         ).toString();
-        // @ts-expect-error
-        meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
+        const rstestDynamicImport = defineRstestDynamicImport({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
@@ -208,6 +207,19 @@ export const loadModule = async ({
           returnModule: false,
           esmMode: EsmMode.Unknown,
         });
+        // @ts-expect-error
+        meta.__rstest_dynamic_import__ = rstestDynamicImport;
+
+        if (federation) {
+          // Some Node runtimes may evaluate chunks outside of the SourceTextModule
+          // context (e.g. via eval/vm wrappers). Expose the shim globally as a
+          // fallback so those chunks can still resolve externals.
+          try {
+            (globalThis as any).__rstest_dynamic_import__ = rstestDynamicImport;
+          } catch {
+            // ignore
+          }
+        }
         // @ts-expect-error
         meta.readWasmFile = (
           wasmPath: URL,

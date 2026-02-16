@@ -1,0 +1,33 @@
+{
+  "name": "rstest_example_main-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "rspack build --config rspack.browser.config.js",
+    "serve": "serve dist -p 3002",
+    "start": "concurrently \"npm run build\" \"npm run serve\"",
+    "test": "rstest --reporter=verbose"
+  },
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@module-federation/enhanced": "0.22.0",
+    "@module-federation/node": "^2.7.26",
+    "@module-federation/rstest-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rstest-plugin@3fe0a1a",
+    "@rsbuild/plugin-react": "^1.4.2",
+    "@rspack/cli": "1.6.8",
+    "@rspack/core": "1.6.8",
+    "@rstest/core": "workspace:*",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "concurrently": "8.2.2",
+    "kill-port": "^2.0.1",
+    "serve": "14.2.3"
+  }
+}

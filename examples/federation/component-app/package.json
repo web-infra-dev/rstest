@@ -1,0 +1,33 @@
+{
+  "name": "rstest_example_component-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "rspack build --config rspack.browser.config.js ",
+    "build:node": "rspack build --config rspack.node.config.js",
+    "serve": "serve dist -p 3001",
+    "serve:node": "serve dist-node -p 3001",
+    "start": "concurrently \"npm run build\" \"npm run serve\"",
+    "pretest": "pnpm -C ../node-local-remote build:node",
+    "test": "rstest --reporter=verbose"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@module-federation/enhanced": "0.22.0",
+    "@module-federation/rstest-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rstest-plugin@3fe0a1a",
+    "@rsbuild/plugin-react": "^1.4.2",
+    "@rspack/cli": "1.6.8",
+    "@rspack/core": "1.6.8",
+    "@rstest/core": "workspace:*",
+    "concurrently": "8.2.2",
+    "serve": "14.2.3"
+  },
+  "dependencies": {
+    "@module-federation/node": "^2.7.26",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  }
+}
