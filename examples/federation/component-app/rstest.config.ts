@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { ModuleFederationPlugin } from '@module-federation/enhanced/rspack';
+import { federation } from '@module-federation/rstest-plugin';
 import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig, federation } from '@rstest/core';
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],

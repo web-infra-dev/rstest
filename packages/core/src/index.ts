@@ -10,7 +10,6 @@ import type {
 export { initCli, runCLI } from './cli';
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export { createRstest } from './core';
-export { federation } from './core/plugins/federation';
 
 export * from './runtime/api/public';
 

@@ -17,16 +17,17 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@rstest/core": "workspace:*",
     "@module-federation/enhanced": "0.22.0",
     "@module-federation/node": "^2.7.26",
+    "@module-federation/rstest-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rstest-plugin@4320",
     "@rsbuild/plugin-react": "^1.4.2",
     "@rspack/cli": "1.6.8",
     "@rspack/core": "1.6.8",
+    "@rstest/core": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
-    "kill-port": "^2.0.1",
     "concurrently": "8.2.2",
+    "kill-port": "^2.0.1",
     "serve": "14.2.3"
   }
 }

@@ -17,10 +17,11 @@
   "license": "ISC",
   "devDependencies": {
     "@module-federation/enhanced": "0.22.0",
-    "@rstest/core": "workspace:*",
+    "@module-federation/rstest-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rstest-plugin@4320",
     "@rsbuild/plugin-react": "^1.4.2",
     "@rspack/cli": "1.6.8",
     "@rspack/core": "1.6.8",
+    "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",
     "serve": "14.2.3"
   },
