@@ -4,16 +4,23 @@ import { describe, expect, it } from '@rstest/core';
 
 describe('file2 isolation', () => {
   it('should not see global variable from file1', () => {
-    // file1 sets __FILE1_VAR__, but it should not exist here
-    // due to iframe isolation
+    // file1 sets __FILE1_VAR__, but it should not exist here.
     expect(
       (globalThis as Record<string, unknown>).__FILE1_VAR__,
     ).toBeUndefined();
   });
 
+  it('should not see local/session storage from file1', () => {
+    expect(localStorage.getItem('rstest-local')).toBeNull();
+    expect(sessionStorage.getItem('rstest-session')).toBeNull();
+  });
+
+  it('should not see cookies from file1', () => {
+    expect(document.cookie).not.toContain('rstest_cookie=file1');
+  });
+
   it('should not see DOM element from file1', () => {
-    // file1 adds #file1-element, but it should not exist here
-    // due to iframe isolation
+    // file1 adds #file1-element, but it should not exist here.
     expect(document.getElementById('file1-element')).toBeNull();
   });
 

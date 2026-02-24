@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
 } from '../src/protocol';
@@ -117,6 +119,33 @@ describe('browser protocol types', () => {
     it('should accept collect-complete message', () => {
       const msg: BrowserClientMessage = { type: 'collect-complete' };
       expect(msg.type).toBe('collect-complete');
+    });
+  });
+
+  describe('BrowserDispatch envelope', () => {
+    it('should accept dispatch request', () => {
+      const request: BrowserDispatchRequest = {
+        requestId: 'req-1',
+        namespace: 'runner',
+        method: 'file-start',
+        args: { testPath: '/test.ts', projectName: 'default' },
+        runToken: 1,
+        target: { testFile: '/test.ts', sessionId: 'session-1' },
+      };
+
+      expect(request.namespace).toBe('runner');
+      expect(request.method).toBe('file-start');
+    });
+
+    it('should accept dispatch response', () => {
+      const response: BrowserDispatchResponse = {
+        requestId: 'req-1',
+        runToken: 1,
+        result: { ok: true },
+      };
+
+      expect(response.requestId).toBe('req-1');
+      expect(response.result).toEqual({ ok: true });
     });
   });
 });
