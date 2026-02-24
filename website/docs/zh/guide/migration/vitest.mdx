@@ -134,6 +134,49 @@ export default defineConfig({
 
 完整工具 API 请参考 [Rstest APIs](/api/runtime-api/)。
 
+### 如果你使用了 `globals: true`
+
+当启用 `globals: true` 时，Vitest 会把 `vi` 和 `vitest` 挂在全局对象上。在 Rstest 中，建议按以下顺序映射：
+
+- `vi.<api>` -> `rs.<api>`
+- `vitest.<api>` -> `rstest.<api>`
+
+`rs` 和 `rstest` 是等价的全局别名，但迁移时按这个一一对应关系更容易阅读和排查。
+
+```diff
+- vi.fn()
++ rs.fn()
+
+- vitest.spyOn(console, 'error')
++ rstest.spyOn(console, 'error')
+```
+
+如果你的测试文件是从 `@rstest/core` 导入 API，建议统一使用 import style 的 `rs.<api>`，不要在同一文件里混用 import style 和 global style。
+
+### 迁移 setup adapter
+
+有些 setup adapter 是 Vitest 专用的。例如 `@testing-library/jest-dom/vitest` 面向的是 Vitest，在 Rstest setup 文件中应替换为 matcher 注册方式。
+
+```diff
+- import '@testing-library/jest-dom/vitest';
++ import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
++ import { expect } from '@rstest/core';
++
++ expect.extend(jestDomMatchers);
+```
+
+### setup 和 helper 中的路径解析
+
+在某些 transform/runtime 模式下，`new URL(..., import.meta.url)` 可能会在 setup 或 helper 文件中失效。
+
+如果你看到 `Cannot find module './'` 或 `Cannot find module '..'` 这类路径错误，建议改用 Node 风格的 `__dirname` 路径解析：
+
+```diff
+- const root = fileURLToPath(new URL('../..', import.meta.url));
++ import { resolve } from 'node:path';
++ const root = resolve(__dirname, '../..');
+```
+
 ### 自动模拟模块
 
 在 Vitest 中，调用 `vi.mock()` 且只传模块路径时，会先尝试从对应 `__mocks__` 目录加载手动 mock；如果没找到，再自动 mock 整个模块，把导出替换为空 mock 函数。
@@ -192,3 +235,5 @@ test('should be mocked', () => {
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```
+
+由于 mock factory 是 hoisted 执行的，不要依赖同模块中后初始化的变量；必要时请将共享值放到 hoisted initializer（例如 `rs.hoisted(...)`）中，避免初始化顺序错误。
