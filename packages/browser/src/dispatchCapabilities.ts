@@ -1,3 +1,4 @@
+import type { Reporter } from '@rstest/core/browser';
 import { HostDispatchRouter } from './dispatchRouter';
 import type {
   BrowserClientMessage,
@@ -17,8 +18,23 @@ type RunnerPayload<TType extends BrowserClientMessage['type']> =
     ? TPayload
     : never;
 
+type ReporterHookArg<THook extends keyof Reporter> = Parameters<
+  NonNullable<Reporter[THook]>
+>[0];
+
+type RunnerDispatchFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
+type RunnerDispatchSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
+type RunnerDispatchSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
+type RunnerDispatchCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+
 export type RunnerDispatchCallbacks = {
   onTestFileStart: (payload: RunnerPayload<'file-start'>) => Promise<void>;
+  onTestFileReady: (payload: RunnerDispatchFileReadyPayload) => Promise<void>;
+  onTestSuiteStart: (payload: RunnerDispatchSuiteStartPayload) => Promise<void>;
+  onTestSuiteResult: (
+    payload: RunnerDispatchSuiteResultPayload,
+  ) => Promise<void>;
+  onTestCaseStart: (payload: RunnerDispatchCaseStartPayload) => Promise<void>;
   onTestCaseResult: (payload: RunnerPayload<'case-result'>) => Promise<void>;
   onTestFileComplete: (
     payload: RunnerPayload<'file-complete'>,
@@ -82,6 +98,26 @@ export const createHostDispatchRouter = ({
       case 'file-start':
         await runnerCallbacks.onTestFileStart(
           request.args as RunnerPayload<'file-start'>,
+        );
+        break;
+      case 'file-ready':
+        await runnerCallbacks.onTestFileReady(
+          request.args as RunnerDispatchFileReadyPayload,
+        );
+        break;
+      case 'suite-start':
+        await runnerCallbacks.onTestSuiteStart(
+          request.args as RunnerDispatchSuiteStartPayload,
+        );
+        break;
+      case 'suite-result':
+        await runnerCallbacks.onTestSuiteResult(
+          request.args as RunnerDispatchSuiteResultPayload,
+        );
+        break;
+      case 'case-start':
+        await runnerCallbacks.onTestCaseStart(
+          request.args as RunnerDispatchCaseStartPayload,
         );
         break;
       case 'case-result':

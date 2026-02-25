@@ -118,6 +118,15 @@ type FatalPayload = {
   stack?: string;
 };
 
+type ReporterHookArg<THook extends keyof Reporter> = Parameters<
+  NonNullable<Reporter[THook]>
+>[0];
+
+type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
+type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
+type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
+type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
@@ -1374,6 +1383,56 @@ export const runBrowserController = async (
     return buildErrorResult(toError(error));
   };
 
+  const collectDeletedTestPaths = (
+    previous: TestFileInfo[],
+    current: TestFileInfo[],
+  ): string[] => {
+    const currentPathSet = new Set(current.map((file) => file.testPath));
+    return previous
+      .map((file) => file.testPath)
+      .filter((testPath) => !currentPathSet.has(testPath));
+  };
+
+  const notifyTestRunStart = async (): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunStart?.();
+    }
+  };
+
+  const notifyTestRunEnd = async ({
+    duration,
+    unhandledErrors,
+    filterRerunTestPaths,
+  }: {
+    duration: {
+      totalTime: number;
+      buildTime: number;
+      testTime: number;
+    };
+    unhandledErrors?: Error[];
+    filterRerunTestPaths?: string[];
+  }): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunEnd?.({
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
+        duration,
+        snapshotSummary: context.snapshotManager.summary,
+        getSourcemap: async () => null,
+        unhandledErrors,
+        filterRerunTestPaths,
+      });
+    }
+  };
+
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
   let containerDistPath: string | undefined;
@@ -1426,6 +1485,8 @@ export const runBrowserController = async (
     }
     return;
   }
+
+  await notifyTestRunStart();
 
   const isWatchMode = context.command === 'watch';
   const tempDir =
@@ -1579,6 +1640,46 @@ export const runBrowserController = async (
     );
   };
 
+  const handleTestFileReady = async (
+    payload: TestFileReadyPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileReady?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteStart = async (
+    payload: TestSuiteStartPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteStart?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteResult = async (
+    payload: TestSuiteResultPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteResult?.(payload),
+      ),
+    );
+  };
+
+  const handleTestCaseStart = async (
+    payload: TestCaseStartPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestCaseStart?.(payload),
+      ),
+    );
+  };
+
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
     await Promise.all(
@@ -1592,6 +1693,7 @@ export const runBrowserController = async (
     payload: TestFileResult,
   ): Promise<void> => {
     reporterResults.push(payload);
+    context.updateReporterResultState([payload], payload.results);
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
     }
@@ -1656,6 +1758,10 @@ export const runBrowserController = async (
       routerOptions: options,
       runnerCallbacks: {
         onTestFileStart: handleTestFileStart,
+        onTestFileReady: handleTestFileReady,
+        onTestSuiteStart: handleTestSuiteStart,
+        onTestSuiteResult: handleTestSuiteResult,
+        onTestCaseStart: handleTestCaseStart,
         onTestCaseResult: handleTestCaseResult,
         onTestFileComplete: handleTestFileComplete,
         onLog: handleLog,
@@ -1960,7 +2066,39 @@ export const runBrowserController = async (
       interruptActiveRun: async (run) => {
         await cancelRun(run, false);
       },
-      runFiles: runFilesWithPool,
+      runFiles: async (files) => {
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          await runFilesWithPool(files);
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: files.map((file) => file.testPath),
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
+        }
+      },
       onError: async (error) => {
         const formatted = toError(error);
         await handleFatal({
@@ -1990,6 +2128,13 @@ export const runBrowserController = async (
         watchContext.affectedTestFiles = [];
 
         if (rerunPlan.filesChanged) {
+          const deletedTestPaths = collectDeletedTestPaths(
+            watchContext.lastTestFiles,
+            rerunPlan.currentTestFiles,
+          );
+          if (deletedTestPaths.length > 0) {
+            context.updateReporterResultState([], [], deletedTestPaths);
+          }
           watchContext.lastTestFiles = rerunPlan.currentTestFiles;
           if (rerunPlan.currentTestFiles.length === 0) {
             await latestRerunScheduler.enqueueLatest([]);
@@ -2057,17 +2202,7 @@ export const runBrowserController = async (
       hasFailure: isFailure,
     };
 
-    if (!skipOnTestRunEnd) {
-      for (const reporter of context.reporters) {
-        await reporter.onTestRunEnd?.({
-          results: context.reporterResults.results,
-          testResults: context.reporterResults.testResults,
-          duration,
-          snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: async () => null,
-        });
-      }
-    }
+    await notifyTestRunEnd({ duration });
 
     if (isWatchMode && triggerRerun) {
       watchContext.hooksEnabled = true;
@@ -2252,6 +2387,13 @@ export const runBrowserController = async (
       watchContext.affectedTestFiles = [];
 
       if (rerunPlan.filesChanged) {
+        const deletedTestPaths = collectDeletedTestPaths(
+          watchContext.lastTestFiles,
+          rerunPlan.currentTestFiles,
+        );
+        if (deletedTestPaths.length > 0) {
+          context.updateReporterResultState([], [], deletedTestPaths);
+        }
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(rerunPlan.currentTestFiles);
       }
@@ -2262,8 +2404,38 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
-          await rpcManager.reloadTestFile(testFile);
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
+            await rpcManager.reloadTestFile(testFile);
+          }
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
         }
       } else if (!rerunPlan.filesChanged) {
         logger.log(color.cyan('Tests will be re-executed automatically\n'));
@@ -2311,18 +2483,7 @@ export const runBrowserController = async (
     hasFailure: isFailure,
   };
 
-  // Only call onTestRunEnd if not skipped (for unified reporter output)
-  if (!skipOnTestRunEnd) {
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
-        duration,
-        snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: async () => null,
-      });
-    }
-  }
+  await notifyTestRunEnd({ duration });
 
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
   if (isWatchMode && triggerRerun) {
