@@ -262,7 +262,7 @@ interface RenderConfiguration {
 
 - React 17, 18, and 19
 - Rstest browser mode (experimental)
-- Node.js >= 18.12.0
+- Node.js >= 20.19.0
 
 ## License
 

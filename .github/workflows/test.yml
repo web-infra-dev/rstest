@@ -109,7 +109,7 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: ${{ fromJson(github.event_name == 'schedule' && '["18","20","22","24"]' || '["18","24"]') }}
+        node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
 
     steps:
       - name: Checkout
