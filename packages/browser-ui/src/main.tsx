@@ -8,7 +8,7 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
-import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
+import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
 import { createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
@@ -17,7 +17,6 @@ import type {
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
-  SnapshotRpcRequest,
   TestFileInfo,
 } from './types';
 import type {
@@ -381,12 +380,9 @@ const BrowserRunner: React.FC<{
       } else if (message.type === 'log') {
         const payload = message.payload as LogPayload;
         rpc?.onLog(payload);
-      } else if (message.type === 'snapshot-rpc-request') {
-        void forwardSnapshotRpcRequest(
-          rpc,
-          message.payload as SnapshotRpcRequest,
-          event.source,
-        );
+      } else if (message.type === 'dispatch-rpc-request') {
+        // Unified RPC path for snapshot and future runner-side capabilities.
+        void forwardDispatchRpcRequest(rpc, message.payload, event.source);
       }
     };
     window.addEventListener('message', listener);

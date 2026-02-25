@@ -13,7 +13,7 @@ export default defineConfig({
     {
       id: 'rstest-browser',
       format: 'esm',
-      syntax: ['node 18.12.0'],
+      syntax: 'es2023',
       dts: {
         bundle: false,
       },

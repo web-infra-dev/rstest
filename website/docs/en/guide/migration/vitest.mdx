@@ -134,6 +134,49 @@ For test APIs, migration is usually just two quick changes:
 
 For the full utility API list, see [Rstest APIs](/api/runtime-api/).
 
+### If you are using `globals: true`
+
+When `globals: true` is enabled, `vi` and `vitest` are available as globals in Vitest. In Rstest, use this mapping order:
+
+- `vi.<api>` -> `rs.<api>`
+- `vitest.<api>` -> `rstest.<api>`
+
+`rs` and `rstest` are equivalent global aliases, but keeping this one-to-one mapping is easier to read during migration.
+
+```diff
+- vi.fn()
++ rs.fn()
+
+- vitest.spyOn(console, 'error')
++ rstest.spyOn(console, 'error')
+```
+
+If your tests import APIs from `@rstest/core`, prefer `rs.<api>` in import style and avoid mixing import style and global style in the same file.
+
+### Migrate setup adapters
+
+Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom/vitest` is designed for Vitest and should be replaced in Rstest setup files.
+
+```diff
+- import '@testing-library/jest-dom/vitest';
++ import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
++ import { expect } from '@rstest/core';
++
++ expect.extend(jestDomMatchers);
+```
+
+### Path resolution in setup and test helpers
+
+Depending on your transform/runtime mode, `new URL(..., import.meta.url)` may fail in setup or helper files.
+
+If you see path errors such as `Cannot find module './'` or `Cannot find module '..'`, prefer Node-style path resolution with `__dirname`:
+
+```diff
+- const root = fileURLToPath(new URL('../..', import.meta.url));
++ import { resolve } from 'node:path';
++ const root = resolve(__dirname, '../..');
+```
+
 ### Auto-mocking modules
 
 In Vitest, calling `vi.mock()` with just the module path first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all its exports with empty mock functions.
@@ -185,3 +228,5 @@ rs.mock('./api', () => ({
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```
+
+Because mock factories are hoisted, avoid relying on values initialized later in the same module. If needed, move shared values to a hoisted initializer (for example `rs.hoisted(...)`) to avoid initialization-order errors.

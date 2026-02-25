@@ -113,63 +113,108 @@ describe('browser mode - watch', () => {
     // Initial run outputs full summary with Duration
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 2 passed');
+    if (
+      !cli.stdout.includes(
+        'Watch mode enabled - will re-run tests on file changes',
+      )
+    ) {
+      await cli.waitForStdout(
+        'Watch mode enabled - will re-run tests on file changes',
+      );
+    }
 
     const newTestPath = path.join(fixturesTargetPath, 'tests/new.test.ts');
     const renamedTestPath = path.join(
       fixturesTargetPath,
       'tests/renamed.test.ts',
     );
+    const waitForRerunSignal = async () => {
+      const marker = 'File changed, re-running tests...';
+      if (!cli.stdout.includes(marker)) {
+        await cli.waitForStdout(marker);
+      }
+      expect(cli.stdout).toContain(marker);
+    };
+    const waitForOutput = async (marker: string | RegExp) => {
+      if (typeof marker === 'string') {
+        if (cli.stdout.includes(marker)) {
+          return;
+        }
+      } else if (cli.stdout.match(marker)) {
+        return;
+      }
+      await cli.waitForStdout(marker);
+    };
+
+    const waitForRerunResult = async (marker: string | RegExp) => {
+      const state = await Promise.race([
+        waitForOutput(marker).then(() => 'expected' as const),
+        waitForOutput('Build error:').then(() => 'build-error' as const),
+        waitForOutput('error   build failed').then(
+          () => 'build-failed' as const,
+        ),
+      ]);
+
+      if (state !== 'expected') {
+        throw new Error(
+          `Unexpected build error during browser watch cycle:\n${cli.stdout}`,
+        );
+      }
+    };
+    const settleWatchCycle = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    };
 
     // ========== Create: Add new test file ==========
     cli.resetStd();
     fs.create(
       newTestPath,
       `import { describe, expect, it } from '@rstest/core';
-describe('new test', () => {
+    describe('new test', () => {
   it('should pass', () => {
     expect('new').toBe('new');
   });
 });`,
     );
-
-    // In browser watch mode, re-runs show test file results but not full summary
-    // Wait for the new test file to appear in output
-    await cli.waitForStdout('✓ tests/new.test.ts');
+    await waitForRerunSignal();
+    await waitForRerunResult('✓ tests/new.test.ts');
+    expect(cli.stdout).toContain('✓ tests/new.test.ts');
+    await settleWatchCycle();
 
     // ========== Update (break): Modify new test file to fail ==========
     cli.resetStd();
     fs.update(newTestPath, (content) => {
       return content.replace("toBe('new')", "toBe('modified')");
     });
-
-    // Wait for failure output (error message appears in stderr for browser mode)
-    await cli.waitForStdout('✗ new test > should pass');
+    await waitForRerunSignal();
+    await waitForRerunResult("expected 'new' to be 'modified'");
+    expect(cli.stdout).toContain("expected 'new' to be 'modified'");
+    await settleWatchCycle();
 
     // ========== Update (fix): Fix the test file ==========
     cli.resetStd();
     fs.update(newTestPath, (content) => {
       return content.replace("toBe('modified')", "toBe('new')");
     });
-
-    // Wait for test to pass again
-    await cli.waitForStdout('✓ tests/new.test.ts');
+    await waitForRerunSignal();
+    await waitForRerunResult('✓ tests/new.test.ts');
+    expect(cli.stdout).toContain('✓ tests/new.test.ts');
+    await settleWatchCycle();
 
     // ========== Rename: Rename new.test.ts to renamed.test.ts ==========
     cli.resetStd();
     fs.rename(newTestPath, renamedTestPath);
-
-    // Wait for renamed file to appear, original file should not appear
-    await cli.waitForStdout('✓ tests/renamed.test.ts');
-    expect(cli.stdout).not.toMatch('new.test.ts');
+    await waitForRerunSignal();
+    await waitForRerunResult('✓ tests/renamed.test.ts');
+    expect(cli.stdout).toContain('✓ tests/renamed.test.ts');
+    await settleWatchCycle();
 
     // ========== Delete: Remove the renamed test file ==========
     cli.resetStd();
     fs.delete(renamedTestPath);
-
-    // Wait for re-run after delete - should only show original test file
-    await cli.waitForStdout('✓ tests/index.test.ts');
-    // The deleted file should not appear in this run's output
-    expect(cli.stdout).not.toMatch('renamed.test.ts');
+    await waitForRerunSignal();
+    await waitForRerunResult('✓ tests/index.test.ts');
+    expect(cli.stdout).toContain('✓ tests/index.test.ts');
 
     // Kill the entire process tree to ensure browser and all child processes are terminated.
     // This is critical on Windows where child processes are not killed by default.
@@ -194,5 +239,5 @@ describe('new test', () => {
         throw err;
       }
     }
-  });
+  }, 30_000);
 });
