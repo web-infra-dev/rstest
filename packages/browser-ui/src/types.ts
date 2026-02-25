@@ -125,7 +125,7 @@ export type HostRPC = {
 
 export type ContainerRPC = {
   onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
+  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
 };
 
 export type BrowserDispatchRequest = {

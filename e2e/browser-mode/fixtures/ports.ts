@@ -18,4 +18,6 @@ export const BROWSER_PORTS = {
   webkit: 5198,
   viewport: 5214,
   'viewport-preset': 5216,
+  reporter: 5220,
+  'reporter-watch': 5222,
 } as const;

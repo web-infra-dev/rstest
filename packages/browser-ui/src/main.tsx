@@ -1,5 +1,11 @@
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -60,6 +66,15 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
+  const pendingReloadsRef = useRef<
+    Map<
+      string,
+      {
+        resolve: () => void;
+        reject: (error: Error) => void;
+      }
+    >
+  >(new Map());
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -160,17 +175,37 @@ const BrowserRunner: React.FC<{
   }, [options.projects, readStoredViewport]);
 
   const handleReloadTestFile = useCallback(
-    (testFile: string, testNamePattern?: string) => {
+    async (testFile: string, testNamePattern?: string) => {
       logger.debug(
         '[Container] handleReloadTestFile called:',
         testFile,
         testNamePattern,
       );
-      const iframe = document.querySelector<HTMLIFrameElement>(
-        `iframe[data-test-file="${testFile}"]`,
-      );
-      logger.debug('[Container] Found iframe:', iframe);
-      if (iframe) {
+      return new Promise<void>((resolve, reject) => {
+        const previousPending = pendingReloadsRef.current.get(testFile);
+        if (previousPending) {
+          previousPending.reject(
+            new Error(
+              `Reload for "${testFile}" was superseded by a newer request.`,
+            ),
+          );
+        }
+        pendingReloadsRef.current.set(testFile, { resolve, reject });
+
+        const iframe = document.querySelector<HTMLIFrameElement>(
+          `iframe[data-test-file="${testFile}"]`,
+        );
+        logger.debug('[Container] Found iframe:', iframe);
+        if (!iframe) {
+          pendingReloadsRef.current.delete(testFile);
+          reject(
+            new Error(
+              `Cannot reload test file "${testFile}": iframe not found`,
+            ),
+          );
+          return;
+        }
+
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
           const prevFile = prev[testFile] ?? {};
@@ -187,7 +222,7 @@ const BrowserRunner: React.FC<{
         );
         logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
-      }
+      });
     },
     [options.runnerUrl],
   );
@@ -197,6 +232,21 @@ const BrowserRunner: React.FC<{
     options?.wsPort,
     handleReloadTestFile,
   );
+
+  useEffect(() => {
+    return () => {
+      if (pendingReloadsRef.current.size === 0) {
+        return;
+      }
+      const unmountError = new Error(
+        'Browser runner unmounted before reload completed',
+      );
+      for (const pending of pendingReloadsRef.current.values()) {
+        pending.reject(unmountError);
+      }
+      pendingReloadsRef.current.clear();
+    };
+  }, []);
 
   // Consolidated effect for handling testFiles changes
   // Handles statusMap, caseMap, openFiles initialization and cleanup
@@ -369,13 +419,27 @@ const BrowserRunner: React.FC<{
             }
             return { ...prev, [testPath]: newCases };
           });
+          const pending = pendingReloadsRef.current.get(testPath);
+          if (pending) {
+            pendingReloadsRef.current.delete(testPath);
+            pending.resolve();
+          }
           rpc?.onTestFileComplete(payload);
         }
       } else if (message.type === 'fatal') {
+        const payload = message.payload as FatalPayload;
         if (active) {
           setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
         }
-        const payload = message.payload as FatalPayload;
+        if (pendingReloadsRef.current.size > 0) {
+          const fatalError = new Error(
+            payload.message || 'Browser runner fatal',
+          );
+          for (const pending of pendingReloadsRef.current.values()) {
+            pending.reject(fatalError);
+          }
+          pendingReloadsRef.current.clear();
+        }
         rpc?.onFatal(payload);
       } else if (message.type === 'log') {
         const payload = message.payload as LogPayload;
