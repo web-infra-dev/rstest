@@ -8,9 +8,21 @@ test('should handle click error', async () => {
 
   const element = screen.getByText('Rsbuild with React');
 
-  window.addEventListener('error', (event) => {
-    expect(event.message).toBe('click error');
+  await new Promise<void>((resolve) => {
+    window.addEventListener(
+      'error',
+      (event) => {
+        expect(event.message).toBe('click error');
+        event.preventDefault();
+        // Some DOM implementations (e.g. happy-dom) don't reflect preventDefault()
+        // via `defaultPrevented`; this ensures frameworks can treat it as handled.
+        (event as any).returnValue = false;
+        resolve();
+      },
+      { once: true },
+    );
+    element.click();
   });
 
-  element.click();
+  // Ensure the assertion above is reached before the test completes.
 });

@@ -32,15 +32,23 @@ const enhancedPathSerializer = {
     // `pathSerializer.serialize` returns a snapshot-ready string (including quotes).
     let serialized = pathSerializer.serialize(value);
 
-    // Normalize pnpm global store paths (macOS/Linux and Windows) into the same
-    // placeholder used by existing snapshots.
+    // Normalize pnpm "virtual store" paths under `<ROOT>/node_modules/.pnpm/...`
+    // (rendered by path-serializer as `<ROOT>/node_modules/<PNPM_INNER>/...`) into
+    // the `<PNPM_STORE>/<pkg>/node_modules/<pkg>/...` shape used by snapshots.
+    serialized = serialized.replace(
+      /<ROOT>\/node_modules\/<PNPM_INNER>\/((?:@[^/]+\/)?[^/]+)(?=\/|")/g,
+      '<PNPM_STORE>/$1/node_modules/$1',
+    );
+
+    // Normalize pnpm global store paths (macOS/Linux and Windows), stripping out
+    // version/hash folders to keep snapshots stable across machines.
     //
     // Example:
-    // `<HOME>/Library/pnpm/store/v10/links/@rsbuild/core/.../node_modules/@rsbuild/core/dist/...`
-    //   -> `<ROOT>/node_modules/<PNPM_INNER>/@rsbuild/core/dist/...`
+    // `<HOME>/Library/pnpm/store/v10/links/react-dom/19.2.3/<hash>/node_modules/react-dom/...`
+    //   -> `<PNPM_STORE>/react-dom/node_modules/react-dom/...`
     serialized = serialized.replace(
-      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/((?:@[^/]+\/)?[^/]+)\/[^/]+(?:\/[^/]+)*\/node_modules\/\1(?=\/|")/gi,
-      '<ROOT>/node_modules/<PNPM_INNER>/$1',
+      /<HOME>\/(?:[^/]+\/)*pnpm\/store\/v[0-9]+\/links\/((?:@[^/]+\/)?[^/]+)\/[^/]+(?:\/[^/]+)*\/node_modules\//gi,
+      '<PNPM_STORE>/$1/node_modules/',
     );
 
     return serialized;

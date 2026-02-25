@@ -6,6 +6,14 @@ import path from 'pathe';
 import { logger } from '../../utils/logger';
 import { asModule, interopModule, shouldInterop } from './interop';
 
+let latestAssetFiles: Record<string, string> = {};
+
+export const updateLatestAssetFiles = (
+  assetFiles: Record<string, string>,
+): void => {
+  latestAssetFiles = assetFiles;
+};
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const createRequire = (
@@ -30,22 +38,27 @@ const createRequire = (
     const joinedPath = isRelativePath(id)
       ? path.join(currentDirectory, id)
       : id;
+    const normalizedJoinedPath = path.normalize(joinedPath);
 
-    const content = assetFiles[joinedPath];
+    // Prefer in-memory assets produced by the bundler (dev server output).
+    const content =
+      assetFiles[normalizedJoinedPath] ||
+      latestAssetFiles[normalizedJoinedPath];
 
     if (content) {
       try {
         return cacheableLoadModule({
           codeContent: content,
-          testPath: joinedPath,
-          distPath: joinedPath,
+          testPath: normalizedJoinedPath,
+          distPath: normalizedJoinedPath,
           rstestContext,
           assetFiles,
           interopDefault,
+          federation: Boolean((globalThis as any).__rstest_federation__),
         });
       } catch (err) {
         logger.error(
-          `load file ${joinedPath} failed:\n`,
+          `load file ${normalizedJoinedPath} failed:\n`,
           err instanceof Error ? err.message : err,
         );
       }
@@ -156,6 +169,7 @@ export const loadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  federation,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -163,6 +177,7 @@ export const loadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  federation?: boolean;
 }): any => {
   const fileDir = path.dirname(testPath);
 
@@ -212,6 +227,31 @@ export const loadModule = ({
     ...rstestContext,
   };
 
+  if (federation) {
+    // Some runtimes (notably Module Federation's Node runtime plugin) may evaluate
+    // code via `vm`/`eval` wrappers that do not preserve the function-argument
+    // injection we do below. Expose the dynamic import shim on globalThis as a
+    // fallback so those evaluated chunks can still resolve external modules.
+    //
+    // This is intentionally best-effort and scoped to the worker process.
+    try {
+      (globalThis as any).__rstest_dynamic_import__ =
+        context.__rstest_dynamic_import__;
+    } catch {
+      // ignore
+    }
+    try {
+      // Ensure a global binding exists for strict-mode scripts evaluated via vm/eval.
+      // Note: assigning on globalThis alone is not enough because evaluated scripts
+      // may refer to an unscoped identifier `__rstest_dynamic_import__`.
+      vm.runInThisContext(
+        'globalThis.__rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__ || undefined; var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
+      );
+    } catch {
+      // ignore
+    }
+  }
+
   const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
   const code = `${codeDefinition}${codeContent}\n}`;
 
@@ -242,6 +282,7 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  federation,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -249,6 +290,7 @@ export const cacheableLoadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  federation?: boolean;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);
@@ -260,6 +302,7 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
+    federation,
   });
   moduleCache.set(testPath, mod);
   return mod;

@@ -1,5 +1,10 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: ['packages/*', 'examples/*', '!examples/browser-projects'],
+  projects: [
+    'packages/*',
+    'examples/*',
+    '!examples/browser-projects',
+    '!examples/browser',
+  ],
 });

@@ -3,8 +3,9 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
-const autoExternalNodeModules: (
+const createAutoExternalNodeModules: (
   outputModule: boolean,
+  federation: boolean,
 ) => (
   data: Rspack.ExternalItemFunctionData,
   callback: (
@@ -12,9 +13,11 @@ const autoExternalNodeModules: (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void =
-  (outputModule) =>
-  ({ context, request, dependencyType, getResolve }, callback) => {
+) => void = (outputModule, federation) =>
+  function autoExternalNodeModules(
+    { context, request, dependencyType, getResolve },
+    callback,
+  ) {
     if (!request) {
       return callback();
     }
@@ -44,8 +47,13 @@ const autoExternalNodeModules: (
 
     resolver(context!, request, (err, resolvePath) => {
       if (err) {
-        // ignore resolve error and external it as commonjs （it may be mocked）
-        // however, we will lose the code frame info if module not found
+        if (federation) {
+          // Keep unresolved specifiers bundled in federation mode.
+          return callback();
+        }
+
+        // Ignore resolve error and external it as commonjs (it may be mocked).
+        // However, we will lose the code frame info if module not found.
         return callback(undefined, request, 'node-commonjs');
       }
 
@@ -103,14 +111,15 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
     api.modifyEnvironmentConfig(
       async (config, { mergeEnvironmentConfig, name }) => {
         const {
-          normalizedConfig: { testEnvironment },
+          normalizedConfig: { testEnvironment, federation },
           outputModule,
         } = context.projects.find((p) => p.environmentName === name)!;
+
         return mergeEnvironmentConfig(config, {
           output: {
             externals:
               testEnvironment.name === 'node'
-                ? [autoExternalNodeModules(outputModule)]
+                ? [createAutoExternalNodeModules(outputModule, federation)]
                 : undefined,
           },
           tools: {

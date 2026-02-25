@@ -40,6 +40,24 @@ type Options = {
   projects: Project[];
 };
 
+const resolveOutputModule = (
+  config: Pick<NormalizedConfig, 'output'>,
+): boolean => {
+  return config.output?.module ?? process.env.RSTEST_OUTPUT_MODULE !== 'false';
+};
+
+const assertFederationCompatible = (
+  config: Pick<NormalizedConfig, 'federation'>,
+  outputModule: boolean,
+): void => {
+  if (!config.federation || !outputModule) return;
+
+  throw new Error(
+    'Federation requires CommonJS output. Set `output.module: false` in your rstest config ' +
+      'when using `federation: true` (note: `RSTEST_OUTPUT_MODULE` can also affect this).',
+  );
+};
+
 export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
@@ -153,30 +171,35 @@ export class Rstest implements RstestContext {
               config.source.tsconfigPath,
             );
           }
+
+          const outputModule = resolveOutputModule(config);
+          assertFederationCompatible(config, outputModule);
+
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
             _globalSetups: false,
-            outputModule:
-              config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+            outputModule,
             environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
         })
       : [
-          {
-            configFilePath,
-            rootPath,
-            _globalSetups: false,
-            name: rstestConfig.name,
-            outputModule:
-              rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
-            environmentName: formatEnvironmentName(rstestConfig.name),
-            normalizedConfig: rstestConfig,
-          },
+          (() => {
+            const outputModule = resolveOutputModule(rstestConfig);
+            assertFederationCompatible(rstestConfig, outputModule);
+
+            return {
+              configFilePath,
+              rootPath,
+              _globalSetups: false,
+              name: rstestConfig.name,
+              outputModule,
+              environmentName: formatEnvironmentName(rstestConfig.name),
+              normalizedConfig: rstestConfig,
+            };
+          })(),
         ];
 
     // Create a map of project name to project config for reporters
