@@ -975,6 +975,12 @@ const createBrowserRuntime = async ({
               resolve: {
                 alias: rstestInternalAliases,
               },
+              source: {
+                define: {
+                  'process.env': 'globalThis[Symbol.for("rstest.env")]',
+                  'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                },
+              },
               output: {
                 target: 'web',
                 // Enable source map for inline snapshot support

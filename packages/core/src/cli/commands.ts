@@ -105,7 +105,7 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option(
       '--unstubEnvs',
-      'Restores all `process.env` values that were changed with `rstest.stubEnv` before every test',
+      'Restores all runtime env values that were changed with `rstest.stubEnv` before every test',
     )
     .option(
       '--includeTaskLocation',
