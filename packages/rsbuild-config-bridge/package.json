@@ -1,7 +1,7 @@
 {
-  "name": "@rstest/adapter-rsbuild",
-  "version": "0.2.0",
-  "description": "Rstest adapter for rsbuild configuration",
+  "name": "@rstest/rsbuild-config-bridge",
+  "version": "0.1.0",
+  "description": "Bridge utilities for converting Rsbuild config to Rstest config",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,21 +17,18 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "test": "rstest"
+    "test": "rstest",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "rstest",
     "rsbuild",
-    "adapter",
+    "bridge",
     "configuration"
   ],
   "license": "MIT",
-  "dependencies": {
-    "@rstest/rsbuild-config-bridge": "workspace:*"
-  },
   "peerDependencies": {
-    "@rsbuild/core": "*",
-    "@rstest/core": ">=0.7.7"
+    "@rsbuild/core": "*"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.0-beta.4",
@@ -48,6 +45,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/web-infra-dev/rstest",
-    "directory": "packages/adapter-rsbuild"
+    "directory": "packages/rsbuild-config-bridge"
   }
 }
