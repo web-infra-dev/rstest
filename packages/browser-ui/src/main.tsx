@@ -1,5 +1,11 @@
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -193,7 +199,9 @@ const BrowserRunner: React.FC<{
         if (!iframe) {
           pendingReloadsRef.current.delete(testFile);
           reject(
-            new Error(`Cannot reload test file "${testFile}": iframe not found`),
+            new Error(
+              `Cannot reload test file "${testFile}": iframe not found`,
+            ),
           );
           return;
         }
@@ -424,7 +432,9 @@ const BrowserRunner: React.FC<{
           setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
         }
         if (pendingReloadsRef.current.size > 0) {
-          const fatalError = new Error(payload.message || 'Browser runner fatal');
+          const fatalError = new Error(
+            payload.message || 'Browser runner fatal',
+          );
           for (const pending of pendingReloadsRef.current.values()) {
             pending.reject(fatalError);
           }
