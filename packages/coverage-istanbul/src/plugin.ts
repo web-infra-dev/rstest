@@ -34,14 +34,16 @@ export const pluginCoverage: (
 
     api.modifyBundlerChain({
       handler: (chain, { rspack, CHAIN_ID, environment }) => {
+        const isV1 = api.context.version.startsWith('1.');
+        const jsRule = isV1
+          ? chain.module.rule(CHAIN_ID.RULE.JS)
+          : chain.module.rule(CHAIN_ID.RULE.JS).oneOf(CHAIN_ID.ONE_OF.JS_MAIN);
+
         const {
           rspackExperiments: _rspackExperiments,
           collectTypeScriptInfo: _collectTypeScriptInfo,
           ...swcOptions
-        } = chain.module
-          .rule(CHAIN_ID.RULE.JS)
-          .use(CHAIN_ID.USE.SWC)
-          .get('options') || {};
+        } = jsRule.use(CHAIN_ID.USE.SWC).get('options') || {};
 
         swcOptions.jsc ??= {};
         swcOptions.jsc.experimental ??= {};

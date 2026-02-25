@@ -34,7 +34,9 @@ export const pluginCSSFilter = (): RsbuildPlugin => ({
               continue;
             }
 
-            const rule = chain.module.rule(ruleId);
+            const rule = chain.module
+              .rule(ruleId)
+              .oneOf(CHAIN_ID.ONE_OF.CSS_MAIN);
 
             if (!rule.uses.has(CHAIN_ID.USE.CSS)) {
               continue;
