@@ -57,6 +57,11 @@
             "Fast, only supports basic test cases.",
             "Slow, supports all test cases, including dynamic test generation methods (each/for/extend)."
           ]
+        },
+        "rstest.applyDiagnostic": {
+          "description": "Show diagnostics in editor and Problems panel for failed tests.",
+          "type": "boolean",
+          "default": true
         }
       }
     },

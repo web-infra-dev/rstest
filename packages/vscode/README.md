@@ -8,6 +8,7 @@ Rstest is a VS Code extension that discovers, displays, and runs tests in your w
 - Parses test structure to build a nested tree (describe/suite/test)
 - Runs individual tests, suites, or entire files
 - Watches the filesystem and updates the tree on create/change/delete
+- Shows editor diagnostics for failed tests
 
 ## Activation
 
@@ -20,6 +21,15 @@ The extension activates automatically when your workspace contains Rstest config
 | `rstest.rstestPackagePath`     | `string`             | `undefined`                                    | The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder. |
 | `rstest.configFileGlobPattern` | `string[]`           | `["**/rstest.config.{mjs,ts,js,cjs,mts,cts}"]` | Glob patterns used to discover config files.                                                                                                                                                                                                                          |
 | `rstest.testCaseCollectMethod` | `"ast" \| "runtime"` | `"ast"`                                        | `"ast"`: Fast, only supports basic test cases. <br /> `"runtime"`: Slow, supports all test cases, including dynamic test generation methods (each/for/extend).                                                                                                        |
+| `rstest.applyDiagnostic`       | `boolean`            | `true`                                         | Show diagnostics in editor and Problems panel for failed tests.                                                                                                                                                                                                       |
+
+### Error lens compatibility
+
+If you use the Error Lens extension and want to avoid duplicated inline diagnostics, add this to your `settings.json`:
+
+- `errorLens.excludeBySource`: `['rstest']`
+
+This extension does not apply this setting automatically.
 
 ## How it works
 
