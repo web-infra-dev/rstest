@@ -40,7 +40,7 @@ const { content: rsbuildConfig } = await loadConfig({
 
 const rstestConfig = toRstestConfig({
   rsbuildConfig,
-  environmentName: 'test',
+  environmentName: 'node',
   modifyRsbuildConfig: (config) => ({
     ...config,
     output: {

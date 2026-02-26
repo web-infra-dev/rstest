@@ -61,7 +61,15 @@ export function toRstestConfig({
   return {
     root: finalBuildConfig.root,
     name: environmentName,
-    plugins: finalBuildConfig.plugins,
+    plugins: [
+      ...(finalBuildConfig.plugins || []),
+      // remove some plugins that are not needed or not compatible in test environment
+      {
+        name: 'remove-useless-plugins',
+        remove: ['rsbuild:type-check'],
+        setup: () => {},
+      },
+    ],
     source: {
       decorators,
       define,
