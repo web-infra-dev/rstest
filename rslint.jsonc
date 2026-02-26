@@ -34,7 +34,6 @@
       "@typescript-eslint/no-misused-promises": "off",
       "@typescript-eslint/no-redundant-type-constituents": "off",
       "@typescript-eslint/switch-exhaustiveness-check": "off",
-      "@typescript-eslint/no-empty-function": "off",
     },
   },
 ]
