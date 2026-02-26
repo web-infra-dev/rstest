@@ -62,10 +62,13 @@ const debugLog = (...args: unknown[]): void => {
   }
 };
 
-type GlobalWithProcess = typeof globalThis & {
-  global?: typeof globalThis;
-  process?: NodeJS.Process;
-};
+type RuntimeEnvStore = Record<string, string | undefined>;
+const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+
+type GlobalWithRuntimeEnv = typeof globalThis &
+  Record<symbol, unknown> & {
+    global?: typeof globalThis;
+  };
 
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
@@ -94,36 +97,34 @@ const restoreRuntimeConfig = (
   };
 };
 
-const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
-  const globalRef = globalThis as GlobalWithProcess;
+const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
+  const globalRef = globalThis as GlobalWithRuntimeEnv;
   if (!globalRef.global) {
     globalRef.global = globalRef;
   }
 
-  if (!globalRef.process) {
-    const processShim: Partial<NodeJS.Process> & {
-      env: Record<string, string | undefined>;
-    } = {
-      env: {},
-      argv: [],
-      version: 'browser',
-      cwd: () => '/',
-      platform: 'linux',
-      nextTick: (cb: (...args: unknown[]) => void, ...args: unknown[]) =>
-        queueMicrotask(() => cb(...args)),
-    };
-
-    globalRef.process = processShim as unknown as NodeJS.Process;
+  const existingEnv = globalRef[RSTEST_ENV_SYMBOL];
+  let runtimeEnv: RuntimeEnvStore;
+  if (existingEnv && typeof existingEnv === 'object') {
+    runtimeEnv = existingEnv as RuntimeEnvStore;
+  } else {
+    runtimeEnv = {};
+    globalRef[RSTEST_ENV_SYMBOL] = runtimeEnv;
   }
-
-  globalRef.process.env ??= {};
 
   if (env) {
     for (const [key, value] of Object.entries(env)) {
-      if (value === undefined) {
-        delete globalRef.process.env[key];
+      const normalizedValue =
+        typeof value === 'string'
+          ? value
+          : value == null
+            ? undefined
+            : String(value);
+
+      if (normalizedValue === undefined) {
+        delete runtimeEnv[key];
       } else {
-        globalRef.process.env[key] = value;
+        runtimeEnv[key] = normalizedValue;
       }
     }
   }
@@ -448,7 +449,7 @@ const run = async () => {
   }
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
-  ensureProcessEnv(runtimeConfig.env);
+  ensureRuntimeEnv(runtimeConfig.env);
 
   // Get this project's setup loaders and test context
   const currentSetupLoaders =

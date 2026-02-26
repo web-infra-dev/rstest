@@ -368,7 +368,7 @@ export interface RstestConfig {
    */
   unstubGlobals?: boolean;
   /**
-   * Restores all `process.env` values that were changed with `rstest.stubEnv` before every test.
+   * Restores all runtime env values that were changed with `rstest.stubEnv` before every test.
    * @default false
    */
   unstubEnvs?: boolean;

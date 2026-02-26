@@ -469,12 +469,13 @@ export interface RstestUtilities {
   resetModules: () => RstestUtilities;
 
   /**
-   * Changes the value of environmental variable on `process.env`.
+   * Changes the value of an environment variable in the current runtime env store.
+   * Uses `process.env` in Node.js and runtime env store in browser mode.
    */
   stubEnv: (name: string, value: string | undefined) => RstestUtilities;
 
   /**
-   * Restores all `process.env` values that were changed with `rstest.stubEnv`.
+   * Restores all env values that were changed with `rstest.stubEnv`.
    */
   unstubAllEnvs: () => RstestUtilities;
 

@@ -11,6 +11,10 @@ import { initSpy } from './spy';
 export const createRstestUtilities: (
   workerState: WorkerState,
 ) => Promise<RstestUtilities> = async (workerState) => {
+  type RuntimeEnvStore = Record<string, string | undefined>;
+  const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+  type GlobalWithRuntimeEnv = typeof globalThis & Record<symbol, unknown>;
+
   const originalEnvValues = new Map<string, string | undefined>();
   const originalGlobalValues = new Map<
     string | symbol | number,
@@ -20,6 +24,22 @@ export const createRstestUtilities: (
   let _timers: FakeTimers;
 
   let originalConfig: undefined | RuntimeConfig;
+
+  const resolveRuntimeEnv = (): RuntimeEnvStore => {
+    const globalRef = globalThis as GlobalWithRuntimeEnv;
+    const runtimeEnv = globalRef[RSTEST_ENV_SYMBOL];
+    if (runtimeEnv && typeof runtimeEnv === 'object') {
+      return runtimeEnv as RuntimeEnvStore;
+    }
+
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env;
+    }
+
+    const createdEnv: RuntimeEnvStore = {};
+    globalRef[RSTEST_ENV_SYMBOL] = createdEnv;
+    return createdEnv;
+  };
 
   const timers = () => {
     if (!_timers) {
@@ -155,26 +175,30 @@ export const createRstestUtilities: (
     },
 
     stubEnv: (name: string, value: string | undefined): RstestUtilities => {
+      const runtimeEnv = resolveRuntimeEnv();
+
       if (!originalEnvValues.has(name)) {
-        originalEnvValues.set(name, process.env[name]);
+        originalEnvValues.set(name, runtimeEnv[name]);
       }
 
-      // update process.env
+      // update runtime env store
       if (value === undefined) {
-        delete process.env[name];
+        delete runtimeEnv[name];
       } else {
-        process.env[name] = value;
+        runtimeEnv[name] = value;
       }
 
       return rstest;
     },
     unstubAllEnvs: (): RstestUtilities => {
-      // restore process.env
+      const runtimeEnv = resolveRuntimeEnv();
+
+      // restore runtime env store
       for (const [name, value] of originalEnvValues) {
         if (value === undefined) {
-          delete process.env[name];
+          delete runtimeEnv[name];
         } else {
-          process.env[name] = value;
+          runtimeEnv[name] = value;
         }
       }
 
