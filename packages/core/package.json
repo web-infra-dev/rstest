@@ -62,7 +62,7 @@
   "dependencies": {
     "@rsbuild/core": "^2.0.0-beta.4",
     "@types/chai": "^5.2.3",
-    "tinypool": "^1.1.1"
+    "tinypool": "^2.1.0"
   },
   "devDependencies": {
     "@babel/code-frame": "^7.27.1",
