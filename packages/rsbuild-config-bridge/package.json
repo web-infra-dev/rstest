@@ -28,7 +28,8 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@rsbuild/core": "*"
+    "@rsbuild/core": "*",
+    "@rstest/core": "*"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.0-beta.4",
