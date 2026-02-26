@@ -57,6 +57,11 @@ import {
   RunSessionLifecycle,
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
+import {
+  loadSourceMapWithCache,
+  normalizeJavaScriptUrl,
+  type SourceMapPayload,
+} from './sourceMap/sourceMapLoader';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
 
@@ -1346,20 +1351,67 @@ export const runBrowserController = async (
     (project) => project.normalizedConfig.browser.headless,
   );
 
+  const browserSourceMapCache = new Map<string, SourceMapPayload | null>();
+
+  const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
+
+  const resolveBrowserSourcemap = async (sourcePath: string) => {
+    if (!isHttpLikeFile(sourcePath)) {
+      return {
+        handled: false,
+        sourcemap: null,
+      };
+    }
+
+    const normalizedUrl = normalizeJavaScriptUrl(sourcePath);
+    if (!normalizedUrl) {
+      return {
+        handled: true,
+        sourcemap: null,
+      };
+    }
+
+    if (browserSourceMapCache.has(normalizedUrl)) {
+      return {
+        handled: true,
+        sourcemap: browserSourceMapCache.get(normalizedUrl) ?? null,
+      };
+    }
+
+    return {
+      handled: true,
+      sourcemap: await loadSourceMapWithCache({
+        jsUrl: normalizedUrl,
+        cache: browserSourceMapCache,
+      }),
+    };
+  };
+
+  const getBrowserSourcemap = async (
+    sourcePath: string,
+  ): Promise<SourceMapPayload | null> => {
+    const result = await resolveBrowserSourcemap(sourcePath);
+    return result.handled ? result.sourcemap : null;
+  };
+
   /**
    * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
    * Used for early-exit error paths to ensure errors reach the summary report.
    */
   const buildErrorResult = async (
     error: Error,
+    close?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
     const elapsed = Math.max(0, Date.now() - buildStart);
-    const errorResult: BrowserTestRunResult = {
+    const errorResult = {
       results: [],
       testResults: [],
       duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
       hasFailure: true,
       unhandledErrors: [error],
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close,
     };
 
     if (!skipOnTestRunEnd) {
@@ -1369,7 +1421,7 @@ export const runBrowserController = async (
           testResults: [],
           duration: errorResult.duration,
           snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: async () => null,
+          getSourcemap: getBrowserSourcemap,
           unhandledErrors: errorResult.unhandledErrors,
         });
       }
@@ -1387,8 +1439,18 @@ export const runBrowserController = async (
     cleanup?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
     ensureProcessExitCode(1);
-    await cleanup?.();
-    return buildErrorResult(toError(error));
+
+    const normalizedError = toError(error);
+
+    if (cleanup && skipOnTestRunEnd) {
+      return buildErrorResult(normalizedError, cleanup);
+    }
+
+    try {
+      return await buildErrorResult(normalizedError);
+    } finally {
+      await cleanup?.();
+    }
   };
 
   const collectDeletedTestPaths = (
@@ -1434,7 +1496,7 @@ export const runBrowserController = async (
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: async () => null,
+        getSourcemap: getBrowserSourcemap,
         unhandledErrors,
         filterRerunTestPaths,
       });
@@ -2179,13 +2241,15 @@ export const runBrowserController = async (
       };
     }
 
-    if (!isWatchMode) {
-      sessionRegistry.clear();
-      await destroyBrowserRuntime(runtime);
-    }
+    const closeHeadlessRuntime = !isWatchMode
+      ? async () => {
+          sessionRegistry.clear();
+          await destroyBrowserRuntime(runtime);
+        }
+      : undefined;
 
     if (fatalError) {
-      return failWithError(fatalError);
+      return failWithError(fatalError, closeHeadlessRuntime);
     }
 
     const duration = {
@@ -2203,14 +2267,23 @@ export const runBrowserController = async (
       ensureProcessExitCode(1);
     }
 
-    const result: BrowserTestRunResult = {
+    const result = {
       results: reporterResults,
       testResults: caseResults,
       duration,
       hasFailure: isFailure,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close: skipOnTestRunEnd ? closeHeadlessRuntime : undefined,
     };
 
-    await notifyTestRunEnd({ duration });
+    if (!skipOnTestRunEnd) {
+      try {
+        await notifyTestRunEnd({ duration });
+      } finally {
+        await closeHeadlessRuntime?.();
+      }
+    }
 
     if (isWatchMode && triggerRerun) {
       watchContext.hooksEnabled = true;
@@ -2451,22 +2524,24 @@ export const runBrowserController = async (
     };
   }
 
-  if (!isWatchMode) {
-    try {
-      await containerPage.close();
-    } catch {
-      // ignore
-    }
-    try {
-      await containerContext.close();
-    } catch {
-      // ignore
-    }
-    await destroyBrowserRuntime(runtime);
-  }
+  const closeContainerRuntime = !isWatchMode
+    ? async () => {
+        try {
+          await containerPage.close();
+        } catch {
+          // ignore
+        }
+        try {
+          await containerContext.close();
+        } catch {
+          // ignore
+        }
+        await destroyBrowserRuntime(runtime);
+      }
+    : undefined;
 
   if (fatalError) {
-    return failWithError(fatalError);
+    return failWithError(fatalError, closeContainerRuntime);
   }
 
   const duration = {
@@ -2484,14 +2559,23 @@ export const runBrowserController = async (
     ensureProcessExitCode(1);
   }
 
-  const result: BrowserTestRunResult = {
+  const result = {
     results: reporterResults,
     testResults: caseResults,
     duration,
     hasFailure: isFailure,
+    getSourcemap: getBrowserSourcemap,
+    resolveSourcemap: resolveBrowserSourcemap,
+    close: skipOnTestRunEnd ? closeContainerRuntime : undefined,
   };
 
-  await notifyTestRunEnd({ duration });
+  if (!skipOnTestRunEnd) {
+    try {
+      await notifyTestRunEnd({ duration });
+    } finally {
+      await closeContainerRuntime?.();
+    }
+  }
 
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
   if (isWatchMode && triggerRerun) {
