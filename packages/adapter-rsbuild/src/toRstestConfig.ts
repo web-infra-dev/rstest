@@ -24,7 +24,10 @@ export interface WithRsbuildConfigOptions {
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
 }
 
-export function convertRsbuildToRstestConfig({
+/**
+ * Convert rsbuild config to rstest config
+ */
+export function toRstestConfig({
   environmentName,
   rsbuildConfig: rawRsbuildConfig,
   modifyRsbuildConfig,

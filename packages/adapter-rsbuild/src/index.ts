@@ -1,6 +1,6 @@
 import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfigFn } from '@rstest/core';
-import { convertRsbuildToRstestConfig } from './toRstestConfig';
+import { toRstestConfig } from './toRstestConfig';
 
 export interface WithRsbuildConfigOptions {
   /**
@@ -46,7 +46,7 @@ export function withRsbuildConfig(
       return {};
     }
 
-    const rstestConfig = convertRsbuildToRstestConfig({
+    const rstestConfig = toRstestConfig({
       environmentName,
       rsbuildConfig,
       modifyRsbuildConfig,
@@ -56,4 +56,4 @@ export function withRsbuildConfig(
   };
 }
 
-export { convertRsbuildToRstestConfig };
+export { toRstestConfig };

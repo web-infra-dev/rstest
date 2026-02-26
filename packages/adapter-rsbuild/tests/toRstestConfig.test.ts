@@ -1,8 +1,8 @@
 import { defineConfig, type RsbuildConfig } from '@rsbuild/core';
 import { describe, expect, it } from '@rstest/core';
-import { convertRsbuildToRstestConfig } from '../src';
+import { toRstestConfig } from '../src';
 
-describe('convertRsbuildToRstestConfig', () => {
+describe('toRstestConfig', () => {
   const rsbuildConfig = defineConfig({
     source: {
       define: {
@@ -31,7 +31,7 @@ describe('convertRsbuildToRstestConfig', () => {
   }) as RsbuildConfig;
 
   it('should convert rsbuild config to rstest config', () => {
-    const config = convertRsbuildToRstestConfig({ rsbuildConfig });
+    const config = toRstestConfig({ rsbuildConfig });
 
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
@@ -43,7 +43,7 @@ describe('convertRsbuildToRstestConfig', () => {
   });
 
   it('should merge environment config', () => {
-    const config = convertRsbuildToRstestConfig({
+    const config = toRstestConfig({
       rsbuildConfig,
       environmentName: 'test',
     });
@@ -58,7 +58,7 @@ describe('convertRsbuildToRstestConfig', () => {
   });
 
   it('should map node target to node test environment', () => {
-    const config = convertRsbuildToRstestConfig({
+    const config = toRstestConfig({
       rsbuildConfig,
       environmentName: 'node',
     });
@@ -68,7 +68,7 @@ describe('convertRsbuildToRstestConfig', () => {
   });
 
   it('should allow modification of rsbuild config', () => {
-    const config = convertRsbuildToRstestConfig({
+    const config = toRstestConfig({
       rsbuildConfig,
       modifyRsbuildConfig: (buildConfig) => ({
         ...buildConfig,

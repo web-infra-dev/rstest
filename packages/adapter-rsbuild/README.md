@@ -26,19 +26,19 @@ Automatically loads Rsbuild config from the current working directory and conver
 
 More advanced usage examples can be found in the [Rsbuild integration guide](https://rstest.rs/guide/integration/rsbuild).
 
-### `convertRsbuildToRstestConfig`
+### `toRstestConfig`
 
-You can also use `convertRsbuildToRstestConfig` directly when you already have an Rsbuild config object.
+You can also use `toRstestConfig` directly when you already have an Rsbuild config object.
 
 ```ts
 import { loadConfig } from '@rsbuild/core';
-import { convertRsbuildToRstestConfig } from '@rstest/adapter-rsbuild';
+import { toRstestConfig } from '@rstest/adapter-rsbuild';
 
 const { content: rsbuildConfig } = await loadConfig({
   cwd: process.cwd(),
 });
 
-const rstestConfig = convertRsbuildToRstestConfig({
+const rstestConfig = toRstestConfig({
   rsbuildConfig,
   environmentName: 'test',
   modifyRsbuildConfig: (config) => ({
