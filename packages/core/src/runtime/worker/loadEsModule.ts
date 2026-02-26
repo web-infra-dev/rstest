@@ -164,7 +164,7 @@ export const asModule = async (
 
   if (unlinked) return syntheticModule;
 
-  await syntheticModule.link((() => {}) as unknown as ModuleLinker);
+  await syntheticModule.link((() => undefined) as unknown as ModuleLinker);
   await syntheticModule.evaluate();
   return syntheticModule;
 };

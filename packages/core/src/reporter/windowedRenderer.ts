@@ -44,15 +44,15 @@ type StreamType = 'output' | 'error';
  * forwards all other intercepted `stdout` and `stderr` logs above it.
  */
 export class WindowRenderer {
-  private options: Required<Options>;
-  private streams!: Record<StreamType, Writable['write']>;
-  private buffer: { type: StreamType; message: string }[] = [];
+  private readonly options: Required<Options>;
+  private readonly streams!: Record<StreamType, Writable['write']>;
+  private readonly buffer: { type: StreamType; message: string }[] = [];
   private renderInterval: NodeJS.Timeout | undefined = undefined;
   private renderScheduled = false;
 
   private windowHeight = 0;
   private finished = false;
-  private cleanups: (() => void)[] = [];
+  private readonly cleanups: (() => void)[] = [];
 
   constructor(options: Options) {
     this.options = {

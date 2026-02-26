@@ -89,7 +89,7 @@ class MockRuntimeRspackPlugin {
 export const pluginMockRuntime: RsbuildPlugin = {
   name: 'rstest:mock-runtime',
   setup: (api) => {
-    api.modifyRspackConfig(async (config) => {
+    api.modifyRspackConfig((config) => {
       config.plugins.push(
         new MockRuntimeRspackPlugin(Boolean(config.output.module)),
       );

@@ -840,9 +840,9 @@ const createCodeFrame = (
 export class MdReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
-  private fileFilters: string[];
-  private options: ResolvedOptions;
-  private logsByTestPath = new Map<string, string[]>();
+  private readonly fileFilters: string[];
+  private readonly options: ResolvedOptions;
+  private readonly logsByTestPath = new Map<string, string[]>();
 
   constructor({
     rootPath,
