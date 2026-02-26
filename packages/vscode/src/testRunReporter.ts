@@ -9,6 +9,7 @@ import type {
 import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
+import type { DiagnosticEntry, RstestDiagnostics } from './diagnostics';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
@@ -22,6 +23,8 @@ export class TestRunReporter implements Reporter {
     private coverageEnabled?: boolean,
     private onFinish?: () => void,
     private createTestRun?: () => vscode.TestRun,
+    private projectKey = '',
+    private diagnostics?: RstestDiagnostics,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -133,31 +136,71 @@ export class TestRunReporter implements Reporter {
     switch (result.status) {
       case 'pass': {
         this.run?.passed(testItem, result.duration);
+        this.diagnostics?.clearForTest(this.projectKey, testItem);
         break;
       }
       case 'skip':
       case 'todo': {
         this.run?.skipped(testItem);
+        this.diagnostics?.clearForTest(this.projectKey, testItem);
         break;
       }
       case 'fail': {
-        this.run?.failed(
-          testItem,
-          await Promise.all(
-            (result.errors || []).map(async (error) =>
-              this.createError(error, result.testPath),
-            ),
+        const errors = await Promise.all(
+          (result.errors || []).map(async (error) =>
+            this.createError(error, result.testPath),
           ),
-          result.duration,
+        );
+        this.run?.failed(testItem, errors, result.duration);
+        this.diagnostics?.setForTest(
+          this.projectKey,
+          testItem,
+          this.createDiagnostics(testItem, errors),
         );
         break;
       }
     }
   }
 
+  private createDiagnostics(
+    testItem: vscode.TestItem,
+    messages: vscode.TestMessage[],
+  ): DiagnosticEntry[] {
+    const diagnostics: DiagnosticEntry[] = [];
+    for (const message of messages) {
+      const location = this.getDiagnosticLocation(testItem, message);
+      if (!location || location.uri.scheme !== 'file') {
+        continue;
+      }
+
+      const diagnostic = new vscode.Diagnostic(
+        location.range,
+        `[${testItem.label}] ${message.message}`,
+        vscode.DiagnosticSeverity.Error,
+      );
+      diagnostic.source = 'rstest';
+      diagnostics.push({ uri: location.uri, diagnostic });
+    }
+    return diagnostics;
+  }
+
+  private getDiagnosticLocation(
+    testItem: vscode.TestItem,
+    message: vscode.TestMessage,
+  ) {
+    if (message.location) {
+      return message.location;
+    }
+
+    if (testItem.uri && testItem.range) {
+      return new vscode.Location(testItem.uri, testItem.range);
+    }
+  }
+
   private isFirstRun = true;
 
   async onTestRunStart() {
+    this.diagnostics?.clearForProject(this.projectKey);
     if (!this.isFirstRun) {
       this.run = this.createTestRun?.();
     }
@@ -261,17 +304,8 @@ export class TestRunReporter implements Reporter {
           ),
         );
       }
-      if (frames.length > 1 || !locationFrame)
-        message.stackTrace = frames?.map(
-          (frame) =>
-            new vscode.TestMessageStackFrame(
-              frame.methodName,
-              frame.file ? vscode.Uri.file(frame.file) : undefined,
-              frame.lineNumber && frame.column
-                ? new vscode.Position(frame.lineNumber - 1, frame.column - 1)
-                : undefined,
-            ),
-        );
+      // Avoid showing compiled runtime stack frames in the editor failure widget.
+      // They are usually not actionable for users and add noisy duplicated entries.
     }
 
     return message;

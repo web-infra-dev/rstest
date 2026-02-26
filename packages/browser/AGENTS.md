@@ -2,6 +2,64 @@
 
 Browser mode support for Rstest. Provides browser test execution using Playwright and a React-based test UI.
 
+## Architecture deep dive
+
+- Host scheduling internals: `src/AGENTS.md`
+- Runner runtime and transport internals: `src/client/AGENTS.md`
+
+## Architecture overview and cross-package contract
+
+```mermaid
+flowchart LR
+  subgraph Host["package: @rstest/browser"]
+    H1[hostController.ts]
+    H2[dispatchRouter.ts]
+    H3[namespace handlers]
+  end
+
+  subgraph UI["package: @rstest/browser-ui"]
+    U1[useRpc birpc]
+    U2[channel.ts]
+    U3[main.tsx message listener]
+  end
+
+  subgraph RunnerRuntime["module: @rstest/browser src/client"]
+    R1[send lifecycle]
+    R2[dispatch rpc request]
+    R3[snapshot.ts]
+  end
+
+  H1 -->|inject host config| U1
+  H1 -->|birpc callbacks| U1
+  U1 -->|birpc calls| H1
+
+  R1 -->|postMessage \_\_rstest_dispatch\_\_| U3
+  U3 -->|onTest* callbacks| U1
+
+  R2 -->|postMessage dispatch rpc request| U2
+  U2 -->|rpc.dispatch(request)| U1
+  U1 -->|dispatch(request)| H1
+  H1 -->|routing inbound request| H2
+  H2 -->|resolve namespace handler| H3
+  H3 -->|return handler result| H2
+  H2 -->|routing done response payload| H1
+  H1 -->|dispatch response| U1
+  U1 -->|return BrowserDispatchResponse| U2
+  U2 -->|postMessage dispatch response| R3
+
+  H1 -->|headless bridge \_\_rstest_dispatch\_\_| R1
+  H1 -->|headless bridge \_\_rstest_dispatch_rpc\_\_| R2
+```
+
+This diagram is the package-level quick overview and the contract boundary map.
+`dispatchRouter` handles inbound request routing only; outbound delivery is transport reply.
+
+Contract ownership:
+
+- `@rstest/browser` owns host scheduling, dispatch routing, and protocol semantics.
+- `@rstest/browser-ui` owns transport bridging and UI state projection only.
+- Runner runtime (`src/client`) owns test execution and emits protocol messages, but does not own filesystem access.
+
 ## Module structure
 
 - `src/index.ts` — Package entry, exports runBrowserTests and listBrowserTests
@@ -30,37 +88,6 @@ pnpm --filter @rstest/browser dev     # Watch mode
 
 # Typecheck
 pnpm --filter @rstest/browser typecheck
-```
-
-## Architecture
-
-```plaintext
-┌─────────────────────────────────────────────────────────────────┐
-│  HOST (Node.js) - hostController.ts                             │
-│  ┌──────────────┐  ┌───────────┐  ┌─────────────────────────┐  │
-│  │ Rsbuild Dev  │  │ Playwright│  │ WebSocket Server (RPC)  │  │
-│  │ Server       │  │ (Chromium)│  │ - rerunTest()           │  │
-│  │ - Bundle     │  │           │  │ - getTestFiles()        │  │
-│  │ - Lazy comp  │  │           │  │ - dispatch(request)     │  │
-│  └──────────────┘  └───────────┘  └─────────────────────────┘  │
-│  Headless: direct page transport + session-based scheduler      │
-│  Headed: container page + iframe runners                        │
-└─────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  BROWSER (Chromium)                                             │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Container Page (@rstest/browser-ui)                      │  │
-│  │  - React + Ant Design UI                                  │  │
-│  │  - Test file tree, status tracking                        │  │
-│  │  ┌─────────────────────────────────────────────────────┐ │  │
-│  │  │  Runner iframes (client/entry.ts)                   │ │  │
-│  │  │  - Loads tests via @rstest/browser-manifest         │ │  │
-│  │  │  - Executes tests via shared runtime from @rstest/core │  │
-│  │  └─────────────────────────────────────────────────────┘ │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Dependencies

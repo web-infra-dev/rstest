@@ -808,14 +808,14 @@ const App: React.FC = () => {
   }
 
   const isDark = theme === 'dark';
+  const projectName =
+    options.projects?.[0]?.name ||
+    options.rootPath.split('/').filter(Boolean).pop() ||
+    'rstest';
 
   useEffect(() => {
-    const projectName =
-      options.projects?.[0]?.name ||
-      options.rootPath.split('/').filter(Boolean).pop() ||
-      'rstest';
     document.title = `${projectName} [RSTEST BROWSER]`;
-  }, [options]);
+  }, [projectName]);
 
   return (
     <ConfigProvider

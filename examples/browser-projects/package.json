@@ -11,7 +11,7 @@
     "@rstest/browser": "workspace:*",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
-    "playwright": "^1.49.1",
+    "playwright": "^1.58.2",
     "typescript": "^5.9.3"
   }
 }
