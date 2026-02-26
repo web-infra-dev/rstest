@@ -14,7 +14,16 @@ export type BrowserConsoleMessage = {
   text: () => string;
 };
 
-/** Minimal page API surface required by hostController. */
+/**
+ * Minimal page API surface required by hostController.
+ *
+ * This is a structural type (shape interface), NOT a direct Playwright import.
+ * It currently mirrors a subset of Playwright's Page API because that is the
+ * only provider. When adding a second provider whose page primitive diverges
+ * (e.g. WebDriver BiDi), consider pushing page-level orchestration (goto,
+ * exposeFunction, addInitScript, event listeners) into provider-specific
+ * implementations so hostController only calls high-level semantic methods.
+ */
 export type BrowserProviderPage = {
   goto: (url: string, options?: { waitUntil?: 'load' }) => Promise<unknown>;
   exposeFunction: (name: string, fn: (...args: any[]) => any) => Promise<void>;

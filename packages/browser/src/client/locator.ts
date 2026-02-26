@@ -115,7 +115,9 @@ export type LocatorSetInputFilesOptions = {
 
 export type LocatorFilterOptions = {
   hasText?: string | RegExp;
+  hasNotText?: string | RegExp;
   has?: Locator;
+  hasNot?: Locator;
 };
 
 export class Locator {
@@ -217,6 +219,9 @@ export class Locator {
             hasText: options.hasText
               ? serializeText(options.hasText)
               : undefined,
+            hasNotText: options.hasNotText
+              ? serializeText(options.hasNotText)
+              : undefined,
             has:
               options.has === undefined
                 ? undefined
@@ -225,6 +230,16 @@ export class Locator {
                   : (() => {
                       throw new TypeError(
                         'Locator.filter({ has }) expects a Locator returned from @rstest/browser page.getBy* APIs.',
+                      );
+                    })(),
+            hasNot:
+              options.hasNot === undefined
+                ? undefined
+                : isLocator(options.hasNot)
+                  ? options.hasNot.ir
+                  : (() => {
+                      throw new TypeError(
+                        'Locator.filter({ hasNot }) expects a Locator returned from @rstest/browser page.getBy* APIs.',
                       );
                     })(),
           },
@@ -416,4 +431,19 @@ export const page: BrowserPage = createBrowserPage();
 
 export const isLocator = (value: unknown): value is Locator => {
   return value instanceof Locator;
+};
+
+/**
+ * Configure the attribute used by `getByTestId()` queries.
+ * Forwards to the host provider (e.g. Playwright `selectors.setTestIdAttribute()`).
+ *
+ * @default 'data-testid'
+ */
+export const setTestIdAttribute = async (attribute: string): Promise<void> => {
+  await callBrowserRpc<void>({
+    kind: 'config',
+    locator: { steps: [] },
+    method: 'setTestIdAttribute',
+    args: [attribute],
+  } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>);
 };

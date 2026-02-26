@@ -50,4 +50,47 @@ describe('browser locator IR', () => {
     expect(hasSteps.some((s) => s.type === 'or')).toBe(true);
     expect(hasSteps.some((s) => s.type === 'and')).toBe(true);
   });
+
+  it('should build filter({ hasNot }) IR', () => {
+    const base = page.locator('section');
+    const hasNot = page.locator('h2').filter({ hasText: 'Draft' });
+    const out = base.filter({ hasNot });
+
+    expect(out.ir.steps.length).toBe(2);
+    const step: any = out.ir.steps[1];
+    expect(step.type).toBe('filter');
+    expect(step.options.hasNot).toBeDefined();
+    expect(step.options.hasNot.steps[0].type).toBe('locator');
+    expect(step.options.hasNot.steps[1].type).toBe('filter');
+  });
+
+  it('should build filter({ hasNotText }) IR', () => {
+    const out = page.locator('li').filter({ hasNotText: 'archived' });
+
+    const step: any = out.ir.steps[1];
+    expect(step.type).toBe('filter');
+    expect(step.options.hasNotText).toEqual({
+      type: 'string',
+      value: 'archived',
+    });
+  });
+
+  it('should build filter with both has and hasNot', () => {
+    const has = page.getByText('Active');
+    const hasNot = page.getByText('Disabled');
+    const out = page
+      .locator('div')
+      .filter({ has, hasNot, hasText: 'Item', hasNotText: /draft/i });
+
+    const step: any = out.ir.steps[1];
+    expect(step.type).toBe('filter');
+    expect(step.options.has).toBeDefined();
+    expect(step.options.hasNot).toBeDefined();
+    expect(step.options.hasText).toEqual({ type: 'string', value: 'Item' });
+    expect(step.options.hasNotText).toEqual({
+      type: 'regexp',
+      source: 'draft',
+      flags: 'i',
+    });
+  });
 });

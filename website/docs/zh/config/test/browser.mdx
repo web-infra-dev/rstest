@@ -65,6 +65,8 @@ npx playwright install chromium
 
 浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。
 
+同一次测试运行（single run）暂不支持混用多个 provider。
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -216,48 +218,31 @@ export default defineConfig({
 });
 ```
 
-## 多浏览器测试
+## 当前限制：同一次 run 的 browser 启动配置必须一致
 
-通过 [projects](/config/test/projects) 配置可以同时在多个浏览器中运行测试：
+在一个 `rstest` 进程内，所有启用 Browser Mode 的项目需要共享同一组 browser 启动配置：
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
 
-export default defineConfig({
-  projects: [
-    {
-      name: 'chromium',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
-      },
-    },
-    {
-      name: 'firefox',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'firefox',
-      },
-    },
-    {
-      name: 'webkit',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'webkit',
-      },
-    },
-  ],
-});
+这意味着目前还不支持在同一次 run 里通过 `projects` 混用多个 provider，或同时配置 Chromium/Firefox/WebKit。
+
+如果你需要跨浏览器覆盖，建议拆成多次执行（例如在 CI matrix 中分别跑）：
+
+```bash
+npx rstest --browser.browser chromium
+npx rstest --browser.browser firefox
+npx rstest --browser.browser webkit
 ```
 
 ## 多项目配置隔离
 
-在 Browser Mode 下使用 `projects` 时，每个项目都会按自己的配置独立编译和执行，不会复用其他项目的 Browser 配置。
+在 Browser Mode 下使用 `projects` 时，每个项目会按自己的构建配置独立编译和执行（如 `plugins`、`include`、框架设置），不会复用其他项目的构建配置。
 
-这意味着你可以安全地让不同项目拥有不同的插件、`include` 规则和框架设置。
+但 browser 启动配置仍需保持一致：`provider`、`browser`、`headless`、`port`、`strictPort` 必须在所有 browser 项目中对齐。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

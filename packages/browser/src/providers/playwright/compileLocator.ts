@@ -70,13 +70,23 @@ export const compilePlaywrightLocator = (
           const locator = ensureLocator();
           const options: {
             hasText?: string | RegExp;
+            hasNotText?: string | RegExp;
             has?: Locator;
+            hasNot?: Locator;
           } = {};
           if (step.options?.hasText) {
             options.hasText = reviveBrowserLocatorText(step.options.hasText);
           }
+          if (step.options?.hasNotText) {
+            options.hasNotText = reviveBrowserLocatorText(
+              step.options.hasNotText,
+            );
+          }
           if (step.options?.has) {
             options.has = compileFromFrame(step.options.has);
+          }
+          if (step.options?.hasNot) {
+            options.hasNot = compileFromFrame(step.options.hasNot);
           }
           current = locator.filter(options);
           break;

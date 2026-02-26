@@ -1,6 +1,12 @@
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
 import { callBrowserRpc } from './browserRpc';
-import { isLocator, Locator, page, serializeText } from './locator';
+import {
+  isLocator,
+  Locator,
+  page,
+  serializeText,
+  setTestIdAttribute,
+} from './locator';
 
 type ElementExpect = {
   not: ElementExpect;
@@ -258,4 +264,4 @@ export type {
   LocatorTextOptions,
   LocatorWaitForOptions,
 } from './locator';
-export { Locator, page };
+export { Locator, page, setTestIdAttribute };

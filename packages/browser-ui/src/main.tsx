@@ -14,12 +14,19 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
+import {
+  canPostMessageSource,
+  createStaleBrowserRpcDispatchResponse,
+  isStaleBrowserRpcRequest,
+  readBrowserRpcRequest,
+} from './core/browserRpc';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
 import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
+  BrowserDispatchRequest,
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
@@ -52,6 +59,14 @@ const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
   } catch {
     return undefined;
   }
+};
+
+const findRunnerFrameByTestPath = (
+  testPath: string,
+): HTMLIFrameElement | undefined => {
+  return Array.from(
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
+  ).find((frame) => frame.dataset.testFile === testPath);
 };
 
 // ============================================================================
@@ -472,7 +487,36 @@ const BrowserRunner: React.FC<{
         rpc?.onLog(payload);
       } else if (message.type === 'dispatch-rpc-request') {
         // Unified RPC path for snapshot and future runner-side capabilities.
-        void forwardDispatchRpcRequest(rpc, message.payload, event.source);
+        const dispatchRequest = message.payload as BrowserDispatchRequest;
+        const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
+
+        if (browserRpcRequest) {
+          const currentFrame = findRunnerFrameByTestPath(
+            browserRpcRequest.testPath,
+          );
+          const currentRunId = currentFrame
+            ? readRunIdFromFrame(currentFrame)
+            : undefined;
+
+          if (isStaleBrowserRpcRequest(browserRpcRequest, currentRunId)) {
+            if (canPostMessageSource(event.source)) {
+              event.source.postMessage(
+                {
+                  type: '__rstest_dispatch_response__',
+                  payload: createStaleBrowserRpcDispatchResponse(
+                    dispatchRequest.requestId,
+                    browserRpcRequest,
+                    currentRunId,
+                  ),
+                },
+                '*',
+              );
+            }
+            return;
+          }
+        }
+
+        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
       }
     };
     window.addEventListener('message', listener);

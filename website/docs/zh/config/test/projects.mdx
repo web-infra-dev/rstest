@@ -50,7 +50,17 @@ export default defineConfig({
 
 ## Browser mode 中的 projects
 
-如果你在 Browser Mode 下使用 `projects`，每个项目都会按自己的配置独立运行，这样可以在一个仓库里同时管理不同技术栈或不同构建配置。
+如果你在 Browser Mode 下使用 `projects`，每个项目都会按自己的构建配置独立编译与执行，这样可以在一个仓库里同时管理不同技术栈或不同构建配置。
+
+但在同一次 run 中，Browser 启动配置必须保持一致：
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+
+也就是说，目前不支持在同一次 run 里混用多个 provider，或同时配置多个 browser 类型。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

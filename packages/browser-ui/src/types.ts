@@ -1,4 +1,6 @@
 import type {
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserRpcRequest,
   BrowserRpcResponse,
 } from '@rstest/browser/protocol';
@@ -135,18 +137,9 @@ export type ContainerRPC = {
   reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
 };
 
-export type BrowserDispatchRequest = {
-  requestId: string;
-  [key: string]: unknown;
+export type {
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
 };
-
-export type BrowserDispatchResponse = {
-  requestId: string;
-  runToken?: number;
-  result?: unknown;
-  error?: string;
-  stale?: boolean;
-  [key: string]: unknown;
-};
-
-export type { BrowserRpcRequest, BrowserRpcResponse };

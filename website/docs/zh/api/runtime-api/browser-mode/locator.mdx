@@ -27,6 +27,14 @@ const submitButton = page.getByRole('button', { name: 'Submit' });
 
 上面的 `submitButton` 是一个 `Locator`，后续可以继续链式调用（例如 `.click()`）或传给 `expect.element(...)` 做断言。
 
+## BrowserPage
+
+- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'>`
+
+`BrowserPage` 是 `page` 的类型定义，只暴露查询入口，不包含 `click`、`fill` 等交互方法。
+
+也就是说，你需要先通过 `page` 拿到 `Locator`，再在 `Locator` 上调用交互和断言。
+
 ## 查询 API
 
 以下 API 都会返回新的 `Locator`，可继续链式调用。

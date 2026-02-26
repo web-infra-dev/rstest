@@ -3,14 +3,22 @@
  * https://github.com/microsoft/playwright/blob/main/packages/playwright/src/matchers/matchers.ts
  * Copyright (c) Microsoft Corporation, Apache-2.0.
  */
-import type { FrameLocator, Page } from 'playwright';
+import type { FrameLocator, Locator, Page } from 'playwright';
 import {
   supportedExpectElementMatchers,
   supportedLocatorActions,
 } from '../../browserRpcRegistry';
-import type { BrowserLocatorIR, BrowserRpcRequest } from '../../rpcProtocol';
+import type {
+  BrowserLocatorIR,
+  BrowserLocatorText,
+  BrowserRpcRequest,
+} from '../../rpcProtocol';
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
+
+// ---------------------------------------------------------------------------
+// Iframe lookup
+// ---------------------------------------------------------------------------
 
 const escapeCssAttrValue = (value: string): string => {
   // Minimal escaping for use in CSS attribute selectors with single quotes.
@@ -43,6 +51,269 @@ const getRunnerFrame = async (
   return containerPage.frameLocator(selector);
 };
 
+// ---------------------------------------------------------------------------
+// Table-driven expect matcher dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Calls Playwright's internal `_expect()` and throws on mismatch.
+ *
+ * NOTE: `_expect()` is a Playwright semi-internal API used by its own test
+ * runner to implement all web-first assertions. It is not part of the public
+ * docs but is stable across minor versions. All Playwright-specific coupling
+ * is intentionally confined to this provider module.
+ * See: https://github.com/nicolo-ribaudo/playwright/blob/HEAD/packages/playwright-core/src/client/locator.ts
+ */
+const callExpect = async (
+  locator: Locator,
+  expectMethod: string,
+  options: Record<string, unknown>,
+  fallbackMessage: string,
+): Promise<null> => {
+  const result = await (locator as any)._expect(expectMethod, options);
+  if (result.matches !== !options.isNot) {
+    throw new Error(formatExpectError(result) || fallbackMessage);
+  }
+  return null;
+};
+
+const assertSerializedText = (
+  value: unknown,
+  matcherName: string,
+): BrowserLocatorText => {
+  const t = value as any;
+  if (!t || (t.type !== 'string' && t.type !== 'regexp')) {
+    throw new Error(`${matcherName} expects a serialized text matcher`);
+  }
+  return t as BrowserLocatorText;
+};
+
+const assertStringArg = (
+  value: unknown,
+  matcherName: string,
+  label: string,
+): string => {
+  if (typeof value !== 'string' || !value) {
+    throw new Error(`${matcherName} expects ${label}`);
+  }
+  return value;
+};
+
+/** Simple boolean state matchers — no extra args. */
+const simpleMatchers: Record<string, string> = {
+  toBeVisible: 'to.be.visible',
+  toBeHidden: 'to.be.hidden',
+  toBeEnabled: 'to.be.enabled',
+  toBeDisabled: 'to.be.disabled',
+  toBeAttached: 'to.be.attached',
+  toBeDetached: 'to.be.detached',
+  toBeEditable: 'to.be.editable',
+  toBeFocused: 'to.be.focused',
+  toBeEmpty: 'to.be.empty',
+};
+
+/** Text matchers that take a single serialized text arg. */
+const textMatchers: Record<
+  string,
+  {
+    expectMethod: string;
+    textOptions?: { matchSubstring?: boolean; normalizeWhiteSpace?: boolean };
+  }
+> = {
+  toHaveId: { expectMethod: 'to.have.id' },
+  toHaveText: {
+    expectMethod: 'to.have.text',
+    textOptions: { normalizeWhiteSpace: true },
+  },
+  toContainText: {
+    expectMethod: 'to.have.text',
+    textOptions: { matchSubstring: true, normalizeWhiteSpace: true },
+  },
+  toHaveValue: { expectMethod: 'to.have.value' },
+  toHaveClass: { expectMethod: 'to.have.class' },
+};
+
+/**
+ * Dispatches an expect matcher call on the given Playwright locator.
+ * Returns `null` on success, throws on mismatch or invalid args.
+ */
+const dispatchExpectMatcher = (
+  locator: Locator,
+  request: BrowserRpcRequest,
+  isNot: boolean,
+  timeout: number,
+): Promise<null> => {
+  const { method, args } = request;
+
+  // --- Simple boolean state matchers ---
+  const simpleExpect = simpleMatchers[method];
+  if (simpleExpect) {
+    return callExpect(
+      locator,
+      simpleExpect,
+      { isNot, timeout },
+      `Expected element ${method
+        .replace('toBe', 'to be ')
+        .replace(/([A-Z])/g, ' $1')
+        .trim()
+        .toLowerCase()}`,
+    );
+  }
+
+  // --- Text matchers (single serialized text arg) ---
+  const textDef = textMatchers[method];
+  if (textDef) {
+    const expected = assertSerializedText(args[0], method);
+    return callExpect(
+      locator,
+      textDef.expectMethod,
+      {
+        isNot,
+        timeout,
+        expectedText: serializeExpectedText(expected, textDef.textOptions),
+      },
+      `Expected element ${method}`,
+    );
+  }
+
+  // --- Matchers with custom arg handling ---
+  switch (method) {
+    case 'toBeInViewport': {
+      const ratio = args[0];
+      if (ratio !== undefined && typeof ratio !== 'number') {
+        throw new Error(
+          `toBeInViewport expects ratio to be a number, got ${typeof ratio}`,
+        );
+      }
+      return callExpect(
+        locator,
+        'to.be.in.viewport',
+        { isNot, timeout, expectedNumber: ratio },
+        'Expected element to be in viewport',
+      );
+    }
+    case 'toBeChecked':
+      return callExpect(
+        locator,
+        'to.be.checked',
+        { isNot, timeout, expectedValue: { checked: true } },
+        'Expected element to be checked',
+      );
+    case 'toBeUnchecked':
+      return callExpect(
+        locator,
+        'to.be.checked',
+        { isNot, timeout, expectedValue: { checked: false } },
+        'Expected element to be unchecked',
+      );
+    case 'toHaveCount': {
+      const expected = args[0];
+      if (typeof expected !== 'number') {
+        throw new Error(`toHaveCount expects a number, got ${typeof expected}`);
+      }
+      return callExpect(
+        locator,
+        'to.have.count',
+        { isNot, timeout, expectedNumber: expected },
+        `Expected count ${expected}`,
+      );
+    }
+    case 'toHaveAttribute': {
+      const name = assertStringArg(
+        args[0],
+        'toHaveAttribute',
+        'an attribute name',
+      );
+      if (args.length < 2) {
+        return callExpect(
+          locator,
+          'to.have.attribute',
+          { isNot, timeout, expressionArg: name },
+          `Expected attribute ${name} to be present`,
+        );
+      }
+      const expected = assertSerializedText(args[1], 'toHaveAttribute');
+      return callExpect(
+        locator,
+        'to.have.attribute.value',
+        {
+          isNot,
+          timeout,
+          expressionArg: name,
+          expectedText: serializeExpectedText(expected),
+        },
+        `Expected attribute ${name} to match`,
+      );
+    }
+    case 'toHaveCSS': {
+      const name = assertStringArg(args[0], 'toHaveCSS', 'a CSS property name');
+      const expected = assertSerializedText(args[1], 'toHaveCSS');
+      return callExpect(
+        locator,
+        'to.have.css',
+        {
+          isNot,
+          timeout,
+          expressionArg: name,
+          expectedText: serializeExpectedText(expected),
+        },
+        `Expected CSS ${name} to match`,
+      );
+    }
+    case 'toHaveJSProperty': {
+      const name = assertStringArg(
+        args[0],
+        'toHaveJSProperty',
+        'a property name',
+      );
+      const expectedValue = args[1];
+      try {
+        JSON.stringify(expectedValue);
+      } catch {
+        throw new Error(
+          'toHaveJSProperty expects a JSON-serializable expected value',
+        );
+      }
+      return callExpect(
+        locator,
+        'to.have.property',
+        { isNot, timeout, expressionArg: name, expectedValue },
+        `Expected JS property ${name} to match`,
+      );
+    }
+  }
+
+  throw new Error(`Unhandled expect matcher: ${method}`);
+};
+
+// ---------------------------------------------------------------------------
+// Config dispatch
+// ---------------------------------------------------------------------------
+
+const dispatchConfigMethod = async (
+  request: BrowserRpcRequest,
+): Promise<null> => {
+  switch (request.method) {
+    case 'setTestIdAttribute': {
+      const attr = request.args[0];
+      if (typeof attr !== 'string' || !attr) {
+        throw new Error(
+          'setTestIdAttribute expects a non-empty string argument',
+        );
+      }
+      const playwright = await import('playwright');
+      playwright.selectors.setTestIdAttribute(attr);
+      return null;
+    }
+    default:
+      throw new Error(`Unknown config method: ${request.method}`);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Public entry
+// ---------------------------------------------------------------------------
+
 export async function dispatchPlaywrightBrowserRpc({
   containerPage,
   runnerPage,
@@ -54,6 +325,11 @@ export async function dispatchPlaywrightBrowserRpc({
   request: BrowserRpcRequest;
   timeoutFallbackMs: number;
 }): Promise<unknown> {
+  // Config operations don't need a locator or runner frame.
+  if (request.kind === 'config') {
+    return dispatchConfigMethod(request);
+  }
+
   const testPath = request.testPath;
   if (!testPath) {
     throw new Error('Browser RPC request is missing testPath');
@@ -89,387 +365,7 @@ export async function dispatchPlaywrightBrowserRpc({
     if (!supportedExpectElementMatchers.has(request.method)) {
       throw new Error(`Expect matcher not supported: ${request.method}`);
     }
-
-    const isNot = !!request.isNot;
-
-    switch (request.method) {
-      case 'toBeVisible': {
-        const result = await (locator as any)._expect('to.be.visible', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be visible',
-          );
-        }
-        return null;
-      }
-      case 'toBeHidden': {
-        const result = await (locator as any)._expect('to.be.hidden', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be hidden',
-          );
-        }
-        return null;
-      }
-      case 'toBeEnabled': {
-        const result = await (locator as any)._expect('to.be.enabled', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be enabled',
-          );
-        }
-        return null;
-      }
-      case 'toBeDisabled': {
-        const result = await (locator as any)._expect('to.be.disabled', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be disabled',
-          );
-        }
-        return null;
-      }
-      case 'toBeAttached': {
-        const result = await (locator as any)._expect('to.be.attached', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be attached',
-          );
-        }
-        return null;
-      }
-      case 'toBeDetached': {
-        const result = await (locator as any)._expect('to.be.detached', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be detached',
-          );
-        }
-        return null;
-      }
-      case 'toBeEditable': {
-        const result = await (locator as any)._expect('to.be.editable', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be editable',
-          );
-        }
-        return null;
-      }
-      case 'toBeFocused': {
-        const result = await (locator as any)._expect('to.be.focused', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be focused',
-          );
-        }
-        return null;
-      }
-      case 'toBeEmpty': {
-        const result = await (locator as any)._expect('to.be.empty', {
-          isNot,
-          timeout,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be empty',
-          );
-        }
-        return null;
-      }
-      case 'toBeInViewport': {
-        const ratio = request.args[0];
-        if (ratio !== undefined && typeof ratio !== 'number') {
-          throw new Error(
-            `toBeInViewport expects ratio to be a number, got ${typeof ratio}`,
-          );
-        }
-        const result = await (locator as any)._expect('to.be.in.viewport', {
-          isNot,
-          timeout,
-          expectedNumber: ratio,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be in viewport',
-          );
-        }
-        return null;
-      }
-      case 'toBeChecked': {
-        const result = await (locator as any)._expect('to.be.checked', {
-          isNot,
-          timeout,
-          expectedValue: { checked: true },
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be checked',
-          );
-        }
-        return null;
-      }
-      case 'toBeUnchecked': {
-        const result = await (locator as any)._expect('to.be.checked', {
-          isNot,
-          timeout,
-          expectedValue: { checked: false },
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to be unchecked',
-          );
-        }
-        return null;
-      }
-      case 'toHaveCount': {
-        const expected = request.args[0];
-        if (typeof expected !== 'number') {
-          throw new Error(
-            `toHaveCount expects a number, got ${typeof expected}`,
-          );
-        }
-        const result = await (locator as any)._expect('to.have.count', {
-          isNot,
-          timeout,
-          expectedNumber: expected,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || `Expected count ${expected}`,
-          );
-        }
-        return null;
-      }
-      case 'toHaveId': {
-        const expected = request.args[0] as any;
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveId expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.id', {
-          isNot,
-          timeout,
-          expectedText: serializeExpectedText(expected),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to have id',
-          );
-        }
-        return null;
-      }
-      case 'toHaveText': {
-        const expected = request.args[0] as any;
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveText expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.text', {
-          isNot,
-          timeout,
-          expectedText: serializeExpectedText(expected, {
-            normalizeWhiteSpace: true,
-          }),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to have text',
-          );
-        }
-        return null;
-      }
-      case 'toContainText': {
-        const expected = request.args[0] as any;
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toContainText expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.text', {
-          isNot,
-          timeout,
-          expectedText: serializeExpectedText(expected, {
-            matchSubstring: true,
-            normalizeWhiteSpace: true,
-          }),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to contain text',
-          );
-        }
-        return null;
-      }
-      case 'toHaveValue': {
-        const expected = request.args[0] as any;
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveValue expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.value', {
-          isNot,
-          timeout,
-          expectedText: serializeExpectedText(expected),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to have value',
-          );
-        }
-        return null;
-      }
-      case 'toHaveAttribute': {
-        const name = request.args[0];
-        if (typeof name !== 'string' || !name) {
-          throw new Error('toHaveAttribute expects an attribute name');
-        }
-
-        const hasValue = request.args.length >= 2;
-        const expected = hasValue ? (request.args[1] as any) : undefined;
-
-        if (!hasValue) {
-          const result = await (locator as any)._expect('to.have.attribute', {
-            isNot,
-            timeout,
-            expressionArg: name,
-          });
-          if (result.matches !== !isNot) {
-            throw new Error(
-              formatExpectError(result) ||
-                `Expected attribute ${name} to be present`,
-            );
-          }
-          return null;
-        }
-
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveAttribute expects a serialized text matcher');
-        }
-
-        const result = await (locator as any)._expect(
-          'to.have.attribute.value',
-          {
-            isNot,
-            timeout,
-            expressionArg: name,
-            expectedText: serializeExpectedText(expected),
-          },
-        );
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || `Expected attribute ${name} to match`,
-          );
-        }
-        return null;
-      }
-      case 'toHaveClass': {
-        const expected = request.args[0] as any;
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveClass expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.class', {
-          isNot,
-          timeout,
-          expectedText: serializeExpectedText(expected),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || 'Expected element to have class',
-          );
-        }
-        return null;
-      }
-      case 'toHaveCSS': {
-        const name = request.args[0];
-        const expected = request.args[1] as any;
-        if (typeof name !== 'string' || !name) {
-          throw new Error('toHaveCSS expects a CSS property name');
-        }
-        if (
-          !expected ||
-          (expected.type !== 'string' && expected.type !== 'regexp')
-        ) {
-          throw new Error('toHaveCSS expects a serialized text matcher');
-        }
-        const result = await (locator as any)._expect('to.have.css', {
-          isNot,
-          timeout,
-          expressionArg: name,
-          expectedText: serializeExpectedText(expected),
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) || `Expected CSS ${name} to match`,
-          );
-        }
-        return null;
-      }
-      case 'toHaveJSProperty': {
-        const name = request.args[0];
-        const expectedValue = request.args[1];
-        if (typeof name !== 'string' || !name) {
-          throw new Error('toHaveJSProperty expects a property name');
-        }
-        try {
-          JSON.stringify(expectedValue);
-        } catch {
-          throw new Error(
-            'toHaveJSProperty expects a JSON-serializable expected value',
-          );
-        }
-        const result = await (locator as any)._expect('to.have.property', {
-          isNot,
-          timeout,
-          expressionArg: name,
-          expectedValue,
-        });
-        if (result.matches !== !isNot) {
-          throw new Error(
-            formatExpectError(result) ||
-              `Expected JS property ${name} to match`,
-          );
-        }
-        return null;
-      }
-    }
+    return dispatchExpectMatcher(locator, request, !!request.isNot, timeout);
   }
 
   throw new Error(`Unknown browser rpc kind: ${request.kind}`);

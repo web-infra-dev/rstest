@@ -196,4 +196,57 @@ describe('compilePlaywrightLocator', () => {
     expect(hasLocator.ops.some((o) => o.name === 'or')).toBe(true);
     expect(hasLocator.ops.some((o) => o.name === 'and')).toBe(true);
   });
+
+  it('should compile filter({ hasNot }) recursively', () => {
+    const ir: BrowserLocatorIR = {
+      steps: [
+        { type: 'locator', selector: 'section' },
+        {
+          type: 'filter',
+          options: {
+            hasNot: {
+              steps: [{ type: 'locator', selector: '.draft' }],
+            },
+          },
+        },
+      ],
+    };
+
+    const frame = new FakeFrameLocator();
+    const out = compilePlaywrightLocator(
+      frame as any,
+      ir,
+    ) as unknown as FakeLocator;
+
+    const filterOp = out.ops.find((o) => o.name === 'filter');
+    expect(filterOp).toBeTruthy();
+    const hasNotLocator = filterOp!.args[0].hasNot as FakeLocator;
+    expect(hasNotLocator).toBeInstanceOf(FakeLocator);
+  });
+
+  it('should compile filter({ hasNotText })', () => {
+    const ir: BrowserLocatorIR = {
+      steps: [
+        { type: 'locator', selector: 'li' },
+        {
+          type: 'filter',
+          options: {
+            hasNotText: { type: 'regexp', source: 'draft', flags: 'i' },
+          },
+        },
+      ],
+    };
+
+    const frame = new FakeFrameLocator();
+    const out = compilePlaywrightLocator(
+      frame as any,
+      ir,
+    ) as unknown as FakeLocator;
+
+    const filterOp = out.ops.find((o) => o.name === 'filter');
+    expect(filterOp).toBeTruthy();
+    expect(filterOp!.args[0].hasNotText).toBeInstanceOf(RegExp);
+    expect(filterOp!.args[0].hasNotText.source).toBe('draft');
+    expect(filterOp!.args[0].hasNotText.flags).toBe('i');
+  });
 });
