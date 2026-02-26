@@ -28,160 +28,154 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         .oneOf(CHAIN_ID.ONE_OF.JS_MAIN)
         .delete('type');
     });
-    api.modifyEnvironmentConfig(
-      async (config, { mergeEnvironmentConfig, name }) => {
-        const {
-          normalizedConfig: {
-            resolve,
-            source,
-            output,
-            tools,
-            dev,
-            testEnvironment,
-          },
-          outputModule,
-          rootPath,
-        } = context.projects.find((p) => p.environmentName === name)!;
-        return mergeEnvironmentConfig(
-          config,
-          {
-            tools,
-            resolve,
-            source,
-            output,
-            dev,
-          },
-          {
-            source: {
-              define: {
-                'import.meta.rstest': "global['@rstest/core']",
-                'import.meta.env': 'process.env',
-              },
+    api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+      const {
+        normalizedConfig: {
+          resolve,
+          source,
+          output,
+          tools,
+          dev,
+          testEnvironment,
+        },
+        outputModule,
+        rootPath,
+      } = context.projects.find((p) => p.environmentName === name)!;
+      return mergeEnvironmentConfig(
+        config,
+        {
+          tools,
+          resolve,
+          source,
+          output,
+          dev,
+        },
+        {
+          source: {
+            define: {
+              'import.meta.rstest': "global['@rstest/core']",
+              'import.meta.env': 'process.env',
             },
-            output: {
-              // Pass resources to the worker on demand according to entry
-              manifest: `${name}-manifest.json`,
-              sourceMap: {
-                js: 'source-map',
-              },
-              module: outputModule,
-              filename: outputModule
-                ? {
-                    js: '[name].mjs',
-                  }
-                : undefined,
-              distPath: {
-                root:
-                  context.projects.length > 1
-                    ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
-                    : TEMP_RSTEST_OUTPUT_DIR,
-              },
+          },
+          output: {
+            // Pass resources to the worker on demand according to entry
+            manifest: `${name}-manifest.json`,
+            sourceMap: {
+              js: 'source-map',
             },
-            tools: {
-              rspack: (config, { isProd, rspack }) => {
-                // keep windows path as native path
-                config.context = path.resolve(rootPath);
-                // treat `test` as development mode
-                config.mode = isProd ? 'production' : 'development';
-                config.output ??= {};
-                config.output.iife = false;
-                // polyfill interop
-                config.output.importFunctionName = outputModule
-                  ? 'import.meta.__rstest_dynamic_import__'
-                  : '__rstest_dynamic_import__';
-                config.output.devtoolModuleFilenameTemplate =
-                  '[absolute-resource-path]';
-
-                if (!config.devtool || !config.devtool.includes('inline')) {
-                  config.devtool = 'nosources-source-map';
+            module: outputModule,
+            filename: outputModule
+              ? {
+                  js: '[name].mjs',
                 }
+              : undefined,
+            distPath: {
+              root:
+                context.projects.length > 1
+                  ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
+                  : TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {
+            rspack: (config, { isProd, rspack }) => {
+              // keep windows path as native path
+              config.context = path.resolve(rootPath);
+              // treat `test` as development mode
+              config.mode = isProd ? 'production' : 'development';
+              config.output ??= {};
+              config.output.iife = false;
+              // polyfill interop
+              config.output.importFunctionName = outputModule
+                ? 'import.meta.__rstest_dynamic_import__'
+                : '__rstest_dynamic_import__';
+              config.output.devtoolModuleFilenameTemplate =
+                '[absolute-resource-path]';
 
+              if (!config.devtool || !config.devtool.includes('inline')) {
+                config.devtool = 'nosources-source-map';
+              }
+
+              config.plugins.push(
+                new rspack.experiments.RstestPlugin({
+                  injectModulePathName: true,
+                  importMetaPathName: true,
+                  hoistMockModule: true,
+                  manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                }),
+              );
+
+              config.module.rules ??= [];
+              config.module.rules.push({
+                test: /\.mts$/,
+                // Treated mts as strict ES modules.
+                type: 'javascript/esm',
+              });
+
+              if (outputModule) {
                 config.plugins.push(
-                  new rspack.experiments.RstestPlugin({
-                    injectModulePathName: true,
-                    importMetaPathName: true,
-                    hoistMockModule: true,
-                    manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                  new rspack.BannerPlugin({
+                    banner: requireShim,
+                    // Just before minify stage, to perform tree shaking.
+                    stage: rspack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE - 1,
+                    raw: true,
+                    include: /\.(js|mjs)$/,
                   }),
                 );
+              }
 
-                config.module.rules ??= [];
-                config.module.rules.push({
-                  test: /\.mts$/,
-                  // Treated mts as strict ES modules.
-                  type: 'javascript/esm',
-                });
+              config.module.parser ??= {};
+              config.module.parser.javascript = {
+                // Keep dynamic import expressions.
+                // eg. (modulePath) => import(modulePath)
+                importDynamic: false,
+                // Keep dynamic require expressions.
+                // eg. (modulePath) => require(modulePath)
+                requireDynamic: false,
+                requireAsExpression: false,
+                // Keep require.resolve expressions.
+                requireResolve: false,
+                ...(config.module.parser.javascript || {}),
+                // suppress ESModulesLinkingError for exports that might be implemented in mock
+                exportsPresence: 'warn',
+              };
 
-                if (outputModule) {
-                  config.plugins.push(
-                    new rspack.BannerPlugin({
-                      banner: requireShim,
-                      // Just before minify stage, to perform tree shaking.
-                      stage:
-                        rspack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE - 1,
-                      raw: true,
-                      include: /\.(js|mjs)$/,
-                    }),
-                  );
-                }
+              config.resolve ??= {};
+              config.resolve.extensions ??= [];
+              config.resolve.extensions.push('.cjs');
 
-                config.module.parser ??= {};
-                config.module.parser.javascript = {
-                  // Keep dynamic import expressions.
-                  // eg. (modulePath) => import(modulePath)
-                  importDynamic: false,
-                  // Keep dynamic require expressions.
-                  // eg. (modulePath) => require(modulePath)
-                  requireDynamic: false,
-                  requireAsExpression: false,
-                  // Keep require.resolve expressions.
-                  requireResolve: false,
-                  ...(config.module.parser.javascript || {}),
-                  // suppress ESModulesLinkingError for exports that might be implemented in mock
-                  exportsPresence: 'warn',
-                };
+              // TypeScript allows importing TS files with `.js` extension
+              config.resolve.extensionAlias ??= {};
+              config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
+              config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
 
-                config.resolve ??= {};
-                config.resolve.extensions ??= [];
-                config.resolve.extensions.push('.cjs');
+              if (testEnvironment.name === 'node') {
+                // skip `module` field in Node.js environment.
+                // ESM module resolved by module field is not always a native ESM module
+                config.resolve.mainFields = config.resolve.mainFields?.filter(
+                  (filed) => filed !== 'module',
+                ) || ['main'];
+              }
 
-                // TypeScript allows importing TS files with `.js` extension
-                config.resolve.extensionAlias ??= {};
-                config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
-                config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
+              config.resolve.byDependency ??= {};
+              config.resolve.byDependency.commonjs ??= {};
+              // skip `module` field when commonjs require
+              // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
+              config.resolve.byDependency.commonjs.mainFields = ['main', '...'];
 
-                if (testEnvironment.name === 'node') {
-                  // skip `module` field in Node.js environment.
-                  // ESM module resolved by module field is not always a native ESM module
-                  config.resolve.mainFields = config.resolve.mainFields?.filter(
-                    (filed) => filed !== 'module',
-                  ) || ['main'];
-                }
-
-                config.resolve.byDependency ??= {};
-                config.resolve.byDependency.commonjs ??= {};
-                // skip `module` field when commonjs require
-                // By default, rspack resolves the "module" field for commonjs first, but this is not always returned synchronously in esm
-                config.resolve.byDependency.commonjs.mainFields = [
-                  'main',
-                  '...',
-                ];
-
-                config.optimization = {
-                  moduleIds: 'named',
-                  chunkIds: 'named',
-                  nodeEnv: false,
-                  ...(config.optimization || {}),
-                  // make sure setup file and test file share the runtime
-                  runtimeChunk: {
-                    name: `${name}-${RUNTIME_CHUNK_NAME}`,
-                  },
-                };
-              },
+              config.optimization = {
+                moduleIds: 'named',
+                chunkIds: 'named',
+                nodeEnv: false,
+                ...(config.optimization || {}),
+                // make sure setup file and test file share the runtime
+                runtimeChunk: {
+                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                },
+              };
             },
           },
-        );
-      },
-    );
+        },
+      );
+    });
   },
 });

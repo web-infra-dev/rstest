@@ -20,10 +20,10 @@ import {
 } from './windowedRenderer';
 
 export class StatusRenderer {
-  private rootPath: string;
-  private renderer: WindowRenderer;
+  private readonly rootPath: string;
+  private readonly renderer: WindowRenderer;
   private startTime: number | undefined = undefined;
-  private testState: RstestTestState;
+  private readonly testState: RstestTestState;
 
   constructor(
     rootPath: string,

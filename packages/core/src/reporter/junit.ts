@@ -49,8 +49,8 @@ interface JUnitReport {
 }
 
 export class JUnitReporter implements Reporter {
-  private rootPath: string;
-  private outputPath?: string;
+  private readonly rootPath: string;
+  private readonly outputPath?: string;
 
   constructor({
     rootPath,

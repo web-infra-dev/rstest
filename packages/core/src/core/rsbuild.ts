@@ -432,7 +432,7 @@ export const createRsbuildServer = async ({
     }
   > = {};
 
-  const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
+  const getEntryFiles = (manifest: ManifestData, outputPath: string) => {
     const entryFiles: Record<string, string[]> = {};
 
     const entries = Object.keys(manifest.entries);
@@ -473,7 +473,7 @@ export const createRsbuildServer = async ({
       timings: true,
     });
 
-    const entryFiles = await getEntryFiles(manifest, outputPath!);
+    const entryFiles = getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const globalSetupEntries: EntryInfo[] = [];

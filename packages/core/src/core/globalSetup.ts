@@ -19,7 +19,7 @@ function applyEnvChanges(changes: Record<string, string | undefined>) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-async function createSetupPool() {
+function createSetupPool() {
   const options: Options = {
     runtime: 'child_process',
     filename: resolve(__dirname, './globalSetupWorker.js'),
@@ -61,7 +61,7 @@ export async function runGlobalSetup({
   success: boolean;
   errors?: any[];
 }> {
-  const pool = await createSetupPool();
+  const pool = createSetupPool();
 
   const result = await pool.run({
     type: 'setup',

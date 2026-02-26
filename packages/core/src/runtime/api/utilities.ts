@@ -134,35 +134,25 @@ export const createRstestUtilities: (
       }
       return rstest;
     },
-    mock: () => {
+    // The below methods are not implemented in the core package.
+    // The actual implementation is managed by the built-in Rstest plugin.
+    mock: () => undefined,
+    mockRequire: () => undefined,
+    doMock: () => undefined,
+    doMockRequire: () => undefined,
+    unmock: () => undefined,
+    doUnmock: () => undefined,
+    importMock: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    mockRequire: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    doMock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    doMockRequire: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    unmock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    doUnmock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-    },
-    importMock: async () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
+      return Promise.resolve({} as any);
     },
     requireMock: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
       return {} as any;
     },
-    importActual: async () => {
+    importActual: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
+      return Promise.resolve({} as any);
     },
     requireActual: () => {
       // The actual implementation is managed by the built-in Rstest plugin.

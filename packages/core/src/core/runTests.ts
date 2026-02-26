@@ -172,7 +172,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
     // We still await the original promise later to surface the error.
-    browserResultPromise.catch(() => {});
+    browserResultPromise.catch(() => undefined);
   }
 
   // If there are no node tests to run, we can potentially exit early.

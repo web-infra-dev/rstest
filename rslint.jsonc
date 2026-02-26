@@ -9,7 +9,6 @@
     "plugins": ["@typescript-eslint"],
     // We should fix the corresponding code according to the following rules and gradually enable more rules.
     "rules": {
-      "@typescript-eslint/prefer-readonly": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/no-extraneous-class": "off",
       "@typescript-eslint/no-invalid-void-type": "off",
