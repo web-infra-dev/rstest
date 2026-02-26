@@ -14,6 +14,7 @@ const configSchema = v.object({
     v.union([v.literal('ast'), v.literal('runtime')]),
     'ast',
   ),
+  applyDiagnostic: v.fallback(v.boolean(), true),
 });
 
 export type ExtensionConfig = v.InferOutput<typeof configSchema>;

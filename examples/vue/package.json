@@ -7,18 +7,18 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "vue": "^3.5.26"
+    "vue": "^3.5.29"
   },
   "devDependencies": {
-    "@rsbuild/plugin-babel": "^1.0.6",
-    "@rsbuild/plugin-vue": "^1.2.2",
-    "@rsbuild/plugin-vue-jsx": "^1.1.1",
-    "@rsbuild/core": "^1.7.3",
+    "@rsbuild/core": "^2.0.0-beta.6",
+    "@rsbuild/plugin-babel": "^1.1.0",
+    "@rsbuild/plugin-vue": "^1.2.6",
+    "@rsbuild/plugin-vue-jsx": "^1.1.2",
     "@rstest/core": "workspace:*",
-    "@vue/compiler-dom": "^3.5.26",
-    "@vue/server-renderer": "^3.5.26",
+    "@vue/compiler-dom": "^3.5.29",
+    "@vue/server-renderer": "^3.5.29",
     "@vue/test-utils": "^2.4.6",
-    "happy-dom": "^20.0.11",
+    "happy-dom": "^20.7.0",
     "typescript": "^5.9.3"
   }
 }

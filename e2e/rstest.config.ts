@@ -5,7 +5,7 @@ import { defineConfig } from '@rstest/core';
  *
  * - watch: requires module isolation to test HMR/watch behavior
  * - mock: requires module isolation for proper mock reset between tests
- * - browser-mode: uses iframe as worker, completely unrelated to Node.js worker isolation
+ * - browser-mode: runs in browser contexts/pages, unrelated to Node.js worker isolation
  */
 const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
 

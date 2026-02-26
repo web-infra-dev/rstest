@@ -9,7 +9,7 @@
       "background": {
         "activeOnStart": true,
         "beginsPattern": "build started...",
-        "endsPattern": "build complete, watching for changes..."
+        "endsPattern": "build completed, watching for changes..."
       },
       "pattern": {
         "regexp": "build failed in"
@@ -27,7 +27,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"
@@ -48,7 +48,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"
@@ -71,7 +71,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"

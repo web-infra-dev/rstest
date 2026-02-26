@@ -3,12 +3,12 @@
   "name": "@rstest/tests-ssr",
   "version": "1.0.0",
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@rsbuild/plugin-react": "^1.4.2",
-    "@types/react": "^19.2.7",
+    "@rsbuild/plugin-react": "^1.4.5",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3"
   }

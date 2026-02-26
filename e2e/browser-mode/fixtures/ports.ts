@@ -14,7 +14,10 @@ export const BROWSER_PORTS = {
   'setup-files': 5190,
   snapshot: 5196,
   watch: 5186,
+  'watch-stale': 5218,
   webkit: 5198,
   viewport: 5214,
   'viewport-preset': 5216,
+  reporter: 5220,
+  'reporter-watch': 5222,
 } as const;

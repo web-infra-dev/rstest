@@ -2,15 +2,56 @@ import type {
   MaybeMockedDeep,
   RstestUtilities,
   RuntimeConfig,
+  WaitForOptions,
+  WaitUntilOptions,
   WorkerState,
 } from '../../types';
+import { getRealTimers } from '../util';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
+const DEFAULT_WAIT_TIMEOUT = 1000;
+const DEFAULT_WAIT_INTERVAL = 50;
+
+const getRealSetTimeout = () =>
+  getRealTimers().setTimeout ?? globalThis.setTimeout.bind(globalThis);
+const getRealClearTimeout = () =>
+  getRealTimers().clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
+
+const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
+  new Error(`waitFor timed out in ${timeout}ms`, { cause });
+
+const createWaitUntilTimeoutError = (timeout: number) =>
+  new Error(`waitUntil timed out in ${timeout}ms`);
+
+const normalizeWaitOptions = (
+  options?: number | WaitForOptions | WaitUntilOptions,
+) => ({
+  timeout: Math.max(
+    0,
+    typeof options === 'number'
+      ? options
+      : (options?.timeout ?? DEFAULT_WAIT_TIMEOUT),
+  ),
+  interval: Math.max(
+    0,
+    typeof options === 'number'
+      ? DEFAULT_WAIT_INTERVAL
+      : (options?.interval ?? DEFAULT_WAIT_INTERVAL),
+  ),
+});
+
 export const createRstestUtilities: (
   workerState: WorkerState,
 ) => Promise<RstestUtilities> = async (workerState) => {
+  type RuntimeEnvStore = Record<string, string | undefined>;
+  const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+  type GlobalWithRuntimeEnv = typeof globalThis & Record<symbol, unknown>;
+
   const originalEnvValues = new Map<string, string | undefined>();
   const originalGlobalValues = new Map<
     string | symbol | number,
@@ -20,6 +61,22 @@ export const createRstestUtilities: (
   let _timers: FakeTimers;
 
   let originalConfig: undefined | RuntimeConfig;
+
+  const resolveRuntimeEnv = (): RuntimeEnvStore => {
+    const globalRef = globalThis as GlobalWithRuntimeEnv;
+    const runtimeEnv = globalRef[RSTEST_ENV_SYMBOL];
+    if (runtimeEnv && typeof runtimeEnv === 'object') {
+      return runtimeEnv as RuntimeEnvStore;
+    }
+
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env;
+    }
+
+    const createdEnv: RuntimeEnvStore = {};
+    globalRef[RSTEST_ENV_SYMBOL] = createdEnv;
+    return createdEnv;
+  };
 
   const timers = () => {
     if (!_timers) {
@@ -155,26 +212,30 @@ export const createRstestUtilities: (
     },
 
     stubEnv: (name: string, value: string | undefined): RstestUtilities => {
+      const runtimeEnv = resolveRuntimeEnv();
+
       if (!originalEnvValues.has(name)) {
-        originalEnvValues.set(name, process.env[name]);
+        originalEnvValues.set(name, runtimeEnv[name]);
       }
 
-      // update process.env
+      // update runtime env store
       if (value === undefined) {
-        delete process.env[name];
+        delete runtimeEnv[name];
       } else {
-        process.env[name] = value;
+        runtimeEnv[name] = value;
       }
 
       return rstest;
     },
     unstubAllEnvs: (): RstestUtilities => {
-      // restore process.env
+      const runtimeEnv = resolveRuntimeEnv();
+
+      // restore runtime env store
       for (const [name, value] of originalEnvValues) {
         if (value === undefined) {
-          delete process.env[name];
+          delete runtimeEnv[name];
         } else {
-          process.env[name] = value;
+          runtimeEnv[name] = value;
         }
       }
 
@@ -272,6 +333,76 @@ export const createRstestUtilities: (
     clearAllTimers: () => {
       timers().clearAllTimers();
       return rstest;
+    },
+    waitFor: async (callback, options) => {
+      const { timeout, interval } = normalizeWaitOptions(options);
+      const clearTimeoutFn = getRealClearTimeout();
+
+      let timedOut = false;
+      let lastError: unknown;
+
+      const timeoutId = getRealSetTimeout()(() => {
+        timedOut = true;
+      }, timeout);
+
+      try {
+        while (true) {
+          if (timedOut) {
+            throw lastError ?? createWaitForTimeoutError(timeout);
+          }
+
+          try {
+            const value = await callback();
+            if (timedOut) {
+              throw lastError ?? createWaitForTimeoutError(timeout);
+            }
+            return value;
+          } catch (error) {
+            lastError = error;
+          }
+
+          if (timedOut) {
+            throw lastError ?? createWaitForTimeoutError(timeout);
+          }
+
+          await sleep(interval);
+        }
+      } finally {
+        clearTimeoutFn(timeoutId);
+      }
+    },
+    waitUntil: async (callback, options) => {
+      const { timeout, interval } = normalizeWaitOptions(options);
+      const clearTimeoutFn = getRealClearTimeout();
+
+      let timedOut = false;
+      const timeoutId = getRealSetTimeout()(() => {
+        timedOut = true;
+      }, timeout);
+
+      try {
+        while (true) {
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+
+          const value = await callback();
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+          if (value) {
+            return value;
+          }
+
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+
+          await sleep(interval);
+        }
+      } finally {
+        clearTimeoutFn(timeoutId);
+      }
     },
   };
 

@@ -45,6 +45,26 @@ describe('Index', () => {
 });
 ```
 
+## Available global APIs
+
+When `globals` is enabled, Rstest injects the following globals:
+
+- `test`
+- `describe`
+- `it`
+- `expect`
+- `assert`
+- `beforeAll`
+- `afterAll`
+- `beforeEach`
+- `afterEach`
+- `onTestFinished`
+- `onTestFailed`
+- `rstest`
+- `rs`
+
+`rstest` and `rs` are aliases with the same runtime utilities.
+
 ### TypeScript support
 
 To enable TypeScript to properly recognize the global APIs, add the `@rstest/core/globals` type declaration in your `tsconfig.json`:

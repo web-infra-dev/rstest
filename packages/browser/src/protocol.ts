@@ -99,10 +99,12 @@ export type BrowserClientMessage =
       payload: { testPath: string; project: string; tests: Test[] };
     }
   | { type: 'collect-complete' }
-  // Snapshot RPC requests (from runner iframe to container)
+  // Unified RPC envelope for all runner -> container/host capability calls.
+  // Snapshot already uses this path via namespace "snapshot". Future PR #948
+  // capabilities can add new namespaces instead of adding new message types.
   | {
-      type: 'snapshot-rpc-request';
-      payload: SnapshotRpcRequest;
+      type: 'dispatch-rpc-request';
+      payload: BrowserDispatchRequest;
     };
 
 /**
@@ -132,10 +134,42 @@ export type SnapshotRpcRequest =
     };
 
 /**
- * Snapshot RPC response from container to runner iframe.
+ * Transport-agnostic envelope used by host routing.
+ * `namespace + method + args + target` describes an operation independent of
+ * the underlying message channel, and `runToken` provides run-level isolation.
  */
-export type SnapshotRpcResponse = {
-  id: string;
+export type BrowserDispatchRequest = {
+  requestId: string;
+  // Optional so headed/container paths can adopt the same envelope even when
+  // run-token isolation is only enforced in headless scheduling today.
+  runToken?: number;
+  namespace: string;
+  method: string;
+  args?: unknown;
+  target?: {
+    testFile?: string;
+    sessionId?: string;
+    projectName?: string;
+  };
+};
+
+/**
+ * Dispatch response envelope.
+ * `stale: true` signals a safe drop from an older run generation, not a failure.
+ */
+export type BrowserDispatchResponse = {
+  requestId: string;
+  runToken?: number;
   result?: unknown;
   error?: string;
+  stale?: boolean;
 };
+
+export type BrowserDispatchResponseEnvelope = {
+  type: '__rstest_dispatch_response__';
+  payload: BrowserDispatchResponse;
+};
+
+export type BrowserDispatchHandler = (
+  request: BrowserDispatchRequest,
+) => Promise<unknown>;

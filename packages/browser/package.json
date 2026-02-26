@@ -42,13 +42,13 @@
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
     "convert-source-map": "^2.0.0",
-    "open-editor": "^4.0.0",
+    "open-editor": "^4.1.1",
     "pathe": "^2.0.3",
     "sirv": "^2.0.4",
-    "ws": "^8.18.3"
+    "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@rslib/core": "^0.19.0",
+    "@rslib/core": "^0.19.6",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
@@ -59,7 +59,7 @@
     "birpc": "^4.0.0",
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.3",
-    "playwright": "^1.49.1"
+    "playwright": "^1.58.2"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",
@@ -71,7 +71,7 @@
     }
   },
   "engines": {
-    "node": ">=18.12.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "publishConfig": {
     "access": "public",

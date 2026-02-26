@@ -2,7 +2,7 @@ import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
 describe('browser mode - isolation', () => {
-  it('should isolate test files in separate iframes', async () => {
+  it('should isolate test files with separate browser contexts', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('isolation');
 
     await expectExecSuccess();

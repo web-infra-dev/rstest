@@ -45,6 +45,26 @@ describe('Index', () => {
 });
 ```
 
+## 可用的全局 API
+
+启用 `globals` 后，Rstest 会注入以下全局 API：
+
+- `test`
+- `describe`
+- `it`
+- `expect`
+- `assert`
+- `beforeAll`
+- `afterAll`
+- `beforeEach`
+- `afterEach`
+- `onTestFinished`
+- `onTestFailed`
+- `rstest`
+- `rs`
+
+`rstest` 和 `rs` 是等价别名，提供相同的 runtime utility。
+
 ### 类型支持
 
 为了让 TypeScript 正确识别全局 API，在 `tsconfig.json` 中添加 `@rstest/core/globals` 类型声明：

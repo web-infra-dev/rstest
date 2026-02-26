@@ -20,6 +20,7 @@ import {
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
   BrowserHostConfig,
   BrowserProjectRuntime,
 } from '../protocol';
@@ -35,10 +36,21 @@ declare global {
   interface Window {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
     __rstest_dispatch__?: (message: BrowserClientMessage) => void;
+    __rstest_dispatch_rpc__?: (
+      request: BrowserDispatchRequest,
+    ) => Promise<unknown>;
   }
   // eslint-disable-next-line no-var
   var __coverage__: Record<string, unknown> | undefined;
 }
+
+type RunnerLifecycleMethod =
+  | 'file-ready'
+  | 'suite-start'
+  | 'suite-result'
+  | 'case-start';
+
+let runnerDispatchRequestId = 0;
 
 /**
  * Debug logger for browser client.
@@ -50,10 +62,13 @@ const debugLog = (...args: unknown[]): void => {
   }
 };
 
-type GlobalWithProcess = typeof globalThis & {
-  global?: typeof globalThis;
-  process?: NodeJS.Process;
-};
+type RuntimeEnvStore = Record<string, string | undefined>;
+const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+
+type GlobalWithRuntimeEnv = typeof globalThis &
+  Record<symbol, unknown> & {
+    global?: typeof globalThis;
+  };
 
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
@@ -82,36 +97,34 @@ const restoreRuntimeConfig = (
   };
 };
 
-const ensureProcessEnv = (env: RuntimeConfig['env'] | undefined): void => {
-  const globalRef = globalThis as GlobalWithProcess;
+const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
+  const globalRef = globalThis as GlobalWithRuntimeEnv;
   if (!globalRef.global) {
     globalRef.global = globalRef;
   }
 
-  if (!globalRef.process) {
-    const processShim: Partial<NodeJS.Process> & {
-      env: Record<string, string | undefined>;
-    } = {
-      env: {},
-      argv: [],
-      version: 'browser',
-      cwd: () => '/',
-      platform: 'linux',
-      nextTick: (cb: (...args: unknown[]) => void, ...args: unknown[]) =>
-        queueMicrotask(() => cb(...args)),
-    };
-
-    globalRef.process = processShim as unknown as NodeJS.Process;
+  const existingEnv = globalRef[RSTEST_ENV_SYMBOL];
+  let runtimeEnv: RuntimeEnvStore;
+  if (existingEnv && typeof existingEnv === 'object') {
+    runtimeEnv = existingEnv as RuntimeEnvStore;
+  } else {
+    runtimeEnv = {};
+    globalRef[RSTEST_ENV_SYMBOL] = runtimeEnv;
   }
-
-  globalRef.process.env ??= {};
 
   if (env) {
     for (const [key, value] of Object.entries(env)) {
-      if (value === undefined) {
-        delete globalRef.process.env[key];
+      const normalizedValue =
+        typeof value === 'string'
+          ? value
+          : value == null
+            ? undefined
+            : String(value);
+
+      if (normalizedValue === undefined) {
+        delete runtimeEnv[key];
       } else {
-        globalRef.process.env[key] = value;
+        runtimeEnv[key] = normalizedValue;
       }
     }
   }
@@ -214,6 +227,38 @@ const send = (message: BrowserClientMessage): void => {
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
   window.__rstest_dispatch__?.(message);
+};
+
+const dispatchRunnerLifecycle = (
+  method: RunnerLifecycleMethod,
+  payload: unknown,
+): void => {
+  const request: BrowserDispatchRequest = {
+    requestId: `runner-lifecycle-${++runnerDispatchRequestId}`,
+    namespace: 'runner',
+    method,
+    args: payload,
+  };
+
+  if (window.parent === window) {
+    const dispatchBridge = window.__rstest_dispatch_rpc__;
+    if (!dispatchBridge) {
+      debugLog(
+        '[Runner] Missing dispatch bridge for lifecycle method:',
+        method,
+      );
+      return;
+    }
+    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+      debugLog('[Runner] Failed to dispatch lifecycle method:', method, error);
+    });
+    return;
+  }
+
+  send({
+    type: 'dispatch-rpc-request',
+    payload: request,
+  });
 };
 
 /** Timeout for waiting for browser config from container (30 seconds) */
@@ -404,7 +449,7 @@ const run = async () => {
   }
 
   const runtimeConfig = restoreRuntimeConfig(projectRuntime.runtimeConfig);
-  ensureProcessEnv(runtimeConfig.env);
+  ensureRuntimeEnv(runtimeConfig.env);
 
   // Get this project's setup loaders and test context
   const currentSetupLoaders =
@@ -556,6 +601,18 @@ const run = async () => {
     let failedTestsCount = 0;
 
     const runnerHooks: RunnerHooks = {
+      onTestFileReady: async (test) => {
+        dispatchRunnerLifecycle('file-ready', test);
+      },
+      onTestSuiteStart: async (test) => {
+        dispatchRunnerLifecycle('suite-start', test);
+      },
+      onTestSuiteResult: async (result) => {
+        dispatchRunnerLifecycle('suite-result', result);
+      },
+      onTestCaseStart: async (test) => {
+        dispatchRunnerLifecycle('case-start', test);
+      },
       onTestCaseResult: async (result) => {
         if (result.status === 'fail') {
           failedTestsCount++;
