@@ -22,6 +22,12 @@ const getRealClearTimeout = () =>
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
 
+const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
+  new Error(`waitFor timed out in ${timeout}ms`, { cause });
+
+const createWaitUntilTimeoutError = (timeout: number) =>
+  new Error(`waitUntil timed out in ${timeout}ms`);
+
 const normalizeWaitOptions = (
   options?: number | WaitForOptions | WaitUntilOptions,
 ) => ({
@@ -317,14 +323,22 @@ export const createRstestUtilities: (
 
       try {
         while (true) {
+          if (timedOut) {
+            throw lastError ?? createWaitForTimeoutError(timeout);
+          }
+
           try {
-            return await callback();
+            const value = await callback();
+            if (timedOut) {
+              throw lastError ?? createWaitForTimeoutError(timeout);
+            }
+            return value;
           } catch (error) {
             lastError = error;
           }
 
           if (timedOut) {
-            throw lastError;
+            throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
           await sleep(interval);
@@ -344,13 +358,20 @@ export const createRstestUtilities: (
 
       try {
         while (true) {
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+
           const value = await callback();
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
           if (value) {
             return value;
           }
 
           if (timedOut) {
-            throw new Error(`waitUntil timed out in ${timeout}ms`);
+            throw createWaitUntilTimeoutError(timeout);
           }
 
           await sleep(interval);

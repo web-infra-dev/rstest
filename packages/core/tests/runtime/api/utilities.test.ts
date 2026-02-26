@@ -2,6 +2,9 @@ import { createRstestUtilities } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
 import type { WorkerState } from '../../../src/types';
 
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 function createWorkerState(): WorkerState {
   return {
     runtimeConfig: {
@@ -63,6 +66,17 @@ describe('rstest utilities wait APIs', () => {
     expect(attempts).toBeGreaterThan(1);
   });
 
+  it('waitFor rejects when callback succeeds after timeout', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    await expect(
+      rs.waitFor(async () => {
+        await sleep(30);
+        return 'late-success';
+      }, 10),
+    ).rejects.toThrow('waitFor timed out in 10ms');
+  });
+
   it('waitUntil retries until callback returns a truthy value', async () => {
     const rs = await createRstestUtilities(createWorkerState());
 
@@ -85,6 +99,17 @@ describe('rstest utilities wait APIs', () => {
     await expect(rs.waitUntil(() => false, 20)).rejects.toThrow(
       'waitUntil timed out in 20ms',
     );
+  });
+
+  it('waitUntil rejects truthy values returned after timeout', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    await expect(
+      rs.waitUntil(async () => {
+        await sleep(30);
+        return 'late-ready';
+      }, 10),
+    ).rejects.toThrow('waitUntil timed out in 10ms');
   });
 
   it('wait APIs still work when fake timers are enabled', async () => {
