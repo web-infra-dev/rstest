@@ -1,11 +1,17 @@
-import {
-  mergeRsbuildConfig,
-  type RsbuildConfig,
-  type RsbuildPlugin,
-} from '@rsbuild/core';
+import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
 
-export interface ConvertRsbuildToRstestConfigOptions {
+export interface WithRsbuildConfigOptions {
+  /**
+   * `cwd` passed to loadConfig of Rsbuild
+   * @default process.cwd()
+   */
+  cwd?: string;
+  /**
+   * Path to rsbuild config file
+   * @default './rsbuild.config.ts'
+   */
+  configPath?: string;
   /**
    * The environment name in `environments` field to use, will be merged with the common config.
    * Set to a string to use the environment config with matching name.
@@ -16,17 +22,17 @@ export interface ConvertRsbuildToRstestConfigOptions {
    * Modify rsbuild config before converting to rstest config
    */
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
-  /**
-   * Rsbuild config to convert
-   */
-  rsbuildConfig: RsbuildConfig;
 }
 
 export function convertRsbuildToRstestConfig({
   environmentName,
   rsbuildConfig: rawRsbuildConfig,
   modifyRsbuildConfig,
-}: ConvertRsbuildToRstestConfigOptions): ExtendConfig {
+}: {
+  environmentName?: string;
+  rsbuildConfig: RsbuildConfig;
+  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
+}): ExtendConfig {
   const { environments, ...rawBuildConfig } = rawRsbuildConfig;
 
   const environmentConfig = environmentName
@@ -49,17 +55,10 @@ export function convertRsbuildToRstestConfig({
   const { decorators, define, include, exclude, tsconfigPath } =
     finalBuildConfig.source || {};
 
-  // remove some plugins that are not compatible with rstest, such as type-check plugin which will cause issues when used in rstest
-  const rstestRemovePlugin: RsbuildPlugin = {
-    name: 'remove-useless-plugins',
-    remove: ['rsbuild:type-check'],
-    setup: () => {},
-  };
-
   return {
     root: finalBuildConfig.root,
     name: environmentName,
-    plugins: [...(finalBuildConfig.plugins || []), rstestRemovePlugin],
+    plugins: finalBuildConfig.plugins,
     source: {
       decorators,
       define,

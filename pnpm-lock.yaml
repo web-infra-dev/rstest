@@ -721,10 +721,6 @@ importers:
         version: 5.9.3
 
   packages/adapter-rsbuild:
-    dependencies:
-      '@rstest/rsbuild-config-bridge':
-        specifier: workspace:*
-        version: link:../rsbuild-config-bridge
     devDependencies:
       '@rsbuild/core':
         specifier: ^2.0.0-beta.6
@@ -1075,21 +1071,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  packages/rsbuild-config-bridge:
-    devDependencies:
-      '@rsbuild/core':
-        specifier: ^2.0.0-beta.6
-        version: 2.0.0-beta.6(core-js@3.47.0)
-      '@rslib/core':
-        specifier: ^0.19.6
-        version: 0.19.6(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../core
-      '@rstest/tsconfig':
-        specifier: workspace:*
-        version: link:../../scripts/tsconfig
 
   packages/vscode:
     devDependencies:

@@ -1,6 +1,6 @@
 import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfigFn } from '@rstest/core';
-import { convertRsbuildToRstestConfig } from '@rstest/rsbuild-config-bridge';
+import { convertRsbuildToRstestConfig } from './toRstestConfig';
 
 export interface WithRsbuildConfigOptions {
   /**
@@ -55,3 +55,5 @@ export function withRsbuildConfig(
     return rstestConfig;
   };
 }
+
+export { convertRsbuildToRstestConfig };

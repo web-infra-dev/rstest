@@ -26,9 +26,6 @@
     "configuration"
   ],
   "license": "MIT",
-  "dependencies": {
-    "@rstest/rsbuild-config-bridge": "workspace:*"
-  },
   "peerDependencies": {
     "@rsbuild/core": "*",
     "@rstest/core": ">=0.7.7"
