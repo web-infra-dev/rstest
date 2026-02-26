@@ -24,7 +24,7 @@ export function getWindowKeys(
 }
 
 function isClassLike(name: string) {
-  return name[0] === name[0]?.toUpperCase();
+  return name[0] && name.startsWith(name[0].toUpperCase());
 }
 
 export function installGlobal(

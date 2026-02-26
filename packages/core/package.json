@@ -60,21 +60,21 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "^2.0.0-beta.4",
+    "@rsbuild/core": "^2.0.0-beta.6",
     "@types/chai": "^5.2.3",
     "tinypool": "^1.1.1"
   },
   "devDependencies": {
-    "@babel/code-frame": "^7.27.1",
-    "@clack/prompts": "^0.10.1",
+    "@babel/code-frame": "^7.29.0",
+    "@clack/prompts": "^0.11.0",
     "@jridgewell/trace-mapping": "0.3.31",
-    "@microsoft/api-extractor": "^7.55.2",
+    "@microsoft/api-extractor": "^7.57.6",
     "@rsbuild/plugin-node-polyfill": "^1.4.4",
-    "@rslib/core": "^0.19.0",
+    "@rslib/core": "^0.19.6",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.1.0",
-    "@types/babel__code-frame": "^7.0.6",
+    "@types/babel__code-frame": "^7.27.0",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/istanbul-reports": "^3.0.4",
@@ -88,10 +88,10 @@
     "cac": "^6.7.14",
     "chai": "^5.3.3",
     "chokidar": "^4.0.3",
-    "happy-dom": "^20.0.11",
+    "happy-dom": "^20.7.0",
     "jest-diff": "^30.2.0",
     "jsdom": "^26.1.0",
-    "memfs": "^4.51.1",
+    "memfs": "^4.56.10",
     "package-manager-detector": "^1.6.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
@@ -106,7 +106,7 @@
     "tinyspy": "^4.0.4",
     "url-extras": "^0.1.0",
     "webpack-license-plugin": "^4.5.1",
-    "webpack": "^5.95.0"
+    "webpack": "^5.105.2"
   },
   "peerDependencies": {
     "happy-dom": "*",
