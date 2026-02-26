@@ -139,3 +139,75 @@ Retrieves the current runtime configuration for the test file. Useful for inspec
 const config = rstest.getConfig();
 console.log(config);
 ```
+
+## rstest.waitFor
+
+- **Alias:** `rs.waitFor`
+
+- **Type:**
+
+```ts
+type WaitForOptions = {
+  timeout?: number; // default: 1000
+  interval?: number; // default: 50
+};
+
+type WaitFor = <T>(
+  callback: () => T | Promise<T>,
+  options?: number | WaitForOptions,
+) => Promise<T>;
+```
+
+Retries `callback` until it succeeds (does not throw) or timeout is reached.
+
+- If `options` is a number, it is treated as `timeout`.
+- If timeout is reached, it throws the last error from the callback.
+
+**Example:**
+
+```ts
+await rs.waitFor(
+  async () => {
+    const res = await fetch(url);
+    expect(res.ok).toBe(true);
+  },
+  { timeout: 30_000, interval: 1_000 },
+);
+```
+
+## rstest.waitUntil
+
+- **Alias:** `rs.waitUntil`
+
+- **Type:**
+
+```ts
+type WaitUntilOptions = {
+  timeout?: number; // default: 1000
+  interval?: number; // default: 50
+};
+
+type WaitUntil = <T>(
+  callback: () => T | Promise<T>,
+  options?: number | WaitUntilOptions,
+) => Promise<T>;
+```
+
+Calls `callback` repeatedly only while it returns `undefined` (no value) or any falsy value.
+It resolves when the callback returns a truthy value.
+
+- If `options` is a number, it is treated as `timeout`.
+- If the callback throws, execution is interrupted immediately and the error is thrown.
+- If timeout is reached, it throws a timeout error.
+
+**Example:**
+
+```ts
+const serverReady = await rs.waitUntil(
+  async () => {
+    const status = await getServerStatus();
+    return status.ready ? status : null;
+  },
+  { timeout: 10_000, interval: 200 },
+);
+```

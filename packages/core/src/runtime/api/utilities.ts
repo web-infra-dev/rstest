@@ -2,11 +2,48 @@ import type {
   MaybeMockedDeep,
   RstestUtilities,
   RuntimeConfig,
+  WaitForOptions,
+  WaitUntilOptions,
   WorkerState,
 } from '../../types';
+import { getRealTimers } from '../util';
 import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
+
+const DEFAULT_WAIT_TIMEOUT = 1000;
+const DEFAULT_WAIT_INTERVAL = 50;
+
+const getRealSetTimeout = () =>
+  getRealTimers().setTimeout ?? globalThis.setTimeout.bind(globalThis);
+const getRealClearTimeout = () =>
+  getRealTimers().clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
+
+const createWaitForTimeoutError = (timeout: number, cause?: unknown) =>
+  new Error(`waitFor timed out in ${timeout}ms`, { cause });
+
+const createWaitUntilTimeoutError = (timeout: number) =>
+  new Error(`waitUntil timed out in ${timeout}ms`);
+
+const normalizeWaitOptions = (
+  options?: number | WaitForOptions | WaitUntilOptions,
+) => ({
+  timeout: Math.max(
+    0,
+    typeof options === 'number'
+      ? options
+      : (options?.timeout ?? DEFAULT_WAIT_TIMEOUT),
+  ),
+  interval: Math.max(
+    0,
+    typeof options === 'number'
+      ? DEFAULT_WAIT_INTERVAL
+      : (options?.interval ?? DEFAULT_WAIT_INTERVAL),
+  ),
+});
 
 export const createRstestUtilities: (
   workerState: WorkerState,
@@ -296,6 +333,76 @@ export const createRstestUtilities: (
     clearAllTimers: () => {
       timers().clearAllTimers();
       return rstest;
+    },
+    waitFor: async (callback, options) => {
+      const { timeout, interval } = normalizeWaitOptions(options);
+      const clearTimeoutFn = getRealClearTimeout();
+
+      let timedOut = false;
+      let lastError: unknown;
+
+      const timeoutId = getRealSetTimeout()(() => {
+        timedOut = true;
+      }, timeout);
+
+      try {
+        while (true) {
+          if (timedOut) {
+            throw lastError ?? createWaitForTimeoutError(timeout);
+          }
+
+          try {
+            const value = await callback();
+            if (timedOut) {
+              throw lastError ?? createWaitForTimeoutError(timeout);
+            }
+            return value;
+          } catch (error) {
+            lastError = error;
+          }
+
+          if (timedOut) {
+            throw lastError ?? createWaitForTimeoutError(timeout);
+          }
+
+          await sleep(interval);
+        }
+      } finally {
+        clearTimeoutFn(timeoutId);
+      }
+    },
+    waitUntil: async (callback, options) => {
+      const { timeout, interval } = normalizeWaitOptions(options);
+      const clearTimeoutFn = getRealClearTimeout();
+
+      let timedOut = false;
+      const timeoutId = getRealSetTimeout()(() => {
+        timedOut = true;
+      }, timeout);
+
+      try {
+        while (true) {
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+
+          const value = await callback();
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+          if (value) {
+            return value;
+          }
+
+          if (timedOut) {
+            throw createWaitUntilTimeoutError(timeout);
+          }
+
+          await sleep(interval);
+        }
+      } finally {
+        clearTimeoutFn(timeoutId);
+      }
     },
   };
 

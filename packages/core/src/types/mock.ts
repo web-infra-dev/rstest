@@ -174,6 +174,18 @@ export interface Mock<T extends FunctionLike = FunctionLike>
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
+export type WaitForCallback<T> = () => MaybePromise<T>;
+
+export interface WaitForOptions {
+  timeout?: number;
+  interval?: number;
+}
+
+export interface WaitUntilOptions {
+  timeout?: number;
+  interval?: number;
+}
+
 /**
  * Options for mockObject
  */
@@ -539,4 +551,23 @@ export interface RstestUtilities {
    * Removes all timers that are scheduled to run.
    */
   clearAllTimers: () => RstestUtilities;
+
+  /**
+   * Retry callback until it succeeds (doesn't throw) or timeout is reached.
+   * If timeout is reached, throws the last error from the callback.
+   */
+  waitFor: <T>(
+    callback: WaitForCallback<T>,
+    options?: number | WaitForOptions,
+  ) => Promise<T>;
+
+  /**
+   * Retry callback until it returns a truthy value or timeout is reached.
+   * If callback throws, it interrupts immediately and throws that error.
+   * If timeout is reached, throws an error.
+   */
+  waitUntil: <T>(
+    callback: () => MaybePromise<T>,
+    options?: number | WaitUntilOptions,
+  ) => Promise<T>;
 }
