@@ -29,14 +29,6 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 从正则表达式到模块名称或模块名称数组的映射，允许用单个模块替换多个模块。这类似于 Jest 的 [moduleNameMapper](https://jestjs.io/zh-Hans/docs/configuration#modulenamemapper-objectstring-string--arraystring) 配置。
 
-这在以下场景中非常有用：
-
-- 在测试中 mock 模块
-- 重定向模块路径
-- 替换图片或样式等静态资源
-
-### 基本用法
-
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -47,23 +39,8 @@ export default defineConfig({
       '^module-a$': '<rootDir>/mocks/module-a.ts',
       // 使用捕获组进行匹配
       '^@utils/(.*)$': '<rootDir>/src/utils/$1',
-      // 存根 CSS 导入
+      // 替换 CSS 导入
       '\\.(css|less|scss)$': 'identity-obj-proxy',
-    },
-  },
-});
-```
-
-### 示例：使用捕获组进行路径别名
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  resolve: {
-    moduleNameMapper: {
-      // @components/Button -> ./src/components/Button
-      '^@components/(.*)$': '<rootDir>/src/components/$1',
     },
   },
 });

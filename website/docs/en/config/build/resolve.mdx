@@ -29,14 +29,6 @@ Automatically resolve file extensions when importing modules. This means you can
 
 A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module. This is similar to Jest's [moduleNameMapper](https://jestjs.io/docs/configuration#modulenamemapper-objectstring-string--arraystring) configuration.
 
-This is useful for:
-
-- Mocking modules in tests
-- Redirecting module paths
-- Stubbing out static assets like images or styles
-
-### Basic usage
-
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -49,21 +41,6 @@ export default defineConfig({
       '^@utils/(.*)$': '<rootDir>/src/utils/$1',
       // Stub CSS imports
       '\\.(css|less|scss)$': 'identity-obj-proxy',
-    },
-  },
-});
-```
-
-### Example: Path aliasing with capture groups
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  resolve: {
-    moduleNameMapper: {
-      // @components/Button -> ./src/components/Button
-      '^@components/(.*)$': '<rootDir>/src/components/$1',
     },
   },
 });
