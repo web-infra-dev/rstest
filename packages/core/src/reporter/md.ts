@@ -23,7 +23,8 @@
  *     passedTests, skippedTests, todoTests), durationMs, snapshot.
  *
  * - Tests
- *   - Printed only when `status === 'pass' && focusedRun === true`.
+ *   - Printed when `options.testLists === 'always'`, or when
+ *     `status === 'pass' && focusedRun === true`.
  *   - Contains `### Passed` and `### Skipped` lists; `### Todo` is printed only
  *     when `todoTests.length > 0`.
  *   - Lists are truncated to `DEFAULT_TEST_LIST_MAX_ITEMS` and may include a
@@ -34,7 +35,8 @@
  *   - When there are no failures (`failures.length === 0`):
  *     - Prints `No test failures reported.`
  *     - Additionally prints `Note: all tests passed. Lists omitted for brevity.`
- *       only when `status === 'pass' && focusedRun === false`.
+ *       only when `status === 'pass' && focusedRun === false` and
+ *       `options.testLists !== 'always'`.
  *   - When failures exist:
  *     - If truncated (`failures.length > options.failures.max`):
  *       - Prints truncation note with counts.
@@ -130,10 +132,13 @@ type ErrorsResolved = {
   unhandled: boolean;
 };
 
+type TestListsMode = NonNullable<MdReporterOptions['testLists']>;
+
 type ResolvedOptions = {
   preset: NonNullable<MdReporterOptions['preset']>;
   header: HeaderOptions;
   reproduction: false | 'file' | 'file+name';
+  testLists: TestListsMode;
   failures: FailuresOptions;
   codeFrame: CodeFrameResolved;
   stack: StackMode;
@@ -181,6 +186,7 @@ const defaultOptions: ResolvedOptions = {
     env: true,
   },
   reproduction: 'file+name',
+  testLists: 'auto',
   failures: {
     max: 50,
   },
@@ -328,6 +334,7 @@ export const resolveOptions = (
     preset: presetName,
     header: resolveHeader(userOptions.header),
     reproduction: resolveReproduction(userOptions.reproduction),
+    testLists: userOptions.testLists ?? defaultOptions.testLists,
     failures: resolveFailures(userOptions.failures, preset),
     codeFrame: resolveCodeFrame(userOptions.codeFrame, preset),
     stack: resolveStack(userOptions.stack, preset),
@@ -1062,7 +1069,10 @@ export class MdReporter implements Reporter {
     pushHeading(lines, 2, 'Summary');
     pushFencedBlock(lines, 'json', stringifyJson(summaryPayload));
 
-    if (status === 'pass' && focusedRun) {
+    if (
+      this.options.testLists === 'always' ||
+      (status === 'pass' && focusedRun)
+    ) {
       this.renderTestsSection(lines, {
         passed: passedTests,
         skipped: skippedTests,
@@ -1074,7 +1084,11 @@ export class MdReporter implements Reporter {
 
     if (!failures.length) {
       lines.push('No test failures reported.');
-      if (status === 'pass' && !focusedRun) {
+      if (
+        status === 'pass' &&
+        !focusedRun &&
+        this.options.testLists !== 'always'
+      ) {
         ensureSingleBlankLine(lines);
         lines.push('Note: all tests passed. Lists omitted for brevity.');
       }
