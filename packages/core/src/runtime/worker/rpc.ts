@@ -1,4 +1,3 @@
-import v8 from 'node:v8';
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
 import type { RuntimeRPC, ServerRPC } from '../../types';
@@ -15,15 +14,11 @@ export type WorkerRpcOptions = Pick<
 >;
 
 export function createForksRpcOptions({
-  nodeV8 = v8,
   dispose = [],
 }: {
-  nodeV8?: typeof v8;
   dispose?: (() => void)[];
 }): WorkerRpcOptions {
   return {
-    serialize: nodeV8.serialize,
-    deserialize: (v) => nodeV8.deserialize(Buffer.from(v)),
     post(v) {
       processSend(v);
     },

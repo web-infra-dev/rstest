@@ -33,6 +33,7 @@ function createSetupPool() {
     minThreads: 1,
     concurrentTasksPerWorker: 1,
     isolateWorkers: false,
+    serialization: 'advanced',
     env: {
       NODE_ENV: 'test',
       ...getForceColorEnv(),

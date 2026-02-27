@@ -8,7 +8,7 @@ import type {
   Location,
   ProjectContext,
   RstestContext,
-  Test,
+  TestInfo,
 } from '../types';
 import {
   bgColor,
@@ -348,7 +348,7 @@ export async function listTests(
     type: 'file' | 'suite' | 'case';
   }[] = [];
 
-  const traverseTests = (test: Test) => {
+  const traverseTests = (test: TestInfo) => {
     if (['skip', 'todo'].includes(test.runMode)) {
       return;
     }

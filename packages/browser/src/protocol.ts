@@ -1,8 +1,8 @@
 import type { DevicePreset } from '@rstest/core/browser';
 import type {
   RuntimeConfig,
-  Test,
   TestFileResult,
+  TestInfo,
   TestResult,
 } from '@rstest/core/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
@@ -96,7 +96,7 @@ export type BrowserClientMessage =
   // Collect mode messages
   | {
       type: 'collect-result';
-      payload: { testPath: string; project: string; tests: Test[] };
+      payload: { testPath: string; project: string; tests: TestInfo[] };
     }
   | { type: 'collect-complete' }
   // Unified RPC envelope for all runner -> container/host capability calls.

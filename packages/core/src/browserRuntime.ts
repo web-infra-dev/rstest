@@ -20,6 +20,7 @@ export type {
   RuntimeConfig,
   Test,
   TestFileResult,
+  TestInfo,
   TestResult,
   WorkerState,
 } from './types';
