@@ -92,14 +92,14 @@ export const pluginModuleNameMapper: (context: RstestContext) => RsbuildPlugin =
         );
 
         if (!project) {
-          return;
+          return config;
         }
 
         const moduleNameMapper =
           project.normalizedConfig.resolve?.moduleNameMapper;
 
         if (!moduleNameMapper || Object.keys(moduleNameMapper).length === 0) {
-          return;
+          return config;
         }
 
         config.plugins ??= [];
