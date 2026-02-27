@@ -143,6 +143,7 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'resolve.aliasStrategy',
       'resolve.alias',
+      'resolve.moduleNameMapper',
       'resolve.dedupe',
       'resolve.extensions',
     ],

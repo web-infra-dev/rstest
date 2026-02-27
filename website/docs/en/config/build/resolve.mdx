@@ -21,3 +21,31 @@ Force Rstest to resolve the specified packages from project root, which is usefu
 ## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
 
 Automatically resolve file extensions when importing modules. This means you can import files without explicitly writing their extensions.
+
+## resolve.moduleNameMapper
+
+- **Type:** `Record<string, string | string[]>`
+- **Default:** `undefined`
+
+A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module. This is similar to Jest's [moduleNameMapper](https://jestjs.io/docs/configuration#modulenamemapper-objectstring-string--arraystring) configuration.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    moduleNameMapper: {
+      // Map exact module name
+      '^module-a$': '<rootDir>/mocks/module-a.ts',
+      // Map with capture groups
+      '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+      // Stub CSS imports
+      '\\.(css|less|scss)$': 'identity-obj-proxy',
+    },
+  },
+});
+```
+
+:::tip
+For simple path aliasing, consider using TypeScript's `paths` or [resolve.alias](#resolvealias) in `tsconfig.json` instead, which provides better performance and IDE support.
+:::

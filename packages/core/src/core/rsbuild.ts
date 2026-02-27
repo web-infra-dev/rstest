@@ -23,6 +23,7 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import { pluginModuleNameMapper } from './plugins/moduleNameMapper';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -122,6 +123,7 @@ export const prepareRsbuild = async (
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
+        pluginModuleNameMapper(context),
         !isolate
           ? pluginCacheControl(
               Object.values({

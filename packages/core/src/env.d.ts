@@ -9,11 +9,21 @@ declare const PLAYWRIGHT_VERSION: string;
  * The actual types come from the package when installed.
  */
 declare module '@rstest/browser' {
-  import type { ListCommandResult, RstestContext } from './types';
+  import type {
+    ListCommandResult,
+    RstestContext,
+    BrowserTestRunOptions,
+  } from './types';
 
   export function validateBrowserConfig(context: RstestContext): void;
-  export function runBrowserTests(context: RstestContext): Promise<void>;
-  export function listBrowserTests(context: RstestContext): Promise<{
+  export function runBrowserTests(
+    context: RstestContext,
+    options: BrowserTestRunOptions,
+  ): Promise<void>;
+  export function listBrowserTests(
+    context: RstestContext,
+    options: BrowserTestRunOptions,
+  ): Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
   }>;

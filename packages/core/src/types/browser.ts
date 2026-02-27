@@ -1,3 +1,4 @@
+import type { RsbuildPlugin } from '@rsbuild/core';
 import type { TestFileResult, TestResult } from './testSuite';
 
 /**
@@ -15,6 +16,9 @@ export interface BrowserTestRunOptions {
    * Key is project environmentName.
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  builtinRsbuildPlugins: {
+    pluginModuleNameMapper: RsbuildPlugin;
+  };
 }
 
 /**

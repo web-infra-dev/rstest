@@ -439,7 +439,18 @@ export interface RstestConfig {
     'cssModules' | 'externals' | 'cleanDistPath' | 'module'
   >;
 
-  resolve?: RsbuildConfig['resolve'];
+  resolve?: RsbuildConfig['resolve'] & {
+    /**
+     * A map from regular expressions to module names or to arrays of module names
+     * that allow to stub out resources with a single module.
+     *
+     * This is similar to Jest's `moduleNameMapper` configuration.
+     * Keys are regex patterns and values are replacement paths.
+     * Use `$1`, `$2`, etc. to reference capture groups.
+     * Use `<rootDir>` as a string token to reference the root directory.
+     */
+    moduleNameMapper?: Record<string, string | string[]>;
+  };
 
   tools?: Pick<
     NonNullable<RsbuildConfig['tools']>,

@@ -16,13 +16,11 @@ export interface BrowserModule {
   validateBrowserConfig: (context: unknown) => void;
   runBrowserTests: (
     context: unknown,
-    options?: BrowserTestRunOptions,
+    options: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (
     context: unknown,
-    options?: {
-      shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    },
+    options: BrowserTestRunOptions,
   ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
