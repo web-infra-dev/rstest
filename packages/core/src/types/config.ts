@@ -448,23 +448,6 @@ export interface RstestConfig {
      * Keys are regex patterns and values are replacement paths.
      * Use `$1`, `$2`, etc. to reference capture groups.
      * Use `<rootDir>` as a string token to reference the root directory.
-     *
-     * @example
-     * ```ts
-     * {
-     *   resolve: {
-     *     moduleNameMapper: {
-     *       // Map lodash to lodash-es
-     *       '^lodash$': 'lodash-es',
-     *       // Map @components/* to src/components/*
-     *       '^@components/(.*)$': '<rootDir>/src/components/$1',
-     *       // Map image imports to a stub
-     *       '\\.(jpg|jpeg|png|gif)$': '<rootDir>/__mocks__/fileMock.js',
-     *     }
-     *   }
-     * }
-     * ```
-     * @see https://jestjs.io/docs/configuration#modulenamemapper-objectstring-string--arraystring
      */
     moduleNameMapper?: Record<string, string | string[]>;
   };

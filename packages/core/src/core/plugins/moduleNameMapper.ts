@@ -1,24 +1,13 @@
-import { dirname } from 'node:path';
 import { type RsbuildPlugin, type Rspack, rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 
-export type ModuleNameMapperConfig = Record<string, string | string[]>;
+type ModuleNameMapperConfig = Record<string, string | string[]>;
 
 /**
  * Replace `<rootDir>` token in the replacement path with the actual root directory.
- * In Jest, <rootDir> refers to the directory containing the config file.
  */
-export function replaceRootDir(value: string, rootDir: string): string {
+function replaceRootDir(value: string, rootDir: string): string {
   return value.replace(/<rootDir>/g, rootDir);
-}
-
-export interface CreateModuleNameMapperPluginsOptions {
-  /** The moduleNameMapper configuration */
-  moduleNameMapper: ModuleNameMapperConfig;
-  /** The root directory for `<rootDir>` token replacement */
-  rootDir: string;
-  /** The rspack instance to use for creating plugins (defaults to imported rspack) */
-  rspack?: typeof rspack;
 }
 
 /**
@@ -27,9 +16,14 @@ export interface CreateModuleNameMapperPluginsOptions {
  *
  * @returns Array of NormalModuleReplacementPlugin instances
  */
-export function createModuleNameMapperPlugins(
-  options: CreateModuleNameMapperPluginsOptions,
-): Rspack.WebpackPluginInstance[] {
+export function createModuleNameMapperPlugins(options: {
+  /** The moduleNameMapper configuration */
+  moduleNameMapper: ModuleNameMapperConfig;
+  /** The root directory for `<rootDir>` token replacement */
+  rootDir: string;
+  /** The rspack instance to use for creating plugins (defaults to imported rspack) */
+  rspack?: typeof rspack;
+}): Rspack.WebpackPluginInstance[] {
   const {
     moduleNameMapper,
     rootDir,
@@ -87,8 +81,6 @@ export function createModuleNameMapperPlugins(
  * - Values are replacement paths (string or array of strings)
  * - Capture groups ($1, $2, etc.) are supported
  * - `<rootDir>` token is replaced with the directory containing the config file
- *
- * @see https://jestjs.io/docs/configuration#modulenamemapper-objectstring-string--arraystring
  */
 export const pluginModuleNameMapper: (context: RstestContext) => RsbuildPlugin =
   (context) => ({
@@ -100,27 +92,21 @@ export const pluginModuleNameMapper: (context: RstestContext) => RsbuildPlugin =
         );
 
         if (!project) {
-          return config;
+          return;
         }
 
         const moduleNameMapper =
           project.normalizedConfig.resolve?.moduleNameMapper;
 
         if (!moduleNameMapper || Object.keys(moduleNameMapper).length === 0) {
-          return config;
+          return;
         }
-
-        // Use config file directory for <rootDir>, falling back to project root
-        // This aligns with Jest's behavior where <rootDir> is the config directory
-        const configDir = project.configFilePath
-          ? dirname(project.configFilePath)
-          : project.rootPath;
 
         config.plugins ??= [];
 
         const mapperPlugins = createModuleNameMapperPlugins({
           moduleNameMapper,
-          rootDir: configDir,
+          rootDir: project.rootPath,
         });
         config.plugins.push(...mapperPlugins);
 

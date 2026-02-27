@@ -10,6 +10,7 @@ export default defineConfig({
   },
   include: ['tests/**/*.test.ts'],
   testTimeout: 30000,
+  root: __dirname,
   resolve: {
     moduleNameMapper: {
       // Map module-a to module-b using exact match
