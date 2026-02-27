@@ -19,15 +19,16 @@ export {
 
 export async function runBrowserTests(
   context: Rstest,
-  options?: BrowserTestRunOptions,
+  options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
   return runBrowserController(context, options);
 }
 
 export async function listBrowserTests(
   context: Rstest,
+  options: BrowserTestRunOptions,
 ): Promise<ListBrowserTestsResult> {
-  return listBrowserTestsImpl(context);
+  return listBrowserTestsImpl(context, options);
 }
 
 export type {

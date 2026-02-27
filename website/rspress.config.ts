@@ -97,6 +97,7 @@ export default defineConfig({
       }),
     ],
     performance: {
+      buildCache: false,
       printFileSize: {
         total: true,
         detail: false,

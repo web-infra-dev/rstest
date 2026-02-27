@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import type { RsbuildPlugin } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -869,6 +870,7 @@ const createBrowserRuntime = async ({
   containerDistPath,
   containerDevServer,
   forceHeadless,
+  builtinRsbuildPlugins,
 }: {
   context: Rstest;
   manifestPath: string;
@@ -880,6 +882,9 @@ const createBrowserRuntime = async ({
   containerDevServer?: string;
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
+  builtinRsbuildPlugins: {
+    pluginModuleNameMapper: RsbuildPlugin;
+  };
 }): Promise<BrowserRuntime> => {
   const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
     [manifestPath]: manifestSource,
@@ -951,6 +956,7 @@ const createBrowserRuntime = async ({
 
   // Add plugin to merge user Rsbuild config with rstest required config
   rsbuildInstance.addPlugins([
+    builtinRsbuildPlugins.pluginModuleNameMapper,
     {
       name: 'rstest:browser-user-config',
       setup(api) {
@@ -1337,9 +1343,9 @@ async function resolveProjectEntries(
 
 export const runBrowserController = async (
   context: Rstest,
-  options?: BrowserTestRunOptions,
+  options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false } = options ?? {};
+  const { skipOnTestRunEnd = false, builtinRsbuildPlugins } = options;
   const buildStart = Date.now();
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
@@ -1540,6 +1546,7 @@ export const runBrowserController = async (
           : undefined,
         containerDistPath,
         containerDevServer,
+        builtinRsbuildPlugins,
       });
     } catch (error) {
       return failWithError(error, async () => {
@@ -2525,8 +2532,11 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: Rstest,
-  options?: {
+  options: {
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    builtinRsbuildPlugins: {
+      pluginModuleNameMapper: RsbuildPlugin;
+    };
   },
 ): Promise<ListBrowserTestsResult> => {
   const projectEntries = await resolveProjectEntries(
@@ -2570,6 +2580,7 @@ export const listBrowserTests = async (
       containerDistPath: undefined,
       containerDevServer: undefined,
       forceHeadless: true, // Always use headless for list command
+      builtinRsbuildPlugins: options.builtinRsbuildPlugins,
     });
   } catch (error) {
     logger.error(

@@ -13,16 +13,25 @@ describe('test build config', () => {
     { name: 'plugin' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
-  ])('$name config should work correctly', async ({ name }, {
-    onTestFinished,
-  }) => {
+    { name: 'moduleNameMapper' },
+    {
+      name: 'moduleNameMapperHappyDom',
+      fixtureDir: 'moduleNameMapper',
+      testEnvironment: 'happy-dom',
+    },
+  ])('$name config should work correctly', async ({
+    name,
+    fixtureDir = name,
+    testEnvironment,
+  }, { onTestFinished }) => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: [
         'run',
-        `fixtures/${name}`,
+        `fixtures/${fixtureDir}`,
         '-c',
-        `fixtures/${name}/rstest.config.ts`,
+        `fixtures/${fixtureDir}/rstest.config.ts`,
+        ...(testEnvironment ? ['--testEnvironment', testEnvironment] : []),
       ],
       onTestFinished,
       options: {

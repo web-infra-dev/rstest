@@ -45,24 +45,24 @@ export default defineConfig({
 
 以下是一些常见的 Jest 配置及其对应的 Rstest 配置：
 
-| Jest 配置                    | Rstest 对等配置                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `testRegex`                  | [`include`](/config/test/include)                                                                                  |
-| `testMatch`                  | [`include`](/config/test/include)                                                                                  |
-| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                                                                  |
-| `transformIgnorePatterns`    | [`output.externals`](/config/build/output#outputexternals)、[`source.exclude`](/config/build/source#sourceexclude) |
-| `displayName`                | [`name`](/config/test/name)                                                                                        |
-| `rootDir`                    | [`root`](/config/test/root)                                                                                        |
-| `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setup-files)                                                                           |
-| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)                                                      |
-| `injectGlobals`              | [`globals`](/config/test/globals)                                                                                  |
-| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                                              |
-| `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                             |
-| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                                                |
-| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                                              |
-| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                                              |
-| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                                                |
-| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                                          |
+| Jest 配置                    | Rstest 对等配置                                                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `testRegex`                  | [`include`](/config/test/include)                                                                                                  |
+| `testMatch`                  | [`include`](/config/test/include)                                                                                                  |
+| `testPathIgnorePatterns`     | [`exclude`](/config/test/exclude)                                                                                                  |
+| `transformIgnorePatterns`    | [`output.externals`](/config/build/output#outputexternals)、[`source.exclude`](/config/build/source#sourceexclude)                 |
+| `displayName`                | [`name`](/config/test/name)                                                                                                        |
+| `rootDir`                    | [`root`](/config/test/root)                                                                                                        |
+| `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setup-files)                                                                                           |
+| `verbose`                    | [`verbose-reporter`](/config/test/reporters#verbose-reporter)                                                                      |
+| `injectGlobals`              | [`globals`](/config/test/globals)                                                                                                  |
+| `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)、[`resolve.moduleNameMapper`](/config/build/resolve#resolvemodulenamemapper) |
+| `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                                             |
+| `collectCoverage`            | [`coverage.enabled`](/config/test/coverage#enabled)                                                                                |
+| `coverageDirectory`          | [`coverage.reportsDirectory`](/config/test/coverage#reportsdirectory)                                                              |
+| `coverageProvider`           | [`coverage.provider`](/config/test/coverage#provider)                                                                              |
+| `coveragePathIgnorePatterns` | [`coverage.exclude`](/config/test/coverage#exclude)                                                                                |
+| `coverageThreshold`          | [`coverage.thresholds`](/config/test/coverage#thresholds)                                                                          |
 
 更多详情，请参考 [配置文档](/config)。
 

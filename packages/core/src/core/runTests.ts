@@ -25,14 +25,20 @@ import type { Rstest } from './rstest';
 async function runBrowserModeTests(
   context: Rstest,
   browserProjects: typeof context.projects,
-  options: BrowserTestRunOptions,
+  options: Omit<BrowserTestRunOptions, 'builtinRsbuildPlugins'>,
 ): Promise<BrowserTestRunResult | void> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
     projectRoots,
   });
   validateBrowserConfig(context);
-  return runBrowserTests(context, options);
+  const { pluginModuleNameMapper } = await import('./plugins/moduleNameMapper');
+  return runBrowserTests(context, {
+    ...options,
+    builtinRsbuildPlugins: {
+      pluginModuleNameMapper: pluginModuleNameMapper(context),
+    },
+  });
 }
 
 export async function runTests(context: Rstest): Promise<void> {

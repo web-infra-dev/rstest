@@ -439,7 +439,35 @@ export interface RstestConfig {
     'cssModules' | 'externals' | 'cleanDistPath' | 'module'
   >;
 
-  resolve?: RsbuildConfig['resolve'];
+  resolve?: RsbuildConfig['resolve'] & {
+    /**
+     * A map from regular expressions to module names or to arrays of module names
+     * that allow to stub out resources with a single module.
+     *
+     * This is similar to Jest's `moduleNameMapper` configuration.
+     * Keys are regex patterns and values are replacement paths.
+     * Use `$1`, `$2`, etc. to reference capture groups.
+     * Use `<rootDir>` as a string token to reference the root directory.
+     *
+     * @example
+     * ```ts
+     * {
+     *   resolve: {
+     *     moduleNameMapper: {
+     *       // Map lodash to lodash-es
+     *       '^lodash$': 'lodash-es',
+     *       // Map @components/* to src/components/*
+     *       '^@components/(.*)$': '<rootDir>/src/components/$1',
+     *       // Map image imports to a stub
+     *       '\\.(jpg|jpeg|png|gif)$': '<rootDir>/__mocks__/fileMock.js',
+     *     }
+     *   }
+     * }
+     * ```
+     * @see https://jestjs.io/docs/configuration#modulenamemapper-objectstring-string--arraystring
+     */
+    moduleNameMapper?: Record<string, string | string[]>;
+  };
 
   tools?: Pick<
     NonNullable<RsbuildConfig['tools']>,

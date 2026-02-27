@@ -3,8 +3,27 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
+/**
+ * Check if a request matches any moduleNameMapper pattern.
+ * If it does, don't externalize it - let NormalModuleReplacementPlugin handle it.
+ */
+const matchesModuleNameMapper = (
+  request: string,
+  moduleNameMapper: Record<string, string | string[]> | undefined,
+): boolean => {
+  if (!moduleNameMapper) return false;
+
+  for (const pattern of Object.keys(moduleNameMapper)) {
+    if (new RegExp(pattern).test(request)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const autoExternalNodeModules: (
   outputModule: boolean,
+  moduleNameMapper: Record<string, string | string[]> | undefined,
 ) => (
   data: Rspack.ExternalItemFunctionData,
   callback: (
@@ -13,7 +32,7 @@ const autoExternalNodeModules: (
     type?: Rspack.ExternalsType,
   ) => void,
 ) => void =
-  (outputModule) =>
+  (outputModule, moduleNameMapper) =>
   ({ context, request, dependencyType, getResolve }, callback) => {
     if (!request) {
       return callback();
@@ -21,6 +40,11 @@ const autoExternalNodeModules: (
 
     if (request.startsWith('@swc/helpers/') || request.endsWith('.wasm')) {
       // @swc/helper is a special case (Load by require but resolve to esm)
+      return callback();
+    }
+
+    // If request matches moduleNameMapper, don't externalize - let it be transformed
+    if (matchesModuleNameMapper(request, moduleNameMapper)) {
       return callback();
     }
 
@@ -102,14 +126,16 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
   setup: (api) => {
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const {
-        normalizedConfig: { testEnvironment },
+        normalizedConfig: { testEnvironment, resolve },
         outputModule,
       } = context.projects.find((p) => p.environmentName === name)!;
+      const moduleNameMapper = resolve?.moduleNameMapper;
+
       return mergeEnvironmentConfig(config, {
         output: {
           externals:
             testEnvironment.name === 'node'
-              ? [autoExternalNodeModules(outputModule)]
+              ? [autoExternalNodeModules(outputModule, moduleNameMapper)]
               : undefined,
         },
         tools: {

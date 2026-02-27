@@ -21,3 +21,54 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 ## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
 
 自动添加导入文件的扩展名。这意味着你可以导入文件，而不需要显式地写它们的扩展名。
+
+## resolve.moduleNameMapper
+
+- **类型:** `Record<string, string | string[]>`
+- **默认值:** `undefined`
+
+从正则表达式到模块名称或模块名称数组的映射，允许用单个模块替换多个模块。这类似于 Jest 的 [moduleNameMapper](https://jestjs.io/zh-Hans/docs/configuration#modulenamemapper-objectstring-string--arraystring) 配置。
+
+这在以下场景中非常有用：
+
+- 在测试中 mock 模块
+- 重定向模块路径
+- 替换图片或样式等静态资源
+
+### 基本用法
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    moduleNameMapper: {
+      // 精确匹配模块名
+      '^module-a$': '<rootDir>/mocks/module-a.ts',
+      // 使用捕获组进行匹配
+      '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+      // 存根 CSS 导入
+      '\\.(css|less|scss)$': 'identity-obj-proxy',
+    },
+  },
+});
+```
+
+### 示例：使用捕获组进行路径别名
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    moduleNameMapper: {
+      // @components/Button -> ./src/components/Button
+      '^@components/(.*)$': '<rootDir>/src/components/$1',
+    },
+  },
+});
+```
+
+:::tip
+对于简单的路径别名，建议使用 TypeScript 的 `tsconfig.json` 中的 `paths` 或 [resolve.alias](#resolvealias) 配置，它们提供更好的性能和 IDE 支持。
+:::

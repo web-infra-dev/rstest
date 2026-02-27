@@ -194,7 +194,14 @@ const collectBrowserTests = async ({
     projectRoots,
   });
   validateBrowserConfig(context);
-  return listBrowserTests(context, { shardedEntries });
+  const { pluginModuleNameMapper } = await import('./plugins/moduleNameMapper');
+
+  return listBrowserTests(context, {
+    shardedEntries,
+    builtinRsbuildPlugins: {
+      pluginModuleNameMapper: pluginModuleNameMapper(context),
+    },
+  });
 };
 
 const collectTestFiles = async ({

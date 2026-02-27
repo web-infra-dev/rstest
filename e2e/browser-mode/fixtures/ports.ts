@@ -20,4 +20,5 @@ export const BROWSER_PORTS = {
   'viewport-preset': 5216,
   reporter: 5220,
   'reporter-watch': 5222,
+  'module-name-mapper': 5224,
 } as const;
