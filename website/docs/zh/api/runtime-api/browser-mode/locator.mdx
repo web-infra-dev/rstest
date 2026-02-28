@@ -121,11 +121,37 @@ const helpIcon = page.getByTitle('Help');
 const settingsPanel = page.getByTestId('settings-panel');
 ```
 
+## 配置 API
+
+### setTestIdAttribute
+
+- **类型：** `(attribute: string) => Promise<void>`
+
+设置 `getByTestId()` 使用的属性名。默认值是 `data-testid`。
+
+这个配置会通过 Browser Mode 通道转发到 host provider（例如 Playwright 的 `selectors.setTestIdAttribute()`）。
+
+这是全局配置，建议在测试 setup 阶段统一设置一次，避免在用例执行中途修改导致查询行为不一致。
+
+```ts
+import { page, setTestIdAttribute } from '@rstest/browser';
+
+await setTestIdAttribute('data-test');
+await page.getByTestId('settings-panel').click();
+```
+
 ## 组合 API
 
 ### filter
 
-- **类型：** `(options: { hasText?: string | RegExp; has?: Locator }) => Locator`
+- **类型：** `(options: LocatorFilterOptions) => Locator`
+
+`LocatorFilterOptions` 支持：
+
+- `hasText?: string | RegExp`：保留文本匹配的元素
+- `hasNotText?: string | RegExp`：排除文本匹配的元素
+- `has?: Locator`：保留包含子 Locator 的元素
+- `hasNot?: Locator`：排除包含子 Locator 的元素
 
 用于在已有查询结果上做二次过滤。
 
@@ -134,6 +160,13 @@ const profileSave = page
   .locator('section')
   .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
   .getByRole('button', { name: 'Save' });
+```
+
+```ts
+const visibleItems = page.locator('li').filter({
+  hasNotText: /archived/i,
+  hasNot: page.getByRole('img', { name: 'Locked' }),
+});
 ```
 
 ### and / or
@@ -326,7 +359,7 @@ await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 
 ## 使用约束
 
-- `and` / `or` / `filter({ has })` 的参数必须是 `@rstest/browser` 返回的 `Locator`
+- `and` / `or` / `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`
 - `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串
 - `selectOption` 目前仅支持 `string` 或 `string[]`
 - `setInputFiles` 目前仅支持文件路径 `string` 或 `string[]`

@@ -10,13 +10,14 @@ Browser Mode API 由 [@rstest/browser](https://github.com/web-infra-dev/rstest/t
 
 `@rstest/browser` 提供的是 Browser Mode 的运行时入口能力，核心职责是**定位元素并驱动交互**。
 
-其中，`page` 是查询起点，`Locator` 负责链式组合与动作执行，`BrowserPage` 用来描述 `page` 支持的查询 API。
+其中，`page` 是查询起点，`Locator` 负责链式组合与动作执行，`BrowserPage` 用来描述 `page` 支持的查询 API，`setTestIdAttribute` 用于配置 test id 属性名。
 
 以下是 `@rstest/browser` 当前导出的 API：
 
 - [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` 查询入口（仅查询）
 - [`Locator`](/api/runtime-api/browser-mode/locator) - 链式查询与交互的核心类
 - [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - `page` 的类型定义
+- [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute) - 配置 `getByTestId()` 使用的属性名
 
 ## 断言 API
 

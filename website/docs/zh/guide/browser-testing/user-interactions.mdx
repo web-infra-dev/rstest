@@ -100,10 +100,10 @@ test('composes locators', async () => {
 
 Locator 支持常见交互 API（如 [click](/api/runtime-api/browser-mode/locator#click)、[fill](/api/runtime-api/browser-mode/locator#fill)、[check](/api/runtime-api/browser-mode/locator#check)、[hover](/api/runtime-api/browser-mode/locator#hover)、[press](/api/runtime-api/browser-mode/locator#press)、[selectOption](/api/runtime-api/browser-mode/locator#selectoption)），并可直接配合 [expect.element](/api/runtime-api/browser-mode/assertion) 断言：
 
-- 状态断言：[toBeVisible](/api/runtime-api/browser-mode/assertion#可见性与状态断言)、[toBeHidden](/api/runtime-api/browser-mode/assertion#可见性与状态断言)、[toBeEnabled](/api/runtime-api/browser-mode/assertion#可见性与状态断言)、[toBeDisabled](/api/runtime-api/browser-mode/assertion#可见性与状态断言)
-- 表单/结构断言：[toBeChecked](/api/runtime-api/browser-mode/assertion#可见性与状态断言)、[toBeFocused](/api/runtime-api/browser-mode/assertion#可见性与状态断言)、[toBeEmpty](/api/runtime-api/browser-mode/assertion#可见性与状态断言)
-- 文本和值断言：[toHaveText](/api/runtime-api/browser-mode/assertion#文本和值断言)、[toContainText](/api/runtime-api/browser-mode/assertion#文本和值断言)、[toHaveValue](/api/runtime-api/browser-mode/assertion#文本和值断言)、[toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
-- 属性断言：[toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute)、[toHaveClass](/api/runtime-api/browser-mode/assertion#文本和值断言)、[toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss)、[toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
+- 状态断言：[toBeVisible](/api/runtime-api/browser-mode/assertion#tobevisible)、[toBeHidden](/api/runtime-api/browser-mode/assertion#tobehidden)、[toBeEnabled](/api/runtime-api/browser-mode/assertion#tobeenabled)、[toBeDisabled](/api/runtime-api/browser-mode/assertion#tobedisabled)
+- 表单/结构断言：[toBeChecked](/api/runtime-api/browser-mode/assertion#tobechecked)、[toBeFocused](/api/runtime-api/browser-mode/assertion#tobefocused)、[toBeEmpty](/api/runtime-api/browser-mode/assertion#tobeempty)
+- 文本和值断言：[toHaveText](/api/runtime-api/browser-mode/assertion#tohavetext)、[toContainText](/api/runtime-api/browser-mode/assertion#tocontaintext)、[toHaveValue](/api/runtime-api/browser-mode/assertion#tohavevalue)、[toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
+- 属性断言：[toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute)、[toHaveClass](/api/runtime-api/browser-mode/assertion#tohaveclass)、[toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss)、[toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
 
 建议在关键交互后立即断言可观察结果（例如状态文案、按钮状态、字段值），这样失败信息更聚焦、调试成本更低。
 
