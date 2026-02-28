@@ -7,7 +7,7 @@ overviewHeaders: [2, 3]
 
 `expect.element` 是 Browser Mode 中用于 [Locator](/api/runtime-api/browser-mode/locator) 断言的 API。它接收 `Locator`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
 
-当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。它提供 Playwright-style 的 Locator 断言体验，并在 `timeout` 时间内自动重试，直到断言通过或超时失败。这让查询、交互、断言围绕同一 `Locator` 组织，减少手写轮询与时序抖动，失败信息也更聚焦于元素状态。
+当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。它提供 Playwright-style 的 Locator 断言体验；具体断言行为（例如自动重试）由你配置的 browser `provider` 决定。这让查询、交互、断言围绕同一 `Locator` 组织，减少手写轮询与时序抖动，失败信息也更聚焦于元素状态。
 
 下面这个最小示例展示了常见用法：先断言可见，再验证勾选状态变化，最后校验元素属性。
 
@@ -34,6 +34,49 @@ test('asserts element states in browser mode', async () => {
 
 ```ts
 expect.element(locator: Locator): BrowserElementExpect
+```
+
+## 自动重试与超时
+
+`expect.element` 的断言行为依赖具体 provider。使用 Playwright provider 时，`expect.element` 的 matcher 是 **web-first assertion**：它们会在超时时间内持续重试，直到断言通过或超时失败。你不需要手写 `waitFor` 或轮询逻辑。
+
+### 超时优先级
+
+断言的超时按以下优先级决定：
+
+1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
+2. **全局 `testTimeout` 配置**：来自 `rstest.config.ts` 中的 `testTimeout`（默认 5000ms）
+3. **RPC 兜底超时**：30000ms（仅作为通信层保底，通常不会触及）
+
+```ts
+// 使用全局 testTimeout（默认 5000ms）
+await expect.element(page.getByText('Done')).toBeVisible();
+
+// 覆盖为更长的超时
+await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
+```
+
+### 失败输出
+
+当断言超时失败时，错误信息会包含：期望的元素状态、实际状态、以及超时时间。例如：
+
+```
+Error: Expected element to be visible
+  Locator: getByText('Loading complete')
+  Timeout: 5000ms
+```
+
+### 适用场景
+
+自动重试特别适合处理异步渲染场景——例如等待 loading 消失、等待数据加载完成后的 UI 变化：
+
+```ts
+// 点击后等待异步结果出现
+await page.getByRole('button', { name: 'Submit' }).click();
+await expect.element(page.getByText('Submitted!')).toBeVisible();
+
+// 等待 loading 消失
+await expect.element(page.getByTestId('spinner')).toBeHidden();
 ```
 
 ## 输入约束

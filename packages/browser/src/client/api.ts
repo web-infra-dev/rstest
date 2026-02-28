@@ -1,3 +1,4 @@
+import type { BrowserElementExpect } from '../augmentExpect';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
 import { callBrowserRpc } from './browserRpc';
 import {
@@ -8,61 +9,6 @@ import {
   setTestIdAttribute,
 } from './locator';
 
-type ElementExpect = {
-  not: ElementExpect;
-  toBeVisible: (options?: { timeout?: number }) => Promise<void>;
-  toBeHidden: (options?: { timeout?: number }) => Promise<void>;
-  toBeEnabled: (options?: { timeout?: number }) => Promise<void>;
-  toBeDisabled: (options?: { timeout?: number }) => Promise<void>;
-  toBeChecked: (options?: { timeout?: number }) => Promise<void>;
-  toBeUnchecked: (options?: { timeout?: number }) => Promise<void>;
-  toBeAttached: (options?: { timeout?: number }) => Promise<void>;
-  toBeDetached: (options?: { timeout?: number }) => Promise<void>;
-  toBeEditable: (options?: { timeout?: number }) => Promise<void>;
-  toBeFocused: (options?: { timeout?: number }) => Promise<void>;
-  toBeEmpty: (options?: { timeout?: number }) => Promise<void>;
-  toBeInViewport: (options?: {
-    timeout?: number;
-    ratio?: number;
-  }) => Promise<void>;
-  toHaveText: (
-    text: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toContainText: (
-    text: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveValue: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveId: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveAttribute: (
-    name: string,
-    value?: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveClass: (
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveCount: (count: number, options?: { timeout?: number }) => Promise<void>;
-  toHaveCSS: (
-    name: string,
-    value: string | RegExp,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-  toHaveJSProperty: (
-    name: string,
-    value: unknown,
-    options?: { timeout?: number },
-  ) => Promise<void>;
-};
-
 const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
   return serializeText(value);
 };
@@ -70,7 +16,7 @@ const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
 const createElementExpect = (
   locator: Locator,
   isNot: boolean,
-): ElementExpect => {
+): BrowserElementExpect => {
   const callExpect = async (
     method: string,
     args: unknown[],
@@ -86,7 +32,7 @@ const createElementExpect = (
     } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>);
   };
 
-  const api: Omit<ElementExpect, 'not'> = {
+  const api: Omit<BrowserElementExpect, 'not'> = {
     async toBeVisible(options) {
       await callExpect('toBeVisible', [], options?.timeout);
     },
@@ -191,7 +137,7 @@ const createElementExpect = (
     },
   };
 
-  const withNot = api as ElementExpect;
+  const withNot = api as BrowserElementExpect;
   Object.defineProperty(withNot, 'not', {
     configurable: false,
     enumerable: false,
@@ -202,7 +148,7 @@ const createElementExpect = (
   return withNot;
 };
 
-const element = (locator: unknown): ElementExpect => {
+const element = (locator: unknown): BrowserElementExpect => {
   if (!isLocator(locator)) {
     throw new TypeError(
       'expect.element() expects a Locator returned from @rstest/browser page.getBy* APIs.',

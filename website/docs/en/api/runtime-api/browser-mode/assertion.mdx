@@ -1,0 +1,374 @@
+---
+title: Assertion
+overviewHeaders: [2, 3]
+---
+
+# Assertion
+
+`expect.element` is the API for [Locator](/api/runtime-api/browser-mode/locator) assertions in Browser Mode. It accepts a `Locator` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
+
+When you import `@rstest/browser` in a Browser Mode test (e.g., importing `page`), `expect` automatically gains the `element` capability. It provides a Playwright-style Locator assertion experience, while concrete assertion behavior (such as auto-retry) depends on the configured browser `provider`. This allows queries, interactions, and assertions to be organized around the same `Locator`, reducing hand-written polling and timing flakiness, and focusing failure messages on element state.
+
+The following minimal example demonstrates common usage: first assert visibility, then verify a checked state change, and finally validate an element attribute.
+
+```ts title="src/assertion.test.ts"
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('asserts element states in browser mode', async () => {
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toBeVisible();
+
+  await expect.element(page.getByLabel('Agree')).toBeUnchecked();
+  await page.getByLabel('Agree').check();
+  await expect.element(page.getByLabel('Agree')).toBeChecked();
+
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toHaveAttribute('id', 'save-btn');
+});
+```
+
+## Type signature
+
+```ts
+expect.element(locator: Locator): BrowserElementExpect
+```
+
+## Auto-retry and timeout
+
+Assertion behavior in `expect.element` depends on the provider. With the Playwright provider, `expect.element` matchers are **web-first assertions**: they continuously retry within the timeout duration until the assertion passes or times out. You do not need to write manual `waitFor` or polling logic.
+
+### Timeout priority
+
+The assertion timeout is determined by the following priority:
+
+1. **Per-assertion timeout**: The `timeout` parameter passed directly to the matcher, highest priority
+2. **Global `testTimeout` configuration**: From `testTimeout` in `rstest.config.ts` (default 5000ms)
+3. **RPC fallback timeout**: 30000ms (serves only as a communication-layer safety net, usually not reached)
+
+```ts
+// Uses global testTimeout (default 5000ms)
+await expect.element(page.getByText('Done')).toBeVisible();
+
+// Override with a longer timeout
+await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
+```
+
+### Failure output
+
+When an assertion times out, the error message includes: the expected element state, the actual state, and the timeout duration. For example:
+
+```
+Error: Expected element to be visible
+  Locator: getByText('Loading complete')
+  Timeout: 5000ms
+```
+
+### Use cases
+
+Auto-retry is especially useful for handling async rendering scenarios — such as waiting for a loading indicator to disappear or UI changes after data finishes loading:
+
+```ts
+// Click and wait for async result to appear
+await page.getByRole('button', { name: 'Submit' }).click();
+await expect.element(page.getByText('Submitted!')).toBeVisible();
+
+// Wait for loading to disappear
+await expect.element(page.getByTestId('spinner')).toBeHidden();
+```
+
+## Input constraints
+
+- `locator` must be a `Locator` returned by `@rstest/browser`. This allows the runtime to recognize and replay the complete query chain; hand-crafted objects or locators from other libraries cannot be parsed by this mechanism.
+- `expect.element` is not available outside of Browser Mode. It relies on Browser Mode's browser runtime and communication channel to execute element assertions; pure Node test environments only support regular `expect(value)` assertions.
+
+## Element assertions
+
+### not
+
+- **Type:** `BrowserElementExpect`
+
+Negates the subsequent assertion.
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .not.toBeDisabled();
+```
+
+All the following matchers support an optional `options?: { timeout?: number }` parameter (unless the type signature states otherwise).
+
+### toBeVisible
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The `Locator` resolves to a mounted and visible element within the `timeout`.
+
+Visibility is determined by: the element has a non-empty bounding box and `visibility` is not `hidden`. For example, `display: none` or zero dimensions are not considered visible; `opacity: 0` is still considered visible.
+
+```ts
+await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
+```
+
+### toBeHidden
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The `Locator` meets any of the following conditions within the `timeout`: does not match any DOM node, or matches a non-visible node.
+
+Think of it as the opposite of `toBeVisible`; for example, setting only `opacity: 0` typically will not cause `toBeHidden` to pass.
+
+```ts
+await expect.element(page.getByTestId('loading')).toBeHidden();
+```
+
+### toBeEnabled
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The element is not in a disabled state.
+
+Disabled determination: a native form control with the `disabled` attribute, within a disabled `fieldset`, or within an `aria-disabled=true` semantic context may all be considered disabled.
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .toBeEnabled();
+```
+
+### toBeDisabled
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The element is determined to be disabled.
+
+The determination rules are the same as `toBeEnabled`, just with the opposite result. Recommended for scenarios like button submission and preventing duplicate clicks.
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Submit' }))
+  .toBeDisabled();
+```
+
+### toBeChecked
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The `checked` state of a checkbox or radio is `true`.
+
+Commonly used to verify user check actions or whether a default checked state has taken effect.
+
+```ts
+await expect.element(page.getByLabel('Agree')).toBeChecked();
+```
+
+### toBeUnchecked
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The `checked` state of a checkbox or radio is `false`.
+
+Suitable for use with `check` / `uncheck` to verify state changes before and after interaction.
+
+```ts
+await expect.element(page.getByLabel('Agree')).toBeUnchecked();
+```
+
+### toBeAttached
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The node pointed to by the `Locator` is connected to a `Document` or `ShadowRoot` (equivalent to `Node.isConnected === true`).
+
+This assertion only checks "whether it is in the DOM tree" and does not require the element to be visible.
+
+```ts
+await expect.element(page.locator('#toast')).toBeAttached();
+```
+
+### toBeDetached
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The `Locator` no longer points to a connected DOM node.
+
+Common for verification after conditional rendering, async unmounting, or delete operations.
+
+```ts
+await expect.element(page.locator('#toast')).toBeDetached();
+```
+
+### toBeEditable
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The element is both enabled and not readonly.
+
+Readonly determination includes both the native `readonly` attribute and `aria-readonly=true` semantics.
+
+```ts
+await expect.element(page.getByLabel('Bio')).toBeEditable();
+```
+
+### toBeFocused
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+The element is the current document's focus target (active element).
+
+Suitable for verifying keyboard navigation, auto-focus, or form focus-switching behavior.
+
+```ts
+await expect.element(page.getByLabel('Username')).toBeFocused();
+```
+
+### toBeEmpty
+
+- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+
+An editable element's content is empty, or a regular DOM node has no text content.
+
+It checks "whether the content is empty", not "whether the element exists" or "whether it is visible".
+
+```ts
+await expect.element(page.locator('#empty-state')).toBeEmpty();
+```
+
+### toBeInViewport
+
+- **Type:** `(options?: { timeout?: number; ratio?: number }) => Promise<void>`
+
+The element intersects with the viewport (based on Intersection Observer semantics).
+
+`ratio` represents the minimum intersection ratio; for example, `ratio: 0.5` means at least half of the area is within the viewport.
+
+```ts
+await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
+```
+
+### toHaveText
+
+- **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The element's text fully matches the expected value (supports `string` / `RegExp`).
+
+Text computation includes nested child element content. When the expected value is a `string`, whitespace and line breaks are normalized before matching.
+
+```ts
+await expect.element(page.getByRole('status')).toHaveText('Saved');
+```
+
+### toContainText
+
+- **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The element's text contains the expected substring, or matches the given regex.
+
+The difference from `toHaveText` is: `toContainText` does substring matching, while `toHaveText` does full matching.
+
+```ts
+await expect.element(page.getByRole('status')).toContainText('Save');
+```
+
+### toHaveValue
+
+- **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The form control's current `value` matches the expected value (supports `string` / `RegExp`).
+
+Applicable to `input`, `textarea`, `select`, and other elements with retrievable values.
+
+```ts
+await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
+```
+
+### toHaveId
+
+- **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The element's `id` matches the expected value (supports `string` / `RegExp`).
+
+Suitable for validating dynamically generated IDs or fixed IDs injected after component mounting.
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveId('save-btn');
+```
+
+### toHaveClass
+
+- **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The element's `class` attribute matches the expected value (supports `string` / `RegExp`).
+
+When passing a `string`, it matches against the entire `class` string. If you only care about a specific class, consider using a more targeted regex.
+
+```ts
+await expect.element(page.getByRole('alert')).toHaveClass(/error/);
+```
+
+### toHaveAttribute
+
+- **Type:**
+  - `(name: string, options?: { timeout?: number }) => Promise<void>`
+  - `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+When only `name` is passed, it asserts the attribute exists. When `name + value` is passed, it asserts the attribute value matches (`value` supports `string` / `RegExp`).
+
+Common use cases include validating structural attributes like `type`, `disabled`, `aria-*`, etc.
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveAttribute('type');
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .toHaveAttribute('type', 'submit');
+```
+
+### toHaveCount
+
+- **Type:** `(count: number, options?: { timeout?: number }) => Promise<void>`
+
+The number of elements resolved by the `Locator` exactly matches `count`.
+
+Suitable for list rendering, filter results, pagination item counts, and similar scenarios.
+
+```ts
+await expect.element(page.getByRole('listitem')).toHaveCount(3);
+```
+
+### toHaveCSS
+
+- **Type:** `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+
+The specified CSS property value in the element's computed style matches the expected value.
+
+`name` must be a non-empty string; `value` supports `string` / `RegExp`.
+
+```ts
+await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
+```
+
+### toHaveJSProperty
+
+- **Type:** `(name: string, value: unknown, options?: { timeout?: number }) => Promise<void>`
+
+The JS property on the element matches the expected value.
+
+`name` must be a non-empty string; `value` must be JSON-serializable (assertion parameters are transmitted through the Browser Mode channel).
+
+```ts
+await expect
+  .element(page.getByLabel('Agree'))
+  .toHaveJSProperty('checked', true);
+```
+
+## Related API
+
+- [Locator](/api/runtime-api/browser-mode/locator)
+- [Page (Locator entry point)](/api/runtime-api/browser-mode/locator#page)
+- [Expect](/api/runtime-api/test-api/expect)

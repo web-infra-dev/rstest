@@ -104,42 +104,32 @@ export default defineConfig({
 
 ### 3. Write tests
 
-Create a simple browser test file:
+Create a browser test file. The recommended approach is to use the Locator API for element queries and interactions:
 
-```ts title="src/dom.test.ts"
+```ts title="tests/counter.test.ts"
+import { page } from '@rstest/browser';
 import { expect, test } from '@rstest/core';
 
-test('should work with DOM APIs', () => {
-  const div = document.createElement('div');
-  div.textContent = 'Hello Browser!';
-  document.body.appendChild(div);
+test('counter increments on click', async () => {
+  document.body.innerHTML = `
+    <button id="count-btn">Count: 0</button>
+  `;
 
-  expect(document.body.textContent).toContain('Hello Browser!');
+  let count = 0;
+  document.getElementById('count-btn')!.addEventListener('click', (e) => {
+    count++;
+    (e.target as HTMLButtonElement).textContent = `Count: ${count}`;
+  });
+
+  await expect
+    .element(page.getByRole('button', { name: 'Count: 0' }))
+    .toBeVisible();
+  await page.getByRole('button', { name: 'Count: 0' }).click();
+  await expect.element(page.getByText('Count: 1')).toBeVisible();
 });
-
-test('should have real browser APIs', () => {
-  // These APIs may be incomplete or missing in jsdom
-  expect(typeof window.requestAnimationFrame).toBe('function');
-  expect(typeof window.IntersectionObserver).toBe('function');
-  expect(typeof window.ResizeObserver).toBe('function');
-});
 ```
 
-### 4. Run tests
-
-```bash
-npx rstest
-```
-
-You should see output similar to:
-
-```bash
- ✓ src/dom.test.ts (2)
-
- Test Files 1 passed
-      Tests 2 passed
-   Duration 1.2s
-```
+This example uses `page.getByRole()` to locate a button by its semantic role, triggers an interaction with `click()`, and asserts the result with `expect.element().toBeVisible()`. The assertion automatically waits for the element state to change — no manual polling needed.
 
 ## Headless vs headed mode
 
@@ -170,5 +160,6 @@ For complete configuration reference, see [browser configuration](/config/test/b
 
 ## Next steps
 
-- [Framework Guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
-- [User Interactions](/guide/browser-testing/user-interactions) - Simulate user actions
+- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Use `page` + `expect.element` for semantic queries and assertions
+- [Framework guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
+- [User interactions](/guide/browser-testing/user-interactions) - Simulate user actions

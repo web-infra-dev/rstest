@@ -51,6 +51,7 @@ import type {
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
+import { validateBrowserRpcRequest } from './protocol';
 import {
   type BrowserProvider,
   type BrowserProviderBrowser,
@@ -1804,12 +1805,9 @@ export const runBrowserController = async (
   };
 
   runtime.dispatchHandlers.set('browser', async (dispatchRequest) => {
-    const payload = dispatchRequest.args;
-    if (!payload || typeof payload !== 'object') {
-      throw new Error('Invalid browser dispatch payload: expected object args');
-    }
+    const request = validateBrowserRpcRequest(dispatchRequest.args);
     return dispatchBrowserRpcRequest({
-      request: payload as BrowserRpcRequest,
+      request,
       target: dispatchRequest.target,
     });
   });

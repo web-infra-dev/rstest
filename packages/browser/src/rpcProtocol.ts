@@ -89,6 +89,95 @@ export type BrowserRpcRequest = {
   timeout?: number;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const readString = (
+  value: Record<string, unknown>,
+  key: string,
+  label: string,
+): string => {
+  const result = value[key];
+  if (typeof result !== 'string') {
+    throw new Error(`Invalid browser RPC request: ${label} must be a string`);
+  }
+  return result;
+};
+
+const readUnknownArray = (
+  value: Record<string, unknown>,
+  key: string,
+  label: string,
+): unknown[] => {
+  const result = value[key];
+  if (!Array.isArray(result)) {
+    throw new Error(`Invalid browser RPC request: ${label} must be an array`);
+  }
+  return result;
+};
+
+const parseBrowserLocatorIR = (
+  value: unknown,
+  label: string,
+): BrowserLocatorIR => {
+  if (!isRecord(value)) {
+    throw new Error(`Invalid browser RPC request: ${label} must be an object`);
+  }
+
+  const steps = value.steps;
+  if (!Array.isArray(steps)) {
+    throw new Error(
+      `Invalid browser RPC request: ${label}.steps must be an array`,
+    );
+  }
+
+  return value as BrowserLocatorIR;
+};
+
+export const validateBrowserRpcRequest = (
+  payload: unknown,
+): BrowserRpcRequest => {
+  if (!isRecord(payload)) {
+    throw new Error('Invalid browser RPC request: payload must be an object');
+  }
+
+  const kind = readString(payload, 'kind', 'kind');
+  if (kind !== 'locator' && kind !== 'expect' && kind !== 'config') {
+    throw new Error(
+      `Invalid browser RPC request: unsupported kind ${JSON.stringify(kind)}`,
+    );
+  }
+
+  const request: BrowserRpcRequest = {
+    id: readString(payload, 'id', 'id'),
+    testPath: readString(payload, 'testPath', 'testPath'),
+    runId: readString(payload, 'runId', 'runId'),
+    kind,
+    locator: parseBrowserLocatorIR(payload.locator, 'locator'),
+    method: readString(payload, 'method', 'method'),
+    args: readUnknownArray(payload, 'args', 'args'),
+  };
+
+  const isNot = payload.isNot;
+  if (isNot !== undefined) {
+    if (typeof isNot !== 'boolean') {
+      throw new Error('Invalid browser RPC request: isNot must be a boolean');
+    }
+    request.isNot = isNot;
+  }
+
+  const timeout = payload.timeout;
+  if (timeout !== undefined) {
+    if (typeof timeout !== 'number') {
+      throw new Error('Invalid browser RPC request: timeout must be a number');
+    }
+    request.timeout = timeout;
+  }
+
+  return request;
+};
+
 export type BrowserRpcResponse = {
   id: string;
   result?: unknown;

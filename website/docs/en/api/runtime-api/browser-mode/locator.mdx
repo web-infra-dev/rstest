@@ -1,0 +1,370 @@
+---
+title: Locator
+overviewHeaders: [2, 3]
+---
+
+# Locator
+
+`Locator` is the core API for element querying and interaction in Browser Mode. You can build query chains via `page.getBy*` or `page.locator()`, then execute interaction actions. Concrete execution semantics are provided by the configured browser `provider`.
+
+You can import `page` from [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser):
+
+```ts
+import { page } from '@rstest/browser';
+```
+
+## page
+
+- **Type:** `BrowserPage`
+
+`page` is the starting point in tests: first use `page` to locate elements, then execute interactions and assertions on the returned `Locator`.
+
+`page` is a query-only object: it only creates `Locator` instances and does not directly execute interaction actions.
+
+```ts
+const submitButton = page.getByRole('button', { name: 'Submit' });
+```
+
+The `submitButton` above is a `Locator`. You can continue chaining calls on it (e.g., `.click()`) or pass it to `expect.element(...)` for assertions.
+
+## BrowserPage
+
+- **Type:** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'>`
+
+`BrowserPage` is the type definition for `page`. It only exposes query entry points and does not include interaction methods like `click`, `fill`, etc.
+
+This means you need to first obtain a `Locator` through `page`, then call interactions and assertions on the `Locator`.
+
+## Query API
+
+All the following APIs return a new `Locator` and support further chaining.
+
+### locator
+
+- **Type:** `(selector: string) => Locator`
+
+Query elements by CSS selector.
+
+```ts
+const item = page.locator('.todo-item');
+```
+
+### getByRole
+
+- **Type:** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
+
+Query elements by semantic role. Recommended as the first choice.
+
+`LocatorGetByRoleOptions` supports: `name`, `exact`, `checked`, `disabled`, `expanded`, `selected`, `pressed`, `includeHidden`, `level`.
+
+```ts
+const saveBtn = page.getByRole('button', { name: 'Save' });
+```
+
+### getByText
+
+- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+Query by visible text.
+
+```ts
+const successMessage = page.getByText('Saved successfully');
+```
+
+### getByLabel
+
+- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+Query by form label.
+
+```ts
+const emailInput = page.getByLabel('Email');
+```
+
+### getByPlaceholder
+
+- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+Query by placeholder.
+
+```ts
+const searchInput = page.getByPlaceholder('Search');
+```
+
+### getByAltText
+
+- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+Query by `alt` text.
+
+```ts
+const avatarImage = page.getByAltText('User avatar');
+```
+
+### getByTitle
+
+- **Type:** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+Query by `title`.
+
+```ts
+const helpIcon = page.getByTitle('Help');
+```
+
+### getByTestId
+
+- **Type:** `(text: string | RegExp) => Locator`
+
+Query by test id.
+
+```ts
+const settingsPanel = page.getByTestId('settings-panel');
+```
+
+## Configuration API
+
+### setTestIdAttribute
+
+- **Type:** `(attribute: string) => Promise<void>`
+
+Set the attribute name used by `getByTestId()`. The default value is `data-testid`.
+
+This configuration is forwarded through the Browser Mode channel to the host provider (e.g., Playwright's `selectors.setTestIdAttribute()`).
+
+This is a global configuration. It is recommended to set it once during the test setup phase to avoid inconsistent query behavior caused by mid-test modifications.
+
+```ts
+import { page, setTestIdAttribute } from '@rstest/browser';
+
+await setTestIdAttribute('data-test');
+await page.getByTestId('settings-panel').click();
+```
+
+## Composition API
+
+### filter
+
+- **Type:** `(options: LocatorFilterOptions) => Locator`
+
+`LocatorFilterOptions` supports:
+
+- `hasText?: string | RegExp`: Keep elements matching the text
+- `hasNotText?: string | RegExp`: Exclude elements matching the text
+- `has?: Locator`: Keep elements containing the child Locator
+- `hasNot?: Locator`: Exclude elements containing the child Locator
+
+Used for secondary filtering on existing query results.
+
+```ts
+const profileSave = page
+  .locator('section')
+  .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
+  .getByRole('button', { name: 'Save' });
+```
+
+```ts
+const visibleItems = page.locator('li').filter({
+  hasNotText: /archived/i,
+  hasNot: page.getByRole('img', { name: 'Locked' }),
+});
+```
+
+### and / or
+
+- **Type:** `(other: Locator) => Locator`
+
+Combine two Locator conditions.
+
+```ts
+const byRole = page.getByRole('button', { name: 'Submit' });
+const byId = page.locator('#submit');
+
+const exactOne = byRole.and(byId);
+```
+
+### nth / first / last
+
+- **Type:**
+  - `nth(index: number): Locator`
+  - `first(): Locator`
+  - `last(): Locator`
+
+Select a specific element from the matched set.
+
+## Interaction API
+
+The following APIs trigger actual browser actions and return `Promise<void>`.
+
+These `*Options` types represent the set of options currently supported in Browser Mode:
+
+- `LocatorClickOptions` / `LocatorDblclickOptions`: `button`, `delay`, `force`, `modifiers`, `position`, `timeout`, `trial` (`click` additionally supports `clickCount`)
+- `LocatorHoverOptions`: `force`, `modifiers`, `position`, `timeout`, `trial`
+- `LocatorPressOptions`: `delay`, `timeout`
+- `LocatorFillOptions`: `force`, `timeout`
+- `LocatorCheckOptions`: `force`, `position`, `timeout`, `trial`
+- `LocatorFocusOptions` / `LocatorBlurOptions` / `LocatorScrollIntoViewIfNeededOptions`: `timeout`
+- `LocatorWaitForOptions`: `state` (`attached` / `detached` / `visible` / `hidden`) and `timeout`
+- `LocatorSelectOptionOptions`: `force`, `timeout`
+- `LocatorSetInputFilesOptions`: `timeout`
+
+### click
+
+- **Type:** `(options?: LocatorClickOptions) => Promise<void>`
+
+Click the element matched by the current Locator.
+
+```ts
+await page.getByRole('button', { name: 'Submit' }).click();
+```
+
+### dblclick
+
+- **Type:** `(options?: LocatorDblclickOptions) => Promise<void>`
+
+Double-click the element.
+
+```ts
+await page.getByText('Open details').dblclick();
+```
+
+### hover
+
+- **Type:** `(options?: LocatorHoverOptions) => Promise<void>`
+
+Hover the mouse over the element, commonly used to trigger hover menus or tooltips.
+
+```ts
+await page.getByRole('button', { name: 'More' }).hover();
+```
+
+### press
+
+- **Type:** `(key: string, options?: LocatorPressOptions) => Promise<void>`
+
+Send a keyboard key press on the element.
+
+```ts
+await page.getByLabel('Search').press('Enter');
+```
+
+### fill
+
+- **Type:** `(value: string, options?: LocatorFillOptions) => Promise<void>`
+
+Set the value of an input field. Applicable to `input`, `textarea`, and other editable elements.
+
+```ts
+await page.getByPlaceholder('Email').fill('dev@rstest.rs');
+```
+
+### clear
+
+- **Type:** `() => Promise<void>`
+
+Clear the value of the current input element.
+
+```ts
+await page.getByPlaceholder('Email').clear();
+```
+
+### focus
+
+- **Type:** `(options?: LocatorFocusOptions) => Promise<void>`
+
+Focus the element.
+
+```ts
+await page.getByLabel('Username').focus();
+```
+
+### blur
+
+- **Type:** `(options?: LocatorBlurOptions) => Promise<void>`
+
+Remove focus from the element.
+
+```ts
+await page.getByLabel('Username').blur();
+```
+
+### check
+
+- **Type:** `(options?: LocatorCheckOptions) => Promise<void>`
+
+Check a checkbox or radio button.
+
+```ts
+await page.getByLabel('Agree').check();
+```
+
+### uncheck
+
+- **Type:** `(options?: LocatorCheckOptions) => Promise<void>`
+
+Uncheck a checkbox.
+
+```ts
+await page.getByLabel('Agree').uncheck();
+```
+
+### scrollIntoViewIfNeeded
+
+- **Type:** `(options?: LocatorScrollIntoViewIfNeededOptions) => Promise<void>`
+
+Scroll the page if needed to bring the element into the visible area.
+
+```ts
+await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
+```
+
+### waitFor
+
+- **Type:** `(options?: LocatorWaitForOptions) => Promise<void>`
+
+Wait until the Locator meets the specified condition before continuing execution. Useful for handling async rendering.
+
+```ts
+await page.getByText('Ready').waitFor();
+```
+
+### dispatchEvent
+
+- **Type:** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
+
+Dispatch a custom or native event on the element.
+
+```ts
+await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
+```
+
+### selectOption
+
+- **Type:** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
+
+Select an option of a `select` element. Currently only supports `string` or `string[]` as the value.
+
+```ts
+await page.getByLabel('Choice').selectOption('b');
+```
+
+### setInputFiles
+
+- **Type:** `(files: string | string[], options?: LocatorSetInputFilesOptions) => Promise<void>`
+
+Set files for an `input[type="file"]`. Currently only supports file paths as `string` or `string[]`.
+
+```ts
+await page.locator('#upload').setInputFiles('/tmp/demo.txt');
+```
+
+## Usage constraints
+
+- The argument to `and` / `or` / `filter({ has | hasNot })` must be a `Locator` returned by `@rstest/browser`
+- The `type` argument to `dispatchEvent(type, eventInit?)` must be a non-empty string
+- `selectOption` currently only supports `string` or `string[]`
+- `setInputFiles` currently only supports file paths as `string` or `string[]`
+- Some parameters are transmitted through the Browser Mode communication channel; it is recommended to keep them JSON-serializable
+
+## Using with expect.element
+
+`Locator` is typically used together with `expect.element(locator)`. For the full list of assertions, see [Assertion](/api/runtime-api/browser-mode/assertion).

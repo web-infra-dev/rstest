@@ -43,6 +43,26 @@ expect('hello').toBeDefined();
 expect([1, 2, 3]).toContain(2);
 ```
 
+## expect.element (Browser Mode)
+
+- **Type:** `(locator: Locator) => BrowserElementExpect`
+
+In Browser Mode, `expect.element` is used to assert against a Locator provided by `@rstest/browser` (for example, `toBeVisible`, `toHaveText`, `toHaveValue`).
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('asserts by locator', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toBeVisible();
+});
+```
+
+`expect.element` is only available in Browser Mode and requires importing `@rstest/browser` to install the browser-side adapter. See [Assertion (Browser Mode)](/api/runtime-api/browser-mode/assertion) for the complete reference.
+
 ## expect.not
 
 Negates the assertion.

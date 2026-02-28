@@ -104,26 +104,32 @@ export default defineConfig({
 
 ### 3. 编写测试
 
-创建一个简单的浏览器测试文件：
+创建一个浏览器测试文件。推荐使用 Locator API 进行元素定位和交互：
 
-```ts title="src/dom.test.ts"
+```ts title="tests/counter.test.ts"
+import { page } from '@rstest/browser';
 import { expect, test } from '@rstest/core';
 
-test('should work with DOM APIs', () => {
-  const div = document.createElement('div');
-  div.textContent = 'Hello Browser!';
-  document.body.appendChild(div);
+test('counter increments on click', async () => {
+  document.body.innerHTML = `
+    <button id="count-btn">Count: 0</button>
+  `;
 
-  expect(document.body.textContent).toContain('Hello Browser!');
-});
+  let count = 0;
+  document.getElementById('count-btn')!.addEventListener('click', (e) => {
+    count++;
+    (e.target as HTMLButtonElement).textContent = `Count: ${count}`;
+  });
 
-test('should have real browser APIs', () => {
-  // These APIs may be incomplete or missing in jsdom
-  expect(typeof window.requestAnimationFrame).toBe('function');
-  expect(typeof window.IntersectionObserver).toBe('function');
-  expect(typeof window.ResizeObserver).toBe('function');
+  await expect
+    .element(page.getByRole('button', { name: 'Count: 0' }))
+    .toBeVisible();
+  await page.getByRole('button', { name: 'Count: 0' }).click();
+  await expect.element(page.getByText('Count: 1')).toBeVisible();
 });
 ```
+
+这个示例使用 `page.getByRole()` 按语义角色定位按钮，通过 `click()` 触发交互，再用 `expect.element().toBeVisible()` 断言结果。断言会自动等待元素状态变化，无需手写轮询。
 
 ### 4. 运行测试
 

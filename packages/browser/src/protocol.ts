@@ -16,6 +16,7 @@ export type {
   SnapshotRpcRequest,
   SnapshotRpcResponse,
 } from './rpcProtocol';
+export { validateBrowserRpcRequest } from './rpcProtocol';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
