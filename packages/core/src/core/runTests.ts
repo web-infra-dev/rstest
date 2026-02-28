@@ -788,6 +788,17 @@ export async function runTests(context: Rstest): Promise<void> {
           ),
         );
 
+        // Print which test files were running at time of crash
+        const running = context.stateManager.runningModules;
+        if (running.size > 0) {
+          const files = [...running.keys()].join('\n  - ');
+          logger.log(
+            color.red(
+              `Test files running at time of crash:\n  - ${files}`,
+            ),
+          );
+        }
+
         // Run global teardown before exit
         runGlobalTeardown().catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));

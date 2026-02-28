@@ -46,6 +46,7 @@ const registerGlobalApi = (api: Rstest) => {
 
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
+let hasReportedError = false;
 
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
@@ -133,6 +134,13 @@ const preparePool = async ({
     const error: Error = typeof e === 'string' ? new Error(e) : e;
 
     error.name = type;
+    hasReportedError = true;
+
+    // Write directly to stderr to ensure error survives even if RPC channel is broken.
+    // Tinypool pipes worker stderr to main process stderr, so this will always be visible.
+    process.stderr.write(
+      `\n[Rstest Worker] ${type} (test: ${testPath}):\n${error.stack || error.message}\n`,
+    );
 
     if (isTeardown) {
       error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
@@ -282,6 +290,7 @@ const runInPool = async (
   }
 
   isTeardown = false;
+  hasReportedError = false;
   const {
     entryInfo: { distPath, testPath },
     setupEntries,
@@ -294,6 +303,20 @@ const runInPool = async (
   } = options;
 
   const cleanups: (() => MaybePromise<void>)[] = [];
+
+  // Catch native crashes (SIGKILL, OOM, etc.) where uncaughtException doesn't fire.
+  const workerExitHandler = (code: number | null) => {
+    if (code != null && code !== 0 && !hasReportedError) {
+      process.stderr.write(
+        `\n[Rstest Worker] Worker exited unexpectedly with code ${code} (test: ${testPath})\n` +
+          `This may be caused by a native crash or out-of-memory error.\n`,
+      );
+    }
+  };
+  process.on('exit', workerExitHandler);
+  cleanups.push(() => {
+    process.off('exit', workerExitHandler);
+  });
 
   const exit = process.exit.bind(process);
   process.exit = (code = process.exitCode || 0): never => {
