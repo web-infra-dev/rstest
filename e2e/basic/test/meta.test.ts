@@ -30,4 +30,9 @@ describe('import.meta', () => {
     expect(aMetaDirname).toBe(aDirName);
     expect(aMetaFileName).toBe(aFileName);
   });
+
+  it('should get dirname from import meta correctly', async () => {
+    const { dirname } = import.meta;
+    expect(dirname).toBe(__dirname);
+  });
 });
