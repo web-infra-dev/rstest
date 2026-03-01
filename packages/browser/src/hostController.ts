@@ -51,7 +51,11 @@ import type {
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
-import { validateBrowserRpcRequest } from './protocol';
+import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_RUNNER,
+  validateBrowserRpcRequest,
+} from './protocol';
 import {
   type BrowserProvider,
   type BrowserProviderBrowser,
@@ -2050,7 +2054,7 @@ export const runBrowserController = async (
     const dispatchRouter = createDispatchRouter({
       isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
       onStale: (request) => {
-        if (request.namespace === 'runner') {
+        if (request.namespace === DISPATCH_NAMESPACE_RUNNER) {
           logger.debug(
             `[Headless] Dropped stale message "${request.method}" for ${request.target?.testFile ?? 'unknown'}`,
           );
@@ -2067,7 +2071,7 @@ export const runBrowserController = async (
       const response = await dispatchRouter.dispatch({
         requestId: nextDispatchRequestId('runner'),
         runToken: run.token,
-        namespace: 'runner',
+        namespace: DISPATCH_NAMESPACE_RUNNER,
         method: message.type,
         args: 'payload' in message ? message.payload : undefined,
         target: {
@@ -2882,7 +2886,7 @@ export const listBrowserTests = async (
 
   // Expose dispatch function for browser client to send messages
   await page.exposeFunction(
-    '__rstest_dispatch__',
+    DISPATCH_MESSAGE_TYPE,
     (message: { type: string; payload?: unknown }) => {
       switch (message.type) {
         case 'collect-result': {

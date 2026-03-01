@@ -1,4 +1,8 @@
-import type { BrowserClientMessage, BrowserHostConfig } from './protocol';
+import type {
+  BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserHostConfig,
+} from './protocol';
 
 declare module '@rstest/browser-manifest' {
   export type ManifestProjectConfig = {
@@ -35,6 +39,9 @@ declare global {
   interface Window {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
     __rstest_dispatch__?: (message: BrowserClientMessage) => void;
+    __rstest_dispatch_rpc__?: (
+      request: BrowserDispatchRequest,
+    ) => Promise<unknown>;
     __rstest_container_dispatch__?: (data: unknown) => void;
     __rstest_container_on__?: (data: unknown) => void;
     __RSTEST_DONE__?: boolean;

@@ -7,6 +7,11 @@ import {
   rstest,
 } from '@rstest/core';
 import type { BrowserDispatchResponse } from '../src/protocol';
+import {
+  DISPATCH_METHOD_RPC,
+  DISPATCH_NAMESPACE_BROWSER,
+  DISPATCH_RESPONSE_TYPE,
+} from '../src/protocol';
 
 type CallBrowserRpc = typeof import('../src/client/browserRpc').callBrowserRpc;
 
@@ -21,7 +26,7 @@ describe('browserRpc client', () => {
     }
     messageHandler({
       data: {
-        type: '__rstest_dispatch_response__',
+        type: DISPATCH_RESPONSE_TYPE,
         payload: response,
       },
     } as MessageEvent);
@@ -86,8 +91,8 @@ describe('browserRpc client', () => {
     expect(request?.id).toBe('rpc-id-1');
     expect(request?.testPath).toBe('/tests/example.test.ts');
     expect(request?.runId).toBe('run-1');
-    expect(dispatchRequest?.namespace).toBe('browser');
-    expect(dispatchRequest?.method).toBe('rpc');
+    expect(dispatchRequest?.namespace).toBe(DISPATCH_NAMESPACE_BROWSER);
+    expect(dispatchRequest?.method).toBe(DISPATCH_METHOD_RPC);
 
     respond({ requestId: dispatchRequest!.requestId!, result: undefined });
     await expect(requestPromise).resolves.toBeUndefined();

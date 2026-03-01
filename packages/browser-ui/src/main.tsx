@@ -1,3 +1,8 @@
+import {
+  DISPATCH_RESPONSE_TYPE,
+  DISPATCH_RPC_REQUEST_TYPE,
+  RSTEST_CONFIG_MESSAGE_TYPE,
+} from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import React, {
   useCallback,
@@ -485,7 +490,7 @@ const BrowserRunner: React.FC<{
       } else if (message.type === 'log') {
         const payload = message.payload as LogPayload;
         rpc?.onLog(payload);
-      } else if (message.type === 'dispatch-rpc-request') {
+      } else if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
         // Unified RPC path for snapshot and future runner-side capabilities.
         const dispatchRequest = message.payload as BrowserDispatchRequest;
         const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
@@ -502,7 +507,7 @@ const BrowserRunner: React.FC<{
             if (canPostMessageSource(event.source)) {
               event.source.postMessage(
                 {
-                  type: '__rstest_dispatch_response__',
+                  type: DISPATCH_RESPONSE_TYPE,
                   payload: createStaleBrowserRpcDispatchResponse(
                     dispatchRequest.requestId,
                     browserRpcRequest,
@@ -776,7 +781,7 @@ const BrowserRunner: React.FC<{
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
-                          type: 'RSTEST_CONFIG',
+                          type: RSTEST_CONFIG_MESSAGE_TYPE,
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,

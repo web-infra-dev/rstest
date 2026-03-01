@@ -1,3 +1,7 @@
+import {
+  BROWSER_VIEWPORT_PRESET_DIMENSIONS,
+  BROWSER_VIEWPORT_PRESET_IDS,
+} from '@rstest/browser/viewport-presets';
 import type { DevicePreset } from '@rstest/core/browser';
 
 export type { DevicePreset };
@@ -9,52 +13,37 @@ export type DevicePresetInfo = {
   height: number;
 };
 
-/**
- * Presets aligned with Chrome DevTools (portrait for phones/tablets).
- *
- * Source (Chromium): front_end/models/emulation/EmulatedDevices.ts
- * Default subset: entries with `show-by-default: true`.
- */
-export const DEVICE_PRESETS: DevicePresetInfo[] = [
-  { id: 'iPhoneSE', label: 'iPhone SE', width: 375, height: 667 },
-  { id: 'iPhoneXR', label: 'iPhone XR', width: 414, height: 896 },
-  { id: 'iPhone12Pro', label: 'iPhone 12 Pro', width: 390, height: 844 },
-  { id: 'iPhone14ProMax', label: 'iPhone 14 Pro Max', width: 430, height: 932 },
-  { id: 'Pixel7', label: 'Pixel 7', width: 412, height: 915 },
-  {
-    id: 'SamsungGalaxyS8Plus',
-    label: 'Samsung Galaxy S8+',
-    width: 360,
-    height: 740,
-  },
-  {
-    id: 'SamsungGalaxyS20Ultra',
-    label: 'Samsung Galaxy S20 Ultra',
-    width: 412,
-    height: 915,
-  },
-  { id: 'iPadMini', label: 'iPad Mini', width: 768, height: 1024 },
-  { id: 'iPadAir', label: 'iPad Air', width: 820, height: 1180 },
-  { id: 'iPadPro', label: 'iPad Pro', width: 1024, height: 1366 },
-  { id: 'SurfacePro7', label: 'Surface Pro 7', width: 912, height: 1368 },
-  { id: 'SurfaceDuo', label: 'Surface Duo', width: 540, height: 720 },
-  { id: 'GalaxyZFold5', label: 'Galaxy Z Fold 5', width: 344, height: 882 },
-  {
-    id: 'AsusZenbookFold',
-    label: 'Asus Zenbook Fold',
-    width: 853,
-    height: 1280,
-  },
-  {
-    id: 'SamsungGalaxyA51A71',
-    label: 'Samsung Galaxy A51/71',
-    width: 412,
-    height: 914,
-  },
+const DEVICE_PRESET_LABELS: Record<DevicePreset, string> = {
+  iPhoneSE: 'iPhone SE',
+  iPhoneXR: 'iPhone XR',
+  iPhone12Pro: 'iPhone 12 Pro',
+  iPhone14ProMax: 'iPhone 14 Pro Max',
+  Pixel7: 'Pixel 7',
+  SamsungGalaxyS8Plus: 'Samsung Galaxy S8+',
+  SamsungGalaxyS20Ultra: 'Samsung Galaxy S20 Ultra',
+  iPadMini: 'iPad Mini',
+  iPadAir: 'iPad Air',
+  iPadPro: 'iPad Pro',
+  SurfacePro7: 'Surface Pro 7',
+  SurfaceDuo: 'Surface Duo',
+  GalaxyZFold5: 'Galaxy Z Fold 5',
+  AsusZenbookFold: 'Asus Zenbook Fold',
+  SamsungGalaxyA51A71: 'Samsung Galaxy A51/71',
   // Nest Hub devices only expose a single (horizontal) mode in DevTools.
-  { id: 'NestHub', label: 'Nest Hub', width: 1024, height: 600 },
-  { id: 'NestHubMax', label: 'Nest Hub Max', width: 1280, height: 800 },
-];
+  NestHub: 'Nest Hub',
+  NestHubMax: 'Nest Hub Max',
+};
+
+export const DEVICE_PRESETS: DevicePresetInfo[] =
+  BROWSER_VIEWPORT_PRESET_IDS.map((id) => {
+    const dimensions = BROWSER_VIEWPORT_PRESET_DIMENSIONS[id];
+    return {
+      id,
+      label: DEVICE_PRESET_LABELS[id],
+      width: dimensions.width,
+      height: dimensions.height,
+    };
+  });
 
 const presetIds = new Set<DevicePreset>(DEVICE_PRESETS.map((p) => p.id));
 

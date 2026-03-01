@@ -1,3 +1,7 @@
+import {
+  DISPATCH_METHOD_RPC,
+  DISPATCH_NAMESPACE_BROWSER,
+} from '@rstest/browser/protocol';
 import type { BrowserDispatchResponse, BrowserRpcRequest } from '../types';
 
 export const canPostMessageSource = (
@@ -23,7 +27,10 @@ export const readBrowserRpcRequest = (
     return null;
   }
 
-  if (value.namespace !== 'browser' || value.method !== 'rpc') {
+  if (
+    value.namespace !== DISPATCH_NAMESPACE_BROWSER ||
+    value.method !== DISPATCH_METHOD_RPC
+  ) {
     return null;
   }
 

@@ -13,7 +13,8 @@
     "baseUrl": ".",
     "paths": {
       "@rstest/browser/rpc-protocol": ["../browser/src/rpcProtocol.ts"],
-      "@rstest/browser/protocol": ["../browser/src/protocol.ts"]
+      "@rstest/browser/protocol": ["../browser/src/protocol.ts"],
+      "@rstest/browser/viewport-presets": ["../browser/src/viewportPresets.ts"]
     },
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,

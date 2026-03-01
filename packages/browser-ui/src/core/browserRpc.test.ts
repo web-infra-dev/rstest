@@ -1,3 +1,7 @@
+import {
+  DISPATCH_METHOD_RPC,
+  DISPATCH_NAMESPACE_BROWSER,
+} from '@rstest/browser/protocol';
 import { describe, expect, it } from '@rstest/core';
 import {
   createStaleBrowserRpcDispatchResponse,
@@ -9,8 +13,8 @@ describe('browser rpc helpers', () => {
   it('should read browser rpc payload from dispatch request', () => {
     const request = readBrowserRpcRequest({
       requestId: 'dispatch-1',
-      namespace: 'browser',
-      method: 'rpc',
+      namespace: DISPATCH_NAMESPACE_BROWSER,
+      method: DISPATCH_METHOD_RPC,
       args: {
         id: 'rpc-1',
         testPath: '/tests/example.test.ts',

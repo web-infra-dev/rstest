@@ -18,6 +18,17 @@ export type {
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';
 
+export const DISPATCH_MESSAGE_TYPE = '__rstest_dispatch__';
+export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
+export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
+export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
+export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+
+export const DISPATCH_NAMESPACE_RUNNER = 'runner';
+export const DISPATCH_NAMESPACE_BROWSER = 'browser';
+export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
+export const DISPATCH_METHOD_RPC = 'rpc';
+
 export type SerializedRuntimeConfig = RuntimeConfig;
 
 export type BrowserViewport =
@@ -119,7 +130,7 @@ export type BrowserClientMessage =
   // Snapshot already uses this path via namespace "snapshot". Future PR #948
   // capabilities can add new namespaces instead of adding new message types.
   | {
-      type: 'dispatch-rpc-request';
+      type: typeof DISPATCH_RPC_REQUEST_TYPE;
       payload: BrowserDispatchRequest;
     };
 
@@ -156,7 +167,7 @@ export type BrowserDispatchResponse = {
 };
 
 export type BrowserDispatchResponseEnvelope = {
-  type: '__rstest_dispatch_response__';
+  type: typeof DISPATCH_RESPONSE_TYPE;
   payload: BrowserDispatchResponse;
 };
 

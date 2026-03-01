@@ -1,3 +1,4 @@
+import { DISPATCH_RESPONSE_TYPE } from '@rstest/browser/protocol';
 import { describe, expect, it, rstest } from '@rstest/core';
 import { forwardDispatchRpcRequest } from './channel';
 
@@ -31,7 +32,7 @@ describe('forwardDispatchRpcRequest', () => {
     });
     expect((sourceWindow as any).postMessage).toHaveBeenCalledWith(
       {
-        type: '__rstest_dispatch_response__',
+        type: DISPATCH_RESPONSE_TYPE,
         payload: {
           requestId: 'req-1',
           result: { ok: true },
@@ -58,7 +59,7 @@ describe('forwardDispatchRpcRequest', () => {
 
     expect((sourceWindow as any).postMessage).toHaveBeenCalledWith(
       {
-        type: '__rstest_dispatch_response__',
+        type: DISPATCH_RESPONSE_TYPE,
         payload: {
           requestId: 'req-2',
           error: 'Container RPC is not ready for dispatch.',
@@ -86,7 +87,7 @@ describe('forwardDispatchRpcRequest', () => {
     expect(rpc.dispatch).not.toHaveBeenCalled();
     expect((sourceWindow as any).postMessage).toHaveBeenCalledWith(
       {
-        type: '__rstest_dispatch_response__',
+        type: DISPATCH_RESPONSE_TYPE,
         payload: {
           requestId: 'unknown-request',
           error:
