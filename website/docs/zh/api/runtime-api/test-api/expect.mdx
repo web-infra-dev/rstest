@@ -43,6 +43,26 @@ expect('hello').toBeDefined();
 expect([1, 2, 3]).toContain(2);
 ```
 
+## expect.element（Browser Mode）
+
+- **类型：** `(locator: Locator) => BrowserElementExpect`
+
+在 Browser Mode 中，`expect.element` 用于对 `@rstest/browser` 提供的 Locator 执行断言（例如 `toBeVisible`、`toHaveText`、`toHaveValue`）。
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('asserts by locator', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toBeVisible();
+});
+```
+
+`expect.element` 仅在 Browser Mode 中可用，并且需要引入 `@rstest/browser` 来安装浏览器侧适配层。完整参考见 [Assertion（Browser Mode）](/api/runtime-api/browser-mode/assertion)。
+
 ## expect.not
 
 否定该断言。

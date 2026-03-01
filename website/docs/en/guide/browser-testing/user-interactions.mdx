@@ -1,17 +1,137 @@
 # User interactions
 
-This guide covers how to simulate user interactions in Browser Mode tests.
+This guide covers how to simulate user interactions in Browser Mode tests, and helps you choose between stability, maintainability, and control granularity.
 
-In Browser Mode, you can choose between Testing Library or native DOM APIs. Testing Library better simulates real user behavior by automatically handling complete event sequences and focus management, making it suitable for most UI tests. Native DOM APIs are lighter and allow precise control over event properties, but require manual event sequencing—ideal for verifying low-level event logic or special interaction details.
+In Browser Mode, choose your interaction approach in the following priority order (only fall back when needed):
+
+- **Locator API (preferred)**: Use [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) for semantic queries and auto-waiting assertions, suitable for the vast majority of interaction tests
+- **Testing Library**: Best for migrating existing tests or reusing an established Testing Library toolchain; generally not the first choice for new tests
+- **Native DOM API (fallback)**: Lighter and allows precise control over event properties, but requires manual event sequencing — ideal for verifying low-level event logic or special interaction details
 
 import { PackageManagerTabs } from '@theme';
 
-## Testing library (Recommended)
+## Locator API
 
-[Testing Library](https://testing-library.com/) is a testing utility library focused on user behavior. It encourages writing tests that mirror how users actually interact with your application, rather than relying on implementation details. In Browser Mode, we recommend using these two packages together:
+The Locator API is the default choice in Browser Mode. It is officially provided by Rstest: `@rstest/browser` provides the [page](/api/runtime-api/browser-mode/locator#page) query and interaction entry point, and `@rstest/core` provides [expect.element](/api/runtime-api/browser-mode/assertion) assertion capabilities.
 
-- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro): Provides query methods like `getByRole`, `getByText`, and `getByLabelText` that let you find elements from a user's perspective (e.g., "find the input labeled Username") rather than relying on CSS selectors or test-specific attributes
-- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro): Simulates real user interactions by triggering complete event sequences (e.g., `click` fires `mousedown`, `focus`, `mouseup`, `click` in order) and automatically handling focus, cursor position, and other details
+It adopts a Playwright-style Locator syntax ([page.getBy\*](/api/runtime-api/browser-mode/locator#page) + chaining + [expect.element](/api/runtime-api/browser-mode/assertion)), enabling both component tests and DOM tests to reuse the same interaction and assertion patterns.
+
+Reasons to prefer the Locator API:
+
+- More stable queries: prioritizes locating elements by user-perceivable semantics such as `role`, `label`, and `text`
+- More direct interactions: actions like [click](/api/runtime-api/browser-mode/locator#click), [fill](/api/runtime-api/browser-mode/locator#fill), [check](/api/runtime-api/browser-mode/locator#check), and [press](/api/runtime-api/browser-mode/locator#press) are attached directly to the Locator
+- More natural assertions: combined with [expect.element](/api/runtime-api/browser-mode/assertion), waiting and assertion semantics stay consistent
+- Higher consistency: a single API set covers queries, actions, and assertions, reducing context-switching between multiple tools
+
+### Example
+
+The following example focuses on the most common workflow: filling forms, clicking, and asserting.
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('interacts with form using locator api', async () => {
+  document.body.innerHTML = `
+    <form aria-label="Login form">
+      <label for="username">Username</label>
+      <input id="username" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" />
+
+      <label>
+        <input id="remember" type="checkbox" />
+        Remember me
+      </label>
+
+      <button type="button">Login</button>
+    </form>
+  `;
+
+  await page.getByLabel('Username').fill('alice');
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByLabel('Remember me').check();
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  await expect.element(page.getByLabel('Username')).toHaveValue('alice');
+  await expect.element(page.getByLabel('Remember me')).toBeChecked();
+});
+```
+
+### Common queries and composition
+
+You can compose Locators just like in Playwright, progressively narrowing the scope to the target element:
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('composes locators', async () => {
+  document.body.innerHTML = `
+    <section>
+      <h2>Home</h2>
+      <button>Save</button>
+    </section>
+    <section>
+      <h2>Profile</h2>
+      <button>Save</button>
+    </section>
+  `;
+
+  const saveInProfileSection = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
+    .getByRole('button', { name: 'Save' });
+
+  await expect.element(saveInProfileSection).toHaveCount(1);
+});
+```
+
+Currently available query/composition capabilities include:
+
+- Semantic and attribute queries: [getByRole](/api/runtime-api/browser-mode/locator#getbyrole), [getByText](/api/runtime-api/browser-mode/locator#getbytext), [getByLabel](/api/runtime-api/browser-mode/locator#getbylabel), [getByPlaceholder](/api/runtime-api/browser-mode/locator#getbyplaceholder), [getByAltText](/api/runtime-api/browser-mode/locator#getbyalttext), [getByTitle](/api/runtime-api/browser-mode/locator#getbytitle), [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid)
+- Basic selection and filtering: [locator](/api/runtime-api/browser-mode/locator#locator), [filter](/api/runtime-api/browser-mode/locator#filter)
+- Set composition and positioning: [and](/api/runtime-api/browser-mode/locator#and--or), [or](/api/runtime-api/browser-mode/locator#and--or), [nth](/api/runtime-api/browser-mode/locator#nth--first--last), [first](/api/runtime-api/browser-mode/locator#nth--first--last), [last](/api/runtime-api/browser-mode/locator#nth--first--last)
+
+In practice, prefer semantic queries ([getByRole](/api/runtime-api/browser-mode/locator#getbyrole), [getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)) first, and only fall back to [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid) or CSS selectors when semantic information is insufficient.
+
+### Common interactions and assertions
+
+Locators support common interaction APIs (such as [click](/api/runtime-api/browser-mode/locator#click), [fill](/api/runtime-api/browser-mode/locator#fill), [check](/api/runtime-api/browser-mode/locator#check), [hover](/api/runtime-api/browser-mode/locator#hover), [press](/api/runtime-api/browser-mode/locator#press), [selectOption](/api/runtime-api/browser-mode/locator#selectoption)), and can be directly combined with [expect.element](/api/runtime-api/browser-mode/assertion) assertions:
+
+- State assertions: [toBeVisible](/api/runtime-api/browser-mode/assertion#tobevisible), [toBeHidden](/api/runtime-api/browser-mode/assertion#tobehidden), [toBeEnabled](/api/runtime-api/browser-mode/assertion#tobeenabled), [toBeDisabled](/api/runtime-api/browser-mode/assertion#tobedisabled)
+- Form/structure assertions: [toBeChecked](/api/runtime-api/browser-mode/assertion#tobechecked), [toBeFocused](/api/runtime-api/browser-mode/assertion#tobefocused), [toBeEmpty](/api/runtime-api/browser-mode/assertion#tobeempty)
+- Text and value assertions: [toHaveText](/api/runtime-api/browser-mode/assertion#tohavetext), [toContainText](/api/runtime-api/browser-mode/assertion#tocontaintext), [toHaveValue](/api/runtime-api/browser-mode/assertion#tohavevalue), [toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
+- Attribute assertions: [toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute), [toHaveClass](/api/runtime-api/browser-mode/assertion#tohaveclass), [toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss), [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
+
+It's recommended to assert observable results immediately after key interactions (for example, status text, button state, field values) — this keeps failure messages focused and reduces debugging cost.
+
+You can also chain [not](/api/runtime-api/browser-mode/assertion#not) and use an optional `timeout`:
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .not.toBeDisabled({ timeout: 1000 });
+```
+
+### Current capability boundaries
+
+The current implementation is a high-frequency subset of the Playwright Locator API, not a fully equivalent implementation. Keep the following in mind:
+
+- [selectOption](/api/runtime-api/browser-mode/locator#selectoption) currently only supports `string` or `string[]`
+- [setInputFiles](/api/runtime-api/browser-mode/locator#setinputfiles) currently only supports file paths as `string` or `string[]`
+- [dispatchEvent](/api/runtime-api/browser-mode/locator#dispatchevent) requires `eventInit` to be JSON-serializable
+- [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty) requires the expected value to be JSON-serializable
+
+For the complete API list, see [Locator reference](/api/runtime-api/browser-mode/locator).
+
+## Testing library
+
+[Testing Library](https://testing-library.com/) is a testing utility library focused on user behavior. It encourages writing tests that mirror how users actually interact with your application, rather than relying on implementation details. In Browser Mode, it is better suited as a compatibility and migration solution:
+
+- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro): Handles queries, providing methods like `getByRole`, `getByText`, and `getByLabelText` that let you find elements by user-perceivable semantics
+- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro): Handles interactions, providing more complete event simulation flows; in Browser Mode, the Locator API is still recommended for new tests
 
 ### Installation
 
@@ -53,11 +173,11 @@ test('submits login form with user credentials', async () => {
 });
 ```
 
-Testing Library offers a rich set of interaction methods including click, text input, keyboard events, dropdown selection, drag and drop, and more. For detailed usage, see the [user-event documentation](https://testing-library.com/docs/user-event/intro).
+If your project already uses Testing Library extensively, you can continue reusing its click, text input, keyboard event, dropdown selection, drag and drop, and other capabilities. For detailed usage, see the [user-event documentation](https://testing-library.com/docs/user-event/intro).
 
-## Native DOM APIs
+## Native DOM API
 
-If you prefer not to add extra dependencies, or need lower-level event control (such as precisely specifying `clientX`, `ctrlKey`, etc.), you can use native browser DOM APIs directly.
+If you prefer not to add extra dependencies, or need lower-level event control (such as precisely specifying `clientX`, `ctrlKey`, etc.), you can use native browser DOM APIs directly. This is typically used as a fallback, only when you need precise control over event parameters.
 
 ### Example
 

@@ -13,4 +13,14 @@ describe('browser mode - viewport', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
+
+  it('should apply viewport config in headed mode without scheduler page', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('viewport', {
+      args: ['--browser.headless', 'false'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toMatch(/Tests.*passed/);
+    expect(cli.stdout).not.toContain('/scheduler.html');
+  });
 });

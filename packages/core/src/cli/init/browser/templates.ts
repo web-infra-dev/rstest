@@ -71,18 +71,19 @@ export function getReactTestTemplate(lang: 'ts' | 'js'): string {
   const componentExt = lang === 'ts' ? 'tsx' : 'jsx';
 
   return `import { expect, test } from '@rstest/core';
-import { render } from '@rstest/browser-react';
-import Counter from './Counter.${componentExt}';
+import { page } from '@rstest/browser';
+ import { render } from '@rstest/browser-react';
+ import Counter from './Counter.${componentExt}';
+ 
+ test('increments count on button click', async () => {
+  await render(<Counter initial={5} />);
 
-test('increments count on button click', async () => {
-  const screen = await render(<Counter initial={5} />);
+  await expect.element(page.getByText('Count: 5')).toBeVisible();
 
-  await expect.element(screen.getByText('Count: 5')).toBeInTheDocument();
-
-  await screen.getByRole('button', { name: 'Increment' }).click();
-  await expect.element(screen.getByText('Count: 6')).toBeInTheDocument();
-});
-`;
+  await page.getByRole('button', { name: 'Increment' }).click();
+  await expect.element(page.getByText('Count: 6')).toBeVisible();
+ });
+ `;
 }
 
 /**
@@ -156,15 +157,15 @@ export function getVanillaTestTemplate(lang: 'ts' | 'js'): string {
 import { page } from '@rstest/browser';
 import { createCounter } from './Counter.${ext}';
 
-test('increments count on button click', async () => {
-  document.body.appendChild(createCounter(5));
-
-  await expect.element(page.getByText('Count: 5')).toBeInTheDocument();
-
-  await page.getByRole('button', { name: 'Increment' }).click();
-  await expect.element(page.getByText('Count: 6')).toBeInTheDocument();
-});
-`;
+ test('increments count on button click', async () => {
+   document.body.appendChild(createCounter(5));
+ 
+   await expect.element(page.getByText('Count: 5')).toBeVisible();
+ 
+   await page.getByRole('button', { name: 'Increment' }).click();
+   await expect.element(page.getByText('Count: 6')).toBeVisible();
+ });
+ `;
 }
 
 /**

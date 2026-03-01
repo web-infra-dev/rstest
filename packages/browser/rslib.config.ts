@@ -27,8 +27,10 @@ export default defineConfig({
         },
       },
       source: {
+        tsconfigPath: './tsconfig.json',
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
         },
       },
       tools: {

@@ -6,6 +6,11 @@ import {
   it,
   rstest,
 } from '@rstest/core';
+import {
+  DISPATCH_NAMESPACE_SNAPSHOT,
+  DISPATCH_RESPONSE_TYPE,
+  DISPATCH_RPC_REQUEST_TYPE,
+} from '../src/protocol';
 
 describe('BrowserSnapshotEnvironment', () => {
   let BrowserSnapshotEnvironment: any;
@@ -46,7 +51,7 @@ describe('BrowserSnapshotEnvironment', () => {
     if (messageHandler) {
       messageHandler({
         data: {
-          type: '__rstest_dispatch_response__',
+          type: DISPATCH_RESPONSE_TYPE,
           payload: { requestId: id, result },
         },
       } as MessageEvent);
@@ -106,8 +111,8 @@ describe('BrowserSnapshotEnvironment', () => {
     const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
-    expect(call[0].payload.type).toBe('dispatch-rpc-request');
-    expect(payload.namespace).toBe('snapshot');
+    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('saveSnapshotFile');
     expect(payload.args).toEqual({
       filepath: '/test/snapshot.snap',
@@ -128,8 +133,8 @@ describe('BrowserSnapshotEnvironment', () => {
     const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
-    expect(call[0].payload.type).toBe('dispatch-rpc-request');
-    expect(payload.namespace).toBe('snapshot');
+    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('readSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
 
@@ -163,8 +168,8 @@ describe('BrowserSnapshotEnvironment', () => {
     const requestId = call[0].payload.payload.requestId;
     const payload = call[0].payload.payload;
 
-    expect(call[0].payload.type).toBe('dispatch-rpc-request');
-    expect(payload.namespace).toBe('snapshot');
+    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('removeSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
 

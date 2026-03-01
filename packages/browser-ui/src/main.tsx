@@ -1,3 +1,8 @@
+import {
+  DISPATCH_RESPONSE_TYPE,
+  DISPATCH_RPC_REQUEST_TYPE,
+  RSTEST_CONFIG_MESSAGE_TYPE,
+} from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import React, {
   useCallback,
@@ -14,12 +19,19 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
+import {
+  canPostMessageSource,
+  createStaleBrowserRpcDispatchResponse,
+  isStaleBrowserRpcRequest,
+  readBrowserRpcRequest,
+} from './core/browserRpc';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunnerUrl } from './core/runtime';
+import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
+  BrowserDispatchRequest,
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
@@ -43,6 +55,23 @@ import './index.css';
 const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
+};
+
+const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
+  try {
+    const url = new URL(frame.src, window.location.href);
+    return url.searchParams.get('runId') ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const findRunnerFrameByTestPath = (
+  testPath: string,
+): HTMLIFrameElement | undefined => {
+  return Array.from(
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
+  ).find((frame) => frame.dataset.testFile === testPath);
 };
 
 // ============================================================================
@@ -75,6 +104,9 @@ const BrowserRunner: React.FC<{
       }
     >
   >(new Map());
+  const [runIdByTestFile, setRunIdByTestFile] = useState<
+    Record<string, string>
+  >({});
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -205,7 +237,11 @@ const BrowserRunner: React.FC<{
           );
           return;
         }
-
+        const nextRunId = createRunId();
+        setRunIdByTestFile((prev) => ({
+          ...prev,
+          [testFile]: nextRunId,
+        }));
         setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
         setCaseMap((prev) => {
           const prevFile = prev[testFile] ?? {};
@@ -219,6 +255,8 @@ const BrowserRunner: React.FC<{
           testFile,
           options.runnerUrl,
           testNamePattern,
+          false,
+          nextRunId,
         );
         logger.debug('[Container] Setting iframe.src to:', newSrc);
         iframe.src = newSrc;
@@ -265,6 +303,14 @@ const BrowserRunner: React.FC<{
       const next: Record<string, Record<string, CaseInfo>> = {};
       for (const file of testFiles) {
         next[file.testPath] = prev[file.testPath] ?? {};
+      }
+      return next;
+    });
+
+    setRunIdByTestFile((prev) => {
+      const next: Record<string, string> = {};
+      for (const file of testFiles) {
+        next[file.testPath] = prev[file.testPath] ?? createRunId();
       }
       return next;
     });
@@ -444,9 +490,38 @@ const BrowserRunner: React.FC<{
       } else if (message.type === 'log') {
         const payload = message.payload as LogPayload;
         rpc?.onLog(payload);
-      } else if (message.type === 'dispatch-rpc-request') {
+      } else if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
         // Unified RPC path for snapshot and future runner-side capabilities.
-        void forwardDispatchRpcRequest(rpc, message.payload, event.source);
+        const dispatchRequest = message.payload as BrowserDispatchRequest;
+        const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
+
+        if (browserRpcRequest) {
+          const currentFrame = findRunnerFrameByTestPath(
+            browserRpcRequest.testPath,
+          );
+          const currentRunId = currentFrame
+            ? readRunIdFromFrame(currentFrame)
+            : undefined;
+
+          if (isStaleBrowserRpcRequest(browserRpcRequest, currentRunId)) {
+            if (canPostMessageSource(event.source)) {
+              event.source.postMessage(
+                {
+                  type: DISPATCH_RESPONSE_TYPE,
+                  payload: createStaleBrowserRpcDispatchResponse(
+                    dispatchRequest.requestId,
+                    browserRpcRequest,
+                    currentRunId,
+                  ),
+                },
+                '*',
+              );
+            }
+            return;
+          }
+        }
+
+        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
       }
     };
     window.addEventListener('message', listener);
@@ -689,6 +764,10 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
+                  const runId = runIdByTestFile[fileInfo.testPath];
+                  if (!runId) {
+                    return null;
+                  }
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -698,13 +777,15 @@ const BrowserRunner: React.FC<{
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
                     const frame = event.currentTarget;
+                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
-                          type: 'RSTEST_CONFIG',
+                          type: RSTEST_CONFIG_MESSAGE_TYPE,
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,
+                            runId: frameRunId,
                           },
                         },
                         '*',
@@ -745,6 +826,9 @@ const BrowserRunner: React.FC<{
                           src={createRunnerUrl(
                             fileInfo.testPath,
                             options.runnerUrl,
+                            undefined,
+                            false,
+                            runId,
                           )}
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}

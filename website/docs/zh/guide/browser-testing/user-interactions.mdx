@@ -1,17 +1,137 @@
 # 浏览器交互
 
-本指南介绍如何在浏览器模式测试中模拟用户交互。
+本指南介绍在 Browser Mode 测试中如何模拟用户交互，并帮助你在稳定性、可维护性和控制粒度之间做选择。
 
-在浏览器模式下，你可以选择 Testing Library 或原生 DOM API。Testing Library 更贴近真实用户行为，能自动处理完整事件序列与焦点细节，适合大多数 UI 测试；原生 DOM API 更轻量、可精确控制事件属性，但需要手动拼装事件流程，适合验证底层事件逻辑或特殊交互细节。
+在 Browser Mode 下，推荐按以下优先级选择交互方案（仅在需要时再向后降级）：
+
+- **Locator API（首选）**：使用 [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) 做语义化定位与自动等待断言，适合绝大多数交互测试
+- **Testing Library**：适合迁移存量用例或复用既有 Testing Library 工具链；新测试一般不作为首选
+- **原生 DOM API（兜底）**：更轻量、可精确控制事件属性，但需要手动拼装事件序列，适合验证底层事件逻辑或特殊交互细节
 
 import { PackageManagerTabs } from '@theme';
 
-## Testing Library（推荐）
+## Locator API
 
-[Testing Library](https://testing-library.com/) 是一套专注于用户行为的测试工具库，它鼓励你以用户实际操作的方式编写测试，而非依赖内部实现细节。在浏览器模式下，我们推荐配合使用以下两个包：
+Locator API 是 Browser Mode 下的默认选择。它由 Rstest 官方提供：`@rstest/browser` 提供 [page](/api/runtime-api/browser-mode/locator#page) 查询与交互入口，`@rstest/core` 提供 [expect.element](/api/runtime-api/browser-mode/assertion) 断言能力。
 
-- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro)：提供 `getByRole`、`getByText`、`getByLabelText` 等查询方法，让你能以用户视角查找元素（如"找到标签为 Username 的输入框"），而非依赖 CSS 选择器或测试专用属性
-- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro)：模拟真实用户交互，会触发完整的事件序列（如 `click` 会依次触发 `mousedown`、`focus`、`mouseup`、`click`），并自动处理焦点、光标位置等细节
+它采用 Playwright 风格的 Locator 写法（[page.getBy\*](/api/runtime-api/browser-mode/locator#page) + 链式调用 + [expect.element](/api/runtime-api/browser-mode/assertion)），让组件测试和 DOM 测试都能复用同一套交互和断言模式。
+
+推荐优先使用 Locator API 的原因：
+
+- 查询更稳定：优先按 `role`、`label`、`text` 等用户可感知语义定位
+- 交互更直接：[click](/api/runtime-api/browser-mode/locator#click)、[fill](/api/runtime-api/browser-mode/locator#fill)、[check](/api/runtime-api/browser-mode/locator#check)、[press](/api/runtime-api/browser-mode/locator#press) 等动作直接挂在 Locator 上
+- 断言更自然：和 [expect.element](/api/runtime-api/browser-mode/assertion) 配合，等待与断言语义一致
+- 一致性更高：同一套 API 覆盖查询、操作、断言，减少在多套工具间切换
+
+### 示例
+
+下面示例聚焦最常见链路：填表、点击、断言。
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('interacts with form using locator api', async () => {
+  document.body.innerHTML = `
+    <form aria-label="Login form">
+      <label for="username">Username</label>
+      <input id="username" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" />
+
+      <label>
+        <input id="remember" type="checkbox" />
+        Remember me
+      </label>
+
+      <button type="button">Login</button>
+    </form>
+  `;
+
+  await page.getByLabel('Username').fill('alice');
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByLabel('Remember me').check();
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  await expect.element(page.getByLabel('Username')).toHaveValue('alice');
+  await expect.element(page.getByLabel('Remember me')).toBeChecked();
+});
+```
+
+### 常用查询与组合
+
+你可以像 Playwright 一样组合 Locator，把范围逐步收窄到目标元素：
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('composes locators', async () => {
+  document.body.innerHTML = `
+    <section>
+      <h2>Home</h2>
+      <button>Save</button>
+    </section>
+    <section>
+      <h2>Profile</h2>
+      <button>Save</button>
+    </section>
+  `;
+
+  const saveInProfileSection = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
+    .getByRole('button', { name: 'Save' });
+
+  await expect.element(saveInProfileSection).toHaveCount(1);
+});
+```
+
+当前常用查询/组合能力包括：
+
+- 语义与属性查询：[getByRole](/api/runtime-api/browser-mode/locator#getbyrole)、[getByText](/api/runtime-api/browser-mode/locator#getbytext)、[getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)、[getByPlaceholder](/api/runtime-api/browser-mode/locator#getbyplaceholder)、[getByAltText](/api/runtime-api/browser-mode/locator#getbyalttext)、[getByTitle](/api/runtime-api/browser-mode/locator#getbytitle)、[getByTestId](/api/runtime-api/browser-mode/locator#getbytestid)
+- 基础选择与过滤：[locator](/api/runtime-api/browser-mode/locator#locator)、[filter](/api/runtime-api/browser-mode/locator#filter)
+- 集合组合与定位：[and](/api/runtime-api/browser-mode/locator#and--or)、[or](/api/runtime-api/browser-mode/locator#and--or)、[nth](/api/runtime-api/browser-mode/locator#nth--first--last)、[first](/api/runtime-api/browser-mode/locator#nth--first--last)、[last](/api/runtime-api/browser-mode/locator#nth--first--last)
+
+实践中建议优先使用语义查询（[getByRole](/api/runtime-api/browser-mode/locator#getbyrole)、[getByLabel](/api/runtime-api/browser-mode/locator#getbylabel)），仅在语义信息不足时再考虑 [getByTestId](/api/runtime-api/browser-mode/locator#getbytestid) 或 CSS 选择器。
+
+### 常用交互与断言
+
+Locator 支持常见交互 API（如 [click](/api/runtime-api/browser-mode/locator#click)、[fill](/api/runtime-api/browser-mode/locator#fill)、[check](/api/runtime-api/browser-mode/locator#check)、[hover](/api/runtime-api/browser-mode/locator#hover)、[press](/api/runtime-api/browser-mode/locator#press)、[selectOption](/api/runtime-api/browser-mode/locator#selectoption)），并可直接配合 [expect.element](/api/runtime-api/browser-mode/assertion) 断言：
+
+- 状态断言：[toBeVisible](/api/runtime-api/browser-mode/assertion#tobevisible)、[toBeHidden](/api/runtime-api/browser-mode/assertion#tobehidden)、[toBeEnabled](/api/runtime-api/browser-mode/assertion#tobeenabled)、[toBeDisabled](/api/runtime-api/browser-mode/assertion#tobedisabled)
+- 表单/结构断言：[toBeChecked](/api/runtime-api/browser-mode/assertion#tobechecked)、[toBeFocused](/api/runtime-api/browser-mode/assertion#tobefocused)、[toBeEmpty](/api/runtime-api/browser-mode/assertion#tobeempty)
+- 文本和值断言：[toHaveText](/api/runtime-api/browser-mode/assertion#tohavetext)、[toContainText](/api/runtime-api/browser-mode/assertion#tocontaintext)、[toHaveValue](/api/runtime-api/browser-mode/assertion#tohavevalue)、[toHaveCount](/api/runtime-api/browser-mode/assertion#tohavecount)
+- 属性断言：[toHaveAttribute](/api/runtime-api/browser-mode/assertion#tohaveattribute)、[toHaveClass](/api/runtime-api/browser-mode/assertion#tohaveclass)、[toHaveCSS](/api/runtime-api/browser-mode/assertion#tohavecss)、[toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty)
+
+建议在关键交互后立即断言可观察结果（例如状态文案、按钮状态、字段值），这样失败信息更聚焦、调试成本更低。
+
+你也可以链式使用 [not](/api/runtime-api/browser-mode/assertion#not) 和可选 `timeout`：
+
+```ts
+await expect
+  .element(page.getByRole('button', { name: 'Save' }))
+  .not.toBeDisabled({ timeout: 1000 });
+```
+
+### 当前能力边界
+
+当前实现是 Playwright Locator API 的高频子集，不是完整等价实现。使用时请注意：
+
+- [selectOption](/api/runtime-api/browser-mode/locator#selectoption) 目前仅支持 `string` 或 `string[]`
+- [setInputFiles](/api/runtime-api/browser-mode/locator#setinputfiles) 目前仅支持文件路径 `string` 或 `string[]`
+- [dispatchEvent](/api/runtime-api/browser-mode/locator#dispatchevent) 的 `eventInit` 需要可被 JSON 序列化
+- [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty) 的期望值需要可被 JSON 序列化
+
+完整 API 列表请参考 [Locator 参考](/api/runtime-api/browser-mode/locator)。
+
+## Testing library
+
+[Testing Library](https://testing-library.com/) 是一套专注于用户行为的测试工具库，它鼓励你以用户实际操作方式编写测试，而非依赖内部实现细节。在 Browser Mode 中，它更适合作为兼容与迁移方案：
+
+- [@testing-library/dom](https://testing-library.com/docs/dom-testing-library/intro)：负责查询，提供 `getByRole`、`getByText`、`getByLabelText` 等方法，让你按用户可感知语义查找元素
+- [@testing-library/user-event](https://testing-library.com/docs/user-event/intro)：负责交互，提供更完整的事件模拟流程；在 Browser Mode 中，新测试仍建议优先 Locator API
 
 ### 安装
 
@@ -53,11 +173,11 @@ test('submits login form with user credentials', async () => {
 });
 ```
 
-Testing Library 还提供了丰富的交互方法，包括点击、文本输入、键盘事件、下拉选择、拖拽等。详细用法请参考 [user-event 官方文档](https://testing-library.com/docs/user-event/intro)。
+如果你的项目已经大量使用 Testing Library，可以继续复用它的点击、文本输入、键盘事件、下拉选择、拖拽等能力。详细用法请参考 [user-event 官方文档](https://testing-library.com/docs/user-event/intro)。
 
 ## 原生 DOM API
 
-如果你不想引入额外依赖，或者需要更底层的事件控制（如精确指定 `clientX`、`ctrlKey` 等属性），可以直接使用浏览器原生 DOM API。
+如果你不想引入额外依赖，或者需要更底层的事件控制（如精确指定 `clientX`、`ctrlKey` 等属性），可以直接使用浏览器原生 DOM API。通常将它作为兜底方案，仅在你需要精确控制事件参数时使用。
 
 ### 示例
 

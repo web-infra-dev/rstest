@@ -7,6 +7,28 @@ import type {
 } from '@rstest/core/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 
+export type {
+  BrowserLocatorIR,
+  BrowserLocatorStep,
+  BrowserLocatorText,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+  SnapshotRpcRequest,
+  SnapshotRpcResponse,
+} from './rpcProtocol';
+export { validateBrowserRpcRequest } from './rpcProtocol';
+
+export const DISPATCH_MESSAGE_TYPE = '__rstest_dispatch__';
+export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
+export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
+export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
+export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+
+export const DISPATCH_NAMESPACE_RUNNER = 'runner';
+export const DISPATCH_NAMESPACE_BROWSER = 'browser';
+export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
+export const DISPATCH_METHOD_RPC = 'rpc';
+
 export type SerializedRuntimeConfig = RuntimeConfig;
 
 export type BrowserViewport =
@@ -47,6 +69,11 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /**
+   * Per-run identifier assigned by the container.
+   * Used by browser RPC calls to prevent stale requests from previous reruns.
+   */
+  runId?: string;
   /**
    * Base URL for runner (iframe) pages.
    */
@@ -103,34 +130,8 @@ export type BrowserClientMessage =
   // Snapshot already uses this path via namespace "snapshot". Future PR #948
   // capabilities can add new namespaces instead of adding new message types.
   | {
-      type: 'dispatch-rpc-request';
+      type: typeof DISPATCH_RPC_REQUEST_TYPE;
       payload: BrowserDispatchRequest;
-    };
-
-/**
- * Snapshot RPC request from runner iframe.
- * The container will forward these to the host via WebSocket RPC.
- */
-export type SnapshotRpcRequest =
-  | {
-      id: string;
-      method: 'resolveSnapshotPath';
-      args: { testPath: string };
-    }
-  | {
-      id: string;
-      method: 'readSnapshotFile';
-      args: { filepath: string };
-    }
-  | {
-      id: string;
-      method: 'saveSnapshotFile';
-      args: { filepath: string; content: string };
-    }
-  | {
-      id: string;
-      method: 'removeSnapshotFile';
-      args: { filepath: string };
     };
 
 /**
@@ -166,7 +167,7 @@ export type BrowserDispatchResponse = {
 };
 
 export type BrowserDispatchResponseEnvelope = {
-  type: '__rstest_dispatch_response__';
+  type: typeof DISPATCH_RESPONSE_TYPE;
   payload: BrowserDispatchResponse;
 };
 

@@ -23,6 +23,14 @@ Rstest provides Browser Mode, allowing you to run tests in a real browser instea
 
 Browser Mode uses [Playwright](https://playwright.dev/) to execute your test code in real browsers (Chromium, Firefox, or WebKit). This means your tests run with the exact same browser APIs and behaviors as in production.
 
+## Locator API
+
+Browser Mode now supports a Playwright-style Locator workflow: you can use `page.getBy*` for element queries, then use `expect.element(locator)` for auto-waiting assertions.
+
+This approach is ideal when you want semantic queries (role/label/text) and chainable assertions, making component tests and DOM tests closer to real user interaction semantics.
+
+See [User interactions](/guide/browser-testing/user-interactions#locator-api) for detailed usage.
+
 ## When to use browser mode
 
 Use this decision tree to determine if you need Browser Mode:
@@ -61,6 +69,7 @@ Browser Mode and jsdom/happy-dom represent different trade-offs: Browser Mode pr
 
 ## Next steps
 
-- [Getting Started](/guide/browser-testing/getting-started) - Configure and run your first browser test
-- [Framework Guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
-- [User Interactions](/guide/browser-testing/user-interactions) - Simulate user clicks, typing, and other actions
+- [Getting started](/guide/browser-testing/getting-started) - Configure and run your first browser test
+- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Use `page` + `expect.element` for semantic tests
+- [Framework guides](/guide/browser-testing/framework-guides) - Complete configuration and component testing examples for each framework
+- [User interactions](/guide/browser-testing/user-interactions) - Simulate user clicks, typing, and other actions

@@ -1,0 +1,370 @@
+---
+title: Locator
+overviewHeaders: [2, 3]
+---
+
+# Locator
+
+`Locator` 是 Browser Mode 的元素查询与交互核心 API。你可以通过 `page.getBy*` 或 `page.locator()` 构建查询链，再执行交互操作。具体执行语义由 browser `provider` 决定。
+
+你可以从 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 导入 `page`：
+
+```ts
+import { page } from '@rstest/browser';
+```
+
+## page
+
+- **类型：** `BrowserPage`
+
+`page` 是测试里的起点：先用 `page` 定位元素，再在返回的 `Locator` 上执行交互和断言。
+
+`page` 是仅用于查询的对象：只负责创建 `Locator`，不直接执行交互动作。
+
+```ts
+const submitButton = page.getByRole('button', { name: 'Submit' });
+```
+
+上面的 `submitButton` 是一个 `Locator`，后续可以继续链式调用（例如 `.click()`）或传给 `expect.element(...)` 做断言。
+
+## BrowserPage
+
+- **类型：** `Pick<Locator, 'locator' | 'getByRole' | 'getByText' | 'getByLabel' | 'getByPlaceholder' | 'getByAltText' | 'getByTitle' | 'getByTestId'>`
+
+`BrowserPage` 是 `page` 的类型定义，只暴露查询入口，不包含 `click`、`fill` 等交互方法。
+
+也就是说，你需要先通过 `page` 拿到 `Locator`，再在 `Locator` 上调用交互和断言。
+
+## 查询 API
+
+以下 API 都会返回新的 `Locator`，可继续链式调用。
+
+### locator
+
+- **类型：** `(selector: string) => Locator`
+
+通过 CSS selector 查询元素。
+
+```ts
+const item = page.locator('.todo-item');
+```
+
+### getByRole
+
+- **类型：** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
+
+按语义角色查询元素，推荐优先使用。
+
+`LocatorGetByRoleOptions` 支持：`name`、`exact`、`checked`、`disabled`、`expanded`、`selected`、`pressed`、`includeHidden`、`level`。
+
+```ts
+const saveBtn = page.getByRole('button', { name: 'Save' });
+```
+
+### getByText
+
+- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+按可见文本查询。
+
+```ts
+const successMessage = page.getByText('Saved successfully');
+```
+
+### getByLabel
+
+- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+按表单 label 查询。
+
+```ts
+const emailInput = page.getByLabel('Email');
+```
+
+### getByPlaceholder
+
+- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+按 placeholder 查询。
+
+```ts
+const searchInput = page.getByPlaceholder('Search');
+```
+
+### getByAltText
+
+- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+按 `alt` 文本查询。
+
+```ts
+const avatarImage = page.getByAltText('User avatar');
+```
+
+### getByTitle
+
+- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+
+按 `title` 查询。
+
+```ts
+const helpIcon = page.getByTitle('Help');
+```
+
+### getByTestId
+
+- **类型：** `(text: string | RegExp) => Locator`
+
+按 test id 查询。
+
+```ts
+const settingsPanel = page.getByTestId('settings-panel');
+```
+
+## 配置 API
+
+### setTestIdAttribute
+
+- **类型：** `(attribute: string) => Promise<void>`
+
+设置 `getByTestId()` 使用的属性名。默认值是 `data-testid`。
+
+这个配置会通过 Browser Mode 通道转发到 host provider（例如 Playwright 的 `selectors.setTestIdAttribute()`）。
+
+这是全局配置，建议在测试 setup 阶段统一设置一次，避免在用例执行中途修改导致查询行为不一致。
+
+```ts
+import { page, setTestIdAttribute } from '@rstest/browser';
+
+await setTestIdAttribute('data-test');
+await page.getByTestId('settings-panel').click();
+```
+
+## 组合 API
+
+### filter
+
+- **类型：** `(options: LocatorFilterOptions) => Locator`
+
+`LocatorFilterOptions` 支持：
+
+- `hasText?: string | RegExp`：保留文本匹配的元素
+- `hasNotText?: string | RegExp`：排除文本匹配的元素
+- `has?: Locator`：保留包含子 Locator 的元素
+- `hasNot?: Locator`：排除包含子 Locator 的元素
+
+用于在已有查询结果上做二次过滤。
+
+```ts
+const profileSave = page
+  .locator('section')
+  .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
+  .getByRole('button', { name: 'Save' });
+```
+
+```ts
+const visibleItems = page.locator('li').filter({
+  hasNotText: /archived/i,
+  hasNot: page.getByRole('img', { name: 'Locked' }),
+});
+```
+
+### and / or
+
+- **类型：** `(other: Locator) => Locator`
+
+合并两个 Locator 条件。
+
+```ts
+const byRole = page.getByRole('button', { name: 'Submit' });
+const byId = page.locator('#submit');
+
+const exactOne = byRole.and(byId);
+```
+
+### nth / first / last
+
+- **类型：**
+  - `nth(index: number): Locator`
+  - `first(): Locator`
+  - `last(): Locator`
+
+在匹配集合中选择指定元素。
+
+## 交互 API
+
+以下 API 会触发实际浏览器操作，并返回 `Promise<void>`。
+
+这些 `*Options` 类型表示 Browser Mode 当前稳定支持的一组选项：
+
+- `LocatorClickOptions` / `LocatorDblclickOptions`: `button`、`delay`、`force`、`modifiers`、`position`、`timeout`、`trial`（`click` 额外支持 `clickCount`）
+- `LocatorHoverOptions`: `force`、`modifiers`、`position`、`timeout`、`trial`
+- `LocatorPressOptions`: `delay`、`timeout`
+- `LocatorFillOptions`: `force`、`timeout`
+- `LocatorCheckOptions`: `force`、`position`、`timeout`、`trial`
+- `LocatorFocusOptions` / `LocatorBlurOptions` / `LocatorScrollIntoViewIfNeededOptions`: `timeout`
+- `LocatorWaitForOptions`: `state`（`attached` / `detached` / `visible` / `hidden`）与 `timeout`
+- `LocatorSelectOptionOptions`: `force`、`timeout`
+- `LocatorSetInputFilesOptions`: `timeout`
+
+### click
+
+- **类型：** `(options?: LocatorClickOptions) => Promise<void>`
+
+点击当前 Locator 匹配到的元素。
+
+```ts
+await page.getByRole('button', { name: 'Submit' }).click();
+```
+
+### dblclick
+
+- **类型：** `(options?: LocatorDblclickOptions) => Promise<void>`
+
+对元素执行双击操作。
+
+```ts
+await page.getByText('Open details').dblclick();
+```
+
+### hover
+
+- **类型：** `(options?: LocatorHoverOptions) => Promise<void>`
+
+将鼠标悬停到元素上，常用于触发 hover 菜单或 tooltip。
+
+```ts
+await page.getByRole('button', { name: 'More' }).hover();
+```
+
+### press
+
+- **类型：** `(key: string, options?: LocatorPressOptions) => Promise<void>`
+
+在元素上发送键盘按键。
+
+```ts
+await page.getByLabel('Search').press('Enter');
+```
+
+### fill
+
+- **类型：** `(value: string, options?: LocatorFillOptions) => Promise<void>`
+
+设置输入框值，适用于 `input`、`textarea` 等可输入元素。
+
+```ts
+await page.getByPlaceholder('Email').fill('dev@rstest.rs');
+```
+
+### clear
+
+- **类型：** `() => Promise<void>`
+
+清空当前输入元素的值。
+
+```ts
+await page.getByPlaceholder('Email').clear();
+```
+
+### focus
+
+- **类型：** `(options?: LocatorFocusOptions) => Promise<void>`
+
+让元素获得焦点。
+
+```ts
+await page.getByLabel('Username').focus();
+```
+
+### blur
+
+- **类型：** `(options?: LocatorBlurOptions) => Promise<void>`
+
+让元素失去焦点。
+
+```ts
+await page.getByLabel('Username').blur();
+```
+
+### check
+
+- **类型：** `(options?: LocatorCheckOptions) => Promise<void>`
+
+勾选 checkbox 或 radio。
+
+```ts
+await page.getByLabel('Agree').check();
+```
+
+### uncheck
+
+- **类型：** `(options?: LocatorCheckOptions) => Promise<void>`
+
+取消勾选 checkbox。
+
+```ts
+await page.getByLabel('Agree').uncheck();
+```
+
+### scrollIntoViewIfNeeded
+
+- **类型：** `(options?: LocatorScrollIntoViewIfNeededOptions) => Promise<void>`
+
+必要时滚动页面，使元素进入可视区域。
+
+```ts
+await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
+```
+
+### waitFor
+
+- **类型：** `(options?: LocatorWaitForOptions) => Promise<void>`
+
+等待 Locator 满足条件后继续执行，适合处理异步渲染。
+
+```ts
+await page.getByText('Ready').waitFor();
+```
+
+### dispatchEvent
+
+- **类型：** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
+
+在元素上派发自定义事件或原生事件。
+
+```ts
+await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
+```
+
+### selectOption
+
+- **类型：** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
+
+选择 `select` 元素的 option。当前只支持 `string` 或 `string[]` 作为 value。
+
+```ts
+await page.getByLabel('Choice').selectOption('b');
+```
+
+### setInputFiles
+
+- **类型：** `(files: string | string[], options?: LocatorSetInputFilesOptions) => Promise<void>`
+
+为 `input[type="file"]` 设置文件。当前只支持文件路径 `string` 或 `string[]`。
+
+```ts
+await page.locator('#upload').setInputFiles('/tmp/demo.txt');
+```
+
+## 使用约束
+
+- `and` / `or` / `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`
+- `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串
+- `selectOption` 目前仅支持 `string` 或 `string[]`
+- `setInputFiles` 目前仅支持文件路径 `string` 或 `string[]`
+- 部分参数会通过 Browser Mode 通信通道传输，建议保持可被 JSON 序列化
+
+## 与 expect.element 配合
+
+`Locator` 一般与 `expect.element(locator)` 配合使用。完整断言列表见 [Assertion](/api/runtime-api/browser-mode/assertion)。
