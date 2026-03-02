@@ -59,6 +59,13 @@ const createBrowserDispatchRequest = (
 export const callBrowserRpc = async <T>(
   payload: Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>,
 ): Promise<T> => {
+  if (
+    payload.kind === 'config' &&
+    window.__RSTEST_BROWSER_OPTIONS__?.mode === 'collect'
+  ) {
+    return undefined as T;
+  }
+
   const id = createRequestId('browser-rpc');
   const rpcTimeout = getRpcTimeout();
   const request: BrowserRpcRequest = {

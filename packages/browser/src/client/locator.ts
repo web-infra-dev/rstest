@@ -137,7 +137,10 @@ export class Locator {
           options: options
             ? {
                 ...options,
-                name: options.name ? serializeText(options.name) : undefined,
+                name:
+                  options.name === undefined
+                    ? undefined
+                    : serializeText(options.name),
               }
             : undefined,
         },

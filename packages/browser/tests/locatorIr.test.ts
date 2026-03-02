@@ -10,6 +10,14 @@ describe('browser locator IR', () => {
     expect((locator.ir.steps[0] as any).type).toBe('getByRole');
   });
 
+  it('should preserve empty role name in getByRole options', () => {
+    const locator = page.getByRole('button', { name: '' });
+    const step = locator.ir.steps[0] as any;
+
+    expect(step.type).toBe('getByRole');
+    expect(step.options.name).toEqual({ type: 'string', value: '' });
+  });
+
   it('should build nested filter({ has }) IR', () => {
     const base = page.locator('section');
     const has = page.locator('h2').filter({ hasText: 'Profile' });

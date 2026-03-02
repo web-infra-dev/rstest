@@ -113,4 +113,22 @@ describe('browserRpc client', () => {
       }),
     ).rejects.toThrow('Browser RPC requires runId');
   });
+
+  it('should noop config RPC in collect mode without run context', async () => {
+    (window as any).__RSTEST_BROWSER_OPTIONS__ = {
+      mode: 'collect',
+      rpcTimeout: 1000,
+    };
+
+    await expect(
+      callBrowserRpc<void>({
+        kind: 'config',
+        locator: { steps: [] },
+        method: 'setTestIdAttribute',
+        args: ['data-testid'],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mockPostMessage).not.toHaveBeenCalled();
+  });
 });
