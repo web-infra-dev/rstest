@@ -19,9 +19,9 @@ const applyCommonOptions = (cli: CAC) => {
     )
     .option(
       '--config-loader <loader>',
-      'Specify the loader to load the config file, can be `jiti` or `native`',
+      'Specify the loader to load the config file (auto | jiti | native)',
       {
-        default: 'jiti',
+        default: 'auto',
       },
     )
     .option(

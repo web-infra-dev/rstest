@@ -132,59 +132,59 @@ b.test.ts:9:3 > test b-2
 
 Rstest CLI 支持以下常用参数，所有命令均可使用：
 
-| 参数                            | 说明                                                                                                                                         |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-c, --config <config>`         | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                          |
-| `--config-loader <loader>`      | 指定配置加载器，可选 `jiti` 或 `native`，详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
-| `-r, --root <root>`             | 指定项目根目录，详见 [root](/config/test/root)                                                                                               |
-| `--globals`                     | 提供全局 API，详见 [globals](/config/test/globals)                                                                                           |
-| `--isolate`                     | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                   |
-| `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                           |
-| `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                                                             |
-| `--coverage`                    | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                   |
-| `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                      |
-| `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                    |
-| `--project <name>`              | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                                                     |
-| `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                    |
-| `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                             |
-| `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                             |
-| `--testEnvironment <name>`      | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                          |
-| `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                |
-| `--hookTimeout <value>`         | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                                                          |
-| `--retry <retry>`               | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                         |
-| `--bail [number]`               | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                                                                 |
-| `--browser, --browser.enabled`  | 在浏览器模式下运行测试，详见 [browser](/config/test/browser)                                                                                 |
-| `--browser.name <name>`         | 使用的浏览器：`chromium`、`firefox`、`webkit`（默认：`chromium`），详见 [browser](/config/test/browser)                                      |
-| `--browser.headless`            | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser)                                                          |
-| `--browser.port <port>`         | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser)                                                                             |
-| `--browser.strictPort`          | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser)                                                                             |
-| `--reporter <reporter>`         | 指定测试报告器，详见 [reporters](/config/test/reporters)                                                                                     |
-| `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                          |
-| `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                |
-| `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                    |
-| `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                          |
-| `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                       |
-| `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                          |
-| `--include <pattern>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                   |
-| `--includeSource <pattern>`     | 指定源码内联测试文件匹配模式，详见 [includeSource](/config/test/include-source)                                                              |
-| `--logHeapUsage`                | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                               |
-| `--hideSkippedTests`            | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                               |
-| `--hideSkippedTestFiles`        | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                  |
-| `--chaiConfig <config>`         | 自定义 Chai 配置，详见 [chaiConfig](/config/test/chai-config)                                                                                |
-| `--env <key=value>`             | 设置环境变量，详见 [env](/config/test/env)                                                                                                   |
-| `--pool <type>`                 | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                   |
-| `--pool.type <type>`            | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                                                           |
-| `--pool.maxWorkers <value>`     | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                     |
-| `--pool.minWorkers <value>`     | 最小 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                     |
-| `--pool.execArgv <arg>`         | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                        |
-| `--setupFiles <files>`          | 指定 setup 文件列表，详见 [setupFiles](/config/test/setup-files)                                                                             |
-| `--snapshotFormat <options>`    | 自定义快照格式，详见 [snapshotFormat](/config/test/snapshot-format)                                                                          |
-| `--resolveSnapshotPath`         | 自定义快照路径解析，详见 [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                           |
-| `--onConsoleLog <handler>`      | 处理 console 日志，详见 [onConsoleLog](/config/test/on-console-log)                                                                          |
-| `--name <name>`                 | 设置测试套件名称，详见 [name](/config/test/name)                                                                                             |
-| `--projects <projects>`         | 配置多项目测试，详见 [projects](/config/test/projects)                                                                                       |
-| `-h, --help`                    | 显示帮助信息                                                                                                                                 |
-| `-v, --version`                 | 显示版本号                                                                                                                                   |
+| 参数                            | 说明                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`         | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)     |
+| `--config-loader <loader>`      | 指定配置加载器 (`auto`                                                                                  | `jiti` | `native`)，详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`             | 指定项目根目录，详见 [root](/config/test/root)                                                          |
+| `--globals`                     | 提供全局 API，详见 [globals](/config/test/globals)                                                      |
+| `--isolate`                     | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                              |
+| `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                      |
+| `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                        |
+| `--coverage`                    | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                              |
+| `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                 |
+| `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)               |
+| `--project <name>`              | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                |
+| `--disableConsoleIntercept`     | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)               |
+| `--slowTestThreshold <value>`   | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)        |
+| `-t, --testNamePattern <value>` | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                        |
+| `--testEnvironment <name>`      | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                     |
+| `--testTimeout <value>`         | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                           |
+| `--hookTimeout <value>`         | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                     |
+| `--retry <retry>`               | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                    |
+| `--bail [number]`               | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                            |
+| `--browser, --browser.enabled`  | 在浏览器模式下运行测试，详见 [browser](/config/test/browser)                                            |
+| `--browser.name <name>`         | 使用的浏览器：`chromium`、`firefox`、`webkit`（默认：`chromium`），详见 [browser](/config/test/browser) |
+| `--browser.headless`            | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser)                     |
+| `--browser.port <port>`         | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser)                                        |
+| `--browser.strictPort`          | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser)                                        |
+| `--reporter <reporter>`         | 指定测试报告器，详见 [reporters](/config/test/reporters)                                                |
+| `--maxConcurrency <value>`      | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                     |
+| `--clearMocks`                  | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)           |
+| `--resetMocks`                  | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                               |
+| `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                     |
+| `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)  |
+| `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)     |
+| `--include <pattern>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                              |
+| `--includeSource <pattern>`     | 指定源码内联测试文件匹配模式，详见 [includeSource](/config/test/include-source)                         |
+| `--logHeapUsage`                | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                          |
+| `--hideSkippedTests`            | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                          |
+| `--hideSkippedTestFiles`        | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)             |
+| `--chaiConfig <config>`         | 自定义 Chai 配置，详见 [chaiConfig](/config/test/chai-config)                                           |
+| `--env <key=value>`             | 设置环境变量，详见 [env](/config/test/env)                                                              |
+| `--pool <type>`                 | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                              |
+| `--pool.type <type>`            | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                      |
+| `--pool.maxWorkers <value>`     | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                |
+| `--pool.minWorkers <value>`     | 最小 worker 数量或百分比，详见 [pool](/config/test/pool)                                                |
+| `--pool.execArgv <arg>`         | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                   |
+| `--setupFiles <files>`          | 指定 setup 文件列表，详见 [setupFiles](/config/test/setup-files)                                        |
+| `--snapshotFormat <options>`    | 自定义快照格式，详见 [snapshotFormat](/config/test/snapshot-format)                                     |
+| `--resolveSnapshotPath`         | 自定义快照路径解析，详见 [resolveSnapshotPath](/config/test/resolve-snapshot-path)                      |
+| `--onConsoleLog <handler>`      | 处理 console 日志，详见 [onConsoleLog](/config/test/on-console-log)                                     |
+| `--name <name>`                 | 设置测试套件名称，详见 [name](/config/test/name)                                                        |
+| `--projects <projects>`         | 配置多项目测试，详见 [projects](/config/test/projects)                                                  |
+| `-h, --help`                    | 显示帮助信息                                                                                            |
+| `-v, --version`                 | 显示版本号                                                                                              |
 
 ### 布尔选项取反
 
