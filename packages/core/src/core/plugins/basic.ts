@@ -46,7 +46,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         context.projects.length > 1
           ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
           : TEMP_RSTEST_OUTPUT_DIR;
-      const absoluteDistRootDir = path.join(rootPath, distRootDir);
+      const absoluteDistRootDir = pathe.join(rootPath, distRootDir);
       return mergeEnvironmentConfig(
         config,
         {
