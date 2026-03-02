@@ -46,7 +46,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         context.projects.length > 1
           ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
           : TEMP_RSTEST_OUTPUT_DIR;
-      const absoluteDistRootDir = pathe.join(rootPath, distRootDir);
+
       return mergeEnvironmentConfig(
         config,
         {
@@ -64,7 +64,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
           },
           output: {
-            assetPrefix: absoluteDistRootDir,
+            assetPrefix: '',
             // Pass resources to the worker on demand according to entry
             manifest: `${name}-manifest.json`,
             sourceMap: {
@@ -77,7 +77,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 }
               : undefined,
             distPath: {
-              root: absoluteDistRootDir,
+              root: distRootDir,
             },
           },
           tools: {
