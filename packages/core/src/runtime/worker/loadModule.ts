@@ -1,6 +1,6 @@
 import { createRequire as createNativeRequire } from 'node:module';
 import { isAbsolute } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
@@ -63,10 +63,12 @@ const defineRstestDynamicImport =
     testPath,
     interopDefault,
     returnModule = false,
+    assetFiles,
   }: {
     returnModule?: boolean;
     testPath: string;
     interopDefault: boolean;
+    assetFiles: Record<string, string>;
   }) =>
   async (specifier: string, importAttributes: ImportCallOptions) => {
     const resolvedPath = isAbsolute(specifier)
@@ -75,6 +77,23 @@ const defineRstestDynamicImport =
 
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+
+    if (modulePath.endsWith('.wasm')) {
+      const content =
+        assetFiles[
+          modulePath.startsWith('file://')
+            ? fileURLToPath(modulePath)
+            : modulePath
+        ];
+
+      if (content) {
+        const wasmBuffer = Buffer.from(content, 'base64');
+        const wasmModule = await WebAssembly.compile(wasmBuffer);
+        const wasmInstance = await WebAssembly.instantiate(wasmModule);
+        const exports = wasmInstance.exports as Record<string, any>;
+        return returnModule ? asModule(exports, exports) : exports;
+      }
+    }
 
     // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
     // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
@@ -206,6 +225,7 @@ export const loadModule = ({
     __rstest_dynamic_import__: defineRstestDynamicImport({
       testPath,
       interopDefault,
+      assetFiles,
     }),
     __dirname: fileDir,
     __filename: testPath,
@@ -225,6 +245,7 @@ export const loadModule = ({
         testPath,
         interopDefault,
         returnModule: true,
+        assetFiles,
       })(specifier, importAttributes as ImportCallOptions);
     },
   });

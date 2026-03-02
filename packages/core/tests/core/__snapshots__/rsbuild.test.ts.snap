@@ -429,7 +429,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
     "workerChunkLoading": "import",
   },
@@ -445,7 +445,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp"",
           "process.env.BASE_URL": ""/"",
         },
       ],
@@ -973,7 +973,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     },
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
   },
   "performance": {
@@ -988,7 +988,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp"",
           "process.env.BASE_URL": ""/"",
         },
       ],
@@ -1499,7 +1499,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     },
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
   },
   "performance": {
@@ -1514,7 +1514,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp"",
           "process.env.BASE_URL": ""/"",
         },
       ],
@@ -2027,7 +2027,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     },
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
   },
   "performance": {
@@ -2042,7 +2042,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp"",
           "process.env.BASE_URL": ""/"",
         },
       ],
@@ -2562,7 +2562,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/test/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
   },
   "performance": {
@@ -2577,7 +2577,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp/test"",
           "process.env.BASE_URL": ""/"",
         },
       ],
@@ -3088,7 +3088,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test-node",
     "pathinfo": false,
-    "publicPath": "/",
+    "publicPath": "<ROOT>/packages/core/dist/.rstest-temp/test-node/",
     "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
   },
   "performance": {
@@ -3103,7 +3103,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         {
           "import.meta.env": "process.env",
           "import.meta.rstest": "global['@rstest/core']",
-          "process.env.ASSET_PREFIX": """",
+          "process.env.ASSET_PREFIX": ""<ROOT>/packages/core/dist/.rstest-temp/test-node"",
           "process.env.BASE_URL": ""/"",
         },
       ],
