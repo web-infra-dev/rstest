@@ -50,7 +50,7 @@ const defineRstestDynamicImport =
           const wasmModule = await WebAssembly.compile(wasmBuffer);
           const wasmInstance = await WebAssembly.instantiate(wasmModule);
           const exports = wasmInstance.exports as Record<string, any>;
-          return returnModule ? asModule(exports) : exports;
+          return returnModule ? await asModule(exports) : exports;
         }
         return await loadModule({
           codeContent: content,
