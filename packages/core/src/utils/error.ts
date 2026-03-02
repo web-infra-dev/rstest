@@ -9,6 +9,8 @@ import { formatTestPath } from './testFiles';
 
 export const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
+const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
+
 const hintNotDefinedError = (message: string): string => {
   const [, varName] = message.match(/(\w+) is not defined/) || [];
   if (varName) {
@@ -210,5 +212,22 @@ export async function parseErrorStacktrace({
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
 
-  return stackFrames;
+  if (fullStack) {
+    return stackFrames;
+  }
+
+  const filteredFrames = stackFrames.filter((frame) => {
+    if (!frame.file) {
+      return false;
+    }
+
+    if (isHttpLikeFile(frame.file)) {
+      return false;
+    }
+
+    const normalizedFile = frame.file.replace(/\\/g, '/');
+    return !stackIgnores.some((entry) => normalizedFile.match(entry));
+  });
+
+  return filteredFrames;
 }

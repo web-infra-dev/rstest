@@ -73,6 +73,8 @@ __webpack_require__.rstest_require_actual =
 //#endregion
 
 const getMockImplementation = (mockType = 'mock') => {
+  const isMockRequire =
+    mockType === 'mockRequire' || mockType === 'doMockRequire';
   // The mock and mockRequire will resolve to different module ids when the module is a dual package
   return (id, modFactory) => {
     // Only load the module if it's already in cache (to avoid side effects)
@@ -128,10 +130,15 @@ const getMockImplementation = (mockType = 'mock') => {
         }) || originalModule;
 
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
+        if (isMockRequire) {
+          __webpack_module__.exports = mockedModule;
+          return;
+        }
+
         __webpack_require__.r(__webpack_exports__);
         for (const key in mockedModule) {
           __webpack_require__.d(__webpack_exports__, {
@@ -157,12 +164,18 @@ const getMockImplementation = (mockType = 'mock') => {
       };
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
-        __webpack_require__.r(__webpack_exports__);
         const res = modFactory();
+
+        if (isMockRequire) {
+          __webpack_module__.exports = res;
+          return;
+        }
+
+        __webpack_require__.r(__webpack_exports__);
         for (const key in res) {
           __webpack_require__.d(__webpack_exports__, {
             [key]: () => res[key],

@@ -4,6 +4,7 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
+import type { RstestDiagnostics } from './diagnostics';
 import { logger } from './logger';
 import type { Project } from './project';
 import { TestRunReporter } from './testRunReporter';
@@ -142,6 +143,7 @@ export class RstestApi {
     isSuite,
     kind,
     continuous,
+    diagnostics,
     createTestRun,
   }: {
     run: vscode.TestRun;
@@ -152,6 +154,7 @@ export class RstestApi {
     isSuite?: boolean;
     kind?: vscode.TestRunProfileKind;
     continuous?: boolean;
+    diagnostics?: RstestDiagnostics;
     createTestRun?: () => vscode.TestRun;
   }) {
     let onFinish!: () => void;
@@ -159,6 +162,11 @@ export class RstestApi {
       onFinish = () => resolve(null);
     });
     const coverageEnabled = kind === vscode.TestRunProfileKind.Coverage;
+    const applyDiagnostic = getConfigValue('applyDiagnostic', this.workspace);
+    if (!applyDiagnostic) {
+      diagnostics?.clearForProject(this.configFilePath);
+    }
+
     const testRunReporter = new TestRunReporter(
       run,
       this.project,
@@ -166,6 +174,8 @@ export class RstestApi {
       coverageEnabled,
       onFinish,
       createTestRun,
+      this.configFilePath,
+      applyDiagnostic ? diagnostics : undefined,
     );
 
     const worker = await this.createChildProcess(

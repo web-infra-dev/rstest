@@ -22,9 +22,9 @@ export class DefaultReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
-  private options: DefaultReporterOptions = {};
+  private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
-  private testState: RstestTestState;
+  private readonly testState: RstestTestState;
 
   constructor({
     rootPath,
@@ -129,7 +129,7 @@ export class DefaultReporter implements Reporter {
     logOutput('');
   }
 
-  async onExit(): Promise<void> {
+  onExit(): void {
     this.statusRenderer?.clear();
   }
 

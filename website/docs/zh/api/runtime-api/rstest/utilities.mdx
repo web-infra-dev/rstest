@@ -139,3 +139,74 @@ rstest.resetConfig(); // 恢复默认配置
 const config = rstest.getConfig();
 console.log(config);
 ```
+
+## rstest.waitFor
+
+- **别名：** `rs.waitFor`
+
+- **类型：**
+
+```ts
+type WaitForOptions = {
+  timeout?: number; // 默认: 1000
+  interval?: number; // 默认: 50
+};
+
+type WaitFor = <T>(
+  callback: () => T | Promise<T>,
+  options?: number | WaitForOptions,
+) => Promise<T>;
+```
+
+不断重试 `callback`，直到其执行成功（不抛错）或超时。
+
+- 当 `options` 为数字时，会被视为 `timeout`。
+- 超时时会抛出 callback 最后一次抛出的错误。
+
+**示例：**
+
+```ts
+await rs.waitFor(
+  async () => {
+    const res = await fetch(url);
+    expect(res.ok).toBe(true);
+  },
+  { timeout: 30_000, interval: 1_000 },
+);
+```
+
+## rstest.waitUntil
+
+- **别名：** `rs.waitUntil`
+
+- **类型：**
+
+```ts
+type WaitUntilOptions = {
+  timeout?: number; // 默认: 1000
+  interval?: number; // 默认: 50
+};
+
+type WaitUntil = <T>(
+  callback: () => T | Promise<T>,
+  options?: number | WaitUntilOptions,
+) => Promise<T>;
+```
+
+仅当 `callback` 没有返回值（`undefined` 或 `null`）或返回 falsy 值时才会继续重试；当其返回 truthy 值时会立刻 resolve。
+
+- 当 `options` 为数字时，会被视为 `timeout`。
+- 如果 callback 抛错，会立即中断并抛出该错误。
+- 超时时会抛出超时错误。
+
+**示例：**
+
+```ts
+const serverReady = await rs.waitUntil(
+  async () => {
+    const status = await getServerStatus();
+    return status.ready ? status : null;
+  },
+  { timeout: 10_000, interval: 200 },
+);
+```

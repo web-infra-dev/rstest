@@ -206,7 +206,7 @@ export function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const trimmedParams = match[1]!.trim();
   if (!trimmedParams) return [];
   const [firstParam] = splitByComma(trimmedParams);
-  if (firstParam?.[0] !== '{' || firstParam[firstParam.length - 1] !== '}') {
+  if (firstParam?.[0] !== '{' || !firstParam.endsWith('}')) {
     if (firstParam?.startsWith('_')) {
       return [];
     }

@@ -8,7 +8,7 @@ import type {
   Location,
   ProjectContext,
   RstestContext,
-  Test,
+  TestInfo,
 } from '../types';
 import {
   bgColor,
@@ -39,8 +39,8 @@ const collectNodeTests = async ({
   if (nodeProjects.length === 0) {
     return {
       list: [],
-      getSourceMap: async (_name: string) => null,
-      close: async () => {},
+      getSourceMap: async () => null,
+      close: async () => undefined,
     };
   }
 
@@ -183,7 +183,7 @@ const collectBrowserTests = async ({
   if (browserProjects.length === 0) {
     return {
       list: [],
-      close: async () => {},
+      close: async () => undefined,
     };
   }
 
@@ -216,10 +216,10 @@ const collectTestFiles = async ({
     );
   }
   return {
-    close: async () => {},
+    close: async () => undefined,
     errors: [],
     list,
-    getSourceMap: async (_name: string) => null,
+    getSourceMap: async () => null,
   };
 };
 
@@ -348,7 +348,7 @@ export async function listTests(
     type: 'file' | 'suite' | 'case';
   }[] = [];
 
-  const traverseTests = (test: Test) => {
+  const traverseTests = (test: TestInfo) => {
     if (['skip', 'todo'].includes(test.runMode)) {
       return;
     }

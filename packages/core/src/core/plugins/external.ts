@@ -100,35 +100,33 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
 ) => ({
   name: 'rstest:external',
   setup: (api) => {
-    api.modifyEnvironmentConfig(
-      async (config, { mergeEnvironmentConfig, name }) => {
-        const {
-          normalizedConfig: { testEnvironment },
-          outputModule,
-        } = context.projects.find((p) => p.environmentName === name)!;
-        return mergeEnvironmentConfig(config, {
-          output: {
-            externals:
-              testEnvironment.name === 'node'
-                ? [autoExternalNodeModules(outputModule)]
-                : undefined,
-          },
-          tools: {
-            rspack: (config) => {
-              // Make sure that externals configuration is not modified by users
-              config.externals = castArray(config.externals) || [];
+    api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+      const {
+        normalizedConfig: { testEnvironment },
+        outputModule,
+      } = context.projects.find((p) => p.environmentName === name)!;
+      return mergeEnvironmentConfig(config, {
+        output: {
+          externals:
+            testEnvironment.name === 'node'
+              ? [autoExternalNodeModules(outputModule)]
+              : undefined,
+        },
+        tools: {
+          rspack: (config) => {
+            // Make sure that externals configuration is not modified by users
+            config.externals = castArray(config.externals) || [];
 
-              config.externals.unshift({
-                '@rstest/core': 'global @rstest/core',
-              });
+            config.externals.unshift({
+              '@rstest/core': 'global @rstest/core',
+            });
 
-              config.externalsPresets ??= {};
-              config.externalsPresets.node = false;
-              config.externals.unshift(autoExternalNodeBuiltin);
-            },
+            config.externalsPresets ??= {};
+            config.externalsPresets.node = false;
+            config.externals.unshift(autoExternalNodeBuiltin);
           },
-        });
-      },
-    );
+        },
+      });
+    });
   },
 });

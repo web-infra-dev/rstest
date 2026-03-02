@@ -1,8 +1,13 @@
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
-import convert from 'convert-source-map';
+import {
+  loadSourceMapWithCache,
+  normalizeJavaScriptUrl,
+  type SourceMapPayload,
+} from '../sourceMap/sourceMapLoader';
 
 // Source map cache: JS URL → TraceMap
 const sourceMapCache = new Map<string, TraceMap | null>();
+const sourceMapPayloadCache = new Map<string, SourceMapPayload | null>();
 
 /**
  * Get TraceMap for specified URL (sync cache lookup)
@@ -23,40 +28,23 @@ const preloadSourceMap = async (
   jsUrl: string,
   force = false,
 ): Promise<void> => {
-  if (!force && sourceMapCache.has(jsUrl)) return;
-
-  try {
-    // First, fetch JS file and try to extract inline source map
-    const jsResponse = await fetch(jsUrl);
-    if (!jsResponse.ok) {
-      sourceMapCache.set(jsUrl, null);
-      return;
-    }
-
-    const code = await jsResponse.text();
-
-    // Try to extract inline source map using convert-source-map
-    const inlineConverter = convert.fromSource(code);
-    if (inlineConverter) {
-      const mapObject = inlineConverter.toObject();
-      sourceMapCache.set(jsUrl, new TraceMap(mapObject));
-      return;
-    }
-
-    // Fallback: try to fetch external .map file
-    const mapUrl = `${jsUrl}.map`;
-    const mapResponse = await fetch(mapUrl);
-    if (mapResponse.ok) {
-      const mapJson = await mapResponse.json();
-      sourceMapCache.set(jsUrl, new TraceMap(mapJson));
-      return;
-    }
-
-    // No source map found
-    sourceMapCache.set(jsUrl, null);
-  } catch {
-    sourceMapCache.set(jsUrl, null);
+  const normalizedUrl = normalizeJavaScriptUrl(jsUrl, {
+    origin: window.location.origin,
+  });
+  if (!normalizedUrl) {
+    return;
   }
+
+  if (!force && sourceMapCache.has(normalizedUrl)) return;
+
+  const sourceMap = await loadSourceMapWithCache({
+    jsUrl: normalizedUrl,
+    cache: sourceMapPayloadCache,
+    force,
+    origin: window.location.origin,
+  });
+
+  sourceMapCache.set(normalizedUrl, sourceMap ? new TraceMap(sourceMap) : null);
 };
 
 /**
@@ -128,6 +116,7 @@ export const preloadRunnerSourceMap = async (): Promise<void> => {
  */
 export const clearCache = (): void => {
   sourceMapCache.clear();
+  sourceMapPayloadCache.clear();
 };
 
 /**
@@ -147,11 +136,11 @@ export interface StackFrame {
 export const mapStackFrame = (frame: StackFrame): StackFrame => {
   const { file, line, column } = frame;
 
-  // Normalize file path to full URL for cache lookup
-  let fullUrl = file;
-  if (!file.startsWith('http://') && !file.startsWith('https://')) {
-    // Convert relative path to full URL
-    fullUrl = `${window.location.origin}${file.startsWith('/') ? '' : '/'}${file}`;
+  const fullUrl = normalizeJavaScriptUrl(file, {
+    origin: window.location.origin,
+  });
+  if (!fullUrl) {
+    return frame;
   }
 
   const traceMap = getSourceMap(fullUrl);

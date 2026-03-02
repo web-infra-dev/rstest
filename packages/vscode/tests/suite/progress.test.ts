@@ -126,6 +126,20 @@ suite('Test Progress Reporting', () => {
 
     assert.equal(failedMessages[3].message, 'after suite');
     assert.equal(failedMessages[4].message, 'after root suite');
+
+    assert.ok(item.uri, 'Progress test item should have a file uri');
+    const diagnostics = vscode.languages.getDiagnostics(item.uri);
+    assert.ok(diagnostics.length > 0, 'Failed run should publish diagnostics');
+    assert.ok(
+      diagnostics.some((diagnostic) => diagnostic.source === 'rstest'),
+      'Diagnostics source should be rstest',
+    );
+    assert.ok(
+      diagnostics.some((diagnostic) =>
+        diagnostic.message.includes('expected 1 to equal 2'),
+      ),
+      'Diagnostics should include assertion error messages',
+    );
   });
 
   test('can run a single test case', async () => {
@@ -163,6 +177,18 @@ suite('Test Progress Reporting', () => {
     assert.equal(passedItems.length, 1);
     assert.equal(passedItems[0]?.label, 'should add two numbers correctly');
     assert.match(output, /1 passed/);
+
+    const progressFileUri = vscode.Uri.file(
+      path.resolve(
+        __dirname,
+        '../../tests/fixtures/workspace-1/test/progress.test.ts',
+      ),
+    );
+    assert.equal(
+      vscode.languages.getDiagnostics(progressFileUri).length,
+      0,
+      'Successful run should clear previous diagnostics',
+    );
   });
 
   test('reports test progress with continuous run', async () => {

@@ -335,7 +335,6 @@ export class Project implements vscode.Disposable {
       path
         .relative(this.root.fsPath, vscode.Uri.parse(uriString).fsPath)
         .split(path.sep)
-        // biome-ignore lint/suspicious/noAssignInExpressions: just simple shorthand
         .reduce((tree, segment) => (tree[segment] ||= {}), tree);
     }
 

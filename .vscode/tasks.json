@@ -2,20 +2,6 @@
 // for the documentation about the tasks.json format
 {
   "version": "2.0.0",
-  "problemMatchers": [
-    {
-      "name": "rslib-watch",
-      "owner": "rslib",
-      "background": {
-        "activeOnStart": true,
-        "beginsPattern": "build started...",
-        "endsPattern": "build complete, watching for changes..."
-      },
-      "pattern": {
-        "regexp": "build failed in"
-      }
-    }
-  ],
   "tasks": [
     {
       "label": "core dev",
@@ -27,7 +13,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"
@@ -48,7 +34,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"
@@ -71,7 +57,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "build started...",
-          "endsPattern": "build complete, watching for changes..."
+          "endsPattern": "build completed, watching for changes..."
         },
         "pattern": {
           "regexp": "build failed in"

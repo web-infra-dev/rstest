@@ -10,6 +10,7 @@ describe('resolveOptions', () => {
         preset: 'normal',
         header: { env: true },
         reproduction: 'file+name',
+        testLists: 'auto',
         failures: { max: 50 },
         codeFrame: { enabled: true, linesAbove: 2, linesBelow: 2 },
         stack: 'top',

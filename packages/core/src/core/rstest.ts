@@ -276,7 +276,7 @@ export function createReporters(
 
       // TODO: load third-party reporters
       throw new Error(
-        `Reporter ${reporter} not found. Please install it or use a built-in reporter.`,
+        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
       );
     }
 

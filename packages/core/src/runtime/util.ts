@@ -7,11 +7,13 @@ import type { FormattedError, Test } from '../types';
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
+  clearTimeout?: typeof globalThis.clearTimeout;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
+  REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {

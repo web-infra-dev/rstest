@@ -19,7 +19,7 @@ class IgnoreModuleNotFoundErrorPlugin {
 export const pluginIgnoreResolveError: RsbuildPlugin = {
   name: 'rstest:ignore-resolve-error',
   setup: (api) => {
-    api.modifyRspackConfig(async (config) => {
+    api.modifyRspackConfig((config) => {
       config.plugins.push(new IgnoreModuleNotFoundErrorPlugin());
       config.optimization ??= {};
       config.optimization.emitOnErrors = true;

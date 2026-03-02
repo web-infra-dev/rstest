@@ -19,7 +19,7 @@ export const pluginCSSFilter = (): RsbuildPlugin => ({
   setup(api) {
     api.modifyBundlerChain({
       order: 'post',
-      handler: async (chain, { target, CHAIN_ID, environment }) => {
+      handler: (chain, { target, CHAIN_ID, environment }) => {
         const emitCss = environment.config.output.emitCss ?? target === 'web';
         if (!emitCss) {
           const ruleIds = [
@@ -34,7 +34,9 @@ export const pluginCSSFilter = (): RsbuildPlugin => ({
               continue;
             }
 
-            const rule = chain.module.rule(ruleId);
+            const rule = chain.module
+              .rule(ruleId)
+              .oneOf(CHAIN_ID.ONE_OF.CSS_MAIN);
 
             if (!rule.uses.has(CHAIN_ID.USE.CSS)) {
               continue;

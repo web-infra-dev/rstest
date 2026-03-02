@@ -1,17 +1,22 @@
 import type {
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   SnapshotRpcRequest,
-  SnapshotRpcResponse,
 } from '../protocol';
 import { mapStackFrame } from './sourceMapSupport';
 
 declare global {
   interface Window {
     __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
+    __rstest_dispatch_rpc__?: (
+      request: BrowserDispatchRequest,
+    ) => Promise<unknown>;
   }
 }
 
 const SNAPSHOT_HEADER = '// Rstest Snapshot';
+const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 
 /** Default RPC timeout if not specified in config (30 seconds) */
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
@@ -39,6 +44,35 @@ const pendingRequests = new Map<
 let requestIdCounter = 0;
 let messageListenerInitialized = false;
 
+const isDispatchResponse = (
+  value: unknown,
+): value is BrowserDispatchResponse => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'requestId' in value &&
+    typeof (value as { requestId: unknown }).requestId === 'string'
+  );
+};
+
+const settlePendingRequest = (response: BrowserDispatchResponse): void => {
+  const pending = pendingRequests.get(response.requestId);
+  if (!pending) {
+    return;
+  }
+
+  pendingRequests.delete(response.requestId);
+  if (response.stale) {
+    pending.reject(new Error('Stale snapshot RPC request ignored.'));
+    return;
+  }
+  if (response.error) {
+    pending.reject(new Error(response.error));
+    return;
+  }
+  pending.resolve(response.result);
+};
+
 /**
  * Initialize the message listener for snapshot RPC responses.
  * This is called once when the first RPC request is made.
@@ -50,19 +84,48 @@ const initMessageListener = (): void => {
   messageListenerInitialized = true;
 
   window.addEventListener('message', (event: MessageEvent) => {
-    if (event.data?.type === '__rstest_snapshot_response__') {
-      const response = event.data.payload as SnapshotRpcResponse;
-      const pending = pendingRequests.get(response.id);
-      if (pending) {
-        pendingRequests.delete(response.id);
-        if (response.error) {
-          pending.reject(new Error(response.error));
-        } else {
-          pending.resolve(response.result);
-        }
-      }
+    if (event.data?.type === DISPATCH_RESPONSE_TYPE) {
+      const response = event.data.payload as BrowserDispatchResponse;
+      settlePendingRequest(response);
     }
   });
+};
+
+const createSnapshotDispatchRequest = (
+  requestId: string,
+  method: SnapshotRpcRequest['method'],
+  args: SnapshotRpcRequest['args'],
+): BrowserDispatchRequest => {
+  // Snapshot is just one namespace on the shared dispatch RPC channel.
+  // Keep this mapping explicit so new runner-side RPC clients can mirror it.
+  return {
+    requestId,
+    namespace: 'snapshot',
+    method,
+    args,
+  };
+};
+
+const unwrapDispatchBridgeResult = <T>(
+  requestId: string,
+  result: unknown,
+): T => {
+  if (!isDispatchResponse(result)) {
+    throw new Error('Invalid dispatch bridge response payload.');
+  }
+
+  if (result.requestId !== requestId) {
+    throw new Error(
+      `Mismatched dispatch response id: expected ${requestId}, got ${result.requestId}`,
+    );
+  }
+  if (result.stale) {
+    throw new Error('Stale snapshot RPC request ignored.');
+  }
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  return result.result as T;
 };
 
 /**
@@ -73,15 +136,54 @@ const sendRpcRequest = <T>(
   method: SnapshotRpcRequest['method'],
   args: SnapshotRpcRequest['args'],
 ): Promise<T> => {
-  initMessageListener();
-
-  const id = `snapshot-rpc-${++requestIdCounter}`;
+  const requestId = `snapshot-rpc-${++requestIdCounter}`;
   const rpcTimeout = getRpcTimeout();
+  const dispatchRequest = createSnapshotDispatchRequest(
+    requestId,
+    method,
+    args,
+  );
+
+  if (window.parent === window) {
+    // Headless top-level runner path: all RPC namespaces go through one bridge.
+    const dispatchBridge = window.__rstest_dispatch_rpc__;
+    if (!dispatchBridge) {
+      return Promise.reject(
+        new Error('Dispatch RPC bridge is not available in top-level runner.'),
+      );
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(
+          new Error(
+            `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${method}`,
+          ),
+        );
+      }, rpcTimeout);
+
+      const call = Promise.resolve(dispatchBridge(dispatchRequest)).then(
+        (result) => unwrapDispatchBridgeResult<T>(requestId, result),
+      );
+
+      call
+        .then((result) => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+    });
+  }
+
+  initMessageListener();
 
   return new Promise<T>((resolve, reject) => {
     // Set a timeout for the RPC call
     const timeoutId = setTimeout(() => {
-      pendingRequests.delete(id);
+      pendingRequests.delete(requestId);
       reject(
         new Error(
           `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${method}`,
@@ -89,7 +191,7 @@ const sendRpcRequest = <T>(
       );
     }, rpcTimeout);
 
-    pendingRequests.set(id, {
+    pendingRequests.set(requestId, {
       resolve: (value) => {
         clearTimeout(timeoutId);
         resolve(value as T);
@@ -105,8 +207,8 @@ const sendRpcRequest = <T>(
       {
         type: '__rstest_dispatch__',
         payload: {
-          type: 'snapshot-rpc-request',
-          payload: { id, method, args },
+          type: 'dispatch-rpc-request',
+          payload: dispatchRequest,
         },
       },
       '*',

@@ -19,7 +19,7 @@ export const pluginInspect: (options?: {
     ? {
         name: 'rstest:inspect',
         setup: (api) => {
-          api.modifyRspackConfig(async (config) => {
+          api.modifyRspackConfig((config) => {
             // use inline source map or write to disk
             config.devtool = 'inline-nosources-source-map';
             config.optimization ??= {};

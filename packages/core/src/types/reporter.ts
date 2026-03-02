@@ -81,6 +81,14 @@ export type MdReporterOptions = {
   reproduction?: boolean | 'file' | 'file+name';
 
   /**
+   * Test lists (Passed / Skipped / Todo) display mode.
+   * - `'auto'`: show only when all tests pass and the run is focused
+   * - `'always'`: always show regardless of test status or focus
+   * @default 'auto'
+   */
+  testLists?: 'auto' | 'always';
+
+  /**
    * Failure output controls.
    * @default { max: 50 }
    */

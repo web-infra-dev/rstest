@@ -55,10 +55,10 @@ export async function setupCliShortcuts({
     } catch {}
   };
 
-  const promptInput = async (
+  const promptInput = (
     promptText: string,
     onComplete: (value: string | undefined) => Promise<void>,
-  ): Promise<void> => {
+  ): void => {
     if (isPrompting) return;
     isPrompting = true;
 
@@ -145,9 +145,9 @@ export async function setupCliShortcuts({
     {
       key: 't',
       description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter test name pattern (empty to clear): ',
           async (pattern) => {
             await runWithTestNamePattern(pattern);
@@ -158,9 +158,9 @@ export async function setupCliShortcuts({
     {
       key: 'p',
       description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter file name pattern (empty to clear): ',
           async (input) => {
             const filters = input

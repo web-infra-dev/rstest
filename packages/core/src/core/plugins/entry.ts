@@ -3,7 +3,7 @@ import type { RstestContext } from '../../types';
 import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
 
 class TestFileWatchPlugin {
-  private contextToWatch: string | null = null;
+  private readonly contextToWatch: string | null = null;
 
   constructor(contextToWatch: string) {
     this.contextToWatch = contextToWatch;

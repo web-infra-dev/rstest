@@ -35,10 +35,10 @@ type CollectStatus = 'lazy' | 'running';
 
 export class RunnerRuntime {
   /** all test cases */
-  private tests: Test[] = [];
+  private readonly tests: Test[] = [];
   /** a calling stack of the current test suites and case */
-  private _currentTest: Test[] = [];
-  private testPath: string;
+  private readonly _currentTest: Test[] = [];
+  private readonly testPath: string;
   private status: 'running' | 'collect' = 'collect';
 
   /**
@@ -48,8 +48,8 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: (() => MaybePromise<void>)[] = [];
-  private runtimeConfig;
-  private project: string;
+  private readonly runtimeConfig;
+  private readonly project: string;
   private testId = 1;
 
   constructor({

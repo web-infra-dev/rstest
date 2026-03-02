@@ -1,4 +1,5 @@
 import vscode from 'vscode';
+import { RstestDiagnostics } from './diagnostics';
 import { logger } from './logger';
 import { runningWorkers } from './master';
 import { Project, WorkspaceManager } from './project';
@@ -28,6 +29,7 @@ class Rstest {
   private workspaceWatcher?: vscode.Disposable;
   private runProfile!: vscode.TestRunProfile;
   private coverageProfile!: vscode.TestRunProfile;
+  private diagnostics = new RstestDiagnostics();
 
   // Add getter to access the test controller for testing
   get testController() {
@@ -37,6 +39,7 @@ class Rstest {
   constructor(context: vscode.ExtensionContext) {
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
+    context.subscriptions.push(this.diagnostics);
 
     this.startScanWorkspaces();
     this.setupTestController();
@@ -171,6 +174,7 @@ class Rstest {
       updateSnapshot,
       kind: request.profile?.kind,
       continuous: request.continuous,
+      diagnostics: this.diagnostics,
       createTestRun: () =>
         createTestRun(
           new vscode.TestRunRequest(

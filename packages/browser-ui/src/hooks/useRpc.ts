@@ -17,7 +17,10 @@ export type RpcState = {
 export const useRpc = (
   setTestFiles: (files: TestFileInfo[]) => void,
   wsPort: number | undefined,
-  onReloadTestFile?: (testFile: string, testNamePattern?: string) => void,
+  onReloadTestFile?: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<void>,
 ): RpcState => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
@@ -61,13 +64,13 @@ export const useRpc = (
           logger.debug('[Container RPC] onTestFileUpdate called:', files);
           setTestFilesRef.current(files);
         },
-        reloadTestFile(testFile: string, testNamePattern?: string) {
+        async reloadTestFile(testFile: string, testNamePattern?: string) {
           logger.debug(
             '[Container RPC] reloadTestFile called:',
             testFile,
             testNamePattern,
           );
-          onReloadTestFileRef.current?.(testFile, testNamePattern);
+          await onReloadTestFileRef.current?.(testFile, testNamePattern);
         },
       };
 

@@ -1,20 +1,14 @@
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   HostRPC,
-  SnapshotRpcRequest,
-  SnapshotRpcResponse,
 } from '../types';
 
 const DISPATCH_MESSAGE_TYPE = '__rstest_dispatch__';
-const SNAPSHOT_RESPONSE_TYPE = '__rstest_snapshot_response__';
+const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 
-type SnapshotRpcHandler = Pick<
-  HostRPC,
-  | 'resolveSnapshotPath'
-  | 'readSnapshotFile'
-  | 'saveSnapshotFile'
-  | 'removeSnapshotFile'
->;
+type DispatchRpcHandler = Pick<HostRPC, 'dispatch'>;
 
 const canPostMessage = (
   sourceWindow: MessageEventSource | null,
@@ -34,48 +28,70 @@ export const readDispatchMessage = (
   return event.data.payload as BrowserClientMessage;
 };
 
-export const forwardSnapshotRpcRequest = async (
-  rpc: SnapshotRpcHandler | null | undefined,
-  request: SnapshotRpcRequest,
+const toDispatchErrorResponse = (
+  requestId: string,
+  error: unknown,
+): BrowserDispatchResponse => {
+  return {
+    requestId,
+    error: error instanceof Error ? error.message : String(error),
+  };
+};
+
+const getDispatchRequestId = (value: unknown): string => {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'requestId' in value &&
+    typeof (value as { requestId: unknown }).requestId === 'string'
+  ) {
+    return (value as { requestId: string }).requestId;
+  }
+  return 'unknown-request';
+};
+
+const isDispatchRequest = (value: unknown): value is BrowserDispatchRequest => {
+  return getDispatchRequestId(value) !== 'unknown-request';
+};
+
+export const forwardDispatchRpcRequest = async (
+  rpc: DispatchRpcHandler | null | undefined,
+  request: unknown,
   sourceWindow: MessageEventSource | null,
 ): Promise<void> => {
-  if (!rpc || !canPostMessage(sourceWindow)) {
+  // Container-side generic dispatch proxy:
+  // runner iframe -> browser-ui -> host birpc dispatch(request).
+  if (!canPostMessage(sourceWindow)) {
     return;
   }
 
-  const sendResponse = (response: SnapshotRpcResponse) => {
+  const sendResponse = (response: BrowserDispatchResponse) => {
     sourceWindow.postMessage(
-      { type: SNAPSHOT_RESPONSE_TYPE, payload: response },
+      { type: DISPATCH_RESPONSE_TYPE, payload: response },
       '*',
     );
   };
 
-  try {
-    let result: unknown;
-    switch (request.method) {
-      case 'resolveSnapshotPath':
-        result = await rpc.resolveSnapshotPath(request.args.testPath);
-        break;
-      case 'readSnapshotFile':
-        result = await rpc.readSnapshotFile(request.args.filepath);
-        break;
-      case 'saveSnapshotFile':
-        result = await rpc.saveSnapshotFile(
-          request.args.filepath,
-          request.args.content,
-        );
-        break;
-      case 'removeSnapshotFile':
-        result = await rpc.removeSnapshotFile(request.args.filepath);
-        break;
-      default:
-        result = undefined;
-    }
-    sendResponse({ id: request.id, result });
-  } catch (error) {
+  if (!isDispatchRequest(request)) {
     sendResponse({
-      id: request.id,
-      error: error instanceof Error ? error.message : String(error),
+      requestId: getDispatchRequestId(request),
+      error:
+        'Invalid dispatch request payload: expected an object with string requestId.',
     });
+    return;
+  }
+
+  if (!rpc) {
+    sendResponse({
+      requestId: request.requestId,
+      error: 'Container RPC is not ready for dispatch.',
+    });
+    return;
+  }
+
+  try {
+    sendResponse(await rpc.dispatch(request));
+  } catch (error) {
+    sendResponse(toDispatchErrorResponse(request.requestId, error));
   }
 };

@@ -13,8 +13,10 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 ## Module structure
 
 - `src/main.tsx` — Application entry
+- `src/core/channel.ts` — Container message channel (`__rstest_dispatch__`) and dispatch RPC forwarding
+- `src/core/runtime.ts` — Runtime URL helpers (`runner`/`websocket`)
 - `src/components/` — UI components
-- `src/hooks/` — React hooks (e.g., `useRpc`)
+- `src/hooks/` — React hooks (notably `useRpc` WebSocket + birpc lifecycle)
 - `src/utils/` — Utility functions and constants
 - `src/types.ts` — TypeScript type definitions
 
@@ -53,6 +55,7 @@ pnpm --filter @rstest/browser-ui typecheck
 ## Key files
 
 - `src/main.tsx` — App entry and root component
+- `src/core/channel.ts` — Dispatch channel forwarding and validation boundary
 - `src/components/TestFilesTree.tsx` — Main test file tree component
 - `src/hooks/useRpc.ts` — RPC communication hook
 - `tailwind.config.cjs` — Tailwind configuration
