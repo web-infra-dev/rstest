@@ -65,6 +65,8 @@ npx playwright install chromium
 
 Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported.
 
+Mixing multiple providers in the same test run is currently not supported.
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -216,40 +218,52 @@ export default defineConfig({
 });
 ```
 
-## Multi-Browser Testing
+## Current limitation: browser launch options must match in one run
 
-Use [projects](/config/test/projects) configuration to run tests in multiple browsers simultaneously:
+In one `rstest` process, all Browser Mode projects must share the same browser launch options:
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+
+This means mixing multiple providers, or running Chromium/Firefox/WebKit together in the same run, is not supported yet.
+
+For cross-browser coverage, run tests in separate executions (for example, in a CI matrix):
+
+```bash
+npx rstest --browser.browser chromium
+npx rstest --browser.browser firefox
+npx rstest --browser.browser webkit
+```
+
+## Multi-project config isolation
+
+When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
+
+Browser launch options still need to stay aligned across browser projects: `provider`, `browser`, `headless`, `port`, and `strictPort`.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: [
-    {
-      name: 'chromium',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
-      },
-    },
-    {
-      name: 'firefox',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'firefox',
-      },
-    },
-    {
-      name: 'webkit',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'webkit',
-      },
-    },
-  ],
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
 });
 ```
 
@@ -289,3 +303,4 @@ export default defineConfig({
 
 - [Browser Mode Guide](/guide/browser-testing/) - Introduction and usage guide for Browser Mode
 - [Getting Started](/guide/browser-testing/getting-started) - Configure Browser Mode tests
+- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Write semantic tests with `page` + `expect.element`

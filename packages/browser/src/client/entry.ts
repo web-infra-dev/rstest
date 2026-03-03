@@ -21,8 +21,13 @@ import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserDispatchRequest,
-  BrowserHostConfig,
   BrowserProjectRuntime,
+} from '../protocol';
+import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_RUNNER,
+  DISPATCH_RPC_REQUEST_TYPE,
+  RSTEST_CONFIG_MESSAGE_TYPE,
 } from '../protocol';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
@@ -33,13 +38,6 @@ import {
 } from './sourceMapSupport';
 
 declare global {
-  interface Window {
-    __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-    __rstest_dispatch__?: (message: BrowserClientMessage) => void;
-    __rstest_dispatch_rpc__?: (
-      request: BrowserDispatchRequest,
-    ) => Promise<unknown>;
-  }
   // eslint-disable-next-line no-var
   var __coverage__: Record<string, unknown> | undefined;
 }
@@ -219,7 +217,7 @@ const send = (message: BrowserClientMessage): void => {
   // If in iframe, send to parent window (container) which will forward to host via RPC
   if (window.parent !== window) {
     window.parent.postMessage(
-      { type: '__rstest_dispatch__', payload: message },
+      { type: DISPATCH_MESSAGE_TYPE, payload: message },
       '*',
     );
     return;
@@ -235,7 +233,7 @@ const dispatchRunnerLifecycle = (
 ): void => {
   const request: BrowserDispatchRequest = {
     requestId: `runner-lifecycle-${++runnerDispatchRequestId}`,
-    namespace: 'runner',
+    namespace: DISPATCH_NAMESPACE_RUNNER,
     method,
     args: payload,
   };
@@ -256,7 +254,7 @@ const dispatchRunnerLifecycle = (
   }
 
   send({
-    type: 'dispatch-rpc-request',
+    type: DISPATCH_RPC_REQUEST_TYPE,
     payload: request,
   });
 };
@@ -276,7 +274,7 @@ const waitForConfig = (): Promise<void> => {
 
   return new Promise((resolve, reject) => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'RSTEST_CONFIG') {
+      if (event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE) {
         window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
         debugLog(
           '[Runner] Received config from container:',
@@ -369,6 +367,7 @@ const run = async () => {
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
+  const urlRunId = urlParams.get('runId');
   const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
@@ -376,6 +375,13 @@ const run = async () => {
     options = {
       ...options,
       testFile: urlTestFile,
+    };
+  }
+
+  if (urlRunId && options) {
+    options = {
+      ...options,
+      runId: urlRunId,
     };
   }
 

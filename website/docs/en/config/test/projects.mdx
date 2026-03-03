@@ -49,3 +49,55 @@ export default defineConfig({
 ```
 
 More information about projects can be found in [Test projects](/guide/basic/projects).
+
+## Projects in browser mode
+
+When you use `projects` with Browser Mode, each project compiles and executes with its own build config, which lets you keep different stacks or build setups in one repository.
+
+In the same run, browser launch options must stay consistent across browser projects:
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+
+So mixing multiple providers, or multiple browser types, in one run is not supported yet.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+```ts title="project-b/rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-b',
+  include: ['tests/**/*.test.ts'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+You can still mix Browser Mode projects with `testEnvironment: 'node'`/`'jsdom'` projects in one `projects` list, and results will be merged in the final report.

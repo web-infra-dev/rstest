@@ -12,7 +12,7 @@
   {
     "type": "dir-section-header",
     "name": "browser-testing",
-    "label": "浏览器测试"
+    "label": "浏览器测试（实验性）"
   },
   {
     "type": "dir-section-header",

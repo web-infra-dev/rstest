@@ -1,0 +1,52 @@
+---
+title: Browser mode
+---
+
+# Browser mode
+
+The Browser Mode API is provided by [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser), designed to let you use a Playwright-style Locator workflow in browser tests.
+
+## Exported API
+
+`@rstest/browser` provides the runtime entry for Browser Mode. Its core responsibility is **locating elements and driving interactions**.
+
+`page` is the query entry point, `Locator` handles chaining and action execution, `BrowserPage` describes the query APIs supported by `page`, and `setTestIdAttribute` configures the test id attribute name.
+
+The following are the APIs currently exported by `@rstest/browser`:
+
+- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` query entry (queries only)
+- [`Locator`](/api/runtime-api/browser-mode/locator) - Core class for chained queries and interactions
+- [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - Type definition for `page`
+- [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute) - Configure the attribute name used by `getByTestId()`
+
+## Assertion API
+
+The assertion entry point is `expect.element(locator)`.
+
+When you import `@rstest/browser` in a Browser Mode test (e.g., `import { page } from '@rstest/browser'`), `expect` automatically gains the `element` capability.
+
+Its responsibility is to perform web-first assertions (with auto-waiting) on a `Locator`, such as `toBeVisible` and `toHaveText`.
+
+The relationship between the two can be understood as: `@rstest/browser` is responsible for **finding and operating on elements**, while `expect.element` is responsible for **verifying element state**.
+
+- [`expect.element(locator)`](/api/runtime-api/browser-mode/assertion) - Perform auto-waiting assertions on a `Locator`
+
+## Example: query, interaction, and assertion
+
+```ts title="browser-example.test.ts"
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('submits form', async () => {
+  await page.getByLabel('Email').fill('dev@rstest.rs');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect.element(page.getByText('Done')).toBeVisible();
+});
+```
+
+In this example, `page` first creates a `Locator`, the `Locator` executes `fill/click`, and finally `expect.element(locator)` performs a visibility assertion on the result, forming a complete test cycle.
+
+## Detailed reference
+
+- [Locator](/api/runtime-api/browser-mode/locator)
+- [Assertion](/api/runtime-api/browser-mode/assertion)

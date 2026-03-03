@@ -1,12 +1,13 @@
+import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_RESPONSE_TYPE,
+} from '@rstest/browser/protocol';
 import type {
   BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   HostRPC,
 } from '../types';
-
-const DISPATCH_MESSAGE_TYPE = '__rstest_dispatch__';
-const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 
 type DispatchRpcHandler = Pick<HostRPC, 'dispatch'>;
 

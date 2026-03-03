@@ -47,3 +47,55 @@ export default defineConfig({
 ```
 
 更多关于项目配置的信息，请参考[多项目测试](/guide/basic/projects)。
+
+## Browser mode 中的 projects
+
+如果你在 Browser Mode 下使用 `projects`，每个项目都会按自己的构建配置独立编译与执行，这样可以在一个仓库里同时管理不同技术栈或不同构建配置。
+
+但在同一次 run 中，Browser 启动配置必须保持一致：
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+
+也就是说，目前不支持在同一次 run 里混用多个 provider，或同时配置多个 browser 类型。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+```ts title="project-b/rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-b',
+  include: ['tests/**/*.test.ts'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+你也可以在同一个 `projects` 列表里混合 Browser Mode 与 `testEnvironment: 'node'`/`'jsdom'` 项目，最终会合并输出测试结果。
