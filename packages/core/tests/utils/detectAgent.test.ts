@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
 import {
-  KNOWN_AGENTS,
   determineAgent,
+  KNOWN_AGENTS,
 } from '../../src/utils/agent/detectAgent';
 
 const AGENT_ENV_KEYS = [
