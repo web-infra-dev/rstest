@@ -35,6 +35,9 @@ test('should add two numbers correctly', ({ expect }) => {
 
 为给定的值创建一个断言对象。
 
+- `actual`：要断言的目标值。
+- `message`：可选，自定义失败提示信息，会在断言失败时显示。
+
 ```ts
 import { expect } from '@rstest/core';
 
@@ -65,12 +68,41 @@ expect.soft(1 + 2).toBe(4);
 
 ## expect.poll
 
-- **类型：** `<T>(actual: () => T, options?: { interval?: number, timeout?: number, message?: string }) => Promise<Assertion<T>>`
+- **类型：** `<T>(actual: () => T | Promise<T>, options?: { interval?: number, timeout?: number, message?: string }) => PromiseLike<Assertion<Awaited<T>>>`
 
-轮询函数返回的值，直到断言通过或超时。
+持续调用 `actual`，并重复执行 matcher，直到断言通过或超时。
+
+- **默认 `interval`：** `50`（毫秒）
+- **默认 `timeout`：** `1000`（毫秒）
+
+`options`：
+
+- `interval`：每次重试之间的间隔时间（毫秒）。
+- `timeout`：轮询允许的最长总耗时（毫秒）。
+- `message`：轮询断言失败时显示的自定义提示信息。
+
+注意：
+
+- `expect.poll(...)` 是异步断言，**必须**使用 `await`。
+- `expect.poll(...)` 不支持 `resolves`/`rejects`、`toThrow*` 以及快照类 matcher。遇到这类不稳定条件建议使用 `rstest.waitFor()`。
 
 ```ts
 await expect.poll(() => getStatus()).toBe('ready');
+
+await expect
+  .poll(
+    async () => {
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      return data.status;
+    },
+    {
+      interval: 100,
+      timeout: 5000,
+      message: '服务应在 5 秒内恢复健康',
+    },
+  )
+  .toBe('healthy');
 ```
 
 ## expect.unreachable
@@ -89,12 +121,16 @@ if (shouldNotHappen) {
 
 - **类型：** `(expected: number) => void`
 
-验证在测试期间调用了特定数量的断言。常用来检查异步代码是否被调用。
+验证在测试期间调用了特定数量的断言。常用来检查异步代码是否被调用或是否触发了预期的异常。
 
 ```ts
-expect.assertions(2);
-expect(1 + 1).toBe(2);
-expect(2 + 2).toBe(4);
+expect.assertions(1);
+
+try {
+  await someAsyncFunction();
+} catch (e) {
+  expect(e).toBeInstanceOf(Error);
+}
 ```
 
 ## expect.hasAssertions
@@ -102,6 +138,8 @@ expect(2 + 2).toBe(4);
 - **类型：** `() => void`
 
 验证在测试期间至少调用了一个断言。
+
+适用于断言次数不固定，但必须至少发生一次断言的场景。
 
 ```ts
 expect.hasAssertions();
@@ -113,6 +151,12 @@ expect(1 + 1).toBe(2);
 - **类型：** `(testers: Array<Tester>) => void`
 
 自定义用来验证两个对象是否相等的测试器。
+
+每个 tester 可以返回：
+
+- `true`：两者视为相等
+- `false`：两者视为不相等
+- `undefined`：跳过当前 tester，交给下一个 tester 或默认比较逻辑
 
 ```ts
 expect.addEqualityTesters([
@@ -158,103 +202,133 @@ console.log(expect.getState().currentTestName); // 输出 '自定义名称'
 
 ### 常用匹配器
 
-常用匹配器用于断言基本的值比较、类型检查和结构检查，涵盖了数字、字符串、对象、数组等日常断言需求。
+常用匹配器是最常见的一组断言能力，用来覆盖值比较、结构比较、类型判断和异常验证。
 
-- `toBe(value)`：使用 `Object.is` 检查严格相等。
-- `toEqual(value)`：检查深度相等（递归检查所有字段）。
-- `toStrictEqual(value)`：深度相等，包含 undefined 属性和稀疏数组。
-- `toBeTruthy()`：检查值为真。
-- `toBeFalsy()`：检查值为假。
-- `toBeNull()`：检查值为 `null`。
-- `toBeUndefined()`：检查值为 `undefined`。
-- `toBeDefined()`：检查值不是 `undefined`。
-- `toBeNaN()`：检查值为 `NaN`。
-- `toBeGreaterThan(number)`：检查值大于给定数字。
-- `toBeGreaterThanOrEqual(number)`：检查值大于等于给定数字。
-- `toBeLessThan(number)`：检查值小于给定数字。
-- `toBeLessThanOrEqual(number)`：检查值小于等于给定数字。
-- `toBeCloseTo(number, numDigits?)`：检查数字接近另一个数字，可指定精度。
-- `toContain(item)`：检查数组或字符串包含指定项。
-- `toContainEqual(item)`：检查数组包含指定项（使用深度相等）。
-- `toMatch(stringOrRegExp)`：检查字符串匹配正则或子串。
-- `toMatchObject(object)`：检查对象包含指定属性子集。
-- `toHaveLength(length)`：检查对象的 `.length` 属性等于指定值。
-- `toHaveProperty(path, value?)`：检查对象指定路径上有属性，可选断言值。
-- `toBeInstanceOf(class)`：检查值是指定类的实例。
-- `toBeTypeOf(type)`：检查值类型（如 'string'）。
-- `toSatisfy(fn)`：检查值满足给定函数。
-- `toBeOneOf(array)`：检查值在给定数组中。
-- `toThrowError(expected?)`：检查函数抛出错误，可选匹配错误信息或类型。
+相等性校验：
+
+- `toBe(value)`：基于 `Object.is` 的严格相等比较。
+- `toEqual(value)`：对象/数组的深度相等比较。
+- `toStrictEqual(value)`：更严格的深度相等（包含 `undefined` 字段、稀疏数组差异）。
+- `toBeOneOf(array)`：值必须命中给定候选集合之一。
+
+类型与存在性：
+
+- `toBeTruthy()` / `toBeFalsy()`：真值/假值判断。
+- `toBeNull()` / `toBeUndefined()` / `toBeDefined()`：空值与定义状态判断。
+- `toBeNaN()`：判断是否为 `NaN`。
+- `toBeInstanceOf(class)`：实例类型判断。
+- `toBeTypeOf(type)`：运行时类型判断（如 `'string'`）。
+
+数字比较：
+
+- `toBeGreaterThan(number)` / `toBeGreaterThanOrEqual(number)`。
+- `toBeLessThan(number)` / `toBeLessThanOrEqual(number)`。
+- `toBeCloseTo(number, numDigits?)`：适合浮点数近似比较。
+
+集合与字符串：
+
+- `toContain(item)`：数组/字符串包含判断。
+- `toContainEqual(item)`：数组成员的深度相等判断。
+- `toMatch(stringOrRegExp)`：字符串匹配子串或正则。
+- `toMatchObject(object)`：对象包含指定属性子集。
+- `toHaveLength(length)`：断言 `.length`。
+- `toHaveProperty(path, value?)`：断言属性路径存在，可选断言该路径值。
+
+自定义条件与异常：
+
+- `toSatisfy(fn)`：满足自定义谓词函数。
+- `toThrowError(expected?)`：断言函数抛错（支持字符串/正则/错误类型）。
 
 ```ts
-// 相等性
+// toBe vs toEqual
 expect(1 + 1).toBe(2);
-expect({ a: 1 }).toEqual({ a: 1 });
-expect([1, undefined]).toStrictEqual([1, undefined]);
-expect(2).toBeOneOf([1, 2, 3]);
+expect({ id: 1, name: 'a' }).toEqual({ id: 1, name: 'a' });
 
-// 类型与定义
-expect(null).toBeNull();
-expect(undefined).toBeUndefined();
-expect('foo').toBeDefined();
-expect('bar').toBeTypeOf('string');
-expect(new Date()).toBeInstanceOf(Date);
-expect(NaN).toBeNaN();
-expect('hello').toBeTruthy();
-expect('').toBeFalsy();
+// 严格深比较
+expect({ a: undefined, b: 1 }).toStrictEqual({ a: undefined, b: 1 });
 
-// 数字比较
-expect(5).toBeGreaterThan(3);
-expect(5).toBeGreaterThanOrEqual(5);
-expect(3).toBeLessThan(5);
-expect(3).toBeLessThanOrEqual(3);
+// 数字断言
 expect(0.1 + 0.2).toBeCloseTo(0.3, 5);
+expect(10).toBeGreaterThan(5);
 
-// 数组/对象/字符串
+// 集合断言
 expect([1, 2, 3]).toContain(2);
-expect([{ a: 1 }]).toContainEqual({ a: 1 });
-expect('hello world').toMatch(/world/);
-expect({ a: 1, b: 2 }).toMatchObject({ a: 1 });
-expect('abc').toHaveLength(3);
-expect({ foo: { bar: 1 } }).toHaveProperty('foo.bar', 1);
+expect([{ id: 1 }]).toContainEqual({ id: 1 });
+expect({ user: { role: 'admin' } }).toHaveProperty('user.role', 'admin');
+expect({ id: 1, role: 'admin', active: true }).toMatchObject({
+  id: 1,
+  role: 'admin',
+});
 
-// 函数/异常
+// 文本与自定义条件
+expect('request id: 42').toMatch(/id:\s\d+/);
+expect(21).toSatisfy((n) => n % 3 === 0);
+
+// 异常断言（必须包成函数）
 expect(() => {
-  throw new Error('fail');
-}).toThrowError('fail');
-expect(3).toSatisfy((x) => x % 3 === 0 || x % 3 === 1);
+  throw new TypeError('invalid input');
+}).toThrowError(TypeError);
 ```
 
 ### Mock 匹配器
 
-Mock 匹配器用于断言 mock 函数（由 `rstest.fn` 或 `rstest.spyOn` 创建）的调用情况、返回值和调用顺序，是单元测试中验证函数交互的重要工具。
+Mock 匹配器用于验证 `rstest.fn` / `rstest.spyOn` 的交互行为，包括调用次数、参数、调用顺序、返回值和异步结果。
 
-- `toHaveBeenCalled()`：检查 mock 函数至少被调用过一次。
-- `toHaveBeenCalledTimes(times)`：检查 mock 函数被调用指定次数。
-- `toHaveBeenCalledWith(...args)`：检查 mock 函数被指定参数调用。
-- `toHaveBeenCalledBefore(mock)`：检查 mock 在另一个 mock 之前被调用。
-- `toHaveBeenCalledAfter(mock)`：检查 mock 在另一个 mock 之后被调用。
-- `toHaveBeenCalledExactlyOnceWith(...args)`：检查 mock 仅被指定参数调用过一次。
-- `toHaveBeenLastCalledWith(...args)`：检查 mock 最后一次被指定参数调用。
-- `toHaveBeenNthCalledWith(n, ...args)`：检查 mock 第 n 次被指定参数调用。
-- `toHaveReturned()`：检查 mock 函数至少有一次返回。
-- `toHaveReturnedTimes(times)`：检查 mock 函数返回指定次数。
-- `toHaveReturnedWith(value)`：检查 mock 函数返回指定值。
-- `toHaveLastReturnedWith(value)`：检查 mock 函数最后一次返回指定值。
-- `toHaveNthReturnedWith(n, value)`：检查 mock 函数第 n 次返回指定值。
-- `toHaveResolved()`：检查 Promise 至少 resolve 过一次。
-- `toHaveResolvedTimes(times)`：检查 Promise resolve 指定次数。
-- `toHaveResolvedWith(value)`：检查 Promise resolve 指定值。
-- `toHaveLastResolvedWith(value)`：检查 Promise 最后一次 resolve 指定值。
-- `toHaveNthResolvedWith(n, value)`：检查 Promise 第 n 次 resolve 指定值。
+调用相关：
+
+- `toHaveBeenCalled()`：至少被调用一次。
+- `toHaveBeenCalledTimes(times)`：被调用次数精确匹配。
+- `toHaveBeenCalledWith(...args)`：任意一次调用参数匹配。
+- `toHaveBeenLastCalledWith(...args)`：最后一次调用参数匹配。
+- `toHaveBeenNthCalledWith(n, ...args)`：第 n 次调用参数匹配。
+- `toHaveBeenCalledExactlyOnceWith(...args)`：仅调用一次且参数匹配。
+- `toHaveBeenCalledBefore(mock)` / `toHaveBeenCalledAfter(mock)`：校验调用先后顺序。
+
+返回值相关：
+
+- `toHaveReturned()`：至少有一次正常返回。
+- `toHaveReturnedTimes(times)`：正常返回次数精确匹配。
+- `toHaveReturnedWith(value)`：任意一次返回值匹配。
+- `toHaveLastReturnedWith(value)`：最后一次返回值匹配。
+- `toHaveNthReturnedWith(n, value)`：第 n 次返回值匹配。
+
+Promise 结果相关：
+
+- `toHaveResolved()`：至少有一次 resolve。
+- `toHaveResolvedTimes(times)`：resolve 次数精确匹配。
+- `toHaveResolvedWith(value)`：任意一次 resolve 值匹配。
+- `toHaveLastResolvedWith(value)`：最后一次 resolve 值匹配。
+- `toHaveNthResolvedWith(n, value)`：第 n 次 resolve 值匹配。
+
+注意：
+
+- `Nth` 系列从 `1` 开始计数（`1` 表示第一次调用）。
+- `toHaveBeenCalledWith` 只要求“某次”匹配；需要严格位置时用 `Last` 或 `Nth`。
+- 这些 matcher 只能用于 mock/spy，不能用于普通函数。
 
 ```ts
-const mockFn = rstest.fn((x) => x + 1);
-mockFn(1);
+const sum = rstest.fn((a: number, b: number) => a + b);
+sum(1, 2);
+sum(2, 3);
 
-expect(mockFn).toHaveBeenCalled();
-expect(mockFn).toHaveBeenCalledTimes(1);
-expect(mockFn).toHaveBeenCalledWith(1);
+expect(sum).toHaveBeenCalledTimes(2);
+expect(sum).toHaveBeenNthCalledWith(1, 1, 2);
+expect(sum).toHaveBeenLastCalledWith(2, 3);
+expect(sum).toHaveReturnedWith(3);
+expect(sum).toHaveLastReturnedWith(5);
+
+const fetchUser = rstest.fn(async (id: number) => ({ id, name: 'alice' }));
+await fetchUser(1);
+await fetchUser(2);
+
+expect(fetchUser).toHaveResolvedTimes(2);
+expect(fetchUser).toHaveNthResolvedWith(1, { id: 1, name: 'alice' });
+
+const before = rstest.fn();
+const after = rstest.fn();
+before();
+after();
+expect(before).toHaveBeenCalledBefore(after);
 ```
 
 ### 快照匹配器
