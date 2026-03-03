@@ -95,10 +95,8 @@ export function determineAgent(): AgentResult {
     }
   }
 
-  if (process.env.CURSOR_TRACE_ID) {
-    return { isAgent: true, agent: { name: CURSOR } };
-  }
-
+  // `CURSOR_TRACE_ID` is injected in normal Cursor terminal sessions as well,
+  // so it cannot reliably distinguish agent runs.
   if (process.env.CURSOR_AGENT) {
     return { isAgent: true, agent: { name: CURSOR_CLI } };
   }
