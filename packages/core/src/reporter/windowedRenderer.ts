@@ -53,7 +53,7 @@ export class WindowRenderer {
   private windowHeight = 0;
   private finished = false;
   private readonly cleanups: (() => void)[] = [];
-  private exitHandler = () => {
+  private readonly exitHandler = () => {
     this.finish();
   };
 
