@@ -13,6 +13,7 @@ const AGENT_ENV_KEYS = [
   'CODEX_SANDBOX',
   'AUGMENT_AGENT',
   'OPENCODE',
+  // cspell:disable-next-line
   'CLAUDECODE',
   'CLAUDE_CODE',
   'REPL_ID',
