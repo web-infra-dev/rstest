@@ -53,6 +53,9 @@ export class WindowRenderer {
   private windowHeight = 0;
   private finished = false;
   private readonly cleanups: (() => void)[] = [];
+  private exitHandler = () => {
+    this.finish();
+  };
 
   constructor(options: Options) {
     this.options = {
@@ -74,11 +77,7 @@ export class WindowRenderer {
 
     this.start();
 
-    process.once('exit', () => {
-      if (!this.finished) {
-        this.finish();
-      }
-    });
+    process.once('exit', this.exitHandler);
   }
 
   start(): void {
@@ -102,6 +101,7 @@ export class WindowRenderer {
     this.finished = true;
     this.flushBuffer();
     clearInterval(this.renderInterval);
+    process.removeListener('exit', this.exitHandler);
   }
 
   /**
