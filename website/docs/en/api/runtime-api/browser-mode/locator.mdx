@@ -7,10 +7,23 @@ overviewHeaders: [2, 3]
 
 `Locator` is the core API for element querying and interaction in Browser Mode. You can build query chains via `page.getBy*` or `page.locator()`, then execute interaction actions. Concrete execution semantics are provided by the configured browser `provider`.
 
-You can import `page` from [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser):
+:::tip Auto-wait
+With the Playwright provider, Locator interaction methods (such as `click`, `fill`, `check`) automatically wait for the element to become actionable (visible, enabled, stable) before executing. You do not need to manually wait for elements before performing actions. This is distinct from the [auto-retry](/api/runtime-api/browser-mode/assertion#auto-retry-and-timeout) behavior of `expect.element` assertions.
+:::
 
-```ts
+The following example demonstrates the typical workflow: query elements, perform interactions, and combine with [expect.element](/api/runtime-api/browser-mode/assertion) for assertions.
+
+```ts title="src/locator.test.ts"
 import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('interacts with a form using locator', async () => {
+  await page.getByLabel('Username').fill('alice');
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  await expect.element(page.getByLabel('Username')).toHaveValue('alice');
+});
 ```
 
 ## page
@@ -140,6 +153,25 @@ await setTestIdAttribute('data-test');
 await page.getByTestId('settings-panel').click();
 ```
 
+:::tip
+It is recommended to configure `setTestIdAttribute` in a setup file to ensure it applies to all tests consistently:
+
+```ts title="rstest.setup.ts"
+import { setTestIdAttribute } from '@rstest/browser';
+
+await setTestIdAttribute('data-qa');
+```
+
+Then reference it in your config:
+
+```ts title="rstest.config.ts"
+export default defineConfig({
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+:::
+
 ## Composition API
 
 ### filter
@@ -194,6 +226,10 @@ Select a specific element from the matched set.
 ## Interaction API
 
 The following APIs trigger actual browser actions and return `Promise<void>`.
+
+:::warning Strictness
+Locators are strict. If a Locator interaction action (like `click` or `fill`) resolves to more than one element, the operation will throw an error. Use [`first()`](#nth--first--last), [`last()`](#nth--first--last), or [`nth()`](#nth--first--last) to explicitly select a single element when the query matches multiple elements.
+:::
 
 These `*Options` types represent the set of options currently supported in Browser Mode:
 
@@ -359,6 +395,7 @@ await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 
 ## Usage constraints
 
+- The APIs listed on this page represent the currently supported subset of the Playwright Locator API. APIs not listed here are not yet available
 - The argument to `and` / `or` / `filter({ has | hasNot })` must be a `Locator` returned by `@rstest/browser`
 - The `type` argument to `dispatchEvent(type, eventInit?)` must be a non-empty string
 - `selectOption` currently only supports `string` or `string[]`

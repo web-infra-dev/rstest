@@ -4,8 +4,8 @@
 
 在 Browser Mode 下，推荐按以下优先级选择交互方案（仅在需要时再向后降级）：
 
-- **Locator API（首选）**：使用 [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) 做语义化定位与自动等待断言，适合绝大多数交互测试
-- **Testing Library**：适合迁移存量用例或复用既有 Testing Library 工具链；新测试一般不作为首选
+- **Locator API（首选）**：使用 [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) 做语义化查询、交互与断言，适合绝大多数交互测试
+- **Testing Library**：适合迁移存量用例或复用既有 [Testing Library](https://testing-library.com/) 工具链；新测试一般不作为首选
 - **原生 DOM API（兜底）**：更轻量、可精确控制事件属性，但需要手动拼装事件序列，适合验证底层事件逻辑或特殊交互细节
 
 import { PackageManagerTabs } from '@theme';
@@ -107,6 +107,15 @@ Locator 支持常见交互 API（如 [click](/api/runtime-api/browser-mode/locat
 
 建议在关键交互后立即断言可观察结果（例如状态文案、按钮状态、字段值），这样失败信息更聚焦、调试成本更低。
 
+:::info 自动等待 vs 自动重试
+Locator API 中有两种不同的等待机制：
+
+- **自动等待（交互）**：`click()`、`fill()`、`check()` 等方法会自动等待目标元素可见、启用、稳定后再执行操作。
+- **自动重试（断言）**：`expect.element` 的 matcher 会在超时时间内持续重试，直到断言通过，适合处理异步渲染场景。
+
+大多数情况下，你只需要 `await` 每个调用——框架会在内部处理所有等待和重试。
+:::
+
 你也可以链式使用 [not](/api/runtime-api/browser-mode/assertion#not) 和可选 `timeout`：
 
 ```ts
@@ -115,16 +124,9 @@ await expect
   .not.toBeDisabled({ timeout: 1000 });
 ```
 
-### 当前能力边界
-
-当前实现是 Playwright Locator API 的高频子集，不是完整等价实现。使用时请注意：
-
-- [selectOption](/api/runtime-api/browser-mode/locator#selectoption) 目前仅支持 `string` 或 `string[]`
-- [setInputFiles](/api/runtime-api/browser-mode/locator#setinputfiles) 目前仅支持文件路径 `string` 或 `string[]`
-- [dispatchEvent](/api/runtime-api/browser-mode/locator#dispatchevent) 的 `eventInit` 需要可被 JSON 序列化
-- [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty) 的期望值需要可被 JSON 序列化
-
-完整 API 列表请参考 [Locator 参考](/api/runtime-api/browser-mode/locator)。
+:::warning 严格模式
+Locator 的交互操作是严格的：如果一个 locator 匹配到多个元素，`click`、`fill` 等操作会抛出错误。请使用 `first()`、`last()` 或 `nth()` 选择特定元素。
+:::
 
 ## Testing library
 

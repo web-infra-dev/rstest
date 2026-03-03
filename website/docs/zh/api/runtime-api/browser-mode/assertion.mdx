@@ -7,7 +7,11 @@ overviewHeaders: [2, 3]
 
 `expect.element` 是 Browser Mode 中用于 [Locator](/api/runtime-api/browser-mode/locator) 断言的 API。它接收 `Locator`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
 
-当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。它提供 Playwright-style 的 Locator 断言体验；具体断言行为（例如自动重试）由你配置的 browser `provider` 决定。这让查询、交互、断言围绕同一 `Locator` 组织，减少手写轮询与时序抖动，失败信息也更聚焦于元素状态。
+:::tip 自动重试
+使用 Playwright provider 时，所有 `expect.element` matcher 都会自动重试，直到断言通过或超时。你不需要手写 `waitFor` 或轮询逻辑——只需断言期望状态，框架会自动处理等待。
+:::
+
+当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。这让查询、交互、断言围绕同一 `Locator` 组织，失败信息更聚焦于元素状态。
 
 下面这个最小示例展示了常见用法：先断言可见，再验证勾选状态变化，最后校验元素属性。
 
@@ -85,6 +89,8 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 - 在非 Browser Mode 中，`expect.element` 不可用。因为它依赖 Browser Mode 的浏览器运行时与通信通道来执行元素断言；纯 Node 测试环境只支持普通 `expect(value)` 断言。
 
 ## 元素断言
+
+以下列出的 matcher 是当前支持的子集，未列出的 matcher 暂不可用。
 
 ### not
 

@@ -7,10 +7,23 @@ overviewHeaders: [2, 3]
 
 `Locator` 是 Browser Mode 的元素查询与交互核心 API。你可以通过 `page.getBy*` 或 `page.locator()` 构建查询链，再执行交互操作。具体执行语义由 browser `provider` 决定。
 
-你可以从 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 导入 `page`：
+:::tip 自动等待
+使用 Playwright provider 时，Locator 交互方法（如 `click`、`fill`、`check`）会自动等待元素进入可操作状态（可见、启用、稳定）后再执行，你不需要在操作前手动等待元素。这与 `expect.element` 断言的[自动重试](/api/runtime-api/browser-mode/assertion#自动重试与超时)机制不同。
+:::
 
-```ts
+下面的示例展示了典型工作流：查询元素、执行交互，并配合 [expect.element](/api/runtime-api/browser-mode/assertion) 进行断言。
+
+```ts title="src/locator.test.ts"
 import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('interacts with a form using locator', async () => {
+  await page.getByLabel('Username').fill('alice');
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByRole('button', { name: 'Login' }).click();
+
+  await expect.element(page.getByLabel('Username')).toHaveValue('alice');
+});
 ```
 
 ## page
@@ -140,6 +153,25 @@ await setTestIdAttribute('data-test');
 await page.getByTestId('settings-panel').click();
 ```
 
+:::tip
+建议在 setup 文件中配置 `setTestIdAttribute`，确保所有测试统一生效：
+
+```ts title="rstest.setup.ts"
+import { setTestIdAttribute } from '@rstest/browser';
+
+await setTestIdAttribute('data-qa');
+```
+
+然后在配置中引用：
+
+```ts title="rstest.config.ts"
+export default defineConfig({
+  setupFiles: ['./rstest.setup.ts'],
+});
+```
+
+:::
+
 ## 组合 API
 
 ### filter
@@ -194,6 +226,10 @@ const exactOne = byRole.and(byId);
 ## 交互 API
 
 以下 API 会触发实际浏览器操作，并返回 `Promise<void>`。
+
+:::warning 严格模式
+Locator 是严格的。如果交互操作（如 `click`、`fill`）匹配到多个元素，会抛出错误。当查询匹配多个元素时，请使用 [`first()`](#nth--first--last)、[`last()`](#nth--first--last) 或 [`nth()`](#nth--first--last) 显式选择单个元素。
+:::
 
 这些 `*Options` 类型表示 Browser Mode 当前稳定支持的一组选项：
 
@@ -359,6 +395,7 @@ await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 
 ## 使用约束
 
+- 本页列出的 API 是当前支持的 Playwright Locator API 子集，未列出的 API 暂不可用
 - `and` / `or` / `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`
 - `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串
 - `selectOption` 目前仅支持 `string` 或 `string[]`

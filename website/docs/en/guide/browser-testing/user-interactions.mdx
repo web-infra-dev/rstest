@@ -4,8 +4,8 @@ This guide covers how to simulate user interactions in Browser Mode tests, and h
 
 In Browser Mode, choose your interaction approach in the following priority order (only fall back when needed):
 
-- **Locator API (preferred)**: Use [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) for semantic queries and auto-waiting assertions, suitable for the vast majority of interaction tests
-- **Testing Library**: Best for migrating existing tests or reusing an established Testing Library toolchain; generally not the first choice for new tests
+- **Locator API (preferred)**: Use [page.getBy\*](/api/runtime-api/browser-mode/locator#page) + [expect.element](/api/runtime-api/browser-mode/assertion) for semantic queries, interactions, and assertions, suitable for the vast majority of interaction tests
+- **Testing Library**: Best for migrating existing tests or reusing an established [Testing Library](https://testing-library.com/) toolchain; generally not the first choice for new tests
 - **Native DOM API (fallback)**: Lighter and allows precise control over event properties, but requires manual event sequencing — ideal for verifying low-level event logic or special interaction details
 
 import { PackageManagerTabs } from '@theme';
@@ -107,6 +107,15 @@ Locators support common interaction APIs (such as [click](/api/runtime-api/brows
 
 It's recommended to assert observable results immediately after key interactions (for example, status text, button state, field values) — this keeps failure messages focused and reduces debugging cost.
 
+:::info Auto-wait vs Auto-retry
+These are two distinct mechanisms in the Locator API:
+
+- **Auto-wait (interactions)**: Methods like `click()`, `fill()`, `check()` automatically wait for the target element to be visible, enabled, and stable before executing the action.
+- **Auto-retry (assertions)**: `expect.element` matchers continuously retry the assertion within the timeout until it passes, ideal for async rendering scenarios.
+
+In most cases, you only need to `await` each call — the framework handles all waiting and retrying internally.
+:::
+
 You can also chain [not](/api/runtime-api/browser-mode/assertion#not) and use an optional `timeout`:
 
 ```ts
@@ -115,16 +124,9 @@ await expect
   .not.toBeDisabled({ timeout: 1000 });
 ```
 
-### Current capability boundaries
-
-The current implementation is a high-frequency subset of the Playwright Locator API, not a fully equivalent implementation. Keep the following in mind:
-
-- [selectOption](/api/runtime-api/browser-mode/locator#selectoption) currently only supports `string` or `string[]`
-- [setInputFiles](/api/runtime-api/browser-mode/locator#setinputfiles) currently only supports file paths as `string` or `string[]`
-- [dispatchEvent](/api/runtime-api/browser-mode/locator#dispatchevent) requires `eventInit` to be JSON-serializable
-- [toHaveJSProperty](/api/runtime-api/browser-mode/assertion#tohavejsproperty) requires the expected value to be JSON-serializable
-
-For the complete API list, see [Locator reference](/api/runtime-api/browser-mode/locator).
+:::warning Strictness
+Locator actions are strict: if a locator matches more than one element, actions like `click` and `fill` will throw an error. Use `first()`, `last()`, or `nth()` to select a specific element.
+:::
 
 ## Testing library
 

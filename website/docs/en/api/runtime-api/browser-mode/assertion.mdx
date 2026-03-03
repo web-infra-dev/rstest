@@ -7,7 +7,11 @@ overviewHeaders: [2, 3]
 
 `expect.element` is the API for [Locator](/api/runtime-api/browser-mode/locator) assertions in Browser Mode. It accepts a `Locator` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
 
-When you import `@rstest/browser` in a Browser Mode test (e.g., importing `page`), `expect` automatically gains the `element` capability. It provides a Playwright-style Locator assertion experience, while concrete assertion behavior (such as auto-retry) depends on the configured browser `provider`. This allows queries, interactions, and assertions to be organized around the same `Locator`, reducing hand-written polling and timing flakiness, and focusing failure messages on element state.
+:::tip Auto-retry
+With the Playwright provider, all `expect.element` matchers automatically retry until the assertion passes or the timeout is reached. You do not need to write manual `waitFor` or polling logic — just assert the expected state and the framework handles the waiting.
+:::
+
+When you import `@rstest/browser` in a Browser Mode test (e.g., importing `page`), `expect` automatically gains the `element` capability. This allows queries, interactions, and assertions to be organized around the same `Locator`, focusing failure messages on element state.
 
 The following minimal example demonstrates common usage: first assert visibility, then verify a checked state change, and finally validate an element attribute.
 
@@ -85,6 +89,8 @@ await expect.element(page.getByTestId('spinner')).toBeHidden();
 - `expect.element` is not available outside of Browser Mode. It relies on Browser Mode's browser runtime and communication channel to execute element assertions; pure Node test environments only support regular `expect(value)` assertions.
 
 ## Element assertions
+
+The matchers listed below represent the currently supported subset. Matchers not listed here are not yet available.
 
 ### not
 
