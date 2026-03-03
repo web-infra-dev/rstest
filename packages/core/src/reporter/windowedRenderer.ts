@@ -73,6 +73,12 @@ export class WindowRenderer {
     );
 
     this.start();
+
+    process.once('exit', () => {
+      if (!this.finished) {
+        this.finish();
+      }
+    });
   }
 
   start(): void {
