@@ -33,6 +33,7 @@ import * as picomatch from 'picomatch';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { getHeadlessConcurrency } from './concurrency';
+import { applyDefaultWatchOptions } from './config';
 import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
@@ -1096,6 +1097,8 @@ const createBrowserRuntime = async ({
                   };
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
+
+                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
 
                   // Extract and merge sourcemaps from pre-built @rstest/core files
                   // This preserves the sourcemap chain for inline snapshot support
