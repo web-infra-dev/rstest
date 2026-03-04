@@ -246,6 +246,55 @@ it('test', async () => {
 });
 ```
 
+## rs.mockRequire
+
+- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+Mocks modules loaded through CommonJS `require()`. Like `rs.mock`, this API is hoisted to the top of the current module.
+
+Use this API when the target module is consumed via `require()` instead of `import`.
+
+:::tip
+Difference from `rs.mock` in dual packages (one ESM entry and one CJS entry):
+
+- `rs.mock()` mocks the **ESM entry** (used by `import`)
+- `rs.mockRequire()` mocks the **CJS entry** (used by `require()`)
+
+If your code path uses `require()`, prefer `rs.mockRequire()` to avoid mocking the wrong entry.
+:::
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+test('mock cjs module with require', () => {
+  expect(sum(1, 2)).toBe(103);
+});
+```
+
+## rs.doMockRequire
+
+- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+Similar to `rs.mockRequire`, but it is **not hoisted**. The mock is applied only after `rs.doMockRequire` is executed, and only affects subsequent `require()` calls.
+
+```ts title="src/math.test.cjs"
+test('doMockRequire only affects later require calls', () => {
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
+});
+```
+
 ## rs.hoisted
 
 - **Type**: `<T = unknown>(fn: () => T) => T`
