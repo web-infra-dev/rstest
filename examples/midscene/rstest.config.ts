@@ -9,7 +9,7 @@ export default defineConfig({
     provider: 'playwright',
   },
   include: ['tests/**/*.test.ts'],
-  testTimeout: 60000,
+  testTimeout: 600_000,
   plugins: [
     pluginMidscene({
       agentOptions: {

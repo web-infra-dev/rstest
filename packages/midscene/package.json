@@ -25,33 +25,23 @@
   },
   "peerDependencies": {
     "@rstest/core": "workspace:~",
-    "@rsbuild/core": "^1.0.0",
+    "@rsbuild/core": "^2.0.0-beta.6",
     "@rstest/browser": "workspace:~",
-    "playwright": "^1.40.0"
-  },
-  "peerDependenciesMeta": {
-    "@rsbuild/core": {
-      "optional": true
-    },
-    "@rstest/browser": {
-      "optional": true
-    },
-    "playwright": {
-      "optional": true
-    }
+    "playwright": "^1.58.2"
   },
   "dependencies": {
     "@midscene/core": "^1.0.1",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/browser": "workspace:*",
-    "@rsbuild/core": "^1.0.0",
-    "@rslib/core": "0.18.3",
+    "@rsbuild/core": "^2.0.0-beta.6",
+    "@rslib/core": "^0.19.6",
     "@types/node": "^22.16.5",
-    "playwright": "^1.40.0",
+    "playwright": "^1.58.2",
     "typescript": "^5.9.3"
   },
   "keywords": [

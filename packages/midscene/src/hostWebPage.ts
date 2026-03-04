@@ -415,13 +415,40 @@ export class HostWebPage {
   }
 
   async screenshotBase64(): Promise<string> {
-    const buffer = await this.iframeElement.screenshot({
-      type: 'jpeg',
-      quality: 90,
+    // Get iframe bounding box for post-processing crop
+    const box = await this.iframeElement.boundingBox();
+    if (!box) {
+      throw new Error('iframe not visible for screenshot');
+    }
+
+    // Get DPR to convert CSS pixels to device pixels
+    const containerDpr = await this.containerPage.evaluate(
+      () => window.devicePixelRatio,
+    );
+
+    // Capture the ENTIRE container page without any clip parameter
+    // This avoids triggering Chromium's iframe focus behavior that causes flashing
+    const fullPageBuffer = await this.containerPage.screenshot({
+      type: 'png', // Use PNG for lossless intermediate format
+      fullPage: false, // Only capture viewport, not full page
     });
 
+    // Playwright screenshot returns device pixels (width * DPR, height * DPR)
+    // But boundingBox returns CSS pixels, so we need to multiply by DPR
+    const sharp = await import('sharp');
+    const croppedBuffer = await sharp
+      .default(fullPageBuffer)
+      .extract({
+        left: Math.max(0, Math.floor(box.x * containerDpr)),
+        top: Math.max(0, Math.floor(box.y * containerDpr)),
+        width: Math.ceil(box.width * containerDpr),
+        height: Math.ceil(box.height * containerDpr),
+      })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
     // Midscene expects a data URI payload.
-    return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    return `data:image/jpeg;base64,${croppedBuffer.toString('base64')}`;
   }
 
   async size(): Promise<Size> {

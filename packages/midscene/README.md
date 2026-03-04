@@ -119,6 +119,65 @@ export default defineConfig({
 - `createAgentOptions`: lazily computes options for each test file/profile (supports Promise)
 - `getAgentCacheKey`: customize Agent cache key; default is `${testFile}::${profileName || 'default'}`
 
+## Cache configuration
+
+Midscene supports caching AI planning and element location to speed up test execution. Cache is configured in `agentOptions`:
+
+```ts
+pluginMidscene({
+  agentOptions: {
+    cache: {
+      id: 'my-cache-id',
+      strategy: 'read-write', // 'read-write' | 'read-only' | 'write-only'
+    },
+  },
+});
+```
+
+### Cache strategies
+
+- **`read-write`** (recommended for local): Reads existing cache, calls AI on miss and saves new cache
+- **`read-only`** (recommended for CI): Only reads cache, never writes (requires cache files committed)
+- **`write-only`** (force regenerate): Ignores existing cache, always calls AI and overwrites
+
+### How cache generation works
+
+Cache is **automatically generated** when you run tests:
+
+1. **First run**: AI is called, results are cached to `./midscene_run/cache/*.cache.yaml`
+2. **Subsequent runs**: Cache is used, ~45% faster execution
+
+To force regenerate cache, temporarily switch to `write-only` strategy:
+
+```ts
+const strategy = process.env.REGENERATE_CACHE ? 'write-only' : 'read-write';
+```
+
+Then run:
+
+```bash
+REGENERATE_CACHE=1 pnpm test
+```
+
+### Performance impact
+
+- Cache miss: ~51 seconds (calls AI model)
+- Cache hit: ~28 seconds (reads from cache) ⚡
+
+### Cache files location
+
+Cache files are saved in YAML format at `./midscene_run/cache/`:
+
+```yaml
+- prompt: 'type "Hello" into the input'
+  response:
+    plan: [...]
+    locate:
+      xpath: "//input[@placeholder='Task title']"
+```
+
+For more details, see [Midscene cache documentation](https://midscenejs.com/caching).
+
 ## Runtime behavior from user perspective
 
 - In browser mode, `agent.*` calls are dispatched through a namespace-based protocol.
