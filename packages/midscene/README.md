@@ -1,35 +1,73 @@
 # @rstest/midscene
 
-Midscene integration for Rstest browser mode.
+`@rstest/midscene` lets you use Midscene AI actions directly in `@rstest/browser` browser mode tests.  
+In test code, you call `agent.*` directly and focus on behavior; host-side config controls model/client/runtime behavior.
 
-This package now exposes an AI-first API through `agent.*` and a host plugin
-bridge (`pluginMidscene`).
+Current implementation is **Playwright-first** and aligned with the Playwright provider in `@rstest/browser`. Future provider adapters can be added if needed.
 
-## Installation
+## What you can do
+
+- Use AI actions in browser tests (`agent.aiTap`, `agent.aiInput`, `agent.aiAssert`, etc.)
+- Reduce selector brittleness through natural language actions
+- Centralize model, cache, and environment setup in `pluginMidscene`
+- Route different test scopes (smoke/full/debug) through profiles
+
+## Install
+
+You need `@rstest/core`, `@rstest/browser`, and `@rstest/midscene`.  
+`@rstest/midscene` currently requires Playwright in the dependency chain.
 
 ```bash
-pnpm add @rstest/midscene
+pnpm add -D @rstest/core @rstest/browser @rstest/midscene
+pnpm add -D playwright
+npx playwright install
 ```
 
-## Setup
+## Quick start
+
+### 1) Configure `rstest.config.ts`
 
 ```ts
-// rstest.config.ts
 import { defineConfig } from '@rstest/core';
 import { pluginMidscene } from '@rstest/midscene/plugin';
 
 export default defineConfig({
   browser: {
     enabled: true,
+    provider: 'playwright',
   },
   plugins: [pluginMidscene()],
 });
 ```
 
-## Host-side configuration (layered)
+### 2) Use `agent` in browser tests
 
-`pluginMidscene` runs on the host (Node.js), so this is the right place to set
-non-serializable or infra-level Midscene options.
+```ts
+import { test, expect } from '@rstest/core';
+import { agent } from '@rstest/midscene';
+
+test('add todo', async () => {
+  await agent.aiAct('type "Hello Midscene" into the task title input');
+  await agent.aiTap('Add button');
+  await expect(
+    agent.aiBoolean('Is there a task named "Hello Midscene"?'),
+  ).resolves.toBe(true);
+});
+```
+
+### 3) Prepare `.env` (optional)
+
+`pluginMidscene()` tries to load `.env` from project root by default (or the path in `envPath`).
+
+```bash
+OPENAI_API_KEY=...
+```
+
+Model/API client configuration belongs to host side options (passed to `new Agent(...)`).
+
+## Recommended host configuration for real projects
+
+`pluginMidscene` runs in Node host, which is the right place for non-serializable and environment-specific options.
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -43,17 +81,9 @@ export default defineConfig({
   plugins: [
     pluginMidscene({
       envPath: '.env',
-
-      // Base options applied to all Midscene Agent instances
       agentOptions: {
         replanningCycleLimit: 20,
-        cache: {
-          id: 'rstest-midscene-default',
-          strategy: process.env.CI ? 'read-only' : 'read-write',
-        },
       },
-
-      // Optional named profiles
       profiles: {
         smoke: {
           replanningCycleLimit: 8,
@@ -62,58 +92,62 @@ export default defineConfig({
           replanningCycleLimit: 30,
         },
       },
-
-      // Choose profile per test file
       resolveProfile: (ctx) =>
         ctx.testFile.includes('.smoke.') ? 'smoke' : 'full',
-
-      // Dynamic host-side options per test file/profile
-      createAgentOptions: (ctx, profileName) => ({
-        cache: {
-          id: `midscene-${profileName || 'default'}-${ctx.testFile.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
-          strategy: process.env.CI ? 'read-only' : 'read-write',
-        },
-      }),
+      createAgentOptions: async (ctx, profileName) => {
+        const strategy = process.env.CI === 'true' ? 'read-only' : 'read-write';
+        return {
+          cache: {
+            id: `midscene-${profileName || 'default'}-${ctx.testFile.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
+            strategy,
+          },
+        };
+      },
+      getAgentCacheKey: (ctx, profileName) =>
+        `${ctx.testFile}::${profileName || 'default'}`,
     }),
   ],
 });
 ```
 
-Runtime behavior stays in test code (`agent.setAIActContext`, per-call options
-like `cacheable/deepThink`, `aiWaitFor` timeouts, etc.), while host-side model,
-cache strategy, and client wrappers stay in `pluginMidscene(...)`.
+### Option meanings (priority order)
 
-## Usage
+- `envPath`: `.env` file path, default is project root `.env`
+- `agentOptions`: default `Agent` options for all tests
+- `profiles`: profile map, e.g. `smoke`, `full`
+- `resolveProfile`: selects profile using a fixed string or `(ctx) => profile`
+- `createAgentOptions`: lazily computes options for each test file/profile (supports Promise)
+- `getAgentCacheKey`: customize Agent cache key; default is `${testFile}::${profileName || 'default'}`
 
-```ts
-import { test } from '@rstest/core';
-import { agent } from '@rstest/midscene';
+## Runtime behavior from user perspective
 
-test('ai action', async () => {
-  await agent.aiAct('type "Hello Midscene" into the input field');
-  await agent.aiAssert('The input now contains Hello Midscene');
-});
-```
+- In browser mode, `agent.*` calls are dispatched through a namespace-based protocol.
+- `@rstest/midscene` keeps Host-side Agent instances per `testFile + profile` for reuse.
+- Each API call depends on the exposed host plugin; `pluginMidscene` must be enabled and browser mode active.
+- Default RPC timeout is `120000ms` (see `AI_RPC_TIMEOUT_MS` in protocol implementation).
 
-## API
+## Browser-side API
 
-- `agent.ai(prompt)`
+Methods below are available on `agent`:
+
+- `agent.ai(prompt)` (alias for `agent.aiAct`)
 - `agent.aiAct(prompt, options?)`
 - `agent.aiTap(locate, options?)`
 - `agent.aiHover(locate, options?)`
-- `agent.aiInput(...)` (supports `aiInput(locate, { value })` and `aiInput(locate, value, options?)`)
-- `agent.aiKeyboardPress(...)` (supports both Midscene signatures)
-- `agent.aiScroll(...)` (supports both Midscene signatures)
+- `agent.aiInput(locate, options?)` (supports `aiInput(locate, { value })`)
+- `agent.aiInput(locate, value, options?)` (supports separated value overload)
+- `agent.aiKeyboardPress(locate, options?)` (supports `aiKeyboardPress(key, locate?, options?)`)
+- `agent.aiScroll(locate, options?)` (supports scroll parameter overload)
 - `agent.aiDoubleClick(locate, options?)`
 - `agent.aiRightClick(locate, options?)`
-- `agent.aiAsk(prompt, options?)`
+- `agent.aiLocate(locate, options?)` (returns location info)
+- `agent.aiAssert(assertion, errorMsg?, options?)`
+- `agent.aiWaitFor(condition, options?)`
 - `agent.aiQuery(dataDemand, options?)`
+- `agent.aiAsk(prompt, options?)`
 - `agent.aiBoolean(prompt, options?)`
 - `agent.aiNumber(prompt, options?)`
 - `agent.aiString(prompt, options?)`
-- `agent.aiAssert(assertion, errorMsg?, options?)`
-- `agent.aiLocate(locate, options?)`
-- `agent.aiWaitFor(assertion, options?)`
 - `agent.runYaml(yamlScriptContent)`
 - `agent.setAIActContext(context)`
 - `agent.evaluateJavaScript(script)`
@@ -121,6 +155,66 @@ test('ai action', async () => {
 - `agent.freezePageContext()`
 - `agent.unfreezePageContext()`
 - `agent._unstableLogContent()`
+
+## Practical example (combined flow)
+
+```ts
+import { test, expect } from '@rstest/core';
+import { agent } from '@rstest/midscene';
+
+test('order form flow', async () => {
+  await agent.setAIActContext(
+    'Only interact with the order form area. Ignore banners and floating widgets.',
+  );
+
+  await agent.aiTap('Username field');
+  await agent.aiInput('Username field', 'qa-user');
+  await agent.aiInput('Password field', {
+    value: 'P@ssw0rd',
+    mode: 'replace',
+  });
+  await agent.aiTap('Sign in button');
+
+  await agent.aiWaitFor('A success toast appears');
+  const message = await agent.aiAsk('What is the current status message?');
+  expect(message).toContain('success');
+});
+```
+
+## Troubleshooting
+
+### `@rstest/midscene: @rstest/browser exposed API not found`
+
+Browser mode is likely not running. Verify `browser.enabled = true` and `@rstest/browser` is installed.
+
+### `Current provider: ...`
+
+This version only supports `playwright`. Ensure `browser.provider` is `playwright`.
+
+### `Cannot determine test file`
+
+`agent` requires browser-mode runtime injection. Make sure tests are running in `rstest` browser mode, not plain Node mode.
+
+### Timeout during AI call
+
+AI call timeout is 120s by default. Start by simplifying prompts, reducing DOM complexity, or using a stronger model setting.
+
+### No AI internal log output
+
+`agent._unstableLogContent()` is a debug-only, unstable API and should not be used in stable assertions.
+
+## Scope and limitations
+
+- Browser mode + Playwright provider only
+- `agent` API is the test-side interface; production behavior should be controlled via host config
+- `_unstableLogContent` is intentionally unstable
+
+## Adoption strategy
+
+- Start with three core APIs: `aiTap`, `aiInput`, `aiAssert`
+- Move reusable runtime/model settings into `agentOptions`
+- Use `profiles` and `createAgentOptions` for file-level behavior differences
+- Use `setAIActContext` first when prompts start to drift across cases
 
 ## License
 

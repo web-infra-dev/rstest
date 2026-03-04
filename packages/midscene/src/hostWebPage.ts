@@ -4,9 +4,13 @@
  * This class extends Midscene's AbstractWebPage by using Playwright's Page and Frame
  * objects to control the browser iframe. It provides the interface that Midscene's
  * Agent needs to perform AI-driven operations.
+ *
+ * Current implementation is Playwright-specific.
+ * Keep this as a dedicated adapter so other interface implementations can be
+ * added in a future release without changing the plugin contract.
  */
 
-import type { ElementHandle, Frame, Page } from 'playwright';
+import type { ElementHandle, FileChooser, Frame, Page } from 'playwright';
 
 type Point = {
   left: number;
@@ -20,7 +24,6 @@ interface ElementInfo {
 type Size = {
   width: number;
   height: number;
-  dpr?: number;
 };
 
 type Rect = {
@@ -351,6 +354,33 @@ export class HostWebPage {
   private everMoved = false;
   private actionSpaceCache: unknown[] | null = null;
   private actionSpacePromise: Promise<unknown[]> | null = null;
+  private fileChooserListeners = new Set<
+    (fileChooserEvent: FileChooser) => void
+  >();
+
+  private static isExpectedFrame = async (
+    fileChooserEvent: FileChooser,
+    expectedFrame: Frame,
+  ): Promise<boolean> => {
+    const chooserFrame = await fileChooserEvent.element().ownerFrame();
+    if (!chooserFrame) {
+      return false;
+    }
+
+    if (chooserFrame === expectedFrame) {
+      return true;
+    }
+
+    let current: Frame | null = chooserFrame.parentFrame();
+    while (current) {
+      if (current === expectedFrame) {
+        return true;
+      }
+      current = current.parentFrame();
+    }
+
+    return false;
+  };
 
   constructor(
     containerPage: Page,
@@ -367,6 +397,15 @@ export class HostWebPage {
     iframeElement: ElementHandle<HTMLIFrameElement>,
     frame: Frame,
   ): void {
+    const oldContainerPage = this.containerPage;
+
+    if (oldContainerPage !== containerPage) {
+      for (const listener of this.fileChooserListeners) {
+        oldContainerPage.off('filechooser', listener);
+        containerPage.on('filechooser', listener);
+      }
+    }
+
     this.containerPage = containerPage;
     this.iframeElement = iframeElement;
     this.frame = frame;
@@ -393,7 +432,6 @@ export class HostWebPage {
     const size = await this.frame.evaluate(() => ({
       width: document.documentElement.clientWidth,
       height: document.documentElement.clientHeight,
-      dpr: window.devicePixelRatio,
     }));
 
     this.cachedSize = size;
@@ -461,21 +499,52 @@ export class HostWebPage {
   }
 
   /**
-   * TODO(midscene-file-upload): bridge `filechooser` events from Playwright.
+   * Bridge Playwright `filechooser` events to Midscene.
    *
-   * Midscene's `fileChooserAccept` option requires this hook. In rstest browser
-   * mode we need to map container-page file chooser events back to the current
-   * runner iframe and keep isolation across test files/runs.
-   *
-   * This is intentionally unimplemented for now to avoid cross-iframe leakage.
+   * Midscene's `fileChooserAccept` option requires this hook. The handler is
+   * attached at container-page level and isolated to the current runner iframe.
    */
   async registerFileChooserListener(
-    _handler: (chooser: FileChooserBridge) => Promise<void>,
+    handler: (chooser: FileChooserBridge) => Promise<void>,
   ): Promise<FileChooserListenerRegistration> {
-    throw new Error(
-      '[rstest:midscene] fileChooserAccept is not implemented in HostWebPage yet. ' +
-        'TODO: add a Playwright filechooser bridge with iframe-level isolation.',
-    );
+    const normalizeError = (error: unknown): Error =>
+      error instanceof Error ? error : new Error(String(error));
+
+    let listenerError: Error | undefined;
+    const listener = async (fileChooserEvent: FileChooser) => {
+      try {
+        const isExpectedFrame = await HostWebPage.isExpectedFrame(
+          fileChooserEvent,
+          this.frame,
+        );
+        if (!isExpectedFrame) {
+          return;
+        }
+
+        await handler({
+          accept: async (files: string[]) => {
+            await fileChooserEvent.setFiles(files);
+          },
+        });
+      } catch (error) {
+        listenerError = normalizeError(error);
+      }
+    };
+
+    const rawListener = (fileChooserEvent: FileChooser) => {
+      void listener(fileChooserEvent);
+    };
+
+    this.fileChooserListeners.add(rawListener);
+    this.containerPage.on('filechooser', rawListener);
+
+    return {
+      dispose: () => {
+        this.fileChooserListeners.delete(rawListener);
+        this.containerPage.off('filechooser', rawListener);
+      },
+      getError: () => listenerError,
+    };
   }
 
   /**

@@ -9,9 +9,10 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AgentOpt } from '@midscene/core';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type {
-  PlaywrightDispatchContext,
-  RstestBrowserExposedApi,
+import {
+  type PlaywrightDispatchContext,
+  RSTEST_BROWSER_EXPOSE_ID,
+  type RstestBrowserExposedApi,
 } from '@rstest/browser/internal';
 import {
   AI_RPC_METHODS,
@@ -23,6 +24,9 @@ import {
 type MaybePromise<T> = T | Promise<T>;
 
 type BrowserExposedApi = RstestBrowserExposedApi & {
+  // Playwright-only today.
+  // Future implementation can introduce a provider-agnostic adapter layer
+  // without changing plugin registration flow.
   browser: {
     provider: string;
     playwright: PlaywrightDispatchContext;
@@ -36,7 +40,11 @@ type BrowserExposedApi = RstestBrowserExposedApi & {
 export type MidsceneDispatchContext = {
   /** The test file path associated with this dispatch request. */
   testFile: string;
-  /** Playwright context helpers for browser automation. */
+  /**
+   * Playwright context helpers for browser automation.
+   * Kept as a Playwright binding for now; can be generalized with a provider
+   * adapter if needed.
+   */
   playwright: PlaywrightDispatchContext;
 };
 
@@ -203,6 +211,9 @@ const resolvePlaywrightContext = (
   api: BrowserExposedApi,
 ): PlaywrightDispatchContext => {
   const provider = api.browser.provider;
+  // Architecture boundary: only Playwright is supported in this package version.
+  // Keep the provider enum check here to make intent explicit and leave room for
+  // a future adapter-based provider abstraction.
   if (provider !== 'playwright') {
     throw new Error(
       '[rstest:midscene] Midscene requires the Playwright browser provider. ' +
@@ -257,8 +268,9 @@ export function pluginMidscene(
     name: 'rstest:midscene',
     setup(api) {
       api.onAfterStartDevServer(async () => {
-        const browserApi =
-          api.useExposed<RstestBrowserExposedApi>('rstest:browser');
+        const browserApi = api.useExposed<RstestBrowserExposedApi>(
+          RSTEST_BROWSER_EXPOSE_ID,
+        );
         if (!browserApi) {
           console.warn(
             '[rstest:midscene] @rstest/browser exposed API not found. ' +

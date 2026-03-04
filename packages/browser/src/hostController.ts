@@ -37,6 +37,10 @@ import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
+import {
+  RSTEST_BROWSER_EXPOSE_ID,
+  type RstestBrowserExposedApi,
+} from './extensionContract';
 import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
 import type {
@@ -174,57 +178,6 @@ type ContainerRpcMethods = {
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
-
-// ============================================================================
-// Extension Dispatch API - Playwright context for plugin dispatch handlers
-// ============================================================================
-
-/**
- * Playwright context helpers exposed to external plugins via the `rstest:browser` API.
- * Handlers registered via `registerDispatchHandler` can use these to interact
- * with the headful browser container page and test runner iframes.
- */
-export type PlaywrightDispatchContext = {
-  /** Get the container Playwright Page that hosts all test runner iframes. */
-  getContainerPage: () => import('playwright').Page;
-  /** Get the Frame inside the iframe for a specific test file. */
-  getFrameForTestFile: (
-    testFile: string,
-  ) => Promise<import('playwright').Frame>;
-  /** Get the ElementHandle for the iframe of a specific test file. */
-  getIframeElementForTestFile: (
-    testFile: string,
-  ) => Promise<import('playwright').ElementHandle<HTMLIFrameElement>>;
-};
-
-/**
- * Dispatch context exposed to external plugins.
- *
- * The context is provider-discriminated so plugins can safely narrow before
- * accessing provider-specific helpers.
- */
-export type BrowserDispatchContext = {
-  provider: 'playwright';
-  playwright: PlaywrightDispatchContext;
-};
-
-/**
- * API exposed to RsbuildPlugins via `api.useExposed('rstest:browser')`.
- * Plugins register their dispatch namespace handler here.
- */
-export type RstestBrowserExposedApi = {
-  /**
-   * Register a dispatch handler for a given namespace.
-   * The handler receives a `BrowserDispatchRequest` and returns the result.
-   * Use provider-specific helpers from `browser` for browser automation.
-   */
-  registerDispatchHandler: (
-    namespace: string,
-    handler: BrowserDispatchHandler,
-  ) => void;
-  /** Browser provider context helpers for automation within dispatch handlers. */
-  browser: BrowserDispatchContext;
-};
 
 // ============================================================================
 // RPC Manager - Encapsulates WebSocket and birpc management
@@ -1037,7 +990,9 @@ const createBrowserRuntime = async ({
   // Late-binding ref for the headed container page.
   // Populated in runBrowserController once the Playwright page is ready;
   // used by plugin dispatch handlers that need Playwright access.
-  const containerPageRef: { current: BrowserProviderPage | null } = { current: null };
+  const containerPageRef: { current: BrowserProviderPage | null } = {
+    current: null,
+  };
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
@@ -1105,8 +1060,8 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
-        // Expose API for other Rsbuild plugins (e.g., @rstest/midscene) to register
-        // dispatch namespace handlers and access Playwright context helpers.
+        // Expose API for other Rsbuild plugins to register dispatch namespace
+        // handlers and access browser context helpers.
         const getPlaywrightPage = (): import('playwright').Page => {
           if (!containerPageRef.current) {
             throw new Error(
@@ -1164,10 +1119,11 @@ const createBrowserRuntime = async ({
             },
           },
         };
-        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
-          'rstest:browser',
-          exposedApi,
-        );
+        (
+          api as {
+            expose?: (name: string, value: unknown) => void;
+          }
+        ).expose?.(RSTEST_BROWSER_EXPOSE_ID, exposedApi);
 
         api.modifyEnvironmentConfig({
           handler: (config, { mergeEnvironmentConfig, name }) => {
