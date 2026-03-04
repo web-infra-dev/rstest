@@ -47,7 +47,7 @@
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
     "convert-source-map": "^2.0.0",
-    "open-editor": "^4.1.1",
+    "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^2.0.4",
     "ws": "^8.19.0"
