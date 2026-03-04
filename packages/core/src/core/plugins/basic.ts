@@ -41,6 +41,12 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         outputModule,
         rootPath,
       } = context.projects.find((p) => p.environmentName === name)!;
+
+      const distRootDir =
+        context.projects.length > 1
+          ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
+          : TEMP_RSTEST_OUTPUT_DIR;
+
       return mergeEnvironmentConfig(
         config,
         {
@@ -58,6 +64,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
           },
           output: {
+            assetPrefix: '',
             // Pass resources to the worker on demand according to entry
             manifest: `${name}-manifest.json`,
             sourceMap: {
@@ -70,10 +77,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 }
               : undefined,
             distPath: {
-              root:
-                context.projects.length > 1
-                  ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
-                  : TEMP_RSTEST_OUTPUT_DIR,
+              root: distRootDir,
             },
           },
           tools: {

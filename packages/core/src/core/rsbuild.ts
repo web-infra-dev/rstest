@@ -440,8 +440,14 @@ export const createRsbuildServer = async ({
     for (const entry of entries) {
       const data = manifest.entries[entry];
       entryFiles[entry] = (
-        (data?.initial?.js || []).concat(data?.async?.js || []) || []
-      ).map((file: string) => path.join(outputPath, file));
+        (data?.initial?.js || [])
+          .concat(data?.async?.js || [])
+          .concat(
+            data?.assets?.filter((asset) => !asset.endsWith('.map')) || [],
+          ) || []
+      ).map((file: string) =>
+        file.startsWith(outputPath) ? file : path.join(outputPath, file),
+      );
     }
     return entryFiles;
   };

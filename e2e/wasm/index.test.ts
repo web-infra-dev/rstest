@@ -14,3 +14,12 @@ test('dynamic import WASM', async () => {
   expect(AsyncFactorial(2)).toBe(2);
   expect(AsyncFactorial(3)).toBe(6);
 });
+
+test('url load WASM', async () => {
+  const { loadWASM } = await import('./src/factorial.ts');
+  const AsyncFactorial = await loadWASM();
+
+  expect(AsyncFactorial(1)).toBe(1);
+  expect(AsyncFactorial(2)).toBe(2);
+  expect(AsyncFactorial(3)).toBe(6);
+});
