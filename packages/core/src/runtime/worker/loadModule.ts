@@ -79,12 +79,12 @@ const defineRstestDynamicImport =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
 
     if (modulePath.endsWith('.wasm')) {
-      const content =
-        assetFiles[
-          modulePath.startsWith('file://')
-            ? fileURLToPath(modulePath)
-            : modulePath
-        ];
+      const normalizedPath = path.normalize(
+        modulePath.startsWith('file://')
+          ? fileURLToPath(modulePath)
+          : modulePath,
+      );
+      const content = assetFiles[normalizedPath];
 
       if (content) {
         const wasmBuffer = Buffer.from(content, 'base64');

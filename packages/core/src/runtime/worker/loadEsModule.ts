@@ -35,13 +35,11 @@ const defineRstestDynamicImport =
     const joinedPath = isRelativePath(specifier)
       ? path.join(currentDirectory, specifier)
       : specifier;
+    const normalizedPath = path.normalize(
+      joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
+    );
 
-    const content =
-      assetFiles[
-        joinedPath.startsWith('file://')
-          ? fileURLToPath(joinedPath)
-          : joinedPath
-      ];
+    const content = assetFiles[normalizedPath];
 
     if (content) {
       try {
