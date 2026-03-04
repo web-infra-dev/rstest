@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli } from './utils';
+import { canRunHeadedBrowser, runBrowserCli } from './utils';
 
 describe('browser mode - viewport', () => {
   it('should apply viewport config to runner iframe', async () => {
@@ -14,13 +14,16 @@ describe('browser mode - viewport', () => {
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
 
-  it('should apply viewport config in headed mode without scheduler page', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('viewport', {
-      args: ['--browser.headless', 'false'],
-    });
+  it.skipIf(!canRunHeadedBrowser)(
+    'should apply viewport config in headed mode without scheduler page',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('viewport', {
+        args: ['--browser.headless', 'false'],
+      });
 
-    await expectExecSuccess();
-    expect(cli.stdout).toMatch(/Tests.*passed/);
-    expect(cli.stdout).not.toContain('/scheduler.html');
-  });
+      await expectExecSuccess();
+      expect(cli.stdout).toMatch(/Tests.*passed/);
+      expect(cli.stdout).not.toContain('/scheduler.html');
+    },
+  );
 });
