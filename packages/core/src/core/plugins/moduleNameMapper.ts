@@ -74,6 +74,47 @@ export function createModuleNameMapperPlugins(options: {
 }
 
 /**
+ * Check if a request matches any moduleNameMapper pattern.
+ * If it does, don't externalize it - let NormalModuleReplacementPlugin handle it.
+ */
+const matchesModuleNameMapper = (
+  request: string,
+  moduleNameMapper: Record<string, string | string[]> | undefined,
+): boolean => {
+  if (!moduleNameMapper) return false;
+
+  for (const pattern of Object.keys(moduleNameMapper)) {
+    if (new RegExp(pattern).test(request)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const excludeExternalize: (
+  moduleNameMapper: Record<string, string | string[]> | undefined,
+) => (
+  data: Rspack.ExternalItemFunctionData,
+  callback: (
+    err?: Error,
+    result?: Rspack.ExternalItemValue,
+    type?: Rspack.ExternalsType,
+  ) => void,
+) => void =
+  (moduleNameMapper) =>
+  ({ request }, callback) => {
+    if (!request) {
+      return callback();
+    }
+
+    // If request matches moduleNameMapper, don't externalize - let it be transformed
+    if (matchesModuleNameMapper(request, moduleNameMapper)) {
+      return callback(undefined, false);
+    }
+    return callback();
+  };
+
+/**
  * Apply module name mapper using rspack.NormalModuleReplacementPlugin.
  *
  * This is similar to Jest's moduleNameMapper configuration.
@@ -109,6 +150,13 @@ export const pluginModuleNameMapper: (context: RstestContext) => RsbuildPlugin =
           rootDir: project.rootPath,
         });
         config.plugins.push(...mapperPlugins);
+
+        // Make sure that externals configuration is not modified by users
+        config.externals = Array.isArray(config.externals)
+          ? config.externals
+          : [];
+
+        config.externals.unshift(excludeExternalize(moduleNameMapper));
 
         return config;
       });
