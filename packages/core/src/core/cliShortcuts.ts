@@ -86,6 +86,13 @@ export async function setupCliShortcuts({
         return;
       }
 
+      if (key.ctrl && key.name === 'z') {
+        if (process.platform !== 'win32') {
+          process.kill(process.pid, 'SIGTSTP');
+        }
+        return;
+      }
+
       if (key.name === 'return' || key.name === 'enter') {
         // Finish input
         process.stdin.off('keypress', onPromptKey);
@@ -201,6 +208,13 @@ export async function setupCliShortcuts({
     if (key.ctrl && key.name === 'c') {
       // Send SIGINT to self to trigger proper cleanup
       process.kill(process.pid, 'SIGINT');
+      return;
+    }
+
+    if (key.ctrl && key.name === 'z') {
+      if (process.platform !== 'win32') {
+        process.kill(process.pid, 'SIGTSTP');
+      }
       return;
     }
 

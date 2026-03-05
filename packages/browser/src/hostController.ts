@@ -934,7 +934,7 @@ const registerWatchCleanup = (): void => {
     watchContext.runtime = null;
   };
 
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const) {
     process.once(signal, () => {
       void cleanup();
     });

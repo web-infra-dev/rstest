@@ -592,11 +592,14 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(signal === 'SIGINT' ? 130 : 143);
+      process.exit(
+        signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 148,
+      );
     };
 
     process.on('SIGINT', handleSignal);
     process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -801,12 +804,15 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(signal === 'SIGINT' ? 130 : 143);
+      process.exit(
+        signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 148,
+      );
     };
 
     process.on('exit', unExpectedExit);
     process.on('SIGINT', handleSignal);
     process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
 
     try {
       await run();
@@ -820,6 +826,7 @@ export async function runTests(context: Rstest): Promise<void> {
       process.off('exit', unExpectedExit);
       process.off('SIGINT', handleSignal);
       process.off('SIGTERM', handleSignal);
+      process.off('SIGTSTP', handleSignal);
     }
   }
 }
