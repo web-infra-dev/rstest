@@ -246,6 +246,55 @@ it('test', async () => {
 });
 ```
 
+## rs.mockRequire
+
+- **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+用于 mock 通过 CommonJS `require()` 加载的模块。和 `rs.mock` 一样，这个 API 会被提升（hoisted）到当前模块顶部。
+
+当目标模块是通过 `require()` 消费时，应使用这个 API。
+
+:::tip
+与 `rs.mock` 在 dual package（同时提供 ESM entry 与 CJS entry）场景的区别：
+
+- `rs.mock()` mock 的是 **ESM entry**（`import` 使用）
+- `rs.mockRequire()` mock 的是 **CJS entry**（`require()` 使用）
+
+如果你的代码路径走的是 `require()`，优先使用 `rs.mockRequire()`，避免 mock 到错误的 entry。
+:::
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+test('使用 require mock cjs 模块', () => {
+  expect(sum(1, 2)).toBe(103);
+});
+```
+
+## rs.doMockRequire
+
+- **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+与 `rs.mockRequire` 类似，但它**不会被提升**。只有在执行 `rs.doMockRequire` 之后，后续的 `require()` 才会应用 mock。
+
+```ts title="src/math.test.cjs"
+test('doMockRequire 只影响后续 require 调用', () => {
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
+});
+```
+
 ## rs.hoisted
 
 - **类型：** `<T = unknown>(fn: () => T) => T`
