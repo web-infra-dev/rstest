@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import type { ProjectContext, Rstest } from '@rstest/core/browser';
+import { createBrowserRsbuildDevConfig } from '../src/hostController';
 
 /**
  * Create a mock context for testing browser config resolution.
@@ -98,5 +99,19 @@ describe('browser config resolution', () => {
     expect(browserConfig.headless).toBe(true);
     expect(browserConfig.port).toBe(3000);
     expect(browserConfig.strictPort).toBe(true);
+  });
+
+  it('should disable HMR in non-watch mode and keep error-only client log', () => {
+    const devConfig = createBrowserRsbuildDevConfig(false);
+
+    expect(devConfig.hmr).toBe(false);
+    expect(devConfig.client.logLevel).toBe('error');
+  });
+
+  it('should enable HMR in watch mode', () => {
+    const devConfig = createBrowserRsbuildDevConfig(true);
+
+    expect(devConfig.hmr).toBe(true);
+    expect(devConfig.client.logLevel).toBe('error');
   });
 });
