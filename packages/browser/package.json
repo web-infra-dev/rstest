@@ -49,7 +49,7 @@
     "convert-source-map": "^2.0.0",
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
-    "sirv": "^2.0.4",
+    "sirv": "^3.0.2",
     "ws": "^8.19.0"
   },
   "devDependencies": {
