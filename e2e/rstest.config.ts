@@ -16,6 +16,7 @@ export default defineConfig({
   // Use the same timeout locally because browser-mode e2e tests can exceed 15s when
   // running together with the full suite under high machine load.
   testTimeout: process.env.CI ? 60_000 : 30_000,
+  // TODO(rstest): Remove CI retries after flaky e2e root causes are fixed.
   // Retry failed test cases in CI to reduce flaky failures without rerunning
   // the whole suite; keep local runs strict for faster feedback.
   retry: process.env.CI ? 2 : 0,
