@@ -40,7 +40,9 @@ export default defineConfig({
     execArgv: ['--trace-warnings'],
     // `--isolate false` is more likely to hit resource contention on CI. Limit
     // worker concurrency to avoid sporadic "Worker exited unexpectedly" flakes.
-    ...(process.env.ISOLATE === 'false' ? { maxWorkers: 2 } : {}),
+    ...(process.env.ISOLATE === 'false'
+      ? { maxWorkers: process.env.CI ? 1 : 2 }
+      : {}),
   },
   exclude: [
     '**/node_modules/**',
