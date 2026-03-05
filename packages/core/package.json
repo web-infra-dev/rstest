@@ -85,7 +85,7 @@
     "@vitest/expect": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "^4.0.0",
-    "cac": "^6.7.14",
+    "cac": "^7.0.0",
     "chai": "^5.3.3",
     "chokidar": "^4.0.3",
     "happy-dom": "^20.7.0",
