@@ -158,8 +158,13 @@ export class RstestApi {
     createTestRun?: () => vscode.TestRun;
   }) {
     let onFinish!: () => void;
-    const promise = new Promise((resolve) => {
-      onFinish = () => resolve(null);
+    let finished = false;
+    const promise = new Promise<void>((resolve) => {
+      onFinish = () => {
+        if (finished) return;
+        finished = true;
+        resolve();
+      };
     });
     const coverageEnabled = kind === vscode.TestRunProfileKind.Coverage;
     const applyDiagnostic = getConfigValue('applyDiagnostic', this.workspace);
@@ -188,7 +193,7 @@ export class RstestApi {
       onFinish();
     });
 
-    worker
+    void worker
       .runTest({
         command: continuous ? 'watch' : 'run',
         fileFilters: fileFilter ? [fileFilter] : undefined,
@@ -202,6 +207,20 @@ export class RstestApi {
         rstestPath: this.resolveRstestPath(),
         coverage: coverageEnabled ? { enabled: true } : undefined,
         includeTaskLocation: true,
+      })
+      .catch((error) => {
+        if (!token.isCancellationRequested) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.error('Failed to run tests', error);
+          run.appendOutput(`\n[rstest] ${message}\n`.replaceAll('\n', '\r\n'));
+          vscode.window.showErrorMessage(`Rstest test run failed: ${message}`);
+        }
+
+        if (continuous) {
+          worker.$close();
+        }
+        onFinish();
       })
       .finally(() => {
         if (!continuous) worker.$close();
