@@ -1,3 +1,4 @@
+import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
@@ -34,6 +35,11 @@ async function runBrowserModeTests(
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
 }
+
+const getSignalExitCode = (signal: NodeJS.Signals): number => {
+  const signalNumber = osConstants.signals[signal];
+  return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
+};
 
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
@@ -592,9 +598,7 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(
-        signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 148,
-      );
+      process.exit(getSignalExitCode(signal));
     };
 
     process.on('SIGINT', handleSignal);
@@ -804,9 +808,7 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(
-        signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 148,
-      );
+      process.exit(getSignalExitCode(signal));
     };
 
     process.on('exit', unExpectedExit);
