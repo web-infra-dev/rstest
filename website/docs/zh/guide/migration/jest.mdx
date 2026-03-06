@@ -80,6 +80,16 @@ export default defineConfig({
 });
 ```
 
+为了让 TypeScript 正确识别这些全局 API，请在 `tsconfig.json` 中添加 `@rstest/core/globals` 类型声明：
+
+```ts title='tsconfig.json'
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
+
 ### 代码转换
 
 Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。
