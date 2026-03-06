@@ -411,6 +411,40 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
 };
 
+type LazyCompilationModule = {
+  nameForCondition?: () => string | null | undefined;
+};
+
+type BrowserLazyCompilationConfig = {
+  imports: true;
+  entries: false;
+  test?: (module: LazyCompilationModule) => boolean;
+};
+
+export const createBrowserLazyCompilationConfig = (
+  setupFiles: string[],
+): BrowserLazyCompilationConfig => {
+  const eagerSetupFiles = new Set(
+    setupFiles.map((filePath) => normalize(filePath)),
+  );
+
+  if (eagerSetupFiles.size === 0) {
+    return {
+      imports: true,
+      entries: false,
+    };
+  }
+
+  return {
+    imports: true,
+    entries: false,
+    test(module: LazyCompilationModule) {
+      const filePath = module.nameForCondition?.();
+      return !filePath || !eagerSetupFiles.has(normalize(filePath));
+    },
+  };
+};
+
 export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
   return {
     // Disable HMR in non-watch mode (tests run once and exit).
@@ -1109,6 +1143,12 @@ const createBrowserRuntime = async ({
             }
 
             const userRsbuildConfig = project.normalizedConfig;
+            const setupFiles = Object.values(
+              getSetupFiles(
+                project.normalizedConfig.setupFiles,
+                project.rootPath,
+              ),
+            );
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
             const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
               resolve: {
@@ -1130,10 +1170,8 @@ const createBrowserRuntime = async ({
               tools: {
                 rspack: (rspackConfig) => {
                   rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation = {
-                    imports: true,
-                    entries: false,
-                  };
+                  rspackConfig.lazyCompilation =
+                    createBrowserLazyCompilationConfig(setupFiles);
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
 

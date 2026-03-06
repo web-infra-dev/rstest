@@ -11,6 +11,7 @@ describe('browser mode - @rstest/browser-react', () => {
     expect(cli.stdout).toContain('renderHook.test.tsx');
     expect(cli.stdout).toContain('cleanup.test.tsx');
     expect(cli.stdout).toContain('testingLibraryDom.test.tsx');
+    expect(cli.stdout).toContain('setupImport.test.tsx');
 
     // Verify tests passed
     expect(cli.stdout).toMatch(/Tests.*passed/);
