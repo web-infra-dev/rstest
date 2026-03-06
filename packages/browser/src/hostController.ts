@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -376,6 +377,47 @@ const ensureProcessExitCode = (code: number): void => {
   if (process.exitCode === undefined || process.exitCode === 0) {
     process.exitCode = code;
   }
+};
+
+const castArray = <T>(arr?: T | T[]): T[] => {
+  if (arr === undefined) {
+    return [];
+  }
+  return Array.isArray(arr) ? arr : [arr];
+};
+
+const applyDefaultWatchOptions = (
+  rspackConfig: Rspack.Configuration,
+  isWatchMode: boolean,
+) => {
+  rspackConfig.watchOptions ??= {};
+
+  if (!isWatchMode) {
+    rspackConfig.watchOptions.ignored = '**/**';
+    return;
+  }
+
+  rspackConfig.watchOptions.ignored = castArray(
+    rspackConfig.watchOptions.ignored || [],
+  ) as string[];
+
+  if (rspackConfig.watchOptions.ignored.length === 0) {
+    rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
+  }
+
+  rspackConfig.output?.path &&
+    rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+};
+
+export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
+  return {
+    // Disable HMR in non-watch mode (tests run once and exit).
+    // Aligns with node mode behavior (packages/core/src/core/rsbuild.ts).
+    hmr: isWatchMode,
+    client: {
+      logLevel: 'error' as const,
+    },
+  };
 };
 
 /**
@@ -933,7 +975,7 @@ const registerWatchCleanup = (): void => {
     watchContext.runtime = null;
   };
 
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const) {
     process.once(signal, () => {
       void cleanup();
     });
@@ -1029,11 +1071,7 @@ const createBrowserRuntime = async ({
         port: browserLaunchOptions.port ?? 4000,
         strictPort: browserLaunchOptions.strictPort,
       },
-      dev: {
-        client: {
-          logLevel: 'error',
-        },
-      },
+      dev: createBrowserRsbuildDevConfig(isWatchMode),
       environments: {
         ...Object.fromEntries(
           browserProjects.map((project) => [project.environmentName, {}]),
@@ -1096,6 +1134,8 @@ const createBrowserRuntime = async ({
                   };
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
+
+                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
 
                   // Extract and merge sourcemaps from pre-built @rstest/core files
                   // This preserves the sourcemap chain for inline snapshot support

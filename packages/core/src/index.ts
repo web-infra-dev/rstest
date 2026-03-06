@@ -71,6 +71,8 @@ export function defineProject(config: RstestProjectConfigExport) {
   return config;
 }
 
+export type { Rspack } from '@rsbuild/core';
+
 export type {
   Assertion,
   DescribeAPI as Describe,

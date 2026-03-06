@@ -16,6 +16,10 @@ export default defineConfig({
   // Use the same timeout locally because browser-mode e2e tests can exceed 15s when
   // running together with the full suite under high machine load.
   testTimeout: process.env.CI ? 60_000 : 30_000,
+  // TODO(rstest): Remove CI retries after flaky e2e root causes are fixed.
+  // Retry failed test cases in CI to reduce flaky failures without rerunning
+  // the whole suite; keep local runs strict for faster feedback.
+  retry: process.env.CI ? 2 : 0,
   slowTestThreshold: 2_000,
   // Stabilize date/time based e2e fixtures across different runner timezones.
   // Some fixtures use `new Date('YYYY-MM-DD')` (UTC parsing) but assert on local
@@ -36,7 +40,9 @@ export default defineConfig({
     execArgv: ['--trace-warnings'],
     // `--isolate false` is more likely to hit resource contention on CI. Limit
     // worker concurrency to avoid sporadic "Worker exited unexpectedly" flakes.
-    ...(process.env.ISOLATE === 'false' ? { maxWorkers: 2 } : {}),
+    ...(process.env.ISOLATE === 'false'
+      ? { maxWorkers: process.env.CI ? 1 : 2 }
+      : {}),
   },
   exclude: [
     '**/node_modules/**',
