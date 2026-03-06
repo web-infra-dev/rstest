@@ -163,8 +163,8 @@ jobs:
 
       - name: E2E Test (No Isolate)
         env:
-          NODE_OPTIONS: ${{ env.NODE_OPTIONS }} --report-on-fatalerror --report-compact --report-dir=${{ github.workspace }}/node-reports
-        run: cd e2e && pnpm test:no-isolate
+          NODE_OPTIONS: --max-old-space-size=2048 --report-on-fatalerror --report-compact --report-dir=${{ github.workspace }}/node-reports
+        run: cd e2e && pnpm test:no-isolate -- --pool.maxWorkers 1
 
       - name: List Node diagnostic reports
         if: failure()
