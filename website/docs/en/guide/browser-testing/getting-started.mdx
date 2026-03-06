@@ -6,9 +6,9 @@ import { PackageManagerTabs } from '@theme';
 
 ## Automatic initialization
 
-The quickest way is to use the `rstest init browser` command for automatic configuration:
+The quickest way is to use the `@rstest/core init browser` command for automatic configuration:
 
-<PackageManagerTabs command="rstest init browser" dlx />
+<PackageManagerTabs command="@rstest/core init browser" dlx />
 
 ### Initialization process
 
@@ -26,7 +26,7 @@ When you run the command, Rstest automatically:
 Here's an example output for a React project:
 
 ```bash
-◆ rstest init browser
+◆ @rstest/core init browser
 
   Detecting project...
   ✓ Found React 19.0.0
@@ -55,7 +55,7 @@ After initialization, follow the "Next steps" instructions in the output: instal
 In CI or other non-interactive environments, add the `--yes` flag to skip all prompts and use detected configuration:
 
 ```bash
-npx rstest init browser --yes
+npx @rstest/core init browser --yes
 ```
 
 :::
