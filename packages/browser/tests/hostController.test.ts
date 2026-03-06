@@ -1,6 +1,9 @@
 import { describe, expect, it } from '@rstest/core';
 import type { ProjectContext, Rstest } from '@rstest/core/browser';
-import { createBrowserRsbuildDevConfig } from '../src/hostController';
+import {
+  createBrowserLazyCompilationConfig,
+  createBrowserRsbuildDevConfig,
+} from '../src/hostController';
 
 /**
  * Create a mock context for testing browser config resolution.
@@ -113,5 +116,36 @@ describe('browser config resolution', () => {
 
     expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
+  });
+
+  it('should keep setup files out of lazy compilation', () => {
+    const lazyCompilation = createBrowserLazyCompilationConfig([
+      '/project/tests/rstest.setup.ts',
+    ]);
+
+    expect(lazyCompilation.imports).toBe(true);
+    expect(lazyCompilation.entries).toBe(false);
+    expect(
+      lazyCompilation.test?.({
+        nameForCondition: () => '/project/tests/rstest.setup.ts',
+      }),
+    ).toBe(false);
+    expect(
+      lazyCompilation.test?.({
+        nameForCondition: () => '/project/tests/example.test.tsx',
+      }),
+    ).toBe(true);
+  });
+
+  it('should normalize setup file paths before filtering lazy compilation', () => {
+    const lazyCompilation = createBrowserLazyCompilationConfig([
+      '/project/tests/rstest.setup.ts',
+    ]);
+
+    expect(
+      lazyCompilation.test?.({
+        nameForCondition: () => '/project/tests/../tests/rstest.setup.ts',
+      }),
+    ).toBe(false);
   });
 });

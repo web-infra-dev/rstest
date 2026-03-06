@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import treeKill from 'tree-kill';
 import { prepareFixtures, runRstestCli } from '../scripts';
+import { runBrowserWatchCli } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -238,6 +239,24 @@ describe('browser mode - watch', () => {
       if (process.platform !== 'win32') {
         throw err;
       }
+    }
+  }, 30_000);
+
+  it('should not emit HMR fallback warning when setup files are eager compiled', async () => {
+    const { cli } = await runBrowserWatchCli('browser-react');
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toContain('setupImport.test.tsx');
+    expect(cli.stdout).not.toContain(
+      'HMR update failed, performing full reload',
+    );
+    expect(cli.stdout).not.toContain('is not accepted');
+
+    const pid = cli.exec.process?.pid;
+    if (pid) {
+      treeKill(pid, 'SIGKILL');
+    } else {
+      cli.exec.kill();
     }
   }, 30_000);
 });
