@@ -63,6 +63,7 @@ describe('getIncludedFiles', () => {
       [
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
         "packages/a.ts",
         "packages/b.js",
       ]
@@ -75,6 +76,7 @@ describe('getIncludedFiles', () => {
         "apps/.c.ts",
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
       ]
     `);
   });
@@ -84,6 +86,7 @@ describe('getIncludedFiles', () => {
       [
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
       ]
     `);
   });
