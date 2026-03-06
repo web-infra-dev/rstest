@@ -38,6 +38,7 @@ import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
+import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
 import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
 import type {
@@ -156,6 +157,7 @@ type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
 type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<TestFileInfo[]>;
+  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
@@ -2501,13 +2503,98 @@ export const runBrowserController = async (
     return result;
   }
 
-  let completedTests = 0;
+  let currentTestFiles = allTestFiles;
+  const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
+  let currentRunnerFramesSignature: string | null = null;
+  const runnerFramesWaiters = new Map<string, Set<() => void>>();
 
-  // Promise that resolves when all tests complete
-  let resolveAllTests: (() => void) | undefined;
-  const allTestsPromise = new Promise<void>((resolve) => {
-    resolveAllTests = resolve;
-  });
+  const createTestFilesSignature = (testFiles: readonly string[]): string => {
+    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
+  };
+
+  const markRunnerFramesReady = (testFiles: string[]): void => {
+    const signature = createTestFilesSignature(testFiles);
+    currentRunnerFramesSignature = signature;
+    const waiters = runnerFramesWaiters.get(signature);
+    if (!waiters) {
+      return;
+    }
+    runnerFramesWaiters.delete(signature);
+    for (const waiter of waiters) {
+      waiter();
+    }
+  };
+
+  const waitForRunnerFramesReady = async (
+    testFiles: readonly string[],
+  ): Promise<void> => {
+    const signature = createTestFilesSignature(testFiles);
+    if (currentRunnerFramesSignature === signature) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const waiters =
+        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      const cleanup = () => {
+        const currentWaiters = runnerFramesWaiters.get(signature);
+        if (!currentWaiters) {
+          return;
+        }
+        currentWaiters.delete(onReady);
+        if (currentWaiters.size === 0) {
+          runnerFramesWaiters.delete(signature);
+        }
+      };
+
+      const onReady = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        cleanup();
+        resolve();
+      };
+
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(
+          new Error(
+            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
+          ),
+        );
+      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
+
+      waiters.add(onReady);
+      runnerFramesWaiters.set(signature, waiters);
+
+      if (currentRunnerFramesSignature === signature) {
+        onReady();
+      }
+    });
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const normalizedTestFile = normalize(testFile);
+    const fileInfo = currentTestFiles.find(
+      (file) => file.testPath === normalizedTestFile,
+    );
+    if (!fileInfo) {
+      throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
+    }
+    return fileInfo;
+  };
+
+  const getHeadedPerFileTimeoutMs = (file: TestFileInfo): number => {
+    const projectRuntime = projectRuntimeConfigs.find(
+      (project) => project.name === file.projectName,
+    );
+    return (
+      (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
+      30_000
+    );
+  };
 
   // Open a container page for user to view (reuse in watch mode)
   let containerContext: BrowserProviderContext;
@@ -2553,6 +2640,40 @@ export const runBrowserController = async (
   activeContainerPage = containerPage;
 
   const dispatchRouter = createDispatchRouter();
+  const headedReloadQueue = createHeadedSerialTaskQueue();
+  let enqueueHeadedReload = async (
+    _file: TestFileInfo,
+    _testNamePattern?: string,
+  ): Promise<void> => {
+    throw new Error('Headed reload queue is not initialized');
+  };
+
+  const reloadTestFileWithTimeout = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    const timeoutMs = getHeadedPerFileTimeoutMs(file);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await Promise.race([
+        rpcManager.reloadTestFile(file.testPath, testNamePattern),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `Headed test execution timeout after ${timeoutMs / 1000}s for ${file.testPath}.`,
+              ),
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
 
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
@@ -2565,10 +2686,13 @@ export const runBrowserController = async (
           `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
         ),
       );
-      await rpcManager.reloadTestFile(testFile, testNamePattern);
+      await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
-      return allTestFiles;
+      return currentTestFiles;
+    },
+    async onRunnerFramesReady(testFiles: string[]) {
+      markRunnerFramesReady(testFiles);
     },
     async onTestFileStart(payload: TestFileStartPayload) {
       await handleTestFileStart(payload);
@@ -2578,20 +2702,12 @@ export const runBrowserController = async (
     },
     async onTestFileComplete(payload: TestFileResult) {
       await handleTestFileComplete(payload);
-
-      completedTests++;
-      if (completedTests >= allTestFiles.length && resolveAllTests) {
-        resolveAllTests();
-      }
     },
     async onLog(payload: LogPayload) {
       await handleLog(payload);
     },
     async onFatal(payload: FatalPayload) {
       await handleFatal(payload);
-      if (resolveAllTests) {
-        resolveAllTests();
-      }
     },
     async dispatch(request: BrowserDispatchRequest) {
       // Headed/container path now shares the same dispatch contract as headless.
@@ -2633,31 +2749,33 @@ export const runBrowserController = async (
     );
   }
 
-  // Wait for all tests to complete
-  // Calculate total timeout based on config: max testTimeout * file count + buffer
-  const maxTestTimeout = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
-  );
-  const totalTimeoutMs = maxTestTimeout * allTestFiles.length + 30_000;
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const testTimeout = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(() => {
-      logger.log(
-        color.yellow(
-          `\nTest execution timeout after ${totalTimeoutMs / 1000}s. ` +
-            `Completed: ${completedTests}/${allTestFiles.length}\n`,
-        ),
-      );
-      resolve();
-    }, totalTimeoutMs);
-  });
+  enqueueHeadedReload = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    return headedReloadQueue.enqueue(async () => {
+      if (fatalError) {
+        return;
+      }
+      await reloadTestFileWithTimeout(file, testNamePattern);
+    });
+  };
 
   const testStart = Date.now();
-  await Promise.race([allTestsPromise, testTimeout]);
+  try {
+    await waitForRunnerFramesReady(
+      currentTestFiles.map((file) => file.testPath),
+    );
 
-  if (timeoutId) {
-    clearTimeout(timeoutId);
+    for (const file of currentTestFiles) {
+      await enqueueHeadedReload(file);
+      if (fatalError) {
+        break;
+      }
+    }
+  } catch (error) {
+    fatalError = fatalError ?? toError(error);
+    ensureProcessExitCode(1);
   }
 
   const testTime = Date.now() - testStart;
@@ -2682,7 +2800,11 @@ export const runBrowserController = async (
           context.updateReporterResultState([], [], deletedTestPaths);
         }
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
-        await rpcManager.notifyTestFileUpdate(rerunPlan.currentTestFiles);
+        currentTestFiles = rerunPlan.currentTestFiles;
+        await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        await waitForRunnerFramesReady(
+          currentTestFiles.map((file) => file.testPath),
+        );
       }
 
       if (rerunPlan.normalizedAffectedTestFiles.length > 0) {
@@ -2699,7 +2821,7 @@ export const runBrowserController = async (
 
         try {
           for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
-            await rpcManager.reloadTestFile(testFile);
+            await enqueueHeadedReload(getTestFileInfo(testFile));
           }
         } catch (error) {
           rerunError = toError(error);
