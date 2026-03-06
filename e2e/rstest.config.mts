@@ -26,6 +26,9 @@ export default defineConfig({
   // calendar fields; forcing UTC makes results consistent.
   env: {
     TZ: 'UTC',
+    BROWSER_HEADLESS: process.argv.includes('--browser.headless')
+      ? 'true'
+      : 'false',
   },
   output: {
     externals: {
