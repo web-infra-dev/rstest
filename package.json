@@ -38,7 +38,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.16.5",
     "bumpp": "^10.4.1",
-    "check-dependency-version-consistency": "^5.0.1",
+    "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "fs-extra": "^11.3.3",
@@ -48,7 +48,7 @@
     "path-serializer": "0.5.1",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
-    "prettier-plugin-packagejson": "^2.5.22",
+    "prettier-plugin-packagejson": "^3.0.2",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^5.9.3"
   },

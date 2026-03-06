@@ -67,6 +67,7 @@ export type BrowserClientMessage =
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<TestFileInfo[]>;
+  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;

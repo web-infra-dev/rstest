@@ -77,6 +77,8 @@ cd e2e && pnpm rstest browser-mode/config.test.ts
 
 Note: Always lint and typecheck updated files. Use project-wide commands sparingly.
 
+When validating changes through `examples/` or `e2e/`, remember that package source edits will not take effect until the affected workspace package is rebuilt first (for example `pnpm --filter @rstest/browser build`).
+
 ## Do
 
 - Use ESM-first: `.mjs` for runtime loaders, `.ts` for typed utilities

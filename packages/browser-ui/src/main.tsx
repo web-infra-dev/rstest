@@ -213,6 +213,7 @@ const BrowserRunner: React.FC<{
         testFile,
         testNamePattern,
       );
+      setActive(testFile);
       return new Promise<void>((resolve, reject) => {
         const previousPending = pendingReloadsRef.current.get(testFile);
         if (previousPending) {
@@ -310,7 +311,9 @@ const BrowserRunner: React.FC<{
     setRunIdByTestFile((prev) => {
       const next: Record<string, string> = {};
       for (const file of testFiles) {
-        next[file.testPath] = prev[file.testPath] ?? createRunId();
+        if (prev[file.testPath]) {
+          next[file.testPath] = prev[file.testPath]!;
+        }
       }
       return next;
     });
@@ -331,6 +334,21 @@ const BrowserRunner: React.FC<{
       return prev;
     });
   }, [testFiles]);
+
+  useEffect(() => {
+    if (!rpc || !connected) {
+      return;
+    }
+
+    void rpc
+      .onRunnerFramesReady(testFiles.map((file) => file.testPath))
+      .catch((error) => {
+        logger.debug(
+          '[Container RPC] Failed to notify runner frames ready:',
+          error,
+        );
+      });
+  }, [rpc, connected, testFiles]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -765,9 +783,6 @@ const BrowserRunner: React.FC<{
                 (() => {
                   const isActive = fileInfo.testPath === active;
                   const runId = runIdByTestFile[fileInfo.testPath];
-                  if (!runId) {
-                    return null;
-                  }
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -776,6 +791,9 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
+                    if (!runId) {
+                      return;
+                    }
                     const frame = event.currentTarget;
                     const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
@@ -823,13 +841,17 @@ const BrowserRunner: React.FC<{
                         <iframe
                           data-test-file={fileInfo.testPath}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
-                          src={createRunnerUrl(
-                            fileInfo.testPath,
-                            options.runnerUrl,
-                            undefined,
-                            false,
-                            runId,
-                          )}
+                          src={
+                            runId
+                              ? createRunnerUrl(
+                                  fileInfo.testPath,
+                                  options.runnerUrl,
+                                  undefined,
+                                  false,
+                                  runId,
+                                )
+                              : 'about:blank'
+                          }
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}
                           onLoad={onLoad}
