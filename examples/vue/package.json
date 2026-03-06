@@ -1,5 +1,6 @@
 {
   "name": "@examples/vue",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "rsbuild dev",
