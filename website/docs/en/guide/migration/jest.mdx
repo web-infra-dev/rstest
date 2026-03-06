@@ -80,6 +80,16 @@ export default defineConfig({
 });
 ```
 
+To enable TypeScript to properly recognize the global APIs, add the `@rstest/core/globals` type declaration in your `tsconfig.json`:
+
+```ts title='tsconfig.json'
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
+
 ### Code transformation
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
