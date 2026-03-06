@@ -77,6 +77,9 @@
           "@vue/server-renderer": "3.5.17"
         }
       }
+    },
+    "patchedDependencies": {
+      "tinypool@2.1.0": "patches/tinypool@2.1.0.patch"
     }
   }
 }
