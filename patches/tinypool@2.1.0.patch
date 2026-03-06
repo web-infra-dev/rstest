@@ -1,0 +1,97 @@
+diff --git a/dist/entry/process.js b/dist/entry/process.js
+index 893fddd8a895cfcec913802907c2515d13d556a4..3d3aeb677837a02be0b08116bd26d82aac9112c6 100644
+--- a/dist/entry/process.js
++++ b/dist/entry/process.js
+@@ -10,6 +10,35 @@ process.__tinypool_state__ = {
+ };
+ const memoryUsage = process.memoryUsage.bind(process);
+ const send = process.send.bind(process);
++function normalizeFatalError(error) {
++	if (error instanceof Error) return error;
++	return new Error(String(error));
++}
++function reportFatalError(error) {
++	try {
++		send({
++			source: "pool",
++			__tinypool_worker_message__: true,
++			fatalError: serializeError(error)
++		}, () => {});
++	} catch {}
++}
++const onUnhandledRejection = (reason) => {
++	const error = normalizeFatalError(reason);
++	reportFatalError(error);
++	process.off("uncaughtException", onUncaughtException);
++	process.off("unhandledRejection", onUnhandledRejection);
++	throwInNextTick(error);
++};
++const onUncaughtException = (error) => {
++	const normalizedError = normalizeFatalError(error);
++	reportFatalError(normalizedError);
++	process.off("uncaughtException", onUncaughtException);
++	process.off("unhandledRejection", onUnhandledRejection);
++	throwInNextTick(normalizedError);
++};
++process.on("uncaughtException", onUncaughtException);
++process.on("unhandledRejection", onUnhandledRejection);
+ process.on("message", (message) => {
+ 	if (!message || !message.__tinypool_worker_message__) return;
+ 	if (message.source === "pool") {
+diff --git a/dist/index.js b/dist/index.js
+index c2eaa7117c151c358115144864054ca7c5cb1219..052ef4867ad59ee031adebc340c12a4e0ea94027 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -54,10 +54,26 @@ var ThreadWorker = class {
+ //#region src/runtime/process-worker.ts
+ const __tinypool_worker_message__ = true;
+ const SIGKILL_TIMEOUT = 1e3;
++function deserializeWorkerError(error, code, signal) {
++	let normalizedError;
++	if (error && typeof error === "object" && "message" in error) {
++		normalizedError = Object.assign(new Error(String(error.message)), error);
++	} else if (error != null) {
++		normalizedError = new Error(String(error));
++	} else {
++		normalizedError = new Error("Worker exited unexpectedly");
++	}
++	const details = [];
++	if (code !== null && code !== void 0) details.push(`code: ${code}`);
++	if (signal) details.push(`signal: ${signal}`);
++	if (details.length > 0) normalizedError.message += `\n\nWorker process exited unexpectedly (${details.join(", ")})`;
++	return normalizedError;
++}
+ var ProcessWorker = class {
+ 	name = "ProcessWorker";
+ 	runtime = "child_process";
+ 	isTerminating = false;
++	lastFatalError = null;
+ 	initialize(options) {
+ 		this.process = fork(fileURLToPath(import.meta.url + "/../entry/process.js"), options.argv, {
+ 			...options,
+@@ -75,9 +91,12 @@ var ProcessWorker = class {
+ 		this.process.on("exit", this.onUnexpectedExit);
+ 		this.waitForExit = new Promise((r) => this.process.on("exit", r));
+ 	}
+-	onUnexpectedExit = () => {
+-		this.process.emit("error", new Error("Worker exited unexpectedly"));
++	onUnexpectedExit = (code, signal) => {
++		this.process.emit("error", deserializeWorkerError(this.lastFatalError, code, signal));
+ 	};
++	onFatalError(error) {
++		this.lastFatalError = error;
++	}
+ 	async terminate() {
+ 		this.isTerminating = true;
+ 		this.process.off("exit", this.onUnexpectedExit);
+@@ -543,6 +562,10 @@ var ThreadPool = class {
+ 				if (!workerInfo.isReady()) workerInfo.markAsReady();
+ 				return;
+ 			}
++			if (message$1.fatalError !== void 0) {
++				worker.onFatalError?.(message$1.fatalError);
++				return;
++			}
+ 			worker.emit("error", new Error(`Unexpected message on Worker: ${inspect(message$1)}`));
+ 		});
+ 		worker.on("error", (err) => {

@@ -46,7 +46,7 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
@@ -157,11 +157,27 @@ jobs:
       - name: E2E Test (CommonJS)
         run: cd e2e && pnpm test:commonjs
 
-      - name: E2E Test (No Isolate)
+      - name: Prepare Node diagnostic reports
         shell: bash
-        run: |
-          cd e2e
-          pnpm test:no-isolate || (echo "No-isolate e2e failed, retry once..." && sleep 5 && pnpm test:no-isolate)
+        run: mkdir -p '${{ github.workspace }}/node-reports'
+
+      - name: E2E Test (No Isolate)
+        env:
+          NODE_OPTIONS: --max-old-space-size=2048 --report-on-fatalerror --report-compact --report-dir=${{ github.workspace }}/node-reports
+        run: cd e2e && pnpm test:no-isolate -- --pool.maxWorkers 1
+
+      - name: List Node diagnostic reports
+        if: failure()
+        shell: bash
+        run: ls -la '${{ github.workspace }}/node-reports' || true
+
+      - name: Upload Node diagnostic reports
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: node-diagnostic-reports-${{ matrix.os }}-${{ matrix.node_version }}
+          path: ${{ github.workspace }}/node-reports
+          if-no-files-found: warn
 
       - name: VS Code Extension Test
         run: pnpm run test:vscode
