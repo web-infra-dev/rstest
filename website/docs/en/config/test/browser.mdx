@@ -34,6 +34,7 @@ Browser Mode configuration. When enabled, tests run in a real browser instead of
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--browser`, `--browser.enabled`
 
 Enable Browser Mode.
 
@@ -82,6 +83,7 @@ export default defineConfig({
 
 - **Type:** `'chromium' | 'firefox' | 'webkit'`
 - **Default:** `'chromium'`
+- **CLI:** `--browser.name <name>`
 
 The browser type to use for testing.
 
@@ -121,6 +123,7 @@ npx playwright install
 
 - **Type:** `boolean`
 - **Default:** `true` in CI environments, `false` for local development
+- **CLI:** `--browser.headless`
 
 Whether to run the browser in headless mode (without UI).
 
@@ -178,6 +181,7 @@ export default defineConfig({
 
 - **Type:** `number`
 - **Default:** `undefined` (automatically selects an available port)
+- **CLI:** `--browser.port <port>`
 
 The port number for the Browser Mode Dev Server.
 
@@ -199,6 +203,7 @@ If you set `port` and the port is already in use, the behavior is controlled by 
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--browser.strictPort`
 
 When `port` is specified, whether the port must be available:
 
@@ -233,9 +238,9 @@ This means mixing multiple providers, or running Chromium/Firefox/WebKit togethe
 For cross-browser coverage, run tests in separate executions (for example, in a CI matrix):
 
 ```bash
-npx rstest --browser.browser chromium
-npx rstest --browser.browser firefox
-npx rstest --browser.browser webkit
+npx rstest --browser.name chromium
+npx rstest --browser.name firefox
+npx rstest --browser.name webkit
 ```
 
 ## Multi-project config isolation

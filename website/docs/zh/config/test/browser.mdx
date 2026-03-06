@@ -34,6 +34,7 @@ const defaultBrowser = {
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--browser`、`--browser.enabled`
 
 启用浏览器模式。
 
@@ -82,6 +83,7 @@ export default defineConfig({
 
 - **类型：** `'chromium' | 'firefox' | 'webkit'`
 - **默认值：** `'chromium'`
+- **CLI：** `--browser.name <name>`
 
 用于测试的浏览器类型。
 
@@ -121,6 +123,7 @@ npx playwright install
 
 - **类型：** `boolean`
 - **默认值：** CI 环境为 `true`，本地开发为 `false`
+- **CLI：** `--browser.headless`
 
 是否以无界面模式运行浏览器。
 
@@ -178,6 +181,7 @@ export default defineConfig({
 
 - **类型：** `number`
 - **默认值：** `undefined`（自动选择可用端口）
+- **CLI：** `--browser.port <port>`
 
 浏览器模式 Dev Server 的端口号。
 
@@ -199,6 +203,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--browser.strictPort`
 
 当指定 `port` 时，是否要求端口必须可用：
 
@@ -233,9 +238,9 @@ export default defineConfig({
 如果你需要跨浏览器覆盖，建议拆成多次执行（例如在 CI matrix 中分别跑）：
 
 ```bash
-npx rstest --browser.browser chromium
-npx rstest --browser.browser firefox
-npx rstest --browser.browser webkit
+npx rstest --browser.name chromium
+npx rstest --browser.name firefox
+npx rstest --browser.name webkit
 ```
 
 ## 多项目配置隔离

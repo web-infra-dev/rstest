@@ -33,9 +33,17 @@ export const runBrowserCli = async (
     env?: Record<string, string>;
   },
 ) => {
+  const args = extra?.args || [];
+  if (
+    process.env.BROWSER_HEADLESS === 'true' &&
+    !args.includes('--browser.headless')
+  ) {
+    args.push('--browser.headless');
+  }
+
   return await runRstestCli({
     command: 'rstest',
-    args: ['run', ...(extra?.args || [])],
+    args: ['run', ...args],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
