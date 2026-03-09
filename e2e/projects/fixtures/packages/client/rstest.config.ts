@@ -10,6 +10,9 @@ export default defineProject({
       testEnvironment: 'jsdom',
       setupFiles: ['./test/setup.ts'],
       exclude: ['test/node.test.ts'],
+      env: {
+        aaaa: undefined,
+      },
     },
     {
       root: __dirname,
