@@ -65,6 +65,8 @@
     "tinypool": "^2.1.0"
   },
   "devDependencies": {
+    "@rsbuild/plugin-less": "^1.6.0",
+    "@rsbuild/plugin-sass": "^1.5.0",
     "@babel/code-frame": "^7.29.0",
     "@clack/prompts": "^1.1.0",
     "@jridgewell/trace-mapping": "0.3.31",
