@@ -5,7 +5,6 @@ export default defineConfig({
   coverage: {
     enabled: true,
     provider: 'istanbul',
-    include: ['test-temp-sourcemap-dist/sourcemap.js'],
     clean: true,
     reporters: ['text'],
   },
