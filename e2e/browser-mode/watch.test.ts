@@ -114,14 +114,8 @@ describe('browser mode - watch', () => {
     // Initial run outputs full summary with Duration
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 2 passed');
-    if (
-      !cli.stdout.includes(
-        'Watch mode enabled - will re-run tests on file changes',
-      )
-    ) {
-      await cli.waitForStdout(
-        'Watch mode enabled - will re-run tests on file changes',
-      );
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
     }
 
     const newTestPath = path.join(fixturesTargetPath, 'tests/new.test.ts');

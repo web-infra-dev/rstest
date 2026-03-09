@@ -78,6 +78,11 @@ import {
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
 import { resolveBrowserViewportPreset } from './viewportPresets';
+import {
+  isBrowserWatchCliShortcutsEnabled,
+  logBrowserWatchReadyMessage,
+  setupBrowserWatchCliShortcuts,
+} from './watchCliShortcuts';
 import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
 
 const { createRsbuild, rspack } = rsbuild;
@@ -317,6 +322,8 @@ type WatchContext = {
   lastTestFiles: TestFileInfo[];
   hooksEnabled: boolean;
   cleanupRegistered: boolean;
+  cleanupPromise: Promise<void> | null;
+  closeCliShortcuts: (() => void) | null;
   chunkHashes: Map<string, string>;
   affectedTestFiles: string[];
 };
@@ -326,6 +333,8 @@ const watchContext: WatchContext = {
   lastTestFiles: [],
   hooksEnabled: false,
   cleanupRegistered: false,
+  cleanupPromise: null,
+  closeCliShortcuts: null,
   chunkHashes: new Map(),
   affectedTestFiles: [],
 };
@@ -998,27 +1007,39 @@ const destroyBrowserRuntime = async (
     .catch(() => {});
 };
 
+const cleanupWatchRuntime = (): Promise<void> => {
+  if (watchContext.cleanupPromise) {
+    return watchContext.cleanupPromise;
+  }
+
+  watchContext.cleanupPromise = (async () => {
+    watchContext.closeCliShortcuts?.();
+    watchContext.closeCliShortcuts = null;
+
+    if (!watchContext.runtime) {
+      return;
+    }
+
+    await destroyBrowserRuntime(watchContext.runtime);
+    watchContext.runtime = null;
+  })();
+
+  return watchContext.cleanupPromise;
+};
+
 const registerWatchCleanup = (): void => {
   if (watchContext.cleanupRegistered) {
     return;
   }
 
-  const cleanup = async () => {
-    if (!watchContext.runtime) {
-      return;
-    }
-    await destroyBrowserRuntime(watchContext.runtime);
-    watchContext.runtime = null;
-  };
-
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const) {
     process.once(signal, () => {
-      void cleanup();
+      void cleanupWatchRuntime();
     });
   }
 
   process.once('exit', () => {
-    void cleanup();
+    void cleanupWatchRuntime();
   });
 
   watchContext.cleanupRegistered = true;
@@ -1718,6 +1739,7 @@ export const runBrowserController = async (
   await notifyTestRunStart();
 
   const isWatchMode = context.command === 'watch';
+  const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const tempDir =
     isWatchMode && watchContext.runtime
       ? watchContext.runtime.tempDir
@@ -1771,6 +1793,12 @@ export const runBrowserController = async (
     if (isWatchMode) {
       watchContext.runtime = runtime;
       registerWatchCleanup();
+
+      if (enableCliShortcuts && !watchContext.closeCliShortcuts) {
+        watchContext.closeCliShortcuts = await setupBrowserWatchCliShortcuts({
+          close: cleanupWatchRuntime,
+        });
+      }
     }
   }
 
@@ -2411,6 +2439,7 @@ export const runBrowserController = async (
                 ? [rerunFatalError]
                 : undefined,
           });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
         }
       },
       onError: async (error) => {
@@ -2455,6 +2484,7 @@ export const runBrowserController = async (
             logger.log(
               color.cyan('No browser test files remain after update.\n'),
             );
+            logBrowserWatchReadyMessage(enableCliShortcuts);
             return;
           }
 
@@ -2473,6 +2503,7 @@ export const runBrowserController = async (
               'No affected browser test files detected, skipping re-run.\n',
             ),
           );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
           return;
         }
 
@@ -2531,11 +2562,7 @@ export const runBrowserController = async (
 
     if (isWatchMode && triggerRerun) {
       watchContext.hooksEnabled = true;
-      logger.log(
-        color.cyan(
-          '\nWatch mode enabled - will re-run tests on file changes\n',
-        ),
-      );
+      logBrowserWatchReadyMessage(enableCliShortcuts);
     }
 
     return result;
@@ -2883,9 +2910,13 @@ export const runBrowserController = async (
                 ? [rerunFatalError]
                 : undefined,
           });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
         }
       } else if (!rerunPlan.filesChanged) {
         logger.log(color.cyan('Tests will be re-executed automatically\n'));
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      } else {
+        logBrowserWatchReadyMessage(enableCliShortcuts);
       }
     };
   }
@@ -2946,9 +2977,7 @@ export const runBrowserController = async (
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
   if (isWatchMode && triggerRerun) {
     watchContext.hooksEnabled = true;
-    logger.log(
-      color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
-    );
+    logBrowserWatchReadyMessage(enableCliShortcuts);
   }
 
   return result;
