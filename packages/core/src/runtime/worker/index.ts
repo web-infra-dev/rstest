@@ -49,7 +49,13 @@ let isTeardown = false;
 
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
-    Object.assign(process.env, env);
+    Object.entries(env).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
   }
 };
 
