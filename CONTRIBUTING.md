@@ -66,6 +66,28 @@ You can also use the watch mode to automatically rebuild the package when you ma
 npx nx build @rstest/core --watch
 ```
 
+## Testing
+
+Run unit tests:
+
+```sh
+pnpm test
+```
+
+Run e2e tests:
+
+```sh
+pnpm e2e
+```
+
+### Browser e2e tests
+
+Browser-mode e2e fixtures set `headless: true` in their `rstest.config.ts` so no browser windows pop up locally. A few headed smoke tests (tests that explicitly need a visible browser, e.g. viewport assertions) are skipped locally by default and only run on CI. To opt in to headed smoke tests locally:
+
+```bash
+RSTEST_E2E_RUN_HEADED=true pnpm rstest browser-mode/basic.test.ts
+```
+
 ## Releasing
 
 Repository maintainers can publish new versions of changed packages.

@@ -98,6 +98,9 @@ jobs:
       - name: Run Test
         run: pnpm run test
 
+      - name: Run Examples Test
+        run: pnpm run test:examples
+
   # ======== e2e ========
   e2e:
     needs: [prepare, ut]

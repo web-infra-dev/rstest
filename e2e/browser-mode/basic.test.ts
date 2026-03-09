@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { canRunHeadedBrowser, runBrowserCli } from './utils';
+import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 describe('browser mode - basic', () => {
   it('should run DOM tests correctly', async () => {
@@ -37,7 +37,7 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
-  it.runIf(canRunHeadedBrowser)(
+  it.runIf(shouldRunHeadedBrowserTests)(
     'should run headed mode and exit with code 0',
     async () => {
       const { cli } = await runBrowserCli('basic', {

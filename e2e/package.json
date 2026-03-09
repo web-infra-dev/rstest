@@ -3,9 +3,9 @@
   "name": "@rstest/tests",
   "version": "1.0.0",
   "scripts": {
-    "test": "rstest run --browser.headless",
-    "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run --browser.headless",
-    "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false --browser.headless",
+    "test": "rstest run",
+    "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run",
+    "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

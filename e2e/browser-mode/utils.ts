@@ -17,11 +17,20 @@ const defaultEnvOverrides: Record<string, string> = {
   GITHUB_ACTIONS: '',
 };
 
-export const canRunHeadedBrowser =
+const canRunHeadedBrowser =
   process.platform === 'darwin' ||
   process.platform === 'win32' ||
   (process.platform === 'linux' &&
     Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
+
+/**
+ * Skip headed browser smoke tests locally to avoid popping browser windows.
+ * CI runs them when the machine supports headed mode.
+ * Set `RSTEST_E2E_RUN_HEADED=true` locally to opt back in.
+ */
+export const shouldRunHeadedBrowserTests =
+  canRunHeadedBrowser &&
+  Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
 
 /**
  * Run browser mode CLI with specified fixture
@@ -34,12 +43,6 @@ export const runBrowserCli = async (
   },
 ) => {
   const args = extra?.args || [];
-  if (
-    process.env.BROWSER_HEADLESS === 'true' &&
-    !args.includes('--browser.headless')
-  ) {
-    args.push('--browser.headless');
-  }
 
   return await runRstestCli({
     command: 'rstest',
