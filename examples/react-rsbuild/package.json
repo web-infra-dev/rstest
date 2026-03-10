@@ -1,5 +1,6 @@
 {
   "name": "@examples/react-rsbuild",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "rsbuild dev --open",

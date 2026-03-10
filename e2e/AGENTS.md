@@ -14,6 +14,10 @@ Integration and end-to-end coverage for Rstest features.
 - Don't create near-duplicate fixtures just to add one extra test case.
 - Don't expand fixture scope beyond the behavior the e2e is meant to cover.
 
-## Validation
+## Browser e2e tests
 
-- Rebuild affected workspace packages before validating through `e2e/` fixtures when source edits need packaged output.
+Browser-mode e2e fixtures set `headless: true` in their `rstest.config.ts` so no browser windows pop up locally. A few "headed smoke tests" (tests that explicitly need a visible browser, e.g. viewport assertions) are **skipped locally by default** and only run on CI. To opt in to headed smoke tests locally:
+
+```bash
+RSTEST_E2E_RUN_HEADED=true pnpm rstest browser-mode/basic.test.ts
+```

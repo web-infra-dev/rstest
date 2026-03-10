@@ -11,5 +11,6 @@ export default defineConfig({
     port: BROWSER_PORTS['browser-react'],
   },
   include: ['tests/**/*.test.tsx'],
+  setupFiles: ['./tests/rstest.setup.ts'],
   testTimeout: 30000,
 });

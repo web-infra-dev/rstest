@@ -14,7 +14,7 @@
   "inlcude": ["./tests/suite", "./tests/runTests.ts"],
   "exclude": [
     "./rslib.config.mts",
-    "./rstest.config.ts",
+    "./rstest.config.mts",
     "./src",
     "./sample",
     "./tests/unit",

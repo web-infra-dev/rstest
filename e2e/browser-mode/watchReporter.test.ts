@@ -69,14 +69,8 @@ describe('browser mode - watch reporter lifecycle', () => {
 
       await waitForHookCounts(1, 1);
 
-      if (
-        !cli.stdout.includes(
-          'Watch mode enabled - will re-run tests on file changes',
-        )
-      ) {
-        await cli.waitForStdout(
-          'Watch mode enabled - will re-run tests on file changes',
-        );
+      if (!cli.stdout.includes('Waiting for file changes...')) {
+        await cli.waitForStdout('Waiting for file changes...');
       }
 
       const testFilePath = path.join(fixturesTargetPath, 'tests/index.test.ts');

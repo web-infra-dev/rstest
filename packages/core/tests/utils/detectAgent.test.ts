@@ -1,33 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
-import {
-  determineAgent,
-  KNOWN_AGENTS,
-} from '../../src/utils/agent/detectAgent';
+import { determineAgent } from '../../src/utils/agent/detectAgent';
 
-const AGENT_ENV_KEYS = [
-  'RSTEST_NO_AGENT',
-  'AI_AGENT',
-  'CURSOR_TRACE_ID',
-  'CURSOR_AGENT',
-  'GEMINI_CLI',
-  'CODEX_SANDBOX',
-  'AUGMENT_AGENT',
-  'OPENCODE',
-  // cspell:disable-next-line
-  'CLAUDECODE',
-  'CLAUDE_CODE',
-  'REPL_ID',
-] as const;
+const AGENT_ENV_KEYS = ['RSTEST_NO_AGENT', 'AI_AGENT', 'OPENCODE'] as const;
 
-function readAgentEnvSnapshot() {
-  const snapshot: Record<string, string | undefined> = {};
+function snapshotAgentEnv() {
+  const snapshot = {} as Record<
+    (typeof AGENT_ENV_KEYS)[number],
+    string | undefined
+  >;
   for (const key of AGENT_ENV_KEYS) {
     snapshot[key] = process.env[key];
   }
   return snapshot;
 }
 
-function restoreAgentEnv(snapshot: Record<string, string | undefined>) {
+function resetAgentEnv() {
+  for (const key of AGENT_ENV_KEYS) {
+    delete process.env[key];
+  }
+}
+
+function restoreAgentEnv(
+  snapshot: Record<(typeof AGENT_ENV_KEYS)[number], string | undefined>,
+) {
   for (const key of AGENT_ENV_KEYS) {
     const value = snapshot[key];
     if (value === undefined) {
@@ -39,40 +34,29 @@ function restoreAgentEnv(snapshot: Record<string, string | undefined>) {
 }
 
 describe('determineAgent', () => {
-  let envSnapshot: Record<string, string | undefined>;
+  let envSnapshot: Record<(typeof AGENT_ENV_KEYS)[number], string | undefined>;
 
   beforeEach(() => {
-    envSnapshot = readAgentEnvSnapshot();
-    for (const key of AGENT_ENV_KEYS) {
-      delete process.env[key];
-    }
+    envSnapshot = snapshotAgentEnv();
+    resetAgentEnv();
   });
 
   afterEach(() => {
     restoreAgentEnv(envSnapshot);
   });
 
-  it('does not detect cursor terminal by CURSOR_TRACE_ID only', () => {
-    process.env.CURSOR_TRACE_ID = 'trace-id';
-
-    expect(determineAgent()).toEqual({
-      isAgent: false,
-      agent: undefined,
-    });
-  });
-
-  it('detects cursor agent by CURSOR_AGENT', () => {
-    process.env.CURSOR_AGENT = '1';
+  it('delegates agent detection to std-env', () => {
+    process.env.AI_AGENT = 'custom-agent';
 
     expect(determineAgent()).toEqual({
       isAgent: true,
-      agent: { name: KNOWN_AGENTS.CURSOR_CLI },
+      agent: { name: 'custom-agent' },
     });
   });
 
   it('keeps opt-out highest priority', () => {
     process.env.RSTEST_NO_AGENT = '1';
-    process.env.CURSOR_AGENT = '1';
+    process.env.AI_AGENT = 'custom-agent';
 
     expect(determineAgent()).toEqual({
       isAgent: false,

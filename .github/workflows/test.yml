@@ -98,6 +98,9 @@ jobs:
       - name: Run Test
         run: pnpm run test
 
+      - name: Run Examples Test
+        run: pnpm run test:examples
+
   # ======== e2e ========
   e2e:
     needs: [prepare, ut]
@@ -158,10 +161,9 @@ jobs:
         run: cd e2e && pnpm test:commonjs
 
       - name: E2E Test (No Isolate)
-        shell: bash
-        run: |
-          cd e2e
-          pnpm test:no-isolate || (echo "No-isolate e2e failed, retry once..." && sleep 5 && pnpm test:no-isolate)
+        # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
+        if: matrix.node_version != '20'
+        run: cd e2e && pnpm test:no-isolate
 
       - name: VS Code Extension Test
         run: pnpm run test:vscode
