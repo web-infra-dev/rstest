@@ -87,8 +87,8 @@ importers:
         specifier: ^1.4.5
         version: 1.4.5(@rsbuild/core@2.0.0-canary-20260309140114)
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/browser':
         specifier: workspace:*
         version: link:../packages/browser
@@ -364,7 +364,7 @@ importers:
         version: 2.0.0-canary-20260309140114
       '@rsbuild/plugin-vue':
         specifier: ^1.2.6
-        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
+        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -426,7 +426,7 @@ importers:
         version: 2.0.0-canary-20260309140114
       '@rsbuild/plugin-vue':
         specifier: ^1.2.6
-        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
+        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -507,7 +507,7 @@ importers:
         version: 1.1.0(@rsbuild/core@2.0.0-canary-20260309140114)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.6
-        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
+        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^1.1.2
         version: 1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.0-canary-20260309140114)
@@ -673,7 +673,7 @@ importers:
         version: 1.1.0(@rsbuild/core@2.0.0-canary-20260309140114)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.6
-        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
+        version: 1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^1.1.2
         version: 1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.0-canary-20260309140114)
@@ -702,8 +702,8 @@ importers:
         specifier: ^2.0.0-beta.6
         version: 2.0.0-canary-20260309140114
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -714,8 +714,8 @@ importers:
   packages/adapter-rslib:
     devDependencies:
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -751,8 +751,8 @@ importers:
         version: 8.19.0
     devDependencies:
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -790,8 +790,8 @@ importers:
   packages/browser-react:
     devDependencies:
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -897,8 +897,8 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(@rsbuild/core@2.0.0-canary-20260309140114)
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -1027,8 +1027,8 @@ importers:
         version: 0.0.32
     devDependencies:
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1060,8 +1060,8 @@ importers:
         specifier: ^2.0.0-beta.6
         version: 2.0.0-canary-20260309140114
       '@rslib/core':
-        specifier: 0.20.0-canary-202603101
-        version: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -2390,6 +2390,16 @@ packages:
       core-js:
         optional: true
 
+  '@rsbuild/core@2.0.0-beta.8':
+    resolution: {integrity: sha512-MUxbKJPE1agOK3eCHjKvBIiA+CcZ0TJU/ANKDBLMjK2Er+wq4r5c2ne53+Pi7DtIExoMbSSWBx+RP3CMewKGVA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      core-js: '>= 3.0.0'
+    peerDependenciesMeta:
+      core-js:
+        optional: true
+
   '@rsbuild/core@2.0.0-canary-20260309140114':
     resolution: {integrity: sha512-xVBn15queLoGcqN6ykJ9c35x4HDJei81t8q27naK0IvbUopLPH3X0pGtw7ibEuV6u++42SJEFGE7jnKXVhqhoA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2488,8 +2498,8 @@ packages:
   '@rsdoctor/utils@1.5.2':
     resolution: {integrity: sha512-Zdvpp4GdJKgQYXLuILM124YU0peMDebr95k2s5zTTuB2LBkHENf8UdjJs7ijKyoaVYKqxXTBdghekXEFcdo6jQ==}
 
-  '@rslib/core@0.20.0-canary-202603101':
-    resolution: {integrity: sha512-dfCuYPNXtNkcH7Rt/is3jmGO53mS/aCj/Dd3eJf8/wZw2Br7fy442JF4ooNgoiKSlYMKfnuD3PXgdBvnIxWzPg==}
+  '@rslib/core@0.20.0':
+    resolution: {integrity: sha512-hsRwjMbBla8lyKIVR0gFsK5M3j+LSbFOTafvbT0QR90ehZXwlu+EhpHJv8v/uIRT50RVlgCrcT+LCVr1oU3pbA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -2604,8 +2614,18 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@rspack/binding-darwin-arm64@2.0.0-beta.6':
+    resolution: {integrity: sha512-FQ8zflthQJJf0cM0vDFnfnXrTOnRvwz886tiafbwu1RO5qmh+pJH+xg1eQaLPnRPqLTlcmnpngyacYFUxw+1AA==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@rspack/binding-darwin-x64@2.0.0-beta.0':
     resolution: {integrity: sha512-GucsfjrSKBZ9cuOTXmHWxeY2wPmaNyvGNxTyzttjRcfwqOWz8r+ku6PCsMSXUqxZRYWW1L9mvtTdlDrzTYJZ0w==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rspack/binding-darwin-x64@2.0.0-beta.6':
+    resolution: {integrity: sha512-Cr4P19anOIaHtK8Z20Hl12PPUcs3LM24ZSQPfs0gPS0etzSOE4JRsqW/79GnnjZd/A+Wola/dZcnMVS44e3c3A==}
     cpu: [x64]
     os: [darwin]
 
@@ -2614,8 +2634,18 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@rspack/binding-linux-arm64-gnu@2.0.0-beta.6':
+    resolution: {integrity: sha512-MgTzspaj3v9/4T3KQ/fRuj+cit3BnEcgFe4OP+BvUWlTQvxlckDWpDymVhPuIqpx7pJvLcXwdz8mQhvZ87AD5g==}
+    cpu: [arm64]
+    os: [linux]
+
   '@rspack/binding-linux-arm64-musl@2.0.0-beta.0':
     resolution: {integrity: sha512-S2fshx0Rf7/XYwoMLaqFsVg4y+VAfHzubrczy8AW5xIs6UNC3eRLVTgShLerUPtF6SG+v6NQxQ9JI3vOo2qPOA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rspack/binding-linux-arm64-musl@2.0.0-beta.6':
+    resolution: {integrity: sha512-5vyjbrj3u8x4Crb77QvFJSZkq7QwOuVJff8oStbS/v7cC+NEAQQYB/6Bl0JwyDFAcMMX8ZRyaDjc1o1qQ0Q31g==}
     cpu: [arm64]
     os: [linux]
 
@@ -2624,8 +2654,18 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@rspack/binding-linux-x64-gnu@2.0.0-beta.6':
+    resolution: {integrity: sha512-GmNJgFHoK5LFQ2m96HrXIgf1zZNe+4yaaOD/5qqcI163QXRqRflfZprmdr2L4R6VsU2i+YQ2Ap2s20Y/zSt6RQ==}
+    cpu: [x64]
+    os: [linux]
+
   '@rspack/binding-linux-x64-musl@2.0.0-beta.0':
     resolution: {integrity: sha512-sBX4b2W0PgehlAVT224k0Q6GaH6t9HP+hBNDrbX/g6d0hfxZN56gm5NfOTOD1Rien4v7OBEejJ3/uFbm1WjwYQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@rspack/binding-linux-x64-musl@2.0.0-beta.6':
+    resolution: {integrity: sha512-tI2S3v8yXel5GL3yPnBNnFZ/dye4TyRM2j7mfJ49M6uTWjfRFyAcuxqw7z9Pyvyhsc1AoOnnXejtqqJpZkBQoA==}
     cpu: [x64]
     os: [linux]
 
@@ -2633,8 +2673,17 @@ packages:
     resolution: {integrity: sha512-o6OatnNvb4kCzXbCaomhENGaCsO3naIyAqqErew90HeAwa1lfY3NhRfDLeIyuANQ+xqFl34/R7n8q3ZDx3nd4Q==}
     cpu: [wasm32]
 
+  '@rspack/binding-wasm32-wasi@2.0.0-beta.6':
+    resolution: {integrity: sha512-Bv9o1zZIDTOzjbliyAwMOGjsL6wiGIPRttJ9CLsdRoKI5XcMTEFHjwlnm1Zs4/EP+zC+bTgseq1EFngIy+nZRg==}
+    cpu: [wasm32]
+
   '@rspack/binding-win32-arm64-msvc@2.0.0-beta.0':
     resolution: {integrity: sha512-neCzVllXzIqM8p8qKb89qV7wyk233gC/V9VrHIKbGeQjAEzpBsk5GOWlFbq5DDL6tivQ+uzYaTrZWm9tb2qxXg==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rspack/binding-win32-arm64-msvc@2.0.0-beta.6':
+    resolution: {integrity: sha512-R/j0VTVKn3gU4a0xKAXJUX6jzmanHsuBHtLSpgnRqKW/20csFzsnsqY9PxaiAObTHVPMCrNvTG5KXHYIqYgACg==}
     cpu: [arm64]
     os: [win32]
 
@@ -2643,19 +2692,44 @@ packages:
     cpu: [ia32]
     os: [win32]
 
+  '@rspack/binding-win32-ia32-msvc@2.0.0-beta.6':
+    resolution: {integrity: sha512-v3Gc+gRFTBNLSmyHAgI6mE30W94T0g8jD7S1qamUfX6i50YjDylyiMG1prG/8i/YVNWQynQeQi4Cjfg+Hi7alQ==}
+    cpu: [ia32]
+    os: [win32]
+
   '@rspack/binding-win32-x64-msvc@2.0.0-beta.0':
     resolution: {integrity: sha512-dx4zgiAT88EQE7kEUpr7Z9EZAwLnO5FhzWzvd/cDK4bkqYsx+rTklgf/c0EYPBeroXCxlGiMsuC9wHAFNK7sFw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@rspack/binding-win32-x64-msvc@2.0.0-beta.6':
+    resolution: {integrity: sha512-PjaKOG2rQqzOwsmu03EAyTb7oA52CrO1I8JXiBT07adrDysHvKV/Gi+P0XPuDLDMnxNpndoGJMmvfxsymRpwyA==}
     cpu: [x64]
     os: [win32]
 
   '@rspack/binding@2.0.0-beta.0':
     resolution: {integrity: sha512-L6PPqhwZWC2vzwdhBItNPXw+7V4sq+MBDRXLdd8NMqaJSCB5iKdJIbpbEQucST9Nn7V28IYoQTXs6+ol5vWUBA==}
 
+  '@rspack/binding@2.0.0-beta.6':
+    resolution: {integrity: sha512-oJytPDJT57cz2is0e/e1myWVNxn+ZcII1/fF2Y3TiXVUIihLC/KDm6ISTgaZKr8ZyjTlVIV3V4wSO7IHlYV6aw==}
+
   '@rspack/core@2.0.0-beta.0':
     resolution: {integrity: sha512-aEqlQQjiXixT5i9S4DFtiAap8ZjF6pOgfY2ALHOizins/QqWyB8dyLxSoXdzt7JixmKcFmHkbL9XahO28BlVUA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@module-federation/runtime-tools': '>=0.22.0'
+      '@swc/helpers': '>=0.5.1'
+    peerDependenciesMeta:
+      '@module-federation/runtime-tools':
+        optional: true
+      '@swc/helpers':
+        optional: true
+
+  '@rspack/core@2.0.0-beta.6':
+    resolution: {integrity: sha512-dvi10ijR9Rr0W75GRFqWvswAEdLBsbXCGhxzm6zXxFNSanNL9s9xPelZ8XfnIU13QZkN2VNHGl9O/8KQEmYdEw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@module-federation/runtime-tools': ^0.24.1 || ^2.0.0
       '@swc/helpers': '>=0.5.1'
     peerDependenciesMeta:
       '@module-federation/runtime-tools':
@@ -6300,8 +6374,8 @@ packages:
   rrweb-cssom@0.8.0:
     resolution: {integrity: sha512-guoltQEx+9aMf2gDZ0s62EcV8lsXR+0w8915TC3ITdn2YueuNjdAYh/levpU9nFaoChh9RUS5ZdQMrKfVEN9tw==}
 
-  rsbuild-plugin-dts@0.20.0-canary-202603101:
-    resolution: {integrity: sha512-JwNf1NrkJX0GAkhGg0yp7VNYvrd8JCWDX15mCMiYpzAzDhQRTJmoWE625JQy+aoUJAXHDzO+69kMnibYKYrWKQ==}
+  rsbuild-plugin-dts@0.20.0:
+    resolution: {integrity: sha512-CnTJTB59zzQFjPVEjpOaaEw5BeK/eTY6kwt4l5Lr9d3HQk3VRDSKfLWY/hpeZMbZzpCk2TqLrqIhS6a+jg7k7g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@microsoft/api-extractor': ^7
@@ -8707,6 +8781,13 @@ snapshots:
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'
 
+  '@rsbuild/core@2.0.0-beta.8':
+    dependencies:
+      '@rspack/core': 2.0.0-beta.6(@swc/helpers@0.5.19)
+      '@swc/helpers': 0.5.19
+    transitivePeerDependencies:
+      - '@module-federation/runtime-tools'
+
   '@rsbuild/core@2.0.0-canary-20260309140114':
     dependencies:
       '@rspack/core': '@rspack-canary/core@2.0.0-canary-511d0b77-20260309140114(@swc/helpers@0.5.19)'
@@ -8822,10 +8903,10 @@ snapshots:
       - '@babel/core'
       - supports-color
 
-  '@rsbuild/plugin-vue@1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))':
+  '@rsbuild/plugin-vue@1.2.6(@rsbuild/core@2.0.0-canary-20260309140114)(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))':
     dependencies:
       '@rsbuild/core': 2.0.0-canary-20260309140114
-      rspack-vue-loader: 17.5.0(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
+      rspack-vue-loader: 17.5.0(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3))
     transitivePeerDependencies:
       - '@rspack/core'
       - '@vue/compiler-sfc'
@@ -8926,10 +9007,10 @@ snapshots:
       - '@rspack/core'
       - webpack
 
-  '@rslib/core@0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)':
+  '@rslib/core@0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)':
     dependencies:
-      '@rsbuild/core': 2.0.0-canary-20260309140114
-      rsbuild-plugin-dts: 0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(@rsbuild/core@2.0.0-canary-20260309140114)(typescript@5.9.3)
+      '@rsbuild/core': 2.0.0-beta.8
+      rsbuild-plugin-dts: 0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.8)(typescript@5.9.3)
     optionalDependencies:
       '@microsoft/api-extractor': 7.57.6(@types/node@22.18.6)
       typescript: 5.9.3
@@ -9019,19 +9100,37 @@ snapshots:
   '@rspack/binding-darwin-arm64@2.0.0-beta.0':
     optional: true
 
+  '@rspack/binding-darwin-arm64@2.0.0-beta.6':
+    optional: true
+
   '@rspack/binding-darwin-x64@2.0.0-beta.0':
+    optional: true
+
+  '@rspack/binding-darwin-x64@2.0.0-beta.6':
     optional: true
 
   '@rspack/binding-linux-arm64-gnu@2.0.0-beta.0':
     optional: true
 
+  '@rspack/binding-linux-arm64-gnu@2.0.0-beta.6':
+    optional: true
+
   '@rspack/binding-linux-arm64-musl@2.0.0-beta.0':
+    optional: true
+
+  '@rspack/binding-linux-arm64-musl@2.0.0-beta.6':
     optional: true
 
   '@rspack/binding-linux-x64-gnu@2.0.0-beta.0':
     optional: true
 
+  '@rspack/binding-linux-x64-gnu@2.0.0-beta.6':
+    optional: true
+
   '@rspack/binding-linux-x64-musl@2.0.0-beta.0':
+    optional: true
+
+  '@rspack/binding-linux-x64-musl@2.0.0-beta.6':
     optional: true
 
   '@rspack/binding-wasm32-wasi@2.0.0-beta.0':
@@ -9039,13 +9138,27 @@ snapshots:
       '@napi-rs/wasm-runtime': 1.0.7
     optional: true
 
+  '@rspack/binding-wasm32-wasi@2.0.0-beta.6':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.0.7
+    optional: true
+
   '@rspack/binding-win32-arm64-msvc@2.0.0-beta.0':
+    optional: true
+
+  '@rspack/binding-win32-arm64-msvc@2.0.0-beta.6':
     optional: true
 
   '@rspack/binding-win32-ia32-msvc@2.0.0-beta.0':
     optional: true
 
+  '@rspack/binding-win32-ia32-msvc@2.0.0-beta.6':
+    optional: true
+
   '@rspack/binding-win32-x64-msvc@2.0.0-beta.0':
+    optional: true
+
+  '@rspack/binding-win32-x64-msvc@2.0.0-beta.6':
     optional: true
 
   '@rspack/binding@2.0.0-beta.0':
@@ -9061,10 +9174,29 @@ snapshots:
       '@rspack/binding-win32-ia32-msvc': 2.0.0-beta.0
       '@rspack/binding-win32-x64-msvc': 2.0.0-beta.0
 
+  '@rspack/binding@2.0.0-beta.6':
+    optionalDependencies:
+      '@rspack/binding-darwin-arm64': 2.0.0-beta.6
+      '@rspack/binding-darwin-x64': 2.0.0-beta.6
+      '@rspack/binding-linux-arm64-gnu': 2.0.0-beta.6
+      '@rspack/binding-linux-arm64-musl': 2.0.0-beta.6
+      '@rspack/binding-linux-x64-gnu': 2.0.0-beta.6
+      '@rspack/binding-linux-x64-musl': 2.0.0-beta.6
+      '@rspack/binding-wasm32-wasi': 2.0.0-beta.6
+      '@rspack/binding-win32-arm64-msvc': 2.0.0-beta.6
+      '@rspack/binding-win32-ia32-msvc': 2.0.0-beta.6
+      '@rspack/binding-win32-x64-msvc': 2.0.0-beta.6
+
   '@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19)':
     dependencies:
       '@rspack/binding': 2.0.0-beta.0
       '@rspack/lite-tapable': 1.1.0
+    optionalDependencies:
+      '@swc/helpers': 0.5.19
+
+  '@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19)':
+    dependencies:
+      '@rspack/binding': 2.0.0-beta.6
     optionalDependencies:
       '@swc/helpers': 0.5.19
 
@@ -13520,10 +13652,10 @@ snapshots:
 
   rrweb-cssom@0.8.0: {}
 
-  rsbuild-plugin-dts@0.20.0-canary-202603101(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(@rsbuild/core@2.0.0-canary-20260309140114)(typescript@5.9.3):
+  rsbuild-plugin-dts@0.20.0(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.8)(typescript@5.9.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
-      '@rsbuild/core': 2.0.0-canary-20260309140114
+      '@rsbuild/core': 2.0.0-beta.8
     optionalDependencies:
       '@microsoft/api-extractor': 7.57.6(@types/node@22.18.6)
       typescript: 5.9.3
@@ -13540,12 +13672,12 @@ snapshots:
 
   rslog@2.0.0: {}
 
-  rspack-vue-loader@17.5.0(@rspack/core@2.0.0-beta.0(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3)):
+  rspack-vue-loader@17.5.0(@rspack/core@2.0.0-beta.6(@swc/helpers@0.5.19))(vue@3.5.29(typescript@5.9.3)):
     dependencies:
       '@rspack/lite-tapable': 1.1.0
       chalk: 4.1.2
     optionalDependencies:
-      '@rspack/core': 2.0.0-beta.0(@swc/helpers@0.5.19)
+      '@rspack/core': 2.0.0-beta.6(@swc/helpers@0.5.19)
       vue: 3.5.29(typescript@5.9.3)
 
   rspress-plugin-font-open-sans@1.0.3(@rspress/core@2.0.3(@types/react@19.2.14)):

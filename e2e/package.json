@@ -11,7 +11,7 @@
   "devDependencies": {
     "@rsbuild/core": "^2.0.0-beta.6",
     "@rsbuild/plugin-react": "^1.4.5",
-    "@rslib/core": "0.20.0-canary-202603101",
+    "@rslib/core": "0.20.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
