@@ -987,8 +987,8 @@ importers:
         specifier: 0.1.11
         version: 0.1.11
       std-env:
-        specifier: ^3.10.0
-        version: 3.10.0
+        specifier: ^4.0.0
+        version: 4.0.0
       strip-ansi:
         specifier: ^7.1.2
         version: 7.1.2
@@ -6793,8 +6793,8 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
-  std-env@3.10.0:
-    resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
+  std-env@4.0.0:
+    resolution: {integrity: sha512-zUMPtQ/HBY3/50VbpkupYHbRroTRZJPRLvreamgErJVys0ceuzMkD44J/QjqhHjOzK42GQ3QZIeFG1OYfOtKqQ==}
 
   stdin-discarder@0.2.2:
     resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
@@ -14103,7 +14103,7 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
-  std-env@3.10.0: {}
+  std-env@4.0.0: {}
 
   stdin-discarder@0.2.2: {}
 
