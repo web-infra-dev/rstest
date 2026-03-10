@@ -887,9 +887,15 @@ importers:
       '@microsoft/api-extractor':
         specifier: ^7.57.6
         version: 7.57.6(@types/node@22.18.6)
+      '@rsbuild/plugin-less':
+        specifier: ^1.6.0
+        version: 1.6.0(@rsbuild/core@2.0.0-beta.6(core-js@3.47.0))
       '@rsbuild/plugin-node-polyfill':
         specifier: ^1.4.4
         version: 1.4.4(@rsbuild/core@2.0.0-beta.6(core-js@3.47.0))
+      '@rsbuild/plugin-sass':
+        specifier: ^1.5.0
+        version: 1.5.0(@rsbuild/core@2.0.0-beta.6(core-js@3.47.0))
       '@rslib/core':
         specifier: ^0.19.6
         version: 0.19.6(@microsoft/api-extractor@7.57.6(@types/node@22.18.6))(typescript@5.9.3)
@@ -2429,6 +2435,11 @@ packages:
     peerDependenciesMeta:
       '@rsbuild/core':
         optional: true
+
+  '@rsbuild/plugin-less@1.6.0':
+    resolution: {integrity: sha512-LridpH/ai10eyN7jlEPfmNiv8Kc9+eDggZkXIMYXcccpdQsc+ZvuuOWMugbyyiZ2j56uCuhvS4fG6UYL8QmL6A==}
+    peerDependencies:
+      '@rsbuild/core': ^1.3.0 || ^2.0.0-0
 
   '@rsbuild/plugin-node-polyfill@1.4.4':
     resolution: {integrity: sha512-V9Wh8FOprWBOaPvTK6ptj9A+SAkG1X1645sVf6HoIrJRNgtlrBECuadybMLFRBdihr6hiizz417d5RXy6X1hLQ==}
@@ -8850,6 +8861,12 @@ snapshots:
       source-map: 0.7.6
     optionalDependencies:
       '@rsbuild/core': 2.0.0-beta.6(core-js@3.47.0)
+
+  '@rsbuild/plugin-less@1.6.0(@rsbuild/core@2.0.0-beta.6(core-js@3.47.0))':
+    dependencies:
+      '@rsbuild/core': 2.0.0-beta.6(core-js@3.47.0)
+      deepmerge: 4.3.1
+      reduce-configs: 1.1.1
 
   '@rsbuild/plugin-node-polyfill@1.4.4(@rsbuild/core@2.0.0-beta.6(core-js@3.47.0))':
     dependencies:

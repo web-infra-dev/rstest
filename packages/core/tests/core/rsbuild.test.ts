@@ -1,3 +1,4 @@
+import type { Rspack } from '@rsbuild/core';
 import { join } from 'pathe';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { RstestContext } from '../../src/types';
@@ -5,6 +6,39 @@ import type { RstestContext } from '../../src/types';
 process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
+
+export function matchRules(
+  config: Rspack.Configuration,
+  testFile: string,
+): Rspack.RuleSetRules {
+  if (!config.module?.rules) {
+    return [];
+  }
+
+  const isMatch = (test: Rspack.RuleSetCondition, testFile: string) => {
+    if (test instanceof RegExp && test.test(testFile)) {
+      return true;
+    }
+    return false;
+  };
+
+  return config.module.rules.filter((rule) => {
+    if (rule && typeof rule === 'object' && rule.test) {
+      if (isMatch(rule.test, testFile)) {
+        return true;
+      }
+
+      if (
+        Array.isArray(rule.test) &&
+        rule.test.some((test) => isMatch(test, testFile))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+}
 
 describe('prepareRsbuild', () => {
   it('should generate rspack config correctly (jsdom)', async () => {
@@ -332,5 +366,62 @@ describe('prepareRsbuild', () => {
     } = await rsbuildInstance.inspectConfig();
 
     expect(bundlerConfigs[0]).toMatchSnapshot();
+  });
+
+  it('should generate rspack config correctly with less / sass plugin', async () => {
+    const { pluginLess } = await import('@rsbuild/plugin-less');
+    const { pluginSass } = await import('@rsbuild/plugin-sass');
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {},
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [pluginLess(), pluginSass()],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+    expect(rsbuildInstance).toBeDefined();
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(matchRules(bundlerConfigs[0]!, 'a.less')).toMatchSnapshot(
+      'less rules',
+    );
+    expect(matchRules(bundlerConfigs[0]!, 'a.sass')).toMatchSnapshot(
+      'sass rules',
+    );
   });
 });

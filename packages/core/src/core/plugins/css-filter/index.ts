@@ -23,20 +23,18 @@ export const pluginCSSFilter = (): RsbuildPlugin => ({
         const emitCss = environment.config.output.emitCss ?? target === 'web';
         if (!emitCss) {
           const ruleIds = [
-            CHAIN_ID.RULE.CSS,
-            CHAIN_ID.RULE.SASS,
-            CHAIN_ID.RULE.LESS,
-            CHAIN_ID.RULE.STYLUS,
+            [CHAIN_ID.RULE.CSS, CHAIN_ID.ONE_OF.CSS_MAIN],
+            [CHAIN_ID.RULE.SASS, 'sass'],
+            [CHAIN_ID.RULE.LESS, 'less'],
+            [CHAIN_ID.RULE.STYLUS, 'stylus'],
           ];
 
-          for (const ruleId of ruleIds) {
-            if (!chain.module.rules.has(ruleId)) {
+          for (const [ruleId, mainId] of ruleIds) {
+            if (!chain.module.rules.has(ruleId!)) {
               continue;
             }
 
-            const rule = chain.module
-              .rule(ruleId)
-              .oneOf(CHAIN_ID.ONE_OF.CSS_MAIN);
+            const rule = chain.module.rule(ruleId!).oneOf(mainId!);
 
             if (!rule.uses.has(CHAIN_ID.USE.CSS)) {
               continue;
@@ -54,13 +52,19 @@ export const pluginCSSFilter = (): RsbuildPlugin => ({
               continue;
             }
 
+            const clonedOptions = {
+              ...cssLoaderOptions,
+              importLoaders: (cssLoaderOptions.importLoaders || 0) + 1,
+            };
+            rule.use(CHAIN_ID.USE.CSS).options(clonedOptions);
+
             rule
               .use('rstest-css-pre-filter')
               .loader(path.join(__dirname, 'cssFilterLoader.mjs'))
               .options({
                 modules: cssLoaderOptions.modules,
               })
-              .after(ruleId);
+              .after(mainId!);
           }
         }
       },
