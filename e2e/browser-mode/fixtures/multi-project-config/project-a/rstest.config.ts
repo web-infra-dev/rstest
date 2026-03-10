@@ -8,5 +8,6 @@ export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
+    headless: true,
   },
 });

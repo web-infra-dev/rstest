@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { canRunHeadedBrowser, runBrowserCli } from './utils';
+import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 describe('browser mode - locator api', () => {
   it('should run locator API tests correctly', async () => {
@@ -12,7 +12,7 @@ describe('browser mode - locator api', () => {
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
 
-  it.skipIf(!canRunHeadedBrowser)(
+  it.skipIf(!shouldRunHeadedBrowserTests)(
     'should keep locator API working across multiple files in headed mode',
     async () => {
       const { expectExecSuccess, cli } = await runBrowserCli('locator-api', {

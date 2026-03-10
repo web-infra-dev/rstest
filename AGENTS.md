@@ -53,6 +53,7 @@ pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
 - To run a specific e2e test: `pnpm rstest <path-to-test>` (e.g., `pnpm rstest browser-mode/config.test.ts`)
 - To run tests in a fixture directory: `cd` into `e2e/<test>/fixtures/<fixture>/`, then run `npx rstest`
+- For browser-mode defaults and `RSTEST_E2E_RUN_HEADED`, see `e2e/AGENTS.md`
 
 ## File-scoped commands
 
