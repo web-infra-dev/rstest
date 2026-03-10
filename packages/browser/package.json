@@ -53,7 +53,7 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@rslib/core": "^0.19.6",
+    "@rslib/core": "0.20.0-canary-202603101",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
