@@ -27,6 +27,7 @@ consolas
 contentful
 corejs
 corepack
+cpuprofile
 craco
 crossorigin
 ctsx
@@ -44,6 +45,7 @@ facti
 fastpaths
 filenaming
 flac
+flamegraph
 flexbox
 flexbugs
 fnames
@@ -76,6 +78,7 @@ microfrontend
 microfrontends
 mjsx
 modularly
+modu
 mtsx
 napi
 nodenext
@@ -167,4 +170,5 @@ vnode
 watchpack
 webm
 webp
+worktrees
 Zenbook

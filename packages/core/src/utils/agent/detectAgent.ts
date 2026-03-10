@@ -25,7 +25,7 @@ export function determineAgent(): AgentResult {
   if (agent.name) {
     return {
       isAgent: true,
-      agent: { name: agent.name as KnownAgentNames },
+      agent: { name: agent.name },
     };
   }
 
