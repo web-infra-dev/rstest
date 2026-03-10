@@ -158,6 +158,8 @@ jobs:
         run: cd e2e && pnpm test:commonjs
 
       - name: E2E Test (No Isolate)
+        # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
+        if: matrix.node_version != '20'
         shell: bash
         run: |
           cd e2e
