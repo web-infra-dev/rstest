@@ -157,6 +157,33 @@ type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
 type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
 type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+type ReloadTestFileAck = {
+  runId: string;
+};
+type HeadedTestFileCompletePayload = TestFileResult & {
+  runId?: string;
+};
+
+type DeferredPromise<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+
+const createDeferredPromise = <T>(): DeferredPromise<T> => {
+  let resolve!: DeferredPromise<T>['resolve'];
+  let reject!: DeferredPromise<T>['reject'];
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+};
 
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
@@ -166,7 +193,7 @@ type HostRpcMethods = {
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
-  onTestFileComplete: (payload: TestFileResult) => Promise<void>;
+  onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
   // Generic dispatch endpoint used by runner RPC requests.
@@ -178,7 +205,10 @@ type HostRpcMethods = {
 /** RPC methods exposed by the container (client) to the host (server) */
 type ContainerRpcMethods = {
   onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
+  reloadTestFile: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<ReloadTestFileAck>;
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
@@ -196,16 +226,27 @@ class ContainerRpcManager {
   private ws: WebSocket | null = null;
   private rpc: ContainerRpc | null = null;
   private methods: HostRpcMethods;
+  private onDisconnect?: (error: Error) => void;
+  private detachActiveSocketListeners: (() => void) | null = null;
 
-  constructor(wss: WebSocketServer, methods: HostRpcMethods) {
+  constructor(
+    wss: WebSocketServer,
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ) {
     this.wss = wss;
     this.methods = methods;
+    this.onDisconnect = onDisconnect;
     this.setupConnectionHandler();
   }
 
   /** Update the RPC methods (used when starting a new test run) */
-  updateMethods(methods: HostRpcMethods): void {
+  updateMethods(
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ): void {
     this.methods = methods;
+    this.onDisconnect = onDisconnect;
     // Re-create birpc with new methods if already connected
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       this.attachWebSocket(this.ws);
@@ -223,35 +264,68 @@ class ContainerRpcManager {
   }
 
   private attachWebSocket(ws: WebSocket): void {
+    this.detachActiveSocketListeners?.();
+    if (this.rpc && !this.rpc.$closed) {
+      this.rpc.$close(new Error('Container RPC transport reattached'));
+    }
     this.ws = ws;
+    const messageHandlers = new WeakMap<
+      (data: any) => void,
+      (message: any) => void
+    >();
 
     this.rpc = createBirpc<ContainerRpcMethods, HostRpcMethods>(this.methods, {
+      timeout: -1,
       post: (data) => {
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify(data));
         }
       },
       on: (fn) => {
-        ws.on('message', (message) => {
+        const handler = (message: any) => {
           try {
             const data = JSON.parse(message.toString());
             fn(data);
           } catch {
             // ignore invalid messages
           }
-        });
+        };
+        messageHandlers.set(fn, handler);
+        ws.on('message', handler);
+      },
+      off: (fn) => {
+        const handler = messageHandlers.get(fn);
+        if (!handler) {
+          return;
+        }
+        ws.off('message', handler);
+        messageHandlers.delete(fn);
       },
     });
 
-    ws.on('close', () => {
+    const handleClose = () => {
       // Only clear if this is still the active connection
       // This prevents a race condition when a new connection is established
       // before the old one's close event fires
       if (this.ws === ws) {
         this.ws = null;
-        this.rpc = null;
       }
-    });
+      this.detachActiveSocketListeners?.();
+      this.detachActiveSocketListeners = null;
+      if (this.rpc && !this.rpc.$closed) {
+        const disconnectError = new Error(
+          'Browser UI WebSocket disconnected before reload completed',
+        );
+        this.rpc.$close(disconnectError);
+        this.onDisconnect?.(disconnectError);
+      }
+      this.rpc = null;
+    };
+
+    ws.on('close', handleClose);
+    this.detachActiveSocketListeners = () => {
+      ws.off('close', handleClose);
+    };
   }
 
   /** Check if a container is currently connected */
@@ -278,16 +352,15 @@ class ContainerRpcManager {
   async reloadTestFile(
     testFile: string,
     testNamePattern?: string,
-  ): Promise<void> {
+  ): Promise<ReloadTestFileAck> {
     logger.debug(
       `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
     );
     if (!this.rpc) {
-      logger.debug('[Browser UI] RPC not available, skipping reloadTestFile');
-      return;
+      throw new Error('Browser UI RPC not available for reloadTestFile');
     }
     logger.debug(`[Browser UI] Calling reloadTestFile: ${testFile}`);
-    await this.rpc.reloadTestFile(testFile, testNamePattern);
+    return this.rpc.reloadTestFile(testFile, testNamePattern);
   }
 }
 
@@ -2706,11 +2779,82 @@ export const runBrowserController = async (
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
+  const pendingHeadedReloads = new Map<
+    string,
+    {
+      runId: string;
+      deferred: DeferredPromise<void>;
+    }
+  >();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
   ): Promise<void> => {
     throw new Error('Headed reload queue is not initialized');
+  };
+
+  const rejectPendingHeadedReload = (
+    testPath: string,
+    error: Error,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.reject(error);
+  };
+
+  const rejectAllPendingHeadedReloads = (error: Error): void => {
+    for (const [testPath, pending] of pendingHeadedReloads) {
+      pendingHeadedReloads.delete(testPath);
+      pending.deferred.reject(error);
+    }
+  };
+
+  const registerPendingHeadedReload = (
+    testPath: string,
+    runId: string,
+  ): Promise<void> => {
+    const previousPending = pendingHeadedReloads.get(testPath);
+    if (previousPending) {
+      previousPending.deferred.reject(
+        new Error(
+          `Reload for "${testPath}" was superseded by a newer request.`,
+        ),
+      );
+      pendingHeadedReloads.delete(testPath);
+    }
+
+    const deferred = createDeferredPromise<void>();
+    pendingHeadedReloads.set(testPath, {
+      runId,
+      deferred,
+    });
+
+    return deferred.promise;
+  };
+
+  const resolvePendingHeadedReload = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      logger.debug(
+        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
+      );
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.resolve();
   };
 
   const reloadTestFileWithTimeout = async (
@@ -2719,10 +2863,19 @@ export const runBrowserController = async (
   ): Promise<void> => {
     const timeoutMs = getHeadedPerFileTimeoutMs(file);
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let reloadAck: ReloadTestFileAck | undefined;
 
     try {
+      reloadAck = await rpcManager.reloadTestFile(
+        file.testPath,
+        testNamePattern,
+      );
+      const completionPromise = registerPendingHeadedReload(
+        file.testPath,
+        reloadAck.runId,
+      );
       await Promise.race([
-        rpcManager.reloadTestFile(file.testPath, testNamePattern),
+        completionPromise,
         new Promise<never>((_, reject) => {
           timeoutId = setTimeout(() => {
             reject(
@@ -2733,6 +2886,15 @@ export const runBrowserController = async (
           }, timeoutMs);
         }),
       ]);
+    } catch (error) {
+      if (reloadAck?.runId) {
+        rejectPendingHeadedReload(
+          file.testPath,
+          toError(error),
+          reloadAck.runId,
+        );
+      }
+      throw error;
     } finally {
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -2765,13 +2927,26 @@ export const runBrowserController = async (
     async onTestCaseResult(payload: TestResult) {
       await handleTestCaseResult(payload);
     },
-    async onTestFileComplete(payload: TestFileResult) {
-      await handleTestFileComplete(payload);
+    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      try {
+        await handleTestFileComplete(payload);
+        resolvePendingHeadedReload(payload.testPath, payload.runId);
+      } catch (error) {
+        rejectPendingHeadedReload(
+          payload.testPath,
+          toError(error),
+          payload.runId,
+        );
+        throw error;
+      }
     },
     async onLog(payload: LogPayload) {
       await handleLog(payload);
     },
     async onFatal(payload: FatalPayload) {
+      const error = new Error(payload.message);
+      error.stack = payload.stack;
+      rejectAllPendingHeadedReloads(error);
       await handleFatal(payload);
     },
     async dispatch(request: BrowserDispatchRequest) {
@@ -2786,14 +2961,18 @@ export const runBrowserController = async (
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods());
+    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
       rpcManager.reattach(existingWs);
     }
   } else {
-    rpcManager = new ContainerRpcManager(wss, createRpcMethods());
+    rpcManager = new ContainerRpcManager(
+      wss,
+      createRpcMethods(),
+      rejectAllPendingHeadedReloads,
+    );
 
     if (isWatchMode) {
       runtime.rpcManager = rpcManager;

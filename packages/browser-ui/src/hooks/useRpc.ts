@@ -1,7 +1,12 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
 import { createWebSocketUrl, RECONNECT_DELAYS } from '../core/runtime';
-import type { ContainerRPC, HostRPC, TestFileInfo } from '../types';
+import type {
+  ContainerRPC,
+  HostRPC,
+  ReloadTestFileAck,
+  TestFileInfo,
+} from '../types';
 import { logger } from '../utils/logger';
 
 export type RpcState = {
@@ -20,7 +25,7 @@ export const useRpc = (
   onReloadTestFile?: (
     testFile: string,
     testNamePattern?: string,
-  ) => Promise<void>,
+  ) => Promise<ReloadTestFileAck>,
 ): RpcState => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
@@ -49,6 +54,7 @@ export const useRpc = (
     }
 
     let ws: WebSocket | null = null;
+    let birpc: BirpcReturn<HostRPC, ContainerRPC> | null = null;
     let reconnectAttempt = 0;
     let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
@@ -58,6 +64,10 @@ export const useRpc = (
 
       ws = new WebSocket(createWebSocketUrl(wsPort));
       activeWsRef.current = ws;
+      const messageHandlers = new WeakMap<
+        (data: any) => void,
+        (event: MessageEvent<string>) => void
+      >();
 
       const methods: ContainerRPC = {
         onTestFileUpdate(files: TestFileInfo[]) {
@@ -70,7 +80,10 @@ export const useRpc = (
             testFile,
             testNamePattern,
           );
-          await onReloadTestFileRef.current?.(testFile, testNamePattern);
+          if (!onReloadTestFileRef.current) {
+            throw new Error('reloadTestFile handler is not available');
+          }
+          return onReloadTestFileRef.current(testFile, testNamePattern);
         },
       };
 
@@ -81,7 +94,8 @@ export const useRpc = (
         reconnectAttempt = 0; // Reset reconnect counter on successful connection
         setConnected(true);
 
-        const birpc = createBirpc<HostRPC, ContainerRPC>(methods, {
+        birpc = createBirpc<HostRPC, ContainerRPC>(methods, {
+          timeout: -1,
           post: (data) => {
             if (ws?.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify(data));
@@ -89,7 +103,7 @@ export const useRpc = (
           },
           on: (fn) => {
             if (!ws) return;
-            ws.onmessage = (event) => {
+            const handler = (event: MessageEvent<string>) => {
               try {
                 const data = JSON.parse(event.data);
                 fn(data);
@@ -97,6 +111,15 @@ export const useRpc = (
                 // ignore invalid messages
               }
             };
+            messageHandlers.set(fn, handler);
+            ws.addEventListener('message', handler);
+          },
+          off: (fn) => {
+            if (!ws) return;
+            const handler = messageHandlers.get(fn);
+            if (!handler) return;
+            ws.removeEventListener('message', handler);
+            messageHandlers.delete(fn);
           },
         });
         setRpc(birpc);
@@ -128,6 +151,7 @@ export const useRpc = (
         if (!isMounted) return;
 
         logger.debug('[Container] WebSocket disconnected');
+        birpc?.$close(new Error('Container WebSocket disconnected'));
         setRpc(null);
         setConnected(false);
 
@@ -162,6 +186,7 @@ export const useRpc = (
       if (reconnectTimeoutId) {
         clearTimeout(reconnectTimeoutId);
       }
+      birpc?.$close(new Error('Container RPC disposed'));
       if (ws) {
         ws.close();
       }
