@@ -60,6 +60,19 @@ Contract ownership:
 - `@rstest/browser-ui` owns transport bridging and UI state projection only.
 - Runner runtime (`src/client`) owns test execution and emits protocol messages, but does not own filesystem access.
 
+## Provider-agnostic design
+
+Browser mode must stay provider-neutral at the framework boundary.
+
+- Keep shared config, protocol, scheduling, and public APIs provider-agnostic.
+- Treat `browser.providerOptions` as an opaque passthrough at the framework boundary.
+- Do not export provider-owned config types from `@rstest/browser` public entrypoints.
+- Do not reference optional peer provider modules from public declarations, including `import type` and `import('pkg')` in type positions.
+- Keep provider-specific behavior, config decoding, and runtime quirks inside provider implementations whenever possible.
+- Prefer direct passthrough to provider APIs over provider-specific post-init translation layers. If a capability cannot be expressed as passthrough, only promote it when the behavior is meaningful across multiple providers.
+- Do not introduce new shared abstractions for a single provider convenience; promote behavior into shared contracts only when it is meaningful across multiple providers.
+- When richer DX is needed later, prefer provider-owned helpers or separate optional type entrypoints over coupling the main package surface to a specific provider.
+
 ## Module structure
 
 - `src/index.ts` — Package entry, exports runBrowserTests and listBrowserTests

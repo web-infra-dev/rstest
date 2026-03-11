@@ -11,10 +11,12 @@ export const playwrightProviderImplementation: BrowserProviderImplementation = {
   async launchRuntime({
     browserName,
     headless,
+    providerOptions,
   }): Promise<BrowserProviderRuntime> {
     return launchPlaywrightBrowser({
       browserName,
       headless,
+      providerOptions,
     });
   },
   async dispatchRpc({

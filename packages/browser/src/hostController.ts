@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
@@ -123,10 +124,24 @@ type BrowserProviderProject = {
   provider: BrowserProvider;
 };
 
-type BrowserLaunchOptions = Pick<
-  ProjectContext['normalizedConfig']['browser'],
-  'provider' | 'browser' | 'headless' | 'port' | 'strictPort'
->;
+type BrowserLaunchOptions = {
+  provider: BrowserProvider;
+  browser: ProjectContext['normalizedConfig']['browser']['browser'];
+  headless: ProjectContext['normalizedConfig']['browser']['headless'];
+  port: ProjectContext['normalizedConfig']['browser']['port'];
+  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
+  providerOptions: Record<string, unknown>;
+};
+
+const getBrowserProviderOptions = (
+  project: ProjectContext,
+): Record<string, unknown> => {
+  const browserConfig = project.normalizedConfig.browser as {
+    providerOptions?: Record<string, unknown>;
+  };
+
+  return browserConfig.providerOptions ?? {};
+};
 
 /** Payload for test file start event */
 type TestFileStartPayload = {
@@ -299,6 +314,7 @@ type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
   browser: BrowserProviderBrowser;
+  browserLaunchOptions: BrowserLaunchOptions;
   port: number;
   wsPort: number;
   manifestPath: string;
@@ -724,6 +740,7 @@ const getBrowserLaunchOptions = (
   headless: project.normalizedConfig.browser.headless,
   port: project.normalizedConfig.browser.port,
   strictPort: project.normalizedConfig.browser.strictPort,
+  providerOptions: getBrowserProviderOptions(project),
 });
 
 const ensureConsistentBrowserLaunchOptions = (
@@ -743,11 +760,12 @@ const ensureConsistentBrowserLaunchOptions = (
       options.browser !== firstOptions.browser ||
       options.headless !== firstOptions.headless ||
       options.port !== firstOptions.port ||
-      options.strictPort !== firstOptions.strictPort
+      options.strictPort !== firstOptions.strictPort ||
+      !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
     ) {
       throw new Error(
         `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
-          'All browser-enabled projects in one run must share provider/browser/headless/port/strictPort.',
+          'All browser-enabled projects in one run must share provider/browser/headless/port/strictPort/providerOptions.',
       );
     }
   }
@@ -1469,11 +1487,13 @@ const createBrowserRuntime = async ({
     const runtime = await providerImplementation.launchRuntime({
       browserName,
       headless: forceHeadless ?? browserLaunchOptions.headless,
+      providerOptions: browserLaunchOptions.providerOptions,
     });
     return {
       rsbuildInstance,
       devServer,
       browser: runtime.browser,
+      browserLaunchOptions,
       port,
       wsPort,
       manifestPath,
@@ -1802,7 +1822,7 @@ export const runBrowserController = async (
     }
   }
 
-  const { browser, port, wsPort, wss } = runtime;
+  const { browser, browserLaunchOptions, port, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries with project info
@@ -2208,6 +2228,7 @@ export const runBrowserController = async (
 
       const viewport = viewportByProject.get(file.projectName);
       const browserContext = await browser.newContext({
+        providerOptions: browserLaunchOptions.providerOptions,
         viewport: viewport ?? null,
       });
       run.contexts.add(browserContext);
@@ -2673,6 +2694,7 @@ export const runBrowserController = async (
   } else {
     isNewPage = true;
     containerContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
       viewport: null,
     });
     containerPage = await containerContext.newPage();
@@ -3066,7 +3088,7 @@ export const listBrowserTests = async (
     throw error;
   }
 
-  const { browser, port } = runtime;
+  const { browser, browserLaunchOptions, port } = runtime;
 
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
@@ -3110,7 +3132,10 @@ export const listBrowserTests = async (
   });
 
   // Create a headless page to run collection
-  const browserContext = await browser.newContext({ viewport: null });
+  const browserContext = await browser.newContext({
+    providerOptions: browserLaunchOptions.providerOptions,
+    viewport: null,
+  });
   const page = await browserContext.newPage();
 
   // Expose dispatch function for browser client to send messages

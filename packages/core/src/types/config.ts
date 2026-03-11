@@ -131,6 +131,13 @@ export type BrowserModeConfig = {
    * @default false
    */
   strictPort?: boolean;
+  /**
+   * Provider-specific config passed through to the selected browser provider.
+   *
+   * Use provider-owned types or helpers in user config when you want richer
+   * IntelliSense for this field.
+   */
+  providerOptions?: Record<string, unknown>;
 };
 
 type SnapshotFormat = Omit<
@@ -470,6 +477,7 @@ export type NormalizedBrowserModeConfig = {
   port?: number;
   strictPort: boolean;
   viewport?: BrowserViewport;
+  providerOptions: Record<string, unknown>;
 };
 
 export type NormalizedConfig = Required<
