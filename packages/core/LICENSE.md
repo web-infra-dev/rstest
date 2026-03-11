@@ -1183,7 +1183,7 @@ Licensed under MIT license in the repository at https://github.com/facebook/reac
 
 ### readdirp
 
-Licensed under MIT license in the repository at git://github.com/paulmillr/readdirp.git.
+Licensed under MIT license in the repository at https://github.com/paulmillr/readdirp.git.
 
 > MIT License
 >
