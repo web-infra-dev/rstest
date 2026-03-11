@@ -182,9 +182,6 @@ export default defineConfig({
       watchOptions: {
         ignored: /\.git/,
       },
-      stats: {
-        warnings: false,
-      },
     },
   },
 });
