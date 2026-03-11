@@ -15,6 +15,8 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2023',
       dts: {
+        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
+        tsgo: !process.env.CI,
         bundle: false,
       },
       output: {
