@@ -36,6 +36,7 @@ export type BrowserClientFileResult = {
   status: TestFileResult['status'];
   name: TestFileResult['name'];
   testPath: TestFileResult['testPath'];
+  runId?: string;
   parentNames?: TestFileResult['parentNames'];
   location?: {
     line: number;
@@ -78,9 +79,16 @@ export type HostRPC = {
   ) => Promise<BrowserDispatchResponse>;
 };
 
+export type ReloadTestFileAck = {
+  runId: string;
+};
+
 export type ContainerRPC = {
   onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
+  reloadTestFile: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<ReloadTestFileAck>;
 };
 
 export type {
