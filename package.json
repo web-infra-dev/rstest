@@ -2,8 +2,8 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
-    "typecheck": "cross-env NX_DAEMON=false nx run-many -t typecheck --exclude @examples/* --parallel=10",
-    "build": "cross-env NX_DAEMON=false nx run-many -t build --exclude @examples/* @rstest/tests-* rstest-website --parallel=10",
+    "typecheck": "pnpm --filter '!@examples/*' run typecheck",
+    "build": "pnpm --filter './packages/*' run build",
     "test:vscode": "pnpm --filter ./packages/vscode test",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "test": "rstest",
@@ -13,7 +13,7 @@
     "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
-    "prepare": "pnpm run build && simple-git-hooks",
+    "prepare": "simple-git-hooks && pnpm run build",
     "bump": "node --experimental-strip-types scripts/version.mts"
   },
   "simple-git-hooks": {
@@ -45,7 +45,6 @@
     "fs-extra": "^11.3.3",
     "heading-case": "^1.0.7",
     "nano-staged": "^0.9.0",
-    "nx": "^21.6.10",
     "path-serializer": "0.5.1",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
@@ -61,13 +60,11 @@
   "pnpm": {
     "ignoredBuiltDependencies": [
       "@biomejs/biome",
-      "nx",
       "simple-git-hooks"
     ],
     "onlyBuiltDependencies": [
       "@biomejs/biome",
       "core-js",
-      "nx",
       "simple-git-hooks"
     ],
     "packageExtensions": {
