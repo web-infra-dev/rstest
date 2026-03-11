@@ -93,6 +93,7 @@ When validating changes through `examples/` or `e2e/`, remember that package sou
 
 - Don't mix CommonJS and ESM in the same module
 - Don't add heavy dependencies without discussion
+- Don't use namespace imports like `import * as foo from 'foo'` unless the module shape requires it
 - Don't commit without running lint
 - Don't make repo-wide rewrites unless explicitly asked
 
