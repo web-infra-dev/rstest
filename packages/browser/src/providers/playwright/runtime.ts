@@ -14,19 +14,20 @@ export async function launchPlaywrightBrowser({
   const launchOptions = providerOptions.launch as
     | Record<string, unknown>
     | undefined;
+  const launchArgs = Array.isArray(launchOptions?.args)
+    ? launchOptions.args
+    : browserName === 'chromium'
+      ? [
+          '--disable-popup-blocking',
+          '--no-first-run',
+          '--no-default-browser-check',
+        ]
+      : undefined;
 
   const browser = await browserType.launch({
     ...launchOptions,
     headless,
-    // Chromium-specific args (ignored by other browsers)
-    args:
-      browserName === 'chromium'
-        ? [
-            '--disable-popup-blocking',
-            '--no-first-run',
-            '--no-default-browser-check',
-          ]
-        : undefined,
+    args: launchArgs,
   });
 
   const wrappedBrowser: BrowserProviderRuntime['browser'] = {

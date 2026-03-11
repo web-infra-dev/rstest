@@ -95,4 +95,36 @@ describe('launchPlaywrightBrowser', () => {
     expect(defaultTimeoutCalls).toEqual([]);
     expect(defaultNavigationTimeoutCalls).toEqual([]);
   });
+
+  it('prefers user-provided launch args over Chromium defaults', async () => {
+    const launchCalls: Array<Record<string, unknown>> = [];
+
+    chromium.launch = (async (options?: Record<string, unknown>) => {
+      launchCalls.push(options ?? {});
+
+      return {
+        async close() {},
+        async newContext() {
+          throw new Error('unused in this test');
+        },
+      } as never;
+    }) as typeof chromium.launch;
+
+    await launchPlaywrightBrowser({
+      browserName: 'chromium',
+      headless: true,
+      providerOptions: {
+        launch: {
+          args: ['--user-defined-arg'],
+        },
+      },
+    });
+
+    expect(launchCalls).toEqual([
+      {
+        args: ['--user-defined-arg'],
+        headless: true,
+      },
+    ]);
+  });
 });
