@@ -31,8 +31,7 @@
   },
   "dependencies": {
     "@midscene/core": "^1.0.1",
-    "dotenv": "^16.4.5",
-    "sharp": "^0.33.5"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@rstest/tsconfig": "workspace:*",

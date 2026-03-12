@@ -7,13 +7,27 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { AgentOpt } from '@midscene/core';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import {
-  type PlaywrightDispatchContext,
   RSTEST_BROWSER_EXPOSE_ID,
   type RstestBrowserExposedApi,
 } from '@rstest/browser/internal';
+import {
+  createMidsceneAgentRuntime,
+  type MidsceneAgent,
+} from './pluginAgentRuntime';
+import {
+  appendReportPathToError,
+  logMidsceneEnvLoaded,
+  logMidsceneMethodFinish,
+  logMidsceneMethodStart,
+  logMidscenePluginInitialized,
+  logMidsceneWarning,
+} from './pluginLogging';
+import type {
+  MidsceneDispatchContext,
+  PluginMidsceneOptions,
+} from './pluginTypes';
 import {
   AI_RPC_METHODS,
   type AiRpcMethod,
@@ -21,140 +35,7 @@ import {
   MIDSCENE_NAMESPACE,
 } from './protocol';
 
-type MaybePromise<T> = T | Promise<T>;
-
-/**
- * Context object provided to profile/option resolvers.
- * Contains the test file path and Playwright context helpers.
- */
-export type MidsceneDispatchContext = {
-  /** The test file path associated with this dispatch request. */
-  testFile: string;
-  /**
-   * Playwright context helpers for browser automation.
-   * Kept as a Playwright binding for now; can be generalized with a provider
-   * adapter if needed.
-   */
-  playwright: PlaywrightDispatchContext;
-};
-
-/**
- * Host-side Midscene Agent options.
- *
- * These options are applied on the Node.js side when creating `new Agent(...)`.
- * Use this for non-serializable configuration such as `createOpenAIClient`,
- * model settings, cache strategy, and report behavior.
- */
-export type MidsceneAgentOptions = AgentOpt;
-
-export type MidsceneProfileMap = Record<string, MidsceneAgentOptions>;
-
-export type MidsceneProfileResolver =
-  | string
-  | ((ctx: MidsceneDispatchContext) => string | undefined);
-
-/**
- * Plugin options for pluginMidscene
- */
-export interface PluginMidsceneOptions {
-  /**
-   * Path to .env file for Midscene configuration.
-   * Defaults to '.env' in the project root.
-   */
-  envPath?: string;
-
-  /**
-   * Static host-side defaults applied to every Midscene Agent.
-   */
-  agentOptions?: MidsceneAgentOptions;
-
-  /**
-   * Named host-side option sets.
-   *
-   * Use with `resolveProfile` to select a profile per test file/request.
-   */
-  profiles?: MidsceneProfileMap;
-
-  /**
-   * Resolves the active profile name.
-   *
-   * - If omitted and `profiles.default` exists, `default` is used.
-   * - If a profile name is resolved but missing from `profiles`, an error is thrown.
-   */
-  resolveProfile?: MidsceneProfileResolver;
-
-  /**
-   * Dynamic host-side option resolver executed on Agent creation.
-   *
-   * This is useful for deriving options from `testFile`, project context, or env.
-   */
-  createAgentOptions?: (
-    ctx: MidsceneDispatchContext,
-    profileName: string | undefined,
-  ) => MaybePromise<MidsceneAgentOptions | undefined>;
-
-  /**
-   * Custom key for Midscene Agent instance cache.
-   *
-   * Default key: `${testFile}::${profileName ?? 'default'}`
-   */
-  getAgentCacheKey?: (
-    ctx: MidsceneDispatchContext,
-    profileName: string | undefined,
-  ) => string;
-}
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
-const mergeAgentOptions = (
-  ...optionsList: Array<MidsceneAgentOptions | undefined>
-): MidsceneAgentOptions | undefined => {
-  let merged: MidsceneAgentOptions | undefined;
-
-  for (const current of optionsList) {
-    if (!current) {
-      continue;
-    }
-
-    const prev = merged;
-    merged = {
-      ...(prev || {}),
-      ...current,
-    };
-
-    if (isObject(prev?.modelConfig) && isObject(current.modelConfig)) {
-      merged.modelConfig = {
-        ...prev.modelConfig,
-        ...current.modelConfig,
-      };
-    }
-  }
-
-  return merged;
-};
-
-const resolveProfileName = (
-  options: PluginMidsceneOptions,
-  ctx: MidsceneDispatchContext,
-): string | undefined => {
-  if (typeof options.resolveProfile === 'string') {
-    return options.resolveProfile;
-  }
-
-  if (typeof options.resolveProfile === 'function') {
-    return options.resolveProfile(ctx);
-  }
-
-  if (options.profiles?.default) {
-    return 'default';
-  }
-
-  return undefined;
-};
-
 type MidsceneAgentMethod = (...args: unknown[]) => unknown;
-type MidsceneAgent = Record<string, MidsceneAgentMethod | undefined>;
 
 type MidsceneRequestLike = {
   id?: unknown;
@@ -171,13 +52,20 @@ const validateRequestMethod = (method: unknown): method is AiRpcMethod => {
   return isAiRpcMethod(method);
 };
 
+const asAgentMethod = (value: unknown): MidsceneAgentMethod | undefined => {
+  return typeof value === 'function'
+    ? (value as MidsceneAgentMethod)
+    : undefined;
+};
+
 const resolveAgentMethod = (
   agent: MidsceneAgent,
   method: AiRpcMethod,
 ): MidsceneAgentMethod | undefined => {
   const direct = agent[method];
-  if (typeof direct === 'function') {
-    return direct;
+  const directMethod = asAgentMethod(direct);
+  if (directMethod) {
+    return directMethod;
   }
 
   const alias = AGENT_METHOD_ALIASES[method];
@@ -186,7 +74,7 @@ const resolveAgentMethod = (
   }
 
   const fallback = agent[alias];
-  return typeof fallback === 'function' ? fallback : undefined;
+  return asAgentMethod(fallback);
 };
 
 const invokeAgentMethod = async (
@@ -245,14 +133,12 @@ export function pluginMidscene(
           RSTEST_BROWSER_EXPOSE_ID,
         );
         if (!browserApi) {
-          console.warn(
-            '[rstest:midscene] @rstest/browser exposed API not found. ' +
-              'Make sure browser mode is enabled.',
+          logMidsceneWarning(
+            '@rstest/browser exposed API not found. Make sure browser mode is enabled.',
           );
           return;
         }
-        const playwrightContext: PlaywrightDispatchContext =
-          browserApi.playwright;
+        const playwrightContext = browserApi.playwright;
 
         const projectRoot = api.context.rootPath;
         const envPath = options.envPath
@@ -263,106 +149,11 @@ export function pluginMidscene(
           try {
             const dotenv = await import('dotenv');
             dotenv.config({ path: envPath });
-            console.log(`[rstest:midscene] Loaded .env from ${envPath}`);
+            logMidsceneEnvLoaded(envPath);
           } catch {}
         }
 
-        type AgentCacheEntry = {
-          agent: MidsceneAgent;
-          updateBindings: (
-            containerPage: import('playwright').Page,
-            iframeElement: import('playwright').ElementHandle<HTMLIFrameElement>,
-            frame: import('playwright').Frame,
-          ) => void;
-        };
-        const agentCache = new Map<string, AgentCacheEntry>();
-
-        const getProfileOptionsOrThrow = (
-          profileName: string | undefined,
-        ): MidsceneAgentOptions | undefined => {
-          if (!profileName) {
-            return undefined;
-          }
-
-          const profileOptions = options.profiles?.[profileName];
-          if (profileOptions) {
-            return profileOptions;
-          }
-
-          const availableProfiles = Object.keys(options.profiles || {});
-          throw new Error(
-            `[rstest:midscene] Unknown profile "${profileName}". ` +
-              `Available profiles: ${availableProfiles.join(', ') || '(none)'}`,
-          );
-        };
-
-        const getAgentCacheKey = (
-          ctx: MidsceneDispatchContext,
-          profileName: string | undefined,
-        ): string => {
-          return (
-            options.getAgentCacheKey?.(ctx, profileName) ||
-            `${ctx.testFile}::${profileName || 'default'}`
-          );
-        };
-
-        const resolveAgentOptions = async (
-          ctx: MidsceneDispatchContext,
-          profileName: string | undefined,
-        ): Promise<MidsceneAgentOptions | undefined> => {
-          const profileOptions = getProfileOptionsOrThrow(profileName);
-          const dynamicOptions = await options.createAgentOptions?.(
-            ctx,
-            profileName,
-          );
-
-          return mergeAgentOptions(
-            options.agentOptions,
-            profileOptions,
-            dynamicOptions,
-          );
-        };
-
-        const getOrCreateAgent = async (
-          ctx: MidsceneDispatchContext,
-        ): Promise<MidsceneAgent> => {
-          const { testFile, playwright } = ctx;
-          const profileName = resolveProfileName(options, ctx);
-          const agentCacheKey = getAgentCacheKey(ctx, profileName);
-          const containerPage = playwright.getContainerPage();
-          const iframeElement =
-            await playwright.getIframeElementForTestFile(testFile);
-          const frame = await playwright.getFrameForTestFile(testFile);
-
-          const cached = agentCache.get(agentCacheKey);
-          if (cached) {
-            cached.updateBindings(containerPage, iframeElement, frame);
-            return cached.agent;
-          }
-
-          const { HostWebPage } = await import('./hostWebPage.js');
-          const hostWebPage = new HostWebPage(
-            containerPage,
-            iframeElement,
-            frame,
-          );
-
-          await hostWebPage.ensureActionSpace();
-          const { Agent } = await import('@midscene/core');
-
-          const agentOptions = await resolveAgentOptions(ctx, profileName);
-
-          const agent = agentOptions
-            ? new Agent(hostWebPage as any, agentOptions)
-            : new Agent(hostWebPage as any);
-          const midsceneAgent = agent as unknown as MidsceneAgent;
-          agentCache.set(agentCacheKey, {
-            agent: midsceneAgent,
-            updateBindings: hostWebPage.updateBindings.bind(hostWebPage),
-          });
-
-          return midsceneAgent;
-        };
+        const { getOrCreateAgent } = createMidsceneAgentRuntime(options);
 
         // Register dispatch handler for the 'midscene' namespace.
         // The host dispatch router routes all requests with namespace='midscene' here.
@@ -397,11 +188,25 @@ export function pluginMidscene(
               throw new Error(`Unknown Midscene method: ${method}`);
             }
 
-            return invokeAgentMethod(agent, handler, args);
+            const startTime = Date.now();
+            logMidsceneMethodStart(method, args);
+
+            try {
+              const result = await invokeAgentMethod(agent, handler, args);
+              logMidsceneMethodFinish(
+                method,
+                args,
+                Date.now() - startTime,
+                agent,
+              );
+              return result;
+            } catch (error) {
+              throw appendReportPathToError(error, agent.reportFile);
+            }
           },
         );
 
-        console.log('[rstest:midscene] Plugin initialized');
+        logMidscenePluginInitialized();
       });
     },
   };

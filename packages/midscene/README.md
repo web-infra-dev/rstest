@@ -185,6 +185,30 @@ For more details, see [Midscene cache documentation](https://midscenejs.com/cach
 - Each API call depends on the exposed host plugin; `pluginMidscene` must be enabled and browser mode active.
 - Default RPC timeout is `120000ms` (see `AI_RPC_TIMEOUT_MS` in protocol implementation).
 
+## Enable Midscene debug logs
+
+Midscene uses the `debug` package internally. Since `pluginMidscene()` runs in the host Node.js process, you can enable Midscene's native debug logs by setting `DEBUG` before running rstest.
+
+### Recommended debug namespaces
+
+```bash
+# Model latency and token usage
+DEBUG=midscene:ai:profile:stats pnpm rstest
+
+# AI request and response details
+DEBUG=midscene:ai:call pnpm rstest
+
+# Everything from Midscene (very verbose)
+DEBUG=midscene:* pnpm rstest
+```
+
+### Notes
+
+- Prefer targeted namespaces like `midscene:ai:profile:stats` or `midscene:ai:call` for local debugging.
+- `DEBUG=midscene:*` is useful for deep investigation but can be very noisy.
+- Midscene also writes debug logs to `./midscene_run/log/` even when `DEBUG` is not set.
+- Midscene debug output comes from its own logger, so it may appear alongside rstest's `[midscene] start/done` progress logs.
+
 ## Browser-side API
 
 Methods below are available on `agent`:
