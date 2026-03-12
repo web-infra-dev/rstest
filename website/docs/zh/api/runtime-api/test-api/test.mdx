@@ -66,6 +66,32 @@ test.each([
 });
 ```
 
+你也可以使用标签模板字面量的表格语法，使参数化测试更具可读性：
+
+```ts
+test.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  expect(a + b).toBe(expected);
+});
+```
+
+第一行定义参数名（列标题），后续每行通过模板表达式（`${...}`）提供值，列之间用 `|` 分隔。
+
+由于表格中的值默认是无类型的，你可以通过显式泛型参数来获得类型支持：
+
+```ts
+test.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  expect(a + b).toBe(expected);
+});
+```
+
 你可以使用 [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) 来格式化测试名称中的参数。
 
 - `%s`: String
@@ -133,6 +159,30 @@ test.for([
   { a: 2, b: 2 },
 ])('adds $a + $b', ({ a, b }, { expect }) => {
   expect(a + b).matchSnapshot();
+});
+```
+
+`test.for` 同样支持标签模板字面量的表格语法：
+
+```ts
+test.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }, { expect }) => {
+  expect(a + b).toBe(expected);
+});
+```
+
+你可以通过显式泛型参数来获得类型安全：
+
+```ts
+test.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }, { expect }) => {
+  expect(a + b).toBe(expected);
 });
 ```
 

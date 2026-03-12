@@ -153,6 +153,41 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
   return result;
 }
 
+export function isTemplateStringsArray(
+  value: unknown,
+): value is TemplateStringsArray {
+  return Array.isArray(value) && 'raw' in value && Array.isArray(value.raw);
+}
+
+export function parseTemplateTable(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): Record<string, unknown>[] {
+  const raw = strings.join('\0');
+  const lines = raw.split('\n').filter((line) => line.trim());
+
+  if (lines.length === 0) return [];
+
+  const headers = lines[0]!
+    .split('|')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+  if (headers.length === 0) return [];
+
+  const result: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < expressions.length; i += headers.length) {
+    const row: Record<string, unknown> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]!] = expressions[i + j];
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
 export class TestRegisterError extends Error {}
 
 export class RstestError extends Error {

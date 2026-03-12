@@ -82,6 +82,34 @@ describe.each([
 });
 ```
 
+You can also use a tagged template literal table syntax:
+
+```ts
+describe.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+You can provide an explicit generic type parameter for type safety:
+
+```ts
+describe.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
 ## describe.for
 
 - **Type:** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
@@ -95,6 +123,34 @@ describe.for([
 ])('math $0 + $1', ([a, b]) => {
   test('add', () => {
     // ...
+  });
+});
+```
+
+`describe.for` also supports the tagged template literal table syntax:
+
+```ts
+describe.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+You can provide an explicit generic type parameter for type safety:
+
+```ts
+describe.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
   });
 });
 ```
