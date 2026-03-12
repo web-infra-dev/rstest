@@ -41,7 +41,7 @@ If any step fails, fix the issue and re-run. If a step cannot run locally (e.g. 
 
 - **Use session context first.** Extract the issue number from the conversation history — do NOT run a blind `gh issue list` search.
 - If the session context contains an explicit issue number, use it directly (e.g., `Fixes #123`).
-- If no issue exists, write a brief motivation in the "Related Links" section instead.
+- Include `Related Links` only when there is a useful issue, documentation page, design discussion, or other relevant reference; otherwise omit the section entirely.
 - **Fallback only**: If genuinely uncertain and the user asks to find one, use `gh issue list -S "<keywords>" --limit 5` with precise keywords.
 
 ### Title
@@ -58,9 +58,12 @@ Use the `.github/PULL_REQUEST_TEMPLATE.md` structure. Use HEREDOC (`gh pr create
 Follow these rules with zero exceptions:
 
 1. **Structure**: Use exactly these three subsections (omit User Impact only if purely internal):
-   - **Background:** <1–2 sentences: what problem exists and why it matters>
-   - **Implementation:** <1–3 sentences or a short bullet list: what was changed and how>
-   - **User Impact:** <1 sentence: what changes for the end user, or "None — internal refactor">
+   - `### Background` <1–2 sentences: what problem exists and why it matters>
+   - `### Implementation` <1–3 bullets or a short numbered list: what was changed and how>
+   - `### User Impact` <1 sentence: what changes for the end user, or "None — internal refactor">
+   - Render each subsection as a Markdown level-3 heading with no trailing colon.
+   - Put a blank line between each subsection so the Summary reads as three clearly separated blocks.
+   - When listing multiple implementation changes, use bullets or numbering instead of packing clauses with semicolons.
 
 2. **Brevity**: The entire Summary MUST fit within 15 lines (excluding diagrams). Every sentence must carry information that a reviewer cannot get from the diff itself. Do NOT:
    - Repeat the PR title or list every file changed.
