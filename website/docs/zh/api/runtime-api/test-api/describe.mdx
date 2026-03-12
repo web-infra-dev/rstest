@@ -82,6 +82,34 @@ describe.each([
 });
 ```
 
+你也可以使用标签模板字面量的表格语法：
+
+```ts
+describe.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+你可以通过显式泛型参数来获得类型支持：
+
+```ts
+describe.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
 ## describe.for
 
 - **类型：** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
@@ -95,6 +123,34 @@ describe.for([
 ])('math $0 + $1', ([a, b]) => {
   test('add', () => {
     // ...
+  });
+});
+```
+
+`describe.for` 同样支持标签模板字面量的表格语法：
+
+```ts
+describe.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+你可以通过显式泛型参数来获得类型支持：
+
+```ts
+describe.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
   });
 });
 ```

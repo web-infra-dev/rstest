@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from '@rstest/core';
 const logs: string[] = [];
 
 afterAll(() => {
-  expect(logs.length).toBe(6);
+  expect(logs.length).toBe(8);
 });
 
 describe.for([
@@ -24,6 +24,18 @@ describe.for([
 ])('add two numbers correctly', ([a, b, expected]) => {
   it(`should return ${expected}`, () => {
     expect(a! + b!).toBe(expected);
+    logs.push('executed');
+  });
+});
+
+// Template table syntax
+describe.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('template for $a + $b = $expected', ({ a, b, expected }) => {
+  it(`should return ${expected}`, () => {
+    expect(a + b).toBe(expected);
     logs.push('executed');
   });
 });
