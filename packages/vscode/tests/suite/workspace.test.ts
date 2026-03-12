@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { toLabelTree, waitFor } from './helpers';
 
 suite('Workspace discover suite', () => {

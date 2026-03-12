@@ -1,7 +1,7 @@
-import * as assert from 'node:assert';
+import assert from 'node:assert';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { delay, getTestItemByLabels, waitFor } from './helpers';
 
 suite('Test Progress Reporting', () => {
