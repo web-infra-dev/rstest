@@ -66,6 +66,13 @@ export async function generateCoverage(
       }
     }
 
+    if (!coverage.allowExternal) {
+      finalCoverageMap.filter((filePath) => {
+        const normalizedFile = normalize(filePath);
+        return normalizedFile.startsWith(normalize(rootPath));
+      });
+    }
+
     if (coverage.include?.length) {
       const coveredFiles = finalCoverageMap.files().map(normalize);
 

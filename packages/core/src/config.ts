@@ -209,6 +209,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     reportsDirectory: './coverage',
     clean: true,
     reportOnFailure: false,
+    allowExternal: false,
   },
 });
 
