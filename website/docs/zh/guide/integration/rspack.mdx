@@ -1,0 +1,218 @@
+# Rspack
+
+本指南介绍了如何将 Rstest 与 [Rspack](https://rspack.dev) 集成，以便在你的 Rspack 项目中进行无缝测试。
+
+## 快速开始
+
+要将 Rstest 添加到现有 Rspack 项目中，请遵循[快速入门](/guide/start/quick-start)来安装和设置测试脚本。
+
+## 复用 Rspack 配置
+
+[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rspack 配置文件中继承配置。这可以确保你的测试环境与构建配置相匹配，而无需重复配置。
+
+### 安装适配器
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rspack -D" />
+
+### 继承你的配置
+
+使用适配器中的 `withRspackConfig` 函数，你可以从 Rspack 配置文件中继承 Rstest 配置。
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRspackConfig } from '@rstest/adapter-rspack';
+
+export default defineConfig({
+  extends: withRspackConfig(),
+  // 额外的 rstest 特定配置
+});
+```
+
+这将自动：
+
+- 加载你的 `rspack.config.ts` 文件
+- 将兼容的 Rspack 选项映射到 Rstest 配置
+- 与你提供的任何其他 Rstest 配置合并
+
+默认情况下，适配器使用 `process.cwd()` 来解析 Rspack 配置。如果你的配置文件在其他地方，你可以使用 `cwd` 选项。更多详情请参阅 [API](#api) 部分。
+
+:::warning
+由于 Rstest 内部使用 Rsbuild 作为打包工具，一些 Rstest 的内置行为可能与 Rspack 的默认行为不同。例如，Rstest 有自己的 CSS 处理流程。为了避免冲突，此适配器会自动禁用 Rstest（Rsbuild） 内置的 CSS 插件，使 Rspack 的 CSS 配置生效。这意味着使用此适配器时，一些 Rsbuild 特有的 CSS 功能和配置（如 `output.cssModules` 配置）将不可用。
+:::
+
+## API
+
+### `withRspackConfig(options)`
+
+返回一个配置函数，该函数加载 Rspack 配置并将其转换为 Rstest 配置。
+
+#### `cwd`
+
+- **类型:** `string`
+- **默认值:** `process.cwd()`
+
+用于解析 Rspack 配置文件的工作目录。
+
+当你的 Rspack 配置文件位于不同的目录，或者你在 monorepo 中运行测试（此时 `process.cwd()` 不是你的配置目录）时，你可以指定 `cwd` 选项从不同的目录解析 Rspack 配置文件。
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    cwd: './packages/my-app',
+  }),
+});
+```
+
+#### `configPath`
+
+- **类型:** `string`
+- **默认值:** `'./rspack.config.ts'`
+
+Rspack 配置文件的路径。
+
+#### `configName`
+
+- **类型:** `string`
+- **默认值:** `undefined`
+
+当 Rspack 配置文件使用[多配置](https://rspack.dev/config/index#configuration-type)时，选择指定名称的配置。设置为字符串以使用具有匹配 `name` 字段的配置。
+
+如果你的 Rspack 配置导出了一个配置数组：
+
+```ts
+// rspack.config.ts
+export default [
+  {
+    name: 'client',
+    target: 'web',
+    entry: './src/client.ts',
+    // ...
+  },
+  {
+    name: 'server',
+    target: 'node',
+    entry: './src/server.ts',
+    // ...
+  },
+];
+```
+
+你可以在 Rstest 配置中选择特定的配置：
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    configName: 'client',
+  }),
+});
+```
+
+当你需要使用不同的配置独立测试应用程序的多个部分时，你可以定义多个 Rstest 项目：
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRspackConfig({ configName: 'server' }),
+      include: ['tests/server/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRspackConfig({ configName: 'client' }),
+      include: ['tests/client/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `env`
+
+- **类型:** `Record<string, unknown> | string[]`
+- **默认值:** `undefined`
+
+传递给 Rspack 配置函数的环境变量。当 `rspack.config.ts` 导出一个函数时，对应其 `env` 参数：
+
+```ts
+// rspack.config.ts
+export default (env) => {
+  console.log(env); // 接收来自适配器的值
+  return {
+    /* ... */
+  };
+};
+```
+
+#### `nodeEnv`
+
+- **类型:** `string`
+- **默认值:** `undefined`
+
+加载 Rspack 配置时使用的 `NODE_ENV` 值。
+
+#### `modifyRspackConfig`
+
+- **类型:** `(config: RspackOptions) => RspackOptions`
+- **默认值:** `undefined`
+
+在将 Rspack 配置转换为 Rstest 配置之前对其进行修改：
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    modifyRspackConfig: (rspackConfig) => {
+      delete rspackConfig.resolve?.alias;
+      return rspackConfig;
+    },
+  }),
+});
+```
+
+## 配置映射
+
+适配器会自动将这些 Rspack 选项映射到 Rstest：
+
+| Rspack 选项        | Rstest 等效项         | 说明                                                              |
+| ------------------ | --------------------- | ----------------------------------------------------------------- |
+| `name`             | `name`                | 配置标识符                                                        |
+| `resolve`          | `resolve`             | 模块解析（别名、扩展名等）                                        |
+| `resolve.tsConfig` | `source.tsconfigPath` | TypeScript 配置文件路径                                           |
+| `output.module`    | `output.module`       | 输出模块类型                                                      |
+| `target`           | `testEnvironment`     | `'node'`/`'async-node'` 映射为 `'node'`，其他映射为 `'happy-dom'` |
+| `module`           | `tools.rspack`        | 模块规则（loader）通过 `tools.rspack` 合并                        |
+| `plugins`          | `tools.rspack`        | 插件通过 `tools.rspack` 合并（`HtmlRspackPlugin` 会被排除）       |
+| `experiments`      | `tools.rspack`        | 实验性配置通过 `tools.rspack` 合并                                |
+| `optimization`     | `tools.rspack`        | 优化配置通过 `tools.rspack` 合并                                  |
+| `devtool`          | `tools.rspack`        | Source map 配置通过 `tools.rspack` 应用                           |
+| `watchOptions`     | `tools.rspack`        | 监听选项通过 `tools.rspack` 合并                                  |
+| `snapshot`         | `tools.rspack`        | 快照配置通过 `tools.rspack` 应用                                  |
+| `externalsPresets` | `tools.rspack`        | 外部模块预设通过 `tools.rspack` 合并                              |
+| `cache`            | `tools.rspack`        | 缓存配置通过 `tools.rspack` 应用                                  |
+
+以下 Rspack 选项**不会**被映射，将被忽略：
+
+| Rspack 选项       | 原因                         |
+| ----------------- | ---------------------------- |
+| `entry`           | Rstest 管理自己的入口        |
+| `output.path`     | Rstest 控制输出目录          |
+| `devServer`       | 不适用于测试                 |
+| `lazyCompilation` | 自动移除（仅用于开发服务器） |
+
+## 调试配置
+
+要查看适配器返回的解析配置，可以将其包装并打印结果：
+
+```ts
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRspackConfig()(user);
+    console.log('继承的配置:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## 相关文档
+
+- [Rspack 配置概览](https://rspack.dev/config)
+- [Rstest 配置概览](/config/)

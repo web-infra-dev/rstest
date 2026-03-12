@@ -1,0 +1,30 @@
+{
+  "name": "@examples/react-rspack-browser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rspack build",
+    "dev": "rspack dev",
+    "preview": "rspack preview",
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@rstest/adapter-rspack": "workspace:*",
+    "@rstest/browser": "workspace:*",
+    "@rstest/browser-react": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@rspack/cli": "2.0.0-beta.6",
+    "@rspack/core": "2.0.0-beta.6",
+    "@rspack/dev-server": "2.0.0-beta.5",
+    "@rspack/plugin-react-refresh": "^1.6.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "playwright": "^1.58.2",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,218 @@
+# Rspack
+
+This guide covers how to integrate Rstest with [Rspack](https://rspack.dev) for seamless testing in your Rspack projects.
+
+## Quick start
+
+To add Rstest to an existing Rspack project, follow the [Quick Start](/guide/start/quick-start) to install and set up test scripts.
+
+## Reuse Rspack config
+
+[@rstest/adapter-rspack](https://www.npmjs.com/package/@rstest/adapter-rspack) is an official adapter that allows Rstest to automatically inherit configuration from your existing Rspack config file. This ensures your test environment matches your build configuration without duplication.
+
+### Install adapter
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @rstest/adapter-rspack -D" />
+
+### Extend your config
+
+Using the `withRspackConfig` function from the adapter, you can extend your Rstest configuration from the Rspack config file.
+
+```typescript
+import { defineConfig } from '@rstest/core';
+import { withRspackConfig } from '@rstest/adapter-rspack';
+
+export default defineConfig({
+  extends: withRspackConfig(),
+  // Additional rstest-specific configuration
+});
+```
+
+This will automatically:
+
+- Load your `rspack.config.ts` file
+- Map compatible Rspack options to Rstest configuration
+- Merge with any additional Rstest config you provide
+
+By default, the adapter uses `process.cwd()` to resolve the Rspack config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
+
+:::warning
+Since Rstest uses Rsbuild internally as its bundler, some Rstest built-in behaviors may differ from Rspack's defaults. For example, Rstest has its own CSS processing pipeline. To avoid conflicts, this adapter automatically disables Rstest (Rsbuild) built-in CSS plugins so that Rspack's CSS configuration takes effect. This means that some Rsbuild-specific CSS features and configurations (e.g., `output.cssModules` configuration) will not be available when using this adapter.
+:::
+
+## API
+
+### `withRspackConfig(options)`
+
+Returns a configuration function that loads Rspack config and converts it to Rstest configuration.
+
+#### `cwd`
+
+- **Type:** `string`
+- **Default:** `process.cwd()`
+
+The working directory to resolve the Rspack config file.
+
+When your Rspack config is in a different directory or you are running tests in a monorepo (where your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rspack config file from a different directory.
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    cwd: './packages/my-app',
+  }),
+});
+```
+
+#### `configPath`
+
+- **Type:** `string`
+- **Default:** `'./rspack.config.ts'`
+
+Path to rspack config file.
+
+#### `configName`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Select a named configuration when using [multi-config](https://rspack.dev/config/index#configuration-type) in your Rspack config file. Set to a string to use the config with a matching `name` field.
+
+If your Rspack config exports an array of configurations:
+
+```ts
+// rspack.config.ts
+export default [
+  {
+    name: 'client',
+    target: 'web',
+    entry: './src/client.ts',
+    // ...
+  },
+  {
+    name: 'server',
+    target: 'node',
+    entry: './src/server.ts',
+    // ...
+  },
+];
+```
+
+You can select a specific configuration in your Rstest config:
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    configName: 'client',
+  }),
+});
+```
+
+When you need to test multiple parts of your application with different configurations independently, you can define multiple Rstest projects:
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRspackConfig({ configName: 'server' }),
+      include: ['tests/server/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRspackConfig({ configName: 'client' }),
+      include: ['tests/client/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```
+
+#### `env`
+
+- **Type:** `Record<string, unknown> | string[]`
+- **Default:** `undefined`
+
+Environment values passed to the Rspack config function. This corresponds to the `env` parameter in `rspack.config.ts` when exporting a function:
+
+```ts
+// rspack.config.ts
+export default (env) => {
+  console.log(env); // receives the values from adapter
+  return {
+    /* ... */
+  };
+};
+```
+
+#### `nodeEnv`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+The `NODE_ENV` value used when loading the Rspack config.
+
+#### `modifyRspackConfig`
+
+- **Type:** `(config: RspackOptions) => RspackOptions`
+- **Default:** `undefined`
+
+Modify the Rspack config before it gets converted to Rstest config:
+
+```ts
+export default defineConfig({
+  extends: withRspackConfig({
+    modifyRspackConfig: (rspackConfig) => {
+      delete rspackConfig.resolve?.alias;
+      return rspackConfig;
+    },
+  }),
+});
+```
+
+## Configuration mapping
+
+The adapter automatically maps these Rspack options to Rstest:
+
+| Rspack option      | Rstest equivalent     | Notes                                                                  |
+| ------------------ | --------------------- | ---------------------------------------------------------------------- |
+| `name`             | `name`                | Configuration identifier                                               |
+| `resolve`          | `resolve`             | Module resolution (aliases, extensions, etc.)                          |
+| `resolve.tsConfig` | `source.tsconfigPath` | TypeScript config path                                                 |
+| `output.module`    | `output.module`       | Output module type                                                     |
+| `target`           | `testEnvironment`     | `'node'`/`'async-node'` maps to `'node'`, others map to `'happy-dom'`  |
+| `module`           | `tools.rspack`        | Module rules (loaders) are merged via `tools.rspack`                   |
+| `plugins`          | `tools.rspack`        | Plugins are merged via `tools.rspack` (`HtmlRspackPlugin` is excluded) |
+| `experiments`      | `tools.rspack`        | Experiments config merged via `tools.rspack`                           |
+| `optimization`     | `tools.rspack`        | Optimization config merged via `tools.rspack`                          |
+| `devtool`          | `tools.rspack`        | Source map config applied via `tools.rspack`                           |
+| `watchOptions`     | `tools.rspack`        | Watch options merged via `tools.rspack`                                |
+| `snapshot`         | `tools.rspack`        | Snapshot config applied via `tools.rspack`                             |
+| `externalsPresets` | `tools.rspack`        | Externals presets merged via `tools.rspack`                            |
+| `cache`            | `tools.rspack`        | Cache config applied via `tools.rspack`                                |
+
+The following Rspack options are **not** mapped and will be ignored:
+
+| Rspack option     | Reason                                       |
+| ----------------- | -------------------------------------------- |
+| `entry`           | Rstest manages its own entry points          |
+| `output.path`     | Rstest controls the output directory         |
+| `devServer`       | Not applicable for testing                   |
+| `lazyCompilation` | Automatically stripped (only for dev server) |
+
+## Debug config
+
+To see the resolved configuration returned by the adapter, wrap it and log the result:
+
+```ts
+export default defineConfig({
+  extends: async (user) => {
+    const config = await withRspackConfig()(user);
+    console.log('Extended config:', JSON.stringify(config, null, 2));
+    return config;
+  },
+});
+```
+
+## Related documentation
+
+- [Rspack configuration overview](https://rspack.dev/config)
+- [Rstest configuration overview](/config/)
