@@ -1,5 +1,5 @@
 import { Splitter, type SplitterProps } from 'antd';
-import * as React from 'react';
+import React from 'react';
 
 type ResizablePanelGroupProps = Omit<SplitterProps, 'children'> & {
   children: React.ReactNode;

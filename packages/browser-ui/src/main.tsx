@@ -4,13 +4,7 @@ import {
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
 import { PreviewHeader } from './components/PreviewHeader';
@@ -74,6 +68,18 @@ const findRunnerFrameByTestPath = (
   ).find((frame) => frame.dataset.testFile === testPath);
 };
 
+const findRunnerFrameBySource = (
+  source: MessageEventSource | null,
+): HTMLIFrameElement | undefined => {
+  if (!source) {
+    return undefined;
+  }
+
+  return Array.from(
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
+  ).find((frame) => frame.contentWindow === source);
+};
+
 // ============================================================================
 // App Component
 // ============================================================================
@@ -95,15 +101,6 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
-  const pendingReloadsRef = useRef<
-    Map<
-      string,
-      {
-        resolve: () => void;
-        reject: (error: Error) => void;
-      }
-    >
-  >(new Map());
   const [runIdByTestFile, setRunIdByTestFile] = useState<
     Record<string, string>
   >({});
@@ -214,54 +211,43 @@ const BrowserRunner: React.FC<{
         testNamePattern,
       );
       setActive(testFile);
-      return new Promise<void>((resolve, reject) => {
-        const previousPending = pendingReloadsRef.current.get(testFile);
-        if (previousPending) {
-          previousPending.reject(
-            new Error(
-              `Reload for "${testFile}" was superseded by a newer request.`,
-            ),
-          );
-        }
-        pendingReloadsRef.current.set(testFile, { resolve, reject });
+      const iframe = document.querySelector<HTMLIFrameElement>(
+        `iframe[data-test-file="${testFile}"]`,
+      );
+      logger.debug('[Container] Found iframe:', iframe);
+      if (!iframe) {
+        throw new Error(
+          `Cannot reload test file "${testFile}": iframe not found`,
+        );
+      }
 
-        const iframe = document.querySelector<HTMLIFrameElement>(
-          `iframe[data-test-file="${testFile}"]`,
-        );
-        logger.debug('[Container] Found iframe:', iframe);
-        if (!iframe) {
-          pendingReloadsRef.current.delete(testFile);
-          reject(
-            new Error(
-              `Cannot reload test file "${testFile}": iframe not found`,
-            ),
-          );
-          return;
+      const nextRunId = createRunId();
+      setRunIdByTestFile((prev) => ({
+        ...prev,
+        [testFile]: nextRunId,
+      }));
+      setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
+      setCaseMap((prev) => {
+        const prevFile = prev[testFile] ?? {};
+        const updatedCases: Record<string, CaseInfo> = {};
+        for (const [key, caseInfo] of Object.entries(prevFile)) {
+          updatedCases[key] = { ...caseInfo, status: 'running' };
         }
-        const nextRunId = createRunId();
-        setRunIdByTestFile((prev) => ({
-          ...prev,
-          [testFile]: nextRunId,
-        }));
-        setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
-        setCaseMap((prev) => {
-          const prevFile = prev[testFile] ?? {};
-          const updatedCases: Record<string, CaseInfo> = {};
-          for (const [key, caseInfo] of Object.entries(prevFile)) {
-            updatedCases[key] = { ...caseInfo, status: 'running' };
-          }
-          return { ...prev, [testFile]: updatedCases };
-        });
-        const newSrc = createRunnerUrl(
-          testFile,
-          options.runnerUrl,
-          testNamePattern,
-          false,
-          nextRunId,
-        );
-        logger.debug('[Container] Setting iframe.src to:', newSrc);
-        iframe.src = newSrc;
+        return { ...prev, [testFile]: updatedCases };
       });
+      const newSrc = createRunnerUrl(
+        testFile,
+        options.runnerUrl,
+        testNamePattern,
+        false,
+        nextRunId,
+      );
+      logger.debug('[Container] Setting iframe.src to:', newSrc);
+      iframe.src = newSrc;
+
+      return {
+        runId: nextRunId,
+      };
     },
     [options.runnerUrl],
   );
@@ -271,21 +257,6 @@ const BrowserRunner: React.FC<{
     options?.wsPort,
     handleReloadTestFile,
   );
-
-  useEffect(() => {
-    return () => {
-      if (pendingReloadsRef.current.size === 0) {
-        return;
-      }
-      const unmountError = new Error(
-        'Browser runner unmounted before reload completed',
-      );
-      for (const pending of pendingReloadsRef.current.values()) {
-        pending.reject(unmountError);
-      }
-      pendingReloadsRef.current.clear();
-    };
-  }, []);
 
   // Consolidated effect for handling testFiles changes
   // Handles statusMap, caseMap, openFiles initialization and cleanup
@@ -458,6 +429,11 @@ const BrowserRunner: React.FC<{
         const payload = message.payload as BrowserClientFileResult;
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
+          const frame = findRunnerFrameBySource(event.source);
+          const fallbackFrame = frame ?? findRunnerFrameByTestPath(testPath);
+          const runId =
+            (fallbackFrame ? readRunIdFromFrame(fallbackFrame) : undefined) ??
+            runIdByTestFile[testPath];
           const passed = payload.status === 'pass' || payload.status === 'skip';
           setStatusMap((prev) => ({
             ...prev,
@@ -483,26 +459,15 @@ const BrowserRunner: React.FC<{
             }
             return { ...prev, [testPath]: newCases };
           });
-          const pending = pendingReloadsRef.current.get(testPath);
-          if (pending) {
-            pendingReloadsRef.current.delete(testPath);
-            pending.resolve();
-          }
-          rpc?.onTestFileComplete(payload);
+          rpc?.onTestFileComplete({
+            ...payload,
+            runId,
+          });
         }
       } else if (message.type === 'fatal') {
         const payload = message.payload as FatalPayload;
         if (active) {
           setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
-        }
-        if (pendingReloadsRef.current.size > 0) {
-          const fatalError = new Error(
-            payload.message || 'Browser runner fatal',
-          );
-          for (const pending of pendingReloadsRef.current.values()) {
-            pending.reject(fatalError);
-          }
-          pendingReloadsRef.current.clear();
         }
         rpc?.onFatal(payload);
       } else if (message.type === 'log') {
@@ -544,7 +509,7 @@ const BrowserRunner: React.FC<{
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase, mapCaseStatus, rpc]);
+  }, [active, upsertCase, mapCaseStatus, rpc, runIdByTestFile]);
 
   // Computed values - case level statistics
   const caseCounts = useMemo(() => {

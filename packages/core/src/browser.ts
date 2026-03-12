@@ -5,6 +5,7 @@
  */
 
 // Re-export @rsbuild/core for @rstest/browser to avoid duplicate dependency
+// biome-ignore lint/performance/noNamespaceImport: this package re-exports the module namespace as a compatibility surface.
 import * as rsbuild from '@rsbuild/core';
 export { rsbuild };
 

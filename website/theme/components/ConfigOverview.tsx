@@ -62,6 +62,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'browser.browser',
       'browser.headless',
       'browser.port',
+      'browser.providerOptions',
     ],
   },
   {

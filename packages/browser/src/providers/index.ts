@@ -6,6 +6,14 @@ import { playwrightProviderImplementation } from './playwright';
  *
  * When adding a new built-in provider, implement `BrowserProviderImplementation`
  * and register it in `providerImplementations` below.
+ *
+ * Provider-agnostic policy:
+ * - keep shared contracts and behavior provider-neutral
+ * - `browser.providerOptions` stays opaque at the framework boundary
+ * - do not export provider-owned config types from `@rstest/browser`
+ * - do not reference optional peer provider types from public declarations
+ * - keep provider-specific behavior and config decoding inside provider implementations
+ * - prefer direct passthrough to provider APIs over provider-specific translation
  */
 export type BrowserProvider = 'playwright';
 
@@ -50,6 +58,7 @@ export type BrowserProviderBrowser = {
   close: () => Promise<void>;
   newContext: (options: {
     viewport: { width: number; height: number } | null;
+    providerOptions?: Record<string, unknown>;
   }) => Promise<BrowserProviderContext>;
 };
 
@@ -62,6 +71,7 @@ export type BrowserProviderRuntime = {
 export type LaunchBrowserInput = {
   browserName: 'chromium' | 'firefox' | 'webkit';
   headless: boolean | undefined;
+  providerOptions: Record<string, unknown>;
 };
 
 /** Input contract for provider-side browser RPC dispatch. */

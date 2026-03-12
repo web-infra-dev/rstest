@@ -64,7 +64,8 @@
         "noConfusingVoidType": "off"
       },
       "performance": {
-        "noDelete": "off"
+        "noDelete": "off",
+        "noNamespaceImport": "error"
       },
       "correctness": {
         "useHookAtTopLevel": "off"
@@ -88,6 +89,16 @@
         "rules": {
           "style": {
             "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["e2e/mock/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noNamespaceImport": "off"
           }
         }
       }

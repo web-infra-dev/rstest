@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { TestInfo } from '@rstest/core';
 import picomatch from 'picomatch';
 import { glob } from 'tinyglobby';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { logger } from './logger';
 import { RstestApi } from './master';
