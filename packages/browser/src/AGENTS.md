@@ -42,7 +42,7 @@ flowchart LR
   RPC --> CH
   CH --> UR
 
-  HC -."headless bridge:\nexposeFunction(\_\_rstest_dispatch\_\_, \_\_rstest_dispatch_rpc\_\_)".-> Runner
+  HC -."headless bridge:\nexposeFunction(__rstest_dispatch__, __rstest_dispatch_rpc__)".-> Runner
 ```
 
 ## Headed transport path

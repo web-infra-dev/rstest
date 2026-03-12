@@ -82,10 +82,10 @@ pnpm e2e
 
 ### Browser e2e tests
 
-Browser-mode e2e fixtures set `headless: true` in their `rstest.config.ts` so no browser windows pop up locally. A few headed smoke tests (tests that explicitly need a visible browser, e.g. viewport assertions) are skipped locally by default and only run on CI. To opt in to headed smoke tests locally:
+Browser-mode e2e fixtures set `headless: true` in their `rstest.config.ts` so no browser windows pop up locally. A few headed smoke tests (tests that explicitly need a visible browser, e.g. viewport assertions) are skipped locally by default and only run on CI. Run them from the `e2e/` directory, for example:
 
 ```bash
-RSTEST_E2E_RUN_HEADED=true pnpm rstest browser-mode/basic.test.ts
+cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts
 ```
 
 ## Releasing
