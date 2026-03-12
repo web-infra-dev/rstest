@@ -6,7 +6,7 @@ This document is architecture-only and focuses on the browser runner runtime in 
 
 ```mermaid
 flowchart TD
-  A["waitForConfig()"] --> B["read \_\_RSTEST_BROWSER_OPTIONS\_\_ + URL overrides"]
+  A["waitForConfig()"] --> B["read __RSTEST_BROWSER_OPTIONS__ + URL overrides"]
   B --> R["send ready"]
   R --> C["setRealTimers()"]
   C --> D["preloadRunnerSourceMap()"]
@@ -23,7 +23,7 @@ flowchart TD
   L --> N["send file-complete per file"]
   N --> O["send complete after all files"]
 
-  H --> M["window.\_\_RSTEST_DONE\_\_ = true"]
+  H --> M["window.__RSTEST_DONE__ = true"]
   O --> M
 ```
 
@@ -32,19 +32,19 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph IframePath["Iframe path (headed)"]
-    S1["send()"] --> P1["parent.postMessage(\_\_rstest_dispatch\_\_)"]
+    S1["send()"] --> P1["parent.postMessage(__rstest_dispatch__)"]
     R1["dispatchRunnerLifecycle()"] --> P2["postMessage dispatch-rpc-request"]
-    SN1["snapshot.sendRpcRequest()"] --> P3["postMessage dispatch-rpc-request + wait \_\_rstest_dispatch_response\_\_"]
+    SN1["snapshot.sendRpcRequest()"] --> P3["postMessage dispatch-rpc-request + wait __rstest_dispatch_response__"]
   end
 
   subgraph TopLevelRunPath["Top-level page path (headless run)"]
-    S2["send()"] --> D1["window.\_\_rstest_dispatch\_\_"]
-    R2["dispatchRunnerLifecycle()"] --> D2["window.\_\_rstest_dispatch_rpc\_\_"]
-    SN2["snapshot.sendRpcRequest()"] --> D3["window.\_\_rstest_dispatch_rpc\_\_"]
+    S2["send()"] --> D1["window.__rstest_dispatch__"]
+    R2["dispatchRunnerLifecycle()"] --> D2["window.__rstest_dispatch_rpc__"]
+    SN2["snapshot.sendRpcRequest()"] --> D3["window.__rstest_dispatch_rpc__"]
   end
 
   subgraph TopLevelCollectPath["Top-level page path (list collect)"]
-    S3["send()"] --> C1["window.\_\_rstest_dispatch\_\_"]
+    S3["send()"] --> C1["window.__rstest_dispatch__"]
   end
 ```
 

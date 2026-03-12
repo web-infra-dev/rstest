@@ -34,20 +34,9 @@ pnpm --filter @rstest/coverage-istanbul dev      # Watch mode
 
 - Don't modify coverage data format; follow istanbul standards
 - Don't add report formats without discussing use case
-- Don't add heavy dependencies
 
 ## Key files
 
 - `src/provider.ts` — Main provider implementing CoverageProvider interface
 - `src/plugin.ts` — Rsbuild plugin that instruments source code
 - `src/index.ts` — Package entry point
-
-## Safety
-
-Allowed: read files, typecheck, build
-
-Ask first: add dependencies, modify instrumentation logic
-
-## When stuck
-
-Ask a clarifying question or propose a plan before making large changes.

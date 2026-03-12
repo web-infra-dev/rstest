@@ -33,7 +33,7 @@ flowchart LR
   H1 -->|birpc callbacks| U1
   U1 -->|birpc calls| H1
 
-  R1 -->|postMessage \_\_rstest_dispatch\_\_| U3
+  R1 -->|postMessage __rstest_dispatch__| U3
   U3 -->|onTest* callbacks| U1
 
   R2 -->|postMessage dispatch rpc request| U2
@@ -47,8 +47,8 @@ flowchart LR
   U1 -->|return BrowserDispatchResponse| U2
   U2 -->|postMessage dispatch response| R3
 
-  H1 -->|headless bridge \_\_rstest_dispatch\_\_| R1
-  H1 -->|headless bridge \_\_rstest_dispatch_rpc\_\_| R2
+  H1 -->|headless bridge __rstest_dispatch__| R1
+  H1 -->|headless bridge __rstest_dispatch_rpc__| R2
 ```
 
 This diagram is the package-level quick overview and the contract boundary map.
