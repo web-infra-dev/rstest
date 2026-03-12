@@ -91,7 +91,7 @@
     "cac": "^7.0.0",
     "chai": "^6.2.2",
     "chokidar": "^5.0.0",
-    "happy-dom": "^20.7.0",
+    "happy-dom": "^20.8.3",
     "jest-diff": "^30.2.0",
     "jsdom": "^28.1.0",
     "memfs": "^4.56.10",
@@ -112,7 +112,7 @@
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
-    "happy-dom": "*",
+    "happy-dom": "^20.8.3",
     "jsdom": "*"
   },
   "peerDependenciesMeta": {

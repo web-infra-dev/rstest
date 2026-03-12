@@ -197,7 +197,7 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       happy-dom:
-        specifier: ^20.7.0
+        specifier: ^20.8.3
         version: 20.8.3
       jsdom:
         specifier: ^28.1.0
@@ -610,7 +610,7 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       happy-dom:
-        specifier: ^20.7.0
+        specifier: ^20.8.3
         version: 20.8.3
       typescript:
         specifier: ^5.9.3
@@ -650,7 +650,7 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       happy-dom:
-        specifier: ^20.7.0
+        specifier: ^20.8.3
         version: 20.8.3
       typescript:
         specifier: ^5.9.3
@@ -788,7 +788,7 @@ importers:
         specifier: ^2.4.6
         version: 2.4.6(@vue/compiler-dom@3.5.29)(@vue/server-renderer@3.5.29(vue@3.5.29(typescript@5.9.3)))(vue@3.5.29(typescript@5.9.3))
       happy-dom:
-        specifier: ^20.7.0
+        specifier: ^20.8.3
         version: 20.8.3
       typescript:
         specifier: ^5.9.3
@@ -1073,7 +1073,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
       happy-dom:
-        specifier: ^20.7.0
+        specifier: ^20.8.3
         version: 20.8.3
       jest-diff:
         specifier: ^30.2.0
