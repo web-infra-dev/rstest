@@ -1,4 +1,4 @@
-import * as path from 'node:path';
+import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
 import { pluginAlgolia } from '@rspress/plugin-algolia';

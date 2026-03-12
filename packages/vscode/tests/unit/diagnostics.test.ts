@@ -5,7 +5,7 @@ let clearCalls = 0;
 let disposeCalls = 0;
 
 rs.mock('vscode', () => {
-  return {
+  const vscode = {
     languages: {
       createDiagnosticCollection: () => ({
         set: (uri: { toString: () => string }, diagnostics: unknown[]) => {
@@ -20,6 +20,11 @@ rs.mock('vscode', () => {
         },
       }),
     },
+  };
+
+  return {
+    ...vscode,
+    default: vscode,
   };
 });
 

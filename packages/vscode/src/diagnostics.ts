@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 
 export type DiagnosticEntry = {
   uri: vscode.Uri;

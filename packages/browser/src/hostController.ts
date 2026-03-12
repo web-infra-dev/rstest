@@ -30,7 +30,7 @@ import {
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
-import * as picomatch from 'picomatch';
+import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { getHeadlessConcurrency } from './concurrency';
