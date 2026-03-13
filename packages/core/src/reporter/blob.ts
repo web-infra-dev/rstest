@@ -25,9 +25,9 @@ export type BlobData = {
 const DEFAULT_OUTPUT_DIR = '.rstest-reports';
 
 export class BlobReporter implements Reporter {
-  private config: NormalizedConfig;
-  private outputDir: string;
-  private consoleLogs: UserConsoleLog[] = [];
+  private readonly config: NormalizedConfig;
+  private readonly outputDir: string;
+  private readonly consoleLogs: UserConsoleLog[] = [];
 
   constructor({
     rootPath,
