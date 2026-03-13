@@ -113,6 +113,11 @@ jobs:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
         node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
+        test_script: ['test', 'test:commonjs', 'test:no-isolate']
+        exclude:
+          # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
+          - node_version: '20'
+            test_script: 'test:no-isolate'
 
     steps:
       - name: Checkout
@@ -154,18 +159,11 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium webkit
 
-      - name: E2E Test
-        run: cd e2e && pnpm test
-
-      - name: E2E Test (CommonJS)
-        run: cd e2e && pnpm test:commonjs
-
-      - name: E2E Test (No Isolate)
-        # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
-        if: matrix.node_version != '20'
-        run: cd e2e && pnpm test:no-isolate
+      - name: E2E Test (${{ matrix.test_script }})
+        run: cd e2e && pnpm ${{ matrix.test_script }}
 
       - name: VS Code Extension Test
+        if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
   # ======== gate ========
