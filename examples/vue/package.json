@@ -19,7 +19,7 @@
     "@vue/compiler-dom": "^3.5.29",
     "@vue/server-renderer": "^3.5.29",
     "@vue/test-utils": "^2.4.6",
-    "happy-dom": "^20.7.0",
+    "happy-dom": "^20.8.3",
     "typescript": "^5.9.3"
   }
 }
