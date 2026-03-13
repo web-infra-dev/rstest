@@ -46,7 +46,7 @@ export default defineConfig({
 
 When using sharding in CI, each shard produces its own test report and coverage data independently. To combine the results from all shards into a single report, use the `blob` reporter along with the `rstest merge-reports` command.
 
-### Step 1: Run shards with blob reporter
+### Step 1: run shards with blob reporter
 
 Configure each shard to output results using the `blob` reporter:
 
@@ -63,7 +63,7 @@ npx rstest run --shard 3/3 --reporter=blob --coverage
 
 Each shard writes its results to `.rstest-reports/blob-{index}-{count}.json`.
 
-### Step 2: Merge reports
+### Step 2: merge reports
 
 After all shards complete, collect all blob files into a single `.rstest-reports/` directory and run:
 
