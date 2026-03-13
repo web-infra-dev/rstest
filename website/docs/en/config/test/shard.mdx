@@ -41,3 +41,36 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## Merging shard reports
+
+When using sharding in CI, each shard produces its own test report and coverage data independently. To combine the results from all shards into a single report, use the `blob` reporter along with the `rstest merge-reports` command.
+
+### Step 1: run shards with blob reporter
+
+Configure each shard to output results using the `blob` reporter:
+
+```bash
+# Shard 1
+npx rstest run --shard 1/3 --reporter=blob --coverage
+
+# Shard 2
+npx rstest run --shard 2/3 --reporter=blob --coverage
+
+# Shard 3
+npx rstest run --shard 3/3 --reporter=blob --coverage
+```
+
+Each shard writes its results to `.rstest-reports/blob-{index}-{count}.json`.
+
+### Step 2: merge reports
+
+After all shards complete, collect all blob files into a single `.rstest-reports/` directory and run:
+
+```bash
+npx rstest merge-reports --cleanup
+```
+
+This will merge all test results, generate a unified summary using your configured reporters, and combine coverage data.
+
+See the [CLI documentation](/guide/basic/cli#rstest-merge-reports) for more details on the `merge-reports` command.

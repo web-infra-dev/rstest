@@ -17,10 +17,11 @@ Usage:
   $ rstest [...filters]
 
 Commands:
-  [...filters]        run tests
-  run [...filters]    run tests without watch mode
-  watch [...filters]  run tests in watch mode
-  list [...filters]   lists all test files that Rstest will run
+  [...filters]              run tests
+  run [...filters]          run tests without watch mode
+  watch [...filters]        run tests in watch mode
+  list [...filters]         lists all test files that Rstest will run
+  merge-reports [path]      merge blob reports from multiple shards
 
 Options:
   -w, --watch                              Run tests in watch mode
@@ -126,6 +127,49 @@ a.test.ts:4:5 > test a > test a-1
 a.test.ts:9:3 > test a-2
 b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
+```
+
+## rstest merge-reports
+
+`rstest merge-reports` 将多个测试分片生成的 blob 报告合并为一个统一的报告。当使用 `--shard` 在多台 CI 机器上并行运行测试时，这非常有用。
+
+### 工作流程
+
+1. 使用 `blob` 报告器运行每个分片以生成 blob 报告文件：
+
+```bash
+# 在 CI 机器 1 上
+npx rstest run --shard 1/3 --reporter=blob
+
+# 在 CI 机器 2 上
+npx rstest run --shard 2/3 --reporter=blob
+
+# 在 CI 机器 3 上
+npx rstest run --shard 3/3 --reporter=blob
+```
+
+2. 将所有 `.rstest-reports/` 目录收集到同一位置，然后合并：
+
+```bash
+npx rstest merge-reports
+```
+
+默认情况下，blob 报告从项目根目录的 `.rstest-reports/` 读取。你可以指定自定义路径：
+
+```bash
+npx rstest merge-reports ./custom-reports-dir
+```
+
+合并命令将：
+
+- 合并所有分片的测试结果
+- 使用配置的报告器（如 `default`、`junit`）输出合并后的数据
+- 合并并生成覆盖率报告（如果启用了覆盖率）
+
+使用 `--cleanup` 在合并完成后删除 blob 报告目录：
+
+```bash
+npx rstest merge-reports --cleanup
 ```
 
 ## CLI 选项
