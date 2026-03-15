@@ -109,11 +109,11 @@
     "package:vsce": "npm run build && vsce package"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-beta.8",
+    "@rsbuild/core": "2.0.0-canary-20260309140114",
     "@rslib/core": "0.20.0",
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
-    "@swc/core": "^1.15.13",
+    "@swc/core": "^1.15.18",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
