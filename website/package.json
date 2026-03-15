@@ -10,10 +10,10 @@
     "preview": "rspress preview"
   },
   "devDependencies": {
-    "@rsbuild/plugin-sass": "^1.5.0",
-    "@rspress/core": "2.0.3",
-    "@rspress/plugin-algolia": "2.0.3",
-    "@rstack-dev/doc-ui": "1.12.3",
+    "@rsbuild/plugin-sass": "^1.5.1",
+    "@rspress/core": "2.0.5",
+    "@rspress/plugin-algolia": "2.0.5",
+    "@rstack-dev/doc-ui": "1.12.4",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.14",
