@@ -28,7 +28,8 @@ export type BuiltInReporterNames =
   | 'verbose'
   | 'md'
   | 'github-actions'
-  | 'junit';
+  | 'junit'
+  | 'blob';
 
 export type DefaultReporterOptions = {
   /**
@@ -140,12 +141,21 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
+export type BlobReporterOptions = {
+  /**
+   * Directory to store blob report files.
+   * @default '.rstest-reports'
+   */
+  outputDir?: string;
+};
+
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': Record<string, unknown>;
   junit: Record<string, unknown>;
+  blob: BlobReporterOptions;
 };
 
 export type ReporterWithOptions<

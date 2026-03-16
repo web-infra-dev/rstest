@@ -19,7 +19,7 @@ export type ProjectEntries = {
   fileFilters?: string[];
 };
 
-export type RstestCommand = 'watch' | 'run' | 'list';
+export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
 
 export type Project = { config: RstestConfig; configFilePath?: string };
 
@@ -83,6 +83,10 @@ export type RstestContext = {
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
+  reporterResults: {
+    results: TestFileResult[];
+    testResults: TestResult[];
+  };
 };
 
 export type ListCommandOptions = {
@@ -103,4 +107,8 @@ export type RstestInstance = {
   context: RstestContext;
   runTests: () => Promise<void>;
   listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
+  mergeReports: (options?: {
+    path?: string;
+    cleanup?: boolean;
+  }) => Promise<void>;
 };

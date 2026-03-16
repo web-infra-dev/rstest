@@ -155,6 +155,7 @@ export const runRest = async ({
   try {
     const { initCli } = await import('./init');
     const { config, configFilePath, projects } = await initCli(options);
+
     const { createRstest } = await import('../core');
     rstest = createRstest(
       { config, configFilePath, projects },
@@ -182,6 +183,7 @@ export const runRest = async ({
         filters,
       });
     }
+
     await rstest.runTests();
   } catch (err) {
     handleUnexpectedExit(rstest, err);
@@ -270,6 +272,39 @@ export function setupCommands(): void {
           });
         } catch (err) {
           logger.error('Failed to run Rstest list.');
+          logger.error(formatError(err));
+          process.exit(1);
+        }
+      },
+    );
+
+  cli
+    .command(
+      'merge-reports [path]',
+      'Merge blob reports from multiple shards into a unified report',
+    )
+    .option('--cleanup', 'Remove blob reports directory after merging')
+    .action(
+      async (
+        path: string | undefined,
+        options: CommonOptions & { cleanup?: boolean },
+      ) => {
+        if (!determineAgent().isAgent) {
+          showRstest();
+        }
+        try {
+          const { initCli } = await import('./init');
+          const { config, configFilePath, projects } = await initCli(options);
+          const { createRstest } = await import('../core');
+          const rstest = createRstest(
+            { config, configFilePath, projects },
+            'merge-reports',
+            [],
+          );
+
+          await rstest.mergeReports({ path, cleanup: options.cleanup });
+        } catch (err) {
+          logger.error('Failed to merge reports.');
           logger.error(formatError(err));
           process.exit(1);
         }
