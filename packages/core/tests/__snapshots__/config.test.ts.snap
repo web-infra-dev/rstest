@@ -15,6 +15,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   },
   "clearMocks": false,
   "coverage": {
+    "allowExternal": false,
     "clean": true,
     "enabled": false,
     "exclude": [

@@ -490,6 +490,15 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/coverage-istanbul
 
+  e2e/test-coverage/fixtures/allow-external:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../../packages/coverage-istanbul
+
   e2e/vue/fixtures:
     dependencies:
       vue:

@@ -16,6 +16,7 @@ type CoverageOptions = {
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
+  allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
 ```
@@ -206,6 +207,29 @@ export default defineConfig({
   coverage: {
     enabled: true,
     reportOnFailure: true,
+  },
+});
+```
+
+### allowExternal
+
+<ApiMeta addedVersion="0.9.3" />
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--coverage.allowExternal`
+
+Whether to collect coverage for source files outside the project root directory. This is useful in monorepo setups where tests import modules from sibling packages.
+
+By default, rstest excludes files outside the project root from coverage reports, which aligns with the behavior of Jest and Vitest.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    allowExternal: true,
   },
 });
 ```

@@ -130,6 +130,13 @@ export type CoverageOptions = {
    * @default false
    */
   reportOnFailure?: boolean;
+
+  /**
+   * Whether to collect coverage for source files outside the project root directory.
+   * This is useful in monorepo setups where tests import modules from sibling packages.
+   * @default false
+   */
+  allowExternal?: boolean;
 };
 
 export type NormalizedCoverageOptions = Required<

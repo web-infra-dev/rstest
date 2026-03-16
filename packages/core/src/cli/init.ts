@@ -50,7 +50,17 @@ export type CommonOptions = {
   exclude?: string[];
   reporter?: string[];
   project?: string[];
-  coverage?: boolean;
+  /**
+   * Coverage options.
+   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--coverage` flag)
+   * - `object`: detailed coverage config (from `--coverage.*` options)
+   */
+  coverage?:
+    | boolean
+    | {
+        enabled?: boolean;
+        allowExternal?: boolean;
+      };
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
@@ -141,7 +151,16 @@ function mergeWithCLIOptions(
 
   if (options.coverage !== undefined) {
     config.coverage ??= {};
-    config.coverage.enabled = options.coverage;
+    if (typeof options.coverage === 'boolean') {
+      config.coverage.enabled = options.coverage;
+    } else {
+      if (options.coverage.enabled !== undefined) {
+        config.coverage.enabled = options.coverage.enabled;
+      }
+      if (options.coverage.allowExternal !== undefined) {
+        config.coverage.allowExternal = options.coverage.allowExternal;
+      }
+    }
   }
 
   if (options.exclude) {

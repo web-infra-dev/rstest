@@ -1,12 +1,11 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  exclude: ['test/sourcemapMapping.test.ts', 'allow-external/**'],
   coverage: {
     enabled: true,
     provider: 'istanbul',
+    reporters: ['text'],
     clean: false,
-    reporters: [['text', { skipFull: true }]],
+    allowExternal: false,
   },
-  setupFiles: ['./rstest.setup.ts'],
 });
