@@ -236,6 +236,104 @@ describe('resolveProjects', () => {
       expect(projects).toHaveLength(1);
       expect(projects[0]!.config.testTimeout).toBe(15000);
     });
+
+    it('should handle inline project with extends as array', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            extends: [
+              {
+                testEnvironment: 'jsdom',
+                setupFiles: ['./setup-a.ts'],
+                source: {
+                  define: {
+                    BASE_URL: '"https://example.com"',
+                  },
+                },
+              },
+              {
+                globals: true,
+                setupFiles: ['./setup-b.ts'],
+                source: {
+                  define: {
+                    API_URL: '"https://api.example.com"',
+                  },
+                },
+              },
+            ],
+            testTimeout: 10000,
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {},
+      });
+
+      expect(projects).toHaveLength(1);
+      expect(projects[0]!.config.testEnvironment).toBe('jsdom');
+      expect(projects[0]!.config.globals).toBe(true);
+      expect(projects[0]!.config.testTimeout).toBe(10000);
+      expect(projects[0]!.config.setupFiles).toEqual([
+        './setup-a.ts',
+        './setup-b.ts',
+      ]);
+      expect(projects[0]!.config.source).toEqual({
+        define: {
+          BASE_URL: '"https://example.com"',
+          API_URL: '"https://api.example.com"',
+        },
+      });
+    });
+
+    it('should pass the original project config to every extends function in arrays', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            testTimeout: 10000,
+            retry: 2,
+            extends: [
+              (userConfig) => {
+                expect(Object.isFrozen(userConfig)).toBe(true);
+                expect(userConfig.testTimeout).toBe(10000);
+                expect(userConfig.retry).toBe(2);
+                expect(userConfig.testEnvironment).toBeUndefined();
+
+                return {
+                  testEnvironment: 'jsdom',
+                };
+              },
+              (userConfig) => {
+                expect(Object.isFrozen(userConfig)).toBe(true);
+                expect(userConfig.testTimeout).toBe(10000);
+                expect(userConfig.retry).toBe(2);
+                expect(userConfig.testEnvironment).toBeUndefined();
+
+                return {
+                  globals: true,
+                };
+              },
+            ],
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {},
+      });
+
+      expect(projects).toHaveLength(1);
+      expect(projects[0]!.config.testEnvironment).toBe('jsdom');
+      expect(projects[0]!.config.globals).toBe(true);
+      expect(projects[0]!.config.testTimeout).toBe(10000);
+      expect(projects[0]!.config.retry).toBe(2);
+    });
   });
 
   describe('browser CLI options', () => {

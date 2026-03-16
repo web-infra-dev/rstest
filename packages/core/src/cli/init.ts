@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
-import { loadConfig, mergeRstestConfig } from '../config';
+import { loadConfig, resolveExtends } from '../config';
 import type { BrowserName, Project, RstestConfig } from '../types';
 import {
   castArray,
@@ -301,18 +301,7 @@ export async function resolveProjects({
         if (typeof p === 'object') {
           const projectRoot = p.root ? formatRootStr(p.root, root) : root;
 
-          // Handle extends
-          let projectConfig: RstestConfig = { ...p };
-          if (projectConfig.extends) {
-            const extendsConfig =
-              typeof projectConfig.extends === 'function'
-                ? await projectConfig.extends(
-                    Object.freeze({ ...projectConfig }),
-                  )
-                : projectConfig.extends;
-            delete (extendsConfig as RstestConfig).projects;
-            projectConfig = mergeRstestConfig(extendsConfig, projectConfig);
-          }
+          const projectConfig = await resolveExtends({ ...p });
 
           projectConfigs.push({
             config: mergeWithCLIOptions(
