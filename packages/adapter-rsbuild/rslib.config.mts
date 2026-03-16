@@ -6,7 +6,7 @@ export default defineConfig({
       format: 'esm',
       dts: {
         tsgo: true,
-        bundle: true
+        bundle: true,
       },
       bundle: true,
       syntax: 'es2023',
