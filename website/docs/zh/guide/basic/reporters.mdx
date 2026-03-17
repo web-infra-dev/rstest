@@ -5,6 +5,8 @@ description: Rstest 中的报告器控制测试结果的显示和处理方式。
 
 import { Tab, Tabs } from '@theme';
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporters
 
 Rstest 中的报告器控制测试结果的显示和处理方式。
@@ -257,6 +259,8 @@ export default defineConfig({
 ```
 
 ### Blob 报告器
+
+<ApiMeta addedVersion="0.9.3" />
 
 Blob 报告器将测试结果序列化为 JSON 文件，以便后续合并。它专门用于 CI 环境中的[测试分片](/config/test/shard)场景，在多台机器上拆分运行测试后需要合并结果。
 

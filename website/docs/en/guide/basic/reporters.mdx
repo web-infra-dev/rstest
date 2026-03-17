@@ -5,6 +5,8 @@ description: Reporters in Rstest control how test results are displayed and proc
 
 import { Tab, Tabs } from '@theme';
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporters
 
 Reporters in Rstest control how test results are displayed and processed.
@@ -259,6 +261,8 @@ export default defineConfig({
 ```
 
 ### Blob reporter
+
+<ApiMeta addedVersion="0.9.3" />
 
 The blob reporter serializes test results into JSON files for later merging. This is designed for use with [test sharding](/config/test/shard) in CI environments, where tests are split across multiple machines and results need to be combined afterward.
 
