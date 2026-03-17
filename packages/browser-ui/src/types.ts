@@ -9,7 +9,11 @@ import type {
   TestFileInfo,
 } from '@rstest/browser/protocol';
 
-import type { TestFileResult, TestResult } from '@rstest/core/browser-runtime';
+import type {
+  TestFileResult,
+  TestInfo,
+  TestResult,
+} from '@rstest/core/browser-runtime';
 
 /**
  * Browser UI types
@@ -50,6 +54,11 @@ export type TestFileStartPayload = Extract<
   ProtocolBrowserClientMessage,
   { type: 'file-start' }
 >['payload'];
+
+export type TestFileReadyPayload = {
+  testPath: string;
+  tests: TestInfo[];
+};
 
 export type LogPayload = Extract<
   ProtocolBrowserClientMessage,

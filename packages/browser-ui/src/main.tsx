@@ -1,4 +1,5 @@
 import {
+  DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_RESPONSE_TYPE,
   DISPATCH_RPC_REQUEST_TYPE,
   RSTEST_CONFIG_MESSAGE_TYPE,
@@ -19,6 +20,7 @@ import {
   isStaleBrowserRpcRequest,
   readBrowserRpcRequest,
 } from './core/browserRpc';
+import { buildCollectedCaseMap } from './core/caseMap';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
 import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
@@ -30,6 +32,7 @@ import type {
   FatalPayload,
   LogPayload,
   TestFileInfo,
+  TestFileReadyPayload,
 } from './types';
 import type {
   CaseInfo,
@@ -362,6 +365,25 @@ const BrowserRunner: React.FC<{
     [mapCaseStatus],
   );
 
+  const syncCollectedCases = useCallback(
+    (filePath: string, payload: TestFileReadyPayload) => {
+      setCaseMap((prev) => {
+        const prevFile = prev[filePath] ?? {};
+        const nextFile = buildCollectedCaseMap({
+          filePath,
+          tests: payload.tests,
+          previousCases: prevFile,
+        });
+
+        return {
+          ...prev,
+          [filePath]: nextFile,
+        };
+      });
+    },
+    [],
+  );
+
   const handleRerunFile = useCallback(
     (file: string) => {
       setActive(file);
@@ -476,6 +498,21 @@ const BrowserRunner: React.FC<{
       } else if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
         // Unified RPC path for snapshot and future runner-side capabilities.
         const dispatchRequest = message.payload as BrowserDispatchRequest;
+
+        if (
+          dispatchRequest.namespace === DISPATCH_NAMESPACE_RUNNER &&
+          dispatchRequest.method === 'file-ready'
+        ) {
+          const payload = dispatchRequest.args as TestFileReadyPayload;
+
+          if (
+            typeof payload?.testPath === 'string' &&
+            Array.isArray(payload.tests)
+          ) {
+            syncCollectedCases(payload.testPath, payload);
+          }
+        }
+
         const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
 
         if (browserRpcRequest) {
@@ -509,7 +546,14 @@ const BrowserRunner: React.FC<{
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase, mapCaseStatus, rpc, runIdByTestFile]);
+  }, [
+    active,
+    upsertCase,
+    mapCaseStatus,
+    rpc,
+    runIdByTestFile,
+    syncCollectedCases,
+  ]);
 
   // Computed values - case level statistics
   const caseCounts = useMemo(() => {
