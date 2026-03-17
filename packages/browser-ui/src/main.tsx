@@ -20,7 +20,7 @@ import {
   isStaleBrowserRpcRequest,
   readBrowserRpcRequest,
 } from './core/browserRpc';
-import { buildCollectedCaseMap } from './core/caseMap';
+import { buildCollectedCaseMap, upsertRunningCase } from './core/caseMap';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
 import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
@@ -31,6 +31,7 @@ import type {
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
+  TestCaseStartPayload,
   TestFileInfo,
   TestFileReadyPayload,
 } from './types';
@@ -384,6 +385,24 @@ const BrowserRunner: React.FC<{
     [],
   );
 
+  const syncStartedCase = useCallback(
+    (filePath: string, payload: TestCaseStartPayload) => {
+      setCaseMap((prev) => {
+        const prevFile = prev[filePath] ?? {};
+
+        return {
+          ...prev,
+          [filePath]: upsertRunningCase({
+            filePath,
+            test: payload,
+            previousCases: prevFile,
+          }),
+        };
+      });
+    },
+    [],
+  );
+
   const handleRerunFile = useCallback(
     (file: string) => {
       setActive(file);
@@ -513,6 +532,17 @@ const BrowserRunner: React.FC<{
           }
         }
 
+        if (
+          dispatchRequest.namespace === DISPATCH_NAMESPACE_RUNNER &&
+          dispatchRequest.method === 'case-start'
+        ) {
+          const payload = dispatchRequest.args as TestCaseStartPayload;
+
+          if (typeof payload?.testPath === 'string' && payload.testId) {
+            syncStartedCase(payload.testPath, payload);
+          }
+        }
+
         const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
 
         if (browserRpcRequest) {
@@ -553,6 +583,7 @@ const BrowserRunner: React.FC<{
     rpc,
     runIdByTestFile,
     syncCollectedCases,
+    syncStartedCase,
   ]);
 
   // Computed values - case level statistics
