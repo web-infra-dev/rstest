@@ -100,7 +100,8 @@ const resolveExtendEntry = async (
     typeof entry === 'function' ? await entry(userConfig) : entry;
 
   if ('projects' in resolved) {
-    delete resolved.projects;
+    const { projects: _projects, ...rest } = resolved;
+    return rest;
   }
 
   return resolved;
