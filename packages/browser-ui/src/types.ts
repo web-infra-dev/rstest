@@ -60,6 +60,8 @@ export type TestFileReadyPayload = {
   tests: TestInfo[];
 };
 
+export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
+
 export type LogPayload = Extract<
   ProtocolBrowserClientMessage,
   { type: 'log' }
