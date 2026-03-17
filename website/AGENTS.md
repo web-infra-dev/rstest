@@ -57,6 +57,7 @@ When writing or editing documentation, follow these principles:
 - npm package names as links: no backticks (e.g., `[@rstest/browser-react](url)` not `[\`@rstest/browser-react\`](url)`)
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)
+- For TypeScript API signatures in docs, prefer `T[]` over `Array<T>`. For unions that allow either a single value or an array, prefer `A | B | (A | B)[]` over `A | B | Array<A | B>`.
 
 ### Logical grouping
 

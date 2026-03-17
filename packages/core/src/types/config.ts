@@ -177,7 +177,7 @@ export interface RstestConfig {
   /**
    * Extend configuration from adapters
    */
-  extends?: ExtendConfigFn | ExtendConfig;
+  extends?: ExtendConfigFn | ExtendConfig | (ExtendConfigFn | ExtendConfig)[];
 
   /**
    * Project root

@@ -4,7 +4,7 @@ description: extends 选项允许你从外部来源扩展 Rstest 配置，例如
 
 # extends
 
-- **类型:** `ExtendConfig | ExtendConfigFn`
+- **类型:** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
 - **默认值:** `undefined`
 
 `extends` 选项允许你从外部来源扩展 Rstest 配置，例如使用适配器将其他构建工具的配置转换为 Rstest 兼容格式。
@@ -14,6 +14,7 @@ description: extends 选项允许你从外部来源扩展 Rstest 配置，例如
 - **适配器集成**: 通过 `@rstest/adapter-rslib` 等适配器从其他构建工具配置中扩展 Rstest 配置
 - **异步配置**: 从外部源异步加载配置
 - **配置合并**: 自动将扩展配置与本地 Rstest 配置合并
+- **可组合预设**: 通过 `extends` 数组组合多个共享配置
 
 ## 基本用法（对象）
 
@@ -68,40 +69,88 @@ export default defineConfig({
 });
 ```
 
+## 多个 extends
+
+当你需要组合多个预设时，可以给 `extends` 传入数组。
+
+Rstest 会按从左到右的顺序依次解析数组。后面的条目会覆盖前面的冲突字段，而本地配置仍然拥有最高优先级。
+
+当数组项为函数时，每个 `ExtendConfigFn` 都会基于原始的用户配置独立解析。数组顺序只影响最终合并优先级，不会影响传给每个函数的输入。
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+import { sharedConfig } from './shared.config';
+
+export default defineConfig({
+  extends: [
+    sharedConfig,
+    withRslibConfig({}),
+    (userConfig) => ({
+      globals: userConfig.retry !== undefined,
+    }),
+  ],
+  testTimeout: 10_000,
+});
+```
+
 ## 配置合并
 
 Rstest 对对象配置执行深度合并，对基本类型配置执行简单覆盖。本地配置优先于扩展配置。
+
+当 `extends` 为数组时，优先级顺序如下：
+
+```ts
+extends[0] < extends[1] < ... < extends[n] < local config
+```
+
+主要合并规则如下：
+
+- `testTimeout`、`retry`、`globals` 这类基本类型字段由后者直接覆盖前者。
+- `setupFiles`、`globalSetup` 和 `plugins` 会拼接，方便多个预设共同追加配置。
+- `include`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
+- `source`、`resolve`、`output`、`tools`、`env` 和 `coverage` 等对象字段会执行深度合并。
+- `browser` 会执行浅合并，后者的同名属性覆盖前者。
+- 每个扩展配置中的 `projects` 都会被忽略。
 
 ```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  extends: {
-    testEnvironment: 'jsdom',
-    globals: true,
-    testTimeout: 5000,
-    source: {
-      define: {
-        BASE_URL: '"https://example.com"',
+  extends: [
+    {
+      testEnvironment: 'jsdom',
+      setupFiles: ['./setup-a.ts'],
+      testTimeout: 5000,
+      source: {
+        define: {
+          BASE_URL: '"https://example.com"',
+        },
+      },
     },
-  },
+    {
+      globals: true,
+      setupFiles: ['./setup-b.ts'],
+      source: {
+        define: {
+          API_URL: '"https://api.example.com"',
+        },
+      },
+    },
+  ],
   // 本地配置
   testTimeout: 10000,
   retry: 2,
-  source: {
-    define: {
-      API_URL: '"https://api.example.com"',
-    },
-  },
 });
 
 // 结果：
 // {
-//   testEnvironment: 'jsdom', // 来自 extends
-//   globals: true,            // 来自 extends
-//   testTimeout: 10000,       // 本地覆盖 extends
-//   retry: 2                  // 本地新增
-//   source: {                 // 深度合并
+//   testEnvironment: 'jsdom',
+//   globals: true,
+//   testTimeout: 10000,
+//   retry: 2,
+//   setupFiles: ['./setup-a.ts', './setup-b.ts'],
+//   source: {
 //     define: {
 //       BASE_URL: '"https://example.com"',
 //       API_URL: '"https://api.example.com"',
