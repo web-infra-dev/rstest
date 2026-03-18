@@ -47,6 +47,26 @@ const registerGlobalApi = (api: Rstest) => {
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 
+const setErrorName = (error: Error, type: string): Error => {
+  try {
+    error.name = type;
+    return error;
+  } catch {
+    try {
+      Object.defineProperty(error, 'name', {
+        value: type,
+        configurable: true,
+      });
+      return error;
+    } catch {
+      const fallbackError = new Error(error.message);
+      fallbackError.name = type;
+      fallbackError.stack = error.stack;
+      return fallbackError;
+    }
+  }
+};
+
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
     Object.entries(env).forEach(([key, value]) => {
@@ -136,9 +156,11 @@ const preparePool = async ({
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: Error | string, type: string) => {
-    const error: Error = typeof e === 'string' ? new Error(e) : e;
-
-    error.name ??= type;
+    const rawError: Error = typeof e === 'string' ? new Error(e) : e;
+    const error =
+      !rawError.name || rawError.name === 'Error'
+        ? setErrorName(rawError, type)
+        : rawError;
 
     if (isTeardown) {
       error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
