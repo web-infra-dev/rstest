@@ -43,4 +43,19 @@ describe('test worker behavior', () => {
     expect(cli.log).toContain('Maybe related stderr');
     expect(cli.log).toContain(marker);
   });
+
+  it('should handle unhandledRejection error correctly', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'unhandledRejection.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(/AssertionError: expected 'hello' to be 'hii'/);
+  });
 });
