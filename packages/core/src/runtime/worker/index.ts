@@ -138,7 +138,7 @@ const preparePool = async ({
   const handleError = (e: Error | string, type: string) => {
     const error: Error = typeof e === 'string' ? new Error(e) : e;
 
-    error.name = type;
+    error.name ??= type;
 
     if (isTeardown) {
       error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
