@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rsbuild",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Rstest adapter for rsbuild configuration",
   "type": "module",
   "main": "dist/index.js",
