@@ -310,19 +310,17 @@ export async function resolveProjects({
   const getProjects = async (rstestConfig: RstestConfig, root: string) => {
     const projectPaths: string[] = [];
     const projectPatterns: string[] = [];
-    const projectConfigs: {
+    const inlineProjectConfigPromises: Promise<{
       config: RstestConfig;
       configFilePath: string | undefined;
-    }[] = [];
+    }>[] = [];
 
-    await Promise.all(
-      (rstestConfig.projects || []).map(async (p) => {
-        if (typeof p === 'object') {
-          const projectRoot = p.root ? formatRootStr(p.root, root) : root;
+    for (const p of rstestConfig.projects || []) {
+      if (typeof p === 'object') {
+        const projectRoot = p.root ? formatRootStr(p.root, root) : root;
 
-          const projectConfig = await resolveExtends({ ...p });
-
-          projectConfigs.push({
+        inlineProjectConfigPromises.push(
+          resolveExtends({ ...p }).then((projectConfig) => ({
             config: mergeWithCLIOptions(
               {
                 root: projectRoot,
@@ -332,26 +330,31 @@ export async function resolveProjects({
               options,
             ),
             configFilePath: undefined,
-          });
-          return;
+          })),
+        );
+        continue;
+      }
+
+      const projectStr = formatRootStr(p, root);
+
+      if (isDynamicPattern(projectStr)) {
+        projectPatterns.push(projectStr);
+      } else {
+        const absolutePath = getAbsolutePath(root, projectStr);
+
+        if (!existsSync(absolutePath)) {
+          throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
         }
+        projectPaths.push(absolutePath);
+      }
+    }
 
-        const projectStr = formatRootStr(p, root);
+    const [projectConfigs, globbedProjectPaths] = await Promise.all([
+      Promise.all(inlineProjectConfigPromises),
+      globProjects(projectPatterns, root),
+    ]);
 
-        if (isDynamicPattern(projectStr)) {
-          projectPatterns.push(projectStr);
-        } else {
-          const absolutePath = getAbsolutePath(root, projectStr);
-
-          if (!existsSync(absolutePath)) {
-            throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
-          }
-          projectPaths.push(absolutePath);
-        }
-      }),
-    );
-
-    projectPaths.push(...(await globProjects(projectPatterns, root)));
+    projectPaths.push(...globbedProjectPaths);
 
     const projects: {
       config: RstestConfig;
