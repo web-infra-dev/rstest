@@ -12,7 +12,7 @@ type AgentCacheEntry = {
   agent: MidsceneAgent;
   updateBindings: (
     containerPage: Page,
-    iframeElement: ElementHandle<HTMLIFrameElement>,
+    iframeElement: ElementHandle<HTMLIFrameElement> | null,
     frame: Frame,
   ) => void;
 };
@@ -125,11 +125,11 @@ export const createMidsceneAgentRuntime = (
     const { testFile, provider } = ctx;
     const profileName = resolveProfileName(options, ctx);
     const agentCacheKey = resolveAgentCacheKey(options, ctx, profileName);
-    const containerPage = provider.getContainerPage() as Page;
+    const frame = (await provider.getFrameForTestFile(testFile)) as Frame;
+    const containerPage = frame.page();
     const iframeElement = (await provider.getIframeElementForTestFile(
       testFile,
-    )) as ElementHandle<HTMLIFrameElement>;
-    const frame = (await provider.getFrameForTestFile(testFile)) as Frame;
+    )) as ElementHandle<HTMLIFrameElement> | null;
 
     const cached = agentCache.get(agentCacheKey);
     if (cached) {

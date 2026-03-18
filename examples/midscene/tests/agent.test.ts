@@ -5,33 +5,34 @@ import { createElement } from 'react';
 import { TaskBoard } from '../src/TaskBoard';
 
 describe('@rstest/midscene advanced API demo', () => {
-  it('can add tasks with aiAct, aiTap, aiInput, and aiKeyboardPress', async () => {
+  it('can build a release follow-up list with mixed action APIs', async () => {
     await render(createElement(TaskBoard));
 
     await agent.setAIActContext(
-      'Only interact with the task board. Use the input with placeholder "Task title".',
+      'You are updating the task board for a release follow-up checklist.',
     );
 
-    await agent.aiAct('type "Ship release notes" into the Task title input', {
-      cacheable: true,
-    });
-    await agent.aiTap('Add task button');
+    await agent.aiAct(
+      'Add one task named "Check rollout dashboard" to the task board.',
+    );
 
-    await agent.aiInput('Task title input', {
-      value: 'Prepare changelog',
+    await agent.aiInput('the "Task title" input on the task board', {
+      value: 'Send launch email',
       mode: 'replace',
     });
-    await agent.aiKeyboardPress('Task title input', { keyName: 'Enter' });
+    await agent.aiTap('the "Add task" button beside the task title input');
 
-    const hasFirstTask = await agent.aiBoolean(
-      'Is there a task named "Ship release notes" in the list?',
-    );
-    const hasSecondTask = await agent.aiBoolean(
-      'Is there a task named "Prepare changelog" in the list?',
-    );
+    await agent.aiInput('the "Task title" input on the task board', {
+      value: 'Archive dry-run notes',
+      mode: 'replace',
+    });
+    await agent.aiKeyboardPress('the "Task title" input on the task board', {
+      keyName: 'Enter',
+    });
 
-    expect(hasFirstTask).toBe(true);
-    expect(hasSecondTask).toBe(true);
+    await agent.aiAssert(
+      'The task board shows "3 tasks" and the list includes "Check rollout dashboard", "Send launch email", and "Archive dry-run notes".',
+    );
 
     const evalResult = (await agent.evaluateJavaScript(`
       (() => {
@@ -47,50 +48,54 @@ describe('@rstest/midscene advanced API demo', () => {
       tasks: string[];
     };
 
-    expect(evalResult.count).toBe(2);
-    expect(evalResult.status).toContain('2 tasks');
-    expect(evalResult.tasks).toContain('Ship release notes');
-    expect(evalResult.tasks).toContain('Prepare changelog');
+    expect(evalResult.count).toBe(3);
+    expect(evalResult.status).toContain('3 tasks');
+    expect(evalResult.tasks).toContain('Check rollout dashboard');
+    expect(evalResult.tasks).toContain('Send launch email');
+    expect(evalResult.tasks).toContain('Archive dry-run notes');
   });
 
-  it('can inspect task board state with query and reporting APIs', async () => {
+  it('can review task board state with query and reporting APIs', async () => {
     await render(createElement(TaskBoard));
 
     await agent.setAIActContext(
-      'Only interact with the task board. Use the input with placeholder "Task title".',
+      'You are reviewing the task board after a release standup.',
     );
 
-    await agent.aiInput('Task title input', {
-      value: 'Prepare changelog',
+    await agent.aiAct('Add one task named "Prepare support handoff".');
+    await agent.aiInput('the "Task title" input on the task board', {
+      value: 'Verify docs links',
       mode: 'replace',
     });
-    await agent.aiKeyboardPress('Task title input', { keyName: 'Enter' });
+    await agent.aiKeyboardPress('the "Task title" input on the task board', {
+      keyName: 'Enter',
+    });
 
     await agent.freezePageContext();
     const statusSummary = await agent.aiAsk(
-      'What does the task status text say? Return only the status text.',
+      'What does the task counter under the input say? Return only that text.',
+    );
+    const taskSummary = await agent.aiAsk(
+      'List the task titles in the task board from top to bottom. Return only a comma-separated list.',
     );
     await agent.unfreezePageContext();
 
-    expect(typeof statusSummary).toBe('string');
-    expect(statusSummary.length).toBeGreaterThan(0);
+    expect(statusSummary).toContain('2 tasks');
+    expect(taskSummary).toContain('Prepare support handoff');
+    expect(taskSummary).toContain('Verify docs links');
 
-    const hasSecondTask = await agent.aiBoolean(
-      'Is there a task named "Prepare changelog" in the list?',
+    const hasDocsTask = await agent.aiBoolean(
+      'Is there a task named "Verify docs links" in the task list?',
     );
-    expect(hasSecondTask).toBe(true);
-
-    await agent.recordToReport('Midscene extended API demo', {
-      content:
-        'Used ai, aiTap, aiInput, aiKeyboardPress, aiAsk, aiBoolean, freeze/unfreeze, evaluateJavaScript.',
-    });
+    expect(hasDocsTask).toBe(true);
 
     const count = await agent.aiNumber(
-      'How many tasks are currently shown in the task board?',
+      'How many tasks are shown in the task board? Return only the number.',
     );
-    expect(count).toBe(1);
+    expect(count).toBe(2);
 
-    const unstableLogs = await agent._unstableLogContent();
-    expect(unstableLogs).toBeTruthy();
+    await agent.recordToReport('Task board review snapshot', {
+      content: `Status: ${statusSummary}. Tasks: ${taskSummary}.`,
+    });
   });
 });

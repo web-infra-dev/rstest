@@ -1,7 +1,7 @@
 import type { ExtendConfigFn } from '@rstest/core';
 import type { PluginMidsceneOptions } from './pluginTypes';
 
-const MIDSCENE_TEST_TIMEOUT_MS = 120_000;
+const MIDSCENE_TEST_TIMEOUT_MS = 900_000;
 const MIDSCENE_PLUGIN_NAME = 'rstest:midscene';
 const MIDSCENE_SUPPORTED_PROVIDER = 'playwright';
 

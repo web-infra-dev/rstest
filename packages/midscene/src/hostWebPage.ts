@@ -414,7 +414,7 @@ export class HostWebPage {
   readonly interfaceType: string = 'rstest-host';
 
   private containerPage: Page;
-  private iframeElement: ElementHandle<HTMLIFrameElement>;
+  private iframeElement: ElementHandle<HTMLIFrameElement> | null;
   private frame: Frame;
   private cachedSize: Size | null = null;
   private iframeBoundingBox: { x: number; y: number } | null = null;
@@ -451,7 +451,7 @@ export class HostWebPage {
 
   constructor(
     containerPage: Page,
-    iframeElement: ElementHandle<HTMLIFrameElement>,
+    iframeElement: ElementHandle<HTMLIFrameElement> | null,
     frame: Frame,
   ) {
     this.containerPage = containerPage;
@@ -461,7 +461,7 @@ export class HostWebPage {
 
   updateBindings(
     containerPage: Page,
-    iframeElement: ElementHandle<HTMLIFrameElement>,
+    iframeElement: ElementHandle<HTMLIFrameElement> | null,
     frame: Frame,
   ): void {
     const oldContainerPage = this.containerPage;
@@ -482,6 +482,16 @@ export class HostWebPage {
   }
 
   async screenshotBase64(): Promise<string> {
+    const fullPageBuffer = await this.containerPage.screenshot({
+      type: 'png',
+      fullPage: false,
+      scale: 'css',
+    });
+
+    if (!this.iframeElement) {
+      return `data:image/png;base64,${fullPageBuffer.toString('base64')}`;
+    }
+
     const box = await this.iframeElement.boundingBox();
     if (!box) {
       throw new Error('iframe not visible for screenshot');
@@ -490,12 +500,6 @@ export class HostWebPage {
     const containerDpr = await this.containerPage.evaluate(
       () => window.devicePixelRatio,
     );
-
-    const fullPageBuffer = await this.containerPage.screenshot({
-      type: 'png',
-      fullPage: false,
-      scale: 'css',
-    });
 
     return cropScreenshotInBrowser(
       this.containerPage,
@@ -526,6 +530,11 @@ export class HostWebPage {
 
   private async getIframeBoundingBox(): Promise<{ x: number; y: number }> {
     if (this.iframeBoundingBox) {
+      return this.iframeBoundingBox;
+    }
+
+    if (!this.iframeElement) {
+      this.iframeBoundingBox = { x: 0, y: 0 };
       return this.iframeBoundingBox;
     }
 

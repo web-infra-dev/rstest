@@ -15,12 +15,19 @@ export const RSTEST_BROWSER_EXPOSE_ID = 'rstest:browser' as const;
  * concrete provider should narrow these `unknown` values on their side.
  */
 export type ProviderDispatchContext = {
-  /** The provider-owned container object hosting runner iframes. */
-  getContainerPage: () => unknown;
+  /**
+   * The provider-owned page object for a given test execution context.
+   * In headed mode this is the shared container page. In headless mode callers
+   * should pass `testFile` to resolve the top-level runner page for that test.
+   */
+  getContainerPage: (testFile?: string) => unknown;
   /** Frame object for a given test file. */
   getFrameForTestFile: (testFile: string) => Promise<unknown>;
-  /** Iframe handle for a given test file. */
-  getIframeElementForTestFile: (testFile: string) => Promise<unknown>;
+  /**
+   * Iframe handle for a given test file.
+   * Returns `null` when the test runs in a top-level headless page.
+   */
+  getIframeElementForTestFile: (testFile: string) => Promise<unknown | null>;
 };
 
 /**

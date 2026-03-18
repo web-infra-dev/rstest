@@ -401,6 +401,11 @@ type BrowserRuntime = {
   containerContext?: BrowserProviderContext;
   /** Late-binding ref for plugin dispatch handlers that need Playwright access. */
   containerPageRef: { current: BrowserProviderPage | null };
+  headlessRunnerPageByTestFileRef: {
+    current:
+      | ((testFile: string) => BrowserProviderPage | undefined)
+      | undefined;
+  };
   setContainerOptions: (options: BrowserHostConfig) => void;
   // Reserved extension seam for host-side dispatch capabilities.
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
@@ -1183,6 +1188,10 @@ const createBrowserRuntime = async ({
   const containerPageRef: { current: BrowserProviderPage | null } = {
     current: null,
   };
+  const headlessRunnerPageByTestFileRef: BrowserRuntime['headlessRunnerPageByTestFileRef'] =
+    {
+      current: undefined,
+    };
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
@@ -1248,15 +1257,36 @@ const createBrowserRuntime = async ({
       setup(api) {
         // Expose API for other Rsbuild plugins to register dispatch namespace
         // handlers and access browser context helpers.
-        const getProviderPage = (): import('playwright').Page => {
-          if (!containerPageRef.current) {
-            throw new Error(
-              'Container page is not available. ' +
-                'Make sure you are calling this within a dispatch handler during test execution.',
-            );
+        const getHeadlessProviderPage = (
+          testFile: string,
+        ): import('playwright').Page | undefined => {
+          const headlessPage =
+            headlessRunnerPageByTestFileRef.current?.(testFile);
+          return headlessPage as unknown as
+            | import('playwright').Page
+            | undefined;
+        };
+        const getProviderPage = (
+          testFile?: string,
+        ): import('playwright').Page => {
+          if (containerPageRef.current) {
+            // The runtime page IS a Playwright Page; cast from the provider-agnostic type.
+            return containerPageRef.current as unknown as import('playwright').Page;
           }
-          // The runtime page IS a Playwright Page; cast from the provider-agnostic type.
-          return containerPageRef.current as unknown as import('playwright').Page;
+
+          const headlessPage = testFile
+            ? getHeadlessProviderPage(testFile)
+            : undefined;
+          if (headlessPage) {
+            return headlessPage;
+          }
+
+          throw new Error(
+            testFile
+              ? `Container page is not available for test file: ${testFile}`
+              : 'Container page is not available. ' +
+                  'Pass testFile when resolving a headless runner page, and make sure you are calling this within a dispatch handler during test execution.',
+          );
         };
         const exposedApi: RstestBrowserExposedApi = {
           dispatch: {
@@ -1273,7 +1303,12 @@ const createBrowserRuntime = async ({
           provider: {
             getContainerPage: getProviderPage,
             getIframeElementForTestFile: async (testFile: string) => {
-              const page = getProviderPage();
+              const headlessPage = getHeadlessProviderPage(testFile);
+              if (headlessPage) {
+                return null;
+              }
+
+              const page = getProviderPage(testFile);
               const iframeElement = await page.$(
                 `iframe[data-test-file="${testFile}"]`,
               );
@@ -1283,7 +1318,12 @@ const createBrowserRuntime = async ({
               return iframeElement;
             },
             getFrameForTestFile: async (testFile: string) => {
-              const page = getProviderPage();
+              const headlessPage = getHeadlessProviderPage(testFile);
+              if (headlessPage) {
+                return headlessPage.mainFrame();
+              }
+
+              const page = getProviderPage(testFile);
               const iframeElement = await page.$(
                 `iframe[data-test-file="${testFile}"]`,
               );
@@ -1645,6 +1685,7 @@ const createBrowserRuntime = async ({
       setContainerOptions,
       dispatchHandlers,
       containerPageRef,
+      headlessRunnerPageByTestFileRef,
       wss,
     };
   } catch (_error) {
@@ -2290,6 +2331,9 @@ export const runBrowserController = async (
     const sessionRegistry = new RunnerSessionRegistry();
     getHeadlessRunnerPageBySessionId = (sessionId) => {
       return sessionRegistry.getById(sessionId)?.page;
+    };
+    runtime.headlessRunnerPageByTestFileRef.current = (testFile) => {
+      return sessionRegistry.getByTestFile(testFile)?.page;
     };
     let dispatchRequestCounter = 0;
 

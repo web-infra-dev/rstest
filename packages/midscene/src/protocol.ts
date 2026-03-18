@@ -3,7 +3,7 @@
  */
 
 export const MIDSCENE_NAMESPACE = 'midscene';
-export const AI_RPC_TIMEOUT_MS = 120_000;
+export const AI_RPC_TIMEOUT_MS: number = 30 * 60_000;
 
 export interface PromptImage {
   name: string;
@@ -137,7 +137,6 @@ export type AiRpcArgsMap = {
   recordToReport: [title?: string, options?: RecordToReportOptions];
   freezePageContext: [];
   unfreezePageContext: [];
-  _unstableLogContent: [];
 };
 
 export type AiRpcResultMap = {
@@ -164,7 +163,6 @@ export type AiRpcResultMap = {
   recordToReport: void;
   freezePageContext: void;
   unfreezePageContext: void;
-  _unstableLogContent: unknown;
 };
 
 export type AiRpcMethod = keyof AiRpcArgsMap;
@@ -195,7 +193,6 @@ export const AI_RPC_METHODS: readonly AiRpcMethod[] = [
   'recordToReport',
   'freezePageContext',
   'unfreezePageContext',
-  '_unstableLogContent',
 ];
 
 export const isAiRpcMethod = (value: unknown): value is AiRpcMethod =>

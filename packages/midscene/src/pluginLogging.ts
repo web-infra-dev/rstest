@@ -44,7 +44,6 @@ const METHOD_LOG_LABELS: Record<AiRpcMethod, string> = {
   recordToReport: 'Report record',
   freezePageContext: 'Page context freeze',
   unfreezePageContext: 'Page context unfreeze',
-  _unstableLogContent: 'Midscene debug log read',
 };
 
 const METHODS_WITH_PREVIEW = new Set<AiRpcMethod>([

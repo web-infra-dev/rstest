@@ -246,7 +246,6 @@ Methods below are available on `agent`:
 - `agent.recordToReport(title?, options?)`
 - `agent.freezePageContext()`
 - `agent.unfreezePageContext()`
-- `agent._unstableLogContent()`
 
 ## Practical example (combined flow)
 
@@ -292,15 +291,10 @@ This version only supports `playwright`. Ensure `browser.provider` is `playwrigh
 
 AI call timeout is 120s by default. Start by simplifying prompts, reducing DOM complexity, or using a stronger model setting.
 
-### No AI internal log output
-
-`agent._unstableLogContent()` is a debug-only, unstable API and should not be used in stable assertions.
-
 ## Scope and limitations
 
 - Browser mode + Playwright provider only
 - `agent` API is the test-side interface; production behavior should be controlled via host config
-- `_unstableLogContent` is intentionally unstable
 
 ## Adoption strategy
 

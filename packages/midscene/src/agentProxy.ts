@@ -333,10 +333,6 @@ export class AgentProxy {
   async unfreezePageContext(): Promise<void> {
     await this.sendVoid('unfreezePageContext', []);
   }
-
-  async _unstableLogContent(): Promise<unknown> {
-    return this.send('_unstableLogContent', []);
-  }
 }
 
 /** Default AgentProxy instance for convenient import. */
