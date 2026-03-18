@@ -33,7 +33,7 @@
     "@rstest/core": ">=0.7.7"
   },
   "devDependencies": {
-    "@rspack/cli": "2.0.0-beta.6",
+    "@rspack/cli": "2.0.0-canary-20260116",
     "@rspack/core": "2.0.0-beta.6",
     "@rslib/core": "0.20.0",
     "@rstest/core": "workspace:*",

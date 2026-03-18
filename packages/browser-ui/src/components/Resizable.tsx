@@ -115,4 +115,4 @@ const ResizableHandle = (): null => {
   return null;
 };
 
-export { ResizablePanelGroup, ResizablePanel, ResizableHandle };
+export { ResizableHandle, ResizablePanel, ResizablePanelGroup };

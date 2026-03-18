@@ -52,7 +52,9 @@ export async function setupCliShortcuts({
   const clearCurrentInputLine = (): void => {
     try {
       process.stdout.write('\r\x1b[2K');
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
   const promptInput = (
@@ -244,7 +246,9 @@ export async function setupCliShortcuts({
     try {
       process.stdin.setRawMode(false);
       process.stdin.pause();
-    } catch {}
+    } catch {
+      // ignore
+    }
     process.stdin.off('keypress', handleKeypress);
     rl.close();
   };

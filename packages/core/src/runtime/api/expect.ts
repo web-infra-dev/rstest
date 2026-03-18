@@ -46,8 +46,8 @@ import type {
 import { createExpectPoll } from './poll';
 import { SnapshotPlugin } from './snapshot';
 
-export { GLOBAL_EXPECT };
 export { assert } from 'chai';
+export { GLOBAL_EXPECT };
 
 export function setupChaiConfig(config: ChaiConfig): void {
   Object.assign(chaiConfig, config);

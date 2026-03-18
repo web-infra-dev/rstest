@@ -17,7 +17,7 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SourceMapInput, SnapshotSummary };
+export type { SnapshotSummary, SourceMapInput };
 
 export type GetSourcemap = (
   sourcePath: string,

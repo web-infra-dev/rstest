@@ -103,10 +103,10 @@ export type ContainerRPC = {
 };
 
 export type {
-  BrowserHostConfig,
-  BrowserProjectRuntime,
   BrowserDispatchRequest,
   BrowserDispatchResponse,
+  BrowserHostConfig,
+  BrowserProjectRuntime,
   BrowserRpcRequest,
   BrowserRpcResponse,
   TestFileInfo,
