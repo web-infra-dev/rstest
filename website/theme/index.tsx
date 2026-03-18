@@ -30,6 +30,5 @@ const Layout = () => {
   return <BaseLayout beforeNavTitle={<NavIcon />} />;
 };
 
-export { Search, Layout, HomeLayout };
-
 export * from '@rspress/core/theme-original';
+export { HomeLayout, Layout, Search };

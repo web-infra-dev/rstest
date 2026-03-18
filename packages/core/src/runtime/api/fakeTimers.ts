@@ -11,6 +11,7 @@ import {
   type InstalledClock,
   withGlobal,
 } from '@sinonjs/fake-timers';
+
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;

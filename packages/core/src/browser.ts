@@ -7,7 +7,6 @@
 // Re-export @rsbuild/core for @rstest/browser to avoid duplicate dependency
 // biome-ignore lint/performance/noNamespaceImport: this package re-exports the module namespace as a compatibility surface.
 import * as rsbuild from '@rsbuild/core';
-export { rsbuild };
 
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
@@ -42,3 +41,4 @@ export { color, isDebug, logger, serializableConfig } from './utils';
 export { globalApis, TEMP_RSTEST_OUTPUT_DIR } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
 export { getTestEntries } from './utils/testFiles';
+export { rsbuild };
