@@ -140,6 +140,9 @@ export default async function runInPool(options: any): Promise<any> {
 
     case 'teardown':
       return runGlobalTeardown();
+
+    default:
+      throw new Error(`Unknown worker type: ${options.type}`);
   }
 }
 
