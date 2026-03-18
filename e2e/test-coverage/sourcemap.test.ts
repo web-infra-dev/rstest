@@ -20,7 +20,7 @@ describe('test coverage-istanbul sourcemap', () => {
         '--moduleResolution',
         'node',
         '--outDir',
-        'test-temp-sourcemap-dist',
+        'test-temp-sourcemap/dist',
         'src/sourcemap.ts',
       ],
       {

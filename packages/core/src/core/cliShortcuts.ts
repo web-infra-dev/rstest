@@ -52,13 +52,15 @@ export async function setupCliShortcuts({
   const clearCurrentInputLine = (): void => {
     try {
       process.stdout.write('\r\x1b[2K');
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
-  const promptInput = async (
+  const promptInput = (
     promptText: string,
     onComplete: (value: string | undefined) => Promise<void>,
-  ): Promise<void> => {
+  ): void => {
     if (isPrompting) return;
     isPrompting = true;
 
@@ -83,6 +85,13 @@ export async function setupCliShortcuts({
       if (key.ctrl && key.name === 'c') {
         // Send SIGINT to self to trigger proper cleanup
         process.kill(process.pid, 'SIGINT');
+        return;
+      }
+
+      if (key.ctrl && key.name === 'z') {
+        if (process.platform !== 'win32') {
+          process.kill(process.pid, 'SIGTSTP');
+        }
         return;
       }
 
@@ -145,9 +154,9 @@ export async function setupCliShortcuts({
     {
       key: 't',
       description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter test name pattern (empty to clear): ',
           async (pattern) => {
             await runWithTestNamePattern(pattern);
@@ -158,9 +167,9 @@ export async function setupCliShortcuts({
     {
       key: 'p',
       description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter file name pattern (empty to clear): ',
           async (input) => {
             const filters = input
@@ -204,6 +213,13 @@ export async function setupCliShortcuts({
       return;
     }
 
+    if (key.ctrl && key.name === 'z') {
+      if (process.platform !== 'win32') {
+        process.kill(process.pid, 'SIGTSTP');
+      }
+      return;
+    }
+
     // Check shortcuts
     for (const shortcut of shortcuts) {
       if (str === shortcut.key) {
@@ -230,7 +246,9 @@ export async function setupCliShortcuts({
     try {
       process.stdin.setRawMode(false);
       process.stdin.pause();
-    } catch {}
+    } catch {
+      // ignore
+    }
     process.stdin.off('keypress', handleKeypress);
     rl.close();
   };

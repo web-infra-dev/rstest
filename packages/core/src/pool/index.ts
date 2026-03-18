@@ -9,10 +9,10 @@ import type {
   RstestContext,
   RuntimeConfig,
   RuntimeRPC,
-  Test,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
   TestSuiteInfo,
   UserConsoleLog,
@@ -22,7 +22,6 @@ import {
   getForceColorEnv,
   isDeno,
   needFlagExperimentalDetectModule,
-  serializableConfig,
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
@@ -160,7 +159,7 @@ export const createPool = async ({
     project: ProjectContext;
   }) => Promise<
     {
-      tests: Test[];
+      tests: TestInfo[];
       testPath: string;
       errors?: FormattedError[];
       project: string;
@@ -311,7 +310,7 @@ export const createPool = async ({
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
-                  runtimeConfig: serializableConfig(runtimeConfig),
+                  runtimeConfig,
                 },
                 type: 'run',
                 setupEntries,
@@ -419,7 +418,7 @@ export const createPool = async ({
                   outputModule: project.outputModule,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
-                  runtimeConfig: serializableConfig(runtimeConfig),
+                  runtimeConfig,
                 },
                 type: 'collect',
                 setupEntries,

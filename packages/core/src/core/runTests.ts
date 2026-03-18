@@ -1,6 +1,7 @@
+import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo, ProjectEntries } from '../types';
+import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
 import {
   clearScreen,
   color,
@@ -34,6 +35,11 @@ async function runBrowserModeTests(
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
 }
+
+const getSignalExitCode = (signal: NodeJS.Signals): number => {
+  const signalNumber = osConstants.signals[signal];
+  return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
+};
 
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
@@ -172,7 +178,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
     // We still await the original promise later to surface the error.
-    browserResultPromise.catch(() => {});
+    browserResultPromise.catch(() => undefined);
   }
 
   // If there are no node tests to run, we can potentially exit early.
@@ -406,137 +412,166 @@ export async function runTests(context: Rstest): Promise<void> {
     const browserResult = browserResultPromise
       ? await browserResultPromise
       : undefined;
+    const browserResolveSourcemap = browserResult?.resolveSourcemap;
+    const browserClose = browserResult?.close;
 
-    // When unifying reporter output, combine browser and node durations
-    const duration =
-      shouldUnifyReporter && browserResult
-        ? {
-            totalTime: testTime + buildTime + browserResult.duration.totalTime,
-            buildTime: buildTime + browserResult.duration.buildTime,
-            testTime: testTime + browserResult.duration.testTime,
-          }
-        : {
-            totalTime: testTime + buildTime,
-            buildTime,
-            testTime,
-          };
+    try {
+      const nodeResourceByAssetName = new Map<
+        string,
+        (typeof returns)[number]['getSourceMaps']
+      >();
 
-    const results = returns.flatMap((r) => r.results);
-    const testResults = returns.flatMap((r) => r.testResults);
-    const errors = returns.flatMap((r) => r.errors || []);
-
-    // Merge browser test results for coverage collection (only when unifying reporter output)
-    // In watch mode, browser and node tests run independently with their own reporters,
-    // so we should not merge stale browser results into node results
-    if (shouldUnifyReporter && browserResult?.results) {
-      results.push(...browserResult.results);
-    }
-    if (shouldUnifyReporter && browserResult?.testResults) {
-      testResults.push(...browserResult.testResults);
-    }
-    if (shouldUnifyReporter && browserResult?.unhandledErrors) {
-      errors.push(...browserResult.unhandledErrors);
-    }
-
-    context.updateReporterResultState(
-      results,
-      testResults,
-      currentDeletedEntries,
-    );
-
-    // Check for failures including browser results when unified
-    const nodeHasFailure =
-      results.some((r) => r.status === 'fail') || errors.length;
-    const browserHasFailure = shouldUnifyReporter && browserResult?.hasFailure;
-
-    if (results.length === 0 && !errors.length) {
-      if (command === 'watch') {
-        if (mode === 'on-demand') {
-          logger.log(color.yellow('No test files need re-run.'));
-        } else {
-          logger.log(color.yellow('No test files found.'));
+      for (const item of returns) {
+        for (const assetName of item.assetNames) {
+          nodeResourceByAssetName.set(assetName, item.getSourceMaps);
         }
-      } else {
-        const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-
-        const message = `No test files found, exiting with code ${code}.`;
-        if (code === 0) {
-          logger.log(color.yellow(message));
-        } else {
-          logger.error(color.red(message));
-        }
-
-        process.exitCode = code;
       }
-      if (mode === 'all') {
-        if (context.fileFilters?.length) {
-          logger.log(
-            color.gray('filter: '),
-            context.fileFilters.join(color.gray(', ')),
-          );
+
+      const getSourcemap = async (
+        sourcePath: string,
+      ): Promise<SourceMapInput | null> => {
+        if (browserResolveSourcemap) {
+          const resolved = await browserResolveSourcemap(sourcePath);
+          if (resolved.handled) {
+            return resolved.sourcemap;
+          }
         }
 
-        allProjects.forEach((p) => {
-          if (allProjects.length > 1) {
-            logger.log('');
-            logger.log(color.gray('project:'), p.name);
-          }
-          logger.log(color.gray('root:'), p.rootPath);
+        const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
+        const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
+        return sourceMap ? JSON.parse(sourceMap) : null;
+      };
 
-          logger.log(
-            color.gray('include:'),
-            p.normalizedConfig.include.join(color.gray(', ')),
-          );
-          logger.log(
-            color.gray('exclude:'),
-            p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-          );
+      // When unifying reporter output, combine browser and node durations
+      const duration =
+        shouldUnifyReporter && browserResult
+          ? {
+              totalTime:
+                testTime + buildTime + browserResult.duration.totalTime,
+              buildTime: buildTime + browserResult.duration.buildTime,
+              testTime: testTime + browserResult.duration.testTime,
+            }
+          : {
+              totalTime: testTime + buildTime,
+              buildTime,
+              testTime,
+            };
+
+      const results = returns.flatMap((r) => r.results);
+      const testResults = returns.flatMap((r) => r.testResults);
+      const errors = returns.flatMap((r) => r.errors || []);
+
+      // Merge browser test results for coverage collection (only when unifying reporter output)
+      // In watch mode, browser and node tests run independently with their own reporters,
+      // so we should not merge stale browser results into node results
+      if (shouldUnifyReporter && browserResult?.results) {
+        results.push(...browserResult.results);
+      }
+      if (shouldUnifyReporter && browserResult?.testResults) {
+        testResults.push(...browserResult.testResults);
+      }
+      if (shouldUnifyReporter && browserResult?.unhandledErrors) {
+        errors.push(...browserResult.unhandledErrors);
+      }
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        currentDeletedEntries,
+      );
+
+      // Check for failures including browser results when unified
+      const nodeHasFailure =
+        results.some((r) => r.status === 'fail') || errors.length;
+      const browserHasFailure =
+        shouldUnifyReporter && browserResult?.hasFailure;
+
+      if (results.length === 0 && !errors.length) {
+        if (command === 'watch') {
+          if (mode === 'on-demand') {
+            logger.log(color.yellow('No test files need re-run.'));
+          } else {
+            logger.log(color.yellow('No test files found.'));
+          }
+        } else {
+          const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+
+          const message = `No test files found, exiting with code ${code}.`;
+          if (code === 0) {
+            logger.log(color.yellow(message));
+          } else {
+            logger.error(color.red(message));
+          }
+
+          process.exitCode = code;
+        }
+        if (mode === 'all') {
+          if (context.fileFilters?.length) {
+            logger.log(
+              color.gray('filter: '),
+              context.fileFilters.join(color.gray(', ')),
+            );
+          }
+
+          allProjects.forEach((p) => {
+            if (allProjects.length > 1) {
+              logger.log('');
+              logger.log(color.gray('project:'), p.name);
+            }
+            logger.log(color.gray('root:'), p.rootPath);
+
+            logger.log(
+              color.gray('include:'),
+              p.normalizedConfig.include.join(color.gray(', ')),
+            );
+            logger.log(
+              color.gray('exclude:'),
+              p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
+            );
+          });
+        }
+      }
+
+      const isFailure = nodeHasFailure || browserHasFailure;
+
+      if (isFailure) {
+        process.exitCode = 1;
+      }
+
+      for (const reporter of reporters) {
+        await reporter.onTestRunEnd?.({
+          results: context.reporterResults.results,
+          testResults: context.reporterResults.testResults,
+          unhandledErrors: errors,
+          snapshotSummary: snapshotManager.summary,
+          duration,
+          getSourcemap,
+          filterRerunTestPaths: currentEntries.length
+            ? currentEntries.map((e) => e.testPath)
+            : undefined,
         });
       }
-    }
 
-    const isFailure = nodeHasFailure || browserHasFailure;
+      // Generate coverage reports after all tests complete
+      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+        const { generateCoverage } = await import('../coverage/generate');
 
-    if (isFailure) {
-      process.exitCode = 1;
-    }
-
-    for (const reporter of reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
-        unhandledErrors: errors,
-        snapshotSummary: snapshotManager.summary,
-        duration,
-        getSourcemap: async (name: string) => {
-          const resource = returns.find((r) => r.assetNames.includes(name));
-
-          const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
-          return sourceMap ? JSON.parse(sourceMap) : null;
-        },
-        filterRerunTestPaths: currentEntries.length
-          ? currentEntries.map((e) => e.testPath)
-          : undefined,
-      });
-    }
-
-    // Generate coverage reports after all tests complete
-    if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
-      const { generateCoverage } = await import('../coverage/generate');
-
-      await generateCoverage(context, results, coverageProvider);
-    }
-
-    if (isFailure) {
-      const bail = context.normalizedConfig.bail;
-
-      if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-        logger.log(
-          color.yellow(
-            `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
-          ),
-        );
+        await generateCoverage(context, results, coverageProvider);
       }
+
+      if (isFailure) {
+        const bail = context.normalizedConfig.bail;
+
+        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+          logger.log(
+            color.yellow(
+              `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
+            ),
+          );
+        }
+      }
+    } finally {
+      await browserClose?.();
     }
   };
 
@@ -564,11 +599,12 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(signal === 'SIGINT' ? 130 : 143);
+      process.exit(getSignalExitCode(signal));
     };
 
     process.on('SIGINT', handleSignal);
     process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -773,12 +809,13 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
       await cleanup();
       // Exit with appropriate code (128 + signal number is Unix convention)
-      process.exit(signal === 'SIGINT' ? 130 : 143);
+      process.exit(getSignalExitCode(signal));
     };
 
     process.on('exit', unExpectedExit);
     process.on('SIGINT', handleSignal);
     process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
 
     try {
       await run();
@@ -792,6 +829,7 @@ export async function runTests(context: Rstest): Promise<void> {
       process.off('exit', unExpectedExit);
       process.off('SIGINT', handleSignal);
       process.off('SIGTERM', handleSignal);
+      process.off('SIGTSTP', handleSignal);
     }
   }
 }

@@ -1,3 +1,7 @@
+---
+description: count 表示总的 shard 数量，index 表示当前 shard 的索引（从 1 开始）。
+---
+
 # shard
 
 - **类型：** `{ count: number; index: number }`
@@ -42,3 +46,36 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+## 合并分片报告
+
+在 CI 中使用分片时，每个分片会独立产生自己的测试报告和覆盖率数据。要将所有分片的结果合并为一个统一的报告，请使用 `blob` 报告器配合 `rstest merge-reports` 命令。
+
+### 步骤一：使用 blob 报告器运行分片
+
+配置每个分片使用 `blob` 报告器输出结果：
+
+```bash
+# 分片 1
+npx rstest run --shard 1/3 --reporter=blob --coverage
+
+# 分片 2
+npx rstest run --shard 2/3 --reporter=blob --coverage
+
+# 分片 3
+npx rstest run --shard 3/3 --reporter=blob --coverage
+```
+
+每个分片会将结果写入 `.rstest-reports/blob-{index}-{count}.json`。
+
+### 步骤二：合并报告
+
+所有分片完成后，将所有 blob 文件收集到同一个 `.rstest-reports/` 目录中，然后运行：
+
+```bash
+npx rstest merge-reports --cleanup
+```
+
+这将合并所有测试结果，使用你配置的报告器生成统一的汇总报告，并合并覆盖率数据。
+
+有关 `merge-reports` 命令的更多详细信息，请参阅 [CLI 文档](/guide/basic/cli#rstest-merge-reports)。

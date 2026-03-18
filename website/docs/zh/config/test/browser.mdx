@@ -1,3 +1,9 @@
+---
+description: 浏览器模式配置。启用后，测试将在真实浏览器中运行，而非 Node.js 环境。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
 # browser（实验性）
 
 - **类型：**
@@ -10,6 +16,7 @@ type BrowserModeConfig = {
   headless?: boolean;
   port?: number;
   strictPort?: boolean;
+  providerOptions?: Record<string, unknown>;
 };
 ```
 
@@ -23,6 +30,7 @@ const defaultBrowser = {
   headless: true, // CI 环境；本地开发为 false
   port: undefined, // 随机可用端口
   strictPort: false,
+  providerOptions: {},
 };
 ```
 
@@ -34,6 +42,7 @@ const defaultBrowser = {
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--browser`、`--browser.enabled`
 
 启用浏览器模式。
 
@@ -65,6 +74,8 @@ npx playwright install chromium
 
 浏览器驱动提供者。目前仅支持 [Playwright](https://playwright.dev/)。
 
+同一次测试运行（single run）暂不支持混用多个 provider。
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -80,6 +91,7 @@ export default defineConfig({
 
 - **类型：** `'chromium' | 'firefox' | 'webkit'`
 - **默认值：** `'chromium'`
+- **CLI：** `--browser.name <name>`
 
 用于测试的浏览器类型。
 
@@ -119,6 +131,7 @@ npx playwright install
 
 - **类型：** `boolean`
 - **默认值：** CI 环境为 `true`，本地开发为 `false`
+- **CLI：** `--browser.headless`
 
 是否以无界面模式运行浏览器。
 
@@ -176,6 +189,7 @@ export default defineConfig({
 
 - **类型：** `number`
 - **默认值：** `undefined`（自动选择可用端口）
+- **CLI：** `--browser.port <port>`
 
 浏览器模式 Dev Server 的端口号。
 
@@ -197,6 +211,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--browser.strictPort`
 
 当指定 `port` 时，是否要求端口必须可用：
 
@@ -216,40 +231,80 @@ export default defineConfig({
 });
 ```
 
-## 多浏览器测试
+### providerOptions
 
-通过 [projects](/config/test/projects) 配置可以同时在多个浏览器中运行测试：
+<ApiMeta addedVersion="0.9.3" />
+
+- **类型：** `Record<string, unknown>`
+- **默认值：** `{}`
+
+传递给选定 browser provider 的特定选项。Rstest 不会验证或解析该对象的内容——它会在浏览器启动和 context 创建时原样转发给 provider。
+
+`providerOptions` 的结构由各 provider 自行定义。详见下方 [Provider 选项](#provider-选项)。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: [
-    {
-      name: 'chromium',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions: {
+      launch: {
+        timeout: 60_000,
       },
     },
-    {
-      name: 'firefox',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'firefox',
-      },
-    },
-    {
-      name: 'webkit',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'webkit',
-      },
-    },
-  ],
+  },
+});
+```
+
+## 当前限制：同一次 run 的 browser 启动配置必须一致
+
+在一个 `rstest` 进程内，所有启用 Browser Mode 的项目需要共享同一组 browser 启动配置：
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+- `providerOptions`
+
+这意味着目前还不支持在同一次 run 里通过 `projects` 混用多个 provider，或同时配置 Chromium/Firefox/WebKit。
+
+如果你需要跨浏览器覆盖，建议拆成多次执行（例如在 CI matrix 中分别跑）：
+
+```bash
+npx rstest --browser.name chromium
+npx rstest --browser.name firefox
+npx rstest --browser.name webkit
+```
+
+## 多项目配置隔离
+
+在 Browser Mode 下使用 `projects` 时，每个项目会按自己的构建配置独立编译和执行（如 `plugins`、`include`、框架设置），不会复用其他项目的构建配置。
+
+但 browser 启动配置仍需保持一致：`provider`、`browser`、`headless`、`port`、`strictPort`、`providerOptions` 必须在所有 browser 项目中对齐。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
 });
 ```
 
@@ -285,7 +340,45 @@ export default defineConfig({
 });
 ```
 
+## Provider 选项
+
+### Playwright
+
+使用 `provider: 'playwright'` 时，Playwright provider 识别 `providerOptions` 中的以下字段：
+
+1. **`launch`** — 传递给 Playwright [`browserType.launch()`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch)，控制浏览器进程的启动方式。
+2. **`context`** — 传递给 Playwright [`browser.newContext()`](https://playwright.dev/docs/api/class-browser#browser-new-context)，控制每个测试文件创建的 browser context。
+
+由于 `providerOptions` 的类型是 `Record<string, unknown>`，默认不会提供 IntelliSense。如需类型检查和自动补全，可以直接从 `playwright` 包导入类型，并配合 TypeScript 的 `satisfies` 运算符使用：
+
+```ts title="rstest.config.ts"
+import type { LaunchOptions, BrowserContextOptions } from 'playwright';
+import { defineConfig } from '@rstest/core';
+
+type PlaywrightProviderOptions = {
+  launch?: LaunchOptions;
+  context?: BrowserContextOptions;
+};
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions: {
+      launch: {
+        timeout: 60_000,
+      },
+      context: {
+        locale: 'en-US',
+        colorScheme: 'dark',
+      },
+    } satisfies PlaywrightProviderOptions,
+  },
+});
+```
+
 ## 相关链接
 
 - [浏览器模式指南](/guide/browser-testing/) - 浏览器模式介绍和使用指南
 - [快速开始](/guide/browser-testing/getting-started) - 配置浏览器模式测试
+- [浏览器交互](/guide/browser-testing/user-interactions#locator-api) - 使用 `page` + `expect.element` 编写语义化测试

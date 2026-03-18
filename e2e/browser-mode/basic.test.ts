@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { canRunHeadedBrowser, runBrowserCli } from './utils';
+import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 describe('browser mode - basic', () => {
   it('should run DOM tests correctly', async () => {
@@ -34,11 +34,11 @@ describe('browser mode - basic', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Test Files.*passed/);
-    expect(cli.stdout).toContain('/scheduler.html');
+    expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
-  it.runIf(canRunHeadedBrowser)(
-    'should run headed mode without scheduler page and exit with code 0',
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should run headed mode and exit with code 0',
     async () => {
       const { cli } = await runBrowserCli('basic', {
         args: ['--browser.headless', 'false', 'tests/dom.test.ts'],
@@ -46,7 +46,6 @@ describe('browser mode - basic', () => {
 
       await cli.exec;
       expect(cli.exec.exitCode).toBe(0);
-      expect(cli.stdout).not.toContain('/scheduler.html');
     },
   );
 });

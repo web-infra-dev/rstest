@@ -1,68 +1,27 @@
-import type {
-  BrowserHostConfig,
-  SnapshotRpcRequest,
-  SnapshotRpcResponse,
-} from '../protocol';
+import type { BrowserDispatchRequest, SnapshotRpcRequest } from '../protocol';
+import { DISPATCH_NAMESPACE_SNAPSHOT } from '../protocol';
+import {
+  createRequestId,
+  dispatchRpc,
+  getRpcTimeout,
+} from './dispatchTransport';
 import { mapStackFrame } from './sourceMapSupport';
-
-declare global {
-  interface Window {
-    __RSTEST_BROWSER_OPTIONS__?: BrowserHostConfig;
-  }
-}
 
 const SNAPSHOT_HEADER = '// Rstest Snapshot';
 
-/** Default RPC timeout if not specified in config (30 seconds) */
-const DEFAULT_RPC_TIMEOUT_MS = 30_000;
-
-/**
- * Get RPC timeout from browser options or use default.
- */
-const getRpcTimeout = (): number => {
-  return (
-    window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout ?? DEFAULT_RPC_TIMEOUT_MS
-  );
-};
-
-/**
- * Pending RPC requests waiting for responses from the container.
- */
-const pendingRequests = new Map<
-  string,
-  {
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-  }
->();
-
-let requestIdCounter = 0;
-let messageListenerInitialized = false;
-
-/**
- * Initialize the message listener for snapshot RPC responses.
- * This is called once when the first RPC request is made.
- */
-const initMessageListener = (): void => {
-  if (messageListenerInitialized) {
-    return;
-  }
-  messageListenerInitialized = true;
-
-  window.addEventListener('message', (event: MessageEvent) => {
-    if (event.data?.type === '__rstest_snapshot_response__') {
-      const response = event.data.payload as SnapshotRpcResponse;
-      const pending = pendingRequests.get(response.id);
-      if (pending) {
-        pendingRequests.delete(response.id);
-        if (response.error) {
-          pending.reject(new Error(response.error));
-        } else {
-          pending.resolve(response.result);
-        }
-      }
-    }
-  });
+const createSnapshotDispatchRequest = (
+  requestId: string,
+  method: SnapshotRpcRequest['method'],
+  args: SnapshotRpcRequest['args'],
+): BrowserDispatchRequest => {
+  // Snapshot is just one namespace on the shared dispatch RPC channel.
+  // Keep this mapping explicit so new runner-side RPC clients can mirror it.
+  return {
+    requestId,
+    namespace: DISPATCH_NAMESPACE_SNAPSHOT,
+    method,
+    args,
+  };
 };
 
 /**
@@ -73,44 +32,20 @@ const sendRpcRequest = <T>(
   method: SnapshotRpcRequest['method'],
   args: SnapshotRpcRequest['args'],
 ): Promise<T> => {
-  initMessageListener();
-
-  const id = `snapshot-rpc-${++requestIdCounter}`;
+  const requestId = createRequestId('snapshot-rpc');
   const rpcTimeout = getRpcTimeout();
+  const dispatchRequest = createSnapshotDispatchRequest(
+    requestId,
+    method,
+    args,
+  );
 
-  return new Promise<T>((resolve, reject) => {
-    // Set a timeout for the RPC call
-    const timeoutId = setTimeout(() => {
-      pendingRequests.delete(id);
-      reject(
-        new Error(
-          `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${method}`,
-        ),
-      );
-    }, rpcTimeout);
-
-    pendingRequests.set(id, {
-      resolve: (value) => {
-        clearTimeout(timeoutId);
-        resolve(value as T);
-      },
-      reject: (error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      },
-    });
-
-    // Send request to parent window (container)
-    window.parent.postMessage(
-      {
-        type: '__rstest_dispatch__',
-        payload: {
-          type: 'snapshot-rpc-request',
-          payload: { id, method, args },
-        },
-      },
-      '*',
-    );
+  return dispatchRpc<T>({
+    requestId,
+    request: dispatchRequest,
+    timeoutMs: rpcTimeout,
+    staleMessage: 'Stale snapshot RPC request ignored.',
+    timeoutMessage: `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${method}`,
   });
 };
 

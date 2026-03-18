@@ -1,6 +1,6 @@
 import type { JSXElementConstructor, ReactNode } from 'react';
-import * as React from 'react';
-import * as ReactDOMClient from 'react-dom/client';
+import React from 'react';
+import { createRoot as createReactRoot } from 'react-dom/client';
 import { act } from './act';
 
 // ===== Types =====
@@ -70,7 +70,7 @@ const config: RenderConfiguration = {
 // ===== Internal Helpers =====
 
 function createRoot(container: HTMLElement): ReactRoot {
-  const root = ReactDOMClient.createRoot(container);
+  const root = createReactRoot(container);
   return {
     render: (element: ReactNode) => root.render(element),
     unmount: () => root.unmount(),

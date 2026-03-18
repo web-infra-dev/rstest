@@ -5,15 +5,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "outputModule": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -53,85 +44,79 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -143,51 +128,51 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -209,7 +194,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -240,9 +225,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -255,7 +240,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -271,9 +256,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -286,7 +271,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -302,9 +287,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -317,7 +302,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -333,9 +318,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -348,7 +333,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -372,7 +357,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -381,7 +366,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -414,13 +399,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].mjs",
     "chunkFormat": "module",
     "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].mjs",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "import.meta.__rstest_dynamic_import__",
     "library": {
@@ -428,9 +415,8 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     },
     "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
     "workerChunkLoading": "import",
   },
   "performance": {
@@ -452,7 +438,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -506,7 +492,7 @@ const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.u
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -558,14 +544,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -604,85 +582,79 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -694,51 +666,51 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -760,7 +732,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -791,9 +763,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -806,7 +778,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -822,9 +794,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -837,7 +809,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -853,9 +825,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -868,7 +840,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -884,9 +856,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -899,7 +871,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -923,7 +895,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -932,7 +904,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -947,6 +919,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     ],
   },
   "name": "test",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
@@ -961,20 +937,25 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].js",
+    "chunkFormat": "module",
+    "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "__rstest_dynamic_import__",
     "library": {
-      "type": "commonjs2",
+      "type": "module",
     },
+    "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
+    "workerChunkLoading": "import",
   },
   "performance": {
     "hints": false,
@@ -995,7 +976,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -1016,7 +997,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {
-      "outputModule": false,
+      "outputModule": true,
     },
     RstestCacheControlPlugin {},
     RstestPlugin {
@@ -1034,7 +1015,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -1083,14 +1064,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -1130,85 +1103,79 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -1220,51 +1187,51 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -1286,7 +1253,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -1317,9 +1284,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1332,7 +1299,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1348,9 +1315,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1363,7 +1330,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1379,9 +1346,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1394,7 +1361,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1410,9 +1377,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1425,7 +1392,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1449,7 +1416,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -1458,7 +1425,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -1473,6 +1440,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     ],
   },
   "name": "test",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
@@ -1487,20 +1458,25 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].js",
+    "chunkFormat": "module",
+    "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "__rstest_dynamic_import__",
     "library": {
-      "type": "commonjs2",
+      "type": "module",
     },
+    "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
+    "workerChunkLoading": "import",
   },
   "performance": {
     "hints": false,
@@ -1521,7 +1497,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -1542,7 +1518,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {
-      "outputModule": false,
+      "outputModule": true,
     },
     RstestPlugin {
       "_args": [
@@ -1559,7 +1535,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -1611,14 +1587,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
-  "experiments": {
-    "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -1658,85 +1626,79 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -1748,51 +1710,51 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -1814,7 +1776,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -1845,9 +1807,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1860,7 +1822,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1876,9 +1838,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1891,7 +1853,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1907,9 +1869,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1922,7 +1884,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1938,9 +1900,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -1953,7 +1915,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -1977,7 +1939,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -1986,7 +1948,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -2001,6 +1963,10 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     ],
   },
   "name": "test",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
@@ -2015,20 +1981,25 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].js",
+    "chunkFormat": "module",
+    "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "__rstest_dynamic_import__",
     "library": {
-      "type": "commonjs2",
+      "type": "module",
     },
+    "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
+    "workerChunkLoading": "import",
   },
   "performance": {
     "hints": false,
@@ -2049,7 +2020,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -2070,7 +2041,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {
-      "outputModule": false,
+      "outputModule": true,
     },
     TestFileWatchPlugin {
       "contextToWatch": "<ROOT>/packages/core",
@@ -2090,7 +2061,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -2142,19 +2113,237 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
 }
 `;
 
+exports[`prepareRsbuild > should generate rspack config correctly with less / sass plugin > less rules 1`] = `
+[
+  {
+    "dependency": {
+      "not": "url",
+    },
+    "oneOf": [
+      {
+        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+        "sideEffects": true,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 2,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 20",
+              ],
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/less-loader/dist/cjs.js",
+            "options": {
+              "lessOptions": {
+                "javascriptEnabled": true,
+                "paths": [
+                  "<ROOT>/packages/core/node_modules",
+                ],
+              },
+              "sourceMap": false,
+            },
+          },
+        ],
+      },
+      {
+        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        "type": "asset/source",
+      },
+      {
+        "sideEffects": true,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "importLoaders": 2,
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/less-loader/dist/cjs.js",
+            "options": {
+              "lessOptions": {
+                "javascriptEnabled": true,
+                "paths": [
+                  "<ROOT>/packages/core/node_modules",
+                ],
+              },
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    "resolve": {
+      "preferRelative": true,
+    },
+    "test": /\\\\\\.less\\$/,
+  },
+]
+`;
+
+exports[`prepareRsbuild > should generate rspack config correctly with less / sass plugin > sass rules 1`] = `
+[
+  {
+    "dependency": {
+      "not": "url",
+    },
+    "oneOf": [
+      {
+        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+        "sideEffects": true,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 3,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 20",
+              ],
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/resolve-url-loader/index.js",
+            "options": {
+              "join": [Function],
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/sass-loader/index.js",
+            "options": {
+              "api": "modern-compiler",
+              "implementation": "<PNPM_INNER>/sass-embedded/dist/lib/index.js",
+              "sassOptions": {
+                "quietDeps": true,
+                "silenceDeprecations": [
+                  "import",
+                ],
+              },
+              "sourceMap": true,
+            },
+          },
+        ],
+      },
+      {
+        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        "type": "asset/source",
+      },
+      {
+        "sideEffects": true,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "importLoaders": 3,
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/resolve-url-loader/index.js",
+            "options": {
+              "join": [Function],
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/sass-loader/index.js",
+            "options": {
+              "api": "modern-compiler",
+              "implementation": "<PNPM_INNER>/sass-embedded/dist/lib/index.js",
+              "sassOptions": {
+                "quietDeps": true,
+                "silenceDeprecations": [
+                  "import",
+                ],
+              },
+              "sourceMap": true,
+            },
+          },
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
+        ],
+      },
+    ],
+    "resolve": {
+      "preferRelative": true,
+    },
+    "test": /\\\\\\.s\\(\\?:a\\|c\\)ss\\$/,
+  },
+]
+`;
+
 exports[`prepareRsbuild > should generate rspack config correctly with projects 1`] = `
 {
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -2193,85 +2382,79 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -2283,51 +2466,51 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -2349,7 +2532,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -2380,9 +2563,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2395,7 +2578,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2411,9 +2594,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2426,7 +2609,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2442,9 +2625,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2457,7 +2640,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2473,9 +2656,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2488,7 +2671,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2512,7 +2695,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -2521,7 +2704,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -2536,6 +2719,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     ],
   },
   "name": "test",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
@@ -2550,20 +2737,25 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].js",
+    "chunkFormat": "module",
+    "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "__rstest_dynamic_import__",
     "library": {
-      "type": "commonjs2",
+      "type": "module",
     },
+    "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
+    "workerChunkLoading": "import",
   },
   "performance": {
     "hints": false,
@@ -2584,7 +2776,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -2605,7 +2797,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {
-      "outputModule": false,
+      "outputModule": true,
     },
     RstestCacheControlPlugin {},
     RstestPlugin {
@@ -2623,7 +2815,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -2672,14 +2864,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
-  "experiments": {
-    "asyncWebAssembly": true,
-    "rspackFuture": {
-      "bundlerInfo": {
-        "force": false,
-      },
-    },
-  },
   "externals": [
     [Function],
     {
@@ -2719,85 +2903,79 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "dependency": {
           "not": "url",
         },
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": {
-          "not": [
-            /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-            /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-          ],
-        },
-        "sideEffects": true,
-        "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
+        "oneOf": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
           },
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "importLoaders": 0,
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-              "sourceMap": false,
-            },
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
           },
           {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
+            "resolve": {
+              "preferRelative": true,
             },
+            "sideEffects": true,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "importLoaders": 1,
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+            ],
           },
         ],
-      },
-      {
-        "resolve": {
-          "preferRelative": true,
-        },
-        "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
-        "sideEffects": true,
         "test": /\\\\\\.css\\$/,
-        "type": "javascript/auto",
-        "use": [
-          {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/compiled/css-loader/index.js",
-            "options": {
-              "exportType": "string",
-              "importLoaders": 1,
-              "modules": false,
-              "sourceMap": false,
-            },
-          },
-          {
-            "loader": "builtin:lightningcss-loader",
-            "options": {
-              "errorRecovery": true,
-              "targets": [
-                "node >= 16",
-              ],
-            },
-          },
-        ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        "test": /\\\\\\.css\\$/,
-        "type": "asset/source",
       },
       {
         "dependency": {
@@ -2809,51 +2987,51 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
-        "resourceQuery": {
-          "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-        },
-        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "use": [
+        "oneOf": [
           {
-            "loader": "builtin:swc-loader",
-            "options": {
-              "collectTypeScriptInfo": {
-                "exportedEnum": false,
-                "typeExports": true,
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "use": [
+              {
+                "loader": "builtin:swc-loader",
+                "options": {
+                  "collectTypeScriptInfo": {
+                    "exportedEnum": false,
+                    "typeExports": true,
+                  },
+                  "env": {
+                    "targets": [
+                      "node >= 20",
+                    ],
+                  },
+                  "isModule": "unknown",
+                  "jsc": {
+                    "experimental": {
+                      "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                      "keepImportAttributes": true,
+                    },
+                    "externalHelpers": true,
+                    "output": {
+                      "charset": "utf8",
+                    },
+                    "parser": {
+                      "decorators": true,
+                      "syntax": "typescript",
+                      "tsx": false,
+                    },
+                    "transform": {
+                      "decoratorVersion": "2022-03",
+                      "legacyDecorator": false,
+                    },
+                  },
+                },
               },
-              "env": {
-                "targets": [
-                  "node >= 16",
-                ],
-              },
-              "isModule": "unknown",
-              "jsc": {
-                "experimental": {
-                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-                  "keepImportAttributes": true,
-                },
-                "externalHelpers": true,
-                "output": {
-                  "charset": "utf8",
-                },
-                "parser": {
-                  "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
-                },
-                "transform": {
-                  "decoratorVersion": "2022-03",
-                  "legacyDecorator": false,
-                },
-              },
-            },
+            ],
           },
         ],
-      },
-      {
-        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-        "type": "asset/source",
       },
       {
         "mimetype": {
@@ -2875,7 +3053,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
               },
               "env": {
                 "targets": [
-                  "node >= 16",
+                  "node >= 20",
                 ],
               },
               "isModule": "unknown",
@@ -2906,9 +3084,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2921,7 +3099,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/image/[name].[contenthash:8][ext]",
+              "filename": "static/image/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2937,9 +3115,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2952,7 +3130,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/svg/[name].[contenthash:8].svg",
+              "filename": "static/svg/[name].[contenthash:10].svg",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2968,9 +3146,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -2983,7 +3161,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/media/[name].[contenthash:8][ext]",
+              "filename": "static/media/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -2999,9 +3177,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "oneOf": [
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?\\(__inline=false\\|url\\)\\$/,
+            "resourceQuery": /\\^\\\\\\?url\\$/,
             "type": "asset/resource",
           },
           {
@@ -3014,7 +3192,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           },
           {
             "generator": {
-              "filename": "static/font/[name].[contenthash:8][ext]",
+              "filename": "static/font/[name].[contenthash:10][ext]",
             },
             "parser": {
               "dataUrlCondition": {
@@ -3038,7 +3216,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "dependency": "url",
         "generator": {
-          "filename": "static/wasm/[contenthash:8].module.wasm",
+          "filename": "static/wasm/[contenthash:10].module.wasm",
         },
         "test": /\\\\\\.wasm\\$/,
         "type": "asset/resource",
@@ -3047,7 +3225,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         "test": /\\\\\\.node\\$/,
         "use": [
           {
-            "loader": "<PNPM_STORE>/@rsbuild/core/node_modules/@rsbuild/core/dist/transformRawLoader.mjs",
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformRawLoader.mjs",
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
@@ -3062,6 +3240,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     ],
   },
   "name": "test-node",
+  "node": {
+    "__dirname": false,
+    "__filename": false,
+  },
   "optimization": {
     "chunkIds": "named",
     "emitOnErrors": true,
@@ -3076,20 +3258,25 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
   },
   "output": {
-    "assetModuleFilename": "static/assets/[name].[contenthash:8][ext]",
+    "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
+    "bundlerInfo": {
+      "force": false,
+    },
     "chunkFilename": "[name].js",
+    "chunkFormat": "module",
+    "chunkLoading": "import",
     "devtoolModuleFilenameTemplate": "[absolute-resource-path]",
     "filename": "[name].js",
-    "hashFunction": "xxhash64",
     "iife": false,
     "importFunctionName": "__rstest_dynamic_import__",
     "library": {
-      "type": "commonjs2",
+      "type": "module",
     },
+    "module": true,
     "path": "<ROOT>/packages/core/dist/.rstest-temp/test-node",
-    "pathinfo": false,
-    "publicPath": "/",
-    "webassemblyModuleFilename": "static/wasm/[contenthash:8].module.wasm",
+    "publicPath": "",
+    "webassemblyModuleFilename": "static/wasm/[contenthash:10].module.wasm",
+    "workerChunkLoading": "import",
   },
   "performance": {
     "hints": false,
@@ -3110,7 +3297,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "affectedHooks": "compilation",
       "name": "DefinePlugin",
     },
-    WebpackManifestPlugin {
+    {
       "options": {
         "assetHookStage": Infinity,
         "basePath": "",
@@ -3131,7 +3318,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     },
     IgnoreModuleNotFoundErrorPlugin {},
     MockRuntimeRspackPlugin {
-      "outputModule": false,
+      "outputModule": true,
     },
     RstestCacheControlPlugin {},
     RstestPlugin {
@@ -3149,7 +3336,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   ],
   "resolve": {
     "alias": {
-      "@swc/helpers": "<PNPM_STORE>/@swc/helpers/node_modules/@swc/helpers",
+      "@swc/helpers": "<PNPM_INNER>/@swc/helpers",
     },
     "byDependency": {
       "commonjs": {
@@ -3215,52 +3402,52 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
       /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
     ],
-    "resourceQuery": {
-      "not": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
-    },
-    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-    "use": [
+    "oneOf": [
       {
-        "loader": "builtin:swc-loader",
-        "options": {
-          "collectTypeScriptInfo": {
-            "exportedEnum": false,
-            "typeExports": true,
+        "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+        "type": "asset/source",
+      },
+      {
+        "use": [
+          {
+            "loader": "builtin:swc-loader",
+            "options": {
+              "collectTypeScriptInfo": {
+                "exportedEnum": false,
+                "typeExports": true,
+              },
+              "env": {
+                "targets": [
+                  "node >= 20",
+                ],
+              },
+              "isModule": "unknown",
+              "jsc": {
+                "experimental": {
+                  "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
+                  "keepImportAttributes": true,
+                },
+                "externalHelpers": true,
+                "output": {
+                  "charset": "utf8",
+                },
+                "parser": {
+                  "decorators": true,
+                  "syntax": "typescript",
+                  "tsx": false,
+                },
+                "transform": {
+                  "decoratorMetadata": true,
+                  "legacyDecorator": true,
+                  "useDefineForClassFields": false,
+                },
+              },
+            },
           },
-          "env": {
-            "targets": [
-              "node >= 16",
-            ],
-          },
-          "isModule": "unknown",
-          "jsc": {
-            "experimental": {
-              "cacheRoot": "<ROOT>/packages/core/node_modules/.cache/.swc",
-              "keepImportAttributes": true,
-            },
-            "externalHelpers": true,
-            "output": {
-              "charset": "utf8",
-            },
-            "parser": {
-              "decorators": true,
-              "syntax": "typescript",
-              "tsx": false,
-            },
-            "transform": {
-              "decoratorMetadata": true,
-              "legacyDecorator": true,
-              "useDefineForClassFields": false,
-            },
-          },
-        },
+        ],
       },
     ],
-  },
-  {
-    "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
-    "type": "asset/source",
   },
 ]
 `;

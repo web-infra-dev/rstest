@@ -1,14 +1,17 @@
 ---
 title: Mock modules
+description: Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。
 ---
 
 # Mock modules
 
-Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock 。你可以直接使用以下方法来 mock 模块：
+Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。
+
+Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock 。你可以直接使用以下方法来 mock 模块：
 
 ## rs.mock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
 
 对第一个参数对应的模块进行 mock 替换。
 
@@ -226,7 +229,7 @@ rs.mock(import('../src/b'), () => {
 
 ## rs.doMock
 
-- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
+- **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
 
 与 `rs.mock` 类似，但它**不会被提升**到模块顶部。它会在被执行到时调用，这意味着如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
 
@@ -243,6 +246,55 @@ it('test', async () => {
   const { sum: mockedSum } = await import('./sum');
   // sum 在执行 doMock 之后导入，现在已经被 mock 了
   expect(mockedSum(1, 2)).toBe(3); // FAILED
+});
+```
+
+## rs.mockRequire
+
+- **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+用于 mock 通过 CommonJS `require()` 加载的模块。和 `rs.mock` 一样，这个 API 会被提升（hoisted）到当前模块顶部。
+
+当目标模块是通过 `require()` 消费时，应使用这个 API。
+
+:::tip
+与 `rs.mock` 在 dual package（同时提供 ESM entry 与 CJS entry）场景的区别：
+
+- `rs.mock()` mock 的是 **ESM entry**（`import` 使用）
+- `rs.mockRequire()` mock 的是 **CJS entry**（`require()` 使用）
+
+如果你的代码路径走的是 `require()`，优先使用 `rs.mockRequire()`，避免 mock 到错误的 entry。
+:::
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+test('使用 require mock cjs 模块', () => {
+  expect(sum(1, 2)).toBe(103);
+});
+```
+
+## rs.doMockRequire
+
+- **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+与 `rs.mockRequire` 类似，但它**不会被提升**。只有在执行 `rs.doMockRequire` 之后，后续的 `require()` 才会应用 mock。
+
+```ts title="src/math.test.cjs"
+test('doMockRequire 只影响后续 require 调用', () => {
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
 });
 ```
 
@@ -369,48 +421,3 @@ it('test', async () => {
 :::warning
 不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock) 或 [`rs.doUnmock`](#rsdounmock) 。
 :::
-
-## 常见问题
-
-### Mocking re-exported modules
-
-在某些库中，API 是通过 **re-exports** 暴露的。例如在 React Router 中，某些 API（如 `useParams`）是从 `react-router-dom` 导入的，但实际上是从 `react-router` 重新导出的。
-
-当使用 Rspack 时，这些 re-exports 可能会被进一步优化：导出语句会被直接解析为从源模块（如 `react-router`）导入，而跳过中间模块（如 `react-router-dom`）。
-
-在这种情况下：
-
-- 对 `react-router-dom` 的 mock 可能不会生效
-- 直接 mock `react-router` 则可以正常生效
-
-```ts
-// 即使你的代码中写的是：
-import { useParams } from 'react-router-dom';
-
-// 实际运行时可能等价于：
-import { useParams } from 'react-router';
-```
-
-在遇到 mock 不生效的问题时，建议：
-
-1. 尝试 mock 实际被解析到的模块路径：
-
-```ts
-rs.mock('react-router', () => ({
-  useParams: () => ({ id: 'mocked-id' }),
-}));
-```
-
-2. 禁用测试环境中的相关打包器优化，以避免 re-export 被 “穿透”。需要注意的是，禁用此优化可能会导致与运行时循环依赖相关的错误。
-
-```ts title="rstest.config.js"
-export default defineConfig({
-  tools: {
-    rspack: {
-      optimization: {
-        providedExports: false,
-      },
-    },
-  },
-});
-```

@@ -272,7 +272,7 @@ export function mockObject<T extends Record<Key, any>>(
               configurable: descriptor.configurable,
               enumerable: descriptor.enumerable,
               get: () => undefined,
-              set: descriptor.set ? () => {} : undefined,
+              set: descriptor.set ? () => undefined : undefined,
             });
           }
         } catch {

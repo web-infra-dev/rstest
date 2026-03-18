@@ -37,21 +37,12 @@ npm run lint                  # Biome check
 - Use PascalCase for classes
 - Place unit tests in `tests/unit/`, E2E in `tests/suite/`
 - Use `toLabelTree()` from `tests/suite/index.test.ts` for stable tree assertions
-- Keep changes minimal and focused
-- Follow existing patterns in the codebase
 
 ## Don't
 
 - Don't edit `dist/` directly
-- Don't add dependencies without discussion
 - Don't mix unit and E2E test patterns
 - Don't modify worker protocol without updating both sides
-
-## Testing loop
-
-1. `npm run typecheck`
-2. `npm run test:unit`
-3. `npm run test:e2e`
 
 ## Key files
 
@@ -61,16 +52,6 @@ npm run lint                  # Biome check
 - `src/master.ts` — Worker manager
 - `src/worker/index.ts` — Worker entry
 - `src/types.ts` — Shared type definitions
-
-## Safety
-
-Allowed: read files, typecheck, lint, unit tests
-
-Ask first: E2E tests (slow), install dependencies, modify extension manifest
-
-## When stuck
-
-Ask a clarifying question or propose a plan before making large changes.
 
 ## References
 

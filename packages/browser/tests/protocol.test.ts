@@ -1,9 +1,12 @@
 import { describe, expect, it } from '@rstest/core';
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
 } from '../src/protocol';
+import { validateBrowserRpcRequest } from '../src/protocol';
 
 describe('browser protocol types', () => {
   describe('BrowserProjectRuntime', () => {
@@ -117,6 +120,84 @@ describe('browser protocol types', () => {
     it('should accept collect-complete message', () => {
       const msg: BrowserClientMessage = { type: 'collect-complete' };
       expect(msg.type).toBe('collect-complete');
+    });
+  });
+
+  describe('BrowserDispatch envelope', () => {
+    it('should accept dispatch request', () => {
+      const request: BrowserDispatchRequest = {
+        requestId: 'req-1',
+        namespace: 'runner',
+        method: 'file-start',
+        args: { testPath: '/test.ts', projectName: 'default' },
+        runToken: 1,
+        target: { testFile: '/test.ts', sessionId: 'session-1' },
+      };
+
+      expect(request.namespace).toBe('runner');
+      expect(request.method).toBe('file-start');
+    });
+
+    it('should accept dispatch response', () => {
+      const response: BrowserDispatchResponse = {
+        requestId: 'req-1',
+        runToken: 1,
+        result: { ok: true },
+      };
+
+      expect(response.requestId).toBe('req-1');
+      expect(response.result).toEqual({ ok: true });
+    });
+  });
+
+  describe('validateBrowserRpcRequest', () => {
+    it('accepts a valid browser RPC request payload', () => {
+      const request = validateBrowserRpcRequest({
+        id: 'rpc-1',
+        testPath: '/tests/example.test.ts',
+        runId: 'run-1',
+        kind: 'locator',
+        locator: { steps: [] },
+        method: 'click',
+        args: [],
+      });
+
+      expect(request.kind).toBe('locator');
+      expect(request.method).toBe('click');
+    });
+
+    it('throws when payload shape is invalid', () => {
+      expect(() => validateBrowserRpcRequest(null)).toThrow(
+        'Invalid browser RPC request: payload must be an object',
+      );
+    });
+
+    it('throws on unsupported kind', () => {
+      expect(() =>
+        validateBrowserRpcRequest({
+          id: 'rpc-1',
+          testPath: '/tests/example.test.ts',
+          runId: 'run-1',
+          kind: 'snapshot',
+          locator: { steps: [] },
+          method: 'click',
+          args: [],
+        }),
+      ).toThrow('Invalid browser RPC request: unsupported kind "snapshot"');
+    });
+
+    it('throws when locator.steps is not an array', () => {
+      expect(() =>
+        validateBrowserRpcRequest({
+          id: 'rpc-1',
+          testPath: '/tests/example.test.ts',
+          runId: 'run-1',
+          kind: 'expect',
+          locator: { steps: 'invalid' },
+          method: 'toBeVisible',
+          args: [],
+        }),
+      ).toThrow('Invalid browser RPC request: locator.steps must be an array');
     });
   });
 });

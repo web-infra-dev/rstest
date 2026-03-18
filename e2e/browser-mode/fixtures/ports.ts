@@ -1,6 +1,13 @@
+/**
+ * Keep every fixture port unique.
+ *
+ * Browser-mode e2e tests can run concurrently in a single process. Reusing a port
+ * across fixtures can cause flaky "EADDRINUSE" failures.
+ */
 export const BROWSER_PORTS = {
   basic: 5180,
   'browser-react': 5202,
+  'locator-api': 5226,
   list: 5204,
   'no-tests': 5206,
   'entry-override': 5208,
@@ -14,7 +21,19 @@ export const BROWSER_PORTS = {
   'setup-files': 5190,
   snapshot: 5196,
   watch: 5186,
+  'watch-stale': 5218,
   webkit: 5198,
   viewport: 5214,
   'viewport-preset': 5216,
+  reporter: 5220,
+  'reporter-watch': 5222,
+  'github-actions': 5224,
 } as const;
+
+const browserPortValues = Object.values(BROWSER_PORTS);
+
+if (new Set(browserPortValues).size !== browserPortValues.length) {
+  throw new Error(
+    `Duplicate browser fixture ports detected: ${JSON.stringify(BROWSER_PORTS)}`,
+  );
+}

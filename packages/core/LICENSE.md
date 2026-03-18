@@ -748,7 +748,7 @@ Licensed under MIT license in the repository at LinusU/buffer-from.
 
 ### cac
 
-Licensed under MIT license in the repository at egoist/cac.
+Licensed under MIT license in the repository at git+https://github.com/cacjs/cac.git.
 
 > The MIT License (MIT)
 >
@@ -1183,7 +1183,7 @@ Licensed under MIT license in the repository at https://github.com/facebook/reac
 
 ### readdirp
 
-Licensed under MIT license in the repository at git://github.com/paulmillr/readdirp.git.
+Licensed under MIT license in the repository at https://github.com/paulmillr/readdirp.git.
 
 > MIT License
 >
@@ -1209,7 +1209,7 @@ Licensed under MIT license in the repository at git://github.com/paulmillr/readd
 
 ### rslog
 
-Licensed under MIT license in the repository at https://github.com/rspack-contrib/rslog.git.
+Licensed under MIT license in the repository at https://github.com/rstackjs/rslog.git.
 
 > MIT License
 >

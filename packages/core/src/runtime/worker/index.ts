@@ -2,16 +2,16 @@ import type {
   MaybePromise,
   Rstest,
   RunWorkerOptions,
-  Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import './setup';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { install } from 'source-map-support';
 import { createCoverageProvider } from '../../coverage';
 import { createWorkerMetaMessage } from '../../pool/workerMeta';
 import { globalApis } from '../../utils/constants';
-import { undoSerializableConfig } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
@@ -52,9 +52,35 @@ const registerGlobalApi = (api: Rstest) => {
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 
+const setErrorName = (error: Error, type: string): Error => {
+  try {
+    error.name = type;
+    return error;
+  } catch {
+    try {
+      Object.defineProperty(error, 'name', {
+        value: type,
+        configurable: true,
+      });
+      return error;
+    } catch {
+      const fallbackError = new Error(error.message);
+      fallbackError.name = type;
+      fallbackError.stack = error.stack;
+      return fallbackError;
+    }
+  }
+};
+
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
-    Object.assign(process.env, env);
+    Object.entries(env).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
   }
 };
 
@@ -70,7 +96,6 @@ const preparePool = async ({
   globalCleanups.length = 0;
 
   setRealTimers();
-  context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   // Expose a simple flag on the worker global so low-level helpers can gate
   // federation-specific behavior without threading config through every call.
@@ -147,9 +172,11 @@ const preparePool = async ({
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: Error | string, type: string) => {
-    const error: Error = typeof e === 'string' ? new Error(e) : e;
-
-    error.name = type;
+    const rawError: Error = typeof e === 'string' ? new Error(e) : e;
+    const error =
+      !rawError.name || rawError.name === 'Error'
+        ? setErrorName(rawError, type)
+        : rawError;
 
     if (isTeardown) {
       error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
@@ -304,7 +331,7 @@ const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
   | {
-      tests: Test[];
+      tests: TestInfo[];
       testPath: string;
     }
   | TestFileResult
@@ -495,7 +522,12 @@ const runInPool = async (
       const coverageMap = coverageProvider.collect();
       if (coverageMap) {
         // Attach coverage data to test result
-        results.coverage = coverageMap.toJSON();
+        results.coverage = {};
+        Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+          if ('toJSON' in value)
+            results.coverage![key] = value.toJSON() as FileCoverageData;
+          else results.coverage![key] = value;
+        });
       }
       // Cleanup
       coverageProvider.cleanup();

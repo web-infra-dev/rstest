@@ -17,7 +17,7 @@
  * copies or substantial portions of the Software.
  */
 import type { Assertion } from '@vitest/expect';
-import * as chai from 'chai';
+import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, TestCase } from '../../types';
 import { getRealTimers } from '../util';
 
@@ -53,9 +53,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
     // biome-ignore lint/style/noParameterAssign: reassigning
     fn = fn.bind(assertion);
     // TODO: flag rstest
-    const test = chai.util.flag(assertion, 'vitest-test') as
-      | TestCase
-      | undefined;
+    const test = util.flag(assertion, 'vitest-test') as TestCase | undefined;
     if (!test) {
       throw new Error('expect.poll() must be called inside a test');
     }
@@ -64,7 +62,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
         const assertionFunction = Reflect.get(target, key, receiver);
 
         if (typeof assertionFunction !== 'function') {
-          return assertionFunction instanceof chai.Assertion
+          return assertionFunction instanceof ChaiAssertion
             ? proxy
             : assertionFunction;
         }
@@ -89,22 +87,22 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
               // TODO: use timeout manager
               const check = async () => {
                 try {
-                  chai.util.flag(assertion, '_name', key);
+                  util.flag(assertion, '_name', key);
                   const obj = await fn();
-                  chai.util.flag(assertion, 'object', obj);
+                  util.flag(assertion, 'object', obj);
                   resolve(await assertionFunction.call(assertion, ...args));
                   clearTimeout(intervalId);
                   clearTimeout(timeoutId);
                 } catch (err) {
                   lastError = err;
-                  if (!chai.util.flag(assertion, '_isLastPollAttempt')) {
+                  if (!util.flag(assertion, '_isLastPollAttempt')) {
                     intervalId = getRealTimers().setTimeout!(check, interval);
                   }
                 }
               };
               timeoutId = getRealTimers().setTimeout!(() => {
                 clearTimeout(intervalId);
-                chai.util.flag(assertion, '_isLastPollAttempt', true);
+                util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {
                   reject(
                     copyStackTrace(
@@ -125,8 +123,8 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           test.onFinished ??= [];
           test.onFinished.push(() => {
             if (!awaited) {
-              const negated = chai.util.flag(assertion, 'negate') ? 'not.' : '';
-              const name = chai.util.flag(assertion, '_poll.element')
+              const negated = util.flag(assertion, 'negate') ? 'not.' : '';
+              const name = util.flag(assertion, '_poll.element')
                 ? 'element(locator)'
                 : 'poll(assertion)';
               const assertionString = `expect.${name}.${negated}${String(key)}()`;

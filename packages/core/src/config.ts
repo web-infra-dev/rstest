@@ -6,7 +6,12 @@ import {
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
-import type { NormalizedConfig, ProjectConfig, RstestConfig } from './types';
+import type {
+  ExtendConfig,
+  NormalizedConfig,
+  ProjectConfig,
+  RstestConfig,
+} from './types';
 import {
   castArray,
   color,
@@ -16,6 +21,12 @@ import {
   logger,
   TEMP_RSTEST_OUTPUT_DIR_GLOB,
 } from './utils';
+
+type ResolvedExtendEntry =
+  | ExtendConfig
+  | ((
+      userConfig: Readonly<RstestConfig>,
+    ) => Promise<ExtendConfig> | ExtendConfig);
 
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
@@ -76,19 +87,41 @@ export async function loadConfig({
 
   let config = content as RstestConfig;
 
-  // Handle extends configuration
-  if (config.extends) {
-    const extendsConfig =
-      typeof config.extends === 'function'
-        ? await config.extends(Object.freeze({ ...config }))
-        : config.extends;
-    // @ts-expect-error: double check
-    delete extendsConfig.projects;
-    config = mergeRstestConfig(extendsConfig, config);
-  }
+  config = await resolveExtends(config);
 
   return { content: config, filePath: configFilePath };
 }
+
+const resolveExtendEntry = async (
+  entry: ResolvedExtendEntry,
+  userConfig: Readonly<RstestConfig>,
+): Promise<ExtendConfig> => {
+  const resolved =
+    typeof entry === 'function' ? await entry(userConfig) : entry;
+
+  if ('projects' in resolved) {
+    const { projects: _projects, ...rest } = resolved;
+    return rest;
+  }
+
+  return resolved;
+};
+
+export const resolveExtends = async (
+  config: RstestConfig,
+): Promise<RstestConfig> => {
+  if (!config.extends) {
+    return config;
+  }
+
+  const userConfig = Object.freeze({ ...config });
+  const extendsEntries = castArray(config.extends);
+  const resolvedExtends = await Promise.all(
+    extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
+  );
+
+  return mergeRstestConfig(...resolvedExtends, config);
+};
 
 export const mergeProjectConfig = (
   ...configs: ProjectConfig[]
@@ -188,11 +221,11 @@ const createDefaultConfig = (): NormalizedConfig => ({
     browser: 'chromium',
     headless: isCI,
     strictPort: false,
+    providerOptions: {},
   },
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/dist/**',
       '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
@@ -210,6 +243,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     reportsDirectory: './coverage',
     clean: true,
     reportOnFailure: false,
+    allowExternal: false,
   },
 });
 
@@ -261,6 +295,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     port: merged.browser?.port,
     strictPort: merged.browser?.strictPort ?? false,
     viewport: merged.browser?.viewport,
+    providerOptions: merged.browser?.providerOptions ?? {},
   };
 
   return {

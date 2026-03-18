@@ -18,16 +18,16 @@
   "devDependencies": {
     "@module-federation/enhanced": "0.22.0",
     "@module-federation/rstest-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rstest-plugin@3fe0a1a",
-    "@rsbuild/plugin-react": "^1.4.2",
-    "@rspack/cli": "1.6.8",
-    "@rspack/core": "1.6.8",
+    "@rsbuild/plugin-react": "^1.4.6",
+    "@rspack/cli": "2.0.0-canary-20260116",
+    "@rspack/core": "2.0.0-beta.6",
     "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",
     "serve": "14.2.3"
   },
   "dependencies": {
     "@module-federation/node": "^2.7.26",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   }
 }

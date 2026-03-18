@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type ModuleLinker, type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
@@ -35,11 +35,21 @@ const defineRstestDynamicImport =
     const joinedPath = isRelativePath(specifier)
       ? path.join(currentDirectory, specifier)
       : specifier;
+    const normalizedPath = path.normalize(
+      joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
+    );
 
-    const content = assetFiles[joinedPath];
+    const content = assetFiles[normalizedPath];
 
     if (content) {
       try {
+        if (specifier.endsWith('.wasm')) {
+          const wasmBuffer = Buffer.from(content, 'base64');
+          const wasmModule = await WebAssembly.compile(wasmBuffer);
+          const wasmInstance = await WebAssembly.instantiate(wasmModule);
+          const exports = wasmInstance.exports as Record<string, any>;
+          return returnModule ? await asModule(exports) : exports;
+        }
         return await loadModule({
           codeContent: content,
           testPath,
@@ -82,7 +92,6 @@ const defineRstestDynamicImport =
             default: importedModule.default,
           };
     }
-
     const importedModule = await import(modulePath, importAttributes);
 
     if (
@@ -163,7 +172,7 @@ export const asModule = async (
 
   if (unlinked) return syntheticModule;
 
-  await syntheticModule.link((() => {}) as unknown as ModuleLinker);
+  await syntheticModule.link((() => undefined) as unknown as ModuleLinker);
   await syntheticModule.evaluate();
   return syntheticModule;
 };

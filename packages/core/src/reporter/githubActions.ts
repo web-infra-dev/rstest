@@ -9,8 +9,8 @@ import type {
 import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
-  private onWritePath: (path: string) => string;
-  private rootPath: string;
+  private readonly onWritePath: (path: string) => string;
+  private readonly rootPath: string;
 
   constructor({
     options,

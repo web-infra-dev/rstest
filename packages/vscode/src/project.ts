@@ -2,8 +2,9 @@ import path from 'node:path';
 import type { TestInfo } from '@rstest/core';
 import picomatch from 'picomatch';
 import { glob } from 'tinyglobby';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { watchConfigValue } from './config';
+import { logger } from './logger';
 import { RstestApi } from './master';
 import { TestFile, TestFolder, testData } from './testTree';
 
@@ -159,13 +160,19 @@ export class Project implements vscode.Disposable {
     );
     this.cancellationSource = new vscode.CancellationTokenSource();
 
-    this.api.getNormalizedConfig().then((config) => {
-      if (this.cancellationSource.token.isCancellationRequested) return;
-      this.root = vscode.Uri.file(config.root);
-      this.include = config.include;
-      this.exclude = config.exclude;
-      this.startWatchingWorkspace(this.root);
-    });
+    void this.api
+      .getNormalizedConfig()
+      .then((config) => {
+        if (this.cancellationSource.token.isCancellationRequested) return;
+        this.root = vscode.Uri.file(config.root);
+        this.include = config.include;
+        this.exclude = config.exclude;
+        this.startWatchingWorkspace(this.root);
+      })
+      .catch((error) => {
+        if (this.cancellationSource.token.isCancellationRequested) return;
+        logger.error('Failed to initialize project config', error);
+      });
   }
 
   public refresh(
@@ -221,92 +228,105 @@ export class Project implements vscode.Disposable {
         if (this.testItem) {
           this.testItem.busy = true;
         }
-        const files: { uri: vscode.Uri; tests?: TestInfo[] }[] =
-          method === 'ast'
-            ? // ast
-              await glob(this.include, {
-                cwd: root.fsPath,
-                ignore: this.exclude,
-                absolute: true,
-                dot: true,
-                expandDirectories: false,
-              }).then((files) =>
-                files.map((file) => ({ uri: vscode.Uri.file(file) })),
-              )
-            : // runtime
-              await this.api.listTests().then((files) =>
-                files.map((file) => ({
-                  uri: vscode.Uri.file(file.testPath),
-                  tests: file.tests,
-                })),
-              );
+        try {
+          const files: { uri: vscode.Uri; tests?: TestInfo[] }[] =
+            method === 'ast'
+              ? // ast
+                await glob(this.include, {
+                  cwd: root.fsPath,
+                  ignore: this.exclude,
+                  absolute: true,
+                  dot: true,
+                  expandDirectories: false,
+                }).then((files) =>
+                  files.map((file) => ({ uri: vscode.Uri.file(file) })),
+                )
+              : // runtime
+                await this.api.listTests().then((files) =>
+                  files.map((file) => ({
+                    uri: vscode.Uri.file(file.testPath),
+                    tests: file.tests,
+                  })),
+                );
 
-        if (token.isCancellationRequested) return;
+          if (token.isCancellationRequested) return;
 
-        if (this.testItem) {
-          this.testItem.busy = false;
-        }
-
-        const visited = new Set<string>();
-        for (const { uri, tests } of files) {
-          this.updateOrCreateFile(uri, tests);
-          visited.add(uri.toString());
-        }
-
-        // remove outdated items after glob configuration changed
-        for (const file of this.testFiles.keys()) {
-          if (!visited.has(file)) {
-            this.testFiles.delete(file);
+          const visited = new Set<string>();
+          for (const { uri, tests } of files) {
+            this.updateOrCreateFile(uri, tests);
+            visited.add(uri.toString());
           }
-        }
-        this.buildTree();
 
-        // start watching test file change
-        // while createFileSystemWatcher don't support same glob syntax with tinyglobby
-        // we can watch all files and filter with picomatch later
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(root, '**'),
-        );
-        token.onCancellationRequested(() => watcher.dispose());
-
-        // TODO delay and batch run multiple files
-        const updateOrCreateByRuntime = (uri: vscode.Uri) => {
-          this.api.listTests([uri.fsPath]).then((files) => {
-            if (token.isCancellationRequested) return;
-            for (const { testPath, tests } of files) {
-              const uri = vscode.Uri.file(testPath);
-              this.updateOrCreateFile(uri, tests);
+          // remove outdated items after glob configuration changed
+          for (const file of this.testFiles.keys()) {
+            if (!visited.has(file)) {
+              this.testFiles.delete(file);
             }
-            this.buildTree();
+          }
+          this.buildTree();
+
+          // start watching test file change
+          // while createFileSystemWatcher don't support same glob syntax with tinyglobby
+          // we can watch all files and filter with picomatch later
+          const watcher = vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(root, '**'),
+          );
+          token.onCancellationRequested(() => watcher.dispose());
+
+          // TODO delay and batch run multiple files
+          const updateOrCreateByRuntime = (uri: vscode.Uri) => {
+            void this.api
+              .listTests([uri.fsPath])
+              .then((files) => {
+                if (token.isCancellationRequested) return;
+                for (const { testPath, tests } of files) {
+                  const uri = vscode.Uri.file(testPath);
+                  this.updateOrCreateFile(uri, tests);
+                }
+                this.buildTree();
+              })
+              .catch((error) => {
+                if (!token.isCancellationRequested) {
+                  logger.error('Failed to update runtime test list', error);
+                }
+              });
+          };
+
+          watcher.onDidCreate((uri) => {
+            if (isInclude(uri)) {
+              if (method === 'ast') {
+                this.updateOrCreateFile(uri);
+                this.buildTree();
+              } else {
+                updateOrCreateByRuntime(uri);
+              }
+            }
           });
-        };
-
-        watcher.onDidCreate((uri) => {
-          if (isInclude(uri)) {
-            if (method === 'ast') {
-              this.updateOrCreateFile(uri);
-              this.buildTree();
-            } else {
-              updateOrCreateByRuntime(uri);
+          watcher.onDidChange((uri) => {
+            if (isInclude(uri)) {
+              if (method === 'ast') {
+                this.updateOrCreateFile(uri);
+                this.buildTree();
+              } else {
+                updateOrCreateByRuntime(uri);
+              }
             }
-          }
-        });
-        watcher.onDidChange((uri) => {
-          if (isInclude(uri)) {
-            if (method === 'ast') {
-              this.updateOrCreateFile(uri);
+          });
+          watcher.onDidDelete((uri) => {
+            if (isInclude(uri)) {
+              this.testFiles.delete(uri.toString());
               this.buildTree();
-            } else {
-              updateOrCreateByRuntime(uri);
             }
+          });
+        } catch (error) {
+          if (!token.isCancellationRequested) {
+            logger.error('Failed to collect test files', error);
           }
-        });
-        watcher.onDidDelete((uri) => {
-          if (isInclude(uri)) {
-            this.testFiles.delete(uri.toString());
-            this.buildTree();
+        } finally {
+          if (this.testItem) {
+            this.testItem.busy = false;
           }
-        });
+        }
       },
     );
     this.cancellationSource.token.onCancellationRequested(() =>
@@ -335,7 +355,6 @@ export class Project implements vscode.Disposable {
       path
         .relative(this.root.fsPath, vscode.Uri.parse(uriString).fsPath)
         .split(path.sep)
-        // biome-ignore lint/suspicious/noAssignInExpressions: just simple shorthand
         .reduce((tree, segment) => (tree[segment] ||= {}), tree);
     }
 

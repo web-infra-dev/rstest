@@ -17,7 +17,7 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SourceMapInput, SnapshotSummary };
+export type { SnapshotSummary, SourceMapInput };
 
 export type GetSourcemap = (
   sourcePath: string,
@@ -28,7 +28,8 @@ export type BuiltInReporterNames =
   | 'verbose'
   | 'md'
   | 'github-actions'
-  | 'junit';
+  | 'junit'
+  | 'blob';
 
 export type DefaultReporterOptions = {
   /**
@@ -79,6 +80,14 @@ export type MdReporterOptions = {
    * @default 'file+name'
    */
   reproduction?: boolean | 'file' | 'file+name';
+
+  /**
+   * Test lists (Passed / Skipped / Todo) display mode.
+   * - `'auto'`: show only when all tests pass and the run is focused
+   * - `'always'`: always show regardless of test status or focus
+   * @default 'auto'
+   */
+  testLists?: 'auto' | 'always';
 
   /**
    * Failure output controls.
@@ -132,12 +141,21 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
+export type BlobReporterOptions = {
+  /**
+   * Directory to store blob report files.
+   * @default '.rstest-reports'
+   */
+  outputDir?: string;
+};
+
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': Record<string, unknown>;
   junit: Record<string, unknown>;
+  blob: BlobReporterOptions;
 };
 
 export type ReporterWithOptions<

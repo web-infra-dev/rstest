@@ -1,9 +1,6 @@
-import {
-  loadConfig,
-  mergeRsbuildConfig,
-  type RsbuildConfig,
-} from '@rsbuild/core';
-import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
+import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
+import type { ExtendConfigFn } from '@rstest/core';
+import { toRstestConfig } from './toRstestConfig';
 
 export interface WithRsbuildConfigOptions {
   /**
@@ -40,10 +37,7 @@ export function withRsbuildConfig(
     } = options;
 
     // Load rsbuild config
-    const {
-      content: { environments, ...rawBuildConfig },
-      filePath,
-    } = await loadConfig({
+    const { content: rsbuildConfig, filePath } = await loadConfig({
       cwd,
       path: configPath,
     });
@@ -52,54 +46,14 @@ export function withRsbuildConfig(
       return {};
     }
 
-    const environmentConfig = environmentName
-      ? environments?.[environmentName]
-      : undefined;
-
-    const rsbuildConfig = environmentConfig
-      ? mergeRsbuildConfig<RsbuildConfig>(
-          rawBuildConfig as RsbuildConfig,
-          environmentConfig as RsbuildConfig,
-        )
-      : (rawBuildConfig as RsbuildConfig);
-
-    // Allow modification of rsbuild config
-    const finalBuildConfig = modifyRsbuildConfig
-      ? modifyRsbuildConfig(rsbuildConfig)
-      : rsbuildConfig;
-
-    const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
-    const { cssModules, target, module } = finalBuildConfig.output || {};
-    const { decorators, define, include, exclude, tsconfigPath } =
-      finalBuildConfig.source || {};
-
-    // Convert rsbuild config to rstest config
-    const rstestConfig: ExtendConfig = {
-      // Copy over compatible configurations
-      root: finalBuildConfig.root,
-      name: environmentName,
-      plugins: finalBuildConfig.plugins,
-      source: {
-        decorators,
-        define,
-        include,
-        exclude,
-        tsconfigPath,
-      },
-      resolve: finalBuildConfig.resolve,
-      output: {
-        cssModules,
-        module,
-      },
-      tools: {
-        rspack,
-        swc,
-        bundlerChain,
-      } as ExtendConfig['tools'],
-
-      testEnvironment: target === 'node' ? 'node' : 'happy-dom',
-    };
+    const rstestConfig = toRstestConfig({
+      environmentName,
+      rsbuildConfig,
+      modifyRsbuildConfig,
+    });
 
     return rstestConfig;
   };
 }
+
+export { toRstestConfig };

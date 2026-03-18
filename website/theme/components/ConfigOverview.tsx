@@ -62,6 +62,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'browser.browser',
       'browser.headless',
       'browser.port',
+      'browser.providerOptions',
     ],
   },
   {
@@ -154,10 +155,6 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'dev',
     items: ['dev.writeToDisk'],
-  },
-  {
-    name: 'performance',
-    items: ['performance.bundleAnalyze'],
   },
 ];
 

@@ -43,9 +43,18 @@ export function createRstest(
     return listTests(context, options);
   };
 
+  const mergeReports = async (options?: {
+    path?: string;
+    cleanup?: boolean;
+  }): Promise<void> => {
+    const { mergeReports } = await import('./mergeReports');
+    await mergeReports(context, options);
+  };
+
   return {
     context,
     runTests,
     listTests,
+    mergeReports,
   };
 }

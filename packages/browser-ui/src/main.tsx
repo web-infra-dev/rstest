@@ -1,3 +1,9 @@
+import {
+  DISPATCH_NAMESPACE_RUNNER,
+  DISPATCH_RESPONSE_TYPE,
+  DISPATCH_RPC_REQUEST_TYPE,
+  RSTEST_CONFIG_MESSAGE_TYPE,
+} from '@rstest/browser/protocol';
 import { App as AntdApp, theme as antdTheme, ConfigProvider } from 'antd';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -8,17 +14,26 @@ import { SidebarHeader } from './components/SidebarHeader';
 import { TestFilesHeader } from './components/TestFilesHeader';
 import { TestFilesTree } from './components/TestFilesTree';
 import { ViewportFrame } from './components/ViewportFrame';
-import { forwardSnapshotRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunnerUrl } from './core/runtime';
+import {
+  canPostMessageSource,
+  createStaleBrowserRpcDispatchResponse,
+  isStaleBrowserRpcRequest,
+  readBrowserRpcRequest,
+} from './core/browserRpc';
+import { buildCollectedCaseMap, upsertRunningCase } from './core/caseMap';
+import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
+import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
   BrowserClientTestResult,
+  BrowserDispatchRequest,
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
-  SnapshotRpcRequest,
+  TestCaseStartPayload,
   TestFileInfo,
+  TestFileReadyPayload,
 } from './types';
 import type {
   CaseInfo,
@@ -38,6 +53,35 @@ import './index.css';
 const getDisplayName = (testFile: string): string => {
   const parts = testFile.split('/');
   return parts[parts.length - 1] || testFile;
+};
+
+const readRunIdFromFrame = (frame: HTMLIFrameElement): string | undefined => {
+  try {
+    const url = new URL(frame.src, window.location.href);
+    return url.searchParams.get('runId') ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const findRunnerFrameByTestPath = (
+  testPath: string,
+): HTMLIFrameElement | undefined => {
+  return Array.from(
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
+  ).find((frame) => frame.dataset.testFile === testPath);
+};
+
+const findRunnerFrameBySource = (
+  source: MessageEventSource | null,
+): HTMLIFrameElement | undefined => {
+  if (!source) {
+    return undefined;
+  }
+
+  return Array.from(
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-test-file]'),
+  ).find((frame) => frame.contentWindow === source);
 };
 
 // ============================================================================
@@ -61,6 +105,9 @@ const BrowserRunner: React.FC<{
   >({});
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
+  const [runIdByTestFile, setRunIdByTestFile] = useState<
+    Record<string, string>
+  >({});
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -161,34 +208,50 @@ const BrowserRunner: React.FC<{
   }, [options.projects, readStoredViewport]);
 
   const handleReloadTestFile = useCallback(
-    (testFile: string, testNamePattern?: string) => {
+    async (testFile: string, testNamePattern?: string) => {
       logger.debug(
         '[Container] handleReloadTestFile called:',
         testFile,
         testNamePattern,
       );
+      setActive(testFile);
       const iframe = document.querySelector<HTMLIFrameElement>(
         `iframe[data-test-file="${testFile}"]`,
       );
       logger.debug('[Container] Found iframe:', iframe);
-      if (iframe) {
-        setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
-        setCaseMap((prev) => {
-          const prevFile = prev[testFile] ?? {};
-          const updatedCases: Record<string, CaseInfo> = {};
-          for (const [key, caseInfo] of Object.entries(prevFile)) {
-            updatedCases[key] = { ...caseInfo, status: 'running' };
-          }
-          return { ...prev, [testFile]: updatedCases };
-        });
-        const newSrc = createRunnerUrl(
-          testFile,
-          options.runnerUrl,
-          testNamePattern,
+      if (!iframe) {
+        throw new Error(
+          `Cannot reload test file "${testFile}": iframe not found`,
         );
-        logger.debug('[Container] Setting iframe.src to:', newSrc);
-        iframe.src = newSrc;
       }
+
+      const nextRunId = createRunId();
+      setRunIdByTestFile((prev) => ({
+        ...prev,
+        [testFile]: nextRunId,
+      }));
+      setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
+      setCaseMap((prev) => {
+        const prevFile = prev[testFile] ?? {};
+        const updatedCases: Record<string, CaseInfo> = {};
+        for (const [key, caseInfo] of Object.entries(prevFile)) {
+          updatedCases[key] = { ...caseInfo, status: 'running' };
+        }
+        return { ...prev, [testFile]: updatedCases };
+      });
+      const newSrc = createRunnerUrl(
+        testFile,
+        options.runnerUrl,
+        testNamePattern,
+        false,
+        nextRunId,
+      );
+      logger.debug('[Container] Setting iframe.src to:', newSrc);
+      iframe.src = newSrc;
+
+      return {
+        runId: nextRunId,
+      };
     },
     [options.runnerUrl],
   );
@@ -220,6 +283,16 @@ const BrowserRunner: React.FC<{
       return next;
     });
 
+    setRunIdByTestFile((prev) => {
+      const next: Record<string, string> = {};
+      for (const file of testFiles) {
+        if (prev[file.testPath]) {
+          next[file.testPath] = prev[file.testPath]!;
+        }
+      }
+      return next;
+    });
+
     // Clean up openFiles: remove files that no longer exist
     const testPaths = testFiles.map((f) => f.testPath);
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
@@ -236,6 +309,21 @@ const BrowserRunner: React.FC<{
       return prev;
     });
   }, [testFiles]);
+
+  useEffect(() => {
+    if (!rpc || !connected) {
+      return;
+    }
+
+    void rpc
+      .onRunnerFramesReady(testFiles.map((file) => file.testPath))
+      .catch((error) => {
+        logger.debug(
+          '[Container RPC] Failed to notify runner frames ready:',
+          error,
+        );
+      });
+  }, [rpc, connected, testFiles]);
 
   const mapCaseStatus = useCallback(
     (status?: BrowserClientTestResult['status']): CaseStatus => {
@@ -276,6 +364,43 @@ const BrowserRunner: React.FC<{
       });
     },
     [mapCaseStatus],
+  );
+
+  const syncCollectedCases = useCallback(
+    (filePath: string, payload: TestFileReadyPayload) => {
+      setCaseMap((prev) => {
+        const prevFile = prev[filePath] ?? {};
+        const nextFile = buildCollectedCaseMap({
+          filePath,
+          tests: payload.tests,
+          previousCases: prevFile,
+        });
+
+        return {
+          ...prev,
+          [filePath]: nextFile,
+        };
+      });
+    },
+    [],
+  );
+
+  const syncStartedCase = useCallback(
+    (filePath: string, payload: TestCaseStartPayload) => {
+      setCaseMap((prev) => {
+        const prevFile = prev[filePath] ?? {};
+
+        return {
+          ...prev,
+          [filePath]: upsertRunningCase({
+            filePath,
+            test: payload,
+            previousCases: prevFile,
+          }),
+        };
+      });
+    },
+    [],
   );
 
   const handleRerunFile = useCallback(
@@ -345,6 +470,11 @@ const BrowserRunner: React.FC<{
         const payload = message.payload as BrowserClientFileResult;
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
+          const frame = findRunnerFrameBySource(event.source);
+          const fallbackFrame = frame ?? findRunnerFrameByTestPath(testPath);
+          const runId =
+            (fallbackFrame ? readRunIdFromFrame(fallbackFrame) : undefined) ??
+            runIdByTestFile[testPath];
           const passed = payload.status === 'pass' || payload.status === 'skip';
           setStatusMap((prev) => ({
             ...prev,
@@ -370,28 +500,91 @@ const BrowserRunner: React.FC<{
             }
             return { ...prev, [testPath]: newCases };
           });
-          rpc?.onTestFileComplete(payload);
+          rpc?.onTestFileComplete({
+            ...payload,
+            runId,
+          });
         }
       } else if (message.type === 'fatal') {
+        const payload = message.payload as FatalPayload;
         if (active) {
           setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
         }
-        const payload = message.payload as FatalPayload;
         rpc?.onFatal(payload);
       } else if (message.type === 'log') {
         const payload = message.payload as LogPayload;
         rpc?.onLog(payload);
-      } else if (message.type === 'snapshot-rpc-request') {
-        void forwardSnapshotRpcRequest(
-          rpc,
-          message.payload as SnapshotRpcRequest,
-          event.source,
-        );
+      } else if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
+        // Unified RPC path for snapshot and future runner-side capabilities.
+        const dispatchRequest = message.payload as BrowserDispatchRequest;
+
+        if (
+          dispatchRequest.namespace === DISPATCH_NAMESPACE_RUNNER &&
+          dispatchRequest.method === 'file-ready'
+        ) {
+          const payload = dispatchRequest.args as TestFileReadyPayload;
+
+          if (
+            typeof payload?.testPath === 'string' &&
+            Array.isArray(payload.tests)
+          ) {
+            syncCollectedCases(payload.testPath, payload);
+          }
+        }
+
+        if (
+          dispatchRequest.namespace === DISPATCH_NAMESPACE_RUNNER &&
+          dispatchRequest.method === 'case-start'
+        ) {
+          const payload = dispatchRequest.args as TestCaseStartPayload;
+
+          if (typeof payload?.testPath === 'string' && payload.testId) {
+            syncStartedCase(payload.testPath, payload);
+          }
+        }
+
+        const browserRpcRequest = readBrowserRpcRequest(dispatchRequest);
+
+        if (browserRpcRequest) {
+          const currentFrame = findRunnerFrameByTestPath(
+            browserRpcRequest.testPath,
+          );
+          const currentRunId = currentFrame
+            ? readRunIdFromFrame(currentFrame)
+            : undefined;
+
+          if (isStaleBrowserRpcRequest(browserRpcRequest, currentRunId)) {
+            if (canPostMessageSource(event.source)) {
+              event.source.postMessage(
+                {
+                  type: DISPATCH_RESPONSE_TYPE,
+                  payload: createStaleBrowserRpcDispatchResponse(
+                    dispatchRequest.requestId,
+                    browserRpcRequest,
+                    currentRunId,
+                  ),
+                },
+                '*',
+              );
+            }
+            return;
+          }
+        }
+
+        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
       }
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [active, upsertCase, mapCaseStatus, rpc]);
+  }, [
+    active,
+    upsertCase,
+    mapCaseStatus,
+    rpc,
+    runIdByTestFile,
+    syncCollectedCases,
+    syncStartedCase,
+  ]);
 
   // Computed values - case level statistics
   const caseCounts = useMemo(() => {
@@ -629,6 +822,7 @@ const BrowserRunner: React.FC<{
               {testFiles.map((fileInfo) =>
                 (() => {
                   const isActive = fileInfo.testPath === active;
+                  const runId = runIdByTestFile[fileInfo.testPath];
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -637,14 +831,19 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
+                    if (!runId) {
+                      return;
+                    }
                     const frame = event.currentTarget;
+                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
-                          type: 'RSTEST_CONFIG',
+                          type: RSTEST_CONFIG_MESSAGE_TYPE,
                           payload: {
                             ...options,
                             testFile: fileInfo.testPath,
+                            runId: frameRunId,
                           },
                         },
                         '*',
@@ -682,10 +881,17 @@ const BrowserRunner: React.FC<{
                         <iframe
                           data-test-file={fileInfo.testPath}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
-                          src={createRunnerUrl(
-                            fileInfo.testPath,
-                            options.runnerUrl,
-                          )}
+                          src={
+                            runId
+                              ? createRunnerUrl(
+                                  fileInfo.testPath,
+                                  options.runnerUrl,
+                                  undefined,
+                                  false,
+                                  runId,
+                                )
+                              : 'about:blank'
+                          }
                           className="block h-full w-full border-0"
                           style={{ background: token.colorBgContainer }}
                           onLoad={onLoad}
@@ -748,14 +954,14 @@ const App: React.FC = () => {
   }
 
   const isDark = theme === 'dark';
+  const projectName =
+    options.projects?.[0]?.name ||
+    options.rootPath.split('/').filter(Boolean).pop() ||
+    'rstest';
 
   useEffect(() => {
-    const projectName =
-      options.projects?.[0]?.name ||
-      options.rootPath.split('/').filter(Boolean).pop() ||
-      'rstest';
     document.title = `${projectName} [RSTEST BROWSER]`;
-  }, [options]);
+  }, [projectName]);
 
   return (
     <ConfigProvider

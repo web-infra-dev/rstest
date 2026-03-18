@@ -27,7 +27,12 @@ import type {
 } from '../../types';
 import { ROOT_SUITE_NAME } from '../../utils/constants';
 import { castArray } from '../../utils/helper';
-import { formatName, TestRegisterError } from '../util';
+import {
+  formatName,
+  isTemplateStringsArray,
+  parseTemplateTable,
+  TestRegisterError,
+} from '../util';
 import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -35,10 +40,10 @@ type CollectStatus = 'lazy' | 'running';
 
 export class RunnerRuntime {
   /** all test cases */
-  private tests: Test[] = [];
+  private readonly tests: Test[] = [];
   /** a calling stack of the current test suites and case */
-  private _currentTest: Test[] = [];
-  private testPath: string;
+  private readonly _currentTest: Test[] = [];
+  private readonly testPath: string;
   private status: 'running' | 'collect' = 'collect';
 
   /**
@@ -48,8 +53,8 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: (() => MaybePromise<void>)[] = [];
-  private runtimeConfig;
-  private project: string;
+  private readonly runtimeConfig;
+  private readonly project: string;
   private testId = 1;
 
   constructor({
@@ -348,15 +353,14 @@ export class RunnerRuntime {
     cases,
     ...options
   }: {
-    cases: Parameters<DescribeEachFn>[0];
+    cases: readonly unknown[];
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): ReturnType<DescribeEachFn> {
+  }): (name: string, fn: (...args: any[]) => any) => void {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
-        // TODO: template string table.
         const param = cases[i]!;
         const params = castArray(param) as Parameters<typeof fn>;
 
@@ -374,15 +378,14 @@ export class RunnerRuntime {
     cases,
     ...options
   }: {
-    cases: Parameters<DescribeForFn>[0];
+    cases: readonly unknown[];
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): ReturnType<DescribeForFn> {
+  }): (name: string, fn: (...args: any[]) => any) => void {
     return (name: string, fn) => {
       for (let i = 0; i < cases.length; i++) {
-        // TODO: template string table.
         const param = cases[i]!;
 
         this.describe({
@@ -399,18 +402,17 @@ export class RunnerRuntime {
     cases,
     ...options
   }: {
-    cases: Parameters<TestEachFn>[0];
+    cases: readonly unknown[];
     runMode?: TestRunMode;
     fails?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): ReturnType<TestEachFn> {
+  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
     return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
-        // TODO: template string table.
         const param = cases[i]!;
-        const params = castArray(param) as Parameters<typeof fn>;
+        const params = castArray(param) as any[];
 
         this.it({
           name: formatName(name, param, i),
@@ -428,16 +430,15 @@ export class RunnerRuntime {
     cases,
     ...options
   }: {
-    cases: Parameters<TestForFn>[0];
+    cases: readonly unknown[];
     fails?: boolean;
     runMode?: TestRunMode;
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): ReturnType<TestEachFn> {
+  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
     return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
       for (let i = 0; i < cases.length; i++) {
-        // TODO: template string table.
         const param = cases[i]!;
 
         this.it({
@@ -553,19 +554,21 @@ export const createRuntimeAPI = ({
         runMode: condition ? 'skip' : options.runMode,
       });
 
-    testFn.each = ((cases: any) =>
-      runtimeInstance.each({
-        cases,
-        ...options,
-        location: getLocation(),
-      })) as TestEachFn;
+    testFn.each = ((...args: any[]) => {
+      const location = getLocation();
+      const cases = isTemplateStringsArray(args[0])
+        ? parseTemplateTable(args[0], ...args.slice(1))
+        : args[0];
+      return runtimeInstance.each({ cases, ...options, location });
+    }) as TestEachFn;
 
-    testFn.for = ((cases: any) =>
-      runtimeInstance.for({
-        cases,
-        ...options,
-        location: getLocation(),
-      })) as TestForFn;
+    testFn.for = ((...args: any[]) => {
+      const location = getLocation();
+      const cases = isTemplateStringsArray(args[0])
+        ? parseTemplateTable(args[0], ...args.slice(1))
+        : args[0];
+      return runtimeInstance.for({ cases, ...options, location });
+    }) as TestForFn;
 
     return testFn;
   };
@@ -632,19 +635,21 @@ export const createRuntimeAPI = ({
         runMode: condition ? options.runMode : 'skip',
       });
 
-    describeFn.each = ((cases: any) =>
-      runtimeInstance.describeEach({
-        cases,
-        ...options,
-        location: getLocation(),
-      })) as DescribeEachFn;
+    describeFn.each = ((...args: any[]) => {
+      const location = getLocation();
+      const cases = isTemplateStringsArray(args[0])
+        ? parseTemplateTable(args[0], ...args.slice(1))
+        : args[0];
+      return runtimeInstance.describeEach({ cases, ...options, location });
+    }) as DescribeEachFn;
 
-    describeFn.for = ((cases: any) =>
-      runtimeInstance.describeFor({
-        cases,
-        ...options,
-        location: getLocation(),
-      })) as DescribeForFn;
+    describeFn.for = ((...args: any[]) => {
+      const location = getLocation();
+      const cases = isTemplateStringsArray(args[0])
+        ? parseTemplateTable(args[0], ...args.slice(1))
+        : args[0];
+      return runtimeInstance.describeFor({ cases, ...options, location });
+    }) as DescribeForFn;
 
     return describeFn;
   };

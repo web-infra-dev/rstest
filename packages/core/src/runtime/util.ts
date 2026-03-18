@@ -7,11 +7,13 @@ import type { FormattedError, Test } from '../types';
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
+  clearTimeout?: typeof globalThis.clearTimeout;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
+  REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
@@ -148,6 +150,41 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
       return defaultValue;
     }
   }
+  return result;
+}
+
+export function isTemplateStringsArray(
+  value: unknown,
+): value is TemplateStringsArray {
+  return Array.isArray(value) && 'raw' in value && Array.isArray(value.raw);
+}
+
+export function parseTemplateTable(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): Record<string, unknown>[] {
+  const raw = strings.join('\0');
+  const lines = raw.split('\n').filter((line) => line.trim());
+
+  if (lines.length === 0) return [];
+
+  const headers = lines[0]!
+    .split('|')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+  if (headers.length === 0) return [];
+
+  const result: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < expressions.length; i += headers.length) {
+    const row: Record<string, unknown> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]!] = expressions[i + j];
+    }
+    result.push(row);
+  }
+
   return result;
 }
 

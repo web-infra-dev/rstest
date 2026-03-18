@@ -1,4 +1,12 @@
+---
+description: 选择覆盖率收集方式。目前仅支持 istanbul。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
 # coverage
+
+<ApiMeta addedVersion="0.4.0" />
 
 - **类型：**
 
@@ -12,12 +20,12 @@ type CoverageOptions = {
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
+  allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
 ```
 
 - **默认值：** `undefined`
-- **版本：** `>=0.4.0`
 
 收集测试覆盖率信息并生成覆盖率报告。
 
@@ -121,7 +129,6 @@ export default defineConfig({
 ```ts
 [
   '**/node_modules/**',
-  '**/dist/**',
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
@@ -202,6 +209,29 @@ export default defineConfig({
   coverage: {
     enabled: true,
     reportOnFailure: true,
+  },
+});
+```
+
+### allowExternal
+
+<ApiMeta addedVersion="0.9.3" />
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--coverage.allowExternal`
+
+是否收集项目根目录之外的源文件的覆盖率。这在 monorepo 中非常有用，例如测试文件导入了来自同级工作区包的模块。
+
+默认情况下，Rstest 会从覆盖率报告中排除项目根目录之外的文件，这与 Jest 和 Vitest 的行为一致。
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    allowExternal: true,
   },
 });
 ```

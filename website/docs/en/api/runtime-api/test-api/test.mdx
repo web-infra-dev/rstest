@@ -1,5 +1,6 @@
 ---
 title: Test
+description: test defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
 ---
 
 # Test
@@ -63,6 +64,32 @@ test.each([
   { a: 2, b: 2, sum: 4 },
 ])('adds $a + $b', ({ a, b, sum }) => {
   expect(a + b).toBe(sum);
+});
+```
+
+You can also use a tagged template literal table syntax for more readable parameterized tests:
+
+```ts
+test.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  expect(a + b).toBe(expected);
+});
+```
+
+The first row defines the parameter names (column headers), and each subsequent row provides the values via template expressions (`${...}`). Columns are separated by `|`.
+
+Since the table values are untyped by default, you can provide an explicit generic type parameter for type safety:
+
+```ts
+test.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  expect(a + b).toBe(expected);
 });
 ```
 
@@ -133,6 +160,30 @@ test.for([
   { a: 2, b: 2 },
 ])('adds $a + $b', ({ a, b }, { expect }) => {
   expect(a + b).matchSnapshot();
+});
+```
+
+`test.for` also supports the tagged template literal table syntax:
+
+```ts
+test.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }, { expect }) => {
+  expect(a + b).toBe(expected);
+});
+```
+
+You can provide an explicit generic type parameter for type safety:
+
+```ts
+test.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }, { expect }) => {
+  expect(a + b).toBe(expected);
 });
 ```
 

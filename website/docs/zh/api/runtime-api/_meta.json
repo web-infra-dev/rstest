@@ -11,6 +11,11 @@
   },
   {
     "type": "dir",
+    "name": "browser-mode",
+    "label": "Browser Mode"
+  },
+  {
+    "type": "dir",
     "name": "rstest",
     "label": "Rstest 实用工具"
   }

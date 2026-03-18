@@ -11,11 +11,13 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18.12.0'],
+      syntax: 'es2023',
       experiments: {
         advancedEsm: true,
       },
       dts: {
+        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
+        tsgo: !process.env.CI,
         bundle: process.env.SOURCEMAP
           ? false
           : {
@@ -110,7 +112,7 @@ export default defineConfig({
     {
       id: 'rstest_loaders',
       format: 'esm',
-      syntax: 'es2021',
+      syntax: 'es2023',
       dts: false,
       source: {
         entry: {
@@ -126,8 +128,10 @@ export default defineConfig({
     {
       id: 'browser_runtime',
       format: 'esm',
-      syntax: 'es2021',
+      syntax: 'es2023',
       dts: {
+        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
+        tsgo: !process.env.CI,
         bundle: true,
       },
       source: {

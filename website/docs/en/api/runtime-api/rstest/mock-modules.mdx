@@ -1,5 +1,6 @@
 ---
 title: Mock modules
+description: Rstest supports mocking modules, which allows you to replace the implementation of modules in tests.
 ---
 
 # Mock modules
@@ -8,7 +9,7 @@ Rstest supports mocking modules, which allows you to replace the implementation 
 
 ## rs.mock
 
-- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Mocks and replaces the module specified in the first parameter.
 
@@ -226,7 +227,7 @@ rs.mock(import('../src/b'), () => {
 
 ## rs.doMock
 
-- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type**: `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Similar to `rs.mock`, but it is **not hoisted** to the top of the module. It is called when it's executed, which means that if a module has already been imported before calling `rs.doMock`, that module will not be mocked, while modules imported after calling `rs.doMock` will be mocked.
 
@@ -243,6 +244,55 @@ it('test', async () => {
   const { sum: mockedSum } = await import('./sum');
   // sum is imported after executing doMock, it's mocked now
   expect(mockedSum(1, 2)).toBe(3); // FAILED
+});
+```
+
+## rs.mockRequire
+
+- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+Mocks modules loaded through CommonJS `require()`. Like `rs.mock`, this API is hoisted to the top of the current module.
+
+Use this API when the target module is consumed via `require()` instead of `import`.
+
+:::tip
+Difference from `rs.mock` in dual packages (one ESM entry and one CJS entry):
+
+- `rs.mock()` mocks the **ESM entry** (used by `import`)
+- `rs.mockRequire()` mocks the **CJS entry** (used by `require()`)
+
+If your code path uses `require()`, prefer `rs.mockRequire()` to avoid mocking the wrong entry.
+:::
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+test('mock cjs module with require', () => {
+  expect(sum(1, 2)).toBe(103);
+});
+```
+
+## rs.doMockRequire
+
+- **Type**: `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
+
+Similar to `rs.mockRequire`, but it is **not hoisted**. The mock is applied only after `rs.doMockRequire` is executed, and only affects subsequent `require()` calls.
+
+```ts title="src/math.test.cjs"
+test('doMockRequire only affects later require calls', () => {
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
 });
 ```
 
@@ -369,48 +419,3 @@ Clears the cache of all modules. This allows modules to be re-executed when re-i
 :::warning
 Does not reset mocked modules. To clear mocked modules, use [`rs.unmock`](#rsunmock) or [`rs.doUnmock`](#rsdounmock).
 :::
-
-## FAQ
-
-### Mocking re-exported modules
-
-In some libraries, APIs are exposed via **re-exports**. For example, in React Router, certain APIs (such as `useParams`) are imported from `react-router-dom` but are actually re-exported from `react-router`.
-
-When using Rspack, these re-exports may be further optimized: the exports can be resolved directly from the source module (e.g. `react-router`), skipping the intermediate module (`react-router-dom`).
-
-In this case:
-
-- Mocking `react-router-dom` may not take effect
-- Mocking `react-router` directly will work as expected
-
-```ts
-// Even if your source code imports from:
-import { useParams } from 'react-router-dom';
-
-// At runtime, it may be resolved as:
-import { useParams } from 'react-router';
-```
-
-If your mock does not work as expected, you can:
-
-1. Mock the module that is actually resolved at runtime:
-
-```ts
-rs.mock('react-router', () => ({
-  useParams: () => ({ id: 'mocked-id' }),
-}));
-```
-
-2. Disable the related bundler optimization in the test environment to prevent re-export flattening. Be careful with this: disabling it may lead to errors related to runtime circular dependencies.
-
-```ts title="rstest.config.js"
-export default defineConfig({
-  tools: {
-    rspack: {
-      optimization: {
-        providedExports: false,
-      },
-    },
-  },
-});
-```

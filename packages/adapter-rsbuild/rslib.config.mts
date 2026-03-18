@@ -4,9 +4,12 @@ export default defineConfig({
   lib: [
     {
       format: 'esm',
-      dts: true,
+      dts: {
+        tsgo: true,
+        bundle: true,
+      },
       bundle: true,
-      syntax: ['node 18.12.0'],
+      syntax: 'es2023',
       experiments: {
         advancedEsm: true,
       },

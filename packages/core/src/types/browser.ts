@@ -1,4 +1,15 @@
+import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
+
+export interface BrowserSourcemapResolutionResult {
+  handled: boolean;
+  sourcemap: SourceMapInput | null;
+}
+
+export type ResolveBrowserSourcemap = (
+  sourcePath: string,
+) => Promise<BrowserSourcemapResolutionResult>;
 
 /**
  * Options for running browser tests.
@@ -35,4 +46,10 @@ export interface BrowserTestRunResult {
   hasFailure: boolean;
   /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
   unhandledErrors?: Error[];
+  /** Source map resolver used when reporter output is unified in core */
+  getSourcemap?: GetSourcemap;
+  /** Route-aware source map resolver used by core unified reporter flow */
+  resolveSourcemap?: ResolveBrowserSourcemap;
+  /** Deferred cleanup hook for unified reporter mode */
+  close?: () => Promise<void>;
 }

@@ -90,5 +90,5 @@ const logger: Logger & { stderr: (message: string, ...args: any[]) => void } = {
   },
 };
 
-export { logger };
 export type { Logger };
+export { logger };

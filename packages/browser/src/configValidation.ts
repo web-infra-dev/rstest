@@ -62,5 +62,9 @@ export const validateBrowserConfig = (context: Rstest): void => {
     }
 
     validateViewport(browser.viewport);
+
+    if (!isPlainObject(browser.providerOptions)) {
+      throw new Error('browser.providerOptions must be a plain object.');
+    }
   }
 };

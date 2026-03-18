@@ -1,3 +1,9 @@
+---
+description: Browser Mode configuration. When enabled, tests run in a real browser instead of the Node.js environment.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
 # browser (experimental)
 
 - **Type:**
@@ -10,6 +16,7 @@ type BrowserModeConfig = {
   headless?: boolean;
   port?: number;
   strictPort?: boolean;
+  providerOptions?: Record<string, unknown>;
 };
 ```
 
@@ -23,6 +30,7 @@ const defaultBrowser = {
   headless: true, // CI environment; false for local development
   port: undefined, // Random available port
   strictPort: false,
+  providerOptions: {},
 };
 ```
 
@@ -34,6 +42,7 @@ Browser Mode configuration. When enabled, tests run in a real browser instead of
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--browser`, `--browser.enabled`
 
 Enable Browser Mode.
 
@@ -65,6 +74,8 @@ npx playwright install chromium
 
 Browser driver provider. Currently only [Playwright](https://playwright.dev/) is supported.
 
+Mixing multiple providers in the same test run is currently not supported.
+
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
@@ -80,6 +91,7 @@ export default defineConfig({
 
 - **Type:** `'chromium' | 'firefox' | 'webkit'`
 - **Default:** `'chromium'`
+- **CLI:** `--browser.name <name>`
 
 The browser type to use for testing.
 
@@ -119,6 +131,7 @@ npx playwright install
 
 - **Type:** `boolean`
 - **Default:** `true` in CI environments, `false` for local development
+- **CLI:** `--browser.headless`
 
 Whether to run the browser in headless mode (without UI).
 
@@ -176,6 +189,7 @@ export default defineConfig({
 
 - **Type:** `number`
 - **Default:** `undefined` (automatically selects an available port)
+- **CLI:** `--browser.port <port>`
 
 The port number for the Browser Mode Dev Server.
 
@@ -197,6 +211,7 @@ If you set `port` and the port is already in use, the behavior is controlled by 
 
 - **Type:** `boolean`
 - **Default:** `false`
+- **CLI:** `--browser.strictPort`
 
 When `port` is specified, whether the port must be available:
 
@@ -216,40 +231,80 @@ export default defineConfig({
 });
 ```
 
-## Multi-Browser Testing
+### providerOptions
 
-Use [projects](/config/test/projects) configuration to run tests in multiple browsers simultaneously:
+<ApiMeta addedVersion="0.9.3" />
+
+- **Type:** `Record<string, unknown>`
+- **Default:** `{}`
+
+Provider-specific options passed through to the selected browser provider. Rstest does not validate or interpret the contents of this object — it is forwarded as-is to the provider at both browser launch and context creation time.
+
+The structure of `providerOptions` is defined by each provider. See the [Provider options](#provider-options) section below for details.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: [
-    {
-      name: 'chromium',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions: {
+      launch: {
+        timeout: 60_000,
       },
     },
-    {
-      name: 'firefox',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'firefox',
-      },
-    },
-    {
-      name: 'webkit',
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'webkit',
-      },
-    },
-  ],
+  },
+});
+```
+
+## Current limitation: browser launch options must match in one run
+
+In one `rstest` process, all Browser Mode projects must share the same browser launch options:
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+- `providerOptions`
+
+This means mixing multiple providers, or running Chromium/Firefox/WebKit together in the same run, is not supported yet.
+
+For cross-browser coverage, run tests in separate executions (for example, in a CI matrix):
+
+```bash
+npx rstest --browser.name chromium
+npx rstest --browser.name firefox
+npx rstest --browser.name webkit
+```
+
+## Multi-project config isolation
+
+When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
+
+Browser launch options still need to stay aligned across browser projects: `provider`, `browser`, `headless`, `port`, `strictPort`, and `providerOptions`.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
 });
 ```
 
@@ -285,7 +340,45 @@ export default defineConfig({
 });
 ```
 
+## Provider options
+
+### Playwright
+
+When using `provider: 'playwright'`, the Playwright provider recognizes the following fields in `providerOptions`:
+
+1. **`launch`** — Passed to Playwright's [`browserType.launch()`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch). Controls how the browser process is started.
+2. **`context`** — Passed to Playwright's [`browser.newContext()`](https://playwright.dev/docs/api/class-browser#browser-new-context). Controls the browser context created for each test file.
+
+Since `providerOptions` is typed as `Record<string, unknown>`, you won't get IntelliSense out of the box. To get type checking and autocompletion, import types directly from the `playwright` package and use TypeScript's `satisfies` operator:
+
+```ts title="rstest.config.ts"
+import type { LaunchOptions, BrowserContextOptions } from 'playwright';
+import { defineConfig } from '@rstest/core';
+
+type PlaywrightProviderOptions = {
+  launch?: LaunchOptions;
+  context?: BrowserContextOptions;
+};
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions: {
+      launch: {
+        timeout: 60_000,
+      },
+      context: {
+        locale: 'en-US',
+        colorScheme: 'dark',
+      },
+    } satisfies PlaywrightProviderOptions,
+  },
+});
+```
+
 ## Related links
 
 - [Browser Mode Guide](/guide/browser-testing/) - Introduction and usage guide for Browser Mode
 - [Getting Started](/guide/browser-testing/getting-started) - Configure Browser Mode tests
+- [User interactions](/guide/browser-testing/user-interactions#locator-api) - Write semantic tests with `page` + `expect.element`

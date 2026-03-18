@@ -7,7 +7,6 @@ beforeEach(async () => {
   await cleanup();
 });
 
-export { render, renderHook, cleanup, act, configure };
 export type {
   RenderConfiguration,
   RenderHookOptions,
@@ -15,3 +14,4 @@ export type {
   RenderOptions,
   RenderResult,
 } from './pure';
+export { act, cleanup, configure, render, renderHook };

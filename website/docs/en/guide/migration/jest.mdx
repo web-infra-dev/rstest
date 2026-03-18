@@ -1,6 +1,20 @@
+---
+description: Migration guide for moving from Jest to Rstest.
+---
+
 # Migrating from Jest
 
 Rstest is designed to be Jest-compatible, making migration from Jest projects straightforward. Here's how to migrate your Jest project to Rstest:
+
+## Using Agent Skills
+
+If you are using a Coding Agent that supports Skills, install the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill to help with the upgrade process from Jest to Rstest.
+
+```bash
+npx skills add rstackjs/agent-skills --skill migrate-to-rstest
+```
+
+After installation, let the Coding Agent guide you through the upgrade.
 
 ## Installation and setup
 
@@ -68,6 +82,16 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   globals: true,
 });
+```
+
+To enable TypeScript to properly recognize the global APIs, add the `@rstest/core/globals` type declaration in your `tsconfig.json`:
+
+```ts title='tsconfig.json'
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
 ```
 
 ### Code transformation
@@ -157,4 +181,23 @@ If you used `jest.setTimeout()` to set the timeout for a test, you can use `rste
 ```diff
 - jest.setTimeout(5_000)
 + rstest.setConfig({ testTimeout: 5_000 })
+```
+
+## ESM and CJS
+
+Rstest supports ESM by default. If your project is using ESM, you don't need to perform any extra configuration, such as setting `NODE_OPTIONS=--experimental-vm-modules`.
+
+If your project is using CommonJS, Rstest still works, but it is recommended to migrate to ESM for better performance and future compatibility.
+
+### ESM vs CJS mocking
+
+In Rstest, `rstest.mock()` targets ESM entries used by `import`, while `rstest.mockRequire()` targets CJS entries used by `require()`.
+
+If your code uses `require()`, you should use `rstest.mockRequire()` to ensure the correct entry is mocked:
+
+```ts
+// Mocking a CJS module
+rstest.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
 ```

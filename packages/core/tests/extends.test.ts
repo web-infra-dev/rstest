@@ -125,4 +125,111 @@ export default defineConfig({
     expect(config.retry).toBe(2);
     expect(config.projects).toBeUndefined(); // projects should be filtered from extends
   });
+
+  it('should handle extends as array', async () => {
+    const testConfigContent = `
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: [
+    {
+      testEnvironment: 'jsdom',
+      setupFiles: ['./setup-a.ts'],
+      source: {
+        define: {
+          BASE_URL: '"https://example.com"'
+        }
+      }
+    },
+    {
+      globals: true,
+      testEnvironment: 'node',
+      setupFiles: ['./setup-b.ts'],
+      source: {
+        define: {
+          API_URL: '"https://api.example.com"'
+        }
+      }
+    }
+  ],
+  testTimeout: 10000,
+  testEnvironment: 'happy-dom'
+});
+    `;
+
+    writeFileSync(testConfigPath, testConfigContent);
+
+    const { content: config } = await loadConfig({
+      path: testConfigPath,
+    });
+
+    expect(config.globals).toBe(true);
+    expect(config.testEnvironment).toBe('happy-dom');
+    expect(config.testTimeout).toBe(10000);
+    expect(config.setupFiles).toEqual(['./setup-a.ts', './setup-b.ts']);
+    expect(config.source).toEqual({
+      define: {
+        BASE_URL: '"https://example.com"',
+        API_URL: '"https://api.example.com"',
+      },
+    });
+  });
+
+  it('should pass the original local config to every extends function in arrays', async () => {
+    const testConfigContent = `
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 10000,
+  retry: 2,
+  extends: [
+    (userConfig) => {
+      if (!Object.isFrozen(userConfig)) {
+        throw new Error('userConfig should be frozen');
+      }
+
+      if (userConfig.testEnvironment !== undefined) {
+        throw new Error('userConfig should not include previous extends result');
+      }
+
+      if (userConfig.testTimeout !== 10000 || userConfig.retry !== 2) {
+        throw new Error('userConfig should match local config');
+      }
+
+      return {
+        testEnvironment: 'jsdom',
+      };
+    },
+    (userConfig) => {
+      if (!Object.isFrozen(userConfig)) {
+        throw new Error('userConfig should be frozen');
+      }
+
+      if (userConfig.testEnvironment !== undefined) {
+        throw new Error('userConfig should remain the original local config');
+      }
+
+      if (userConfig.testTimeout !== 10000 || userConfig.retry !== 2) {
+        throw new Error('userConfig should match local config');
+      }
+
+      return {
+        globals: true,
+      };
+    }
+  ]
+});
+    `;
+
+    writeFileSync(testConfigPath, testConfigContent);
+
+    const { content: config } = await loadConfig({
+      path: testConfigPath,
+    });
+
+    expect(config.testEnvironment).toBe('jsdom');
+    expect(config.globals).toBe(true);
+    expect(config.testTimeout).toBe(10000);
+    expect(config.retry).toBe(2);
+  });
 });

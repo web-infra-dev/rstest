@@ -434,7 +434,7 @@ export const createRsbuildServer = async ({
     }
   > = {};
 
-  const getEntryFiles = async (manifest: ManifestData, outputPath: string) => {
+  const getEntryFiles = (manifest: ManifestData, outputPath: string) => {
     const entryFiles: Record<string, string[]> = {};
 
     const entries = Object.keys(manifest.entries);
@@ -442,8 +442,14 @@ export const createRsbuildServer = async ({
     for (const entry of entries) {
       const data = manifest.entries[entry];
       entryFiles[entry] = (
-        (data?.initial?.js || []).concat(data?.async?.js || []) || []
-      ).map((file: string) => path.join(outputPath, file));
+        (data?.initial?.js || [])
+          .concat(data?.async?.js || [])
+          .concat(
+            data?.assets?.filter((asset) => !asset.endsWith('.map')) || [],
+          ) || []
+      ).map((file: string) =>
+        file.startsWith(outputPath) ? file : path.join(outputPath, file),
+      );
     }
     return entryFiles;
   };
@@ -475,7 +481,7 @@ export const createRsbuildServer = async ({
       timings: true,
     });
 
-    const entryFiles = await getEntryFiles(manifest, outputPath!);
+    const entryFiles = getEntryFiles(manifest, outputPath!);
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const globalSetupEntries: EntryInfo[] = [];

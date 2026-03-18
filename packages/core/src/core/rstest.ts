@@ -4,6 +4,7 @@ import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
+import { BlobReporter } from '../reporter/blob';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
@@ -218,8 +219,15 @@ export class Rstest implements RstestContext {
             options: {
               showProjectName: projects.length > 1,
             },
+          }).filter((r) => {
+            // Exclude blob reporter when merging (we consume blobs, not produce them)
+            if (command === 'merge-reports' && r instanceof BlobReporter) {
+              return false;
+            }
+            return true;
           })
         : [];
+
     this.reporters = reporters;
   }
 
@@ -267,12 +275,14 @@ const reportersMap: {
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
   md: typeof MdReporter;
+  blob: typeof BlobReporter;
 } = {
   default: DefaultReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
   md: MdReporter,
+  blob: BlobReporter,
 };
 
 export type { BuiltInReporterNames };
@@ -299,7 +309,7 @@ export function createReporters(
 
       // TODO: load third-party reporters
       throw new Error(
-        `Reporter ${reporter} not found. Please install it or use a built-in reporter.`,
+        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
       );
     }
 

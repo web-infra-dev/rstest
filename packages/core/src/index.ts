@@ -14,11 +14,11 @@ export { createRstest } from './core';
 export * from './runtime/api/public';
 
 export type {
-  NormalizedCoverageOptions,
   CoverageOptions,
   CoverageProvider,
-  RstestConfig,
+  NormalizedCoverageOptions,
   RsbuildPlugin,
+  RstestConfig,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
@@ -71,9 +71,12 @@ export function defineProject(config: RstestProjectConfigExport) {
   return config;
 }
 
+export type { Rspack } from '@rsbuild/core';
+
 export type {
   Assertion,
   DescribeAPI as Describe,
+  ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
   ProjectConfig,

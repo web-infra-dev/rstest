@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import * as vscode from 'vscode';
+import vscode from 'vscode';
 import { getTestItemByLabels, toLabelTree, waitFor } from './helpers';
 
 suite('Runtime list suite', () => {

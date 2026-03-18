@@ -1,5 +1,15 @@
 import path from 'node:path';
-import * as p from '@clack/prompts';
+import {
+  cancel,
+  confirm,
+  intro,
+  isCancel,
+  log,
+  note,
+  outro,
+  select,
+  spinner,
+} from '@clack/prompts';
 import { color, determineAgent } from '../../../utils';
 import { detectProject } from './detect';
 import type { BrowserProvider, Framework } from './templates';
@@ -159,7 +169,7 @@ async function createInteractive(
   const effectiveFramework: Framework =
     framework === 'react' ? 'react' : 'vanilla';
 
-  p.intro(color.bgCyan(color.black(' rstest init browser ')));
+  intro(color.bgCyan(color.black(' rstest init browser ')));
 
   // Step 1: Show detection results
   const detectionLines: string[] = [];
@@ -177,17 +187,17 @@ async function createInteractive(
   );
   detectionLines.push(`${color.green('✓')} Test directory: ${testDir}/`);
 
-  p.note(detectionLines.join('\n'), 'Detecting project...');
+  note(detectionLines.join('\n'), 'Detecting project...');
 
   // Show agent hint if running in AI agent environment
   if (isAgent) {
-    p.log.info(
+    log.info(
       `AI Agent detected. For non-interactive mode, run:\n  ${color.cyan('npx rstest init browser --yes')}`,
     );
   }
 
   // Step 2: Choose browser provider (only playwright supported for now)
-  const providerSelection = await p.select({
+  const providerSelection = await select({
     message: 'Choose a browser provider (so far, only Playwright)',
     options: [
       {
@@ -198,8 +208,8 @@ async function createInteractive(
     ],
   });
 
-  if (p.isCancel(providerSelection)) {
-    p.cancel('Operation cancelled.');
+  if (isCancel(providerSelection)) {
+    cancel('Operation cancelled.');
     process.exit(0);
   }
 
@@ -224,21 +234,21 @@ async function createInteractive(
     `   - Add "test:browser" script`,
     `   - Add devDependencies: ${color.dim(depsList)}`,
   ];
-  p.note(previewLines.join('\n'), 'Changes to be made');
+  note(previewLines.join('\n'), 'Changes to be made');
 
   // Step 4: Confirm
-  const confirmed = await p.confirm({
+  const confirmed = await confirm({
     message: 'Proceed with these changes?',
     initialValue: true,
   });
 
-  if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel('Operation cancelled.');
+  if (isCancel(confirmed) || !confirmed) {
+    cancel('Operation cancelled.');
     process.exit(0);
   }
 
   // Step 5: Generate files
-  const s = p.spinner();
+  const s = spinner();
   s.start('Creating files...');
 
   const createdFiles = await generateFiles(cwd, projectInfo, provider);
@@ -248,7 +258,7 @@ async function createInteractive(
   // Show created files
   const fileLines = createdFiles.map((f) => `${color.green('✓')} Created ${f}`);
   fileLines.push(`${color.green('✓')} Updated package.json`);
-  p.note(fileLines.join('\n'), 'Files');
+  note(fileLines.join('\n'), 'Files');
 
   // Step 6: Show next steps
   const nextStepsLines = [
@@ -262,9 +272,9 @@ async function createInteractive(
     `   ${color.cyan(getRunCommand(agent))}`,
   ];
 
-  p.note(nextStepsLines.join('\n'), 'Next steps');
+  note(nextStepsLines.join('\n'), 'Next steps');
 
-  p.outro(color.green('Done! Happy testing with Rstest!'));
+  outro(color.green('Done! Happy testing with Rstest!'));
 }
 
 /**

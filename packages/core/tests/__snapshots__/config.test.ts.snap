@@ -9,16 +9,17 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     "headless": false,
     "port": undefined,
     "provider": "playwright",
+    "providerOptions": {},
     "strictPort": false,
     "viewport": undefined,
   },
   "clearMocks": false,
   "coverage": {
+    "allowExternal": false,
     "clean": true,
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
       "**/__mocks__/**",

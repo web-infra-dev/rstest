@@ -1,56 +1,33 @@
+import type {
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
+  BrowserHostConfig,
+  BrowserProjectRuntime,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+  BrowserClientMessage as ProtocolBrowserClientMessage,
+  TestFileInfo,
+} from '@rstest/browser/protocol';
+
+import type {
+  TestFileResult,
+  TestInfo,
+  TestResult,
+} from '@rstest/core/browser-runtime';
+
 /**
  * Browser UI types
  *
- * These types are derived from @rstest/core's protocol types but simplified
- * for the browser UI's needs. The UI only needs a subset of the full config.
+ * Keep protocol types (locator IR + snapshot/browser RPC) in sync with
+ * @rstest/browser by importing from the shared source.
  */
-
-export type BrowserProjectRuntime = {
-  name: string;
-  environmentName: string;
-  projectRoot: string;
-  runtimeConfig: Record<string, unknown>;
-  viewport?:
-    | {
-        width: number;
-        height: number;
-      }
-    | string;
-};
-
-/**
- * Test file info with associated project name.
- * Used to track which project a test file belongs to.
- */
-export type TestFileInfo = {
-  testPath: string;
-  projectName: string;
-};
-
-export type BrowserHostConfig = {
-  rootPath: string;
-  projects: BrowserProjectRuntime[];
-  snapshot: {
-    updateSnapshot: unknown;
-  };
-  /** If provided, only run this specific test file */
-  testFile?: string;
-  /** Base URL for runner (iframe) pages */
-  runnerUrl?: string;
-  /** WebSocket port for container RPC */
-  wsPort?: number;
-  /** Debug mode. When true, enables verbose logging in browser */
-  debug?: boolean;
-  /** Timeout for RPC operations in milliseconds */
-  rpcTimeout?: number;
-};
 
 export type BrowserClientTestResult = {
-  testId: string;
-  status: 'skip' | 'pass' | 'fail' | 'todo';
-  name: string;
-  testPath: string;
-  parentNames?: string[];
+  testId: TestResult['testId'];
+  status: TestResult['status'];
+  name: TestResult['name'];
+  testPath: TestResult['testPath'];
+  parentNames?: TestResult['parentNames'];
   location?: {
     line: number;
     column?: number;
@@ -58,106 +35,79 @@ export type BrowserClientTestResult = {
   };
 };
 
-export type BrowserClientFileResult = BrowserClientTestResult & {
+export type BrowserClientFileResult = {
+  testId: TestFileResult['testId'];
+  status: TestFileResult['status'];
+  name: TestFileResult['name'];
+  testPath: TestFileResult['testPath'];
+  runId?: string;
+  parentNames?: TestFileResult['parentNames'];
+  location?: {
+    line: number;
+    column?: number;
+    file?: string;
+  };
   results: BrowserClientTestResult[];
 };
 
-export type TestFileStartPayload = {
+export type TestFileStartPayload = Extract<
+  ProtocolBrowserClientMessage,
+  { type: 'file-start' }
+>['payload'];
+
+export type TestFileReadyPayload = {
   testPath: string;
-  projectName: string;
+  tests: TestInfo[];
 };
 
-export type LogPayload = {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  content: string;
-  testPath: string;
-  type: 'stdout' | 'stderr';
-  trace?: string;
-};
+export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
 
-export type FatalPayload = {
-  message: string;
-  stack?: string;
-};
+export type LogPayload = Extract<
+  ProtocolBrowserClientMessage,
+  { type: 'log' }
+>['payload'];
+
+export type FatalPayload = Extract<
+  ProtocolBrowserClientMessage,
+  { type: 'fatal' }
+>['payload'];
 
 export type BrowserClientMessage =
-  | { type: 'ready' }
-  | {
-      type: 'file-start';
-      payload: TestFileStartPayload;
-    }
-  | {
-      type: 'case-result';
-      payload: BrowserClientTestResult;
-    }
-  | {
-      type: 'file-complete';
-      payload: BrowserClientFileResult;
-    }
-  | {
-      type: 'fatal';
-      payload: FatalPayload;
-    }
-  | {
-      type: 'log';
-      payload: LogPayload;
-    }
-  | {
-      type: 'snapshot-rpc-request';
-      payload: SnapshotRpcRequest;
-    }
+  | ProtocolBrowserClientMessage
   | { type: string; payload?: unknown };
 
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<TestFileInfo[]>;
+  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
-  resolveSnapshotPath: (testPath: string) => Promise<string>;
-  readSnapshotFile: (filepath: string) => Promise<string | null>;
-  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
-  removeSnapshotFile: (filepath: string) => Promise<void>;
+  dispatch: (
+    request: BrowserDispatchRequest,
+  ) => Promise<BrowserDispatchResponse>;
+};
+
+export type ReloadTestFileAck = {
+  runId: string;
 };
 
 export type ContainerRPC = {
   onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => void;
+  reloadTestFile: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<ReloadTestFileAck>;
 };
 
-/**
- * Snapshot RPC request from runner iframe.
- * The container will forward these to the host via WebSocket RPC.
- */
-export type SnapshotRpcRequest =
-  | {
-      id: string;
-      method: 'resolveSnapshotPath';
-      args: { testPath: string };
-    }
-  | {
-      id: string;
-      method: 'readSnapshotFile';
-      args: { filepath: string };
-    }
-  | {
-      id: string;
-      method: 'saveSnapshotFile';
-      args: { filepath: string; content: string };
-    }
-  | {
-      id: string;
-      method: 'removeSnapshotFile';
-      args: { filepath: string };
-    };
-
-/**
- * Snapshot RPC response from container to runner iframe.
- */
-export type SnapshotRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
+export type {
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
+  BrowserHostConfig,
+  BrowserProjectRuntime,
+  BrowserRpcRequest,
+  BrowserRpcResponse,
+  TestFileInfo,
 };

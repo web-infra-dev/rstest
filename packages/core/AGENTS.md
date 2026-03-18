@@ -5,7 +5,7 @@ Core testing framework for Rstest. Provides CLI, test runner, reporter, and work
 ## Module structure
 
 - `src/cli/` — CLI commands, initialization
-- `src/core/` — Rsbuild integration, test orchestration, state management
+- `src/core/` — Rsbuild integration, test scheduling, state management
 - `src/core/plugins/` — Rsbuild plugins (mock loader, external handling)
 - `src/runtime/` — Test runtime (expect, spy, fakeTimers, fixtures)
 - `src/runtime/runner/` — Test runner implementation
@@ -43,49 +43,5 @@ pnpm --filter @rstest/core typecheck
 
 ## Don't
 
-- Don't mix CommonJS and ESM in the same module
-- Don't add heavy dependencies without discussion
 - Don't bypass the worker pool for test execution
 - Don't use `console.log` directly; use the logger utilities
-
-## Key files
-
-- `src/index.ts` — Package entry, exports public API
-- `src/cli/index.ts` — CLI entry point
-- `src/core/rstest.ts` — Main Rstest class
-- `src/runtime/runner/runner.ts` — Test runner implementation
-- `src/types/config.ts` — Configuration types
-
-## Testing
-
-- Tests live in `tests/` with structure mirroring `src/`
-- Example: `src/core/rsbuild.ts` → `tests/core/rsbuild.test.ts`
-- Use `npx rstest --globals` for running tests
-- Update snapshots with `-- --updateSnapshot` only when behavior changes
-
-### E2E note (build required)
-
-All E2E tests execute `rstest` via `@rstest/core`'s built output (e.g. `packages/core/dist` / `packages/core/bin`), not the TypeScript sources under `packages/core/src`.
-
-That means: if you change anything in `@rstest/core`, you must rebuild before running E2E tests, otherwise E2E will run against stale output.
-
-```bash
-pnpm --filter @rstest/core build
-cd e2e && pnpm rstest
-```
-
-## Good examples
-
-- Runner implementation: `src/runtime/runner/runner.ts`
-- Reporter pattern: `src/reporter/verbose.ts`
-- Plugin pattern: `src/core/plugins/mockRuntime.ts`
-
-## Safety
-
-Allowed: read files, typecheck, lint, run single test files
-
-Ask first: add dependencies, run full test suite, modify public API types
-
-## When stuck
-
-Ask a clarifying question or propose a plan before making large changes.

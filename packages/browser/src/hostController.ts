@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
+import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -29,15 +31,60 @@ import {
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
-import * as picomatch from 'picomatch';
-import type { BrowserContext, ConsoleMessage, Page } from 'playwright';
+import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
+import { getHeadlessConcurrency } from './concurrency';
+import {
+  createHostDispatchRouter,
+  type HostDispatchRouterOptions,
+} from './dispatchCapabilities';
+import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
+import { attachHeadlessRunnerTransport } from './headlessTransport';
 import type {
+  BrowserClientMessage,
+  BrowserDispatchHandler,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
+  BrowserRpcRequest,
+  BrowserViewport,
+  SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
+import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_RUNNER,
+  validateBrowserRpcRequest,
+} from './protocol';
+import {
+  type BrowserProvider,
+  type BrowserProviderBrowser,
+  type BrowserProviderContext,
+  type BrowserProviderImplementation,
+  type BrowserProviderPage,
+  getBrowserProviderImplementation,
+} from './providers';
+import {
+  createRunSession,
+  type RunSession,
+  RunSessionLifecycle,
+} from './runSession';
+import { RunnerSessionRegistry } from './sessionRegistry';
+import {
+  loadSourceMapWithCache,
+  normalizeJavaScriptUrl,
+  type SourceMapPayload,
+} from './sourceMap/sourceMapLoader';
+import { resolveBrowserViewportPreset } from './viewportPresets';
+import {
+  isBrowserWatchCliShortcutsEnabled,
+  logBrowserWatchReadyMessage,
+  setupBrowserWatchCliShortcuts,
+} from './watchCliShortcuts';
+import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
 
 const { createRsbuild, rspack } = rsbuild;
 type RsbuildDevServer = rsbuild.RsbuildDevServer;
@@ -66,14 +113,34 @@ type VirtualModulesPluginInstance = InstanceType<
   (typeof rspack.experiments)['VirtualModulesPlugin']
 >;
 
-type PlaywrightModule = typeof import('playwright');
-type BrowserType = PlaywrightModule['chromium'];
-type BrowserInstance = Awaited<ReturnType<BrowserType['launch']>>;
-
 type BrowserProjectEntries = {
   project: ProjectContext;
   setupFiles: string[];
   testFiles: string[];
+};
+
+type BrowserProviderProject = {
+  rootPath: string;
+  provider: BrowserProvider;
+};
+
+type BrowserLaunchOptions = {
+  provider: BrowserProvider;
+  browser: ProjectContext['normalizedConfig']['browser']['browser'];
+  headless: ProjectContext['normalizedConfig']['browser']['headless'];
+  port: ProjectContext['normalizedConfig']['browser']['port'];
+  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
+  providerOptions: Record<string, unknown>;
+};
+
+const getBrowserProviderOptions = (
+  project: ProjectContext,
+): Record<string, unknown> => {
+  const browserConfig = project.normalizedConfig.browser as {
+    providerOptions?: Record<string, unknown>;
+  };
+
+  return browserConfig.providerOptions ?? {};
 };
 
 /** Payload for test file start event */
@@ -97,27 +164,66 @@ type FatalPayload = {
   stack?: string;
 };
 
+type ReporterHookArg<THook extends keyof Reporter> = Parameters<
+  NonNullable<Reporter[THook]>
+>[0];
+
+type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
+type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
+type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
+type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+type ReloadTestFileAck = {
+  runId: string;
+};
+type HeadedTestFileCompletePayload = TestFileResult & {
+  runId?: string;
+};
+
+type DeferredPromise<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+
+const createDeferredPromise = <T>(): DeferredPromise<T> => {
+  let resolve!: DeferredPromise<T>['resolve'];
+  let reject!: DeferredPromise<T>['reject'];
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+};
+
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<TestFileInfo[]>;
+  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
   // Test result callbacks from container
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
-  onTestFileComplete: (payload: TestFileResult) => Promise<void>;
+  onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
-  // Snapshot file operations (for browser mode snapshot support)
-  resolveSnapshotPath: (testPath: string) => Promise<string>;
-  readSnapshotFile: (filepath: string) => Promise<string | null>;
-  saveSnapshotFile: (filepath: string, content: string) => Promise<void>;
-  removeSnapshotFile: (filepath: string) => Promise<void>;
+  // Generic dispatch endpoint used by runner RPC requests.
+  dispatch: (
+    request: BrowserDispatchRequest,
+  ) => Promise<BrowserDispatchResponse>;
 };
 
 /** RPC methods exposed by the container (client) to the host (server) */
 type ContainerRpcMethods = {
   onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
-  reloadTestFile: (testFile: string, testNamePattern?: string) => Promise<void>;
+  reloadTestFile: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<ReloadTestFileAck>;
 };
 
 type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
@@ -135,16 +241,27 @@ class ContainerRpcManager {
   private ws: WebSocket | null = null;
   private rpc: ContainerRpc | null = null;
   private methods: HostRpcMethods;
+  private onDisconnect?: (error: Error) => void;
+  private detachActiveSocketListeners: (() => void) | null = null;
 
-  constructor(wss: WebSocketServer, methods: HostRpcMethods) {
+  constructor(
+    wss: WebSocketServer,
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ) {
     this.wss = wss;
     this.methods = methods;
+    this.onDisconnect = onDisconnect;
     this.setupConnectionHandler();
   }
 
   /** Update the RPC methods (used when starting a new test run) */
-  updateMethods(methods: HostRpcMethods): void {
+  updateMethods(
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ): void {
     this.methods = methods;
+    this.onDisconnect = onDisconnect;
     // Re-create birpc with new methods if already connected
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       this.attachWebSocket(this.ws);
@@ -162,35 +279,68 @@ class ContainerRpcManager {
   }
 
   private attachWebSocket(ws: WebSocket): void {
+    this.detachActiveSocketListeners?.();
+    if (this.rpc && !this.rpc.$closed) {
+      this.rpc.$close(new Error('Container RPC transport reattached'));
+    }
     this.ws = ws;
+    const messageHandlers = new WeakMap<
+      (data: any) => void,
+      (message: any) => void
+    >();
 
     this.rpc = createBirpc<ContainerRpcMethods, HostRpcMethods>(this.methods, {
+      timeout: -1,
       post: (data) => {
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify(data));
         }
       },
       on: (fn) => {
-        ws.on('message', (message) => {
+        const handler = (message: any) => {
           try {
             const data = JSON.parse(message.toString());
             fn(data);
           } catch {
             // ignore invalid messages
           }
-        });
+        };
+        messageHandlers.set(fn, handler);
+        ws.on('message', handler);
+      },
+      off: (fn) => {
+        const handler = messageHandlers.get(fn);
+        if (!handler) {
+          return;
+        }
+        ws.off('message', handler);
+        messageHandlers.delete(fn);
       },
     });
 
-    ws.on('close', () => {
+    const handleClose = () => {
       // Only clear if this is still the active connection
       // This prevents a race condition when a new connection is established
       // before the old one's close event fires
       if (this.ws === ws) {
         this.ws = null;
-        this.rpc = null;
       }
-    });
+      this.detachActiveSocketListeners?.();
+      this.detachActiveSocketListeners = null;
+      if (this.rpc && !this.rpc.$closed) {
+        const disconnectError = new Error(
+          'Browser UI WebSocket disconnected before reload completed',
+        );
+        this.rpc.$close(disconnectError);
+        this.onDisconnect?.(disconnectError);
+      }
+      this.rpc = null;
+    };
+
+    ws.on('close', handleClose);
+    this.detachActiveSocketListeners = () => {
+      ws.off('close', handleClose);
+    };
   }
 
   /** Check if a container is currently connected */
@@ -217,16 +367,15 @@ class ContainerRpcManager {
   async reloadTestFile(
     testFile: string,
     testNamePattern?: string,
-  ): Promise<void> {
+  ): Promise<ReloadTestFileAck> {
     logger.debug(
       `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
     );
     if (!this.rpc) {
-      logger.debug('[Browser UI] RPC not available, skipping reloadTestFile');
-      return;
+      throw new Error('Browser UI RPC not available for reloadTestFile');
     }
     logger.debug(`[Browser UI] Calling reloadTestFile: ${testFile}`);
-    await this.rpc.reloadTestFile(testFile, testNamePattern);
+    return this.rpc.reloadTestFile(testFile, testNamePattern);
   }
 }
 
@@ -237,15 +386,18 @@ class ContainerRpcManager {
 type BrowserRuntime = {
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
-  browser: BrowserInstance;
+  browser: BrowserProviderBrowser;
+  browserLaunchOptions: BrowserLaunchOptions;
   port: number;
   wsPort: number;
   manifestPath: string;
   tempDir: string;
   manifestPlugin: VirtualModulesPluginInstance;
-  containerPage?: Page;
-  containerContext?: BrowserContext;
+  containerPage?: BrowserProviderPage;
+  containerContext?: BrowserProviderContext;
   setContainerOptions: (options: BrowserHostConfig) => void;
+  // Reserved extension seam for host-side dispatch capabilities.
+  dispatchHandlers: Map<string, BrowserDispatchHandler>;
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
 };
@@ -259,6 +411,8 @@ type WatchContext = {
   lastTestFiles: TestFileInfo[];
   hooksEnabled: boolean;
   cleanupRegistered: boolean;
+  cleanupPromise: Promise<void> | null;
+  closeCliShortcuts: (() => void) | null;
   chunkHashes: Map<string, string>;
   affectedTestFiles: string[];
 };
@@ -268,6 +422,8 @@ const watchContext: WatchContext = {
   lastTestFiles: [],
   hooksEnabled: false,
   cleanupRegistered: false,
+  cleanupPromise: null,
+  closeCliShortcuts: null,
   chunkHashes: new Map(),
   affectedTestFiles: [],
 };
@@ -276,10 +432,126 @@ const watchContext: WatchContext = {
 // Utility Functions
 // ============================================================================
 
+const resolveViewport = (
+  viewport: BrowserViewport | undefined,
+): { width: number; height: number } | null => {
+  if (!viewport) {
+    return null;
+  }
+
+  if (typeof viewport === 'string') {
+    return resolveBrowserViewportPreset(viewport);
+  }
+
+  if (
+    typeof viewport.width === 'number' &&
+    Number.isFinite(viewport.width) &&
+    viewport.width > 0 &&
+    typeof viewport.height === 'number' &&
+    Number.isFinite(viewport.height) &&
+    viewport.height > 0
+  ) {
+    return {
+      width: viewport.width,
+      height: viewport.height,
+    };
+  }
+
+  return null;
+};
+
+const mapViewportByProject = (
+  projects: BrowserProjectRuntime[],
+): Map<string, { width: number; height: number }> => {
+  const map = new Map<string, { width: number; height: number }>();
+  for (const project of projects) {
+    const viewport = resolveViewport(project.viewport);
+    if (viewport) {
+      map.set(project.name, viewport);
+    }
+  }
+  return map;
+};
+
 const ensureProcessExitCode = (code: number): void => {
   if (process.exitCode === undefined || process.exitCode === 0) {
     process.exitCode = code;
   }
+};
+
+const castArray = <T>(arr?: T | T[]): T[] => {
+  if (arr === undefined) {
+    return [];
+  }
+  return Array.isArray(arr) ? arr : [arr];
+};
+
+const applyDefaultWatchOptions = (
+  rspackConfig: Rspack.Configuration,
+  isWatchMode: boolean,
+) => {
+  rspackConfig.watchOptions ??= {};
+
+  if (!isWatchMode) {
+    rspackConfig.watchOptions.ignored = '**/**';
+    return;
+  }
+
+  rspackConfig.watchOptions.ignored = castArray(
+    rspackConfig.watchOptions.ignored || [],
+  ) as string[];
+
+  if (rspackConfig.watchOptions.ignored.length === 0) {
+    rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
+  }
+
+  rspackConfig.output?.path &&
+    rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+};
+
+type LazyCompilationModule = {
+  nameForCondition?: () => string | null | undefined;
+};
+
+type BrowserLazyCompilationConfig = {
+  imports: true;
+  entries: false;
+  test?: (module: LazyCompilationModule) => boolean;
+};
+
+export const createBrowserLazyCompilationConfig = (
+  setupFiles: string[],
+): BrowserLazyCompilationConfig => {
+  const eagerSetupFiles = new Set(
+    setupFiles.map((filePath) => normalize(filePath)),
+  );
+
+  if (eagerSetupFiles.size === 0) {
+    return {
+      imports: true,
+      entries: false,
+    };
+  }
+
+  return {
+    imports: true,
+    entries: false,
+    test(module: LazyCompilationModule) {
+      const filePath = module.nameForCondition?.();
+      return !filePath || !eagerSetupFiles.has(normalize(filePath));
+    },
+  };
+};
+
+export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
+  return {
+    // Disable HMR in non-watch mode (tests run once and exit).
+    // Aligns with node mode behavior (packages/core/src/core/rsbuild.ts).
+    hmr: isWatchMode,
+    client: {
+      logLevel: 'error' as const,
+    },
+  };
 };
 
 /**
@@ -535,6 +807,71 @@ const getBrowserProjects = (context: Rstest): ProjectContext[] => {
   );
 };
 
+const getBrowserLaunchOptions = (
+  project: ProjectContext,
+): BrowserLaunchOptions => ({
+  provider: project.normalizedConfig.browser.provider,
+  browser: project.normalizedConfig.browser.browser,
+  headless: project.normalizedConfig.browser.headless,
+  port: project.normalizedConfig.browser.port,
+  strictPort: project.normalizedConfig.browser.strictPort,
+  providerOptions: getBrowserProviderOptions(project),
+});
+
+const ensureConsistentBrowserLaunchOptions = (
+  projects: ProjectContext[],
+): BrowserLaunchOptions => {
+  if (projects.length === 0) {
+    throw new Error('No browser-enabled projects found.');
+  }
+
+  const firstProject = projects[0]!;
+  const firstOptions = getBrowserLaunchOptions(firstProject);
+
+  for (const project of projects.slice(1)) {
+    const options = getBrowserLaunchOptions(project);
+    if (
+      options.provider !== firstOptions.provider ||
+      options.browser !== firstOptions.browser ||
+      options.headless !== firstOptions.headless ||
+      options.port !== firstOptions.port ||
+      options.strictPort !== firstOptions.strictPort ||
+      !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
+    ) {
+      throw new Error(
+        `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
+          'All browser-enabled projects in one run must share provider/browser/headless/port/strictPort/providerOptions.',
+      );
+    }
+  }
+
+  return firstOptions;
+};
+
+const resolveProviderForTestPath = ({
+  testPath,
+  browserProjects,
+}: {
+  testPath: string;
+  browserProjects: BrowserProviderProject[];
+}): BrowserProvider => {
+  const normalizedTestPath = normalize(testPath);
+  const sortedProjects = [...browserProjects].sort(
+    (a, b) => b.rootPath.length - a.rootPath.length,
+  );
+
+  for (const project of sortedProjects) {
+    if (normalizedTestPath.startsWith(project.rootPath)) {
+      return project.provider;
+    }
+  }
+
+  throw new Error(
+    `Cannot resolve browser provider for test path: ${JSON.stringify(testPath)}. ` +
+      `Known project roots: ${JSON.stringify(sortedProjects.map((p) => p.rootPath))}`,
+  );
+};
+
 const collectProjectEntries = async (
   context: Rstest,
 ): Promise<BrowserProjectEntries[]> => {
@@ -731,21 +1068,6 @@ const htmlTemplate = `<!DOCTYPE html>
 </html>
 `;
 
-const fallbackSchedulerHtmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Rstest Browser Scheduler</title>
-    <script>
-      window.__RSTEST_BROWSER_OPTIONS__ = ${OPTIONS_PLACEHOLDER};
-    </script>
-  </head>
-  <body>
-    <script type="module" src="/container-static/js/scheduler.js"></script>
-  </body>
-</html>
-`;
-
 // Workaround for noisy "removed ..." logs caused by VirtualModulesPlugin.
 // Rsbuild suppresses the removed-file log if all removed paths include "virtual":
 // https://github.com/web-infra-dev/rsbuild/blob/1258fa9dba5c321a4629b591a6dadbd2e26c6963/packages/core/src/createCompiler.ts#L73-L76
@@ -778,27 +1100,39 @@ const destroyBrowserRuntime = async (
     .catch(() => {});
 };
 
+const cleanupWatchRuntime = (): Promise<void> => {
+  if (watchContext.cleanupPromise) {
+    return watchContext.cleanupPromise;
+  }
+
+  watchContext.cleanupPromise = (async () => {
+    watchContext.closeCliShortcuts?.();
+    watchContext.closeCliShortcuts = null;
+
+    if (!watchContext.runtime) {
+      return;
+    }
+
+    await destroyBrowserRuntime(watchContext.runtime);
+    watchContext.runtime = null;
+  })();
+
+  return watchContext.cleanupPromise;
+};
+
 const registerWatchCleanup = (): void => {
   if (watchContext.cleanupRegistered) {
     return;
   }
 
-  const cleanup = async () => {
-    if (!watchContext.runtime) {
-      return;
-    }
-    await destroyBrowserRuntime(watchContext.runtime);
-    watchContext.runtime = null;
-  };
-
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const) {
     process.once(signal, () => {
-      void cleanup();
+      void cleanupWatchRuntime();
     });
   }
 
   process.once('exit', () => {
-    void cleanup();
+    void cleanupWatchRuntime();
   });
 
   watchContext.cleanupRegistered = true;
@@ -833,15 +1167,11 @@ const createBrowserRuntime = async ({
   const containerHtmlTemplate = containerDistPath
     ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
     : null;
-  const schedulerHtmlTemplate = containerDistPath
-    ? await fs
-        .readFile(join(containerDistPath, 'scheduler.html'), 'utf-8')
-        .catch(() => null)
-    : null;
 
   let injectedContainerHtml: string | null = null;
-  let injectedSchedulerHtml: string | null = null;
   let serializedOptions = 'null';
+  // Reserved extension seam for future browser-side capabilities.
+  const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
 
   const setContainerOptions = (options: BrowserHostConfig): void => {
     serializedOptions = serializeForInlineScript(options);
@@ -851,18 +1181,17 @@ const createBrowserRuntime = async ({
         serializedOptions,
       );
     }
-    injectedSchedulerHtml = (
-      schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate
-    ).replace(OPTIONS_PLACEHOLDER, serializedOptions);
   };
 
-  // Get user Rsbuild config from the first browser project
   const browserProjects = getBrowserProjects(context);
-  const firstProject = browserProjects[0];
-  const userPlugins = firstProject?.normalizedConfig.plugins || [];
-  const userRsbuildConfig = firstProject?.normalizedConfig ?? {};
-  const browserConfig =
-    firstProject?.normalizedConfig.browser ?? context.normalizedConfig.browser;
+  const projectByEnvironmentName = new Map(
+    browserProjects.map((project) => [project.environmentName, project]),
+  );
+  const userPlugins = browserProjects.flatMap(
+    (project) => project.normalizedConfig.plugins || [],
+  );
+  const browserLaunchOptions =
+    ensureConsistentBrowserLaunchOptions(browserProjects);
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -873,6 +1202,8 @@ const createBrowserRuntime = async ({
     '@rstest/browser-manifest': manifestPath,
     // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
+    // User test code: import { page } from '@rstest/browser'
+    '@rstest/browser': resolveBrowserFile('browser.ts'),
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/browser-runtime': browserRuntimePath,
@@ -887,16 +1218,14 @@ const createBrowserRuntime = async ({
       plugins: userPlugins,
       server: {
         printUrls: false,
-        port: browserConfig.port ?? 4000,
-        strictPort: browserConfig.strictPort,
+        port: browserLaunchOptions.port ?? 4000,
+        strictPort: browserLaunchOptions.strictPort,
       },
-      dev: {
-        client: {
-          logLevel: 'error',
-        },
-      },
+      dev: createBrowserRsbuildDevConfig(isWatchMode),
       environments: {
-        [firstProject?.environmentName || 'web']: {},
+        ...Object.fromEntries(
+          browserProjects.map((project) => [project.environmentName, {}]),
+        ),
       },
     },
   });
@@ -906,12 +1235,44 @@ const createBrowserRuntime = async ({
     {
       name: 'rstest:browser-user-config',
       setup(api) {
+        // Internal extension entry: register host dispatch handlers without
+        // coupling scheduling to individual capability implementations.
+        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
+          'rstest:browser',
+          {
+            registerDispatchHandler: (
+              namespace: string,
+              handler: BrowserDispatchHandler,
+            ) => {
+              dispatchHandlers.set(namespace, handler);
+            },
+          },
+        );
+
         api.modifyEnvironmentConfig({
-          handler: (config, { mergeEnvironmentConfig }) => {
+          handler: (config, { mergeEnvironmentConfig, name }) => {
+            const project = projectByEnvironmentName.get(name);
+            if (!project) {
+              return config;
+            }
+
+            const userRsbuildConfig = project.normalizedConfig;
+            const setupFiles = Object.values(
+              getSetupFiles(
+                project.normalizedConfig.setupFiles,
+                project.rootPath,
+              ),
+            );
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
             const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
               resolve: {
                 alias: rstestInternalAliases,
+              },
+              source: {
+                define: {
+                  'process.env': 'globalThis[Symbol.for("rstest.env")]',
+                  'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                },
               },
               output: {
                 target: 'web',
@@ -923,12 +1284,12 @@ const createBrowserRuntime = async ({
               tools: {
                 rspack: (rspackConfig) => {
                   rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation = {
-                    imports: true,
-                    entries: false,
-                  };
+                  rspackConfig.lazyCompilation =
+                    createBrowserLazyCompilationConfig(setupFiles);
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
+
+                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
 
                   // Extract and merge sourcemaps from pre-built @rstest/core files
                   // This preserves the sourcemap chain for inline snapshot support
@@ -986,8 +1347,8 @@ const createBrowserRuntime = async ({
             if (stats) {
               const projectEntries = await collectProjectEntries(context);
               const entryTestFiles = new Set<string>(
-                projectEntries.flatMap((entry) =>
-                  entry.testFiles.map((f) => normalize(f)),
+                collectWatchTestFiles(projectEntries).map(
+                  (file) => file.testPath,
                 ),
               );
 
@@ -1017,7 +1378,9 @@ const createBrowserRuntime = async ({
   }
 
   // Register coverage plugin for browser mode
-  const coverage = firstProject?.normalizedConfig.coverage;
+  const coverage = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
   if (coverage?.enabled && context.command !== 'list') {
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
@@ -1111,82 +1474,72 @@ const createBrowserRuntime = async ({
     }
   };
 
-  devServer.middlewares.use(async (req, res, next) => {
-    if (!req.url) {
+  devServer.middlewares.use(
+    async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+      if (!req.url) {
+        next();
+        return;
+      }
+      const url = new URL(req.url, 'http://localhost');
+      if (url.pathname === '/__open-in-editor') {
+        const file = url.searchParams.get('file');
+        if (!file) {
+          res.statusCode = 400;
+          res.end('Missing file');
+          return;
+        }
+        try {
+          await openEditor([{ file }]);
+          res.statusCode = 204;
+          res.end();
+        } catch (error) {
+          logger.debug(`[Browser UI] Failed to open editor: ${String(error)}`);
+          res.statusCode = 500;
+          res.end('Failed to open editor');
+        }
+        return;
+      }
+      if (url.pathname === '/') {
+        if (await respondWithDevServerHtml(url, res)) {
+          return;
+        }
+
+        const html =
+          injectedContainerHtml ||
+          containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
+
+        if (html) {
+          res.setHeader('Content-Type', 'text/html');
+          res.end(html);
+          return;
+        }
+
+        res.statusCode = 502;
+        res.end('Container UI is not available.');
+        return;
+      }
+      if (url.pathname.startsWith('/container-static/')) {
+        if (await proxyDevServerAsset(req, res)) {
+          return;
+        }
+
+        if (serveContainer) {
+          serveContainer(req, res, next);
+          return;
+        }
+
+        res.statusCode = 502;
+        res.end('Container assets are not available.');
+        return;
+      }
+      if (url.pathname === '/runner.html') {
+        res.setHeader('Content-Type', 'text/html');
+        res.end(htmlTemplate);
+        return;
+      }
       next();
-      return;
-    }
-    const url = new URL(req.url, 'http://localhost');
-    if (url.pathname === '/__open-in-editor') {
-      const file = url.searchParams.get('file');
-      if (!file) {
-        res.statusCode = 400;
-        res.end('Missing file');
-        return;
-      }
-      try {
-        await openEditor([{ file }]);
-        res.statusCode = 204;
-        res.end();
-      } catch (error) {
-        logger.debug(`[Browser UI] Failed to open editor: ${String(error)}`);
-        res.statusCode = 500;
-        res.end('Failed to open editor');
-      }
-      return;
-    }
-    if (url.pathname === '/' || url.pathname === '/scheduler.html') {
-      if (await respondWithDevServerHtml(url, res)) {
-        return;
-      }
-
-      if (url.pathname === '/scheduler.html') {
-        res.setHeader('Content-Type', 'text/html');
-        res.end(
-          injectedSchedulerHtml ||
-            (schedulerHtmlTemplate || fallbackSchedulerHtmlTemplate).replace(
-              OPTIONS_PLACEHOLDER,
-              'null',
-            ),
-        );
-        return;
-      }
-
-      const html =
-        injectedContainerHtml ||
-        containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
-
-      if (html) {
-        res.setHeader('Content-Type', 'text/html');
-        res.end(html);
-        return;
-      }
-
-      res.statusCode = 502;
-      res.end('Container UI is not available.');
-      return;
-    }
-    if (url.pathname.startsWith('/container-static/')) {
-      if (await proxyDevServerAsset(req, res)) {
-        return;
-      }
-
-      if (serveContainer) {
-        serveContainer(req, res, next);
-        return;
-      }
-
-      res.statusCode = 502;
-      res.end('Container assets are not available.');
-      return;
-    }
-    if (url.pathname === '/runner.html') {
-      res.setHeader('Content-Type', 'text/html');
-      res.end(htmlTemplate);
-      return;
-    }
-    next();
-  });
+    },
+  );
 
   const { port } = await devServer.listen();
 
@@ -1201,49 +1554,35 @@ const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  let browserLauncher: BrowserType;
-  const browserName = browserConfig.browser;
+  const browserName = browserLaunchOptions.browser ?? 'chromium';
   try {
-    const playwright = await import('playwright');
-    browserLauncher = playwright[browserName];
-  } catch (_error) {
-    wss.close();
-    await devServer.close();
-    throw _error;
-  }
-
-  let browser: BrowserInstance;
-  try {
-    browser = await browserLauncher.launch({
-      headless: forceHeadless ?? browserConfig.headless,
-      // Chromium-specific args (ignored by other browsers)
-      args:
-        browserName === 'chromium'
-          ? [
-              '--disable-popup-blocking',
-              '--no-first-run',
-              '--no-default-browser-check',
-            ]
-          : undefined,
+    const providerImplementation = getBrowserProviderImplementation(
+      browserLaunchOptions.provider,
+    );
+    const runtime = await providerImplementation.launchRuntime({
+      browserName,
+      headless: forceHeadless ?? browserLaunchOptions.headless,
+      providerOptions: browserLaunchOptions.providerOptions,
     });
+    return {
+      rsbuildInstance,
+      devServer,
+      browser: runtime.browser,
+      browserLaunchOptions,
+      port,
+      wsPort,
+      manifestPath,
+      tempDir,
+      manifestPlugin: virtualManifestPlugin,
+      setContainerOptions,
+      dispatchHandlers,
+      wss,
+    };
   } catch (_error) {
     wss.close();
     await devServer.close();
     throw _error;
   }
-
-  return {
-    rsbuildInstance,
-    devServer,
-    browser,
-    port,
-    wsPort,
-    manifestPath,
-    tempDir,
-    manifestPlugin: virtualManifestPlugin,
-    setContainerOptions,
-    wss,
-  };
 };
 
 async function resolveProjectEntries(
@@ -1283,9 +1622,52 @@ export const runBrowserController = async (
   const { skipOnTestRunEnd = false } = options ?? {};
   const buildStart = Date.now();
   const browserProjects = getBrowserProjects(context);
-  const useSchedulerPage = browserProjects.every(
+  const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
   );
+
+  const browserSourceMapCache = new Map<string, SourceMapPayload | null>();
+
+  const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
+
+  const resolveBrowserSourcemap = async (sourcePath: string) => {
+    if (!isHttpLikeFile(sourcePath)) {
+      return {
+        handled: false,
+        sourcemap: null,
+      };
+    }
+
+    const normalizedUrl = normalizeJavaScriptUrl(sourcePath);
+    if (!normalizedUrl) {
+      return {
+        handled: true,
+        sourcemap: null,
+      };
+    }
+
+    if (browserSourceMapCache.has(normalizedUrl)) {
+      return {
+        handled: true,
+        sourcemap: browserSourceMapCache.get(normalizedUrl) ?? null,
+      };
+    }
+
+    return {
+      handled: true,
+      sourcemap: await loadSourceMapWithCache({
+        jsUrl: normalizedUrl,
+        cache: browserSourceMapCache,
+      }),
+    };
+  };
+
+  const getBrowserSourcemap = async (
+    sourcePath: string,
+  ): Promise<SourceMapPayload | null> => {
+    const result = await resolveBrowserSourcemap(sourcePath);
+    return result.handled ? result.sourcemap : null;
+  };
 
   /**
    * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
@@ -1293,14 +1675,18 @@ export const runBrowserController = async (
    */
   const buildErrorResult = async (
     error: Error,
+    close?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
     const elapsed = Math.max(0, Date.now() - buildStart);
-    const errorResult: BrowserTestRunResult = {
+    const errorResult = {
       results: [],
       testResults: [],
       duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
       hasFailure: true,
       unhandledErrors: [error],
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close,
     };
 
     if (!skipOnTestRunEnd) {
@@ -1310,7 +1696,7 @@ export const runBrowserController = async (
           testResults: [],
           duration: errorResult.duration,
           snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: async () => null,
+          getSourcemap: getBrowserSourcemap,
           unhandledErrors: errorResult.unhandledErrors,
         });
       }
@@ -1328,32 +1714,94 @@ export const runBrowserController = async (
     cleanup?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
     ensureProcessExitCode(1);
-    await cleanup?.();
-    return buildErrorResult(toError(error));
+
+    const normalizedError = toError(error);
+
+    if (cleanup && skipOnTestRunEnd) {
+      return buildErrorResult(normalizedError, cleanup);
+    }
+
+    try {
+      return await buildErrorResult(normalizedError);
+    } finally {
+      await cleanup?.();
+    }
+  };
+
+  const collectDeletedTestPaths = (
+    previous: TestFileInfo[],
+    current: TestFileInfo[],
+  ): string[] => {
+    const currentPathSet = new Set(current.map((file) => file.testPath));
+    return previous
+      .map((file) => file.testPath)
+      .filter((testPath) => !currentPathSet.has(testPath));
+  };
+
+  const notifyTestRunStart = async (): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunStart?.();
+    }
+  };
+
+  const notifyTestRunEnd = async ({
+    duration,
+    unhandledErrors,
+    filterRerunTestPaths,
+  }: {
+    duration: {
+      totalTime: number;
+      buildTime: number;
+      testTime: number;
+    };
+    unhandledErrors?: Error[];
+    filterRerunTestPaths?: string[];
+  }): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunEnd?.({
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
+        duration,
+        snapshotSummary: context.snapshotManager.summary,
+        getSourcemap: getBrowserSourcemap,
+        unhandledErrors,
+        filterRerunTestPaths,
+      });
+    }
   };
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
   let containerDistPath: string | undefined;
 
-  if (containerDevServerEnv) {
-    try {
-      containerDevServer = new URL(containerDevServerEnv).toString();
-      logger.debug(
-        `[Browser UI] Using dev server for container: ${containerDevServer}`,
-      );
-    } catch (error) {
-      const originalError = toError(error);
-      originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
-      return failWithError(originalError);
+  if (!useHeadlessDirect) {
+    if (containerDevServerEnv) {
+      try {
+        containerDevServer = new URL(containerDevServerEnv).toString();
+        logger.debug(
+          `[Browser UI] Using dev server for container: ${containerDevServer}`,
+        );
+      } catch (error) {
+        const originalError = toError(error);
+        originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
+        return failWithError(originalError);
+      }
     }
-  }
 
-  if (!containerDevServer) {
-    try {
-      containerDistPath = resolveContainerDist();
-    } catch (error) {
-      return failWithError(error);
+    if (!containerDevServer) {
+      try {
+        containerDistPath = resolveContainerDist();
+      } catch (error) {
+        return failWithError(error);
+      }
     }
   }
 
@@ -1383,7 +1831,10 @@ export const runBrowserController = async (
     return;
   }
 
+  await notifyTestRunStart();
+
   const isWatchMode = context.command === 'watch';
+  const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const tempDir =
     isWatchMode && watchContext.runtime
       ? watchContext.runtime.tempDir
@@ -1404,12 +1855,7 @@ export const runBrowserController = async (
 
   // Track initial test files for watch mode
   if (isWatchMode) {
-    watchContext.lastTestFiles = projectEntries.flatMap((entry) =>
-      entry.testFiles.map((testPath) => ({
-        testPath,
-        projectName: entry.project.name,
-      })),
-    );
+    watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
 
   let runtime = isWatchMode ? watchContext.runtime : null;
@@ -1442,10 +1888,16 @@ export const runBrowserController = async (
     if (isWatchMode) {
       watchContext.runtime = runtime;
       registerWatchCleanup();
+
+      if (enableCliShortcuts && !watchContext.closeCliShortcuts) {
+        watchContext.closeCliShortcuts = await setupBrowserWatchCliShortcuts({
+          close: cleanupWatchRuntime,
+        });
+      }
     }
   }
 
-  const { browser, port, wsPort, wss } = runtime;
+  const { browser, browserLaunchOptions, port, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries with project info
@@ -1486,23 +1938,828 @@ export const runBrowserController = async (
     rpcTimeout: maxTestTimeoutForRpc,
   };
 
-  runtime.setContainerOptions(hostOptions);
+  const browserProviderProjects: BrowserProviderProject[] = browserProjects.map(
+    (project) => ({
+      rootPath: normalize(project.rootPath),
+      provider: project.normalizedConfig.browser.provider,
+    }),
+  );
+  const implementationByProvider = new Map<
+    BrowserProvider,
+    BrowserProviderImplementation
+  >();
+  for (const browserProject of browserProviderProjects) {
+    if (!implementationByProvider.has(browserProject.provider)) {
+      implementationByProvider.set(
+        browserProject.provider,
+        getBrowserProviderImplementation(browserProject.provider),
+      );
+    }
+  }
 
-  // Track test results from iframes
-  const reporterResults: TestFileResult[] = [];
-  const caseResults: TestResult[] = [];
-  let completedTests = 0;
-  let fatalError: Error | null = null;
+  let activeContainerPage: BrowserProviderPage | null = null;
+  let getHeadlessRunnerPageBySessionId:
+    | ((sessionId: string) => BrowserProviderPage | undefined)
+    | undefined;
 
-  // Promise that resolves when all tests complete
-  let resolveAllTests: (() => void) | undefined;
-  const allTestsPromise = new Promise<void>((resolve) => {
-    resolveAllTests = resolve;
+  const dispatchBrowserRpcRequest = async ({
+    request,
+    target,
+  }: {
+    request: BrowserRpcRequest;
+    target?: BrowserDispatchRequest['target'];
+  }): Promise<unknown> => {
+    const timeoutFallbackMs = maxTestTimeoutForRpc;
+    const provider = resolveProviderForTestPath({
+      testPath: request.testPath,
+      browserProjects: browserProviderProjects,
+    });
+    const implementation = implementationByProvider.get(provider);
+    if (!implementation) {
+      throw new Error(`Browser provider implementation not found: ${provider}`);
+    }
+
+    const runnerPage = target?.sessionId
+      ? getHeadlessRunnerPageBySessionId?.(target.sessionId)
+      : undefined;
+
+    if (target?.sessionId && !runnerPage) {
+      throw new Error(
+        `Runner page session not found for browser dispatch: ${target.sessionId}`,
+      );
+    }
+
+    if (!runnerPage && !activeContainerPage) {
+      throw new Error('Browser container page is not initialized');
+    }
+
+    try {
+      return await implementation.dispatchRpc({
+        containerPage: runnerPage
+          ? undefined
+          : (activeContainerPage ?? undefined),
+        runnerPage,
+        request,
+        timeoutFallbackMs,
+      });
+    } catch (error) {
+      // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
+      if (error instanceof Error) {
+        throw error.message;
+      }
+      throw String(error);
+    }
+  };
+
+  runtime.dispatchHandlers.set('browser', async (dispatchRequest) => {
+    const request = validateBrowserRpcRequest(dispatchRequest.args);
+    return dispatchBrowserRpcRequest({
+      request,
+      target: dispatchRequest.target,
+    });
   });
 
+  runtime.setContainerOptions(hostOptions);
+
+  // Track test results from browser runners
+  const reporterResults: TestFileResult[] = [];
+  const caseResults: TestResult[] = [];
+  let fatalError: Error | null = null;
+
+  const snapshotRpcMethods = {
+    async resolveSnapshotPath(testPath: string): Promise<string> {
+      const snapExtension = '.snap';
+      const resolver =
+        context.normalizedConfig.resolveSnapshotPath ||
+        (() =>
+          join(
+            dirname(testPath),
+            '__snapshots__',
+            `${basename(testPath)}${snapExtension}`,
+          ));
+      return resolver(testPath, snapExtension);
+    },
+    async readSnapshotFile(filepath: string): Promise<string | null> {
+      try {
+        return await fs.readFile(filepath, 'utf-8');
+      } catch {
+        return null;
+      }
+    },
+    async saveSnapshotFile(filepath: string, content: string): Promise<void> {
+      const dir = dirname(filepath);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(filepath, content, 'utf-8');
+    },
+    async removeSnapshotFile(filepath: string): Promise<void> {
+      try {
+        await fs.unlink(filepath);
+      } catch {
+        // ignore if file doesn't exist
+      }
+    },
+  };
+
+  const handleTestFileStart = async (
+    payload: TestFileStartPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileStart?.({
+          testPath: payload.testPath,
+          tests: [],
+        }),
+      ),
+    );
+  };
+
+  const handleTestFileReady = async (
+    payload: TestFileReadyPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileReady?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteStart = async (
+    payload: TestSuiteStartPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteStart?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteResult = async (
+    payload: TestSuiteResultPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteResult?.(payload),
+      ),
+    );
+  };
+
+  const handleTestCaseStart = async (
+    payload: TestCaseStartPayload,
+  ): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestCaseStart?.(payload),
+      ),
+    );
+  };
+
+  const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
+    caseResults.push(payload);
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestCaseResult?.(payload),
+      ),
+    );
+  };
+
+  const handleTestFileComplete = async (
+    payload: TestFileResult,
+  ): Promise<void> => {
+    reporterResults.push(payload);
+    context.updateReporterResultState([payload], payload.results);
+    if (payload.snapshotResult) {
+      context.snapshotManager.add(payload.snapshotResult);
+    }
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileResult?.(payload),
+      ),
+    );
+    if (payload.status === 'fail') {
+      ensureProcessExitCode(1);
+    }
+  };
+
+  const handleLog = async (payload: LogPayload): Promise<void> => {
+    const log: UserConsoleLog = {
+      content: payload.content,
+      name: payload.level,
+      testPath: payload.testPath,
+      type: payload.type,
+      trace: payload.trace,
+    };
+    const shouldLog =
+      context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
+    if (shouldLog) {
+      await Promise.all(
+        context.reporters.map((reporter) =>
+          (reporter as Reporter).onUserConsoleLog?.(log),
+        ),
+      );
+    }
+  };
+
+  const handleFatal = async (payload: FatalPayload): Promise<void> => {
+    const error = new Error(payload.message);
+    error.stack = payload.stack;
+    fatalError = error;
+    ensureProcessExitCode(1);
+  };
+
+  const runSnapshotRpc = async (
+    request: SnapshotRpcRequest,
+  ): Promise<unknown> => {
+    switch (request.method) {
+      case 'resolveSnapshotPath':
+        return snapshotRpcMethods.resolveSnapshotPath(request.args.testPath);
+      case 'readSnapshotFile':
+        return snapshotRpcMethods.readSnapshotFile(request.args.filepath);
+      case 'saveSnapshotFile':
+        return snapshotRpcMethods.saveSnapshotFile(
+          request.args.filepath,
+          request.args.content,
+        );
+      case 'removeSnapshotFile':
+        return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
+      default:
+        return undefined;
+    }
+  };
+
+  const createDispatchRouter = (options?: HostDispatchRouterOptions) => {
+    return createHostDispatchRouter({
+      routerOptions: options,
+      runnerCallbacks: {
+        onTestFileStart: handleTestFileStart,
+        onTestFileReady: handleTestFileReady,
+        onTestSuiteStart: handleTestSuiteStart,
+        onTestSuiteResult: handleTestSuiteResult,
+        onTestCaseStart: handleTestCaseStart,
+        onTestCaseResult: handleTestCaseResult,
+        onTestFileComplete: handleTestFileComplete,
+        onLog: handleLog,
+        onFatal: handleFatal,
+      },
+      runSnapshotRpc,
+      extensionHandlers: runtime.dispatchHandlers,
+      onDuplicateNamespace: (namespace) => {
+        logger.debug(
+          `[Dispatch] Skip registering dispatch namespace "${namespace}" because it is already reserved`,
+        );
+      },
+    });
+  };
+
+  if (useHeadlessDirect) {
+    // Session-based scheduling path: lifecycle + session index + dispatch routing.
+    type ActiveHeadlessRun = RunSession & {
+      contexts: Set<BrowserProviderContext>;
+    };
+
+    const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
+    const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
+    const sessionRegistry = new RunnerSessionRegistry();
+    getHeadlessRunnerPageBySessionId = (sessionId) => {
+      return sessionRegistry.getById(sessionId)?.page;
+    };
+    let dispatchRequestCounter = 0;
+
+    const nextDispatchRequestId = (namespace: string): string => {
+      return `${namespace}-${++dispatchRequestCounter}`;
+    };
+
+    const closeContextSafely = async (
+      browserContext: BrowserProviderContext,
+    ): Promise<void> => {
+      try {
+        await browserContext.close();
+      } catch {
+        // ignore
+      }
+    };
+
+    const cancelRun = async (
+      run: ActiveHeadlessRun,
+      waitForDone = true,
+    ): Promise<void> => {
+      await runLifecycle.cancel(run, {
+        waitForDone,
+        onCancel: async (session) => {
+          await Promise.all(
+            Array.from(session.contexts).map((browserContext) =>
+              closeContextSafely(browserContext),
+            ),
+          );
+        },
+      });
+    };
+
+    const dispatchRouter = createDispatchRouter({
+      isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
+      onStale: (request) => {
+        if (request.namespace === DISPATCH_NAMESPACE_RUNNER) {
+          logger.debug(
+            `[Headless] Dropped stale message "${request.method}" for ${request.target?.testFile ?? 'unknown'}`,
+          );
+        }
+      },
+    });
+
+    const dispatchRunnerMessage = async (
+      run: ActiveHeadlessRun,
+      file: TestFileInfo,
+      sessionId: string,
+      message: BrowserClientMessage,
+    ): Promise<void> => {
+      const response = await dispatchRouter.dispatch({
+        requestId: nextDispatchRequestId('runner'),
+        runToken: run.token,
+        namespace: DISPATCH_NAMESPACE_RUNNER,
+        method: message.type,
+        args: 'payload' in message ? message.payload : undefined,
+        target: {
+          sessionId,
+          testFile: file.testPath,
+          projectName: file.projectName,
+        },
+      });
+
+      if (response.stale) {
+        return;
+      }
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+    };
+
+    const runSingleFile = async (
+      run: ActiveHeadlessRun,
+      file: TestFileInfo,
+    ): Promise<void> => {
+      if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
+        return;
+      }
+
+      const viewport = viewportByProject.get(file.projectName);
+      const browserContext = await browser.newContext({
+        providerOptions: browserLaunchOptions.providerOptions,
+        viewport: viewport ?? null,
+      });
+      run.contexts.add(browserContext);
+
+      let page: BrowserProviderPage | null = null;
+      let sessionId: string | null = null;
+      let settled = false;
+      let resolveDone: (() => void) | null = null;
+
+      const markDone = (): void => {
+        if (!settled) {
+          settled = true;
+          resolveDone?.();
+        }
+      };
+
+      const donePromise = new Promise<void>((resolve) => {
+        resolveDone = resolve;
+      });
+
+      const projectRuntime = projectRuntimeConfigs.find(
+        (project) => project.name === file.projectName,
+      );
+      const perFileTimeoutMs =
+        (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
+        30_000;
+
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        page = await browserContext.newPage();
+
+        const session = sessionRegistry.register({
+          testFile: file.testPath,
+          projectName: file.projectName,
+          runToken: run.token,
+          mode: 'headless-page',
+          context: browserContext,
+          page,
+        });
+        sessionId = session.id;
+
+        await attachHeadlessRunnerTransport(page, {
+          onDispatchMessage: async (message) => {
+            try {
+              await dispatchRunnerMessage(run, file, session.id, message);
+              if (
+                message.type === 'file-complete' ||
+                message.type === 'complete'
+              ) {
+                markDone();
+              } else if (message.type === 'fatal') {
+                markDone();
+                await cancelRun(run, false);
+              }
+            } catch (error) {
+              const formatted = toError(error);
+              await handleFatal({
+                message: formatted.message,
+                stack: formatted.stack,
+              });
+              markDone();
+              await cancelRun(run, false);
+            }
+          },
+          onDispatchRpc: async (request) => {
+            return dispatchRouter.dispatch({
+              ...request,
+              runToken: run.token,
+              target: {
+                sessionId: session.id,
+                testFile: file.testPath,
+                projectName: file.projectName,
+                ...request.target,
+              },
+            });
+          },
+        });
+
+        const inlineOptions: BrowserHostConfig = {
+          ...hostOptions,
+          testFile: file.testPath,
+          runId: `${run.token}:${session.id}`,
+        };
+        const serializedOptions = serializeForInlineScript(inlineOptions);
+        await page.addInitScript(
+          `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+        );
+
+        await page.goto(`http://localhost:${port}/runner.html`, {
+          waitUntil: 'load',
+        });
+
+        const timeoutPromise = new Promise<'timeout'>((resolve) => {
+          timeoutId = setTimeout(() => resolve('timeout'), perFileTimeoutMs);
+        });
+
+        const state = await Promise.race([
+          donePromise.then(() => 'done' as const),
+          timeoutPromise,
+          run.cancelSignal.then(() => 'cancelled' as const),
+        ]);
+
+        if (state === 'cancelled') {
+          return;
+        }
+
+        if (
+          state === 'timeout' &&
+          runLifecycle.isTokenActive(run.token) &&
+          !run.cancelled
+        ) {
+          await handleFatal({
+            message: `Test execution timeout after ${perFileTimeoutMs / 1000}s for ${file.testPath}.`,
+          });
+          await cancelRun(run, false);
+        }
+      } catch (error) {
+        if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
+          const formatted = toError(error);
+          await handleFatal({
+            message: formatted.message,
+            stack: formatted.stack,
+          });
+          await cancelRun(run, false);
+        }
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (page) {
+          try {
+            await page.close();
+          } catch {
+            // ignore
+          }
+        }
+        if (sessionId) {
+          sessionRegistry.deleteById(sessionId);
+        }
+        run.contexts.delete(browserContext);
+        await closeContextSafely(browserContext);
+      }
+    };
+
+    const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
+      if (files.length === 0) {
+        return;
+      }
+
+      const previous = runLifecycle.activeSession;
+      if (previous) {
+        await cancelRun(previous);
+      }
+
+      const run = runLifecycle.createSession((token) => ({
+        ...createRunSession(token),
+        contexts: new Set<BrowserProviderContext>(),
+      }));
+
+      const queue = [...files];
+      const concurrency = getHeadlessConcurrency(context, queue.length);
+
+      const worker = async (): Promise<void> => {
+        while (
+          queue.length > 0 &&
+          !run.cancelled &&
+          runLifecycle.isTokenActive(run.token)
+        ) {
+          const next = queue.shift();
+          if (!next) {
+            return;
+          }
+          await runSingleFile(run, next);
+        }
+      };
+
+      run.done = Promise.all(
+        Array.from(
+          { length: Math.min(queue.length, Math.max(concurrency, 1)) },
+          () => worker(),
+        ),
+      ).then(() => {});
+
+      await run.done;
+      runLifecycle.clearIfActive(run);
+    };
+
+    const latestRerunScheduler = createHeadlessLatestRerunScheduler<
+      TestFileInfo,
+      ActiveHeadlessRun
+    >({
+      getActiveRun: () => runLifecycle.activeSession,
+      isRunCancelled: (run) => run.cancelled,
+      invalidateActiveRun: () => {
+        runLifecycle.invalidateActiveToken();
+      },
+      interruptActiveRun: async (run) => {
+        await cancelRun(run, false);
+      },
+      runFiles: async (files) => {
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          await runFilesWithPool(files);
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: files.map((file) => file.testPath),
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        }
+      },
+      onError: async (error) => {
+        const formatted = toError(error);
+        await handleFatal({
+          message: formatted.message,
+          stack: formatted.stack,
+        });
+      },
+      onInterrupt: (run) => {
+        logger.debug(
+          `[Headless] Interrupting active run token ${run.token} before scheduling latest rerun`,
+        );
+      },
+    });
+
+    const testStart = Date.now();
+    await runFilesWithPool(allTestFiles);
+    const testTime = Date.now() - testStart;
+
+    if (isWatchMode) {
+      triggerRerun = async () => {
+        const newProjectEntries = await collectProjectEntries(context);
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchContext.lastTestFiles,
+          affectedTestFiles: watchContext.affectedTestFiles,
+        });
+        watchContext.affectedTestFiles = [];
+
+        if (rerunPlan.filesChanged) {
+          const deletedTestPaths = collectDeletedTestPaths(
+            watchContext.lastTestFiles,
+            rerunPlan.currentTestFiles,
+          );
+          if (deletedTestPaths.length > 0) {
+            context.updateReporterResultState([], [], deletedTestPaths);
+          }
+          watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+          if (rerunPlan.currentTestFiles.length === 0) {
+            await latestRerunScheduler.enqueueLatest([]);
+            logger.log(
+              color.cyan('No browser test files remain after update.\n'),
+            );
+            logBrowserWatchReadyMessage(enableCliShortcuts);
+            return;
+          }
+
+          logger.log(
+            color.cyan(
+              `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+            ),
+          );
+          void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+          return;
+        }
+
+        if (rerunPlan.affectedTestFiles.length === 0) {
+          logger.log(
+            color.cyan(
+              'No affected browser test files detected, skipping re-run.\n',
+            ),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
+
+        logger.log(
+          color.cyan(
+            `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
+          ),
+        );
+        void latestRerunScheduler.enqueueLatest(rerunPlan.affectedTestFiles);
+      };
+    }
+
+    const closeHeadlessRuntime = !isWatchMode
+      ? async () => {
+          sessionRegistry.clear();
+          await destroyBrowserRuntime(runtime);
+        }
+      : undefined;
+
+    if (fatalError) {
+      return failWithError(fatalError, closeHeadlessRuntime);
+    }
+
+    const duration = {
+      totalTime: buildTime + testTime,
+      buildTime,
+      testTime,
+    };
+
+    context.updateReporterResultState(reporterResults, caseResults);
+
+    const isFailure = reporterResults.some(
+      (result: TestFileResult) => result.status === 'fail',
+    );
+    if (isFailure) {
+      ensureProcessExitCode(1);
+    }
+
+    const result = {
+      results: reporterResults,
+      testResults: caseResults,
+      duration,
+      hasFailure: isFailure,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close: skipOnTestRunEnd ? closeHeadlessRuntime : undefined,
+    };
+
+    if (!skipOnTestRunEnd) {
+      try {
+        await notifyTestRunEnd({ duration });
+      } finally {
+        await closeHeadlessRuntime?.();
+      }
+    }
+
+    if (isWatchMode && triggerRerun) {
+      watchContext.hooksEnabled = true;
+      logBrowserWatchReadyMessage(enableCliShortcuts);
+    }
+
+    return result;
+  }
+
+  let currentTestFiles = allTestFiles;
+  const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
+  let currentRunnerFramesSignature: string | null = null;
+  const runnerFramesWaiters = new Map<string, Set<() => void>>();
+
+  const createTestFilesSignature = (testFiles: readonly string[]): string => {
+    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
+  };
+
+  const markRunnerFramesReady = (testFiles: string[]): void => {
+    const signature = createTestFilesSignature(testFiles);
+    currentRunnerFramesSignature = signature;
+    const waiters = runnerFramesWaiters.get(signature);
+    if (!waiters) {
+      return;
+    }
+    runnerFramesWaiters.delete(signature);
+    for (const waiter of waiters) {
+      waiter();
+    }
+  };
+
+  const waitForRunnerFramesReady = async (
+    testFiles: readonly string[],
+  ): Promise<void> => {
+    const signature = createTestFilesSignature(testFiles);
+    if (currentRunnerFramesSignature === signature) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const waiters =
+        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      const cleanup = () => {
+        const currentWaiters = runnerFramesWaiters.get(signature);
+        if (!currentWaiters) {
+          return;
+        }
+        currentWaiters.delete(onReady);
+        if (currentWaiters.size === 0) {
+          runnerFramesWaiters.delete(signature);
+        }
+      };
+
+      const onReady = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        cleanup();
+        resolve();
+      };
+
+      timeoutId = setTimeout(() => {
+        cleanup();
+        reject(
+          new Error(
+            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
+          ),
+        );
+      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
+
+      waiters.add(onReady);
+      runnerFramesWaiters.set(signature, waiters);
+
+      if (currentRunnerFramesSignature === signature) {
+        onReady();
+      }
+    });
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const normalizedTestFile = normalize(testFile);
+    const fileInfo = currentTestFiles.find(
+      (file) => file.testPath === normalizedTestFile,
+    );
+    if (!fileInfo) {
+      throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
+    }
+    return fileInfo;
+  };
+
+  const getHeadedPerFileTimeoutMs = (file: TestFileInfo): number => {
+    const projectRuntime = projectRuntimeConfigs.find(
+      (project) => project.name === file.projectName,
+    );
+    return (
+      (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
+      30_000
+    );
+  };
+
   // Open a container page for user to view (reuse in watch mode)
-  let containerContext: BrowserContext;
-  let containerPage: Page;
+  let containerContext: BrowserProviderContext;
+  let containerPage: BrowserProviderPage;
   let isNewPage = false;
 
   if (isWatchMode && runtime.containerPage && runtime.containerContext) {
@@ -1512,16 +2769,17 @@ export const runBrowserController = async (
   } else {
     isNewPage = true;
     containerContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
       viewport: null,
     });
     containerPage = await containerContext.newPage();
 
     // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: Page) => {
+    containerPage.on('popup', async (popup: BrowserProviderPage) => {
       await popup.close().catch(() => {});
     });
 
-    containerContext.on('page', async (page: Page) => {
+    containerContext.on('page', async (page: BrowserProviderPage) => {
       if (page !== containerPage) {
         await page.close().catch(() => {});
       }
@@ -1533,17 +2791,140 @@ export const runBrowserController = async (
     }
 
     // Forward browser console to terminal
-    containerPage.on('console', (msg: ConsoleMessage) => {
+    containerPage.on('console', (msg) => {
       const text = msg.text();
-      if (
-        text.startsWith('[Container]') ||
-        text.startsWith('[Runner]') ||
-        text.startsWith('[Scheduler]')
-      ) {
+      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
         logger.log(color.gray(`[Browser Console] ${text}`));
       }
     });
   }
+
+  activeContainerPage = containerPage;
+
+  const dispatchRouter = createDispatchRouter();
+  const headedReloadQueue = createHeadedSerialTaskQueue();
+  const pendingHeadedReloads = new Map<
+    string,
+    {
+      runId: string;
+      deferred: DeferredPromise<void>;
+    }
+  >();
+  let enqueueHeadedReload = async (
+    _file: TestFileInfo,
+    _testNamePattern?: string,
+  ): Promise<void> => {
+    throw new Error('Headed reload queue is not initialized');
+  };
+
+  const rejectPendingHeadedReload = (
+    testPath: string,
+    error: Error,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.reject(error);
+  };
+
+  const rejectAllPendingHeadedReloads = (error: Error): void => {
+    for (const [testPath, pending] of pendingHeadedReloads) {
+      pendingHeadedReloads.delete(testPath);
+      pending.deferred.reject(error);
+    }
+  };
+
+  const registerPendingHeadedReload = (
+    testPath: string,
+    runId: string,
+  ): Promise<void> => {
+    const previousPending = pendingHeadedReloads.get(testPath);
+    if (previousPending) {
+      previousPending.deferred.reject(
+        new Error(
+          `Reload for "${testPath}" was superseded by a newer request.`,
+        ),
+      );
+      pendingHeadedReloads.delete(testPath);
+    }
+
+    const deferred = createDeferredPromise<void>();
+    pendingHeadedReloads.set(testPath, {
+      runId,
+      deferred,
+    });
+
+    return deferred.promise;
+  };
+
+  const resolvePendingHeadedReload = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      logger.debug(
+        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
+      );
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.resolve();
+  };
+
+  const reloadTestFileWithTimeout = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    const timeoutMs = getHeadedPerFileTimeoutMs(file);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let reloadAck: ReloadTestFileAck | undefined;
+
+    try {
+      reloadAck = await rpcManager.reloadTestFile(
+        file.testPath,
+        testNamePattern,
+      );
+      const completionPromise = registerPendingHeadedReload(
+        file.testPath,
+        reloadAck.runId,
+      );
+      await Promise.race([
+        completionPromise,
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `Headed test execution timeout after ${timeoutMs / 1000}s for ${file.testPath}.`,
+              ),
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } catch (error) {
+      if (reloadAck?.runId) {
+        rejectPendingHeadedReload(
+          file.testPath,
+          toError(error),
+          reloadAck.runId,
+        );
+      }
+      throw error;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
 
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
@@ -1556,105 +2937,45 @@ export const runBrowserController = async (
           `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
         ),
       );
-      await rpcManager.reloadTestFile(testFile, testNamePattern);
+      await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
-      return allTestFiles;
+      return currentTestFiles;
+    },
+    async onRunnerFramesReady(testFiles: string[]) {
+      markRunnerFramesReady(testFiles);
     },
     async onTestFileStart(payload: TestFileStartPayload) {
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onTestFileStart?.({
-            testPath: payload.testPath,
-            tests: [],
-          }),
-        ),
-      );
+      await handleTestFileStart(payload);
     },
     async onTestCaseResult(payload: TestResult) {
-      caseResults.push(payload);
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onTestCaseResult?.(payload),
-        ),
-      );
+      await handleTestCaseResult(payload);
     },
-    async onTestFileComplete(payload: TestFileResult) {
-      reporterResults.push(payload);
-      if (payload.snapshotResult) {
-        context.snapshotManager.add(payload.snapshotResult);
-      }
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onTestFileResult?.(payload),
-        ),
-      );
-
-      completedTests++;
-      if (completedTests >= allTestFiles.length && resolveAllTests) {
-        resolveAllTests();
+    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      try {
+        await handleTestFileComplete(payload);
+        resolvePendingHeadedReload(payload.testPath, payload.runId);
+      } catch (error) {
+        rejectPendingHeadedReload(
+          payload.testPath,
+          toError(error),
+          payload.runId,
+        );
+        throw error;
       }
     },
     async onLog(payload: LogPayload) {
-      const log: UserConsoleLog = {
-        content: payload.content,
-        name: payload.level,
-        testPath: payload.testPath,
-        type: payload.type,
-        trace: payload.trace,
-      };
-
-      // Check onConsoleLog filter
-      const shouldLog =
-        context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-
-      if (shouldLog) {
-        await Promise.all(
-          context.reporters.map((reporter) =>
-            (reporter as Reporter).onUserConsoleLog?.(log),
-          ),
-        );
-      }
+      await handleLog(payload);
     },
     async onFatal(payload: FatalPayload) {
-      fatalError = new Error(payload.message);
-      fatalError.stack = payload.stack;
-      if (resolveAllTests) {
-        resolveAllTests();
-      }
+      const error = new Error(payload.message);
+      error.stack = payload.stack;
+      rejectAllPendingHeadedReloads(error);
+      await handleFatal(payload);
     },
-    // Snapshot file operations
-    async resolveSnapshotPath(testPath: string) {
-      const snapExtension = '.snap';
-      const resolver =
-        context.normalizedConfig.resolveSnapshotPath ||
-        // test/index.ts -> test/__snapshots__/index.ts.snap
-        (() =>
-          join(
-            dirname(testPath),
-            '__snapshots__',
-            `${basename(testPath)}${snapExtension}`,
-          ));
-      return resolver(testPath, snapExtension);
-    },
-    async readSnapshotFile(filepath: string) {
-      try {
-        return await fs.readFile(filepath, 'utf-8');
-      } catch {
-        return null;
-      }
-    },
-    async saveSnapshotFile(filepath: string, content: string) {
-      const dir = dirname(filepath);
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(filepath, content, 'utf-8');
-    },
-    async removeSnapshotFile(filepath: string) {
-      try {
-        await fs.unlink(filepath);
-      } catch {
-        // ignore if file doesn't exist
-      }
+    async dispatch(request: BrowserDispatchRequest) {
+      // Headed/container path now shares the same dispatch contract as headless.
+      return dispatchRouter.dispatch(request);
     },
   });
 
@@ -1664,14 +2985,18 @@ export const runBrowserController = async (
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods());
+    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
       rpcManager.reattach(existingWs);
     }
   } else {
-    rpcManager = new ContainerRpcManager(wss, createRpcMethods());
+    rpcManager = new ContainerRpcManager(
+      wss,
+      createRpcMethods(),
+      rejectAllPendingHeadedReloads,
+    );
 
     if (isWatchMode) {
       runtime.rpcManager = rpcManager;
@@ -1680,13 +3005,7 @@ export const runBrowserController = async (
 
   // Only navigate on first creation
   if (isNewPage) {
-    const pagePath = useSchedulerPage ? '/scheduler.html' : '/';
-    if (useSchedulerPage) {
-      const serializedOptions = serializeForInlineScript(hostOptions);
-      await containerPage.addInitScript(
-        `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
-      );
-    }
+    const pagePath = '/';
     await containerPage.goto(`http://localhost:${port}${pagePath}`, {
       waitUntil: 'load',
     });
@@ -1698,31 +3017,33 @@ export const runBrowserController = async (
     );
   }
 
-  // Wait for all tests to complete
-  // Calculate total timeout based on config: max testTimeout * file count + buffer
-  const maxTestTimeout = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
-  );
-  const totalTimeoutMs = maxTestTimeout * allTestFiles.length + 30_000;
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const testTimeout = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(() => {
-      logger.log(
-        color.yellow(
-          `\nTest execution timeout after ${totalTimeoutMs / 1000}s. ` +
-            `Completed: ${completedTests}/${allTestFiles.length}\n`,
-        ),
-      );
-      resolve();
-    }, totalTimeoutMs);
-  });
+  enqueueHeadedReload = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    return headedReloadQueue.enqueue(async () => {
+      if (fatalError) {
+        return;
+      }
+      await reloadTestFileWithTimeout(file, testNamePattern);
+    });
+  };
 
   const testStart = Date.now();
-  await Promise.race([allTestsPromise, testTimeout]);
+  try {
+    await waitForRunnerFramesReady(
+      currentTestFiles.map((file) => file.testPath),
+    );
 
-  if (timeoutId) {
-    clearTimeout(timeoutId);
+    for (const file of currentTestFiles) {
+      await enqueueHeadedReload(file);
+      if (fatalError) {
+        break;
+      }
+    }
+  } catch (error) {
+    fatalError = fatalError ?? toError(error);
+    ensureProcessExitCode(1);
   }
 
   const testTime = Date.now() - testStart;
@@ -1731,63 +3052,96 @@ export const runBrowserController = async (
   if (isWatchMode) {
     triggerRerun = async () => {
       const newProjectEntries = await collectProjectEntries(context);
-      // Normalize paths to posix format for cross-platform compatibility
-      const currentTestFiles: TestFileInfo[] = newProjectEntries.flatMap(
-        (entry) =>
-          entry.testFiles.map((testPath) => ({
-            testPath: normalize(testPath),
-            projectName: entry.project.name,
-          })),
-      );
-
-      // Compare test files by serializing to JSON for deep comparison
-      const serialize = (files: TestFileInfo[]) =>
-        JSON.stringify(
-          files.map((f) => `${f.projectName}:${f.testPath}`).sort(),
-        );
-
-      const filesChanged =
-        serialize(currentTestFiles) !== serialize(watchContext.lastTestFiles);
-
-      if (filesChanged) {
-        watchContext.lastTestFiles = currentTestFiles;
-        await rpcManager.notifyTestFileUpdate(currentTestFiles);
-      }
-
-      const affectedFiles = watchContext.affectedTestFiles;
+      const rerunPlan = planWatchRerun({
+        projectEntries: newProjectEntries,
+        previousTestFiles: watchContext.lastTestFiles,
+        affectedTestFiles: watchContext.affectedTestFiles,
+      });
       watchContext.affectedTestFiles = [];
 
-      if (affectedFiles.length > 0) {
+      if (rerunPlan.filesChanged) {
+        const deletedTestPaths = collectDeletedTestPaths(
+          watchContext.lastTestFiles,
+          rerunPlan.currentTestFiles,
+        );
+        if (deletedTestPaths.length > 0) {
+          context.updateReporterResultState([], [], deletedTestPaths);
+        }
+        watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+        currentTestFiles = rerunPlan.currentTestFiles;
+        await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        await waitForRunnerFramesReady(
+          currentTestFiles.map((file) => file.testPath),
+        );
+      }
+
+      if (rerunPlan.normalizedAffectedTestFiles.length > 0) {
         logger.log(
           color.cyan(
-            `Re-running ${affectedFiles.length} affected test file(s)...\n`,
+            `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        for (const testFile of affectedFiles) {
-          await rpcManager.reloadTestFile(testFile);
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
+            await enqueueHeadedReload(getTestFileInfo(testFile));
+          }
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
         }
-      } else if (!filesChanged) {
+      } else if (!rerunPlan.filesChanged) {
         logger.log(color.cyan('Tests will be re-executed automatically\n'));
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      } else {
+        logBrowserWatchReadyMessage(enableCliShortcuts);
       }
     };
   }
 
-  if (!isWatchMode) {
-    try {
-      await containerPage.close();
-    } catch {
-      // ignore
-    }
-    try {
-      await containerContext.close();
-    } catch {
-      // ignore
-    }
-    await destroyBrowserRuntime(runtime);
-  }
+  const closeContainerRuntime = !isWatchMode
+    ? async () => {
+        try {
+          await containerPage.close();
+        } catch {
+          // ignore
+        }
+        try {
+          await containerContext.close();
+        } catch {
+          // ignore
+        }
+        await destroyBrowserRuntime(runtime);
+      }
+    : undefined;
 
   if (fatalError) {
-    return failWithError(fatalError);
+    return failWithError(fatalError, closeContainerRuntime);
   }
 
   const duration = {
@@ -1805,32 +3159,28 @@ export const runBrowserController = async (
     ensureProcessExitCode(1);
   }
 
-  const result: BrowserTestRunResult = {
+  const result = {
     results: reporterResults,
     testResults: caseResults,
     duration,
     hasFailure: isFailure,
+    getSourcemap: getBrowserSourcemap,
+    resolveSourcemap: resolveBrowserSourcemap,
+    close: skipOnTestRunEnd ? closeContainerRuntime : undefined,
   };
 
-  // Only call onTestRunEnd if not skipped (for unified reporter output)
   if (!skipOnTestRunEnd) {
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
-        duration,
-        snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: async () => null,
-      });
+    try {
+      await notifyTestRunEnd({ duration });
+    } finally {
+      await closeContainerRuntime?.();
     }
   }
 
   // Enable watch hooks AFTER initial test run to avoid duplicate runs
   if (isWatchMode && triggerRerun) {
     watchContext.hooksEnabled = true;
-    logger.log(
-      color.cyan('\nWatch mode enabled - will re-run tests on file changes\n'),
-    );
+    logBrowserWatchReadyMessage(enableCliShortcuts);
   }
 
   return result;
@@ -1889,6 +3239,7 @@ export const listBrowserTests = async (
     manifestPath,
     entries: projectEntries,
   });
+  const browserProjects = getBrowserProjects(context);
 
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
@@ -1904,20 +3255,24 @@ export const listBrowserTests = async (
       forceHeadless: true, // Always use headless for list command
     });
   } catch (error) {
+    const providers = [
+      ...new Set(
+        browserProjects.map((p) => p.normalizedConfig.browser.provider),
+      ),
+    ];
     logger.error(
       color.red(
-        'Failed to load Playwright. Please install "playwright" to use browser mode.',
+        `Failed to initialize browser provider runtime (${providers.join(', ')}).`,
       ),
       error,
     );
     throw error;
   }
 
-  const { browser, port } = runtime;
+  const { browser, browserLaunchOptions, port } = runtime;
 
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
-  const browserProjects = getBrowserProjects(context);
   const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
     (project: ProjectContext) => ({
       name: project.name,
@@ -1958,12 +3313,15 @@ export const listBrowserTests = async (
   });
 
   // Create a headless page to run collection
-  const browserContext = await browser.newContext({ viewport: null });
+  const browserContext = await browser.newContext({
+    providerOptions: browserLaunchOptions.providerOptions,
+    viewport: null,
+  });
   const page = await browserContext.newPage();
 
   // Expose dispatch function for browser client to send messages
   await page.exposeFunction(
-    '__rstest_dispatch__',
+    DISPATCH_MESSAGE_TYPE,
     (message: { type: string; payload?: unknown }) => {
       switch (message.type) {
         case 'collect-result': {

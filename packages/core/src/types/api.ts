@@ -57,15 +57,33 @@ export interface TestEachFn {
     fn: (...args: T[]) => MaybePromise<void>,
     timeout?: number,
   ) => void;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): (
+    description: string,
+    fn?: (param: T) => MaybePromise<void>,
+    timeout?: number,
+  ) => void;
 }
 
-export type TestForFn<ExtraContext = object> = <T>(
-  cases: readonly T[],
-) => (
-  description: string,
-  fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-  timeout?: number,
-) => void;
+export interface TestForFn<ExtraContext = object> {
+  <T>(
+    cases: readonly T[],
+  ): (
+    description: string,
+    fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
+    timeout?: number,
+  ) => void;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): (
+    description: string,
+    fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
+    timeout?: number,
+  ) => void;
+}
 
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
@@ -77,11 +95,21 @@ export interface DescribeEachFn {
   <T>(
     cases: readonly T[],
   ): (description: string, fn: (param: T) => MaybePromise<void>) => void;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
 }
 
-export type DescribeForFn = <T>(
-  cases: readonly T[],
-) => (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+export interface DescribeForFn {
+  <T>(
+    cases: readonly T[],
+  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+}
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   each: TestEachFn;

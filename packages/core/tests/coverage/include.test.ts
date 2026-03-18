@@ -1,11 +1,10 @@
 import path from 'node:path';
-import type { GlobOptions } from 'tinyglobby';
 import { withDefaultConfig } from '../../src/config';
 import { getIncludedFiles } from '../../src/coverage/generate';
 
 describe('getIncludedFiles', () => {
   let defaultExclude: string[] = [];
-  let memfs!: GlobOptions['fs'];
+  let memfs!: typeof import('node:fs');
   beforeAll(async () => {
     const { fs } = await import('memfs');
     defaultExclude = withDefaultConfig({}).coverage.exclude;
@@ -63,6 +62,7 @@ describe('getIncludedFiles', () => {
       [
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
         "packages/a.ts",
         "packages/b.js",
       ]
@@ -75,6 +75,7 @@ describe('getIncludedFiles', () => {
         "apps/.c.ts",
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
       ]
     `);
   });
@@ -84,6 +85,7 @@ describe('getIncludedFiles', () => {
       [
         "apps/a.ts",
         "apps/b.js",
+        "apps/dist/a.ts",
       ]
     `);
   });

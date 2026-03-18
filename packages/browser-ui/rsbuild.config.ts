@@ -5,6 +5,8 @@ import { pluginSvgr } from '@rsbuild/plugin-svgr';
 
 const root = __dirname;
 
+const isDev = process.argv.includes('dev');
+
 export default defineConfig({
   plugins: [pluginReact(), pluginSvgr()],
   server: {
@@ -14,15 +16,14 @@ export default defineConfig({
     client: {
       port: 7392,
     },
-    assetPrefix: 'http://localhost:7392/',
   },
   source: {
     entry: {
       index: './src/main.tsx',
-      scheduler: './src/scheduler.ts',
     },
   },
   output: {
+    assetPrefix: isDev ? 'http://localhost:7392/' : undefined,
     distPath: {
       js: 'container-static/js',
       css: 'container-static/css',

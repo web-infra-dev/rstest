@@ -127,6 +127,10 @@ if (globalThis.__rstest_federation__) {
   }
 }
 
+const hasOwn = (target, property) => Object.hasOwn(target, property);
+
+const isPromise = (value) => value instanceof Promise;
+
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id) => {
   const originalModuleFactory =
@@ -147,12 +151,11 @@ __webpack_require__.rstest_do_unmock = __webpack_require__.rstest_unmock;
 //#region rs.requireActual
 __webpack_require__.rstest_require_actual =
   __webpack_require__.rstest_import_actual = (id) => {
-    const originalModule = __webpack_require__.rstest_original_modules[id];
-
-    if (originalModule) {
-      return originalModule;
+    if (hasOwn(__webpack_require__.rstest_original_modules, id)) {
+      return __webpack_require__.rstest_original_modules[id];
     }
-    if (id in __webpack_require__.rstest_original_module_factories) {
+
+    if (hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
       const mod = __webpack_require__.rstest_original_module_factories[id];
       const moduleInstance = { exports: {} };
       mod(moduleInstance, moduleInstance.exports, __webpack_require__);
@@ -165,20 +168,32 @@ __webpack_require__.rstest_require_actual =
 //#endregion
 
 const getMockImplementation = (mockType = 'mock') => {
+  const isMockRequire =
+    mockType === 'mockRequire' || mockType === 'doMockRequire';
+
   // The mock and mockRequire will resolve to different module ids when the module is a dual package
   return (id, modFactory) => {
     // Only load the module if it's already in cache (to avoid side effects)
-    let requiredModule = __webpack_module_cache__[id]?.exports;
-    const wasAlreadyLoaded = !!requiredModule;
+    const hasCachedModule = hasOwn(__webpack_module_cache__, id);
+    let requiredModule = hasCachedModule
+      ? __webpack_module_cache__[id].exports
+      : undefined;
+    const wasAlreadyLoaded = hasCachedModule;
 
-    if (!requiredModule) {
-      // Module hasn't been loaded yet, so we can't get the original
-      // But we still need to save the original factory if it exists
-      __webpack_require__.rstest_original_module_factories[id] =
-        __webpack_modules__[id];
-    } else {
-      // Module was already loaded, save it
+    const hasSavedOriginalModule = hasOwn(
+      __webpack_require__.rstest_original_modules,
+      id,
+    );
+    const hasSavedOriginalFactory = hasOwn(
+      __webpack_require__.rstest_original_module_factories,
+      id,
+    );
+
+    if (!hasSavedOriginalModule && hasCachedModule) {
       __webpack_require__.rstest_original_modules[id] = requiredModule;
+    }
+
+    if (!hasSavedOriginalFactory) {
       __webpack_require__.rstest_original_module_factories[id] =
         __webpack_modules__[id];
     }
@@ -220,10 +235,15 @@ const getMockImplementation = (mockType = 'mock') => {
         }) || originalModule;
 
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
+        if (isMockRequire) {
+          __webpack_module__.exports = mockedModule;
+          return;
+        }
+
         __webpack_require__.r(__webpack_exports__);
         for (const key in mockedModule) {
           __webpack_require__.d(__webpack_exports__, {
@@ -249,12 +269,23 @@ const getMockImplementation = (mockType = 'mock') => {
       };
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
-        __unused_webpack_module,
+        __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
-        __webpack_require__.r(__webpack_exports__);
         const res = modFactory();
+
+        if (isPromise(res)) {
+          __webpack_module__.exports = res;
+          return;
+        }
+
+        if (isMockRequire) {
+          __webpack_module__.exports = res;
+          return;
+        }
+
+        __webpack_require__.r(__webpack_exports__);
         for (const key in res) {
           __webpack_require__.d(__webpack_exports__, {
             [key]: () => res[key],
