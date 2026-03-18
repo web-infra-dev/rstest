@@ -65,7 +65,7 @@ export function toRstestConfig({
       ...(finalBuildConfig.plugins || []),
       // remove some plugins that are not needed or not compatible in test environment
       {
-        name: 'remove-useless-plugins',
+        name: 'rsbuild-adapter:remove-useless-plugins',
         remove: ['rsbuild:type-check'],
         setup: () => {},
       },
