@@ -3,7 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
-const createAutoExternalNodeModules: (
+export const createAutoExternalNodeModules: (
   outputModule: boolean,
   federation: boolean,
 ) => (
@@ -48,8 +48,10 @@ const createAutoExternalNodeModules: (
     resolver(context!, request, (err, resolvePath) => {
       if (err) {
         if (federation) {
-          // Keep unresolved specifiers bundled in federation mode.
-          return callback();
+          // In federation mode unresolved specifiers must stay bundled. Passing
+          // `false` tells Rspack not to treat the request as external and to
+          // skip any later externals handlers from user config.
+          return callback(undefined, false);
         }
 
         // Ignore resolve error and external it as commonjs (it may be mocked).
