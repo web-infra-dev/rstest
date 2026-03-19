@@ -256,13 +256,6 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);
 
-  // Module Federation (async-node) runs most reliably with CJS output in our
-  // worker VM runtime, because some third-party runtimes evaluate chunks via
-  // vm/eval and rely on a global `__rstest_dynamic_import__` fallback.
-  if (merged.federation && merged.output?.module == null) {
-    merged.output = { ...(merged.output ?? {}), module: false };
-  }
-
   merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
 
   const reportsDirectory = formatRootStr(
