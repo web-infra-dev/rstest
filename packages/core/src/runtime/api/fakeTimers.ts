@@ -15,16 +15,13 @@ export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
 
-const loadFakeTimersModule = (): Pick<
-  typeof import('@sinonjs/fake-timers'),
-  'withGlobal'
-> => {
+const loadFakeTimersModule = () => {
   // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
   // preserving that pattern without breaking bundling/runtime resolution.
   // Preserve the public sync timer API while avoiding module init work
   // on worker startup when fake timers are never used.
-  const loaded =
-    require('@sinonjs/fake-timers') as typeof import('@sinonjs/fake-timers');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const loaded = require('@sinonjs/fake-timers');
   return { withGlobal: loaded.withGlobal };
 };
 

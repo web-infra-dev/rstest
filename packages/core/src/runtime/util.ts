@@ -1,10 +1,6 @@
 import type { FormattedError, Test } from '../types';
 
-const loadDiffModules = async (): Promise<{
-  diff: typeof import('jest-diff')['diff'];
-  prettyFormat: typeof import('pretty-format')['format'];
-  prettyFormatPlugins: typeof import('pretty-format')['plugins'];
-}> => {
+const loadDiffModules = async () => {
   const [jestDiff, prettyFormat] = await Promise.all([
     import('jest-diff'),
     import('pretty-format'),
