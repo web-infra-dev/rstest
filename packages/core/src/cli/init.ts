@@ -310,27 +310,35 @@ export async function resolveProjects({
   const getProjects = async (rstestConfig: RstestConfig, root: string) => {
     const projectPaths: string[] = [];
     const projectPatterns: string[] = [];
-    const inlineProjectConfigPromises: Promise<{
-      config: RstestConfig;
-      configFilePath: string | undefined;
-    }>[] = [];
+    const inlineProjectConfigPromises: Promise<
+      | {
+          config: RstestConfig;
+          configFilePath: string | undefined;
+        }
+      | {
+          error: unknown;
+        }
+    >[] = [];
 
     for (const p of rstestConfig.projects || []) {
       if (typeof p === 'object') {
         const projectRoot = p.root ? formatRootStr(p.root, root) : root;
 
         inlineProjectConfigPromises.push(
-          resolveExtends({ ...p }).then((projectConfig) => ({
-            config: mergeWithCLIOptions(
-              {
-                root: projectRoot,
-                ...projectConfig,
-                name: p.name ? p.name : getDefaultProjectName(projectRoot),
-              },
-              options,
-            ),
-            configFilePath: undefined,
-          })),
+          resolveExtends({ ...p }).then(
+            (projectConfig) => ({
+              config: mergeWithCLIOptions(
+                {
+                  root: projectRoot,
+                  ...projectConfig,
+                  name: p.name ? p.name : getDefaultProjectName(projectRoot),
+                },
+                options,
+              ),
+              configFilePath: undefined,
+            }),
+            (error) => ({ error }),
+          ),
         );
         continue;
       }
@@ -349,10 +357,20 @@ export async function resolveProjects({
       }
     }
 
-    const [projectConfigs, globbedProjectPaths] = await Promise.all([
-      Promise.all(inlineProjectConfigPromises),
-      globProjects(projectPatterns, root),
-    ]);
+    const [inlineProjectConfigResults, globbedProjectPaths] = await Promise.all(
+      [
+        Promise.all(inlineProjectConfigPromises),
+        globProjects(projectPatterns, root),
+      ],
+    );
+
+    const projectConfigs = inlineProjectConfigResults.map((result) => {
+      if ('error' in result) {
+        throw result.error;
+      }
+
+      return result;
+    });
 
     projectPaths.push(...globbedProjectPaths);
 
