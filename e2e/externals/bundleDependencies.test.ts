@@ -1,13 +1,22 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import fse from 'fs-extra';
 import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const distDir = join(__dirname, 'dist/.rstest-temp');
+
+function readTestOutput(): string {
+  const ext = process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '.mjs' : '.js';
+  const file = join(distDir, `fixtures_index~test~ts${ext}`);
+  if (existsSync(file)) {
+    return readFileSync(file, 'utf-8');
+  }
+  throw new Error('No test output file found');
+}
 
 describe('test bundleDependencies', () => {
   it('should externalize dependencies in jsdom when bundleDependencies is false', async () => {
@@ -29,10 +38,7 @@ describe('test bundleDependencies', () => {
 
     await expectExecSuccess();
 
-    const output = fse.readFileSync(
-      join(distDir, 'fixtures_index~test~ts.mjs'),
-      'utf-8',
-    );
+    const output = readTestOutput();
 
     // strip-ansi source code should NOT be inlined when externalized
     expect(output).not.toContain('function stripAnsi');
@@ -56,10 +62,7 @@ describe('test bundleDependencies', () => {
 
     await expectExecSuccess();
 
-    const output = fse.readFileSync(
-      join(distDir, 'fixtures_index~test~ts.mjs'),
-      'utf-8',
-    );
+    const output = readTestOutput();
 
     // strip-ansi source code should be inlined when bundled
     expect(output).toContain('function stripAnsi');
