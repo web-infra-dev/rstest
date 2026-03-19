@@ -109,9 +109,12 @@ const filterAssetsByEntry = async (
   setupAssets: string[],
 ) => {
   const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
-  const neededFiles = await getAssetFiles(assetNames);
-
-  const neededSourceMaps = await getSourceMaps(assetNames);
+  const neededFilesPromise = getAssetFiles(assetNames);
+  const neededSourceMapsPromise = getSourceMaps(assetNames);
+  const [neededFiles, neededSourceMaps] = await Promise.all([
+    neededFilesPromise,
+    neededSourceMapsPromise,
+  ]);
 
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
 };

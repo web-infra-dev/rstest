@@ -138,6 +138,21 @@ const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
   process.exit(1);
 };
 
+const resolveCliRuntime = async (options: CommonOptions) => {
+  const [{ initCli }, { createRstest }] = await Promise.all([
+    import('./init'),
+    import('../core'),
+  ]);
+  const { config, configFilePath, projects } = await initCli(options);
+
+  return {
+    config,
+    configFilePath,
+    projects,
+    createRstest,
+  };
+};
+
 export const runRest = async ({
   options,
   filters,
@@ -153,10 +168,8 @@ export const runRest = async ({
   };
 
   try {
-    const { initCli } = await import('./init');
-    const { config, configFilePath, projects } = await initCli(options);
-
-    const { createRstest } = await import('../core');
+    const { config, configFilePath, projects, createRstest } =
+      await resolveCliRuntime(options);
     rstest = createRstest(
       { config, configFilePath, projects },
       command,
@@ -250,14 +263,13 @@ export function setupCommands(): void {
         options: CommonOptions & ListCommandOptions,
       ) => {
         try {
-          const { initCli } = await import('./init');
-          const { config, configFilePath, projects } = await initCli(options);
+          const { config, configFilePath, projects, createRstest } =
+            await resolveCliRuntime(options);
 
           if (options.printLocation) {
             config.includeTaskLocation = true;
           }
 
-          const { createRstest } = await import('../core');
           const rstest = createRstest(
             { config, configFilePath, projects },
             'list',
@@ -293,9 +305,8 @@ export function setupCommands(): void {
           showRstest();
         }
         try {
-          const { initCli } = await import('./init');
-          const { config, configFilePath, projects } = await initCli(options);
-          const { createRstest } = await import('../core');
+          const { config, configFilePath, projects, createRstest } =
+            await resolveCliRuntime(options);
           const rstest = createRstest(
             { config, configFilePath, projects },
             'merge-reports',

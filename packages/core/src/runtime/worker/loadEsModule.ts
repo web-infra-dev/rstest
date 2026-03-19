@@ -1,3 +1,4 @@
+import { builtinModules } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type ModuleLinker, type SourceTextModule } from 'node:vm';
@@ -12,6 +13,9 @@ export enum EsmMode {
 }
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const isBuiltinSpecifier = (specifier: string) =>
+  specifier.startsWith('node:') || builtinModules.includes(specifier);
 
 const defineRstestDynamicImport =
   ({
@@ -68,8 +72,10 @@ const defineRstestDynamicImport =
 
     const resolvedPath = isAbsolute(specifier)
       ? pathToFileURL(specifier)
-      : // TODO: use module path instead of testPath
-        import.meta.resolve(specifier, pathToFileURL(testPath));
+      : isBuiltinSpecifier(specifier)
+        ? specifier
+        : // TODO: use module path instead of testPath
+          import.meta.resolve(specifier, pathToFileURL(testPath));
 
     const modulePath =
       typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;

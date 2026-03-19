@@ -112,9 +112,12 @@ const collectNodeTests = async ({
       ) {
         project._globalSetups = true;
         const files = globalSetupEntries.flatMap((e) => e.files!);
-        const assetFiles = await getAssetFiles(files);
-
-        const sourceMaps = await getSourceMaps(files);
+        const assetFilesPromise = getAssetFiles(files);
+        const sourceMapsPromise = getSourceMaps(files);
+        const [assetFiles, sourceMaps] = await Promise.all([
+          assetFilesPromise,
+          sourceMapsPromise,
+        ]);
 
         const { success, errors } = await runGlobalSetup({
           globalSetupEntries,
@@ -205,17 +208,19 @@ const collectTestFiles = async ({
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
-  const list: ListCommandResult[] = [];
-  for (const project of context.projects) {
-    const files = await globTestSourceEntries(project.environmentName);
-    list.push(
-      ...Object.values(files).map((testPath) => ({
+  const projectLists: ListCommandResult[][] = await Promise.all(
+    context.projects.map(async (project) => {
+      const files = await globTestSourceEntries(project.environmentName);
+      return Object.values(files).map((testPath) => ({
         testPath,
         project: project.name,
         tests: [],
-      })),
-    );
-  }
+      }));
+    }),
+  );
+
+  const list = projectLists.flat();
+
   return {
     close: async () => undefined,
     errors: [],

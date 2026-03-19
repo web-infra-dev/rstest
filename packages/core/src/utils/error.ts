@@ -166,6 +166,10 @@ export async function parseErrorStacktrace({
   stack: string;
   getSourcemap?: GetSourcemap;
 }): Promise<StackFrame[]> {
+  // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
+  // stack frames originate from the same source file.
+  const traceMapCache = new Map<string, TraceMap>();
+
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
@@ -177,7 +181,11 @@ export async function parseErrorStacktrace({
       .map(async (frame) => {
         const sourcemap = await getSourcemap?.(frame.file!);
         if (sourcemap) {
-          const traceMap = new TraceMap(sourcemap);
+          let traceMap = traceMapCache.get(frame.file!);
+          if (!traceMap) {
+            traceMap = new TraceMap(sourcemap);
+            traceMapCache.set(frame.file!, traceMap);
+          }
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
             column: frame.column!,
