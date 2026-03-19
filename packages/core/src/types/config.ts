@@ -444,7 +444,17 @@ export interface RstestConfig {
   output?: Pick<
     NonNullable<RsbuildConfig['output']>,
     'cssModules' | 'externals' | 'cleanDistPath' | 'module'
-  >;
+  > & {
+    /**
+     * Whether to bundle third-party dependencies from node_modules.
+     * - `'auto'`: Bundle in browser-like environments (jsdom, happy-dom, etc.),
+     *   externalize in the node environment.
+     * - `true`: Always bundle all third-party dependencies.
+     * - `false`: Always externalize third-party dependencies.
+     * @default 'auto'
+     */
+    bundleDependencies?: 'auto' | boolean;
+  };
 
   resolve?: RsbuildConfig['resolve'];
 
