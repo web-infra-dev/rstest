@@ -426,19 +426,30 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
 
+      // Memoize parsed sourcemaps to avoid redundant JSON.parse when the same
+      // file is referenced by multiple errors or stack frames.
+      const parsedSourceMapCache = new Map<string, SourceMapInput | null>();
+
       const getSourcemap = async (
         sourcePath: string,
       ): Promise<SourceMapInput | null> => {
+        if (parsedSourceMapCache.has(sourcePath)) {
+          return parsedSourceMapCache.get(sourcePath)!;
+        }
+
         if (browserResolveSourcemap) {
           const resolved = await browserResolveSourcemap(sourcePath);
           if (resolved.handled) {
+            parsedSourceMapCache.set(sourcePath, resolved.sourcemap);
             return resolved.sourcemap;
           }
         }
 
         const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
         const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
-        return sourceMap ? JSON.parse(sourceMap) : null;
+        const parsed = sourceMap ? JSON.parse(sourceMap) : null;
+        parsedSourceMapCache.set(sourcePath, parsed);
+        return parsed;
       };
 
       // When unifying reporter output, combine browser and node durations

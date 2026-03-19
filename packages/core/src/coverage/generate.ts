@@ -74,7 +74,7 @@ export async function generateCoverage(
     }
 
     if (coverage.include?.length) {
-      const coveredFiles = finalCoverageMap.files().map(normalize);
+      const coveredFilesSet = new Set(finalCoverageMap.files().map(normalize));
 
       let isTimeout = false;
 
@@ -89,7 +89,7 @@ export async function generateCoverage(
             const includedFiles = await getIncludedFiles(coverage, p.rootPath);
 
             const uncoveredFiles = includedFiles.filter(
-              (file) => !coveredFiles.includes(normalize(file)),
+              (file) => !coveredFilesSet.has(normalize(file)),
             );
 
             if (uncoveredFiles.length) {
@@ -113,7 +113,8 @@ export async function generateCoverage(
       }
 
       // should be better to filter files before swc coverage is processed
-      finalCoverageMap.filter((file) => allFiles.includes(normalize(file)));
+      const allFilesSet = new Set(allFiles.map(normalize));
+      finalCoverageMap.filter((file) => allFilesSet.has(normalize(file)));
     }
 
     // Generate coverage reports
