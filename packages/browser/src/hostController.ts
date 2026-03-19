@@ -873,35 +873,33 @@ const resolveProviderForTestPath = ({
 const collectProjectEntries = async (
   context: Rstest,
 ): Promise<BrowserProjectEntries[]> => {
-  const projectEntries: BrowserProjectEntries[] = [];
-
   // Only collect entries for browser mode projects
   const browserProjects = getBrowserProjects(context);
 
-  for (const project of browserProjects) {
-    const {
-      normalizedConfig: { include, exclude, includeSource, setupFiles },
-    } = project;
+  return Promise.all(
+    browserProjects.map(async (project) => {
+      const {
+        normalizedConfig: { include, exclude, includeSource, setupFiles },
+      } = project;
 
-    const tests = await getTestEntries({
-      include,
-      exclude: exclude.patterns,
-      includeSource,
-      rootPath: context.rootPath,
-      projectRoot: project.rootPath,
-      fileFilters: context.fileFilters || [],
-    });
+      const tests = await getTestEntries({
+        include,
+        exclude: exclude.patterns,
+        includeSource,
+        rootPath: context.rootPath,
+        projectRoot: project.rootPath,
+        fileFilters: context.fileFilters || [],
+      });
 
-    const setup = getSetupFiles(setupFiles, project.rootPath);
+      const setup = getSetupFiles(setupFiles, project.rootPath);
 
-    projectEntries.push({
-      project,
-      setupFiles: Object.values(setup),
-      testFiles: Object.values(tests),
-    });
-  }
-
-  return projectEntries;
+      return {
+        project,
+        setupFiles: Object.values(setup),
+        testFiles: Object.values(tests),
+      };
+    }),
+  );
 };
 
 const resolveBrowserFile = (relativePath: string): string => {
