@@ -34,6 +34,7 @@ module.exports = {
       experiments: {
         asyncStartup: true,
       },
+      remoteType: 'script',
       remotes: {
         'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
         'node-local-remote':
