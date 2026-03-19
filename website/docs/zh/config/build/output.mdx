@@ -145,17 +145,18 @@ export default defineConfig({
 
 ## output.bundleDependencies
 
-- **类型：** `'auto' | boolean`
-- **默认值：** `'auto'`
+- **类型：** `boolean`
+- **默认值：** 取决于 `testEnvironment`
 
 控制是否打包 `node_modules` 中的第三方依赖。
 
-- `'auto'`（默认）：在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
 - `true`：无论测试环境如何，始终打包所有第三方依赖。
 - `false`：无论测试环境如何，始终外部化第三方依赖。
 
+当未设置该选项时，rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
+
 :::warning
-此选项仅适用于非浏览器模式。在[浏览器模式](/guide/browser/index)下，所有依赖始终会被打包，此选项不会生效。
+此选项仅适用于非浏览器模式。在[浏览器模式](/guide/browser/index)下，所有依赖始终会被打包，因此不支持 `output.bundleDependencies: false`。
 :::
 
 此选项提供了一种简单的方式来覆盖与 `testEnvironment` 绑定的默认打包策略。例如，如果你使用 `jsdom` 但希望与 `node` 环境相同的外部化行为：

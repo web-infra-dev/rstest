@@ -106,9 +106,9 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
         outputModule,
       } = context.projects.find((p) => p.environmentName === name)!;
 
-      const { bundleDependencies = 'auto' } = outputConfig ?? {};
+      const bundleDependencies = outputConfig?.bundleDependencies;
       const shouldExternalize =
-        bundleDependencies === 'auto'
+        bundleDependencies === undefined
           ? testEnvironment.name === 'node'
           : !bundleDependencies;
 

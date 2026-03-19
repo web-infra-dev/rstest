@@ -147,17 +147,18 @@ export default defineConfig({
 
 ## output.bundleDependencies
 
-- **Type:** `'auto' | boolean`
-- **Default:** `'auto'`
+- **Type:** `boolean`
+- **Default:** Depends on `testEnvironment`
 
 Controls whether third-party dependencies from `node_modules` are bundled or externalized.
 
-- `'auto'` (default): Bundle dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalize them in the `node` environment.
 - `true`: Always bundle all third-party dependencies, regardless of test environment.
 - `false`: Always externalize third-party dependencies, regardless of test environment.
 
+When this option is unset, rstest bundles dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalizes them in the `node` environment.
+
 :::warning
-This option only applies to non-browser mode. In [browser mode](/guide/browser/index), all dependencies are always bundled and this option has no effect.
+This option only applies to non-browser mode. In [browser mode](/guide/browser/index), all dependencies are always bundled, so `output.bundleDependencies: false` is not supported.
 :::
 
 This option provides a simple way to override the default bundling strategy that is tied to `testEnvironment`. For example, if you use `jsdom` but want the same externalization behavior as the `node` environment:

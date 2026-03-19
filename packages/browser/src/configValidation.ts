@@ -44,7 +44,7 @@ const validateViewport = (viewport: unknown): void => {
 
 export const validateBrowserConfig = (context: Rstest): void => {
   for (const project of context.projects) {
-    const browser = project.normalizedConfig.browser;
+    const { browser, output } = project.normalizedConfig;
     if (!browser.enabled) {
       continue;
     }
@@ -65,6 +65,12 @@ export const validateBrowserConfig = (context: Rstest): void => {
 
     if (!isPlainObject(browser.providerOptions)) {
       throw new Error('browser.providerOptions must be a plain object.');
+    }
+
+    if (output?.bundleDependencies === false) {
+      throw new Error(
+        'output.bundleDependencies false is not supported in browser environment.',
+      );
     }
   }
 };

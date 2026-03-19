@@ -44,6 +44,25 @@ describe('test bundleDependencies', () => {
     expect(output).not.toContain('function stripAnsi');
   });
 
+  it('should use testEnvironment-based behavior when bundleDependencies is unset', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', './fixtures/index.test.ts', '--testEnvironment=jsdom'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const output = readTestOutput();
+
+    // jsdom should still bundle dependencies by default
+    expect(output).toContain('function stripAnsi');
+  });
+
   it('should bundle dependencies in node when bundleDependencies is true', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

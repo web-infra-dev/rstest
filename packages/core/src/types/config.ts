@@ -447,13 +447,14 @@ export interface RstestConfig {
   > & {
     /**
      * Whether to bundle third-party dependencies from node_modules.
-     * - `'auto'`: Bundle in browser-like environments (jsdom, happy-dom, etc.),
-     *   externalize in the node environment.
      * - `true`: Always bundle all third-party dependencies.
      * - `false`: Always externalize third-party dependencies.
-     * @default 'auto'
+     *
+     * When unset, rstest bundles dependencies in browser-like test
+     * environments (jsdom, happy-dom, etc.) and externalizes them in the node
+     * environment. This option is not supported in browser mode.
      */
-    bundleDependencies?: 'auto' | boolean;
+    bundleDependencies?: boolean;
   };
 
   resolve?: RsbuildConfig['resolve'];
