@@ -17,28 +17,6 @@ const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 const isBuiltinSpecifier = (specifier: string) =>
   specifier.startsWith('node:') || builtinModules.includes(specifier);
 
-const toImportCallOptions = (
-  attributes?: Record<string, string | undefined>,
-): ImportCallOptions | undefined => {
-  if (!attributes) {
-    return undefined;
-  }
-
-  const withAttributes: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(attributes)) {
-    if (value !== undefined) {
-      withAttributes[key] = value;
-    }
-  }
-
-  if (Object.keys(withAttributes).length === 0) {
-    return undefined;
-  }
-
-  return { with: withAttributes };
-};
-
 const defineRstestDynamicImport =
   ({
     distPath,
@@ -55,7 +33,7 @@ const defineRstestDynamicImport =
     testPath: string;
     interopDefault: boolean;
   }) =>
-  async (specifier: string, importAttributes?: ImportCallOptions) => {
+  async (specifier: string, importAttributes: ImportCallOptions) => {
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(specifier)
@@ -282,8 +260,7 @@ export const loadModule = async ({
   if (esmMode === EsmMode.Unlinked) return esm;
 
   if (esm.status === 'unlinked') {
-    await esm.link(async (specifier, referencingModule, extra) => {
-      const importAttributes = toImportCallOptions(extra?.attributes);
+    await esm.link(async (specifier, referencingModule) => {
       const result = await defineRstestDynamicImport({
         assetFiles,
         testPath,
@@ -291,7 +268,7 @@ export const loadModule = async ({
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
-      })(specifier, importAttributes);
+      })(specifier, referencingModule as ImportCallOptions);
 
       const linkedModule = await asModule(
         result,
