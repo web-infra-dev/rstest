@@ -21,6 +21,10 @@ module.exports = {
     rules: [
       { test: /\.(jpg|png|gif|jpeg)$/, type: 'asset/resource' },
       {
+        test: /\.css$/,
+        type: 'css/auto',
+      },
+      {
         test: /\.(js|jsx)$/,
         use: {
           loader: 'builtin:swc-loader',
@@ -37,6 +41,9 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'component_app',
+      experiments: {
+        asyncStartup: true,
+      },
       filename: 'remoteEntry.js',
       library: { type: 'var', name: 'component_app' },
       exposes: {
@@ -46,8 +53,8 @@ module.exports = {
         './ToolTip': './src/ToolTip.jsx',
       },
       shared: {
-        react: { singleton: true, requiredVersion: '19.2.3' },
-        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.4' },
       },
     }),
     new HtmlRspackPlugin({ template: './public/index.html' }),

@@ -31,14 +31,17 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'main_app',
+      experiments: {
+        asyncStartup: true,
+      },
       remotes: {
         'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
         'node-local-remote':
           'node_local_remote@http://localhost:3004/remoteEntry.js',
       },
       shared: {
-        react: { singleton: true, requiredVersion: '19.2.3' },
-        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.4' },
       },
     }),
     new HtmlRspackPlugin({ template: './public/index.html' }),

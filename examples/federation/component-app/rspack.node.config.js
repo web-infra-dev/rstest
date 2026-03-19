@@ -35,6 +35,10 @@ module.exports = {
         type: 'asset/resource',
       },
       {
+        test: /\.css$/,
+        type: 'css/auto',
+      },
+      {
         test: /\.(js|jsx)$/,
         use: {
           loader: 'builtin:swc-loader',
@@ -58,6 +62,9 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'component_app',
+      experiments: {
+        asyncStartup: true,
+      },
       filename: 'remoteEntry.js',
       // This remote is consumed by Rstest using `remoteType: 'script'` while tests
       // run under JSDOM. We force the MF runtime to use its Node loader (vm eval),
@@ -73,8 +80,8 @@ module.exports = {
         './ToolTip': './src/ToolTip.jsx',
       },
       shared: {
-        react: { singleton: true, requiredVersion: '19.2.3' },
-        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.4' },
       },
     }),
   ],

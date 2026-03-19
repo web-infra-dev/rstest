@@ -10,7 +10,9 @@ export default defineConfig({
     pluginReact(),
     federation({
       name: 'component_app_node_test',
-      remoteType: 'commonjs',
+      experiments: {
+        asyncStartup: true,
+      },
       remotes: {
         'node-local-remote': `commonjs ${path.resolve(
           __dirname,
@@ -18,11 +20,10 @@ export default defineConfig({
         )}`,
       },
       shared: {
-        react: { singleton: true, eager: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
         'react-dom': {
           singleton: true,
-          eager: true,
-          requiredVersion: '19.2.3',
+          requiredVersion: '19.2.4',
         },
       },
     }),

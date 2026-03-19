@@ -1,9 +1,9 @@
 import { expect, test } from '@rstest/core';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import ToolTip from '../src/ToolTip.jsx';
 
-test('SSR: ToolTip renders content/message', async () => {
-  const { default: ToolTip } = await import('../src/ToolTip.jsx');
+test('SSR: ToolTip renders content/message', () => {
   const html = renderToString(
     React.createElement(ToolTip, {
       content: 'hover me please',

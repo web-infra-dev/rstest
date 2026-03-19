@@ -34,6 +34,9 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'main_app',
+      experiments: {
+        asyncStartup: true,
+      },
       library: { type: 'commonjs-module', name: 'main_app_web' },
       remoteType: 'script',
       remotes: {
@@ -43,8 +46,8 @@ module.exports = {
       },
       runtimePlugins: ['@module-federation/node/runtimePlugin'],
       shared: {
-        react: { singleton: true, requiredVersion: '19.2.3' },
-        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.4' },
       },
     }),
   ],

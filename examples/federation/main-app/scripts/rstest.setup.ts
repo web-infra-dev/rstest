@@ -1,8 +1,14 @@
 import vm from 'node:vm';
 import { expect } from '@rstest/core';
-import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+import {
+  toBeInTheDocument,
+  toHaveAttribute,
+} from '@testing-library/jest-dom/matchers';
 
-expect.extend(jestDomMatchers);
+expect.extend({
+  toBeInTheDocument,
+  toHaveAttribute,
+});
 
 // Force Module Federation runtime to use the node-like loader in JSDOM so remoteEntry
 // executes via fetch + vm instead of DOM script injection.

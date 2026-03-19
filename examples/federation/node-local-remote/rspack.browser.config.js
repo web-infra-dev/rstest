@@ -15,11 +15,14 @@ module.exports = {
   plugins: [
     new ModuleFederationPlugin({
       name: 'node_local_remote',
+      experiments: {
+        asyncStartup: true,
+      },
       filename: 'remoteEntry.js',
       exposes: { './test': './src/test.js' },
       shared: {
-        react: { singleton: true, requiredVersion: '19.2.3' },
-        'react-dom': { singleton: true, requiredVersion: '19.2.3' },
+        react: { singleton: true, requiredVersion: '19.2.4' },
+        'react-dom': { singleton: true, requiredVersion: '19.2.4' },
       },
     }),
   ],

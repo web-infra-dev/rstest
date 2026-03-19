@@ -18,11 +18,13 @@ try {
     // Assign to the local binding as well: bundler output calls `__rstest_dynamic_import__`
     // as a free identifier within the runtime scope.
     __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
-    try {
-      require('node:vm').runInThisContext(
-        'var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
-      );
-    } catch {}
+    if (typeof __rstest_dynamic_import__ === 'function') {
+      try {
+        require('node:vm').runInThisContext(
+          'var __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__',
+        );
+      } catch {}
+    }
   }
 } catch {}
 
