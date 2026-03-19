@@ -127,7 +127,7 @@ const runGlobalSetup = async (data: {
     return {
       success: false,
       hasTeardown: false,
-      errors: formatTestError(error),
+      errors: await formatTestError(error),
     };
   }
 };
