@@ -11,9 +11,6 @@ export default defineConfig({
     pluginReact(),
     federation({
       name: 'component_app_node_test',
-      experiments: {
-        asyncStartup: true,
-      },
       remoteType: 'commonjs',
       remotes: {
         'node-local-remote': `commonjs ${path.resolve(

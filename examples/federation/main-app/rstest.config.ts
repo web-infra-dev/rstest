@@ -11,9 +11,6 @@ export default defineConfig({
     pluginReact(),
     federation({
       name: 'main_app_web',
-      experiments: {
-        asyncStartup: true,
-      },
       remoteType: 'script',
       remotes: {
         'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
