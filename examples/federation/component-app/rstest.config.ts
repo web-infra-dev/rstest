@@ -1,10 +1,11 @@
 import path from 'node:path';
-import { federation } from '@module-federation/rstest-plugin';
+import { federation } from '@module-federation/rstest';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
+  setupFiles: ['./scripts/rstest.setup.ts'],
   testEnvironment: 'node',
   plugins: [
     pluginReact(),
@@ -13,6 +14,7 @@ export default defineConfig({
       experiments: {
         asyncStartup: true,
       },
+      remoteType: 'commonjs',
       remotes: {
         'node-local-remote': `commonjs ${path.resolve(
           __dirname,
