@@ -1,9 +1,33 @@
-import { diff } from 'jest-diff';
-import {
-  format as prettyFormat,
-  plugins as prettyFormatPlugins,
-} from 'pretty-format';
 import type { FormattedError, Test } from '../types';
+
+let diffFn: typeof import('jest-diff')['diff'] | undefined;
+let prettyFormatFn: typeof import('pretty-format')['format'] | undefined;
+let prettyFormatPlugins: typeof import('pretty-format')['plugins'] | undefined;
+let diffLoadPromise: Promise<void> | undefined;
+
+const ensureDiffLoaded = async (): Promise<void> => {
+  if (diffFn && prettyFormatFn && prettyFormatPlugins) {
+    return;
+  }
+
+  if (!diffLoadPromise) {
+    diffLoadPromise = Promise.all([
+      import('jest-diff'),
+      import('pretty-format'),
+    ])
+      .then(([jestDiff, prettyFormat]) => {
+        diffFn = jestDiff.diff;
+        prettyFormatFn = prettyFormat.format;
+        prettyFormatPlugins = prettyFormat.plugins;
+      })
+      .catch((error) => {
+        diffLoadPromise = undefined;
+        throw error;
+      });
+  }
+
+  await diffLoadPromise;
+};
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
@@ -20,49 +44,56 @@ export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
 
-export const formatTestError = (err: any, test?: Test): FormattedError[] => {
+export const formatTestError = async (
+  err: any,
+  test?: Test,
+): Promise<FormattedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
-  return errors.map((rawError) => {
-    const error =
-      typeof rawError === 'string' ? { message: rawError } : rawError;
-    const errObj: FormattedError = {
-      fullStack: error.fullStack,
-      // Some error attributes cannot be enumerated
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    };
+  return Promise.all(
+    errors.map(async (rawError) => {
+      const error =
+        typeof rawError === 'string' ? { message: rawError } : rawError;
+      const errObj: FormattedError = {
+        fullStack: error.fullStack,
+        // Some error attributes cannot be enumerated
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      };
 
-    if (error instanceof TestRegisterError && test?.type === 'case') {
-      errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
-    }
+      if (error instanceof TestRegisterError && test?.type === 'case') {
+        errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+      }
 
-    if (
-      error.showDiff ||
-      (error.showDiff === undefined &&
-        error.expected !== undefined &&
-        error.actual !== undefined)
-    ) {
-      errObj.diff = diff(err.expected, err.actual, {
-        expand: false,
-      })!;
-      errObj.expected =
-        typeof error.expected === 'string'
-          ? error.expected
-          : prettyFormat(error.expected, {
-              plugins: Object.values(prettyFormatPlugins),
-            });
-      errObj.actual =
-        typeof error.actual === 'string'
-          ? error.actual
-          : prettyFormat(error.actual, {
-              plugins: Object.values(prettyFormatPlugins),
-            });
-    }
+      if (
+        error.showDiff ||
+        (error.showDiff === undefined &&
+          error.expected !== undefined &&
+          error.actual !== undefined)
+      ) {
+        await ensureDiffLoaded();
 
-    return errObj;
-  });
+        errObj.diff = diffFn!(error.expected, error.actual, {
+          expand: false,
+        })!;
+        errObj.expected =
+          typeof error.expected === 'string'
+            ? error.expected
+            : prettyFormatFn!(error.expected, {
+                plugins: Object.values(prettyFormatPlugins!),
+              });
+        errObj.actual =
+          typeof error.actual === 'string'
+            ? error.actual
+            : prettyFormatFn!(error.actual, {
+                plugins: Object.values(prettyFormatPlugins!),
+              });
+      }
+
+      return errObj;
+    }),
+  );
 };
 // cspell:ignore sdjifo
 const formatRegExp = /%[sdjifoOc%]/;

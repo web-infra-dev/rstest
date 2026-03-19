@@ -5,16 +5,36 @@
  * LICENSE file in the root directory of https://github.com/facebook/jest.
  */
 
-import {
-  type FakeTimerInstallOpts,
-  type FakeTimerWithContext,
-  type InstalledClock,
-  withGlobal,
+import type {
+  FakeTimerInstallOpts,
+  FakeTimerWithContext,
+  InstalledClock,
 } from '@sinonjs/fake-timers';
 
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
+let fakeTimersModule:
+  | Pick<typeof import('@sinonjs/fake-timers'), 'withGlobal'>
+  | undefined;
+
+const loadFakeTimersModule = (): Pick<
+  typeof import('@sinonjs/fake-timers'),
+  'withGlobal'
+> => {
+  if (fakeTimersModule) {
+    return fakeTimersModule;
+  }
+
+  // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
+  // preserving that pattern without breaking bundling/runtime resolution.
+  // Preserve the public sync timer API while avoiding module init work
+  // on worker startup when fake timers are never used.
+  const loaded =
+    require('@sinonjs/fake-timers') as typeof import('@sinonjs/fake-timers');
+  fakeTimersModule = { withGlobal: loaded.withGlobal };
+  return fakeTimersModule;
+};
 
 export class FakeTimers {
   private _clock!: InstalledClock;
@@ -31,7 +51,7 @@ export class FakeTimers {
   }) {
     this._config = config;
     this._fakingTime = false;
-    this._fakeTimers = withGlobal(global);
+    this._fakeTimers = loadFakeTimersModule().withGlobal(global);
   }
 
   clearAllTimers(): void {

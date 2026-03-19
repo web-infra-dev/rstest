@@ -390,14 +390,14 @@ const runInPool = async (
         project,
         testPath,
         tests,
-        errors: formatTestError(unhandledErrors),
+        errors: await formatTestError(unhandledErrors),
       };
     } catch (err) {
       return {
         project,
         testPath,
         tests: [],
-        errors: formatTestError(err),
+        errors: await formatTestError(err),
       };
     } finally {
       await teardown();
@@ -480,7 +480,7 @@ const runInPool = async (
     if (unhandledErrors.length > 0) {
       results.status = 'fail';
       results.errors = (results.errors || []).concat(
-        ...formatTestError(unhandledErrors),
+        ...(await formatTestError(unhandledErrors)),
       );
     }
 
@@ -509,7 +509,7 @@ const runInPool = async (
       status: 'fail',
       name: '',
       results: [],
-      errors: formatTestError(err),
+      errors: await formatTestError(err),
     };
   } finally {
     await teardown();
