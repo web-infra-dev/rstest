@@ -68,7 +68,7 @@ describe('test environment variables', () => {
     await expectExecSuccess();
   });
 
-  it('should not force color env in non-TTY when no color env is set by user', async ({
+  it('should propagate color env correctly without user overrides', async ({
     onTestFinished,
   }) => {
     const { expectExecSuccess } = await runRstestCli({

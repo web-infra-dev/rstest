@@ -76,7 +76,7 @@ export function getForceColorEnv(options?: {
   // Normal terminal session with color support — propagate to workers
   // so their piped stdio doesn't suppress colors.
   if (colorSupported) {
-    return { FORCE_COLOR: '1' };
+    // return { FORCE_COLOR: '1' };
   }
 
   return {};

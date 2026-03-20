@@ -62,7 +62,7 @@ describe('mergeRstestConfig', () => {
     ).toEqual({
       exclude: {
         patterns: ['**/node_modules/**', '**/dist/**'],
-        override: false,
+        override: 1,
       },
     });
 
