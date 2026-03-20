@@ -10,6 +10,7 @@ import { x } from 'tinyexec';
 import treeKill from 'tree-kill';
 
 type IoType = 'stdout' | 'stderr';
+
 class Cli {
   public exec: Result;
   public stdout = '';
