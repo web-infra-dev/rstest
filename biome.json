@@ -14,8 +14,7 @@
       "!**/*.vue",
       "!**/dist",
       "!**/dist-types",
-      "!**/.vscode-test.mjs",
-      "!packages/core/src/types/coverage.ts"
+      "!**/.vscode-test.mjs"
     ]
   },
   "formatter": {
