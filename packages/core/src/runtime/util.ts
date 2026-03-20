@@ -56,22 +56,24 @@ export const formatTestError = async (
           error.expected !== undefined &&
           error.actual !== undefined)
       ) {
+        const expected = error.expected;
+        const actual = error.actual;
         const { diff, prettyFormat, prettyFormatPlugins } =
           await loadDiffModules();
 
-        errObj.diff = diff(error.expected, error.actual, {
+        errObj.diff = diff(expected, actual, {
           expand: false,
         })!;
         errObj.expected =
-          typeof error.expected === 'string'
-            ? error.expected
-            : prettyFormat(error.expected, {
+          typeof expected === 'string'
+            ? expected
+            : prettyFormat(expected, {
                 plugins: Object.values(prettyFormatPlugins),
               });
         errObj.actual =
-          typeof error.actual === 'string'
-            ? error.actual
-            : prettyFormat(error.actual, {
+          typeof actual === 'string'
+            ? actual
+            : prettyFormat(actual, {
                 plugins: Object.values(prettyFormatPlugins),
               });
       }
