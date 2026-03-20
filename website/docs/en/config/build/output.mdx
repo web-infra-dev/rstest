@@ -145,6 +145,55 @@ export default defineConfig({
 });
 ```
 
+## output.bundleDependencies
+
+- **Type:** `boolean`
+- **Default:** Depends on `testEnvironment`
+
+Controls whether third-party dependencies from `node_modules` are bundled or externalized.
+
+- `true`: Always bundle all third-party dependencies, regardless of test environment.
+- `false`: Always externalize third-party dependencies, regardless of test environment.
+
+When this option is unset, rstest bundles dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalizes them in the `node` environment.
+
+:::warning
+This option only applies to non-browser mode. In [browser mode](/guide/browser/index), all dependencies are always bundled, so `output.bundleDependencies: false` is not supported.
+:::
+
+This option provides a simple way to override the default bundling strategy that is tied to `testEnvironment`. For example, if you use `jsdom` but want the same externalization behavior as the `node` environment:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  output: {
+    bundleDependencies: false,
+  },
+});
+```
+
+Or if you want to bundle all dependencies in the `node` environment to benefit from optimizations like [lazy barrel](https://rspack.rs/guide/optimization/lazy-barrel):
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'node',
+  output: {
+    bundleDependencies: true,
+  },
+});
+```
+
+### Relationship with output.externals
+
+`output.bundleDependencies` controls the overall bundling strategy for all `node_modules` dependencies, while [`output.externals`](#outputexternals) allows fine-grained control over individual packages. When both are configured, `output.externals` takes higher priority:
+
+- `bundleDependencies: true` + `externals: ['lodash']`: Bundle all dependencies, but externalize `lodash`.
+- `bundleDependencies: false` + `externals` is not needed, since all dependencies are already externalized.
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 For custom CSS Modules configuration.
