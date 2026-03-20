@@ -6,18 +6,19 @@ import type {
   Totals,
 } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
-import type { ReportOptions, ReportType } from 'istanbul-reports';
+import type { ReportOptions } from 'istanbul-reports';
 
-type ReportWithOptions = {
-  [Name in ReportType]: [Name, Partial<ReportOptions[Name]>];
-}[ReportType];
+type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
+  Name extends keyof ReportOptions
+    ? [Name, Partial<ReportOptions[Name]>]
+    : [Name, Record<string, unknown>];
 
 /** Custom reporter configuration for non-istanbul reporters */
 type CustomReporter = string | [string, Record<string, unknown>];
 
 /** Union type for all supported reporter types */
 type SupportedReporter =
-  | ReportType
+  | keyof ReportOptions
   | ReportWithOptions
   | ReportBase
   | CustomReporter;

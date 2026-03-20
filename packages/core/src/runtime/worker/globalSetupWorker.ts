@@ -111,7 +111,7 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
-        federation: Boolean(data.federation),
+        ...(data.outputModule ? {} : { federation: Boolean(data.federation) }),
       });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;

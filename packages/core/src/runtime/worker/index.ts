@@ -297,7 +297,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      federation,
+      ...(outputModule ? {} : { federation }),
     });
   }
 
@@ -312,7 +312,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      federation,
+      ...(outputModule ? {} : { federation }),
     });
   }
 
@@ -323,7 +323,7 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
-    federation,
+    ...(outputModule ? {} : { federation }),
   });
 };
 

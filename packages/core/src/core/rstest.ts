@@ -47,18 +47,6 @@ const resolveOutputModule = (
   return config.output?.module ?? process.env.RSTEST_OUTPUT_MODULE !== 'false';
 };
 
-const assertFederationCompatible = (
-  config: Pick<NormalizedConfig, 'federation'>,
-  outputModule: boolean,
-): void => {
-  if (!config.federation || !outputModule) return;
-
-  throw new Error(
-    'Federation requires CommonJS output. Set `output.module: false` in your rstest config ' +
-      'when using `federation: true` (note: `RSTEST_OUTPUT_MODULE` can also affect this).',
-  );
-};
-
 export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
@@ -174,8 +162,6 @@ export class Rstest implements RstestContext {
           }
 
           const outputModule = resolveOutputModule(config);
-          assertFederationCompatible(config, outputModule);
-
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
@@ -189,8 +175,6 @@ export class Rstest implements RstestContext {
       : [
           (() => {
             const outputModule = resolveOutputModule(rstestConfig);
-            assertFederationCompatible(rstestConfig, outputModule);
-
             return {
               configFilePath,
               rootPath,
