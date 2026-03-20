@@ -117,7 +117,7 @@ export class TestRunner {
           status: 'fail' as const,
           parentNames: test.parentNames,
           name: test.name,
-          errors: formatTestError(error, test),
+          errors: await formatTestError(error, test),
           testPath,
           project,
         };
@@ -187,7 +187,7 @@ export class TestRunner {
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: formatTestError(error, test),
+              errors: await formatTestError(error, test),
               testPath,
             };
           }
@@ -207,7 +207,7 @@ export class TestRunner {
       } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
-        result.errors.push(...formatTestError(error));
+        result.errors.push(...(await formatTestError(error)));
       }
 
       if (result.status === 'fail') {
@@ -216,7 +216,7 @@ export class TestRunner {
             await fn(test.context);
           } catch (error) {
             result.errors ??= [];
-            result.errors.push(...formatTestError(error));
+            result.errors.push(...(await formatTestError(error)));
           }
         }
         // should not be updated for snapshots that have not been run when the test run fails
@@ -339,7 +339,7 @@ export class TestRunner {
           } catch (error) {
             hasBeforeAllError = true;
 
-            result.errors?.push(...formatTestError(error));
+            result.errors?.push(...(await formatTestError(error)));
           }
         }
 
@@ -370,7 +370,7 @@ export class TestRunner {
             }
           } catch (error) {
             // AfterAll failed does not affect test case results
-            result.errors?.push(...formatTestError(error));
+            result.errors?.push(...(await formatTestError(error)));
           }
         }
         result.duration = RealDate.now() - start;
