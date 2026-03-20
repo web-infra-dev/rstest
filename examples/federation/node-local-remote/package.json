@@ -1,5 +1,5 @@
 {
-  "name": "rstest_example_node-local-remote",
+  "name": "@examples/federation-node-local-remote",
   "version": "1.0.0",
   "private": true,
   "scripts": {

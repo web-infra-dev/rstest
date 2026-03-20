@@ -1,5 +1,5 @@
 {
-  "name": "rstest_example_main-app",
+  "name": "@examples/federation-main-app",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",

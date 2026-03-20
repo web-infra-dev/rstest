@@ -2,7 +2,6 @@
 *.log*
 *.cpuprofile
 node_modules/
-examples/federation/node_modules/
 
 dist/
 dist-*

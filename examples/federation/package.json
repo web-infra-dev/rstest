@@ -1,12 +1,12 @@
 {
-  "name": "rstest_example",
+  "name": "@examples/federation",
   "description": "A complete Module Federation Case with React.",
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "start": "pnpm --filter rstest_example_* --parallel start",
-    "build": "pnpm --filter rstest_example_* --parallel build",
-    "test": "pnpm --filter rstest_example_main-app test && pnpm --filter rstest_example_component-app test",
+    "start": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --parallel start",
+    "build": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --filter @examples/federation-node-local-remote --parallel build",
+    "test": "pnpm --filter @examples/federation-main-app test && pnpm --filter @examples/federation-component-app test",
     "e2e:ci": "pnpm build && pnpm exec playwright test --reporter=list"
   },
   "keywords": [],
