@@ -105,6 +105,7 @@ jobs:
           coverage-file: coverage/coverage-final.json
           canyon-url: https://app.canyonjs.io
           instrument-cwd: ${{ github.workspace }}
+          only-changes: false
 
       - name: Run Examples Test
         run: pnpm run test:examples
