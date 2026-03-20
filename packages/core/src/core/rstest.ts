@@ -41,12 +41,6 @@ type Options = {
   projects: Project[];
 };
 
-const resolveOutputModule = (
-  config: Pick<NormalizedConfig, 'output'>,
-): boolean => {
-  return config.output?.module ?? process.env.RSTEST_OUTPUT_MODULE !== 'false';
-};
-
 export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
@@ -160,31 +154,30 @@ export class Rstest implements RstestContext {
               config.source.tsconfigPath,
             );
           }
-
-          const outputModule = resolveOutputModule(config);
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
             _globalSetups: false,
-            outputModule,
+            outputModule:
+              config.output?.module ??
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
             environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
         })
       : [
-          (() => {
-            const outputModule = resolveOutputModule(rstestConfig);
-            return {
-              configFilePath,
-              rootPath,
-              _globalSetups: false,
-              name: rstestConfig.name,
-              outputModule,
-              environmentName: formatEnvironmentName(rstestConfig.name),
-              normalizedConfig: rstestConfig,
-            };
-          })(),
+          {
+            configFilePath,
+            rootPath,
+            _globalSetups: false,
+            name: rstestConfig.name,
+            outputModule:
+              rstestConfig.output?.module ??
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+            environmentName: formatEnvironmentName(rstestConfig.name),
+            normalizedConfig: rstestConfig,
+          },
         ];
 
     // Create a map of project name to project config for reporters

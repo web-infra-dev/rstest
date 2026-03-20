@@ -3,11 +3,6 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
-import {
-  installVirtualFs,
-  setVirtualFiles,
-  uninstallVirtualFs,
-} from './virtualFs';
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
@@ -86,13 +81,6 @@ const runGlobalSetup = async (data: {
       // ignore
     }
 
-    if (data.federation) {
-      installVirtualFs();
-      setVirtualFiles(data.assetFiles);
-    } else {
-      uninstallVirtualFs();
-    }
-
     for (const entry of data.entries) {
       const { distPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
@@ -146,7 +134,6 @@ const runGlobalSetup = async (data: {
       envChanges,
     };
   } catch (error) {
-    uninstallVirtualFs();
     return {
       success: false,
       hasTeardown: false,
@@ -181,9 +168,6 @@ export const runGlobalTeardown = async (): Promise<{
     for (const teardown of callbacks.reverse()) {
       await teardown();
     }
-
-    uninstallVirtualFs();
-
     return {
       success: true,
     };

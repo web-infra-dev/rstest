@@ -3,9 +3,8 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
-export const createAutoExternalNodeModules: (
+const autoExternalNodeModules: (
   outputModule: boolean,
-  federation: boolean,
 ) => (
   data: Rspack.ExternalItemFunctionData,
   callback: (
@@ -13,11 +12,9 @@ export const createAutoExternalNodeModules: (
     result?: Rspack.ExternalItemValue,
     type?: Rspack.ExternalsType,
   ) => void,
-) => void = (outputModule, federation) =>
-  function autoExternalNodeModules(
-    { context, request, dependencyType, getResolve },
-    callback,
-  ) {
+) => void =
+  (outputModule) =>
+  ({ context, request, dependencyType, getResolve }, callback) => {
     if (!request) {
       return callback();
     }
@@ -47,15 +44,8 @@ export const createAutoExternalNodeModules: (
 
     resolver(context!, request, (err, resolvePath) => {
       if (err) {
-        if (federation) {
-          // In federation mode unresolved specifiers must stay bundled. Passing
-          // `false` tells Rspack not to treat the request as external and to
-          // skip any later externals handlers from user config.
-          return callback(undefined, false);
-        }
-
-        // Ignore resolve error and external it as commonjs (it may be mocked).
-        // However, we will lose the code frame info if module not found.
+        // ignore resolve error and external it as commonjs （it may be mocked）
+        // however, we will lose the code frame info if module not found
         return callback(undefined, request, 'node-commonjs');
       }
 
@@ -112,14 +102,14 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
   setup: (api) => {
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const {
-        normalizedConfig: { testEnvironment, federation },
+        normalizedConfig: { testEnvironment },
         outputModule,
       } = context.projects.find((p) => p.environmentName === name)!;
       return mergeEnvironmentConfig(config, {
         output: {
           externals:
             testEnvironment.name === 'node'
-              ? [createAutoExternalNodeModules(outputModule, federation)]
+              ? [autoExternalNodeModules(outputModule)]
               : undefined,
         },
         tools: {

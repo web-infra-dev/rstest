@@ -42,6 +42,7 @@ export function installGlobal(
   const keys = getWindowKeys(global, win, options.additionalKeys);
 
   const originals = new Map<string | symbol, any>();
+
   const overrides = new Map<string | symbol, any>();
   for (const key of keys) {
     const boundFunction =

@@ -16,11 +16,6 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
-import {
-  installVirtualFs,
-  setVirtualFiles,
-  uninstallVirtualFs,
-} from './virtualFs';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -275,16 +270,6 @@ const loadFiles = async ({
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
-
-  // Allow runtimes (e.g. Module Federation) to read compiled artifacts from the
-  // in-memory bundler output even when rsbuild does not write to disk.
-  if (federation) {
-    installVirtualFs();
-    setVirtualFiles(assetFiles);
-  } else {
-    // Avoid affecting non-federation runs, especially when `isolate: false`.
-    uninstallVirtualFs();
-  }
 
   // clean rstest core cache manually
   if (!isolate) {

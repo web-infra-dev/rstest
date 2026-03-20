@@ -58,6 +58,7 @@ const defineRstestDynamicImport =
           codeContent: content,
           testPath,
           distPath: joinedPath,
+          rstestContext: {},
           assetFiles,
           interopDefault,
           esmMode,
@@ -199,6 +200,7 @@ export const loadModule = async ({
   codeContent: string;
   distPath: string;
   testPath: string;
+  rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): Promise<any> => {
   const code = codeContent;
@@ -212,7 +214,8 @@ export const loadModule = async ({
         meta.url = pathToFileURL(
           distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
         ).toString();
-        const rstestDynamicImport = defineRstestDynamicImport({
+        // @ts-expect-error
+        meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
@@ -220,8 +223,6 @@ export const loadModule = async ({
           returnModule: false,
           esmMode: EsmMode.Unknown,
         });
-        // @ts-expect-error
-        meta.__rstest_dynamic_import__ = rstestDynamicImport;
         // @ts-expect-error
         meta.readWasmFile = (
           wasmPath: URL,
