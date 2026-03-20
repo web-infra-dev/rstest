@@ -96,7 +96,16 @@ jobs:
         run: pnpm run typecheck
 
       - name: Run Test
-        run: pnpm run test
+        run: pnpm run test --coverage
+
+      - name: Upload coverage to Canyon
+        if: github.event_name == 'pull_request'
+        uses: canyon-project/canyon-action@v1.0.28
+        with:
+          coverage-file: coverage/coverage-final.json
+          canyon-url: https://app.canyonjs.io
+          instrument-cwd: ${{ github.workspace }}
+          only-changes: false
 
       - name: Run Examples Test
         run: pnpm run test:examples
