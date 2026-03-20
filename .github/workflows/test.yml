@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload coverage to Canyon
         if: github.event_name == 'pull_request'
-        uses: canyon-project/canyon-action@v1.0.26
+        uses: canyon-project/canyon-action@v1.0.27
         with:
           coverage-file: coverage/coverage-final.json
           canyon-url: https://app.canyonjs.io
