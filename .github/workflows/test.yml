@@ -101,6 +101,10 @@ jobs:
       - name: Run Examples Test
         run: pnpm run test:examples
 
+      - name: Run Federation Example Test
+        if: runner.os == 'macOS'
+        run: pnpm run test:federation
+
   # ======== e2e ========
   e2e:
     needs: [prepare, ut]

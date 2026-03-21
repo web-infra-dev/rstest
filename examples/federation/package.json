@@ -1,0 +1,23 @@
+{
+  "name": "@examples/federation",
+  "description": "A complete Module Federation Case with React.",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --parallel start",
+    "build": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --filter @examples/federation-node-local-remote --parallel build",
+    "test": "pnpm --filter @examples/federation-main-app test && pnpm --filter @examples/federation-component-app test",
+    "e2e:ci": "pnpm build && pnpm exec playwright test --reporter=list"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "homepage": "https://github.com/web-infra-dev/rstest/tree/main/examples/federation",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "playwright": "^1.58.2"
+  }
+}

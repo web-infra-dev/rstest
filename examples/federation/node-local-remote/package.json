@@ -1,0 +1,18 @@
+{
+  "name": "@examples/federation-node-local-remote",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "rspack build --config rspack.browser.config.js",
+    "build:node": "rspack build --config rspack.node.config.js",
+    "serve": "serve dist -p 3004",
+    "serve:node": "serve dist-node -p 3004"
+  },
+  "devDependencies": {
+    "@module-federation/enhanced": "https://pkg.pr.new/module-federation/core/@module-federation/enhanced@3fe0a1a3b6b5eab3d2d8eba2e4fd554fc1bda214",
+    "@module-federation/node": "2.7.32",
+    "@rspack/cli": "2.0.0-canary-20260116",
+    "@rspack/core": "2.0.0-beta.6",
+    "serve": "14.2.3"
+  }
+}

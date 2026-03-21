@@ -74,7 +74,7 @@ export function getReactTestTemplate(lang: 'ts' | 'js'): string {
 import { page } from '@rstest/browser';
  import { render } from '@rstest/browser-react';
  import Counter from './Counter.${componentExt}';
- 
+
  test('increments count on button click', async () => {
   await render(<Counter initial={5} />);
 
@@ -159,9 +159,9 @@ import { createCounter } from './Counter.${ext}';
 
  test('increments count on button click', async () => {
    document.body.appendChild(createCounter(5));
- 
+
    await expect.element(page.getByText('Count: 5')).toBeVisible();
- 
+
    await page.getByRole('button', { name: 'Increment' }).click();
    await expect.element(page.getByText('Count: 6')).toBeVisible();
  });
