@@ -27,4 +27,4 @@
 
 执行完上述命令，打开浏览器，输入 `http://localhost:3002` 查看页面结果。
 
-[最佳实践、规则和更多信息请参阅](../../playwright-e2e/README.md)
+[Federation Playwright 示例测试](./e2e/checkApplication.spec.ts)

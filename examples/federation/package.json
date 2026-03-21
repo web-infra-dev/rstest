@@ -13,9 +13,9 @@
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/anderlaw/react-webpack-MF/issues"
+    "url": "https://github.com/web-infra-dev/rstest/issues"
   },
-  "homepage": "https://github.com/anderlaw/react-webpack-MF#readme",
+  "homepage": "https://github.com/web-infra-dev/rstest/tree/main/examples/federation",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "playwright": "^1.58.2"
