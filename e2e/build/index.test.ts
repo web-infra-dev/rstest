@@ -69,9 +69,16 @@ describe('test build config', () => {
     expect(fs.existsSync(join(customOutputPath, 'rstest-manifest.json'))).toBe(
       true,
     );
-    expect(fs.existsSync(join(customOutputPath, 'rstest-runtime.mjs'))).toBe(
-      true,
-    );
+    expect(
+      fs.existsSync(
+        join(
+          customOutputPath,
+          process.env.RSTEST_OUTPUT_MODULE === 'false'
+            ? 'rstest-runtime.js'
+            : 'rstest-runtime.mjs',
+        ),
+      ),
+    ).toBe(true);
     expect(fs.existsSync(join(defaultOutputPath, 'rstest-manifest.json'))).toBe(
       false,
     );
