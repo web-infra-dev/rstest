@@ -1,6 +1,7 @@
-import { dirname } from 'node:path';
+import fs from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,5 +34,46 @@ describe('test build config', () => {
     });
 
     await expectExecSuccess();
+  });
+
+  it('should write output to customized distPath.root', async ({
+    onTestFinished,
+  }) => {
+    const defaultOutputPath = join(__dirname, 'dist/.rstest-temp');
+    const customOutputPath = join(__dirname, 'custom/.rstest-temp');
+
+    fs.rmSync(defaultOutputPath, { recursive: true, force: true });
+    fs.rmSync(join(__dirname, 'custom'), {
+      recursive: true,
+      force: true,
+    });
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/customOutput',
+        '-c',
+        'fixtures/customOutput/rstest.config.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(fs.existsSync(join(customOutputPath, 'rstest-manifest.json'))).toBe(
+      true,
+    );
+    expect(fs.existsSync(join(customOutputPath, 'rstest-runtime.mjs'))).toBe(
+      true,
+    );
+    expect(fs.existsSync(join(defaultOutputPath, 'rstest-manifest.json'))).toBe(
+      false,
+    );
   });
 });

@@ -2,6 +2,7 @@ import type { Rspack } from '@rsbuild/core';
 import { join } from 'pathe';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { RstestContext } from '../../src/types';
+import { TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
 
 process.env.DEBUG = 'false';
 
@@ -51,7 +52,11 @@ describe('prepareRsbuild', () => {
           plugins: [],
           resolve: {},
           source: {},
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           testEnvironment: {
             name: 'jsdom',
@@ -99,7 +104,11 @@ describe('prepareRsbuild', () => {
           plugins: [],
           resolve: {},
           source: {},
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           testEnvironment: {
             name: 'node',
@@ -147,6 +156,11 @@ describe('prepareRsbuild', () => {
           root: rootPath,
           name: 'test',
           pool: { type: 'forks' },
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
         },
         projects: [
           {
@@ -196,6 +210,121 @@ describe('prepareRsbuild', () => {
     expect(bundlerConfigs[1]).toMatchSnapshot();
   });
 
+  it('should respect output.distPath.root in rspack config', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: 'custom/.rstest-temp',
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.output?.path).toBe(
+      join(rootPath, 'custom/.rstest-temp'),
+    );
+  });
+
+  it('should use global output.distPath.root for project rspack config', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: 'global/.rstest-temp',
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {
+                distPath: {
+                  root: 'project/.rstest-temp',
+                },
+              },
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.output?.path).toBe(
+      join(rootPath, 'global/.rstest-temp'),
+    );
+  });
+
   it('should generate swc config correctly with user customize', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
@@ -214,7 +343,11 @@ describe('prepareRsbuild', () => {
             },
             include: [/node_modules[\\/]query-string[\\/]/],
           },
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           pool: { type: 'forks' },
         },
@@ -274,7 +407,11 @@ describe('prepareRsbuild', () => {
           plugins: [],
           resolve: {},
           source: {},
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           testEnvironment: {
             name: 'node',
@@ -327,7 +464,11 @@ describe('prepareRsbuild', () => {
           plugins: [],
           resolve: {},
           source: {},
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           testEnvironment: {
             name: 'node',
@@ -380,7 +521,11 @@ describe('prepareRsbuild', () => {
           plugins: [],
           resolve: {},
           source: {},
-          output: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
           tools: {},
           testEnvironment: {
             name: 'node',

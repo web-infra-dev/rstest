@@ -149,6 +149,36 @@ export default defineConfig({
 
 For custom CSS Modules configuration.
 
+## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
+
+Control the global root directory where rstest places its temporary build outputs.
+
+- **Type:** `string | { root?: string }`
+- **Default:** `{ root: 'dist/.rstest-temp' }`
+
+By default, rstest writes its temporary outputs under `dist/.rstest-temp` when they need to be written to disk. This includes the compiled test outputs used by the Node.js test runner, and the browser mode temporary assets such as the generated runner files and virtual manifest.
+
+In multi-project runs, rstest still uses one global output root. It may create subdirectories under that root for different projects, but the base directory itself is shared and does not switch to each project's `root`.
+
+If you want these files to go to another directory, set `output.distPath.root`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  dev: {
+    writeToDisk: true,
+  },
+  output: {
+    distPath: {
+      root: 'custom/.rstest-temp',
+    },
+  },
+});
+```
+
+After this change, rstest will use `<root>/custom/.rstest-temp` as the temporary output root instead of `<root>/dist/.rstest-temp`.
+
 ## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
 
 Whether to clean up all test temporary files under the output directory before the test starts.

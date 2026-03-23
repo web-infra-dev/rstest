@@ -27,6 +27,19 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+export type RstestOutputConfig = Pick<
+  NonNullable<RsbuildConfig['output']>,
+  'cssModules' | 'externals' | 'cleanDistPath' | 'module'
+> & {
+  distPath?: string | { root?: string };
+};
+
+export type NormalizedOutputConfig = Partial<
+  Omit<RstestOutputConfig, 'distPath'>
+> & {
+  distPath: { root: string };
+};
+
 export type ProjectConfig = Omit<
   RstestConfig,
   | 'projects'
@@ -38,7 +51,10 @@ export type ProjectConfig = Omit<
   | 'onConsoleLog'
   | 'bail'
   | 'shard'
->;
+  | 'output'
+> & {
+  output?: Omit<RstestOutputConfig, 'distPath'>;
+};
 
 /**
  * Supported browser types for browser mode testing.
@@ -441,10 +457,7 @@ export interface RstestConfig {
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
 
-  output?: Pick<
-    NonNullable<RsbuildConfig['output']>,
-    'cssModules' | 'externals' | 'cleanDistPath' | 'module'
-  >;
+  output?: RstestOutputConfig;
 
   resolve?: RsbuildConfig['resolve'];
 
@@ -459,7 +472,6 @@ type OptionalKeys =
   | 'plugins'
   | 'source'
   | 'resolve'
-  | 'output'
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
@@ -492,6 +504,7 @@ export type NormalizedConfig = Required<
     | 'exclude'
     | 'testEnvironment'
     | 'browser'
+    | 'output'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
@@ -505,6 +518,7 @@ export type NormalizedConfig = Required<
       patterns: string[];
       override?: boolean;
     };
+    output: NormalizedOutputConfig;
   };
 
 export type NormalizedProjectConfig = Required<
@@ -516,9 +530,11 @@ export type NormalizedProjectConfig = Required<
     | 'pool'
     | 'setupFiles'
     | 'globalSetup'
+    | 'output'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
     globalSetup: string[];
+    output?: Omit<NormalizedOutputConfig, 'distPath'>;
   };
