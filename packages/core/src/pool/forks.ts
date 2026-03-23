@@ -93,6 +93,7 @@ export const createForksPool = (poolOptions: {
 
   const options: Options = {
     runtime: 'child_process',
+    execPath: process.execPath,
     filename: resolve(__dirname, './worker.js'),
     env,
     execArgv,
