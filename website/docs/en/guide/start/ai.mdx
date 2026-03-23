@@ -11,6 +11,7 @@ To help AI better understand Rstest's features, configuration, and best practice
 - [Agent Skills](#agent-skills)
 - [llms.txt](#llmstxt)
 - [Markdown docs](#markdown-docs)
+- [Markdown reporter](#markdown-reporter)
 - [AGENTS.md](#agentsmd)
 
 ## Agent Skills
@@ -65,6 +66,26 @@ https://rstest.rs/guide/start/index.md
 ```
 
 Providing the Markdown link or content allows AI to focus on a specific chapter, which is useful for targeted troubleshooting or looking up a particular topic.
+
+## Markdown reporter
+
+When you want AI to directly consume test results, use the `md` reporter. It outputs a single markdown document to stdout, which is easier for LLMs to parse than colorful terminal logs.
+
+```bash
+npx rstest --reporter=md
+```
+
+You can also configure it in `rstest.config.ts` and combine it with other reporters in local or CI workflows.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['md'],
+});
+```
+
+For full options (`preset`, `failures`, `stack`, `console`), see [Markdown reporter](/guide/basic/reporters#markdown-reporter).
 
 ## AGENTS.md
 
