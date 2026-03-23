@@ -1,5 +1,5 @@
 import type { Rspack } from '@rsbuild/core';
-import { join } from 'pathe';
+import { join, normalize } from 'pathe';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import type { RstestContext } from '../../src/types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
@@ -260,7 +260,7 @@ describe('prepareRsbuild', () => {
       origin: { bundlerConfigs },
     } = await rsbuildInstance.inspectConfig();
 
-    expect(bundlerConfigs[0]?.output?.path).toBe(
+    expect(normalize(bundlerConfigs[0]!.output!.path!)).toBe(
       join(rootPath, 'custom/.rstest-temp'),
     );
   });
@@ -320,7 +320,7 @@ describe('prepareRsbuild', () => {
       origin: { bundlerConfigs },
     } = await rsbuildInstance.inspectConfig();
 
-    expect(bundlerConfigs[0]?.output?.path).toBe(
+    expect(normalize(bundlerConfigs[0]!.output!.path!)).toBe(
       join(rootPath, 'global/.rstest-temp'),
     );
   });
