@@ -71,6 +71,8 @@ https://rstest.rs/guide/start/index.md
 
 当你希望 AI 直接消费测试结果时，可以使用 `md` 报告器。它会将测试结果输出为一份 markdown 文档到 stdout，相比带颜色的终端日志更容易被 LLM 解析，输出也更简洁，通常能减少 token 消耗。
 
+在 Agent 环境中，当你没有显式配置 reporters 时，Rstest 会默认使用 `md`。
+
 ```bash
 npx rstest --reporter=md
 ```

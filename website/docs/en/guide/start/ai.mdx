@@ -71,6 +71,8 @@ Providing the Markdown link or content allows AI to focus on a specific chapter,
 
 When you want AI to directly consume test results, use the `md` reporter. It outputs a single markdown document to stdout, which is easier for LLMs to parse than colorful terminal logs. The output is also more concise, which usually reduces token usage.
 
+In Agent environments, Rstest defaults to `md` when you didn't explicitly configure reporters.
+
 ```bash
 npx rstest --reporter=md
 ```
