@@ -1,15 +1,15 @@
 import type { FormattedError, Test } from '../types';
 
 const loadDiffModules = async () => {
-  const [jestDiff, prettyFormat] = await Promise.all([
-    import('jest-diff'),
-    import('pretty-format'),
+  const [{ diff }, { format, plugins }] = await Promise.all([
+    import('@vitest/utils/diff'),
+    import('@vitest/pretty-format'),
   ]);
 
   return {
-    diff: jestDiff.diff,
-    prettyFormat: prettyFormat.format,
-    prettyFormatPlugins: prettyFormat.plugins,
+    diff,
+    format,
+    formatPlugins: Object.values(plugins),
   };
 };
 
@@ -58,8 +58,7 @@ export const formatTestError = async (
       ) {
         const expected = error.expected;
         const actual = error.actual;
-        const { diff, prettyFormat, prettyFormatPlugins } =
-          await loadDiffModules();
+        const { diff, format, formatPlugins } = await loadDiffModules();
 
         errObj.diff = diff(expected, actual, {
           expand: false,
@@ -67,15 +66,11 @@ export const formatTestError = async (
         errObj.expected =
           typeof expected === 'string'
             ? expected
-            : prettyFormat(expected, {
-                plugins: Object.values(prettyFormatPlugins),
-              });
+            : format(expected, { plugins: formatPlugins });
         errObj.actual =
           typeof actual === 'string'
             ? actual
-            : prettyFormat(actual, {
-                plugins: Object.values(prettyFormatPlugins),
-              });
+            : format(actual, { plugins: formatPlugins });
       }
 
       return errObj;
