@@ -47,7 +47,13 @@ describe('test bundleDependencies', () => {
   it('should use testEnvironment-based behavior when bundleDependencies is unset', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', './fixtures/index.test.ts', '--testEnvironment=jsdom'],
+      args: [
+        'run',
+        './fixtures/index.test.ts',
+        '--testEnvironment=jsdom',
+        '-c',
+        './fixtures/rstest.debug.config.ts',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,

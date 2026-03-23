@@ -69,7 +69,7 @@ export const validateBrowserConfig = (context: Rstest): void => {
 
     if (output?.bundleDependencies === false) {
       throw new Error(
-        'output.bundleDependencies false is not supported in browser environment.',
+        'output.bundleDependencies false is not supported in browser mode.',
       );
     }
   }
