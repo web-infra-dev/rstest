@@ -1,0 +1,67 @@
+name: Bundle Diff
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '**/_meta.json'
+      - '**/dictionary.txt'
+
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '**/_meta.json'
+      - '**/dictionary.txt'
+
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+env:
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  bundle-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build with Rsdoctor
+        run: RSDOCTOR_CI=true pnpm --filter "./packages/*" run build
+        env:
+          CI: true
+
+      - name: Bundle Analysis
+        uses: web-infra-dev/rsdoctor-action@2aaf6eac243da89d3d08618eb65491051874ad5d
+        with:
+          file_path: 'packages/*/dist/**/rsdoctor-data.json'
+          target_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'main' }}

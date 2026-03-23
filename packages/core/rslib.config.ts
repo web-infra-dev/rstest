@@ -1,5 +1,6 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
@@ -179,6 +180,7 @@ export default defineConfig({
   },
   tools: {
     rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
       watchOptions: {
         ignored: /\.git/,
       },

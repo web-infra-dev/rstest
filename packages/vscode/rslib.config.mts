@@ -1,4 +1,5 @@
 import { defineConfig } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
 
 export default defineConfig({
   lib: [
@@ -50,6 +51,7 @@ export default defineConfig({
   ],
   tools: {
     rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
       ignoreWarnings: [/Module not found/],
     },
   },
