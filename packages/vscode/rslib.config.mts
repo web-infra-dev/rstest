@@ -23,6 +23,10 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-extension' }),
+          ].filter(Boolean),
+          ignoreWarnings: [/Module not found/],
         },
       },
     },
@@ -45,14 +49,12 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-worker' }),
+          ].filter(Boolean),
+          ignoreWarnings: [/Module not found/],
         },
       },
     },
   ],
-  tools: {
-    rspack: {
-      plugins: [rsdoctorCIPlugin()].filter(Boolean),
-      ignoreWarnings: [/Module not found/],
-    },
-  },
 });

@@ -106,6 +106,7 @@ export default defineConfig({
               ],
             }),
             isBuildWatch ? null : licensePlugin(),
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-main' }),
           ].filter(Boolean),
         },
       },
@@ -123,6 +124,13 @@ export default defineConfig({
       output: {
         filename: {
           js: '[name].mjs',
+        },
+      },
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-loaders' }),
+          ].filter(Boolean),
         },
       },
     },
@@ -167,6 +175,13 @@ export default defineConfig({
         },
       },
       plugins: [pluginNodePolyfill()],
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-browser' }),
+          ].filter(Boolean),
+        },
+      },
     },
   ],
   performance: {
@@ -176,14 +191,6 @@ export default defineConfig({
     define: {
       RSTEST_VERSION: JSON.stringify(version),
       PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
-    },
-  },
-  tools: {
-    rspack: {
-      plugins: [rsdoctorCIPlugin()].filter(Boolean),
-      watchOptions: {
-        ignored: /\.git/,
-      },
     },
   },
 });

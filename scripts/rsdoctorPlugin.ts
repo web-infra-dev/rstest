@@ -1,8 +1,11 @@
 import { RsdoctorRspackPlugin } from '@rsdoctor/rspack-plugin';
 
-interface RspackPlugin {
-  name: string;
-  apply(compiler: unknown): void;
+interface RsdoctorCIPluginOptions {
+  /**
+   * Custom report directory for Rsdoctor output.
+   * Use this when multiple libs in the same package need separate reports.
+   */
+  reportDir?: string;
 }
 
 /**
@@ -12,7 +15,9 @@ interface RspackPlugin {
  * Rsbuild's built-in Rsdoctor integration which starts an HTTP
  * server and produces a different output format.
  */
-export function rsdoctorCIPlugin(): RspackPlugin | null {
+export function rsdoctorCIPlugin(
+  options?: RsdoctorCIPluginOptions,
+): InstanceType<typeof RsdoctorRspackPlugin> | null {
   if (process.env.RSDOCTOR_CI !== 'true') {
     return null;
   }
@@ -23,6 +28,7 @@ export function rsdoctorCIPlugin(): RspackPlugin | null {
       options: {
         type: ['json'],
       },
+      reportDir: options?.reportDir,
     },
   });
 }

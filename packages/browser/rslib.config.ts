@@ -51,7 +51,8 @@ export default defineConfig({
                 },
               ],
             }),
-          ],
+            rsdoctorCIPlugin(),
+          ].filter(Boolean),
         },
       },
     },
@@ -59,11 +60,6 @@ export default defineConfig({
   source: {
     define: {
       RSTEST_VERSION: JSON.stringify(require('./package.json').version),
-    },
-  },
-  tools: {
-    rspack: {
-      plugins: [rsdoctorCIPlugin()].filter(Boolean),
     },
   },
 });
