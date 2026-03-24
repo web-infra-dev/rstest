@@ -28,6 +28,12 @@ Rstest provides multi-project testing capabilities, allowing you to run tests fo
 
 Learn more about [Test projects](/guide/basic/projects).
 
+## Test sharding
+
+Rstest supports splitting test files into multiple shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce overall execution time. With the `blob` reporter and `rstest merge-reports`, you can merge test results and coverage data after all shards complete.
+
+Learn more about [Test sharding](/config/test/shard).
+
 ## In-source tests
 
 Rstest supports a Rust-like module testing style, allowing you to write test blocks directly inside source files. This approach is ideal for small utility functions and helpers, enabling quick verification and debugging.
