@@ -2,15 +2,30 @@
   "name": "@rstest/adapter-rsbuild",
   "version": "0.2.4",
   "description": "Rstest adapter for rsbuild configuration",
+  "keywords": [
+    "rstest",
+    "rsbuild",
+    "adapter",
+    "configuration"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/adapter-rsbuild"
+  },
+  "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -19,32 +34,17 @@
     "dev": "rslib build --watch",
     "test": "rstest"
   },
-  "keywords": [
-    "rstest",
-    "rsbuild",
-    "adapter",
-    "configuration"
-  ],
-  "license": "MIT",
-  "peerDependencies": {
-    "@rsbuild/core": "*",
-    "@rstest/core": ">=0.7.7"
-  },
   "devDependencies": {
     "@rsbuild/core": "2.0.0-beta.10",
     "@rslib/core": "0.20.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },
+  "peerDependencies": {
+    "@rsbuild/core": "*",
+    "@rstest/core": ">=0.7.7"
+  },
   "publishConfig": {
     "access": "public"
-  },
-  "bugs": {
-    "url": "https://github.com/web-infra-dev/rstest/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
-    "directory": "packages/adapter-rsbuild"
   }
 }

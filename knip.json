@@ -1,0 +1,48 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["cspell.config.cjs"]
+    },
+    "packages/core": {
+      "entry": ["src/**/*.ts", "tests/**/*.ts", "bin/*.js", "licensePlugin.ts"],
+      "ignoreDependencies": ["@typescript/native-preview"]
+    },
+    "packages/browser": {
+      "entry": ["src/**/*.ts"],
+      "ignoreDependencies": [
+        "@typescript/native-preview",
+        "@rstest/browser-manifest"
+      ]
+    },
+    "packages/browser-ui": {
+      "entry": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["@tailwindcss/postcss", "@rstest/browser"]
+    },
+    "packages/browser-react": {
+      "entry": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/coverage-istanbul": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rslib": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rsbuild": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rspack": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/vscode": {
+      "entry": [
+        "src/**/*.ts",
+        "tests/**/*.ts",
+        "sample/**/*.ts",
+        ".vscode-test.mjs"
+      ],
+      "ignoreDependencies": ["ovsx", "@rsbuild/plugin-react"]
+    }
+  },
+  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"]
+}

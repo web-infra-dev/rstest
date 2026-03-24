@@ -2,6 +2,12 @@
   "name": "@rstest/core",
   "version": "0.9.4",
   "description": "The Rsbuild-based test tool.",
+  "keywords": [
+    "rstest",
+    "test",
+    "rstack",
+    "rspack"
+  ],
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
@@ -10,19 +16,8 @@
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/core"
   },
-  "keywords": [
-    "rstest",
-    "test",
-    "rstack",
-    "rspack"
-  ],
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "bin": {
-    "rstest": "./bin/rstest.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -46,6 +41,11 @@
       "types": "./importMeta.d.ts"
     }
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "rstest": "./bin/rstest.js"
+  },
   "files": [
     "bin",
     "dist",
@@ -55,9 +55,9 @@
   ],
   "scripts": {
     "build": "rslib build && npx prettier ./LICENSE.md --write",
-    "typecheck": "tsc --noEmit",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "test": "npx rstest --globals"
+    "test": "npx rstest --globals",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@rsbuild/core": "2.0.0-beta.10",
@@ -73,7 +73,6 @@
     "@rsbuild/plugin-node-polyfill": "^1.4.4",
     "@rsbuild/plugin-sass": "^1.5.1",
     "@rslib/core": "0.20.0",
-    "@rstest/browser-ui": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@sinonjs/fake-timers": "^15.1.1",
     "@types/babel__code-frame": "^7.27.0",

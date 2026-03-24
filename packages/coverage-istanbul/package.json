@@ -1,10 +1,23 @@
 {
   "name": "@rstest/coverage-istanbul",
   "version": "0.3.0",
-  "type": "module",
   "description": "Istanbul coverage provider for Rstest",
-  "author": "Travis Zhang<https://github.com/travzhang>",
+  "keywords": [
+    "rstest",
+    "coverage",
+    "istanbul"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/coverage-istanbul"
+  },
   "license": "MIT",
+  "author": "Travis Zhang<https://github.com/travzhang>",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -19,9 +32,6 @@
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "typecheck": "tsc --noEmit"
-  },
-  "peerDependencies": {
-    "@rstest/core": "workspace:~"
   },
   "dependencies": {
     "istanbul-lib-coverage": "^3.2.2",
@@ -41,17 +51,7 @@
     "@types/node": "^22.16.5",
     "typescript": "^5.9.3"
   },
-  "keywords": [
-    "rstest",
-    "coverage",
-    "istanbul"
-  ],
-  "bugs": {
-    "url": "https://github.com/web-infra-dev/rstest/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
-    "directory": "packages/coverage-istanbul"
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
   }
 }

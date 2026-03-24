@@ -1,7 +1,7 @@
 {
-  "private": true,
   "name": "@rstest/tests-repoter",
   "version": "1.0.0",
+  "private": true,
   "devDependencies": {
     "@rstest/core": "workspace:*"
   }

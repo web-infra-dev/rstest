@@ -44,3 +44,6 @@ jobs:
 
       - name: Check pnpm Dedupe
         run: pnpm dedupe --check
+
+      - name: Check Unused Dependencies
+        run: pnpm run check-unused-deps

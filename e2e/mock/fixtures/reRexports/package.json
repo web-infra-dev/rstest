@@ -1,7 +1,7 @@
 {
-  "private": true,
   "name": "@rstest/test-mock-re-exports",
   "version": "1.0.0",
+  "private": true,
   "devDependencies": {
     "@rsbuild/plugin-react": "^1.4.6",
     "@rstest/core": "workspace:*",
