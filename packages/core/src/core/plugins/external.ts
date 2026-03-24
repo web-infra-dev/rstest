@@ -112,15 +112,23 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
   setup: (api) => {
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const {
-        normalizedConfig: { testEnvironment },
+        normalizedConfig: {
+          testEnvironment,
+          output: { bundleDependencies } = {},
+        },
         outputModule,
       } = context.projects.find((p) => p.environmentName === name)!;
+
+      const shouldExternalize =
+        bundleDependencies === undefined
+          ? testEnvironment.name === 'node'
+          : !bundleDependencies;
+
       return mergeEnvironmentConfig(config, {
         output: {
-          externals:
-            testEnvironment.name === 'node'
-              ? [autoExternalNodeModules(outputModule)]
-              : undefined,
+          externals: shouldExternalize
+            ? [autoExternalNodeModules(outputModule)]
+            : undefined,
         },
         tools: {
           rspack: (config) => {

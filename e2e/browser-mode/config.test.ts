@@ -38,4 +38,16 @@ describe('browser mode - config options', () => {
     expectStderrLog(/browser\.provider must be one of: playwright\./);
     expect(cli.stdout).not.toMatch(/Browser mode opened at/);
   });
+
+  it('should fail early when bundleDependencies is false in browser mode', async () => {
+    const { expectExecFailed, expectStderrLog, cli } = await runBrowserCli(
+      'invalid-bundle-dependencies',
+    );
+
+    await expectExecFailed();
+    expectStderrLog(
+      /output\.bundleDependencies false is not supported in browser mode\./,
+    );
+    expect(cli.stdout).not.toMatch(/Browser mode opened at/);
+  });
 });

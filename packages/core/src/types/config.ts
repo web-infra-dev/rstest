@@ -32,6 +32,16 @@ export type RstestOutputConfig = Pick<
   'cssModules' | 'externals' | 'cleanDistPath' | 'module'
 > & {
   distPath?: string | { root?: string };
+  /**
+   * Whether to bundle third-party dependencies from node_modules.
+   * - `true`: Always bundle all third-party dependencies.
+   * - `false`: Always externalize third-party dependencies.
+   *
+   * When unset, rstest bundles dependencies in browser-like test
+   * environments (jsdom, happy-dom, etc.) and externalizes them in the node
+   * environment. This option is not supported in browser mode.
+   */
+  bundleDependencies?: boolean;
 };
 
 export type NormalizedOutputConfig = Partial<
