@@ -135,8 +135,10 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'output.module',
       'output.externals',
+      'output.bundleDependencies',
       'output.cssModules',
       'output.cleanDistPath',
+      'output.distPath',
     ],
   },
   {
@@ -175,7 +177,7 @@ export function BuildOverview() {
             groupItem.name === 'top level'
               ? tUrl(`/config/build/${item}`)
               : tUrl(
-                  `/config/build/${groupItem.name}#${item.replace('.', '')}`,
+                  `/config/build/${groupItem.name}#${item.toLowerCase().replace('.', '')}`,
                 ),
           text: item,
         };
