@@ -36,7 +36,6 @@
     "@rsdoctor/rspack-plugin": "^1.5.5",
     "@rslint/core": "^0.3.2",
     "@rstest/core": "workspace:*",
-    "@rstest/coverage-istanbul": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.0.1",
     "check-dependency-version-consistency": "^6.0.0",

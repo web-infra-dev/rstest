@@ -2,8 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["cspell.config.cjs"],
-      "ignoreDependencies": ["@rstest/coverage-istanbul"]
+      "entry": ["cspell.config.cjs"]
     },
     "packages/core": {
       "entry": ["src/**/*.ts", "tests/**/*.ts", "bin/*.js", "licensePlugin.ts"],
