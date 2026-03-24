@@ -22,7 +22,6 @@ import {
   type RuntimeConfig,
   rsbuild,
   serializableConfig,
-  TEMP_RSTEST_OUTPUT_DIR,
   type Test,
   type TestFileResult,
   type TestResult,
@@ -1831,14 +1830,15 @@ export const runBrowserController = async (
 
   const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
+  const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
     isWatchMode && watchContext.runtime
       ? watchContext.runtime.tempDir
       : isWatchMode
-        ? join(context.rootPath, TEMP_RSTEST_OUTPUT_DIR, 'browser', 'watch')
+        ? join(context.rootPath, browserTempOutputRoot, 'browser', 'watch')
         : join(
             context.rootPath,
-            TEMP_RSTEST_OUTPUT_DIR,
+            browserTempOutputRoot,
             'browser',
             Date.now().toString(),
           );
@@ -3225,7 +3225,7 @@ export const listBrowserTests = async (
 
   const tempDir = join(
     context.rootPath,
-    TEMP_RSTEST_OUTPUT_DIR,
+    context.normalizedConfig.output.distPath.root,
     'browser',
     `list-${Date.now()}`,
   );

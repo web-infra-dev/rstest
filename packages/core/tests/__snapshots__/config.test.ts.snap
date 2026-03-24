@@ -67,6 +67,11 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",

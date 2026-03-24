@@ -18,8 +18,10 @@ import {
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
   formatRootStr,
+  getOutputDistPathRoot,
+  getTempRstestOutputDirGlob,
   logger,
-  TEMP_RSTEST_OUTPUT_DIR_GLOB,
+  TEMP_RSTEST_OUTPUT_DIR,
 } from './utils';
 
 type ResolvedExtendEntry =
@@ -193,6 +195,11 @@ const createDefaultConfig = (): NormalizedConfig => ({
   testEnvironment: {
     name: 'node',
   },
+  output: {
+    distPath: {
+      root: TEMP_RSTEST_OUTPUT_DIR,
+    },
+  },
   retry: 0,
   reporters:
     process.env.GITHUB_ACTIONS === 'true'
@@ -255,7 +262,14 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);
 
-  merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
+  const outputDistPathRoot = getOutputDistPathRoot(merged.output?.distPath);
+  merged.output.distPath = {
+    root: formatRootStr(outputDistPathRoot, merged.root),
+  };
+
+  merged.exclude.patterns.push(
+    getTempRstestOutputDirGlob(merged.output?.distPath?.root),
+  );
 
   const reportsDirectory = formatRootStr(
     merged.coverage.reportsDirectory,

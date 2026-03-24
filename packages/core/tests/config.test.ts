@@ -28,6 +28,33 @@ describe('mergeRstestConfig', () => {
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
   });
 
+  it('should respect output.distPath.root when appending rstest temp exclude', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: {
+          root: 'custom/.rstest-temp',
+        },
+      },
+    });
+
+    expect(merged.output?.distPath?.root).toBe('custom/.rstest-temp');
+    expect(merged.exclude.patterns).toContain('**/custom/.rstest-temp');
+  });
+
+  it('should normalize string output.distPath to object in normalized config', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: 'custom/.rstest-temp',
+      },
+    });
+
+    expect(merged.output?.distPath).toEqual({
+      root: 'custom/.rstest-temp',
+    });
+  });
+
   it('should merge exclude correctly', () => {
     expect(
       mergeRstestConfig(
