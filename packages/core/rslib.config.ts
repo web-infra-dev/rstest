@@ -193,4 +193,11 @@ export default defineConfig({
       PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
     },
   },
+  tools: {
+    rspack: {
+      watchOptions: {
+        ignored: /\.git/,
+      },
+    },
+  },
 });
