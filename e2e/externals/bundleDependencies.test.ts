@@ -7,7 +7,7 @@ import { runRstestCli } from '../scripts/';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const distDir = join(__dirname, 'dist/.rstest-temp');
+const distDir = join(__dirname, 'dist-deps/.rstest-temp');
 
 function readTestOutput(): string {
   const ext = process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '.mjs' : '.js';

@@ -1,19 +1,27 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from '@rstest/core';
+import { afterEach, describe, expect, it } from '@rstest/core';
 import { loadConfig } from '../src/config';
 
 describe('Config Extends Mechanism', () => {
-  const testConfigPath = join(__dirname, 'test-temp-extends.config.ts');
+  let testConfigPath: string;
 
-  beforeEach(() => {
-    // Clean up any existing test config
-    if (existsSync(testConfigPath)) {
+  // Rsbuild's loadConfig cache-busts with `?t=${Date.now()}` on native import().
+  // Millisecond resolution can collide between sequential tests reusing the same
+  // file path, causing Node.js to return a stale cached module. A random suffix
+  // per test guarantees a unique path and avoids the cache hit entirely.
+  const createConfigPath = () =>
+    join(__dirname, `test-temp-extends-${randomUUID()}.config.ts`);
+
+  afterEach(() => {
+    if (testConfigPath && existsSync(testConfigPath)) {
       unlinkSync(testConfigPath);
     }
   });
 
   it('should handle extends with direct config object', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 
@@ -42,6 +50,7 @@ export default defineConfig({
   });
 
   it('should handle extends with extend config function', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 
@@ -76,6 +85,7 @@ export default defineConfig({
   });
 
   it('should merge extends config with local config', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 
@@ -103,6 +113,7 @@ export default defineConfig({
   });
 
   it('should handle extends without projects field', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 
@@ -127,6 +138,7 @@ export default defineConfig({
   });
 
   it('should handle extends as array', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 
@@ -176,6 +188,7 @@ export default defineConfig({
   });
 
   it('should pass the original local config to every extends function in arrays', async () => {
+    testConfigPath = createConfigPath();
     const testConfigContent = `
 import { defineConfig } from '@rstest/core';
 

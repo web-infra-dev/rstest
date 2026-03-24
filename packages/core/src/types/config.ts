@@ -27,6 +27,29 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+export type RstestOutputConfig = Pick<
+  NonNullable<RsbuildConfig['output']>,
+  'cssModules' | 'externals' | 'cleanDistPath' | 'module'
+> & {
+  distPath?: string | { root?: string };
+  /**
+   * Whether to bundle third-party dependencies from node_modules.
+   * - `true`: Always bundle all third-party dependencies.
+   * - `false`: Always externalize third-party dependencies.
+   *
+   * When unset, rstest bundles dependencies in browser-like test
+   * environments (jsdom, happy-dom, etc.) and externalizes them in the node
+   * environment. This option is not supported in browser mode.
+   */
+  bundleDependencies?: boolean;
+};
+
+export type NormalizedOutputConfig = Partial<
+  Omit<RstestOutputConfig, 'distPath'>
+> & {
+  distPath: { root: string };
+};
+
 export type ProjectConfig = Omit<
   RstestConfig,
   | 'projects'
@@ -38,7 +61,10 @@ export type ProjectConfig = Omit<
   | 'onConsoleLog'
   | 'bail'
   | 'shard'
->;
+  | 'output'
+> & {
+  output?: Omit<RstestOutputConfig, 'distPath'>;
+};
 
 /**
  * Supported browser types for browser mode testing.
@@ -441,21 +467,7 @@ export interface RstestConfig {
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
 
-  output?: Pick<
-    NonNullable<RsbuildConfig['output']>,
-    'cssModules' | 'externals' | 'cleanDistPath' | 'module'
-  > & {
-    /**
-     * Whether to bundle third-party dependencies from node_modules.
-     * - `true`: Always bundle all third-party dependencies.
-     * - `false`: Always externalize third-party dependencies.
-     *
-     * When unset, rstest bundles dependencies in browser-like test
-     * environments (jsdom, happy-dom, etc.) and externalizes them in the node
-     * environment. This option is not supported in browser mode.
-     */
-    bundleDependencies?: boolean;
-  };
+  output?: RstestOutputConfig;
 
   resolve?: RsbuildConfig['resolve'];
 
@@ -470,7 +482,6 @@ type OptionalKeys =
   | 'plugins'
   | 'source'
   | 'resolve'
-  | 'output'
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
@@ -503,6 +514,7 @@ export type NormalizedConfig = Required<
     | 'exclude'
     | 'testEnvironment'
     | 'browser'
+    | 'output'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
@@ -516,6 +528,7 @@ export type NormalizedConfig = Required<
       patterns: string[];
       override?: boolean;
     };
+    output: NormalizedOutputConfig;
   };
 
 export type NormalizedProjectConfig = Required<
@@ -527,9 +540,11 @@ export type NormalizedProjectConfig = Required<
     | 'pool'
     | 'setupFiles'
     | 'globalSetup'
+    | 'output'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
     globalSetup: string[];
+    output?: Omit<NormalizedOutputConfig, 'distPath'>;
   };

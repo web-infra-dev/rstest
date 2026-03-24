@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
 import type { RstestContext } from '../../types';
-import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
+import { getTempRstestOutputDir } from '../../utils';
 
 export const RUNTIME_CHUNK_NAME = 'runtime';
 
@@ -29,6 +29,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         .delete('type');
     });
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+      const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
       const {
         normalizedConfig: {
           resolve,
@@ -42,10 +43,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         rootPath,
       } = context.projects.find((p) => p.environmentName === name)!;
 
-      const distRootDir =
-        context.projects.length > 1
-          ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
-          : TEMP_RSTEST_OUTPUT_DIR;
+      const distRootDir = getTempRstestOutputDir({
+        distPathRoot: outputDistPathRoot,
+        environmentName: name,
+        multipleProjects: context.projects.length > 1,
+      });
 
       return mergeEnvironmentConfig(
         config,

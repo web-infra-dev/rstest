@@ -6,5 +6,6 @@ export default defineConfig({
   },
   output: {
     cleanDistPath: true,
+    distPath: 'dist-deps/.rstest-temp',
   },
 });

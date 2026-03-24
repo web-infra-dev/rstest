@@ -7,5 +7,6 @@ export default defineConfig({
   output: {
     cleanDistPath: true,
     bundleDependencies: false,
+    distPath: 'dist-deps/.rstest-temp',
   },
 });

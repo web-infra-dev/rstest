@@ -2,6 +2,7 @@
   "cli",
   "configure-rstest",
   "test-filter",
+  "mock",
   "snapshot",
   "projects",
   "reporters",

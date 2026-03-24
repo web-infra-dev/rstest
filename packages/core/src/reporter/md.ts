@@ -749,6 +749,10 @@ const parseErrorStacktrace = async ({
   getSourcemap?: GetSourcemap;
   fullStack?: boolean;
 }): Promise<StackFrame[]> => {
+  // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
+  // stack frames originate from the same source file.
+  const traceMapCache = new Map<string, TraceMap>();
+
   const frames = parseStackTrace(stack)
     .filter((frame) => {
       if (fullStack) return true;
@@ -778,7 +782,11 @@ const parseErrorStacktrace = async ({
         };
       }
 
-      const traceMap = new TraceMap(sourcemap);
+      let traceMap = traceMapCache.get(file);
+      if (!traceMap) {
+        traceMap = new TraceMap(sourcemap);
+        traceMapCache.set(file, traceMap);
+      }
       const { line, column, source, name } = originalPositionFor(traceMap, {
         line: frame.lineNumber || 1,
         column: frame.column || 1,
@@ -1195,13 +1203,14 @@ export class MdReporter implements Reporter {
                 })
               : [];
 
-            const fullFrames = error.stack
-              ? await parseErrorStacktrace({
-                  stack: error.stack,
-                  getSourcemap,
-                  fullStack: error.fullStack,
-                })
-              : candidateFrames;
+            const fullFrames =
+              error.fullStack && error.stack
+                ? await parseErrorStacktrace({
+                    stack: error.stack,
+                    getSourcemap,
+                    fullStack: true,
+                  })
+                : candidateFrames;
 
             const trimmedFrames = resolveStackFrames(fullFrames, this.options);
             const topFrame = fullFrames[0] ?? candidateFrames[0];

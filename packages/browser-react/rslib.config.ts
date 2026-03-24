@@ -1,4 +1,5 @@
 import { defineConfig } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
   lib: [
@@ -26,6 +27,11 @@ export default defineConfig({
     entry: {
       index: './src/index.ts',
       pure: './src/pure.tsx',
+    },
+  },
+  tools: {
+    rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
     },
   },
 });

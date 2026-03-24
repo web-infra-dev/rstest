@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
 import { dirname, resolve } from 'pathe';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const require = createRequire(import.meta.url);
 const browserUiRoot = dirname(
@@ -45,12 +46,13 @@ export default defineConfig({
                   to: 'browser-container',
                   context: browserUiDist,
                   globOptions: {
-                    ignore: ['**/*.LICENSE.txt'],
+                    ignore: ['**/*.LICENSE.txt', '**/rsdoctor-data.json'],
                   },
                 },
               ],
             }),
-          ],
+            rsdoctorCIPlugin(),
+          ].filter(Boolean),
         },
       },
     },

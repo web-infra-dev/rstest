@@ -20,6 +20,7 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  type ChaiPlugin,
   customMatchers,
   GLOBAL_EXPECT,
   getState,
@@ -44,7 +45,6 @@ import type {
   WorkerState,
 } from '../../types';
 import { createExpectPoll } from './poll';
-import { SnapshotPlugin } from './snapshot';
 
 export { assert } from 'chai';
 export { GLOBAL_EXPECT };
@@ -56,13 +56,17 @@ export function setupChaiConfig(config: ChaiConfig): void {
 export function createExpect({
   getCurrentTest,
   workerState,
+  snapshotPlugin,
 }: {
   workerState: WorkerState;
   getCurrentTest: () => TestCase | undefined;
+  snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
   use(JestExtend);
   use(JestChaiExpect);
-  use(SnapshotPlugin(workerState));
+  if (snapshotPlugin) {
+    use(snapshotPlugin);
+  }
   use(JestAsymmetricMatchers);
 
   const expect = ((value: any, message?: string): Assertion => {

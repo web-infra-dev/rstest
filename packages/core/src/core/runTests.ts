@@ -332,8 +332,12 @@ export async function runTests(context: Rstest): Promise<void> {
         if (entries.length && globalSetupEntries.length && !p._globalSetups) {
           p._globalSetups = true;
           const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFiles = await getAssetFiles(files);
-          const sourceMaps = await getSourceMaps(files);
+          const assetFilesPromise = getAssetFiles(files);
+          const sourceMapsPromise = getSourceMaps(files);
+          const [assetFiles, sourceMaps] = await Promise.all([
+            assetFilesPromise,
+            sourceMapsPromise,
+          ]);
 
           const { success, errors } = await runGlobalSetup({
             globalSetupEntries,

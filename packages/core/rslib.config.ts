@@ -1,5 +1,6 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
@@ -105,6 +106,7 @@ export default defineConfig({
               ],
             }),
             isBuildWatch ? null : licensePlugin(),
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-main' }),
           ].filter(Boolean),
         },
       },
@@ -122,6 +124,13 @@ export default defineConfig({
       output: {
         filename: {
           js: '[name].mjs',
+        },
+      },
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-loaders' }),
+          ].filter(Boolean),
         },
       },
     },
@@ -166,6 +175,13 @@ export default defineConfig({
         },
       },
       plugins: [pluginNodePolyfill()],
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-browser' }),
+          ].filter(Boolean),
+        },
+      },
     },
   ],
   performance: {

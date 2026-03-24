@@ -3,6 +3,12 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
 
+function hasInlineLoader(request: string): boolean {
+  // has inline loader in request
+  // eg: ./index.vue.ts?vue&type=template&id=20040a79&ts=true!=!node_modules/rspack-vue-loader/dist/index.js
+  return request.split('!').length > 1;
+}
+
 const autoExternalNodeModules: (
   outputModule: boolean,
 ) => (
@@ -19,7 +25,11 @@ const autoExternalNodeModules: (
       return callback();
     }
 
-    if (request.startsWith('@swc/helpers/') || request.endsWith('.wasm')) {
+    if (
+      request.startsWith('@swc/helpers/') ||
+      request.endsWith('.wasm') ||
+      hasInlineLoader(request)
+    ) {
       // @swc/helper is a special case (Load by require but resolve to esm)
       return callback();
     }
