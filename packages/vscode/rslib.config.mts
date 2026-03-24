@@ -26,7 +26,6 @@ export default defineConfig({
           plugins: [
             rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-extension' }),
           ].filter(Boolean),
-          ignoreWarnings: [/Module not found/],
         },
       },
     },
@@ -52,9 +51,13 @@ export default defineConfig({
           plugins: [
             rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-worker' }),
           ].filter(Boolean),
-          ignoreWarnings: [/Module not found/],
         },
       },
     },
   ],
+  tools: {
+    rspack: {
+      ignoreWarnings: [/Module not found/],
+    },
+  },
 });
