@@ -22,6 +22,9 @@ importers:
       '@rstest/core':
         specifier: workspace:*
         version: link:packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:packages/coverage-istanbul
       '@types/node':
         specifier: ^22.16.5
         version: 22.18.6
