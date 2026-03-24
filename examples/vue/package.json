@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "rsbuild dev",
-    "test": "rstest",
+    "test": "pnpm run test:clinet && pnpm run test:ssr",
+    "test:clinet": "rstest",
+    "test:ssr": "rstest -c rstest.config.ssr.ts",
     "test:watch": "rstest --watch"
   },
   "dependencies": {
