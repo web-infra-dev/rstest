@@ -11,6 +11,6 @@ export default defineConfig({
     pluginVue(),
     pluginVueJsx(),
   ],
-  testEnvironment: 'happy-dom',
-  exclude: ['test/ssr.test.ts'],
+  testEnvironment: 'node',
+  include: ['test/ssr.test.ts'],
 });
