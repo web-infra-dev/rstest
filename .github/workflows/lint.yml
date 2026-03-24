@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
+      - name: Validate AGENTS.md
+        run: pnpm run validate-agents-md
+
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
 

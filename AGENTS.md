@@ -13,6 +13,7 @@ When working on code in a specific package, use the Read tool to load that packa
 - For @rstest/coverage-istanbul: @packages/coverage-istanbul/AGENTS.md
 - For @rstest/adapter-rslib: @packages/adapter-rslib/AGENTS.md
 - For @rstest/adapter-rsbuild: @packages/adapter-rsbuild/AGENTS.md
+- For @rstest/adapter-rspack: @packages/adapter-rspack/AGENTS.md
 - For rstest VS Code extension: @packages/vscode/AGENTS.md
 - For documentation site: @website/AGENTS.md
 
@@ -25,6 +26,7 @@ When working on code in a specific package, use the Read tool to load that packa
 - `packages/coverage-istanbul/` — @rstest/coverage-istanbul: Istanbul coverage provider
 - `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
 - `packages/adapter-rsbuild/` — @rstest/adapter-rsbuild: Rsbuild configuration adapter
+- `packages/adapter-rspack/` — @rstest/adapter-rspack: Rspack configuration adapter
 - `packages/vscode/` — rstest: VS Code extension
 - `e2e/` — End-to-end integration tests
 - `examples/` — Example projects (node, react, browser)
