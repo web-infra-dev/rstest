@@ -7,7 +7,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { getRealTimers } from '../util';
-import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
+import type { FakeTimerInstallOpts } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
@@ -58,7 +58,11 @@ export const createRstestUtilities: (
     PropertyDescriptor | undefined
   >();
 
-  let _timers: FakeTimers;
+  const { FakeTimers } = await import(
+    /* webpackChunkName: "fake-timers" */ './fakeTimers'
+  );
+
+  let _timers: InstanceType<typeof FakeTimers>;
 
   let originalConfig: undefined | RuntimeConfig;
 
