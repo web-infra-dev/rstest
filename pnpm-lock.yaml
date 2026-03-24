@@ -1066,7 +1066,13 @@ importers:
       '@vitest/expect':
         specifier: ^3.2.4
         version: 3.2.4
+      '@vitest/pretty-format':
+        specifier: ^3.2.4
+        version: 3.2.4
       '@vitest/snapshot':
+        specifier: ^3.2.4
+        version: 3.2.4
+      '@vitest/utils':
         specifier: ^3.2.4
         version: 3.2.4
       birpc:
@@ -1084,9 +1090,6 @@ importers:
       happy-dom:
         specifier: ^20.8.4
         version: 20.8.4
-      jest-diff:
-        specifier: ^30.3.0
-        version: 30.3.0
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0
@@ -1105,9 +1108,6 @@ importers:
       picomatch:
         specifier: ^4.0.3
         version: 4.0.3
-      pretty-format:
-        specifier: ^30.3.0
-        version: 30.3.0
       rslog:
         specifier: ^2.0.1
         version: 2.0.1
@@ -1819,20 +1819,12 @@ packages:
     resolution: {integrity: sha512-n5H8QLDJ47QqbCNn5SuFjCRDrOLEZ0h8vAHCK5RL9Ls7Xa8AQLa/YxAc9UjFqoEDM48muwtBGjtMY5cr0PLDCw==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
 
-  '@jest/diff-sequences@30.3.0':
-    resolution: {integrity: sha512-cG51MVnLq1ecVUaQ3fr6YuuAOitHK1S4WUJHnsPFE/quQr33ADUx1FfrTCpMCRxvy0Yr9BThKpDjSlcTi91tMA==}
-    engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
-
   '@jest/expect-utils@30.0.5':
     resolution: {integrity: sha512-F3lmTT7CXWYywoVUGTCmom0vXq3HTTkaZyTAzIy+bXSBizB7o5qzlC9VCtq0arOa8GqmNsbg/cE9C6HLn7Szew==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
 
   '@jest/get-type@30.0.1':
     resolution: {integrity: sha512-AyYdemXCptSRFirI5EPazNxyPwAL0jXt3zceFjaj8NFiKP9pOi0bfXonf6qkf82z2t3QWPeLCWWw4stPBzctLw==}
-    engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
-
-  '@jest/get-type@30.1.0':
-    resolution: {integrity: sha512-eMbZE2hUnx1WV0pmURZY9XoXPkUYjpc55mb0CrhtdWLtzMQPFvu/rZkTLZFTsdaVQa+Tr4eWAteqcUzoawq/uA==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
 
   '@jest/pattern@30.0.1':
@@ -5361,10 +5353,6 @@ packages:
     resolution: {integrity: sha512-1UIqE9PoEKaHcIKvq2vbibrCog4Y8G0zmOxgQUVEiTqwR5hJVMCoDsN1vFvI5JvwD37hjueZ1C4l2FyGnfpE0A==}
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
 
-  jest-diff@30.3.0:
-    resolution: {integrity: sha512-n3q4PDQjS4LrKxfWB3Z5KNk1XjXtZTBwQp71OP0Jo03Z6V60x++K5L8k6ZrW8MY8pOFylZvHM0zsjS1RqlHJZQ==}
-    engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
-
   jest-image-snapshot@6.5.2:
     resolution: {integrity: sha512-frenWThr5ddnnokcX5N4gwi41hA5TiUOdhv/JoGcJrOaktHjrk4/7XbiHKW52lgKX+vei6QkRlgM7fkYQ15nPg==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -8277,15 +8265,11 @@ snapshots:
 
   '@jest/diff-sequences@30.0.1': {}
 
-  '@jest/diff-sequences@30.3.0': {}
-
   '@jest/expect-utils@30.0.5':
     dependencies:
       '@jest/get-type': 30.0.1
 
   '@jest/get-type@30.0.1': {}
-
-  '@jest/get-type@30.1.0': {}
 
   '@jest/pattern@30.0.1':
     dependencies:
@@ -12362,13 +12346,6 @@ snapshots:
       '@jest/get-type': 30.0.1
       chalk: 4.1.2
       pretty-format: 30.0.5
-
-  jest-diff@30.3.0:
-    dependencies:
-      '@jest/diff-sequences': 30.3.0
-      '@jest/get-type': 30.1.0
-      chalk: 4.1.2
-      pretty-format: 30.3.0
 
   jest-image-snapshot@6.5.2:
     dependencies:
