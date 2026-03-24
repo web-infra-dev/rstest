@@ -11,6 +11,7 @@ import path from 'pathe';
 import type {
   EntryInfo,
   NormalizedProjectConfig,
+  ProjectContext,
   RstestContext,
 } from '../types';
 import { isDebug } from '../utils';
@@ -65,6 +66,11 @@ export const prepareRsbuild = async (
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
   setupFiles: Record<string, Record<string, string>>,
   globalSetupFiles: Record<string, Record<string, string>>,
+  /**
+   * Explicit list of node-mode projects to include in the Rsbuild instance.
+   * When provided, only these projects will be compiled.
+   */
+  targetNodeProjects?: ProjectContext[],
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -72,9 +78,11 @@ export const prepareRsbuild = async (
   } = context;
 
   // Filter out browser mode projects - this rsbuild is for node mode only
-  const projects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  const projects = targetNodeProjects?.length
+    ? targetNodeProjects
+    : context.projects.filter(
+        (project) => !project.normalizedConfig.browser.enabled,
+      );
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';

@@ -73,6 +73,7 @@ const collectNodeTests = async ({
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
+    nodeProjects,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
