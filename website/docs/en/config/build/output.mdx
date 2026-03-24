@@ -151,14 +151,14 @@ For custom CSS Modules configuration.
 
 ## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
 
-Control the global root directory where rstest places its temporary build outputs.
-
 - **Type:** `string | { root?: string }`
 - **Default:** `{ root: 'dist/.rstest-temp' }`
 
-By default, rstest writes its temporary outputs under `dist/.rstest-temp` when they need to be written to disk. This includes the compiled test outputs used by the Node.js test runner, and the browser mode temporary assets such as the generated runner files and virtual manifest.
+Control the global root directory where Rstest places its temporary build outputs.
 
-In multi-project runs, rstest still uses one global output root. It may create subdirectories under that root for different projects, but the base directory itself is shared and does not switch to each project's `root`.
+By default, Rstest does not write test temporary files to disk. When you enable the [dev.writeToDisk](/config/build/dev#devwritetodisk) option or run in DEBUG mode, Rstest will write temporary artifacts to disk, outputting them to the `dist/.rstest-temp` directory. This includes compiled artifacts used by the Node.js test runtime, as well as temporary resources generated in browser mode such as runner files and virtual manifests.
+
+In multi-project runs, Rstest still uses one global output root. It may create subdirectories under that root for different projects, but the base directory itself is shared and does not switch to each project's `root`.
 
 If you want these files to go to another directory, set `output.distPath.root`:
 

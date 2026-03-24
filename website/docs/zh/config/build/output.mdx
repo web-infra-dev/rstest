@@ -147,16 +147,22 @@ export default defineConfig({
 
 用于自定义 CSS Modules 的配置。
 
+## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
+
+是否在测试开始前，清空输出目录下的所有测试临时文件。
+
+默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 Rstest 产物调试时可能需要此配置项。
+
 ## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
 
 - **类型：** `string | { root?: string }`
 - **默认值：** `{ root: 'dist/.rstest-temp' }`
 
-控制 rstest 临时构建产物的全局输出根目录。
+控制 Rstest 临时构建产物的全局输出根目录。
 
-默认情况下，当 rstest 需要把临时产物写入磁盘时，会输出到 `dist/.rstest-temp`。这包括 Node.js 测试运行时使用的编译产物，也包括 browser mode 下生成的 runner 文件、virtual manifest 等临时资源。
+默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 选项或在 DEBUG 模式下运行时，Rstest 会把临时产物写入磁盘，输出到 `dist/.rstest-temp` 目录下。这包括 Node.js 测试运行时使用的编译产物，也包括 browser mode 下生成的 runner 文件、virtual manifest 等临时资源。
 
-在多 project 场景下，rstest 仍然只使用一个全局输出根目录。它可能会在这个目录下继续为不同 project 创建子目录，但基础输出根目录本身不会切换到各个 project 的 `root`。
+在多 project 场景下，Rstest 仍然只使用一个全局输出根目录。它可能会在这个目录下继续为不同 project 创建子目录，但基础输出根目录本身不会切换到各个 project 的 `root`。
 
 如果你希望这些文件输出到其他目录，可以通过 `output.distPath.root` 配置：
 
@@ -175,10 +181,4 @@ export default defineConfig({
 });
 ```
 
-配置后，rstest 会把 `<root>/custom/.rstest-temp` 作为临时输出根目录，而不是 `<root>/dist/.rstest-temp`。
-
-## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
-
-是否在测试开始前，清空输出目录下的所有测试临时文件。
-
-默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 Rstest 产物调试时可能需要此配置项。
+配置后，Rstest 会把 `<root>/custom/.rstest-temp` 作为临时输出根目录，而不是 `<root>/dist/.rstest-temp`。
