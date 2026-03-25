@@ -11,8 +11,8 @@
   },
   "devDependencies": {
     "@rsbuild/plugin-sass": "^1.5.1",
-    "@rspress/core": "2.0.5",
-    "@rspress/plugin-algolia": "2.0.5",
+    "@rspress/core": "2.0.6",
+    "@rspress/plugin-algolia": "2.0.6",
     "@rstack-dev/doc-ui": "1.12.5",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",

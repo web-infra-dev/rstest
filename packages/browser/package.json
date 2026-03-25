@@ -50,7 +50,7 @@
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^3.0.2",
-    "ws": "^8.19.0"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@rslib/core": "0.20.0",
@@ -60,11 +60,11 @@
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.2",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260317.1",
+    "@typescript/native-preview": "7.0.0-dev.20260324.1",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "^4.0.0",
     "picocolors": "^1.1.1",
-    "picomatch": "^4.0.3",
+    "picomatch": "^4.0.4",
     "playwright": "^1.58.2"
   },
   "peerDependencies": {

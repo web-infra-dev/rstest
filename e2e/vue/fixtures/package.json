@@ -11,7 +11,7 @@
     "vue": "^3.5.30"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-beta.9",
+    "@rsbuild/core": "2.0.0-canary-20260309140114",
     "@rsbuild/plugin-babel": "^1.1.2",
     "@rsbuild/plugin-vue": "^1.2.7",
     "@rsbuild/plugin-vue-jsx": "^1.1.2",
