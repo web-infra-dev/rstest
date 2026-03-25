@@ -142,7 +142,24 @@ export async function runTests(context: Rstest): Promise<void> {
   let browserProjectsToRun = browserProjects;
   let nodeProjectsToRun = nodeProjects;
 
-  if (shard) {
+  // In non-watch mode, proactively skip projects with no test files to avoid unnecessary builds
+  if (!isWatchMode) {
+    // Populate entries cache for all projects
+    await Promise.all(
+      allProjects.map((p) => globTestSourceEntries(p.environmentName)),
+    );
+
+    const hasEntries = (env: string) =>
+      Object.keys(entriesCache.get(env)?.entries || {}).length > 0;
+
+    browserProjectsToRun = browserProjects.filter((p) =>
+      hasEntries(p.environmentName),
+    );
+    nodeProjectsToRun = nodeProjects.filter((p) =>
+      hasEntries(p.environmentName),
+    );
+  } else if (shard) {
+    // In watch mode with sharding, only run projects that have sharded entries
     browserProjectsToRun = browserProjects.filter((p) => {
       return (
         Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
@@ -232,6 +249,7 @@ export async function runTests(context: Rstest): Promise<void> {
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
+    projects,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
