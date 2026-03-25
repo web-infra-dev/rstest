@@ -36,6 +36,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --ignore-scripts
 
+      - name: Build Packages
+        run: pnpm run build
+
       - name: Lint
         run: pnpm run lint
 
@@ -44,3 +47,6 @@ jobs:
 
       - name: Check pnpm Dedupe
         run: pnpm dedupe --check
+
+      - name: Check Unused Dependencies
+        run: pnpm run check-unused-deps

@@ -1,7 +1,7 @@
 {
-  "private": true,
   "name": "@rstest/tests",
   "version": "1.0.0",
+  "private": true,
   "scripts": {
     "test": "rstest run",
     "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run",
@@ -20,11 +20,14 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/fs-extra": "^11.0.4",
     "@types/is-url": "^1.2.32",
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "axios": "^1.13.6",
+    "cross-env": "^10.1.0",
+    "fs-extra": "^11.3.4",
     "is-url": "^1.2.4",
     "jest-image-snapshot": "^6.5.2",
     "memfs": "^4.57.1",
@@ -36,8 +39,5 @@
     "tinyexec": "^1.0.4",
     "tree-kill": "^1.2.2",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@types/is-url": "^1.2.32"
   }
 }

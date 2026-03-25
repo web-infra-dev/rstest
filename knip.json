@@ -1,0 +1,63 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["cspell.config.cjs"]
+    },
+    "packages/core": {
+      "entry": ["src/**/*.ts", "tests/**/*.ts", "bin/*.js", "licensePlugin.ts"],
+      "ignoreDependencies": [
+        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
+        "@typescript/native-preview"
+      ]
+    },
+    "packages/browser": {
+      "entry": ["src/**/*.ts"],
+      "ignoreDependencies": [
+        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
+        "@typescript/native-preview",
+        // Virtual module resolved at build time by rspack alias in hostController.ts
+        "@rstest/browser-manifest"
+      ]
+    },
+    "packages/browser-ui": {
+      "entry": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": [
+        // Used in postcss.config.cjs which knip doesn't parse
+        "@tailwindcss/postcss",
+        // Path-mapped imports (@rstest/browser/protocol) resolved via tsconfig, not package dependency
+        "@rstest/browser"
+      ]
+    },
+    "packages/browser-react": {
+      "entry": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/coverage-istanbul": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rslib": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rsbuild": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/adapter-rspack": {
+      "entry": ["src/**/*.ts"]
+    },
+    "packages/vscode": {
+      "entry": [
+        "src/**/*.ts",
+        "tests/**/*.ts",
+        "sample/**/*.ts",
+        ".vscode-test.mjs"
+      ],
+      "ignoreDependencies": [
+        // CLI tool used in CI/release scripts, not in code
+        "ovsx",
+        // Used in sample/rsbuild.config.ts for testing the extension
+        "@rsbuild/plugin-react"
+      ]
+    }
+  },
+  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"]
+}

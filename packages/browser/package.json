@@ -2,6 +2,13 @@
   "name": "@rstest/browser",
   "version": "0.9.4",
   "description": "Browser mode support for Rstest testing framework.",
+  "keywords": [
+    "rstest",
+    "browser",
+    "test",
+    "rstack",
+    "rspack"
+  ],
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
@@ -10,16 +17,8 @@
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/browser"
   },
-  "keywords": [
-    "rstest",
-    "browser",
-    "test",
-    "rstack",
-    "rspack"
-  ],
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
   "exports": {
     ".": {
       "types": "./dist/browser.d.ts",
@@ -33,6 +32,7 @@
       "default": "./package.json"
     }
   },
+  "main": "./dist/index.js",
   "files": [
     "dist",
     "src",
@@ -41,8 +41,8 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "typecheck": "tsc --noEmit",
-    "dev": "rslib build --watch"
+    "dev": "rslib build --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -63,7 +63,6 @@
     "@typescript/native-preview": "7.0.0-dev.20260317.1",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "^4.0.0",
-    "picocolors": "^1.1.1",
     "picomatch": "^4.0.4",
     "playwright": "^1.58.2"
   },

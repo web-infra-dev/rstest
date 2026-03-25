@@ -1,10 +1,9 @@
 {
-  "name": "@rstest/tests-externals",
+  "name": "@rstest/tests-browser-coverage",
   "version": "1.0.0",
   "private": true,
   "devDependencies": {
     "@rstest/core": "workspace:*",
-    "picocolors": "^1.1.1",
-    "strip-ansi": "^7.2.0"
+    "@rstest/coverage-istanbul": "workspace:*"
   }
 }

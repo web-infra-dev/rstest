@@ -1,8 +1,8 @@
 {
-  "private": true,
   "name": "@rstest/tests-allow-external",
-  "type": "module",
   "version": "1.0.0",
+  "private": true,
+  "type": "module",
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*"

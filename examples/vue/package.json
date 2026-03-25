@@ -1,7 +1,7 @@
 {
   "name": "@examples/vue",
-  "type": "module",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "rsbuild dev",
     "test": "pnpm run test:clinet && pnpm run test:ssr",
