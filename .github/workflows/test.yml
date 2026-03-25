@@ -41,6 +41,46 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
+  # ======== lint ========
+  lint:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Install pnpm
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --ignore-scripts
+
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check Dependency Version
+        run: pnpm run check-dependency-version
+
+      - name: Check pnpm Dedupe
+        run: pnpm dedupe --check
+
+      - name: Check Unused Code
+        run: pnpm run check-unused
+
   # ======== ut ========
   ut:
     needs: prepare
@@ -103,8 +143,12 @@ jobs:
 
   # ======== e2e ========
   e2e:
-    needs: [prepare, ut]
-    if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
+    needs: [prepare, lint, ut]
+    if: |
+      always() &&
+      (needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule') &&
+      needs.ut.result == 'success' &&
+      (github.event_name == 'schedule' || needs.lint.result == 'success')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -168,12 +212,17 @@ jobs:
 
   # ======== gate ========
   test-gate:
-    needs: [prepare, ut, e2e]
+    needs: [prepare, lint, ut, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check test requirement
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ needs.prepare.outputs.changed }}" = "true" ]; then
-            [ "${{ needs.ut.result }}" = "success" ] && [ "${{ needs.e2e.result }}" = "success" ]
-          fi
+          for result in \
+            "${{ needs.lint.result }}" \
+            "${{ needs.ut.result }}" \
+            "${{ needs.e2e.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              exit 1
+            fi
+          done
