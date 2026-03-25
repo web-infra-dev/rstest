@@ -28,7 +28,7 @@ export function rsdoctorCIPlugin(
       options: {
         type: ['json'],
       },
-      reportDir: options?.reportDir,
+      reportDir: options?.reportDir || '.rsdoctor',
     },
   });
 }
