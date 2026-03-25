@@ -1388,6 +1388,18 @@ const createBrowserRuntime = async ({
     getPortSilently: true,
   });
 
+  if (isDebug()) {
+    await rsbuildInstance.inspectConfig({
+      writeToDisk: true,
+      extraConfigs: {
+        rstest: {
+          ...context.normalizedConfig,
+          projects: browserProjects.map((p) => p.normalizedConfig),
+        },
+      },
+    });
+  }
+
   // Serve prebuilt container assets (SPA) via sirv
   const serveContainer = containerDistPath
     ? sirv(containerDistPath, {
