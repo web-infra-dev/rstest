@@ -94,6 +94,16 @@ describe('getIncludedFiles', () => {
     expect(await glob(['**/*.d.ts'])).toMatchInlineSnapshot('[]');
   });
 
+  it('should not treat single-value braces as an extension alternation', async () => {
+    expect(await glob(['**/*.{ts}'])).toMatchInlineSnapshot('[]');
+    expect(await glob(['**/*.ts'])).toMatchInlineSnapshot(`
+      [
+        "apps/a.ts",
+        "apps/dist/a.ts",
+      ]
+    `);
+  });
+
   it('should exclude test and spec files by default', async () => {
     expect(await glob(['**/*.{test,spec}.*'])).toMatchInlineSnapshot('[]');
   });
