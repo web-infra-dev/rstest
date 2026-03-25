@@ -6,7 +6,7 @@
     "bump": "node --experimental-strip-types scripts/version.mts",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
-    "check-unused-deps": "knip --dependencies",
+    "check-unused": "knip",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",

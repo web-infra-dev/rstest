@@ -22,7 +22,6 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import type { BuiltInReporterNames } from '../types/reporter';
 import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
@@ -262,9 +261,7 @@ const reportersMap: {
   blob: BlobReporter,
 };
 
-export type { BuiltInReporterNames };
-
-export function createReporters(
+function createReporters(
   reporters: RstestConfig['reporters'],
   initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {

@@ -166,7 +166,7 @@ export const prepareRsbuild = async (
   return rsbuildInstance;
 };
 
-export const calcEntriesToRerun = (
+const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
   buildData: {

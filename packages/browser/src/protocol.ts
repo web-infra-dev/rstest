@@ -9,12 +9,8 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 export type {
   BrowserLocatorIR,
-  BrowserLocatorStep,
-  BrowserLocatorText,
   BrowserRpcRequest,
-  BrowserRpcResponse,
   SnapshotRpcRequest,
-  SnapshotRpcResponse,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';
 
@@ -164,11 +160,6 @@ export type BrowserDispatchResponse = {
   result?: unknown;
   error?: string;
   stale?: boolean;
-};
-
-export type BrowserDispatchResponseEnvelope = {
-  type: typeof DISPATCH_RESPONSE_TYPE;
-  payload: BrowserDispatchResponse;
 };
 
 export type BrowserDispatchHandler = (

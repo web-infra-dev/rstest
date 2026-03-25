@@ -168,21 +168,6 @@ import { createCounter } from './Counter.${ext}';
  `;
 }
 
-/**
- * Get the dependencies that need to be installed.
- */
-export function getDependencies(framework: Framework): string[] {
-  const deps = ['@rstest/browser', 'playwright', '@testing-library/dom'];
-  if (framework === 'react') {
-    deps.splice(1, 0, '@rstest/browser-react');
-  }
-  return deps;
-}
-
-/**
- * Get the dependencies with versions.
- * @param rstestVersion The current rstest version to use for rstest packages
- */
 export function getDependenciesWithVersions(
   framework: Framework,
   provider: BrowserProvider,

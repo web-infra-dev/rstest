@@ -7,8 +7,6 @@ import type {
 } from '../types';
 import { Rstest } from './rstest';
 
-export { initCli } from '../cli';
-
 export function createRstest(
   {
     config,

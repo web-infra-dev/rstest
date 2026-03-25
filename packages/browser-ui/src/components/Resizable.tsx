@@ -111,8 +111,4 @@ const ResizablePanel = ({
   return <>{children}</>;
 };
 
-const ResizableHandle = (): null => {
-  return null;
-};
-
-export { ResizableHandle, ResizablePanel, ResizablePanelGroup };
+export { ResizablePanel, ResizablePanelGroup };

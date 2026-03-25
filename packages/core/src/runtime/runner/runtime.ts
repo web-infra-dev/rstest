@@ -38,7 +38,7 @@ import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
 
-export class RunnerRuntime {
+class RunnerRuntime {
   /** all test cases */
   private readonly tests: Test[] = [];
   /** a calling stack of the current test suites and case */

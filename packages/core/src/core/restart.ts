@@ -48,7 +48,7 @@ const beforeRestart = async ({
   cleaners = [];
 };
 
-export const restart = async ({
+const restart = async ({
   filePath,
   clear = true,
   options,

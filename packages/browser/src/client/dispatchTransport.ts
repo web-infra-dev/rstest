@@ -8,7 +8,7 @@ import {
   DISPATCH_RPC_REQUEST_TYPE,
 } from '../protocol';
 
-export const DEFAULT_RPC_TIMEOUT_MS = 30_000;
+const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 
 export const getRpcTimeout = (): number => {
   return (

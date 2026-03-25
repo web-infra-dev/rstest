@@ -7,7 +7,7 @@ import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
-export const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
+const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
 const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 

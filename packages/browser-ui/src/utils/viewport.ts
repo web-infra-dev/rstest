@@ -4,7 +4,7 @@ import {
   isDevicePreset,
 } from './viewportPresets';
 
-export type BrowserViewport =
+type BrowserViewport =
   | {
       width: number;
       height: number;

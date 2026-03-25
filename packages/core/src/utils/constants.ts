@@ -11,8 +11,6 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 
-export const TEMP_RSTEST_OUTPUT_DIR_GLOB = '**/dist/.rstest-temp';
-
 export const getOutputDistPathRoot = (
   distPath?: NonNullable<RstestConfig['output']>['distPath'],
 ): string =>

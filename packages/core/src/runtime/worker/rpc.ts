@@ -8,7 +8,7 @@ const processSend = process.send!.bind(process);
 const processOn = process.on.bind(process);
 const processOff = process.off.bind(process);
 
-export type WorkerRpcOptions = Pick<
+type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
 >;

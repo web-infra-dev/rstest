@@ -1,11 +1,3 @@
-import { clsx } from 'clsx';
-
-export function cn(
-  ...inputs: Array<string | undefined | null | false>
-): string {
-  return clsx(inputs);
-}
-
 export const toRelativePath = (file: string, rootPath?: string): string => {
   if (!rootPath) return file;
   const normalizedRoot = rootPath.endsWith('/')

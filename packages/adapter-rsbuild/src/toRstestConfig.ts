@@ -1,29 +1,6 @@
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
 
-export interface WithRsbuildConfigOptions {
-  /**
-   * `cwd` passed to loadConfig of Rsbuild
-   * @default process.cwd()
-   */
-  cwd?: string;
-  /**
-   * Path to rsbuild config file
-   * @default './rsbuild.config.ts'
-   */
-  configPath?: string;
-  /**
-   * The environment name in `environments` field to use, will be merged with the common config.
-   * Set to a string to use the environment config with matching name.
-   * @default undefined
-   */
-  environmentName?: string;
-  /**
-   * Modify rsbuild config before converting to rstest config
-   */
-  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
-}
-
 /**
  * Convert rsbuild config to rstest config
  */

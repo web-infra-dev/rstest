@@ -125,5 +125,4 @@ const logger: Logger & { stderr: (message: string, ...args: any[]) => void } = {
   },
 };
 
-export type { Logger };
 export { logger };

@@ -7,24 +7,21 @@ import {
   prettyTime,
 } from '../utils';
 
-export const statusStr = {
+const statusStr = {
   fail: '✗',
   pass: '✓',
   todo: '-',
   skip: '-',
 };
 
-export const statusColor: Record<
-  keyof typeof statusStr,
-  (str: string) => string
-> = {
+const statusColor: Record<keyof typeof statusStr, (str: string) => string> = {
   fail: color.red,
   pass: color.green,
   todo: color.gray,
   skip: color.gray,
 };
 
-export const statusColorfulStr: {
+const statusColorfulStr: {
   fail: string;
   pass: string;
   todo: string;

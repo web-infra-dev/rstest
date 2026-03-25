@@ -27,7 +27,7 @@ export const getTestStatus = (
         : 'pass';
 };
 
-export function hasOnlyTest(test: Test[]): boolean {
+function hasOnlyTest(test: Test[]): boolean {
   return test.some((t) => {
     return t.runMode === 'only' || (t.type === 'suite' && hasOnlyTest(t.tests));
   });
@@ -189,7 +189,7 @@ export function registerTestSuiteListener(
   suite[listenersKey].push(fn);
 }
 
-export function makeError(message: string, stackTraceError?: Error): Error {
+function makeError(message: string, stackTraceError?: Error): Error {
   const error = new Error(message);
   if (stackTraceError?.stack) {
     error.stack = stackTraceError.stack.replace(

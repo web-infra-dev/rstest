@@ -2,7 +2,7 @@ import { formatWithOptions } from 'node:util';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
-export type Logger = {
+type Logger = {
   [K in LogLevel]: (...params: unknown[]) => void;
 };
 

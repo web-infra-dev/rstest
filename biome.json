@@ -14,8 +14,7 @@
       "!**/*.vue",
       "!**/dist",
       "!**/dist-types",
-      "!**/.vscode-test.mjs",
-      "!knip.json"
+      "!**/.vscode-test.mjs"
     ]
   },
   "formatter": {

@@ -203,7 +203,7 @@ export function parseTemplateTable(
 
 export class TestRegisterError extends Error {}
 
-export class RstestError extends Error {
+class RstestError extends Error {
   public fullStack?: boolean;
 }
 

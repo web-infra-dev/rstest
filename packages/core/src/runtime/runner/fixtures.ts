@@ -199,7 +199,7 @@ function filterOutComments(s: string): string {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-export function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
+function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const text = filterOutComments(fn.toString());
   const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(text);
   if (!match) return [];

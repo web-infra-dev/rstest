@@ -12,7 +12,7 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 /**
  * Type definition for the @rstest/browser internal exports.
  */
-export interface BrowserModule {
+interface BrowserModule {
   validateBrowserConfig: (context: unknown) => void;
   runBrowserTests: (
     context: unknown,
@@ -29,7 +29,7 @@ export interface BrowserModule {
   }>;
 }
 
-export interface LoadBrowserModuleOptions {
+interface LoadBrowserModuleOptions {
   /**
    * List of project root directories to try resolving @rstest/browser from.
    * This allows resolving from project-specific node_modules in monorepo setups.
