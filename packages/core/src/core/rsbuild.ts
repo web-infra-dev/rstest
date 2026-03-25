@@ -47,7 +47,7 @@ function parseInlineSourceMapStr(code: string) {
     const base64Data = match[1];
     const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
     return decodedStr;
-  } catch (_error) {
+  } catch {
     return null;
   }
 }

@@ -70,7 +70,9 @@ export async function setupBrowserWatchCliShortcuts({
     try {
       process.stdin.setRawMode(false);
       process.stdin.pause();
-    } catch {}
+    } catch {
+      // do nothing
+    }
 
     process.stdin.off('keypress', handleKeypress);
   };
