@@ -298,6 +298,50 @@ test('doMockRequire 只影响后续 require 调用', () => {
 });
 ```
 
+## rs.unmockRequire
+
+- **类型：** `(path: string) => void`
+
+取消通过 `require()` 加载模块的 mock 实现。和 `rs.mockRequire` 一样，这个调用会被提升到文件顶部。
+
+当你希望后续的 `require()` 重新加载原始 CommonJS 模块时，使用这个 API。
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+rs.unmockRequire('./math.cjs');
+
+test('unmockRequire 恢复原始 CommonJS 模块', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+## rs.doUnmockRequire
+
+- **类型：** `(path: string) => void`
+
+与 `rs.unmockRequire` 相同，但不会被提升。只有后续的 `require()` 调用才会重新加载原始模块。
+
+```ts title="src/math.test.cjs"
+test('doUnmockRequire 只影响后续 require 调用', () => {
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
+
+  rs.doUnmockRequire('./math.cjs');
+
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.hoisted
 
 - **类型：** `<T = unknown>(fn: () => T) => T`
@@ -419,5 +463,5 @@ it('test', async () => {
 清除所有模块的缓存。这允许在重新导入时重新执行模块。这在隔离不同测试中共享的模块的状态时非常有用。
 
 :::warning
-不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock) 或 [`rs.doUnmock`](#rsdounmock) 。
+不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock)、[`rs.doUnmock`](#rsdounmock)、[`rs.unmockRequire`](#rsunmockrequire) 或 [`rs.doUnmockRequire`](#rsdounmockrequire)。
 :::

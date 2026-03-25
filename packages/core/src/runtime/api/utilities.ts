@@ -146,6 +146,8 @@ export const createRstestUtilities: (
     doMockRequire: () => undefined,
     unmock: () => undefined,
     doUnmock: () => undefined,
+    unmockRequire: () => undefined,
+    doUnmockRequire: () => undefined,
     importMock: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
       return Promise.resolve({} as any);

@@ -296,6 +296,50 @@ test('doMockRequire only affects later require calls', () => {
 });
 ```
 
+## rs.unmockRequire
+
+- **Type**: `(path: string) => void`
+
+Cancels the mock implementation for modules loaded through `require()`. Like `rs.mockRequire`, this call is hoisted to the top of the file.
+
+Use this API when you want later `require()` calls to load the original CommonJS module again.
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+rs.unmockRequire('./math.cjs');
+
+test('unmockRequire restores the original CommonJS module', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+## rs.doUnmockRequire
+
+- **Type**: `(path: string) => void`
+
+Same as `rs.unmockRequire`, but it is not hoisted. Only later `require()` calls will load the original module again.
+
+```ts title="src/math.test.cjs"
+test('doUnmockRequire only affects later require calls', () => {
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
+
+  rs.doUnmockRequire('./math.cjs');
+
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.hoisted
 
 - **Type**: `<T = unknown>(fn: () => T) => T`
@@ -417,5 +461,5 @@ Same as `rs.unmock`, but it is not hoisted to the top of the file. The next impo
 Clears the cache of all modules. This allows modules to be re-executed when re-imported. This is useful for isolating the state of modules shared between different tests.
 
 :::warning
-Does not reset mocked modules. To clear mocked modules, use [`rs.unmock`](#rsunmock) or [`rs.doUnmock`](#rsdounmock).
+Does not reset mocked modules. To clear mocked modules, use [`rs.unmock`](#rsunmock), [`rs.doUnmock`](#rsdounmock), [`rs.unmockRequire`](#rsunmockrequire), or [`rs.doUnmockRequire`](#rsdounmockrequire).
 :::
