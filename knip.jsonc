@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["cspell.config.cjs"]
+      "entry": ["cspell.config.cjs"],
     },
     "packages/core": {
       "entry": [
@@ -23,12 +23,12 @@
         // Webpack license plugin used by rslib.config.ts
         "licensePlugin.ts",
         // Test files
-        "tests/**/*.ts"
+        "tests/**/*.ts",
       ],
       "ignoreDependencies": [
         // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
-        "@typescript/native-preview"
-      ]
+        "@typescript/native-preview",
+      ],
     },
     "packages/browser": {
       "entry": [
@@ -38,28 +38,28 @@
         "src/client/fakeTimersStub.ts",
         "src/client/public.ts",
         // Test files
-        "tests/**/*.ts"
+        "tests/**/*.ts",
       ],
       "ignoreDependencies": [
         // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
         "@typescript/native-preview",
         // Virtual module resolved at build time by rspack alias in hostController.ts
-        "@rstest/browser-manifest"
-      ]
+        "@rstest/browser-manifest",
+      ],
     },
     "packages/browser-ui": {
       "entry": [
         // PostCSS config (not auto-detected by knip)
         "postcss.config.cjs",
         // Test files
-        "src/**/*.test.ts"
+        "src/**/*.test.ts",
       ],
       "ignoreDependencies": [
         // Used in postcss.config.cjs which knip doesn't parse
         "@tailwindcss/postcss",
         // Path-mapped imports (@rstest/browser/protocol) resolved via tsconfig, not package dependency
-        "@rstest/browser"
-      ]
+        "@rstest/browser",
+      ],
     },
     // No explicit entry needed for the following packages — knip auto-infers from package.json exports:
     // packages/browser-react, packages/coverage-istanbul,
@@ -76,15 +76,15 @@
         // Sample project for e2e testing
         "sample/**/*.ts",
         // VS Code test runner config
-        ".vscode-test.mjs"
+        ".vscode-test.mjs",
       ],
       "ignoreDependencies": [
         // CLI tool used in CI/release scripts, not in code
         "ovsx",
         // Used in sample/rsbuild.config.ts for testing the extension
-        "@rsbuild/plugin-react"
-      ]
-    }
+        "@rsbuild/plugin-react",
+      ],
+    },
   },
-  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"]
+  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"],
 }
