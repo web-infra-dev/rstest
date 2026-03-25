@@ -17,12 +17,12 @@ import { parseWorkerMetaMessage, type WorkerMetaMessage } from './workerMeta';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export type ForksChannel = {
+type ForksChannel = {
   onMessage: (callback: (...args: any[]) => void) => void;
   postMessage: (message: any) => void;
 };
 
-export type ForksChannelContext = {
+type ForksChannelContext = {
   channel: ForksChannel;
   cleanup: () => void;
 };

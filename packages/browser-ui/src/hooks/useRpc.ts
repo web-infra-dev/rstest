@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { logger } from '../utils/logger';
 
-export type RpcState = {
+type RpcState = {
   rpc: BirpcReturn<HostRPC, ContainerRPC> | null;
   loading: boolean;
   connected: boolean;

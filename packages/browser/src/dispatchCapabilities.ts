@@ -27,7 +27,7 @@ type RunnerDispatchSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
 type RunnerDispatchSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
 type RunnerDispatchCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
 
-export type RunnerDispatchCallbacks = {
+type RunnerDispatchCallbacks = {
   onTestFileStart: (payload: RunnerPayload<'file-start'>) => Promise<void>;
   onTestFileReady: (payload: RunnerDispatchFileReadyPayload) => Promise<void>;
   onTestSuiteStart: (payload: RunnerDispatchSuiteStartPayload) => Promise<void>;

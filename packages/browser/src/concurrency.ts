@@ -5,7 +5,7 @@ import type { Rstest } from '@rstest/core/browser';
 // Keep this in one place so executors reuse the same worker semantics.
 const DEFAULT_MAX_HEADLESS_WORKERS = 12;
 
-export type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
+type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
   normalizedConfig: {
     pool: {
       maxWorkers?: string | number;
@@ -13,7 +13,7 @@ export type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
   };
 };
 
-export const getNumCpus = (): number => {
+const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
 };
 

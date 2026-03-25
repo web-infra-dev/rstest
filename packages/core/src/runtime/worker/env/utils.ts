@@ -1,8 +1,8 @@
 import { KEYS } from './jsdomKeys';
 
-export const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
+const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
-export function getWindowKeys(
+function getWindowKeys(
   global: any,
   win: any,
   additionalKeys: string[] = [],

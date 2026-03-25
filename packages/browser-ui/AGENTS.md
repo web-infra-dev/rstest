@@ -31,7 +31,6 @@ pnpm --filter @rstest/browser-ui typecheck
 ## Do
 
 - Use Tailwind utility classes for styling
-- Use `clsx` for conditional class names
 - Use Ant Design components for complex UI (Tree, etc.)
 - Use Lucide React for icons
 - Keep components small and focused

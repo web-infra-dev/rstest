@@ -1,12 +1,12 @@
 import { type AgentName, detectAgent as detectAgentFromStdEnv } from 'std-env';
 
-export type KnownAgentNames = AgentName;
+type KnownAgentNames = AgentName;
 
-export interface KnownAgentDetails {
+interface KnownAgentDetails {
   name: KnownAgentNames;
 }
 
-export type AgentResult =
+type AgentResult =
   | {
       isAgent: true;
       agent: KnownAgentDetails;

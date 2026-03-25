@@ -112,17 +112,9 @@ export const preloadRunnerSourceMap = async (): Promise<void> => {
 };
 
 /**
- * Clear cache (for testing purposes)
- */
-export const clearCache = (): void => {
-  sourceMapCache.clear();
-  sourceMapPayloadCache.clear();
-};
-
-/**
  * Stack frame interface matching @vitest/snapshot's format
  */
-export interface StackFrame {
+interface StackFrame {
   file: string;
   line: number;
   column: number;

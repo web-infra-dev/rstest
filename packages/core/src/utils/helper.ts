@@ -22,10 +22,6 @@ export const parsePosix = (filePath: string): { dir: string; base: string } => {
   };
 };
 
-export function slash(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
 export const isObject = (obj: unknown): obj is Record<string, any> =>
   Object.prototype.toString.call(obj) === '[object Object]';
 
@@ -36,7 +32,7 @@ export const castArray = <T>(arr?: T | T[]): T[] => {
   return Array.isArray(arr) ? arr : [arr];
 };
 
-export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+const isPlainObject = (obj: unknown): obj is Record<string, any> => {
   return (
     obj !== null &&
     typeof obj === 'object' &&
@@ -106,19 +102,6 @@ const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 const wrapRegex = (value: RegExp): string =>
   `${REGEXP_FLAG_PREFIX}${value.toString()}`;
 
-const unwrapRegex = (value: string): RegExp | string => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
-
-    const matches = /^\/(.+)\/([gimuy]*)$/.exec(regexStr);
-    if (matches) {
-      const [, pattern, flags] = matches;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
-
 /**
  * Makes some special types that are not supported for passing into the pool serializable.
  * eg. RegExp
@@ -136,20 +119,7 @@ export const serializableConfig = (
   };
 };
 
-export const undoSerializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
-  const { testNamePattern } = normalizedConfig;
-  return {
-    ...normalizedConfig,
-    testNamePattern:
-      testNamePattern && typeof testNamePattern === 'string'
-        ? unwrapRegex(testNamePattern)
-        : testNamePattern,
-  };
-};
-
-export const getNodeVersion = (): {
+const getNodeVersion = (): {
   major: number;
   minor: number;
   patch: number;

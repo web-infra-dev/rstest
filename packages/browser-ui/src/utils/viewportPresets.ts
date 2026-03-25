@@ -6,7 +6,7 @@ import type { DevicePreset } from '@rstest/core/browser';
 
 export type { DevicePreset };
 
-export type DevicePresetInfo = {
+type DevicePresetInfo = {
   id: DevicePreset;
   label: string;
   width: number;

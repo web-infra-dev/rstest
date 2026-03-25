@@ -33,7 +33,7 @@ import {
   writeFile,
 } from './utils';
 
-export interface CreateOptions {
+interface CreateOptions {
   /** Non-interactive mode, use default options */
   yes?: boolean;
 }

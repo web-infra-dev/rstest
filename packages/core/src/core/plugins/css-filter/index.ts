@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CSSLoaderOptions, RsbuildPlugin } from '@rsbuild/core';
 
-export const PLUGIN_CSS_FILTER = 'rstest:css-filter';
+const PLUGIN_CSS_FILTER = 'rstest:css-filter';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**

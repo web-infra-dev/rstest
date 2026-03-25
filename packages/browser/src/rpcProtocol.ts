@@ -178,12 +178,6 @@ export const validateBrowserRpcRequest = (
   return request;
 };
 
-export type BrowserRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
-};
-
 /**
  * Snapshot RPC request from runner iframe.
  * The container will forward these to the host via WebSocket RPC.
@@ -209,12 +203,3 @@ export type SnapshotRpcRequest =
       method: 'removeSnapshotFile';
       args: { filepath: string };
     };
-
-/**
- * Snapshot RPC response from container to runner iframe.
- */
-export type SnapshotRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
-};

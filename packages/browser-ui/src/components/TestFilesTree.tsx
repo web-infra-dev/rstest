@@ -20,7 +20,7 @@ import { TestSuiteTitle } from './TestSuiteTitle';
 // Types
 // ============================================================================
 
-export type TestFilesTreeProps = {
+type TestFilesTreeProps = {
   testFiles: TestFileInfo[];
   statusMap: Record<string, TestStatus>;
   caseMap: Record<string, Record<string, CaseInfo>>;

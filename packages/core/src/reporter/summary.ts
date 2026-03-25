@@ -64,7 +64,7 @@ export const getSummaryStatusString = (
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
  */
-export const printSnapshotSummaryLog = (
+const printSnapshotSummaryLog = (
   snapshots: SnapshotSummary,
   rootDir: string,
 ): void => {
