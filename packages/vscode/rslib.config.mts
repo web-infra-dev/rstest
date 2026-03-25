@@ -48,9 +48,9 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
-          plugins: [
-            rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' }),
-          ].filter(Boolean),
+          plugins: [rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' })].filter(
+            Boolean,
+          ),
         },
       },
     },
