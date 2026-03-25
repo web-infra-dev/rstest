@@ -84,7 +84,7 @@
     "@types/picomatch": "^4.0.2",
     "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
-    "@typescript/native-preview": "7.0.0-dev.20260324.1",
+    "@typescript/native-preview": "7.0.0-dev.20260317.1",
     "@vitest/expect": "^3.2.4",
     "@vitest/pretty-format": "^3.2.4",
     "@vitest/snapshot": "^3.2.4",
