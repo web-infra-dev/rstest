@@ -50,4 +50,25 @@ describe('browser mode - config options', () => {
     );
     expect(cli.stdout).not.toMatch(/Browser mode opened at/);
   });
+
+  it('should write browser inspect config files when DEBUG is enabled', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/config');
+    const inspectDir = join(fixtureDir, 'dist/.rstest-temp/.rsbuild');
+    const rstestConfigPath = join(inspectDir, 'rstest.config.mjs');
+    const rspackConfigPath = join(inspectDir, 'rspack.config.rstest.mjs');
+    const rsbuildConfigPath = join(inspectDir, 'rsbuild.config.mjs');
+
+    fs.rmSync(inspectDir, { recursive: true, force: true });
+
+    const { expectExecSuccess, cli } = await runBrowserCli('config', {
+      env: { DEBUG: 'rstest' },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('config inspection completed');
+    expect(fs.existsSync(rsbuildConfigPath)).toBe(true);
+    expect(fs.existsSync(rspackConfigPath)).toBe(true);
+    expect(fs.existsSync(rstestConfigPath)).toBe(true);
+  });
 });

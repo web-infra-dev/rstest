@@ -544,6 +544,7 @@ export const createBrowserLazyCompilationConfig = (
 
 export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
   return {
+    writeToDisk: isDebug(),
     // Disable HMR in non-watch mode (tests run once and exit).
     // Aligns with node mode behavior (packages/core/src/core/rsbuild.ts).
     hmr: isWatchMode,
@@ -1387,6 +1388,18 @@ const createBrowserRuntime = async ({
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,
   });
+
+  if (isDebug()) {
+    await rsbuildInstance.inspectConfig({
+      writeToDisk: true,
+      extraConfigs: {
+        rstest: {
+          ...context.normalizedConfig,
+          projects: browserProjects.map((p) => p.normalizedConfig),
+        },
+      },
+    });
+  }
 
   // Serve prebuilt container assets (SPA) via sirv
   const serveContainer = containerDistPath
