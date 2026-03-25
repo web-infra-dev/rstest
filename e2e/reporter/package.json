@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "devDependencies": {
-    "@rstest/core": "workspace:*"
+    "@rstest/core": "workspace:*",
+    "@rstest/coverage-istanbul": "workspace:*"
   }
 }

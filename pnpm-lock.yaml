@@ -454,6 +454,9 @@ importers:
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../packages/coverage-istanbul
 
   e2e/runner/test/fixtures/test-rstest-globals:
     devDependencies:
