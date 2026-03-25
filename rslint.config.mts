@@ -1,7 +1,7 @@
 import { defineConfig, ts } from '@rslint/core';
 
 export default defineConfig([
-  { ignores: ['**/dist/**', '**/dist-types/**', '**/compiled/**'] },
+  { ignores: ['**/dist/**', '**/dist-types/**'] },
   ts.configs.recommended,
   {
     languageOptions: {
