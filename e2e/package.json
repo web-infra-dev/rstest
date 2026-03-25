@@ -8,9 +8,6 @@
     "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@types/is-url": "^1.2.32"
-  },
   "devDependencies": {
     "@rsbuild/core": "2.0.0-beta.10",
     "@rsbuild/plugin-react": "^1.4.6",
