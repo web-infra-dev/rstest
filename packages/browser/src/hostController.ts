@@ -1573,10 +1573,10 @@ const createBrowserRuntime = async ({
       dispatchHandlers,
       wss,
     };
-  } catch (_error) {
+  } catch (error) {
     wss.close();
     await devServer.close();
-    throw _error;
+    throw error;
   }
 };
 

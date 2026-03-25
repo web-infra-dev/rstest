@@ -142,7 +142,7 @@ export class TestRunner {
                 },
               ],
             };
-          } catch (_err) {
+          } catch {
             result = {
               testId: test.testId,
               project,

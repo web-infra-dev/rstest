@@ -19,7 +19,7 @@ const createRequire = (
     try {
       // compat with some testPath may not be an available path but the third-party package name
       return createNativeRequire(filename);
-    } catch (_err) {
+    } catch {
       return createNativeRequire(distPath);
     }
   })();

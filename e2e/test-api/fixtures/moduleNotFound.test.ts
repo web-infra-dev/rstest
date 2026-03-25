@@ -5,7 +5,7 @@ const expectNotFound = async () => {
     // @ts-expect-error
     const res = await import('404');
     return res;
-  } catch (_err) {
+  } catch {
     return null;
   }
 };
