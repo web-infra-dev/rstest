@@ -56,6 +56,15 @@ __webpack_require__.rstest_unmock = (id) => {
 __webpack_require__.rstest_do_unmock = __webpack_require__.rstest_unmock;
 //#endregion
 
+//#region rs.unmockRequire
+__webpack_require__.rstest_unmock_require = __webpack_require__.rstest_unmock;
+//#endregion
+
+//#region rs.doUnmockRequire
+__webpack_require__.rstest_do_unmock_require =
+  __webpack_require__.rstest_do_unmock;
+//#endregion
+
 //#region rs.requireActual
 __webpack_require__.rstest_require_actual =
   __webpack_require__.rstest_import_actual = (id) => {

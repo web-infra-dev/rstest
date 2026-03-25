@@ -157,10 +157,11 @@ rstest.mock('../src/api');
 
 如果你希望后续的 `import` 或 `require()` 返回原始模块，可以使用下面这些 API：
 
-- [rstest.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rstest.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock)：停止 mock 某个模块。
+- [rstest.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rstest.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock)：停止 mock 通过 `import` 加载的模块。
+- [rstest.unmockRequire()](/api/runtime-api/rstest/mock-modules#rsunmockrequire) / [rstest.doUnmockRequire()](/api/runtime-api/rstest/mock-modules#rsdounmockrequire)：停止 mock 通过 `require()` 加载的模块。
 - [rstest.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules)：清空模块缓存，让下一次 import 或 require 重新执行模块。
 
-需要注意的是，`rstest.resetModules()` 不会取消模块 mock。如果你要取消模块 mock，需要使用 `rstest.unmock()` 或 `rstest.doUnmock()`。
+需要注意的是，`rstest.resetModules()` 不会取消模块 mock。要取消模块 mock，需要根据模块的加载方式选择对应的 `unmock` API。
 
 关于完整 API 和更多示例，可以参考 [Mock modules](/api/runtime-api/rstest/mock-modules)。
 

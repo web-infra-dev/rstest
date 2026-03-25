@@ -157,10 +157,11 @@ rstest.mock('../src/api');
 
 If you want later `import` or `require()` calls to return the original module again, you can use these APIs:
 
-- [rstest.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rstest.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock): stop mocking a module.
+- [rstest.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rstest.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock): stop mocking an `import`-based module.
+- [rstest.unmockRequire()](/api/runtime-api/rstest/mock-modules#rsunmockrequire) / [rstest.doUnmockRequire()](/api/runtime-api/rstest/mock-modules#rsdounmockrequire): stop mocking a `require()`-based module.
 - [rstest.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules): clear the module cache so the next import or require evaluates the module again.
 
-Note that `rstest.resetModules()` does not cancel module mocking. To cancel module mocking, use `rstest.unmock()` or `rstest.doUnmock()`.
+Note that `rstest.resetModules()` does not cancel module mocking. To cancel module mocking, use the matching `unmock` API for the way the module is loaded.
 
 For the full API and more examples, see [Mock modules](/api/runtime-api/rstest/mock-modules).
 

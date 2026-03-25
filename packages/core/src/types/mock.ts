@@ -451,9 +451,19 @@ export interface RstestUtilities {
   unmock: (path: string) => void;
 
   /**
+   * Removes CommonJS require module from the mocked registry.
+   */
+  unmockRequire: (path: string) => void;
+
+  /**
    * Removes module from the mocked registry, not hoisted.
    */
   doUnmock: (path: string) => void;
+
+  /**
+   * Removes CommonJS require module from the mocked registry, not hoisted.
+   */
+  doUnmockRequire: (path: string) => void;
 
   /**
    * Imports a module with all of its properties (including nested properties) mocked.
