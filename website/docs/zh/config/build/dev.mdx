@@ -11,3 +11,11 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 ## dev.writeToDisk <RsbuildDocBadge path="/config/dev/write-to-disk" text="dev.writeToDisk" />
 
 默认情况下，Rstest 不会将测试临时文件写入磁盘，当你需要调试 Rstest 产物时可能需要此配置项。
+
+```ts title="rstest.config.ts"
+export default {
+  dev: {
+    writeToDisk: true,
+  },
+};
+```

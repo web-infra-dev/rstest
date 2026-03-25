@@ -21,7 +21,7 @@ DEBUG=rstest pnpm test
 
 ### Rstest 配置文件
 
-在调试模式下，Rstest 会自动生成 `dist/.rsbuild/rstest.config.mjs` 文件，这里面包含了最终生成的 Rstest 配置。在这个文件里，你可以了解到你传入的 Rstest 配置在经过框架层和 Rstest 处理后的最终结果。
+在调试模式下，Rstest 会自动生成 `dist/.rstest-temp/rsbuild/rstest.config.mjs` 文件，这里面包含了最终生成的 Rstest 配置。在这个文件里，你可以了解到你传入的 Rstest 配置在经过框架层和 Rstest 处理后的最终结果。
 
 该文件的大致内容如下：
 
@@ -55,6 +55,10 @@ export default {
 ```
 
 关于 Rstest 配置项的完整介绍，请查看[配置 Rstest](/guide/basic/configure-rstest) 章节。
+
+## 查看测试中间产物
+
+在 [调试模式](#开启调试模式) 下或者手动开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 配置项时，Rstest 会将测试中间产物输出到磁盘。你可以通过查看 `dist/.rstest-temp` 目录下的文件来了解测试中间产物。
 
 ## 在 VS Code 中调试
 

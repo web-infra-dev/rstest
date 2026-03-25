@@ -21,7 +21,7 @@ In debug mode, Rstest will:
 
 ### Rstest config file
 
-In debug mode, Rstest will automatically generate `dist/.rsbuild/rstest.config.mjs` file, which contains the final generated Rstest config. In this file, you can know the final result of the Rstest config you passed in after being processed by the framework and Rstest.
+In debug mode, Rstest will automatically generate `dist/.rstest-temp/rsbuild/rstest.config.mjs` file, which contains the final generated Rstest config. In this file, you can know the final result of the Rstest config you passed in after being processed by the framework and Rstest.
 
 The content of the file is as follows:
 
@@ -55,6 +55,10 @@ export default {
 ```
 
 For a complete introduction to Rstest config, please see the [Configure Rstest](/guide/basic/configure-rstest) chapter.
+
+## View test temporary outputs
+
+In the [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest will write test temporary outputs to disk. You can view the files in `dist/.rstest-temp` directory to help you troubleshoot problems.
 
 ## Debugging in VS Code
 
