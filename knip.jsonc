@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["cspell.config.cjs"],
+      "entry": ["cspell.config.cjs", "rslint.config.mts"],
     },
     "packages/core": {
       "entry": [
