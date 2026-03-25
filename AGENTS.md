@@ -76,8 +76,9 @@ _Note_: E2E tests and examples consume built package output — rebuild affected
 
 Available workflow skills in `.agents/skills/`:
 
-| Skill      | Description                                                                       |
-| ---------- | --------------------------------------------------------------------------------- |
-| pr         | Create a PR for the current branch                                                |
-| testing    | Testing workflow for the rstest monorepo (run tests, write tests, debug failures) |
-| typescript | TypeScript anti-slop guardrails for .ts, .tsx, and .mts files                     |
+| Skill            | Description                                                                       |
+| ---------------- | --------------------------------------------------------------------------------- |
+| generating-tests | Generates high-value missing tests and audits existing test quality               |
+| pr               | Create a PR for the current branch                                                |
+| testing          | Testing workflow for the rstest monorepo (run tests, write tests, debug failures) |
+| typescript       | TypeScript anti-slop guardrails for .ts, .tsx, and .mts files                     |
