@@ -24,7 +24,7 @@ export default defineConfig({
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
           plugins: [
-            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-extension' }),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
           ].filter(Boolean),
         },
       },
@@ -48,9 +48,9 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
-          plugins: [
-            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-worker' }),
-          ].filter(Boolean),
+          plugins: [rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' })].filter(
+            Boolean,
+          ),
         },
       },
     },

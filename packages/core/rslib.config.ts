@@ -106,7 +106,7 @@ export default defineConfig({
               ],
             }),
             isBuildWatch ? null : licensePlugin(),
-            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-main' }),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/main' }),
           ].filter(Boolean),
         },
       },
@@ -129,7 +129,7 @@ export default defineConfig({
       tools: {
         rspack: {
           plugins: [
-            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-loaders' }),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/loaders' }),
           ].filter(Boolean),
         },
       },
@@ -178,7 +178,7 @@ export default defineConfig({
       tools: {
         rspack: {
           plugins: [
-            rsdoctorCIPlugin({ reportDir: 'dist/rsdoctor-browser' }),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
           ].filter(Boolean),
         },
       },
