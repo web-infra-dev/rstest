@@ -178,7 +178,7 @@ export function createCustomConsole({
         const endTime = RealDate.now();
         const time = endTime - startTime.getTime();
         this._log('time', format(`${label}: ${prettyTime(time)}`));
-        delete this._timers[label];
+        Reflect.deleteProperty(this._timers, label);
       }
     }
 

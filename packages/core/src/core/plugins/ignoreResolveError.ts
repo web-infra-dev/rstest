@@ -4,7 +4,7 @@ class IgnoreModuleNotFoundErrorPlugin {
   apply(compiler: Rspack.Compiler) {
     compiler.hooks.done.tap('Rstest:IgnoreModuleNotFoundPlugin', (stats) => {
       for (let i = stats.compilation.errors.length - 1; i >= 0; i--) {
-        if (/Module not found/.test(stats.compilation.errors[i]!.message)) {
+        if (stats.compilation.errors[i]!.message.includes('Module not found')) {
           // Use `splice` instead of `filter` & `reassign` to avoid communication problems with Rust -> JS -> Rust
           stats.compilation.errors.splice(i, 1);
         }

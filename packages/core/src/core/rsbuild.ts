@@ -36,7 +36,7 @@ function parseInlineSourceMapStr(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
   const inlineSourceMapRegex =
     /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
-  const match = code.match(inlineSourceMapRegex);
+  const match = inlineSourceMapRegex.exec(code);
 
   if (!match || !match[1]) {
     return null;

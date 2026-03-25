@@ -71,7 +71,7 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
     Object.entries(env).forEach(([key, value]) => {
       if (value === undefined) {
-        delete process.env[key];
+        Reflect.deleteProperty(process.env, key);
       } else {
         process.env[key] = value;
       }
