@@ -60,7 +60,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "2.0.0-beta.9",
+    "@rsbuild/core": "2.0.0-beta.10",
     "@types/chai": "^5.2.3",
     "tinypool": "^2.1.0"
   },
@@ -93,14 +93,14 @@
     "cac": "^7.0.0",
     "chai": "^6.2.2",
     "chokidar": "^5.0.0",
-    "happy-dom": "^20.8.4",
+    "happy-dom": "^20.8.8",
     "jsdom": "^28.1.0",
-    "memfs": "^4.56.11",
+    "memfs": "^4.57.1",
     "package-manager-detector": "^1.6.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
-    "picomatch": "^4.0.3",
-    "rslog": "^2.0.1",
+    "picomatch": "^4.0.4",
+    "rslog": "^2.1.0",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
     "std-env": "^4.0.0",

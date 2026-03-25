@@ -24,6 +24,7 @@
       matchPackageNames: ['@rsbuild/**'],
       groupSlug: 'rsbuild',
       extends: ['schedule:daily'],
+      allowedVersions: '!/-canary-/',
     },
     {
       groupName: 'rslib',

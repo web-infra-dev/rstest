@@ -12,7 +12,7 @@ export const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 
 const hintNotDefinedError = (message: string): string => {
-  const [, varName] = message.match(/(\w+) is not defined/) || [];
+  const [, varName] = /(\w+) is not defined/.exec(message) || [];
   if (varName) {
     if ((globalApis as string[]).includes(varName)) {
       return message.replace(

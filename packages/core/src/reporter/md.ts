@@ -404,7 +404,7 @@ const getErrorType = (
 ): string => {
   const rawName = error.name || 'Error';
 
-  if (/AssertionError/.test(rawName)) {
+  if (rawName.includes('AssertionError')) {
     return 'AssertionError';
   }
 

@@ -201,7 +201,7 @@ function filterOutComments(s: string): string {
  */
 export function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const text = filterOutComments(fn.toString());
-  const match = text.match(/(?:async)?(?:\s+function)?[^(]*\(([^)]*)/);
+  const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(text);
   if (!match) return [];
   const trimmedParams = match[1]!.trim();
   if (!trimmedParams) return [];

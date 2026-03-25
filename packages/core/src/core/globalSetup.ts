@@ -9,7 +9,7 @@ let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
 function applyEnvChanges(changes: Record<string, string | undefined>) {
   for (const key in changes) {
     if (changes[key] === undefined) {
-      delete process.env[key];
+      Reflect.deleteProperty(process.env, key);
     } else {
       process.env[key] = changes[key];
     }

@@ -13,7 +13,7 @@
     "vue": "^3.5.30"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-beta.9",
+    "@rsbuild/core": "2.0.0-beta.10",
     "@rsbuild/plugin-babel": "^1.1.2",
     "@rsbuild/plugin-vue": "^1.2.7",
     "@rsbuild/plugin-vue-jsx": "^1.1.2",
@@ -21,7 +21,7 @@
     "@vue/compiler-dom": "^3.5.30",
     "@vue/server-renderer": "^3.5.30",
     "@vue/test-utils": "^2.4.6",
-    "happy-dom": "^20.8.4",
+    "happy-dom": "^20.8.8",
     "typescript": "^5.9.3"
   }
 }

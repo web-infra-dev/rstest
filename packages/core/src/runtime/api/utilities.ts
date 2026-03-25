@@ -214,7 +214,7 @@ export const createRstestUtilities: (
 
       // update runtime env store
       if (value === undefined) {
-        delete runtimeEnv[name];
+        Reflect.deleteProperty(runtimeEnv, name);
       } else {
         runtimeEnv[name] = value;
       }
@@ -227,7 +227,7 @@ export const createRstestUtilities: (
       // restore runtime env store
       for (const [name, value] of originalEnvValues) {
         if (value === undefined) {
-          delete runtimeEnv[name];
+          Reflect.deleteProperty(runtimeEnv, name);
         } else {
           runtimeEnv[name] = value;
         }

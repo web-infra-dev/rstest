@@ -96,7 +96,7 @@ export function installGlobal(
 
   return () => {
     for (const key of keys) {
-      delete global[key];
+      Reflect.deleteProperty(global, key);
     }
     originals.forEach((v, k) => {
       global[k] = v;

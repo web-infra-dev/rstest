@@ -110,7 +110,7 @@ const unwrapRegex = (value: string): RegExp | string => {
   if (value.startsWith(REGEXP_FLAG_PREFIX)) {
     const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
 
-    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
+    const matches = /^\/(.+)\/([gimuy]*)$/.exec(regexStr);
     if (matches) {
       const [, pattern, flags] = matches;
       return new RegExp(pattern!, flags);
