@@ -147,6 +147,10 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
   ['--cleanup', 'Remove blob reports directory after merging'],
 ];
 
+const hiddenPassthroughOptionDefinitions: OptionDefinition[] = [
+  ['--isolate', 'Run tests in an isolated environment'],
+];
+
 const listCommandOptionDefinitions: OptionDefinition[] = [
   ['--filesOnly', 'only list the test files'],
   ['--json [boolean/path]', 'print tests as JSON or write to a file'],
@@ -167,6 +171,29 @@ const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, runtimeOptionDefinitions);
   applyOptions(command, poolOptionDefinitions);
 };
+
+const filterHelpOptions = (
+  sections: Array<{ title?: string; body: string }>,
+  hiddenOptionPrefixes: string[],
+) =>
+  sections.map((section) => {
+    if (section.title !== 'Options') {
+      return section;
+    }
+
+    return {
+      ...section,
+      body: section.body
+        .split('\n')
+        .filter(
+          (line) =>
+            !hiddenOptionPrefixes.some((prefix) =>
+              line.trimStart().startsWith(prefix),
+            ),
+        )
+        .join('\n'),
+    };
+  });
 
 const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
   for (const reporter of rstest?.context.reporters || []) {
@@ -245,7 +272,15 @@ export const runRest = async ({
 export function createCli(): CAC {
   const cli = cac('rstest');
 
-  cli.help();
+  cli.help((sections) => {
+    switch (cli.matchedCommand?.name) {
+      case 'init':
+      case 'merge-reports':
+        return filterHelpOptions(sections, ['--isolate']);
+      default:
+        return sections;
+    }
+  });
   cli.version(RSTEST_VERSION);
 
   const defaultCommand = cli
@@ -335,6 +370,7 @@ export function createCli(): CAC {
     'Merge blob reports from multiple shards into a unified report',
   );
   applyOptions(mergeReportsCommand, mergeReportsOptionDefinitions);
+  applyOptions(mergeReportsCommand, hiddenPassthroughOptionDefinitions);
   mergeReportsCommand.action(
     async (
       path: string | undefined,
@@ -365,6 +401,7 @@ export function createCli(): CAC {
   cli
     .command('init [project]', 'Initialize rstest configuration')
     .option('--yes', 'Use default options (non-interactive)')
+    .option('--isolate', 'Run tests in an isolated environment')
     .action(async (project: string | undefined, options: { yes?: boolean }) => {
       try {
         let selectedProject = project;
