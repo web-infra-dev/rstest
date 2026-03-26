@@ -64,7 +64,7 @@ If no documentation exists for the target, skip the Doc Analyst subagent entirel
 
 ### 5. Collect existing test inventory
 
-Collect test coverage in two layers — **do not read file contents at this stage**, only collect file-level and test-case-name-level information:
+Collect test coverage — **do not read file contents at this stage**, only collect file-level and test-case-name-level information:
 
 **Unit tests**: Use `rstest list` to get a structured view:
 
@@ -76,15 +76,9 @@ pnpm rstest list --filesOnly '<directory>'
 pnpm rstest list --json '<target-test-file>'
 ```
 
-**E2E / integration tests**: Many behaviors are primarily covered by e2e tests, not unit tests. Scan the e2e directory for relevant fixtures:
+**E2E / integration tests (if applicable)**: Check whether the project has a separate e2e or integration test layer (e.g., `e2e/`, `tests/integration/`, `test/e2e/`, or similar). If such a directory exists, collect a file-level list of relevant test files and fixture directories. If the project has no e2e layer, skip this — not every project has one.
 
-```bash
-# List e2e test files and fixture directories related to the target module
-ls e2e/                           # top-level e2e suites
-grep -rl '<target-module-name>' e2e/ --include='*.test.ts' -l
-```
-
-Both layers feed into subagent prompts. If a behavior appears covered by e2e, it should not be reported as a missing unit test unless there is a specific reason to also test it at the unit level.
+When e2e coverage exists, both layers feed into subagent prompts. If a behavior appears covered by e2e, it should not be reported as a missing unit test unless there is a specific reason to also test it at the unit level.
 
 ### 6. Execution command
 
@@ -205,12 +199,13 @@ Do NOT extract:
 - Behaviors that clearly belong to upstream dependencies (e.g., bundler
   internals) rather than the target module's own source code
 
-Then compare with the existing test inventory (both unit AND e2e):
+Then compare with the existing test inventory:
 <paste unit test inventory from rstest list>
-<paste e2e test file list from Preflight>
+<if e2e/integration test list was collected in Preflight, paste it here>
 
-For each documented behavior, determine if a corresponding test exists
-in EITHER unit tests or e2e tests. If covered by e2e, mark as tested.
+For each documented behavior, determine if a corresponding test exists.
+If the project has e2e tests, check both unit AND e2e layers — if covered
+by e2e, mark as tested.
 
 Additionally, verify that each documented behavior still exists in the current
 source. If a documented behavior cannot be matched to any function, branch,
@@ -250,7 +245,7 @@ separately by the Static Analyzer. Only report documentation locations.
 Subagent output is **candidate findings, not verified truth**. Before synthesis, verify each candidate:
 
 1. **Source existence check**: For each "missing test" finding, confirm the behavior actually exists in the target module's source code. If the behavior belongs to an upstream dependency or a different package, discard it.
-2. **E2e coverage check**: For findings marked `test_layer: "none"`, do a quick check against e2e fixture names and test file names. If a matching e2e test exists, mark as covered.
+2. **E2e coverage check** (if the project has e2e tests): For findings marked `test_layer: "none"`, do a quick check against e2e fixture names and test file names. If a matching e2e test exists, mark as covered.
 3. **Testability filter**: For findings with `recommended_test_layer: "e2e"`, do not include them in a unit test gap report — note them separately as "better suited for e2e".
 
 Only verified high-confidence findings proceed to Step 3. Discard or group unverifiable items separately as "needs manual review".
