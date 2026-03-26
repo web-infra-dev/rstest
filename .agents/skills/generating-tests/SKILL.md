@@ -66,15 +66,11 @@ If no documentation exists for the target, skip the Doc Analyst subagent entirel
 
 Collect test coverage — **do not read file contents at this stage**, only collect file-level and test-case-name-level information:
 
-**Unit tests**: Use `rstest list` to get a structured view:
+**Unit tests**: Use the project's test runner to list existing tests. Detect the runner from `package.json` scripts or config files, then use the appropriate list command:
 
-```bash
-# List only test files in scope (cheap — no content reading)
-pnpm rstest list --filesOnly '<directory>'
-
-# JSON output with test names for specific files (only when needed)
-pnpm rstest list --json '<target-test-file>'
-```
+- rstest / vitest: `npx rstest list --filesOnly '<dir>'` or `npx vitest list --json '<file>'`
+- jest: `npx jest --listTests` or parse test files with grep
+- Other runners: fall back to `grep -r "it\(\\|test\(" --include='*.test.*' '<dir>' -l`
 
 **E2E / integration tests (if applicable)**: Check whether the project has a separate e2e or integration test layer (e.g., `e2e/`, `tests/integration/`, `test/e2e/`, or similar). If such a directory exists, collect a file-level list of relevant test files and fixture directories. If the project has no e2e layer, skip this — not every project has one.
 
@@ -82,7 +78,7 @@ When e2e coverage exists, both layers feed into subagent prompts. If a behavior 
 
 ### 6. Execution command
 
-Use the `testing` skill to determine the correct run command. Do **not** hardcode `pnpm rstest` — the command varies by package, e2e vs unit, and working directory.
+Determine the correct test run command by inspecting `package.json` scripts and the project's test runner configuration. Do **not** hardcode any specific runner command — the command varies by project, runner, package, and working directory.
 
 ---
 
@@ -147,8 +143,8 @@ Then prompt the subagent with:
 Here is the static analysis output for <target-file>:
 <paste JSON from analyzeSource.cjs>
 
-And here is the existing test inventory from `rstest list --json`:
-<paste JSON from rstest list>
+And here is the existing test inventory:
+<paste test inventory from Preflight step 5>
 
 Your tasks:
 1. For each export in the analysis output, check if it has corresponding tests. Mark tested/untested.
@@ -200,7 +196,7 @@ Do NOT extract:
   internals) rather than the target module's own source code
 
 Then compare with the existing test inventory:
-<paste unit test inventory from rstest list>
+<paste unit test inventory from Preflight step 5>
 <if e2e/integration test list was collected in Preflight, paste it here>
 
 For each documented behavior, determine if a corresponding test exists.
@@ -269,24 +265,24 @@ When multiple documented/discovered behaviors share the same underlying code pat
 How to identify shared mechanisms:
 
 1. Read the source to check if multiple behaviors flow through the same function or branch
-2. If N config options are all processed by the same normalization function (e.g., `formatPaths` handles `include`, `exclude`, `setupFiles`, `globalSetup`), propose **one test for the mechanism** + a brief note that it covers the other options
+2. If N options are all processed by the same normalization function (e.g., `normalizePaths` handles multiple path-type config fields), propose **one test for the mechanism** + a brief note that it covers the other options
 3. If N API options all go through the same validation/merge logic, test the logic once with a representative input
 
 Example — BAD (enumerate every option):
 
 ```
-[1] <rootDir> placeholder in include — doc
-[2] <rootDir> placeholder in exclude — doc
-[3] <rootDir> placeholder in setupFiles — doc
-[4] <rootDir> placeholder in globalSetup — doc
-[5] <rootDir> placeholder in includeSource — doc
+[1] path placeholder in optionA — doc
+[2] path placeholder in optionB — doc
+[3] path placeholder in optionC — doc
+[4] path placeholder in optionD — doc
+[5] path placeholder in optionE — doc
 ```
 
 Example — GOOD (test the mechanism):
 
 ```
-[1] <rootDir> placeholder replacement in path options — doc
-    (covers include, exclude, setupFiles, globalSetup, includeSource — all use formatPaths)
+[1] path placeholder replacement in path-type options — doc
+    (covers optionA, optionB, optionC, optionD, optionE — all use normalizePaths)
 ```
 
 Present the deduplicated findings using the **Generate Mode Checkpoint** format defined in [references/checkpoint-format.md](references/checkpoint-format.md). Load the format reference and follow it exactly — Markdown table with all required columns, Already Covered section, Docs Drift section (if applicable), and the user selection prompt.
@@ -301,7 +297,7 @@ For each approved scenario, generate the test code. Before writing:
 2. **One focused `it()` per scenario** — do not combine behaviors
 3. **Test the mechanism, not every input** — if one test exercises a shared code path, don't add near-identical tests for each variant that uses that path. When a single assertion proves the mechanism works, additional variants are noise.
 4. Place new tests in the correct file following the project's structure
-5. When editing `.ts`/`.tsx` files, follow the `typescript` skill guidelines
+5. When editing `.ts`/`.tsx` files, follow the project's TypeScript conventions
 
 ### Step 5: Auto-healing loop
 
@@ -312,7 +308,7 @@ Loop (max 3 iterations):
   1. Run the test using the command determined in Preflight
   2. If exit code 0 → done, report success
   3. If exit code != 0 → parse both stdout and stderr
-  4. Diagnose failure type from the structured md reporter output:
+  4. Diagnose failure type from the test output:
 
      Failure type           │ Signal                              │ Fix strategy
      ───────────────────────┼─────────────────────────────────────┼──────────────────────────
@@ -323,7 +319,7 @@ Loop (max 3 iterations):
                             │                                     │ agent wrote the snapshot
      TypeError/ReferenceError│ type in error details              │ Read candidateFiles, fix
      Timeout                │ message contains "timed out"        │ Simplify async or ↑ timeout
-     Mock hoisting error    │ "hoisted", factory errors           │ Fix vi.mock placement
+     Mock hoisting error    │ "hoisted", factory errors           │ Fix mock placement
      Unrelated pre-existing │ failures in tests the agent didn't  │ Ignore — not our problem
                             │ write or modify                     │
 
@@ -331,9 +327,9 @@ Loop (max 3 iterations):
   6. Loop back to step 1
 ```
 
-After 3 failed iterations, stop and present the md reporter output to the user with a diagnosis summary.
+After 3 failed iterations, stop and present the test output to the user with a diagnosis summary.
 
-**Note**: rstest auto-detects agent environments and switches to `md` reporter, which outputs structured Markdown with JSON details blocks, diff blocks, code frames, and reproduction commands. Parse these sections to diagnose failures. Also check stderr for errors that occur before the reporter runs (syntax errors, module resolution failures).
+Parse both stdout and stderr to diagnose failures. Check stderr for errors that occur before the reporter runs (syntax errors, module resolution failures).
 
 ---
 
@@ -361,8 +357,8 @@ Test type: <unit|integration> (from Preflight)
 Static analysis of <source-file> (from scripts/analyzeSource.cjs):
 <paste JSON output>
 
-Existing test inventory (from rstest list --json):
-<paste JSON output>
+Existing test inventory (from Preflight step 5):
+<paste test inventory>
 
 For each violation found, report:
 - rule_id: <e.g., TST-004>
@@ -388,7 +384,7 @@ For approved fixes:
 
 1. Apply auto-fixable changes directly via `edit_file`
 2. For non-auto-fixable warnings, propose the fix and let the user confirm
-3. After all edits, run the tests (using the `testing` skill) to confirm nothing broke
+3. After all edits, run the tests to confirm nothing broke
 
 ---
 
@@ -400,7 +396,7 @@ For approved fixes:
 - **Mimic existing conventions** — always read nearby test files before writing.
 - **Propose before acting** — always show the plan and wait for user confirmation before generating or modifying tests.
 - **Error severity = high confidence** — only flag as `error` when evidence is local and unambiguous. Use `warning` for cross-file heuristic findings.
-- **Use sibling skills** — use `testing` for execution commands, `typescript` for code quality in test files.
+- **Follow project conventions** — use the project's test runner, mock API, and coding standards. Do not assume any specific framework.
 
 ## Audit Rule Reference
 

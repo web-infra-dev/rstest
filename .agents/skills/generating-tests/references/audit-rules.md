@@ -183,8 +183,8 @@ expect(() => fn()).toThrow('bad');
 ### TST-014: Fake timers not restored
 
 - **Severity**: warning
-- **Auto-fixable**: Yes (add `afterEach(() => vi.useRealTimers())`)
-- **Detect**: `vi.useFakeTimers()` or `vi.setSystemTime()` without corresponding `vi.useRealTimers()` in afterEach/afterAll/finally
+- **Auto-fixable**: Yes (add `afterEach(() => vi.useRealTimers())` or equivalent for the project's test framework)
+- **Detect**: `vi.useFakeTimers()` / `jest.useFakeTimers()` or `vi.setSystemTime()` / `jest.setSystemTime()` without corresponding restore call in afterEach/afterAll/finally
 - **Why**: Leaks fake timer state into subsequent tests.
 
 ### TST-020: Global/env mutation not restored
@@ -216,10 +216,10 @@ it('uses prod mode', () => {
 ### TST-022: Spies/mocks not cleared or restored
 
 - **Severity**: warning
-- **Auto-fixable**: Yes (add `afterEach(() => vi.restoreAllMocks())`)
-- **Detect**: `vi.spyOn`, `.mockReturnValue`, `.mockImplementation` used at describe-level or shared across tests, without `restoreAllMocks`/`clearAllMocks` in afterEach
+- **Auto-fixable**: Yes (add `afterEach(() => vi.restoreAllMocks())` or `jest.restoreAllMocks()`)
+- **Detect**: `vi.spyOn` / `jest.spyOn`, `.mockReturnValue`, `.mockImplementation` used at describe-level or shared across tests, without `restoreAllMocks`/`clearAllMocks` in afterEach
 - **Why**: Mock state leaks across tests — call counts accumulate, implementations persist.
-- **Note**: Local `vi.fn()` created and consumed within a single `it()` block is fine — only flag when mocks are shared across tests or attached to real modules via `vi.spyOn`.
+- **Note**: Local `vi.fn()` / `jest.fn()` created and consumed within a single `it()` block is fine — only flag when mocks are shared across tests or attached to real modules via `spyOn`.
 
 ### TST-030: Weak truthiness assertion
 
@@ -259,15 +259,15 @@ expect(config.optionalPlugin).toBeDefined();
 
 - **Severity**: error (only when confidence is high)
 - **Auto-fixable**: Partial
-- **Detect**: In `foo.test.ts`, `vi.mock('../foo')` or mocking the exact exported symbol that the test's `expect()` calls verify.
+- **Detect**: In `foo.test.ts`, `vi.mock('../foo')` / `jest.mock('../foo')` or mocking the exact exported symbol that the test's `expect()` calls verify.
 - **Why**: You're not testing real code — you're testing your own mock.
-- **Note**: Downgrade to warning if the mock is a partial mock (`vi.mock('../foo', async () => { const actual = await vi.importActual('../foo'); ... })`) — partial mocks may be intentional for isolating specific exports.
+- **Note**: Downgrade to warning if the mock is a partial mock (e.g., `vi.mock('../foo', async () => { const actual = await vi.importActual('../foo'); ... })`) — partial mocks may be intentional for isolating specific exports.
 
 ### TST-043: Dead or unasserted spy
 
 - **Severity**: info
 - **Auto-fixable**: Yes (remove unused spy)
-- **Detect**: `vi.spyOn(…)` or `vi.fn()` assigned to a variable that is never referenced in an `expect()` call or used as a mock implementation
+- **Detect**: `vi.spyOn(…)` / `jest.spyOn(…)` or `vi.fn()` / `jest.fn()` assigned to a variable that is never referenced in an `expect()` call or used as a mock implementation
 - **Why**: Noise. Creates false impression that something is being verified.
 
 ### TST-060: Generic or misleading test name
@@ -298,18 +298,18 @@ it('retries up to maxRetries then throws', () => { … });
 - **Why**: Redundant tests inflate the test suite without improving confidence. They increase maintenance cost and slow down test runs.
 
 ```typescript
-// ❌ Bad — 5 tests for the same formatPaths mechanism
-it('should format include paths with <rootDir>', () => { … });
-it('should format exclude paths with <rootDir>', () => { … });
-it('should format setupFiles with <rootDir>', () => { … });
-it('should format globalSetup with <rootDir>', () => { … });
-it('should format includeSource with <rootDir>', () => { … });
+// ❌ Bad — 5 tests for the same normalizePaths mechanism
+it('should normalize pathA with placeholder', () => { … });
+it('should normalize pathB with placeholder', () => { … });
+it('should normalize pathC with placeholder', () => { … });
+it('should normalize pathD with placeholder', () => { … });
+it('should normalize pathE with placeholder', () => { … });
 
 // ✅ Good — one test proves the mechanism, comment notes coverage
-it('should replace <rootDir> placeholder in path options', () => {
-  // formatPaths is shared by include, exclude, setupFiles, globalSetup, includeSource
-  const result = withDefaultConfig({ root: '/project', include: ['<rootDir>/src/**/*.test.ts'] });
-  expect(result.include).toEqual(['/project/src/**/*.test.ts']);
+it('should replace placeholder in path-type options', () => {
+  // normalizePaths is shared by pathA, pathB, pathC, pathD, pathE
+  const result = normalize({ root: '/project', pathA: ['<root>/src/**/*.test.ts'] });
+  expect(result.pathA).toEqual(['/project/src/**/*.test.ts']);
 });
 ```
 
@@ -377,7 +377,7 @@ Skip Layer 3 for integration/e2e tests that exercise multiple modules, or when t
 - **Auto-fixable**: No
 - **Detect**: Source depends on `Date.now()`, `Math.random()`, UUIDs, timestamps, locale-sensitive formatting, or `process.env` values. Tests assert on exact output values without stubbing/mocking these sources.
 - **Why**: Tests may pass locally but fail in different timezones, locales, or environments. Or worse, they pass today and fail tomorrow.
-- **How to check**: Find nondeterministic calls in source. Check if test file uses `vi.useFakeTimers()`, `vi.spyOn(Math, 'random')`, or env setup for those values.
+- **How to check**: Find nondeterministic calls in source. Check if test file uses fake timers (`vi.useFakeTimers()` / `jest.useFakeTimers()`), `spyOn(Math, 'random')`, or env setup for those values.
 
 ### TST-034: Bare `toThrow()` when source has distinct errors
 
