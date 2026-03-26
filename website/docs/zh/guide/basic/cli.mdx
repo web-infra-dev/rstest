@@ -27,15 +27,15 @@ Commands:
   run [...filters]          run tests without watch mode
   watch [...filters]        run tests in watch mode
   list [...filters]         lists all test files that Rstest will run
-  merge-reports [path]      merge blob reports from multiple shards
+  merge-reports [path]      Merge blob reports from multiple shards into a unified report
+  init [project]            Initialize rstest configuration
 
 Options:
-  -w, --watch                              Run tests in watch mode
-  -h, --help                               Display this message
-  -v, --version                            Display version number
-  -c, --config <config>
-  ...
+  -h, --help                Display this message
+  -v, --version             Display version number
 ```
+
+可以通过 `npx rstest <command> -h` 查看命令专属参数。例如，`npx rstest init -h` 只会显示初始化相关参数，而 `npx rstest merge-reports -h` 只会显示合并报告相关参数。
 
 ## rstest [...filters]
 
@@ -180,9 +180,33 @@ npx rstest merge-reports ./custom-reports-dir
 npx rstest merge-reports --cleanup
 ```
 
+## rstest init
+
+`rstest init` 用于为支持的项目类型生成初始配置。
+
+```bash
+npx rstest init
+```
+
+当前可用的初始化目标是 `browser`：
+
+```bash
+npx rstest init browser
+```
+
+使用 `--yes` 可以跳过交互式提问，直接应用默认配置：
+
+```bash
+npx rstest init browser --yes
+```
+
 ## CLI 选项
 
-Rstest CLI 支持以下常用参数，所有命令均可使用：
+Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参数。
+
+### 测试命令
+
+`rstest`、`rstest run` 和 `rstest watch` 共享同一组测试运行参数：
 
 | 参数                            | 说明                                                                                                                                                 |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -217,26 +241,52 @@ Rstest CLI 支持以下常用参数，所有命令均可使用：
 | `--restoreMocks`                | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                                  |
 | `--unstubGlobals`               | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                               |
 | `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                  |
-| `--include <pattern>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                           |
-| `--includeSource <pattern>`     | 指定源码内联测试文件匹配模式，详见 [includeSource](/config/test/include-source)                                                                      |
+| `--include <include>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                           |
 | `--logHeapUsage`                | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
 | `--hideSkippedTests`            | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                                       |
 | `--hideSkippedTestFiles`        | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                          |
-| `--chaiConfig <config>`         | 自定义 Chai 配置，详见 [chaiConfig](/config/test/chai-config)                                                                                        |
-| `--env <key=value>`             | 设置环境变量，详见 [env](/config/test/env)                                                                                                           |
 | `--pool <type>`                 | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                           |
 | `--pool.type <type>`            | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                                                                   |
 | `--pool.maxWorkers <value>`     | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                             |
 | `--pool.minWorkers <value>`     | 最小 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                             |
 | `--pool.execArgv <arg>`         | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                                |
-| `--setupFiles <files>`          | 指定 setup 文件列表，详见 [setupFiles](/config/test/setup-files)                                                                                     |
-| `--snapshotFormat <options>`    | 自定义快照格式，详见 [snapshotFormat](/config/test/snapshot-format)                                                                                  |
-| `--resolveSnapshotPath`         | 自定义快照路径解析，详见 [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                                   |
-| `--onConsoleLog <handler>`      | 处理 console 日志，详见 [onConsoleLog](/config/test/on-console-log)                                                                                  |
-| `--name <name>`                 | 设置测试套件名称，详见 [name](/config/test/name)                                                                                                     |
-| `--projects <projects>`         | 配置多项目测试，详见 [projects](/config/test/projects)                                                                                               |
 | `-h, --help`                    | 显示帮助信息                                                                                                                                         |
-| `-v, --version`                 | 显示版本号                                                                                                                                           |
+
+`rstest` 默认命令还额外支持 `-w, --watch`，可直接切换到 watch 模式。
+
+### rstest list
+
+`rstest list` 支持上面测试命令的过滤和配置参数，并额外提供：
+
+| 参数                    | 说明                        |
+| ----------------------- | --------------------------- |
+| `--filesOnly`           | 仅输出匹配到的测试文件      |
+| `--json [boolean/path]` | 以 JSON 输出，或写入文件    |
+| `--includeSuites`       | 在输出中包含 suite          |
+| `--printLocation`       | 输出测试和 suite 的位置信息 |
+
+### rstest merge-reports
+
+`rstest merge-reports` 只注册一组更小的参数集合：
+
+| 参数                       | 说明                                                                                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`    | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                  |
+| `--config-loader <loader>` | 指定配置加载器 （`auto` \| `jiti` \| `native`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`        | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
+| `--coverage`               | 合并完成后生成覆盖率报告，详见 [coverage](/config/test/coverage)                                                                                     |
+| `--reporter <reporter>`    | 指定在合并结果上运行的报告器，详见 [reporters](/config/test/reporters)                                                                               |
+| `--cleanup`                | 合并完成后删除 blob 报告目录                                                                                                                         |
+| `-h, --help`               | 显示帮助信息                                                                                                                                         |
+
+### rstest init
+
+`rstest init` 只接受初始化相关参数：
+
+| 参数         | 说明                       |
+| ------------ | -------------------------- |
+| `--yes`      | 使用默认选项并跳过交互界面 |
+| `-h, --help` | 显示帮助信息               |
 
 ### 布尔选项取反
 
