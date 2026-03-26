@@ -27,7 +27,7 @@ try {
   console.error(
     'Falling back: the generating-tests skill will use manual source scanning instead.',
   );
-  process.exit(2);
+  process.exit(1);
 }
 
 function scriptKind(file) {
