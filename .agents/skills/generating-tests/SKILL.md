@@ -22,7 +22,7 @@ User task → What do they want?
 
 ## Preflight (shared by both modes)
 
-Before entering either mode, resolve these three things:
+Before entering either mode, resolve these things:
 
 ### 1. Source ↔ Test mapping
 
@@ -50,7 +50,19 @@ Determine whether the target tests are **unit** (single module, mocked dependenc
 - Generate mode: scope of analysis and mock expectations
 - Audit mode: Layer 3 cross-file rules only apply to unit-style tests with a clear primary subject
 
-### 4. Collect existing test inventory
+### 4. Locate documentation (Generate mode only)
+
+Find documentation that describes the target module's user-facing behavior. Try in order:
+
+1. **Same repo**: Check for `docs/`, `website/`, `README.md`, or a doc directory referenced in the repo root README
+2. **Package-level**: Check `packages/<name>/README.md` or a `docs/` folder within the package
+3. **External repo**: If the README or docs link to an external documentation repository, note the URL
+
+If documentation is found automatically, proceed. If the location is ambiguous or external, **ask the user to confirm** the documentation path or URL before dispatching the Doc Analyst.
+
+If no documentation exists for the target, skip the Doc Analyst subagent entirely.
+
+### 5. Collect existing test inventory
 
 Use `rstest list` to get a structured view of existing tests:
 
@@ -67,7 +79,7 @@ pnpm rstest list --filesOnly '<directory>'
 
 This is more reliable than grep-matching `it(` patterns — it handles `it.each`, dynamic names, and nested suites correctly.
 
-### 5. Execution command
+### 6. Execution command
 
 Use the `testing` skill to determine the correct run command. Do **not** hardcode `pnpm rstest` — the command varies by package, e2e vs unit, and working directory.
 
@@ -81,9 +93,9 @@ Ask the user for the target file or directory if not provided. Run Preflight to 
 
 For **small single-file targets**, you may skip subagents and perform analysis directly. Use subagents when the scope involves multiple files or when git history analysis would benefit from isolation.
 
-### Step 2: Discovery — dispatch two subagents in parallel
+### Step 2: Discovery — dispatch subagents in parallel
 
-Use the `Task` tool to dispatch both subagents concurrently.
+Use the `Task` tool to dispatch subagents concurrently. Always dispatch A and B. Dispatch C only if documentation was found in Preflight step 4.
 
 #### Subagent A: The Archaeologist (git history)
 
@@ -152,15 +164,50 @@ Return a JSON array:
 Priority guide: high = error paths + historical bugs, medium = branches + boundaries, low = happy path variants.
 ```
 
+#### Subagent C: The Doc Analyst (documentation-driven discovery)
+
+Only dispatch this subagent if documentation was located in Preflight step 4.
+
+Prompt the subagent with:
+
+```
+Read the documentation at <doc-path-or-url> that covers <target-module>.
+
+Extract every concrete user-facing behavior described in the docs:
+- API usage examples (function calls with specific arguments/options)
+- Configuration options and their effects
+- CLI commands/flags and expected behavior
+- Edge cases or caveats explicitly mentioned
+- Code examples shown in the docs
+
+Then compare with the existing test inventory:
+<paste JSON from rstest list>
+
+For each documented behavior, determine if a corresponding test exists.
+
+Return a JSON array:
+[
+  {
+    "documented_behavior": "<what the docs say>",
+    "doc_location": "<doc-file:line or section heading>",
+    "tested": true/false,
+    "existing_test": "<test name if tested, null otherwise>",
+    "priority": "high"
+  }
+]
+
+All documented behaviors are high priority — if the docs promise it, a test should protect it.
+```
+
 ### Step 3: Synthesize & propose
 
-Collect results from both subagents. Deduplicate by root cause (one finding per behavior, not per detection method). Present a prioritized list to the user:
+Collect results from all subagents. Deduplicate by root cause (one finding per behavior, not per detection method). Present a prioritized list to the user, tagging each finding with its source:
 
 ```
 Found N missing test scenarios for <target>:
 
 High priority:
-  [1] <description> — <reason: historical bug / untested error path / ...>
+  [1] <description> — <source: doc / historical bug / untested error path>
   [2] ...
 
 Medium priority:
