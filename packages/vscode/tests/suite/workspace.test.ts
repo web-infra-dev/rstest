@@ -69,7 +69,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'folder/project-2/rstest.config.mts',
+              label: 'folder/project-2/rstest.config.ts',
               children: [
                 {
                   label: 'test',
@@ -78,7 +78,7 @@ suite('Workspace discover suite', () => {
               ],
             },
             {
-              label: 'project-1/rstest.config.mts',
+              label: 'project-1/rstest.config.ts',
               children: [
                 {
                   label: 'test',
@@ -93,13 +93,13 @@ suite('Workspace discover suite', () => {
 
     // remove config file
     await fs.rename(
-      path.resolve(fixturesRoot, 'workspace-2/project-1/rstest.config.mts'),
+      path.resolve(fixturesRoot, 'workspace-2/project-1/rstest.config.ts'),
       path.resolve(fixturesRoot, 'workspace-2/project-1/foo.config.ts'),
     );
     await fs.rename(
       path.resolve(
         fixturesRoot,
-        'workspace-2/folder/project-2/rstest.config.mts',
+        'workspace-2/folder/project-2/rstest.config.ts',
       ),
       path.resolve(fixturesRoot, 'workspace-2/folder/project-2/bar.config.ts'),
     );
@@ -193,13 +193,13 @@ suite('Workspace discover suite', () => {
     // restore config file and configFileGlobPattern
     await fs.rename(
       path.resolve(fixturesRoot, 'workspace-2/project-1/foo.config.ts'),
-      path.resolve(fixturesRoot, 'workspace-2/project-1/rstest.config.mts'),
+      path.resolve(fixturesRoot, 'workspace-2/project-1/rstest.config.ts'),
     );
     await fs.rename(
       path.resolve(fixturesRoot, 'workspace-2/folder/project-2/foo.config.ts'),
       path.resolve(
         fixturesRoot,
-        'workspace-2/folder/project-2/rstest.config.mts',
+        'workspace-2/folder/project-2/rstest.config.ts',
       ),
     );
     await config.update('configFileGlobPattern', undefined);
@@ -226,7 +226,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'folder/project-2/rstest.config.mts',
+              label: 'folder/project-2/rstest.config.ts',
               children: [
                 {
                   label: 'test',
@@ -235,7 +235,7 @@ suite('Workspace discover suite', () => {
               ],
             },
             {
-              label: 'project-1/rstest.config.mts',
+              label: 'project-1/rstest.config.ts',
               children: [
                 {
                   label: 'test',
