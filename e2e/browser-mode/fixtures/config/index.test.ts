@@ -1,4 +1,4 @@
-// @ts-expect-error - @test-alias is defined via resolve.alias in rstest.config.ts
+// @ts-expect-error - @test-alias is defined via resolve.alias in rstest.config.mts
 import { ALIASED_VALUE } from '@test-alias';
 
 // This test uses globals: true config
@@ -19,7 +19,7 @@ describe('globals config', () => {
 
 describe('rsbuild config options', () => {
   it('should support source.define', () => {
-    // @ts-expect-error - __TEST_DEFINE__ is defined via source.define in rstest.config.ts
+    // @ts-expect-error - __TEST_DEFINE__ is defined via source.define in rstest.config.mts
     expect(__TEST_DEFINE__).toBe('define-value');
   });
 

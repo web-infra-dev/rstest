@@ -23,7 +23,7 @@ describe('test build config', () => {
         'run',
         `fixtures/${name}`,
         '-c',
-        `fixtures/${name}/rstest.config.ts`,
+        `fixtures/${name}/rstest.config.mts`,
       ],
       onTestFinished,
       options: {
@@ -54,7 +54,7 @@ describe('test build config', () => {
         'run',
         'fixtures/customOutput',
         '-c',
-        'fixtures/customOutput/rstest.config.ts',
+        'fixtures/customOutput/rstest.config.mts',
       ],
       onTestFinished,
       options: {

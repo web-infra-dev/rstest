@@ -41,7 +41,7 @@ describe('cli init browser', () => {
     await expectExecSuccess();
 
     expect(
-      fs.existsSync(path.join(projectDir, 'rstest.browser.config.ts')),
+      fs.existsSync(path.join(projectDir, 'rstest.browser.config.mts')),
     ).toBe(true);
 
     expect(
@@ -51,7 +51,7 @@ describe('cli init browser', () => {
 
     const pkg = readJson(path.join(projectDir, 'package.json'));
     expect(pkg.scripts?.['test:browser']).toBe(
-      'rstest --config=rstest.browser.config.ts',
+      'rstest --config=rstest.browser.config.mts',
     );
   });
 });
