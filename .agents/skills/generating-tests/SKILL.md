@@ -64,20 +64,27 @@ If no documentation exists for the target, skip the Doc Analyst subagent entirel
 
 ### 5. Collect existing test inventory
 
-Use `rstest list` to get a structured view of existing tests:
+Collect test coverage in two layers — **do not read file contents at this stage**, only collect file-level and test-case-name-level information:
+
+**Unit tests**: Use `rstest list` to get a structured view:
 
 ```bash
-# JSON output with file, name, location for each test case
-pnpm rstest list --json '<target-test-file>'
-
-# With line/column locations
-pnpm rstest list --json --printLocation '<target-test-file>'
-
-# List only test files in scope (no individual cases)
+# List only test files in scope (cheap — no content reading)
 pnpm rstest list --filesOnly '<directory>'
+
+# JSON output with test names for specific files (only when needed)
+pnpm rstest list --json '<target-test-file>'
 ```
 
-This is more reliable than grep-matching `it(` patterns — it handles `it.each`, dynamic names, and nested suites correctly.
+**E2E / integration tests**: Many behaviors are primarily covered by e2e tests, not unit tests. Scan the e2e directory for relevant fixtures:
+
+```bash
+# List e2e test files and fixture directories related to the target module
+ls e2e/                           # top-level e2e suites
+grep -rl '<target-module-name>' e2e/ --include='*.test.ts' -l
+```
+
+Both layers feed into subagent prompts. If a behavior appears covered by e2e, it should not be reported as a missing unit test unless there is a specific reason to also test it at the unit level.
 
 ### 6. Execution command
 
@@ -93,9 +100,15 @@ Ask the user for the target file or directory if not provided. Run Preflight to 
 
 For **small single-file targets**, you may skip subagents and perform analysis directly. Use subagents when the scope involves multiple files or when git history analysis would benefit from isolation.
 
-### Step 2: Discovery — dispatch subagents in parallel
+### Step 2: Discovery — dispatch subagents
 
-Use the `Task` tool to dispatch subagents concurrently. Always dispatch A and B. Dispatch C only if documentation was found in Preflight step 4.
+Dispatch only the subagents needed for the user's request and the target scope:
+
+- If the user explicitly requests a subset (e.g., "Doc Analyst only"), honor that — skip the others.
+- Default: dispatch A (Archaeologist) and B (Static Analyzer) always; dispatch C (Doc Analyst) only if documentation was found in Preflight step 4.
+- When running without the Static Analyzer, doc-sourced findings cannot be validated against source code — Step 2.5 (verification) becomes especially important.
+
+Use the `Task` tool to dispatch selected subagents concurrently.
 
 #### Subagent A: The Archaeologist (git history)
 
@@ -173,27 +186,39 @@ Prompt the subagent with:
 ```
 Read the documentation at <doc-path-or-url> that covers <target-module>.
 
-Extract every concrete user-facing behavior described in the docs:
-- API usage examples (function calls with specific arguments/options)
-- Configuration options and their effects
-- CLI commands/flags and expected behavior
-- Edge cases or caveats explicitly mentioned
-- Code examples shown in the docs
+SCOPE REDUCTION: If the doc directory contains many files (>20), first scan
+filenames and section headings to identify only the files relevant to the
+target module. Do not read every doc file — focus on the ones whose path or
+title matches the target package/module name.
 
-Then compare with the existing test inventory:
-<paste JSON from rstest list>
+Extract **distinct user-facing mechanisms** described in the docs. Focus on:
+- Error/throw paths and explicit validation rules
+- Fallback, retry, and recovery behaviors
+- Caveats, warnings, or "gotchas" explicitly called out
+- Behaviors with dedicated code branches/mechanisms
+- API usage examples with specific arguments/options
 
-For each documented behavior, determine if a corresponding test exists.
+Do NOT extract:
+- Trivial default values ("default is X") unless the default involves a
+  distinct branch or conditional logic
+- Simple value pass-through that is likely covered by snapshot or e2e tests
+- Behaviors that clearly belong to upstream dependencies (e.g., bundler
+  internals) rather than the target module's own source code
 
-Additionally, verify that each documented behavior still exists in the current source.
-If a documented behavior cannot be matched to any function, branch, or code path in
-the current source, mark it as "docs_drift" — this is a documentation accuracy issue,
-not a missing test.
+Then compare with the existing test inventory (both unit AND e2e):
+<paste unit test inventory from rstest list>
+<paste e2e test file list from Preflight>
 
-When multiple documented behaviors appear to target the same source function or
-adjacent line range (e.g., several config options all described as going through the
-same normalization), assign them the same "mechanism_group" string so they can be
-deduplicated downstream.
+For each documented behavior, determine if a corresponding test exists
+in EITHER unit tests or e2e tests. If covered by e2e, mark as tested.
+
+Additionally, verify that each documented behavior still exists in the current
+source. If a documented behavior cannot be matched to any function, branch,
+or code path in the current source, mark it as "docs_drift".
+
+When multiple documented behaviors appear to target the same source function
+or adjacent line range, assign them the same "mechanism_group" string so
+they can be deduplicated downstream.
 
 Return a JSON array:
 [
@@ -201,22 +226,36 @@ Return a JSON array:
     "documented_behavior": "<what the docs say>",
     "doc_location": "<doc-file section heading or path:section>",
     "tested": true/false,
+    "test_layer": "<unit | e2e | none>",
     "status": "missing_test | docs_drift",
     "existing_test": "<test name if tested, null otherwise>",
     "mechanism_group": "<shared group label, or null if unique>",
+    "recommended_test_layer": "unit | e2e",
     "priority": "high | medium"
   }
 ]
 
 Priority guide:
-- high: error/throw paths, fallback/recovery logic, security boundaries, behaviors
-  with explicit caveats in the docs
-- medium: happy-path value mappings, simple normalization, straightforward config
-  defaults
+- high: error/throw paths, fallback/recovery logic, security boundaries,
+  behaviors with explicit caveats in the docs
+- medium: happy-path value mappings, simple normalization, straightforward
+  config defaults
 
 Do NOT include source file line numbers — source location mapping is handled
 separately by the Static Analyzer. Only report documentation locations.
 ```
+
+### Step 2.5: Verify candidate findings
+
+Subagent output is **candidate findings, not verified truth**. Before synthesis, verify each candidate:
+
+1. **Source existence check**: For each "missing test" finding, confirm the behavior actually exists in the target module's source code. If the behavior belongs to an upstream dependency or a different package, discard it.
+2. **E2e coverage check**: For findings marked `test_layer: "none"`, do a quick check against e2e fixture names and test file names. If a matching e2e test exists, mark as covered.
+3. **Testability filter**: For findings with `recommended_test_layer: "e2e"`, do not include them in a unit test gap report — note them separately as "better suited for e2e".
+
+Only verified high-confidence findings proceed to Step 3. Discard or group unverifiable items separately as "needs manual review".
+
+This step is especially important when running without the Static Analyzer (e.g., Doc Analyst only mode), since there is no source-grounded cross-check.
 
 ### Step 3: Synthesize & propose
 
