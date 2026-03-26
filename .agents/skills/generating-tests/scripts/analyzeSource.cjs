@@ -6,14 +6,29 @@
  * using the TypeScript compiler API (parse-only, no type-checking).
  *
  * Usage:
- *   node scripts/analyze-source.cjs <file.ts> [file2.ts ...]
+ *   node analyzeSource.cjs <file> [file2 ...]
+ *
+ * Supports .ts, .tsx, .mts, .cts, .js, .jsx, .mjs, .cjs files.
+ * Requires `typescript` to be resolvable (installed in the project or globally).
  *
  * Output: JSON to stdout
  */
 'use strict';
 
 const fs = require('node:fs');
-const ts = require('typescript');
+
+let ts;
+try {
+  ts = require('typescript');
+} catch {
+  console.error(
+    'Error: typescript is not installed. Install it as a dev dependency or globally to use static analysis.',
+  );
+  console.error(
+    'Falling back: the generating-tests skill will use manual source scanning instead.',
+  );
+  process.exit(2);
+}
 
 function scriptKind(file) {
   if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
@@ -200,7 +215,7 @@ function analyze(file) {
 // --- Main ---
 const files = process.argv.slice(2);
 if (!files.length) {
-  console.error('Usage: analyze-source.cjs <file.ts> [file2.ts ...]');
+  console.error('Usage: node analyzeSource.cjs <file> [file2 ...]');
   process.exit(1);
 }
 
