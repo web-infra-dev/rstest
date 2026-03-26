@@ -1280,8 +1280,9 @@ const createBrowserRuntime = async ({
               tools: {
                 rspack: (rspackConfig) => {
                   rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation =
-                    createBrowserLazyCompilationConfig(setupFiles);
+                  rspackConfig.lazyCompilation = isWatchMode
+                    ? createBrowserLazyCompilationConfig(setupFiles)
+                    : false;
                   rspackConfig.plugins = rspackConfig.plugins || [];
                   rspackConfig.plugins.push(virtualManifestPlugin);
 
