@@ -185,25 +185,50 @@ Then compare with the existing test inventory:
 
 For each documented behavior, determine if a corresponding test exists.
 
+Additionally, verify that each documented behavior still exists in the current source.
+If a documented behavior cannot be matched to any function, branch, or code path in
+the current source, mark it as "docs_drift" — this is a documentation accuracy issue,
+not a missing test.
+
+When multiple documented behaviors appear to target the same source function or
+adjacent line range (e.g., several config options all described as going through the
+same normalization), assign them the same "mechanism_group" string so they can be
+deduplicated downstream.
+
 Return a JSON array:
 [
   {
     "documented_behavior": "<what the docs say>",
-    "doc_location": "<doc-file:line or section heading>",
+    "doc_location": "<doc-file section heading or path:section>",
     "tested": true/false,
+    "status": "missing_test | docs_drift",
     "existing_test": "<test name if tested, null otherwise>",
-    "priority": "high"
+    "mechanism_group": "<shared group label, or null if unique>",
+    "priority": "high | medium"
   }
 ]
 
-All documented behaviors are high priority — if the docs promise it, a test should protect it.
+Priority guide:
+- high: error/throw paths, fallback/recovery logic, security boundaries, behaviors
+  with explicit caveats in the docs
+- medium: happy-path value mappings, simple normalization, straightforward config
+  defaults
+
+Do NOT include source file line numbers — source location mapping is handled
+separately by the Static Analyzer. Only report documentation locations.
 ```
 
 ### Step 3: Synthesize & propose
 
-Collect results from all subagents. Before presenting to the user, apply **mechanism-level deduplication**:
+Collect results from all subagents. Before presenting to the user, apply deduplication in two passes:
 
-#### Dedup rule: test mechanisms, not enumerations
+#### Pass 1: Cross-subagent dedup
+
+When the same behavior appears in multiple subagent results (e.g., Doc Analyst reports an untested throw path that Static Analyzer also found via `throws`), **merge into one finding**. Prefer the Doc Analyst's description (more user-facing) and tag the source as `doc + static` or `doc + history`. Do not present the same behavior twice from different subagents.
+
+For Doc Analyst findings with `status: "docs_drift"`, separate them into a dedicated **Docs Drift** section in the report — these are not missing tests but documentation accuracy issues to flag to the user.
+
+#### Pass 2: Mechanism-level dedup — test mechanisms, not enumerations
 
 When multiple documented/discovered behaviors share the same underlying code path, **group them and propose one test for the mechanism**, not one test per input variant.
 
@@ -230,23 +255,9 @@ Example — GOOD (test the mechanism):
     (covers include, exclude, setupFiles, globalSetup, includeSource — all use formatPaths)
 ```
 
-Present the deduplicated list to the user, tagging each finding with its source:
+Present the deduplicated findings using the **Generate Mode Checkpoint** format defined in [references/checkpoint-format.md](references/checkpoint-format.md). Load the format reference and follow it exactly — Markdown table with all required columns, Already Covered section, Docs Drift section (if applicable), and the user selection prompt.
 
-```
-Found N missing test scenarios for <target>:
-
-High priority:
-  [1] <description> — <source: doc / historical bug / untested error path>
-  [2] ...
-
-Medium priority:
-  [3] ...
-
-Already covered (no action needed):
-  - <existing test name>: covers <behavior>
-```
-
-**Wait for user approval** before proceeding. The user may select all, pick specific numbers, or skip.
+**⛔ MANDATORY STOP**: Do NOT proceed to Step 4 (writing tests) until the user has replied with their selection. This checkpoint is not optional — the agent must present the table and wait. No exceptions.
 
 ### Step 4: Write tests
 
@@ -333,24 +344,9 @@ Dedupe: report one finding per root cause. If TST-003 (empty body) fires, do not
 
 ### Step 3: Present audit report
 
-Collect and merge all subagent results. Present grouped by severity:
+Collect and merge all subagent results. Present findings using the **Audit Mode Checkpoint** format defined in [references/checkpoint-format.md](references/checkpoint-format.md). Load the format reference and follow it exactly — Markdown table with all required columns (Severity, Rule, Fixable, Location, Problem, Evidence & Explanation, Suggested Fix), info summary line, stats, and the user selection prompt.
 
-```
-Audit results for <scope> (X files, Y test cases):
-
-🔴 Errors (must fix):
-  - <file>:<line> [TST-004] No assertion in test body
-  - <file>:<line> [TST-010] Missing await on async expect
-
-🟡 Warnings (should fix):
-  - <file>:<line> [TST-030] Weak assertion: toBeTruthy() on structured return value
-  - <file>:<line> [TST-051] Source throws 3 distinct errors, none tested
-
-🔵 Info (consider fixing):
-  - <file>:<line> [TST-061] 4 similar tests could use it.each
-```
-
-**Wait for user approval** before applying fixes.
+**⛔ MANDATORY STOP**: Do NOT proceed to Step 4 (applying fixes) until the user has replied with their selection. This checkpoint is not optional — the agent must present the table and wait. No exceptions.
 
 ### Step 4: Apply fixes
 
@@ -364,6 +360,7 @@ For approved fixes:
 
 ## Guardrails
 
+- **Mandatory checkpoint** — both modes require a formatted checkpoint report (see [references/checkpoint-format.md](references/checkpoint-format.md)) before any write action. The agent must stop and wait for user selection. Skipping the checkpoint or auto-selecting is forbidden.
 - **Never modify source code** — only test files. If a test failure reveals a source bug, report it to the user.
 - **Never add dependencies** — use only what the project already has.
 - **Mimic existing conventions** — always read nearby test files before writing.
