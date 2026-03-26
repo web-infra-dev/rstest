@@ -3,6 +3,7 @@ description: Options for configuring the output of Rstest, such as whether to ou
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # output
 
@@ -147,6 +148,8 @@ export default defineConfig({
 
 ## output.bundleDependencies
 
+<ApiMeta addedVersion="0.9.5" />
+
 - **Type:** `boolean`
 - **Default:** Depends on `testEnvironment`
 
@@ -199,6 +202,8 @@ export default defineConfig({
 For custom CSS Modules configuration.
 
 ## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
+
+<ApiMeta addedVersion="0.9.5" />
 
 - **Type:** `string | { root?: string }`
 - **Default:** `{ root: 'dist/.rstest-temp' }`
