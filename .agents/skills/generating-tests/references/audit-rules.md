@@ -288,12 +288,30 @@ it('returns null when queue is empty', () => { … });
 it('retries up to maxRetries then throws', () => { … });
 ```
 
-### TST-061: Duplicate tests that should use `it.each`
+### TST-061: Duplicate tests that should be collapsed
 
-- **Severity**: info
-- **Auto-fixable**: Partial (can refactor to `it.each`)
-- **Detect**: Multiple adjacent `it()` blocks with near-identical structure differing only in literal values
-- **Why**: Duplication makes tests harder to extend and maintain.
+- **Severity**: info → warning (when many duplicates)
+- **Auto-fixable**: Partial
+- **Detect**: Multiple `it()` blocks that exercise the same underlying code path with different input values. Two subtypes:
+  - **Literal duplication**: near-identical structure differing only in literal values → refactor to `it.each`
+  - **Mechanism duplication**: multiple tests that each test a different input to the same shared function/branch. If one test proves the mechanism works, the others add no coverage value → collapse to one representative test
+- **Why**: Redundant tests inflate the test suite without improving confidence. They increase maintenance cost and slow down test runs.
+
+```typescript
+// ❌ Bad — 5 tests for the same formatPaths mechanism
+it('should format include paths with <rootDir>', () => { … });
+it('should format exclude paths with <rootDir>', () => { … });
+it('should format setupFiles with <rootDir>', () => { … });
+it('should format globalSetup with <rootDir>', () => { … });
+it('should format includeSource with <rootDir>', () => { … });
+
+// ✅ Good — one test proves the mechanism, comment notes coverage
+it('should replace <rootDir> placeholder in path options', () => {
+  // formatPaths is shared by include, exclude, setupFiles, globalSetup, includeSource
+  const result = withDefaultConfig({ root: '/project', include: ['<rootDir>/src/**/*.test.ts'] });
+  expect(result.include).toEqual(['/project/src/**/*.test.ts']);
+});
+```
 
 ---
 

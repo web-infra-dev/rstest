@@ -201,7 +201,36 @@ All documented behaviors are high priority — if the docs promise it, a test sh
 
 ### Step 3: Synthesize & propose
 
-Collect results from all subagents. Deduplicate by root cause (one finding per behavior, not per detection method). Present a prioritized list to the user, tagging each finding with its source:
+Collect results from all subagents. Before presenting to the user, apply **mechanism-level deduplication**:
+
+#### Dedup rule: test mechanisms, not enumerations
+
+When multiple documented/discovered behaviors share the same underlying code path, **group them and propose one test for the mechanism**, not one test per input variant.
+
+How to identify shared mechanisms:
+
+1. Read the source to check if multiple behaviors flow through the same function or branch
+2. If N config options are all processed by the same normalization function (e.g., `formatPaths` handles `include`, `exclude`, `setupFiles`, `globalSetup`), propose **one test for the mechanism** + a brief note that it covers the other options
+3. If N API options all go through the same validation/merge logic, test the logic once with a representative input
+
+Example — BAD (enumerate every option):
+
+```
+[1] <rootDir> placeholder in include — doc
+[2] <rootDir> placeholder in exclude — doc
+[3] <rootDir> placeholder in setupFiles — doc
+[4] <rootDir> placeholder in globalSetup — doc
+[5] <rootDir> placeholder in includeSource — doc
+```
+
+Example — GOOD (test the mechanism):
+
+```
+[1] <rootDir> placeholder replacement in path options — doc
+    (covers include, exclude, setupFiles, globalSetup, includeSource — all use formatPaths)
+```
+
+Present the deduplicated list to the user, tagging each finding with its source:
 
 ```
 Found N missing test scenarios for <target>:
@@ -225,8 +254,9 @@ For each approved scenario, generate the test code. Before writing:
 
 1. **Follow conventions** discovered in Preflight — do not invent new patterns
 2. **One focused `it()` per scenario** — do not combine behaviors
-3. Place new tests in the correct file following the project's structure
-4. When editing `.ts`/`.tsx` files, follow the `typescript` skill guidelines
+3. **Test the mechanism, not every input** — if one test exercises a shared code path, don't add near-identical tests for each variant that uses that path. When a single assertion proves the mechanism works, additional variants are noise.
+4. Place new tests in the correct file following the project's structure
+5. When editing `.ts`/`.tsx` files, follow the `typescript` skill guidelines
 
 ### Step 5: Auto-healing loop
 
