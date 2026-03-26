@@ -9,7 +9,6 @@ import type {
 import './setup';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { install } from 'source-map-support';
-import { createCoverageProvider } from '../../coverage';
 import { createWorkerMetaMessage } from '../../pool/workerMeta';
 import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
@@ -426,10 +425,16 @@ const runInPool = async (
       };
     }
     // Initialize coverage collector if coverage is enabled
-    const coverageProvider = await createCoverageProvider(
-      options.context.runtimeConfig.coverage || {},
-      options.context.rootPath,
-    );
+    let coverageProvider: Awaited<
+      ReturnType<typeof import('../../coverage').createCoverageProvider>
+    > | null = null;
+    if (options.context.runtimeConfig.coverage?.enabled) {
+      const { createCoverageProvider } = await import('../../coverage');
+      coverageProvider = await createCoverageProvider(
+        options.context.runtimeConfig.coverage,
+        options.context.rootPath,
+      );
+    }
     if (coverageProvider) {
       coverageProvider.init();
     }
