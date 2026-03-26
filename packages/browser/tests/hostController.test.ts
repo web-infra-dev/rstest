@@ -104,10 +104,10 @@ describe('browser config resolution', () => {
     expect(browserConfig.strictPort).toBe(true);
   });
 
-  it('should disable HMR in non-watch mode and keep error-only client log', () => {
+  it('should enable HMR in non-watch mode and keep error-only client log', () => {
     const devConfig = createBrowserRsbuildDevConfig(false);
 
-    expect(devConfig.hmr).toBe(false);
+    expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
   });
 
