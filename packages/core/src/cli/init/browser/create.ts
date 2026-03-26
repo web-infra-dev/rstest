@@ -356,7 +356,7 @@ async function generateFiles(
 
   // 4. Update package.json scripts
   updatePackageJsonScripts(cwd, {
-    'test:browser': 'rstest --config=rstest.browser.config.ts',
+    'test:browser': 'rstest --config=rstest.browser.config.mts',
   });
 
   // 5. Add devDependencies to package.json

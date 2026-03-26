@@ -11,7 +11,7 @@ describe('test projects coverage', () => {
   it('should run projects correctly with coverage', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--globals', '-c', 'rstest.coverage.config.ts'],
+      args: ['run', '--globals', '-c', 'rstest.coverage.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -50,7 +50,7 @@ describe('test projects coverage', () => {
   it('should run projects correctly with coverage.include', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--globals', '-c', 'rstest.coverage.include.config.ts'],
+      args: ['run', '--globals', '-c', 'rstest.coverage.include.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

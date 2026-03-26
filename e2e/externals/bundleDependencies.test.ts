@@ -27,7 +27,7 @@ describe('test bundleDependencies', () => {
         './fixtures/index.test.ts',
         '--testEnvironment=jsdom',
         '-c',
-        './fixtures/rstest.noBundleDeps.config.ts',
+        './fixtures/rstest.noBundleDeps.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -52,7 +52,7 @@ describe('test bundleDependencies', () => {
         './fixtures/index.test.ts',
         '--testEnvironment=jsdom',
         '-c',
-        './fixtures/rstest.debug.config.ts',
+        './fixtures/rstest.debug.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -76,7 +76,7 @@ describe('test bundleDependencies', () => {
         'run',
         './fixtures/index.test.ts',
         '-c',
-        './fixtures/rstest.bundleDeps.config.ts',
+        './fixtures/rstest.bundleDeps.config.mts',
       ],
       options: {
         nodeOptions: {

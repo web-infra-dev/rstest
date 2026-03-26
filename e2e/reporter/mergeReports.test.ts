@@ -95,7 +95,7 @@ describe('merge-reports', () => {
         '1/2',
         '--reporter=blob',
         '-c',
-        'rstest.coverage.config.ts',
+        'rstest.coverage.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -114,7 +114,7 @@ describe('merge-reports', () => {
         '2/2',
         '--reporter=blob',
         '-c',
-        'rstest.coverage.config.ts',
+        'rstest.coverage.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -128,7 +128,12 @@ describe('merge-reports', () => {
     const { cli: mergeCli, expectExecSuccess: mergeSuccess } =
       await runRstestCli({
         command: 'rstest',
-        args: ['merge-reports', '--cleanup', '-c', 'rstest.coverage.config.ts'],
+        args: [
+          'merge-reports',
+          '--cleanup',
+          '-c',
+          'rstest.coverage.config.mts',
+        ],
         options: {
           nodeOptions: {
             cwd: fixturesDir,

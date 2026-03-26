@@ -51,7 +51,7 @@ describe('test projects', () => {
   it('should run project correctly with specified config root', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--globals', '-c', 'packages/client/rstest.config.ts'],
+      args: ['run', '--globals', '-c', 'packages/client/rstest.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -78,7 +78,7 @@ describe('test projects', () => {
   it('should run projects fail when project not found', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.404.config.ts'],
+      args: ['run', '-c', 'rstest.404.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -151,7 +151,7 @@ describe('test projects', () => {
         args: [
           'run',
           '-c',
-          'rstest.projectConfig.config.ts',
+          'rstest.projectConfig.config.mts',
           '--reporter',
           'verbose',
         ],
@@ -184,7 +184,7 @@ describe('test projects', () => {
         args: [
           'run',
           '-c',
-          'rstest.slowTest.config.ts',
+          'rstest.slowTest.config.mts',
           '--reporter',
           'verbose',
         ],
@@ -210,7 +210,7 @@ describe('test projects', () => {
     it('should respect hideSkippedTestFiles per project', async () => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.ts'],
+        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.mts'],
         options: {
           nodeOptions: {
             cwd: join(__dirname, 'fixtures'),

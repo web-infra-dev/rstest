@@ -1,5 +1,5 @@
 import { defineConfig } from '@rslib/core';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin.ts';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
   lib: [

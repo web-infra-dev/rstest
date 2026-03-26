@@ -10,5 +10,5 @@
     "moduleResolution": "bundler",
     "types": ["@rstest/core"]
   },
-  "include": ["tests", "rstest.config.ts"]
+  "include": ["tests", "rstest.config.mts"]
 }

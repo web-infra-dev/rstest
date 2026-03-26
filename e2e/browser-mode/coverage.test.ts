@@ -19,7 +19,7 @@ describe('browser mode - coverage', () => {
 
   it('should collect coverage data successfully without include option', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
-      args: ['-c', 'rstest.noInclude.config.ts'],
+      args: ['-c', 'rstest.noInclude.config.mts'],
     });
 
     await expectExecSuccess();

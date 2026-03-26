@@ -81,7 +81,7 @@ describe('test snapshot', () => {
         'fixtures/index.test.ts',
         '-u',
         '-c',
-        'fixtures/rstest.snapshotPath.config.ts',
+        'fixtures/rstest.snapshotPath.config.mts',
       ],
       options: {
         nodeOptions: {

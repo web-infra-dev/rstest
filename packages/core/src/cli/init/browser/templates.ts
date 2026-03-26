@@ -5,7 +5,7 @@ export type Framework = 'react' | 'vanilla';
 export type BrowserProvider = 'playwright';
 
 /**
- * Get rstest.config.ts template content.
+ * Get rstest.config.mts template content.
  */
 export function getConfigTemplate(): string {
   return `import { defineConfig } from '@rstest/core';
@@ -233,5 +233,5 @@ export function getRunCommand(agent: Agent): string {
  * Get the config file name to create.
  */
 export function getConfigFileName(): string {
-  return 'rstest.browser.config.ts';
+  return 'rstest.browser.config.mts';
 }

@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 it('snapshotFormat', async () => {
   const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
-    args: ['run', 'options.test.ts', '-c', 'rstest.options.config.ts'],
+    args: ['run', 'options.test.ts', '-c', 'rstest.options.config.mts'],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures'),

@@ -43,10 +43,10 @@ export const getTempRstestOutputDirGlob = (distPathRoot: string): string => {
 };
 
 export const DEFAULT_CONFIG_EXTENSIONS = [
-  '.js',
-  '.ts',
-  '.mjs',
   '.mts',
+  '.mjs',
+  '.ts',
+  '.js',
   '.cjs',
   '.cts',
 ] as const;
