@@ -22,11 +22,11 @@ Test inventory: N existing tests in <test-file>
 
 ### Findings Table
 
-| #   | Priority | Missing Behavior                                                      | Source Evidence                                     | Why This Needs a Test                                                                         | Found By     |
-| --- | -------- | --------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------ |
-| 1   | high     | `publicDir.name=''` should throw                                      | `defaultConfig.ts:371` — `throw new Error(...)`     | Explicit throw path — silent regression if removed; docs promise this validation              | doc + static |
-| 2   | high     | `loader='auto'` fallback from native to jiti when native import fails | `loadConfig.ts:143-167` — `catch → retry with jiti` | Fallback logic — if native loader fails, must degrade gracefully; untested = silent breakage  | doc          |
-| 3   | medium   | `server.host=true` normalizes to `'0.0.0.0'`                          | `defaultConfig.ts:344-349` — `if (host === true)`   | Simple value mapping — low regression risk but documented behavior should have basic coverage | doc          |
+| #   | Priority | Missing Behavior                                   | Source Evidence                                      | Why This Needs a Test                                                                         | Found By     |
+| --- | -------- | -------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------ |
+| 1   | high     | `validateInput('')` should throw `ValidationError` | `validator.ts:42` — `throw new ValidationError(...)` | Explicit throw path — silent regression if removed; docs promise this validation              | doc + static |
+| 2   | high     | Retry fallback when primary provider fails         | `fetcher.ts:87-102` — `catch → retry with fallback`  | Fallback logic — if primary fails, must degrade gracefully; untested = silent breakage        | doc          |
+| 3   | medium   | `normalize(true)` converts to string `'enabled'`   | `config.ts:156` — `if (value === true)`              | Simple value mapping — low regression risk but documented behavior should have basic coverage | doc          |
 
 Column definitions:
 
@@ -49,14 +49,14 @@ After the findings table, list behaviors that are already tested:
 ```
 Already covered (no action needed):
   - "parses config from .ts file": covers config file loading
-  - "addPlugins appends to list": covers basic plugin registration
+  - "registers middleware in order": covers middleware registration
 ```
 
 ### Docs Drift Section (if applicable)
 
 ```
 Docs drift (documentation describes behavior not found in current source):
-  - docs/en/config/server.md § "Legacy Mode": source no longer has legacy mode branch
+  - docs/en/api/options.md § "Legacy Mode": source no longer has legacy mode branch
 ```
 
 ### User Prompt
@@ -86,11 +86,11 @@ Rules applied: Layer 1 (grep) + Layer 2 (semantic) + Layer 3 (cross-file)
 
 ### Findings Table
 
-| #   | Severity   | Rule    | Fixable | Location                          | Problem                              | Evidence & Explanation                                                                                   | Suggested Fix                                   |
-| --- | ---------- | ------- | ------- | --------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 1   | 🔴 error   | TST-004 | no      | `rsbuild.test.ts:45`              | No assertion in test body            | `it('loads config', () => { loadConfig('/path'); });` — runs code but proves nothing                     | Add `expect()` assertion on return value        |
-| 2   | 🔴 error   | TST-011 | partial | `snapshot.test.ts:78`             | Wrong async throw pattern            | `expect(async () => await save(d)).toThrow();` — `toThrow` cannot catch async rejections                 | Change to `await expect(...).rejects.toThrow()` |
-| 3   | 🟡 warning | TST-051 | no      | `pluginManager.test.ts` (missing) | 3 throw paths in source, none tested | `pluginManager.ts:27` throw "webpack plugin", `:45` throw "invalid plugin", `:89` throw "duplicate name" | Write error-path tests for each distinct throw  |
+| #   | Severity   | Rule    | Fixable | Location                      | Problem                              | Evidence & Explanation                                                                              | Suggested Fix                                   |
+| --- | ---------- | ------- | ------- | ----------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1   | 🔴 error   | TST-004 | no      | `parser.test.ts:45`           | No assertion in test body            | `it('parses input', () => { parse('/path'); });` — runs code but proves nothing                     | Add `expect()` assertion on return value        |
+| 2   | 🔴 error   | TST-011 | partial | `snapshot.test.ts:78`         | Wrong async throw pattern            | `expect(async () => await save(d)).toThrow();` — `toThrow` cannot catch async rejections            | Change to `await expect(...).rejects.toThrow()` |
+| 3   | 🟡 warning | TST-051 | no      | `validator.test.ts` (missing) | 3 throw paths in source, none tested | `validator.ts:27` throw "invalid input", `:45` throw "missing field", `:89` throw "duplicate entry" | Write error-path tests for each distinct throw  |
 
 Column definitions:
 
