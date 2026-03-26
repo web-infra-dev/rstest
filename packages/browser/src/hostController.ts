@@ -542,12 +542,12 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
-export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
+export const createBrowserRsbuildDevConfig = (_isWatchMode: boolean) => {
   return {
     writeToDisk: isDebug(),
-    // Disable HMR in non-watch mode (tests run once and exit).
-    // Aligns with node mode behavior (packages/core/src/core/rsbuild.ts).
-    hmr: isWatchMode,
+    // Keep HMR enabled in browser mode even for one-shot runs.
+    // lazyCompilation depends on HMR runtime wiring for async import chains.
+    hmr: true,
     client: {
       logLevel: 'error' as const,
     },
