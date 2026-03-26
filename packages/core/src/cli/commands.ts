@@ -1,4 +1,4 @@
-import cac, { type CAC } from 'cac';
+import cac, { type CAC, type Command } from 'cac';
 import { normalize } from 'pathe';
 import type {
   ListCommandOptions,
@@ -11,122 +11,161 @@ import { showRstest } from './prepare';
 
 export type { CommonOptions } from './init';
 
-const applyCommonOptions = (cli: CAC) => {
-  cli
-    .option(
-      '-c, --config <config>',
-      'Specify the configuration file, can be a relative or absolute path',
-    )
-    .option(
-      '--config-loader <loader>',
-      'Specify the loader to load the config file (auto | jiti | native)',
-      {
-        default: 'auto',
-      },
-    )
-    .option(
-      '-r, --root <root>',
-      'Specify the project root directory, can be an absolute path or a path relative to cwd',
-    )
-    .option('--globals', 'Provide global APIs')
-    .option('--isolate', 'Run tests in an isolated environment')
-    .option('--include <include>', 'Match test files')
-    .option('--exclude <exclude>', 'Exclude files from test')
-    .option('-u, --update', 'Update snapshot files')
-    .option('--coverage', 'Enable code coverage collection')
-    .option(
-      '--project <name>',
-      'Run only projects that match the name, can be a full name or wildcards pattern',
-    )
-    .option(
-      '--passWithNoTests',
-      'Allows the test suite to pass when no files are found',
-    )
-    .option(
-      '--printConsoleTrace',
-      'Print console traces when calling any console method',
-    )
-    .option('--disableConsoleIntercept', 'Disable console intercept')
-    .option('--logHeapUsage', 'Log heap usage after each test')
-    .option(
-      '--slowTestThreshold <value>',
-      'The number of milliseconds after which a test or suite is considered slow',
-    )
-    .option('--reporter <reporter>', 'Specify the reporter to use')
-    .option(
-      '-t, --testNamePattern <value>',
-      'Run only tests with a name that matches the regex',
-    )
-    .option(
-      '--testEnvironment <name>',
-      'The environment that will be used for testing',
-    )
-    .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
-    .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
-    .option('--hideSkippedTests', 'Hide skipped tests from the output')
-    .option('--hideSkippedTestFiles', 'Hide skipped test files from the output')
-    .option('--retry <retry>', 'Number of times to retry a test if it fails')
-    .option(
-      '--bail [number]',
-      'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
-    )
-    .option(
-      '--shard <index/count>',
-      'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
-    )
-    .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
-    .option(
-      '--clearMocks',
-      'Automatically clear mock calls, instances, contexts and results before every test',
-    )
-    .option('--resetMocks', 'Automatically reset mock state before every test')
-    .option(
-      '--restoreMocks',
-      'Automatically restore mock state and implementation before every test',
-    )
-    .option('--browser', 'Run tests in browser mode')
-    .option('--browser.enabled', 'Run tests in browser mode')
-    .option(
-      '--browser.name <name>',
-      'Browser to use: chromium, firefox, webkit (default: chromium)',
-    )
-    .option(
-      '--browser.headless',
-      'Run browser in headless mode (default: true in CI)',
-    )
-    .option('--browser.port <port>', 'Port for the browser mode dev server')
-    .option(
-      '--browser.strictPort',
-      'Exit if the specified port is already in use',
-    )
-    .option(
-      '--unstubGlobals',
-      'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
-    )
-    .option(
-      '--unstubEnvs',
-      'Restores all runtime env values that were changed with `rstest.stubEnv` before every test',
-    )
-    .option(
-      '--includeTaskLocation',
-      'Collect test and suite locations. This might increase the running time.',
-    );
+type OptionConfig = {
+  default?: string;
+};
 
-  cli
-    .option('--pool <type>', 'Shorthand for --pool.type')
-    .option('--pool.type <type>', 'Specify the test pool type (e.g. forks)')
-    .option(
-      '--pool.maxWorkers <value>',
-      'Maximum number or percentage of workers (e.g. 4 or 50%)',
-    )
-    .option(
-      '--pool.minWorkers <value>',
-      'Minimum number or percentage of workers (e.g. 1 or 25%)',
-    )
-    .option(
-      '--pool.execArgv <arg>',
-      'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
-    );
+type OptionDefinition = readonly [
+  rawName: string,
+  description: string,
+  config?: OptionConfig,
+];
+
+const runtimeOptionDefinitions: OptionDefinition[] = [
+  [
+    '-c, --config <config>',
+    'Specify the configuration file, can be a relative or absolute path',
+  ],
+  [
+    '--config-loader <loader>',
+    'Specify the loader to load the config file (auto | jiti | native)',
+    { default: 'auto' },
+  ],
+  [
+    '-r, --root <root>',
+    'Specify the project root directory, can be an absolute path or a path relative to cwd',
+  ],
+  ['--globals', 'Provide global APIs'],
+  ['--isolate', 'Run tests in an isolated environment'],
+  ['--include <include>', 'Match test files'],
+  ['--exclude <exclude>', 'Exclude files from test'],
+  ['-u, --update', 'Update snapshot files'],
+  ['--coverage', 'Enable code coverage collection'],
+  [
+    '--project <name>',
+    'Run only projects that match the name, can be a full name or wildcards pattern',
+  ],
+  [
+    '--passWithNoTests',
+    'Allows the test suite to pass when no files are found',
+  ],
+  [
+    '--printConsoleTrace',
+    'Print console traces when calling any console method',
+  ],
+  ['--disableConsoleIntercept', 'Disable console intercept'],
+  ['--logHeapUsage', 'Log heap usage after each test'],
+  [
+    '--slowTestThreshold <value>',
+    'The number of milliseconds after which a test or suite is considered slow',
+  ],
+  ['--reporter <reporter>', 'Specify the reporter to use'],
+  [
+    '-t, --testNamePattern <value>',
+    'Run only tests with a name that matches the regex',
+  ],
+  ['--testEnvironment <name>', 'The environment that will be used for testing'],
+  ['--testTimeout <value>', 'Timeout of a test in milliseconds'],
+  ['--hookTimeout <value>', 'Timeout of hook in milliseconds'],
+  ['--hideSkippedTests', 'Hide skipped tests from the output'],
+  ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
+  ['--retry <retry>', 'Number of times to retry a test if it fails'],
+  [
+    '--bail [number]',
+    'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
+  ],
+  [
+    '--shard <index/count>',
+    'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
+  ],
+  ['--maxConcurrency <value>', 'Maximum number of concurrent tests'],
+  [
+    '--clearMocks',
+    'Automatically clear mock calls, instances, contexts and results before every test',
+  ],
+  ['--resetMocks', 'Automatically reset mock state before every test'],
+  [
+    '--restoreMocks',
+    'Automatically restore mock state and implementation before every test',
+  ],
+  ['--browser', 'Run tests in browser mode'],
+  ['--browser.enabled', 'Run tests in browser mode'],
+  [
+    '--browser.name <name>',
+    'Browser to use: chromium, firefox, webkit (default: chromium)',
+  ],
+  ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
+  ['--browser.port <port>', 'Port for the browser mode dev server'],
+  ['--browser.strictPort', 'Exit if the specified port is already in use'],
+  [
+    '--unstubGlobals',
+    'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
+  ],
+  [
+    '--unstubEnvs',
+    'Restores all runtime env values that were changed with `rstest.stubEnv` before every test',
+  ],
+  [
+    '--includeTaskLocation',
+    'Collect test and suite locations. This might increase the running time.',
+  ],
+];
+
+const poolOptionDefinitions: OptionDefinition[] = [
+  ['--pool <type>', 'Shorthand for --pool.type'],
+  ['--pool.type <type>', 'Specify the test pool type (e.g. forks)'],
+  [
+    '--pool.maxWorkers <value>',
+    'Maximum number or percentage of workers (e.g. 4 or 50%)',
+  ],
+  [
+    '--pool.minWorkers <value>',
+    'Minimum number or percentage of workers (e.g. 1 or 25%)',
+  ],
+  [
+    '--pool.execArgv <arg>',
+    'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
+  ],
+];
+
+const mergeReportsOptionDefinitions: OptionDefinition[] = [
+  [
+    '-c, --config <config>',
+    'Specify the configuration file, can be a relative or absolute path',
+  ],
+  [
+    '--config-loader <loader>',
+    'Specify the loader to load the config file (auto | jiti | native)',
+    { default: 'auto' },
+  ],
+  [
+    '-r, --root <root>',
+    'Specify the project root directory, can be an absolute path or a path relative to cwd',
+  ],
+  ['--coverage', 'Enable code coverage collection'],
+  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--cleanup', 'Remove blob reports directory after merging'],
+];
+
+const listCommandOptionDefinitions: OptionDefinition[] = [
+  ['--filesOnly', 'only list the test files'],
+  ['--json [boolean/path]', 'print tests as JSON or write to a file'],
+  ['--includeSuites', 'include suites in output'],
+  ['--printLocation', 'print test case location'],
+];
+
+const applyOptions = (
+  command: CAC | Command,
+  definitions: readonly OptionDefinition[],
+): void => {
+  for (const [rawName, description, config] of definitions) {
+    command.option(rawName, description, config);
+  }
+};
+
+const applyRuntimeCommandOptions = (command: Command): void => {
+  applyOptions(command, runtimeOptionDefinitions);
+  applyOptions(command, poolOptionDefinitions);
 };
 
 const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
@@ -203,124 +242,124 @@ export const runRest = async ({
   }
 };
 
-export function setupCommands(): void {
+export function createCli(): CAC {
   const cli = cac('rstest');
 
   cli.help();
   cli.version(RSTEST_VERSION);
 
-  // Apply common options to all commands
-  applyCommonOptions(cli);
-
-  cli
+  const defaultCommand = cli
     .command('[...filters]', 'run tests')
-    .option('-w, --watch', 'Run tests in watch mode')
-    .action(
-      async (
-        filters: string[],
-        options: CommonOptions & {
-          watch?: boolean;
-        },
-      ) => {
-        if (!determineAgent().isAgent) {
-          showRstest();
-        }
-        if (options.watch) {
-          await runRest({ options, filters, command: 'watch' });
-        } else {
-          await runRest({ options, filters, command: 'run' });
-        }
+    .option('-w, --watch', 'Run tests in watch mode');
+  applyRuntimeCommandOptions(defaultCommand);
+  defaultCommand.action(
+    async (
+      filters: string[],
+      options: CommonOptions & {
+        watch?: boolean;
       },
-    );
-
-  cli
-    .command('run [...filters]', 'run tests without watch mode')
-    .action(async (filters: string[], options: CommonOptions) => {
+    ) => {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      await runRest({ options, filters, command: 'run' });
-    });
+      if (options.watch) {
+        await runRest({ options, filters, command: 'watch' });
+      } else {
+        await runRest({ options, filters, command: 'run' });
+      }
+    },
+  );
 
-  cli
-    .command('watch [...filters]', 'run tests in watch mode')
-    .action(async (filters: string[], options: CommonOptions) => {
+  const runCommand = cli.command(
+    'run [...filters]',
+    'run tests without watch mode',
+  );
+  applyRuntimeCommandOptions(runCommand);
+  runCommand.action(async (filters: string[], options: CommonOptions) => {
+    if (!determineAgent().isAgent) {
+      showRstest();
+    }
+    await runRest({ options, filters, command: 'run' });
+  });
+
+  const watchCommand = cli.command(
+    'watch [...filters]',
+    'run tests in watch mode',
+  );
+  applyRuntimeCommandOptions(watchCommand);
+  watchCommand.action(async (filters: string[], options: CommonOptions) => {
+    if (!determineAgent().isAgent) {
+      showRstest();
+    }
+    await runRest({ options, filters, command: 'watch' });
+  });
+
+  const listCommand = cli.command(
+    'list [...filters]',
+    'lists all test files that Rstest will run',
+  );
+  applyRuntimeCommandOptions(listCommand);
+  applyOptions(listCommand, listCommandOptionDefinitions);
+  listCommand.action(
+    async (filters: string[], options: CommonOptions & ListCommandOptions) => {
+      try {
+        const { config, configFilePath, projects, createRstest } =
+          await resolveCliRuntime(options);
+
+        if (options.printLocation) {
+          config.includeTaskLocation = true;
+        }
+
+        const rstest = createRstest(
+          { config, configFilePath, projects },
+          'list',
+          filters.map(normalize),
+        );
+
+        await rstest.listTests({
+          filesOnly: options.filesOnly,
+          json: options.json,
+          includeSuites: options.includeSuites,
+          printLocation: options.printLocation,
+        });
+      } catch (err) {
+        logger.error('Failed to run Rstest list.');
+        logger.error(formatError(err));
+        process.exit(1);
+      }
+    },
+  );
+
+  const mergeReportsCommand = cli.command(
+    'merge-reports [path]',
+    'Merge blob reports from multiple shards into a unified report',
+  );
+  applyOptions(mergeReportsCommand, mergeReportsOptionDefinitions);
+  mergeReportsCommand.action(
+    async (
+      path: string | undefined,
+      options: CommonOptions & { cleanup?: boolean },
+    ) => {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      await runRest({ options, filters, command: 'watch' });
-    });
+      try {
+        const { config, configFilePath, projects, createRstest } =
+          await resolveCliRuntime(options);
+        const rstest = createRstest(
+          { config, configFilePath, projects },
+          'merge-reports',
+          [],
+        );
 
-  cli
-    .command('list [...filters]', 'lists all test files that Rstest will run')
-    .option('--filesOnly', 'only list the test files')
-    .option('--json [boolean/path]', 'print tests as JSON or write to a file')
-    .option('--includeSuites', 'include suites in output')
-    .option('--printLocation', 'print test case location')
-    .action(
-      async (
-        filters: string[],
-        options: CommonOptions & ListCommandOptions,
-      ) => {
-        try {
-          const { config, configFilePath, projects, createRstest } =
-            await resolveCliRuntime(options);
-
-          if (options.printLocation) {
-            config.includeTaskLocation = true;
-          }
-
-          const rstest = createRstest(
-            { config, configFilePath, projects },
-            'list',
-            filters.map(normalize),
-          );
-
-          await rstest.listTests({
-            filesOnly: options.filesOnly,
-            json: options.json,
-            includeSuites: options.includeSuites,
-            printLocation: options.printLocation,
-          });
-        } catch (err) {
-          logger.error('Failed to run Rstest list.');
-          logger.error(formatError(err));
-          process.exit(1);
-        }
-      },
-    );
-
-  cli
-    .command(
-      'merge-reports [path]',
-      'Merge blob reports from multiple shards into a unified report',
-    )
-    .option('--cleanup', 'Remove blob reports directory after merging')
-    .action(
-      async (
-        path: string | undefined,
-        options: CommonOptions & { cleanup?: boolean },
-      ) => {
-        if (!determineAgent().isAgent) {
-          showRstest();
-        }
-        try {
-          const { config, configFilePath, projects, createRstest } =
-            await resolveCliRuntime(options);
-          const rstest = createRstest(
-            { config, configFilePath, projects },
-            'merge-reports',
-            [],
-          );
-
-          await rstest.mergeReports({ path, cleanup: options.cleanup });
-        } catch (err) {
-          logger.error('Failed to merge reports.');
-          logger.error(formatError(err));
-          process.exit(1);
-        }
-      },
-    );
+        await rstest.mergeReports({ path, cleanup: options.cleanup });
+      } catch (err) {
+        logger.error('Failed to merge reports.');
+        logger.error(formatError(err));
+        process.exit(1);
+      }
+    },
+  );
 
   // init command - initialize rstest configuration
   cli
@@ -370,5 +409,9 @@ export function setupCommands(): void {
       }
     });
 
-  cli.parse();
+  return cli;
+}
+
+export function setupCommands(): void {
+  createCli().parse();
 }

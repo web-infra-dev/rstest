@@ -27,15 +27,15 @@ Commands:
   run [...filters]          run tests without watch mode
   watch [...filters]        run tests in watch mode
   list [...filters]         lists all test files that Rstest will run
-  merge-reports [path]      merge blob reports from multiple shards
+  merge-reports [path]      Merge blob reports from multiple shards into a unified report
+  init [project]            Initialize rstest configuration
 
 Options:
-  -w, --watch                              Run tests in watch mode
-  -h, --help                               Display this message
-  -v, --version                            Display version number
-  -c, --config <config>
-  ...
+  -h, --help                Display this message
+  -v, --version             Display version number
 ```
+
+Use `npx rstest <command> -h` to see command-specific options. For example, `npx rstest init -h` only shows initialization options, while `npx rstest merge-reports -h` only shows merge-related options.
 
 ## rstest [...filters]
 
@@ -180,9 +180,33 @@ Use `--cleanup` to remove the blob reports directory after merging:
 npx rstest merge-reports --cleanup
 ```
 
+## rstest init
+
+`rstest init` creates starter configuration for supported project types.
+
+```bash
+npx rstest init
+```
+
+Currently, `browser` is the available initializer:
+
+```bash
+npx rstest init browser
+```
+
+Use `--yes` to skip the interactive prompt and apply the default setup:
+
+```bash
+npx rstest init browser --yes
+```
+
 ## CLI options
 
-Rstest CLI provides several common options that can be used with all commands:
+Rstest CLI options are registered per command instead of being shared by every command.
+
+### Test commands
+
+`rstest`, `rstest run`, and `rstest watch` share the same test runtime options:
 
 | Flag                            | Description                                                                                                                                                           |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -217,26 +241,52 @@ Rstest CLI provides several common options that can be used with all commands:
 | `--restoreMocks`                | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                                 |
 | `--unstubGlobals`               | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                          |
 | `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                               |
-| `--include <pattern>`           | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
-| `--includeSource <pattern>`     | Specify in-source testing file matching pattern, see [includeSource](/config/test/include-source)                                                                     |
+| `--include <include>`           | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
 | `--logHeapUsage`                | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
 | `--hideSkippedTests`            | Do not display skipped test logs, see [hideSkippedTests](/config/test/hide-skipped-tests)                                                                             |
 | `--hideSkippedTestFiles`        | Do not display skipped test file logs, see [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                               |
-| `--chaiConfig <config>`         | Customize Chai configuration, see [chaiConfig](/config/test/chai-config)                                                                                              |
-| `--env <key=value>`             | Set environment variables, see [env](/config/test/env)                                                                                                                |
 | `--pool <type>`                 | Shorthand for `--pool.type`, see [pool](/config/test/pool)                                                                                                            |
 | `--pool.type <type>`            | Specify the test pool type, see [pool](/config/test/pool)                                                                                                             |
 | `--pool.maxWorkers <value>`     | Maximum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
 | `--pool.minWorkers <value>`     | Minimum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
 | `--pool.execArgv <arg>`         | Additional Node.js execArgv for worker processes (repeatable), see [pool](/config/test/pool)                                                                          |
-| `--setupFiles <files>`          | Specify setup files list, see [setupFiles](/config/test/setup-files)                                                                                                  |
-| `--snapshotFormat <options>`    | Customize snapshot format, see [snapshotFormat](/config/test/snapshot-format)                                                                                         |
-| `--resolveSnapshotPath`         | Customize snapshot path resolution, see [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                                     |
-| `--onConsoleLog <handler>`      | Handle console logs, see [onConsoleLog](/config/test/on-console-log)                                                                                                  |
-| `--name <name>`                 | Set test suite name, see [name](/config/test/name)                                                                                                                    |
-| `--projects <projects>`         | Configure multi-project testing, see [projects](/config/test/projects)                                                                                                |
 | `-h, --help`                    | Display help for command                                                                                                                                              |
-| `-v, --version`                 | Display version                                                                                                                                                       |
+
+`rstest` also supports `-w, --watch`, which switches the default command into watch mode.
+
+### rstest list
+
+`rstest list` supports the same filtering and config options as the test commands above, and adds:
+
+| Flag                    | Description                                 |
+| ----------------------- | ------------------------------------------- |
+| `--filesOnly`           | Only print matching test files              |
+| `--json [boolean/path]` | Print tests as JSON or write JSON to a file |
+| `--includeSuites`       | Include suites in the output                |
+| `--printLocation`       | Print test and suite locations              |
+
+### rstest merge-reports
+
+`rstest merge-reports` has its own smaller option set:
+
+| Flag                       | Description                                                                                                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`    | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                      |
+| `--config-loader <loader>` | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`        | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
+| `--coverage`               | Enable coverage generation after merging, see [coverage](/config/test/coverage)                                                                                       |
+| `--reporter <reporter>`    | Specify which reporters run on merged results, see [reporters](/config/test/reporters)                                                                                |
+| `--cleanup`                | Remove the blob reports directory after merging                                                                                                                       |
+| `-h, --help`               | Display help for command                                                                                                                                              |
+
+### rstest init
+
+`rstest init` only accepts initialization-specific options:
+
+| Flag         | Description                                 |
+| ------------ | ------------------------------------------- |
+| `--yes`      | Use default options and skip interactive UI |
+| `-h, --help` | Display help for command                    |
 
 ### Boolean option negation
 
