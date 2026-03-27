@@ -58,6 +58,7 @@ When writing or editing documentation, follow these principles:
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)
 - For TypeScript API signatures in docs, prefer `T[]` over `Array<T>`. For unions that allow either a single value or an array, prefer `A | B | (A | B)[]` over `A | B | Array<A | B>`.
+- When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`.
 
 ### Logical grouping
 
