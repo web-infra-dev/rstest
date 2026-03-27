@@ -20,7 +20,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "happy-dom": "^20.8.8",
-    "jsdom": "^28.1.0",
+    "jsdom": "^29.0.1",
     "typescript": "^5.9.3"
   }
 }
