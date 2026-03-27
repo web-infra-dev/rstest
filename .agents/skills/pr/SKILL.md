@@ -20,6 +20,8 @@ metadata:
 
 Use `.github/workflows/` as the source of truth for validation commands. Run the full validation suite locally before pushing. Invoking this skill grants explicit permission to run full build and test suites.
 
+If the change is docs-only, scale validation down instead of running the full suite. Treat a PR as docs-only when all modified files are documentation or docs tooling content such as `*.md`, `*.mdx`, `website/**`, or other clearly non-runtime text/config docs assets, and no package/runtime/test source files changed.
+
 Run `pnpm format` first to ensure consistent formatting, then stage any resulting changes before proceeding.
 
 1. `pnpm run lint`
@@ -27,6 +29,14 @@ Run `pnpm format` first to ensure consistent formatting, then stage any resultin
 3. `pnpm run build`
 4. `pnpm run test`
 5. `cd e2e && pnpm test`
+
+For docs-only changes:
+
+1. `pnpm format`
+2. Run the smallest relevant docs checks available (for example `pnpm run lint`, or narrower website/doc-specific checks if the workflow supports them)
+3. Skip `pnpm run test` and `cd e2e && pnpm test`
+4. Note the reduced validation scope in the PR body
+5. If docs tooling, typed website code, or shared build config changed and local evidence suggests broader risk, use judgment and run additional validation
 
 If any step fails, fix the issue and re-run. If a step cannot run locally (e.g. environment restrictions), skip it and note the skipped validation in the PR body. If validation cannot be completed, create a **Draft PR** (`gh pr create --draft`).
 
