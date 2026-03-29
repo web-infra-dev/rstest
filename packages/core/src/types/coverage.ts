@@ -151,12 +151,12 @@ export declare class CoverageProvider {
   /**
    * Initialize coverage collection
    */
-  init(): void;
+  init(): void | Promise<void>;
 
   /**
    * Collect coverage data from global coverage object
    */
-  collect(): CoverageMap | null;
+  collect(): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

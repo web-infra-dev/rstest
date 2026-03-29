@@ -5,6 +5,7 @@ import type { CoverageOptions, CoverageProvider } from '../types/coverage';
 import { color } from '../utils';
 export const CoverageProviderMap: Record<string, string> = {
   istanbul: '@rstest/coverage-istanbul',
+  v8: '@rstest/coverage-v8',
 };
 
 export const loadCoverageProvider = async (

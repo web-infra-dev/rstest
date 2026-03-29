@@ -436,7 +436,7 @@ const runInPool = async (
       );
     }
     if (coverageProvider) {
-      coverageProvider.init();
+      await coverageProvider.init();
     }
 
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
@@ -491,7 +491,7 @@ const runInPool = async (
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
-      const coverageMap = coverageProvider.collect();
+      const coverageMap = await coverageProvider.collect();
       if (coverageMap) {
         // Attach coverage data to test result
         results.coverage = {};
