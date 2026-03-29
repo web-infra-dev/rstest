@@ -1,0 +1,1 @@
+export { CoverageProvider } from './provider';

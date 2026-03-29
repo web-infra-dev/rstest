@@ -1,0 +1,36 @@
+{
+  "name": "@rstest/coverage-v8",
+  "version": "0.3.0",
+  "description": "V8 coverage provider for Rstest",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ast-v8-to-istanbul": "^1.0.0",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-reports": "^3.2.0"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.20.0",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
+  }
+}
