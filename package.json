@@ -32,9 +32,9 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.8",
+    "@biomejs/biome": "^2.4.9",
     "@rsdoctor/rspack-plugin": "^1.5.5",
-    "@rslint/core": "^0.3.2",
+    "@rslint/core": "^0.3.3",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.0.1",
@@ -42,7 +42,7 @@
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.0.7",
-    "knip": "^6.0.4",
+    "knip": "^6.1.0",
     "nano-staged": "^0.9.0",
     "path-serializer": "0.6.0",
     "playwright": "^1.58.2",
