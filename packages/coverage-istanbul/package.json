@@ -41,7 +41,7 @@
     "swc-plugin-coverage-instrument": "0.0.32"
   },
   "devDependencies": {
-    "@rslib/core": "0.20.0",
+    "@rslib/core": "0.20.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
