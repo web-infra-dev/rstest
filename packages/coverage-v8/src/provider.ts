@@ -2,10 +2,16 @@ import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
 import { fileURLToPath } from 'node:url';
 import type {
+  CoverageOptions,
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
-import istanbulLibCoverage, { type CoverageMap } from 'istanbul-lib-coverage';
+import istanbulLibCoverage, {
+  type CoverageMap,
+  type FileCoverageData,
+} from 'istanbul-lib-coverage';
+import { createContext } from 'istanbul-lib-report';
+import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
 
@@ -74,6 +80,7 @@ export class CoverageProvider implements RstestCoverageProvider {
         await converter.load();
         converter.applyCoverage(entry.functions);
         const istanbulData = converter.toIstanbul();
+        converter.destroy();
 
         coverageMap.merge(istanbulData);
       } catch (e) {
@@ -87,9 +94,61 @@ export class CoverageProvider implements RstestCoverageProvider {
   createCoverageMap(): CoverageMap {
     return istanbulLibCoverage.createCoverageMap({});
   }
-  async generateCoverageForUntestedFiles(): Promise<any[]> {
-    return [];
+  async generateCoverageForUntestedFiles({
+    files,
+  }: {
+    environmentName?: string;
+    files: string[];
+  }): Promise<FileCoverageData[]> {
+    const CHUNK_SIZE = 100;
+    const results: (FileCoverageData | null)[] = [];
+    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+      const chunk = files.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(async (file) => {
+          try {
+            const converter = v8ToIstanbul(file, 0, undefined, () => false);
+            await converter.load();
+            converter.applyCoverage([]); // Empty coverage array
+            const istanbulData = converter.toIstanbul();
+            converter.destroy();
+            const keys = Object.keys(istanbulData);
+            if (keys.length > 0) {
+              return istanbulData[keys[0] as string] as FileCoverageData;
+            }
+          } catch {
+            // Silently ignore failures (e.g. file deleted between test and coverage generation)
+          }
+          return null;
+        }),
+      );
+      results.push(...chunkResults);
+    }
+    return results.filter((res): res is FileCoverageData => res !== null);
   }
-  async generateReports(_coverageMap: CoverageMap): Promise<void> {}
+  async generateReports(
+    coverageMap: CoverageMap,
+    options?: CoverageOptions,
+  ): Promise<void> {
+    const opts = { ...this.options, ...(options || {}) };
+
+    const context = createContext({
+      dir: opts.reportsDirectory,
+      coverageMap: coverageMap,
+    });
+
+    const reportersList = opts.reporters || ['text', 'html', 'json'];
+    for (const reporter of reportersList) {
+      if (typeof reporter === 'object' && 'execute' in reporter) {
+        reporter.execute(context);
+      } else {
+        const [reporterName, reporterOptions] = Array.isArray(reporter)
+          ? reporter
+          : [reporter, {}];
+        const report = reports.create(reporterName as any, reporterOptions);
+        report.execute(context);
+      }
+    }
+  }
   cleanup(): void {}
 }
