@@ -1,4 +1,4 @@
-# rstest V8 Coverage Provider Implementation Plan
+# rstest V8 coverage provider implementation plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Update Core Coverage Interfaces to Support Async Provider Lifecycle
+### Task 1: update core coverage interfaces to support async provider lifecycle
 
 **Files:**
 
@@ -42,7 +42,7 @@ git commit -m "feat(core): update CoverageProvider to support async init and col
 
 ---
 
-### Task 2: Scaffold the `@rstest/coverage-v8` package and install dependencies
+### Task 2: scaffold the `@rstest/coverage-v8` package and install dependencies
 
 **Files:**
 
@@ -137,7 +137,7 @@ git commit -m "feat(coverage-v8): scaffold coverage-v8 package"
 
 ---
 
-### Task 3: Implement V8 inspector and collection logic
+### Task 3: implement V8 inspector and collection logic
 
 **Files:**
 
@@ -215,7 +215,7 @@ git commit -m "feat(coverage-v8): implement inspector profiling and ast conversi
 
 ---
 
-### Task 4: Implement untestes files & report generation
+### Task 4: implement untested files & report generation
 
 **Files:**
 

@@ -1187,6 +1187,43 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/coverage-v8:
+    dependencies:
+      istanbul-lib-coverage:
+        specifier: ^3.2.2
+        version: 3.2.2
+      istanbul-lib-report:
+        specifier: ^3.0.1
+        version: 3.0.1
+      istanbul-reports:
+        specifier: ^3.2.0
+        version: 3.2.0
+      picomatch:
+        specifier: ^4.0.4
+        version: 4.0.4
+      v8-to-istanbul:
+        specifier: ^9.3.0
+        version: 9.3.0
+    devDependencies:
+      '@rslib/core':
+        specifier: 0.20.0
+        version: 0.20.0(@microsoft/api-extractor@7.57.7(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260317.1)(typescript@5.9.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      '@types/node':
+        specifier: ^22.16.5
+        version: 22.18.6
+      '@types/picomatch':
+        specifier: ^4.0.2
+        version: 4.0.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/vscode:
     devDependencies:
       '@rsbuild/core':

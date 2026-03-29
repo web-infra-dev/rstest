@@ -1,4 +1,4 @@
-# rstest V8 Coverage Provider Design
+# rstest V8 coverage provider design
 
 ## Overview
 
@@ -6,7 +6,7 @@ This document outlines the design for implementing the `@rstest/coverage-v8` pac
 
 ## Architecture
 
-### 1. Core Package Changes (`@rstest/core`)
+### 1. Core package changes (`@rstest/core`)
 
 To support the asynchronous nature of the `node:inspector` API required for V8 coverage, the core `CoverageProvider` interface will be updated.
 
@@ -27,7 +27,7 @@ A new package will be scaffolded mirroring the existing `coverage-istanbul` stru
   - `istanbul-reports`
   - `istanbul-lib-report`
 
-### 3. V8 Provider Implementation
+### 3. V8 Provider implementation
 
 The core logic resides in the `CoverageProvider` implementation for V8.
 
