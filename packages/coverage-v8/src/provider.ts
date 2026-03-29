@@ -12,7 +12,6 @@ import istanbulLibCoverage, {
 } from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
-import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
 
 export class CoverageProvider implements RstestCoverageProvider {
@@ -45,22 +44,13 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const coverageMap = this.createCoverageMap();
 
-    const isExcluded = this.options.exclude
-      ? picomatch(this.options.exclude)
-      : () => false;
-    const isIncluded = this.options.include
-      ? picomatch(this.options.include)
-      : () => true;
-
     for (const entry of coverage.result) {
       if (!entry.url.startsWith('file://')) continue;
 
-      const filePath = fileURLToPath(entry.url);
+      const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
 
       if (filePath.includes('/node_modules/') || filePath.includes('@rstest/'))
         continue;
-
-      if (isExcluded(filePath) || !isIncluded(filePath)) continue;
 
       try {
         const converter = v8ToIstanbul(
@@ -68,11 +58,10 @@ export class CoverageProvider implements RstestCoverageProvider {
           0,
           { source: await fs.readFile(filePath, 'utf-8') },
           (filepath) => {
+            const normalizedFilepath = filepath.replace(/\\/g, '/');
             return (
-              filepath.includes('node_modules') ||
-              filepath.includes('@rstest') ||
-              isExcluded(filepath) ||
-              !isIncluded(filepath)
+              normalizedFilepath.includes('/node_modules/') ||
+              normalizedFilepath.includes('@rstest/')
             );
           },
         );
@@ -109,7 +98,13 @@ export class CoverageProvider implements RstestCoverageProvider {
           try {
             const converter = v8ToIstanbul(file, 0, undefined, () => false);
             await converter.load();
-            converter.applyCoverage([]); // Empty coverage array
+            converter.applyCoverage([
+              {
+                functionName: '(empty-report)',
+                ranges: [{ startOffset: 0, endOffset: 0, count: 0 }],
+                isBlockCoverage: true,
+              },
+            ]); // Empty coverage array workaround
             const istanbulData = converter.toIstanbul();
             converter.destroy();
             const keys = Object.keys(istanbulData);

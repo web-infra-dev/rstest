@@ -87,7 +87,11 @@ export const prepareRsbuild = async (
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
-  const writeToDisk = dev.writeToDisk || debugMode;
+  const writeToDisk =
+    dev.writeToDisk ||
+    debugMode ||
+    (context.normalizedConfig.coverage?.enabled &&
+      (context.normalizedConfig.coverage?.provider as any) === 'v8');
 
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',

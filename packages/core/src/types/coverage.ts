@@ -88,7 +88,7 @@ export type CoverageOptions = {
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
 
   /**
    * The reporters to use for coverage collection.

@@ -11,6 +11,7 @@
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
+    "@rstest/coverage-v8": "workspace:*",
     "@types/node": "^22.16.5",
     "typescript": "^5.9.3"
   }
