@@ -498,6 +498,24 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  e2e/test-coverage-v8/fixtures:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../packages/coverage-istanbul
+
+  e2e/test-coverage-v8/fixtures/allow-external:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../../packages/coverage-istanbul
+
   e2e/test-coverage/fixtures:
     devDependencies:
       '@rstest/core':
