@@ -72,6 +72,6 @@ describe('test coverage-v8 sourcemap', () => {
       .find((log) => log.includes('All files'))
       ?.replaceAll(' ', '');
 
-    expect(allFilesLog).toMatchInlineSnapshot(`"Allfiles|92.59|80|100|92.59|"`);
+    expect(allFilesLog).toMatchInlineSnapshot(`"Allfiles|88.88|75|100|88.88|"`);
   });
 });

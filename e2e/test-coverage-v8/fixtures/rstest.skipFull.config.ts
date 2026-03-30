@@ -6,6 +6,13 @@ export default defineConfig({
     enabled: true,
     provider: 'v8',
     clean: false,
+    exclude: [
+      'src/sourcemap.ts',
+      '**/test/**',
+      '**/*.test.ts',
+      'rstest.setup.ts',
+      'test/**',
+    ],
     reporters: [['text', { skipFull: true }]],
   },
   setupFiles: ['./rstest.setup.ts'],

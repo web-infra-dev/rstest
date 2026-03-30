@@ -27,7 +27,7 @@ describe('test coverage-v8 include option', () => {
       logs
         .find((log) => log.includes('date.ts') && log.includes('|'))
         ?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"date.ts|0|0|0|0|1-30"`);
+    ).toMatchInlineSnapshot(`"date.ts|100|100|100|100|"`);
 
     expect(
       logs.find((log) => log.includes('a.ts') && log.includes('|')),

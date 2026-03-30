@@ -56,7 +56,7 @@ describe('test coverage-v8', () => {
 
     expect(
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"Allfiles|98.46|100|87.5|98.46|"`);
+    ).toMatchInlineSnapshot(`"Allfiles|94.68|100|87.5|94.68|"`);
 
     // text reporter
     expectLog('% Stmts', logs);

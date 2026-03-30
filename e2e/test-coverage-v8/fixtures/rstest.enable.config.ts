@@ -12,6 +12,7 @@ export default defineConfig({
       'rstest.setup.ts',
       '**/index.test.ts',
       'test/**',
+      '**/fixtures/**',
     ],
   },
   setupFiles: ['./rstest.setup.ts'],

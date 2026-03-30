@@ -18,6 +18,8 @@ import v8ToIstanbul from 'v8-to-istanbul';
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
+  private isIncluded: (filePath: string) => boolean;
+  private isExcluded: (filePath: string) => boolean;
 
   constructor(
     public options: NormalizedCoverageOptions,
@@ -27,11 +29,11 @@ export class CoverageProvider implements RstestCoverageProvider {
       this.root = this.root.replace(/\\/g, '/');
     }
 
-    const isIncluded = options.include?.length
+    this.isIncluded = options.include?.length
       ? picomatch(options.include)
       : () => true;
 
-    const isExcluded = options.exclude?.length
+    this.isExcluded = options.exclude?.length
       ? picomatch(options.exclude)
       : () => false;
 
@@ -43,14 +45,6 @@ export class CoverageProvider implements RstestCoverageProvider {
       ) {
         return false;
       }
-
-      let testPath = filePath;
-      if (this.root && filePath.startsWith(this.root)) {
-        testPath = filePath.slice(this.root.length).replace(/^\/+/, '');
-      }
-
-      if (isExcluded(testPath) || isExcluded(filePath)) return false;
-      if (!isIncluded(testPath) && !isIncluded(filePath)) return false;
 
       return true;
     };
@@ -79,7 +73,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       try {
         await this.session.post('Profiler.stopPreciseCoverage');
         await this.session.post('Profiler.disable');
-      } catch (err) {
+      } catch (_err) {
         // Ignore teardown errors to prevent masking original errors
       }
     }
@@ -119,6 +113,21 @@ export class CoverageProvider implements RstestCoverageProvider {
           converter.applyCoverage(entry.functions);
           const istanbulData = converter.toIstanbul();
           converter.destroy();
+
+          for (const key of Object.keys(istanbulData)) {
+            // Apply include/exclude logic on the resolved original file path
+            const originalTestPath =
+              this.root && key.startsWith(this.root)
+                ? key.slice(this.root.length).replace(/^\/+/, '')
+                : key;
+
+            if (
+              this.isExcluded(originalTestPath) ||
+              !this.isIncluded(originalTestPath)
+            ) {
+              delete istanbulData[key];
+            }
+          }
 
           coverageMap.merge(istanbulData);
         } catch (e) {
