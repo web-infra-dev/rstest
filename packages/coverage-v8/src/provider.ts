@@ -80,6 +80,29 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const coverageMap = this.createCoverageMap();
 
+    const findInDict = (
+      dict: Record<string, string> | undefined,
+      filePath: string,
+    ): string | undefined => {
+      if (!dict) return undefined;
+      if (dict[filePath]) return dict[filePath];
+
+      for (const [key, value] of Object.entries(dict)) {
+        const normalizedKey = key.replace(/\\/g, '/');
+        if (normalizedKey === filePath) return value;
+        if (
+          filePath.startsWith('/private/') &&
+          normalizedKey === filePath.slice('/private'.length)
+        ) {
+          return value;
+        }
+        if (normalizedKey.toLowerCase() === filePath.toLowerCase()) {
+          return value;
+        }
+      }
+      return undefined;
+    };
+
     await Promise.all(
       coverage.result.map(async (entry) => {
         if (!entry.url.startsWith('file://')) return;
@@ -89,14 +112,17 @@ export class CoverageProvider implements RstestCoverageProvider {
         if (!this.isMatch(filePath)) return;
 
         try {
+          const assetSource = findInDict(options?.assetFiles, filePath);
+          const sourceMapStr = findInDict(options?.sourceMaps, filePath);
+
           const converter = v8ToIstanbul(
             filePath,
             0,
-            options?.assetFiles?.[filePath]
+            assetSource
               ? {
-                  source: options.assetFiles[filePath],
-                  sourceMap: options.sourceMaps?.[filePath]
-                    ? { sourcemap: JSON.parse(options.sourceMaps[filePath]) }
+                  source: assetSource,
+                  sourceMap: sourceMapStr
+                    ? { sourcemap: JSON.parse(sourceMapStr) }
                     : undefined,
                 }
               : { source: await fs.readFile(filePath, 'utf-8') },
