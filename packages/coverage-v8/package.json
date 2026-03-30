@@ -29,6 +29,9 @@
     "@rslib/core": "0.20.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-reports": "^3.0.4",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.2",
     "typescript": "^5.9.3"
