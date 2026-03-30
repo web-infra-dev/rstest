@@ -147,7 +147,7 @@ export type NormalizedCoverageOptions = Required<
 };
 
 export declare class CoverageProvider {
-  constructor(options: CoverageOptions);
+  constructor(options: CoverageOptions, root?: string);
   /**
    * Initialize coverage collection
    */

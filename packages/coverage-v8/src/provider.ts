@@ -12,12 +12,49 @@ import istanbulLibCoverage, {
 } from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
+import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
 
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
+  private isMatch: (filePath: string) => boolean;
 
-  constructor(public options: NormalizedCoverageOptions) {}
+  constructor(
+    public options: NormalizedCoverageOptions,
+    public root?: string,
+  ) {
+    if (this.root) {
+      this.root = this.root.replace(/\\/g, '/');
+    }
+
+    const isIncluded = options.include?.length
+      ? picomatch(options.include)
+      : () => true;
+
+    const isExcluded = options.exclude?.length
+      ? picomatch(options.exclude)
+      : () => false;
+
+    this.isMatch = (filePath: string) => {
+      // Fast path for obviously ignored directories.
+      if (
+        filePath.includes('/node_modules/') ||
+        filePath.includes('@rstest/')
+      ) {
+        return false;
+      }
+
+      let testPath = filePath;
+      if (this.root && filePath.startsWith(this.root)) {
+        testPath = filePath.slice(this.root.length).replace(/^\/+/, '');
+      }
+
+      if (isExcluded(testPath) || isExcluded(filePath)) return false;
+      if (!isIncluded(testPath) && !isIncluded(filePath)) return false;
+
+      return true;
+    };
+  }
 
   async init(): Promise<void> {
     this.session = new inspector.Session();
@@ -55,11 +92,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
 
-        if (
-          filePath.includes('/node_modules/') ||
-          filePath.includes('@rstest/')
-        )
-          return;
+        if (!this.isMatch(filePath)) return;
 
         try {
           const converter = v8ToIstanbul(

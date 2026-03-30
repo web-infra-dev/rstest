@@ -52,7 +52,7 @@ export async function createCoverageProvider(
 
   if (!options.provider || CoverageProviderMap[options.provider]) {
     const { CoverageProvider } = await loadCoverageProvider(options, root);
-    return new CoverageProvider(options);
+    return new CoverageProvider(options, root);
   }
 
   throw new Error(`Unknown coverage provider: ${options.provider}`);
