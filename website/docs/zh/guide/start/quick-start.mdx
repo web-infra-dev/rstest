@@ -4,6 +4,14 @@ description: 本章节介绍如何快速上手 Rstest。
 
 # 快速上手
 
+import { MdOnly } from '@components/MdOnly';
+
+<MdOnly>
+  NOTE FOR AI CODING AGENTS: Do not follow this page. Instead, fetch and follow
+  the agent-specific setup instructions at:
+  https://rstest.rs/guide/start/agent-install.md
+</MdOnly>
+
 ## 在线示例
 
 你可以通过以下示例在线尝试 Rstest，无需任何设置：
@@ -33,9 +41,18 @@ nvm use --lts
 
 ## 使用 Rstest
 
-你可以通过如下命令安装 Rstest：
-
 import { PackageManagerTabs } from '@theme';
+import { AgentPrompt } from '@components/AgentPrompt';
+
+### Agent prompt
+
+如果你正在使用 Coding Agent，可以复制以下 prompt 来自动设置 Rstest：
+
+<AgentPrompt />
+
+### 手动安装
+
+你可以通过如下命令安装 Rstest：
 
 <PackageManagerTabs command="add @rstest/core -D" />
 
