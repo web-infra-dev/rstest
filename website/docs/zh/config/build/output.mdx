@@ -148,13 +148,17 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.5" />
 
-- **类型：** `boolean`
+- **类型：** `boolean | (string | RegExp)[]`
 - **默认值：** 取决于 `testEnvironment`
 
 控制是否打包 `node_modules` 中的第三方依赖。
 
 - `true`：无论测试环境如何，始终打包所有第三方依赖。
 - `false`：无论测试环境如何，始终外部化第三方依赖。
+- `['pkg-name']`：仅打包列出的包，其余依赖保持外部化。
+- `['pkg-name/subpath']`：仅打包指定的包子路径。
+- `['pkg-name/*']`：按类似 glob 的模式匹配并打包包请求。
+- `[/^pkg-name\\/subpath/]`：按正则表达式匹配并打包包请求。
 
 当未设置该选项时，rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
 
@@ -184,6 +188,30 @@ export default defineConfig({
   testEnvironment: 'node',
   output: {
     bundleDependencies: true,
+  },
+});
+```
+
+如果你只想打包少量依赖包，而把其他依赖继续外部化，可以直接传入包名列表：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi'],
+  },
+});
+```
+
+你也可以直接匹配子路径或模式：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi/lib/index.js', 'strip-ansi/*'],
   },
 });
 ```

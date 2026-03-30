@@ -150,13 +150,17 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.5" />
 
-- **Type:** `boolean`
+- **Type:** `boolean | (string | RegExp)[]`
 - **Default:** Depends on `testEnvironment`
 
 Controls whether third-party dependencies from `node_modules` are bundled or externalized.
 
 - `true`: Always bundle all third-party dependencies, regardless of test environment.
 - `false`: Always externalize third-party dependencies, regardless of test environment.
+- `['pkg-name']`: Bundle only the listed packages and externalize the rest.
+- `['pkg-name/subpath']`: Bundle a specific package subpath.
+- `['pkg-name/*']`: Bundle package requests that match the glob-like pattern.
+- `[/^pkg-name\\/subpath/]`: Bundle package requests that match the regular expression.
 
 When this option is unset, rstest bundles dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalizes them in the `node` environment.
 
@@ -186,6 +190,30 @@ export default defineConfig({
   testEnvironment: 'node',
   output: {
     bundleDependencies: true,
+  },
+});
+```
+
+If you only want to bundle a few packages while keeping the rest externalized, pass their package names:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi'],
+  },
+});
+```
+
+You can also target subpaths or patterns:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi/lib/index.js', 'strip-ansi/*'],
   },
 });
 ```

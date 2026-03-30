@@ -27,6 +27,8 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+export type BundleDependencyPattern = string | RegExp;
+
 export type RstestOutputConfig = Pick<
   NonNullable<RsbuildConfig['output']>,
   'cssModules' | 'externals' | 'cleanDistPath' | 'module'
@@ -36,12 +38,17 @@ export type RstestOutputConfig = Pick<
    * Whether to bundle third-party dependencies from node_modules.
    * - `true`: Always bundle all third-party dependencies.
    * - `false`: Always externalize third-party dependencies.
+   * - `['pkg']`: Bundle the package and all of its subpaths.
+   * - `['pkg/subpath']`: Bundle a specific package subpath.
+   * - `['pkg/*']`: Bundle package subpaths that match the pattern.
+   * - `[/^pkg\\/subpath/]`: Bundle package requests matched by a regular
+   *   expression.
    *
    * When unset, rstest bundles dependencies in browser-like test
    * environments (jsdom, happy-dom, etc.) and externalizes them in the node
    * environment. This option is not supported in browser mode.
    */
-  bundleDependencies?: boolean;
+  bundleDependencies?: boolean | BundleDependencyPattern[];
 };
 
 export type NormalizedOutputConfig = Partial<
