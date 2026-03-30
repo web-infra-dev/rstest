@@ -120,6 +120,10 @@ function RotatingIcon({ index, fading }: { index: number; fading: boolean }) {
 }
 
 export function AgentPrompt() {
+  if (import.meta.env.SSG_MD) {
+    return <>{`\`\`\`\n${PROMPT_TEXT}\n\`\`\`\n`}</>;
+  }
+
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
   const [copied, setCopied] = useState(false);
