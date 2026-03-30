@@ -191,9 +191,13 @@ const autoExternalNodeModules: (
         return callback(undefined, request, 'node-commonjs');
       }
 
-      const resolvedSpecifier =
+      const normalizedResolvePath =
         typeof resolvePath === 'string'
-          ? getNodeModulesSpecifierFromResolvedPath(resolvePath)
+          ? normalizePath(resolvePath)
+          : resolvePath;
+      const resolvedSpecifier =
+        typeof normalizedResolvePath === 'string'
+          ? getNodeModulesSpecifierFromResolvedPath(normalizedResolvePath)
           : undefined;
       const shouldBundleByResolvedPath = matchesBundledDependency(
         request,
@@ -203,12 +207,12 @@ const autoExternalNodeModules: (
 
       if (
         // biome-ignore lint/complexity/useOptionalChain: type error
-        resolvePath &&
-        resolvePath.includes(NODE_MODULES_PATH_SEGMENT) &&
+        normalizedResolvePath &&
+        normalizedResolvePath.includes(NODE_MODULES_PATH_SEGMENT) &&
         !shouldBundleByResolvedPath &&
-        !/\.(?:ts|tsx|jsx|mts|cts)$/.test(resolvePath)
+        !/\.(?:ts|tsx|jsx|mts|cts)$/.test(normalizedResolvePath)
       ) {
-        return doExternal(resolvePath);
+        return doExternal(normalizedResolvePath);
       }
       return callback();
     });
