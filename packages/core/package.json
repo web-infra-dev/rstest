@@ -60,7 +60,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rsbuild/core": "2.0.0-beta.10",
+    "@rsbuild/core": "2.0.0-beta.11",
     "@types/chai": "^5.2.3",
     "tinypool": "^2.1.0"
   },
