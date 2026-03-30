@@ -218,6 +218,8 @@ export default defineConfig({
 });
 ```
 
+Patterns only affect dependency requests that rstest can still process in the current bundle graph. If a package has already been externalized, its internal dependencies stay external as well. In other words, `bundleDependencies` does not re-bundle transitive dependencies that are reachable only through an externalized parent package.
+
 ### Relationship with output.externals
 
 `output.bundleDependencies` controls the overall bundling strategy for all `node_modules` dependencies, while [`output.externals`](#outputexternals) allows fine-grained control over individual packages. When both are configured, `output.externals` takes higher priority:

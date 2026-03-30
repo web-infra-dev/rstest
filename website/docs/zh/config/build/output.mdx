@@ -216,6 +216,8 @@ export default defineConfig({
 });
 ```
 
+这些模式只会影响 rstest 在当前构建图里仍然能够处理到的依赖请求。如果某个包本身已经被 externalize 了，那么它内部继续引用的子依赖也会保持 external。也就是说，`bundleDependencies` 不会把仅通过某个已 externalize 父包间接到达的传递依赖重新打包回来。
+
 ### 与 output.externals 的关系
 
 `output.bundleDependencies` 控制所有 `node_modules` 依赖的整体打包策略，而 [`output.externals`](#outputexternals) 允许对单个包进行细粒度控制。当两者同时配置时，`output.externals` 的优先级更高：
