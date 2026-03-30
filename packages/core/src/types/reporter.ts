@@ -29,6 +29,7 @@ export type BuiltInReporterNames =
   | 'md'
   | 'github-actions'
   | 'junit'
+  | 'json'
   | 'blob';
 
 export type DefaultReporterOptions = {
@@ -149,12 +150,20 @@ export type BlobReporterOptions = {
   outputDir?: string;
 };
 
+export type JsonReporterOptions = {
+  /**
+   * Write report JSON to a file instead of stdout.
+   */
+  outputPath?: string;
+};
+
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': Record<string, unknown>;
   junit: Record<string, unknown>;
+  json: JsonReporterOptions;
   blob: BlobReporterOptions;
 };
 
