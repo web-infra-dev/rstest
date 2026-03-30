@@ -156,7 +156,10 @@ export declare class CoverageProvider {
   /**
    * Collect coverage data from global coverage object
    */
-  collect(): CoverageMap | null | Promise<CoverageMap | null>;
+  collect(options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

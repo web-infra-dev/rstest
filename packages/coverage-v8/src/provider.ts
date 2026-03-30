@@ -29,7 +29,10 @@ export class CoverageProvider implements RstestCoverageProvider {
     });
   }
 
-  async collect(): Promise<CoverageMap | null> {
+  async collect(options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
     let coverage: inspector.Profiler.TakePreciseCoverageReturnType;
@@ -56,7 +59,14 @@ export class CoverageProvider implements RstestCoverageProvider {
         const converter = v8ToIstanbul(
           filePath,
           0,
-          { source: await fs.readFile(filePath, 'utf-8') },
+          options?.assetFiles?.[filePath]
+            ? {
+                source: options.assetFiles[filePath],
+                sourceMap: options.sourceMaps?.[filePath]
+                  ? { sourcemap: JSON.parse(options.sourceMaps[filePath]) }
+                  : undefined,
+              }
+            : { source: await fs.readFile(filePath, 'utf-8') },
           (filepath) => {
             const normalizedFilepath = filepath.replace(/\\/g, '/');
             return (
