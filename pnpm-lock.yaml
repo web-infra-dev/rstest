@@ -595,9 +595,6 @@ importers:
       '@rstest/coverage-istanbul':
         specifier: workspace:*
         version: link:../../packages/coverage-istanbul
-      '@rstest/coverage-v8':
-        specifier: workspace:*
-        version: link:../../packages/coverage-v8
       '@types/node':
         specifier: ^22.16.5
         version: 22.18.6
