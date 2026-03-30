@@ -25,7 +25,7 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-beta.10",
+    "@rsbuild/core": "2.0.0-beta.11",
     "@rslib/core": "0.20.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
