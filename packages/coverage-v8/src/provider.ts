@@ -39,53 +39,60 @@ export class CoverageProvider implements RstestCoverageProvider {
     try {
       coverage = await this.session.post('Profiler.takePreciseCoverage');
     } finally {
-      await this.session.post('Profiler.stopPreciseCoverage');
-      await this.session.post('Profiler.disable');
-      this.session.disconnect();
-      this.session = null;
+      try {
+        await this.session.post('Profiler.stopPreciseCoverage');
+        await this.session.post('Profiler.disable');
+      } catch (err) {
+        // Ignore teardown errors to prevent masking original errors
+      }
     }
 
     const coverageMap = this.createCoverageMap();
 
-    for (const entry of coverage.result) {
-      if (!entry.url.startsWith('file://')) continue;
+    await Promise.all(
+      coverage.result.map(async (entry) => {
+        if (!entry.url.startsWith('file://')) return;
 
-      const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
+        const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
 
-      if (filePath.includes('/node_modules/') || filePath.includes('@rstest/'))
-        continue;
+        if (
+          filePath.includes('/node_modules/') ||
+          filePath.includes('@rstest/')
+        )
+          return;
 
-      try {
-        const converter = v8ToIstanbul(
-          filePath,
-          0,
-          options?.assetFiles?.[filePath]
-            ? {
-                source: options.assetFiles[filePath],
-                sourceMap: options.sourceMaps?.[filePath]
-                  ? { sourcemap: JSON.parse(options.sourceMaps[filePath]) }
-                  : undefined,
-              }
-            : { source: await fs.readFile(filePath, 'utf-8') },
-          (filepath) => {
-            const normalizedFilepath = filepath.replace(/\\/g, '/');
-            return (
-              normalizedFilepath.includes('/node_modules/') ||
-              normalizedFilepath.includes('@rstest/')
-            );
-          },
-        );
+        try {
+          const converter = v8ToIstanbul(
+            filePath,
+            0,
+            options?.assetFiles?.[filePath]
+              ? {
+                  source: options.assetFiles[filePath],
+                  sourceMap: options.sourceMaps?.[filePath]
+                    ? { sourcemap: JSON.parse(options.sourceMaps[filePath]) }
+                    : undefined,
+                }
+              : { source: await fs.readFile(filePath, 'utf-8') },
+            (filepath) => {
+              const normalizedFilepath = filepath.replace(/\\/g, '/');
+              return (
+                normalizedFilepath.includes('/node_modules/') ||
+                normalizedFilepath.includes('@rstest/')
+              );
+            },
+          );
 
-        await converter.load();
-        converter.applyCoverage(entry.functions);
-        const istanbulData = converter.toIstanbul();
-        converter.destroy();
+          await converter.load();
+          converter.applyCoverage(entry.functions);
+          const istanbulData = converter.toIstanbul();
+          converter.destroy();
 
-        coverageMap.merge(istanbulData);
-      } catch (e) {
-        console.warn(`Failed to process coverage for ${entry.url}:`, e);
-      }
-    }
+          coverageMap.merge(istanbulData);
+        } catch (e) {
+          console.warn(`Failed to process coverage for ${entry.url}:`, e);
+        }
+      }),
+    );
 
     return coverageMap;
   }
@@ -155,5 +162,10 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
   }
-  cleanup(): void {}
+  cleanup(): void {
+    if (this.session) {
+      this.session.disconnect();
+      this.session = null;
+    }
+  }
 }

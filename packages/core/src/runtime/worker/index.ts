@@ -358,6 +358,10 @@ const runInPool = async (
     isTeardown = true;
   };
 
+  let coverageProvider: Awaited<
+    ReturnType<typeof import('../../coverage').createCoverageProvider>
+  > | null = null;
+
   if (type === 'collect') {
     try {
       const {
@@ -425,9 +429,6 @@ const runInPool = async (
       };
     }
     // Initialize coverage collector if coverage is enabled
-    let coverageProvider: Awaited<
-      ReturnType<typeof import('../../coverage').createCoverageProvider>
-    > | null = null;
     if (options.context.runtimeConfig.coverage?.enabled) {
       const { createCoverageProvider } = await import('../../coverage');
       coverageProvider = await createCoverageProvider(
@@ -504,8 +505,6 @@ const runInPool = async (
           else results.coverage![key] = value;
         });
       }
-      // Cleanup
-      coverageProvider.cleanup();
     }
 
     return results;
@@ -520,6 +519,9 @@ const runInPool = async (
       errors: await formatTestError(err),
     };
   } finally {
+    if (coverageProvider) {
+      coverageProvider.cleanup();
+    }
     await teardown();
   }
 };
