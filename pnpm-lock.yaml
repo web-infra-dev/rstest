@@ -158,15 +158,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  e2e/browser-mode/fixtures-test-snapshot-module/browser-coverage:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../../packages/core
-      '@rstest/coverage-istanbul':
-        specifier: workspace:*
-        version: link:../../../../packages/coverage-istanbul
-
   e2e/browser-mode/fixtures/browser-coverage:
     devDependencies:
       '@rstest/core':
