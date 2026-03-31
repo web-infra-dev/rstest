@@ -518,6 +518,30 @@ type BrowserLazyCompilationConfig = {
   test?: (module: LazyCompilationModule) => boolean;
 };
 
+/**
+ * Resolve the actual port the dev server is listening on.
+ *
+ * Rsbuild's `devServer.listen()` may return `0` when configured with
+ * `server.port: 0` because its internal `getPort` never reads back the
+ * OS-assigned ephemeral port.  This helper falls back to
+ * `httpServer.address()` to obtain the real bound port.
+ */
+export const resolveListenPort = (
+  listenPort: number,
+  httpServer: {
+    address: () => ReturnType<import('node:net').Server['address']>;
+  } | null,
+): number => {
+  if (listenPort) {
+    return listenPort;
+  }
+  const addr = httpServer?.address();
+  if (addr && typeof addr === 'object') {
+    return addr.port;
+  }
+  return listenPort;
+};
+
 export const createBrowserLazyCompilationConfig = (
   setupFiles: string[],
 ): BrowserLazyCompilationConfig => {
@@ -1549,7 +1573,8 @@ const createBrowserRuntime = async ({
     },
   );
 
-  const { port } = await devServer.listen();
+  const { port: listenPort } = await devServer.listen();
+  const port = resolveListenPort(listenPort, devServer.httpServer);
 
   // Create WebSocket server on an available port
   // Using port: 0 lets the OS assign an available port, avoiding conflicts
