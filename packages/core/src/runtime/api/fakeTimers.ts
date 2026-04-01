@@ -164,6 +164,10 @@ export class FakeTimers {
       ...fakeTimersConfig,
     });
 
+    // Reinitialize fake-timers internal queues after install. This keeps the
+    // clock state stable across bundled worker environments where the install
+    // path may leave queue structures partially initialized.
+    this._clock.reset();
     this._fakingTime = true;
   }
 
