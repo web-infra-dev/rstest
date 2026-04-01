@@ -6,6 +6,7 @@ import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
@@ -250,6 +251,7 @@ const reportersMap: {
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  json: typeof JsonReporter;
   md: typeof MdReporter;
   blob: typeof BlobReporter;
 } = {
@@ -257,6 +259,7 @@ const reportersMap: {
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  json: JsonReporter,
   md: MdReporter,
   blob: BlobReporter,
 };

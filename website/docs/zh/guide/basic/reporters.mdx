@@ -47,6 +47,7 @@ Rstest 提供了多种内置报告器：
 | `verbose`        | 详细的测试用例输出  | 调试测试失败          |
 | `github-actions` | CI 错误注释         | GitHub Actions 工作流 |
 | `junit`          | JUnit XML 格式      | CI/CD 集成            |
+| `json`           | 结构化 JSON 报告    | CI 工具和脚本处理     |
 | `md`             | Markdown agent 报告 | Agent / LLM 集成      |
 | `blob`           | 序列化 JSON 输出    | 合并分片报告          |
 
@@ -207,6 +208,46 @@ JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 - `fail`: 测试失败，生成 `<failure>` 标签
 - `skip`: 测试跳过，生成 `<skipped>` 标签
 - `todo`: 测试待办，生成 `<skipped>` 标签
+
+### JSON 报告器
+
+<ApiMeta addedVersion="0.9.6" />
+
+生成稳定的 JSON 文档，适合 CI 工具、自定义 dashboard 或后处理脚本直接消费。
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=json
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['json', { outputPath: './reports/rstest.json' }]],
+});
+```
+  </Tab>
+</Tabs>
+
+**配置选项：**
+
+- `outputPath`: 输出文件路径（默认输出到 stdout）
+
+**输出结构：**
+
+- `status`: 本次运行的整体状态（`pass` 或 `fail`）
+- `summary`: 文件和测试的聚合计数
+- `durationMs`: 总耗时、构建耗时和测试耗时（毫秒）
+- `snapshot`: 本次运行的 snapshot 汇总
+- `files`: 按测试文件聚合的结果，包含嵌套测试项
+- `tests`: 扁平化测试结果，每项都带 `fullName`
+- `consoleLogs`: 捕获到的用户 console 输出（如果有）
+- `unhandledErrors`: 顶层 unhandled errors（如果有）
+
+JSON 报告器会将 `testPath` 写成相对路径，这样在不同机器和 CI workspace 中输出更稳定。
 
 ### Markdown 报告器
 
