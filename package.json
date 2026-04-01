@@ -2,8 +2,9 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
+    "bench:cpu": "pnpm --filter @rstest/benchmarks bench:cpu",
+    "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
-    "bench": "node benchmarks/suiteRun.mjs",
     "bump": "node --experimental-strip-types scripts/version.mts",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
@@ -34,7 +35,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
-    "@codspeed/tinybench-plugin": "^5.2.0",
     "@rsdoctor/rspack-plugin": "^1.5.7",
     "@rslint/core": "^0.3.4",
     "@rstest/core": "workspace:*",

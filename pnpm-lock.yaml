@@ -13,9 +13,6 @@ importers:
       '@biomejs/biome':
         specifier: ^2.4.10
         version: 2.4.10
-      '@codspeed/tinybench-plugin':
-        specifier: ^5.2.0
-        version: 5.2.0(tinybench@5.1.0)
       '@rsdoctor/rspack-plugin':
         specifier: ^1.5.7
         version: 1.5.7(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(webpack@5.105.4)
@@ -64,12 +61,33 @@ importers:
       simple-git-hooks:
         specifier: ^2.13.1
         version: 2.13.1
-      tinybench:
-        specifier: ^5.1.0
-        version: 5.1.0
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
+
+  benchmarks:
+    dependencies:
+      '@codspeed/tinybench-plugin':
+        specifier: ^5.2.0
+        version: 5.2.0(tinybench@5.1.0)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      antd:
+        specifier: ^6.3.5
+        version: 6.3.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      three:
+        specifier: ^0.181.2
+        version: 0.181.2
+      tinybench:
+        specifier: ^5.1.0
+        version: 5.1.0
 
   e2e:
     devDependencies:
@@ -7434,6 +7452,9 @@ packages:
     engines: {node: '>=10.18'}
     peerDependencies:
       tslib: ^2
+
+  three@0.181.2:
+    resolution: {integrity: sha512-k/CjiZ80bYss6Qs7/ex1TBlPD11whT9oKfT8oTGiHa34W4JRd1NiH/Tr1DbHWQ2/vMUypxksLnF2CfmlmM5XFQ==}
 
   throttle-debounce@5.0.2:
     resolution: {integrity: sha512-B71/4oyj61iNH0KeCamLuE2rmKuTO5byTOSVwECM5FA7TiAiAW+UqTKZ9ERueC4qvgSttUhdmq1mXC3kJqGX7A==}
@@ -15030,6 +15051,8 @@ snapshots:
   thingies@2.5.0(tslib@2.8.1):
     dependencies:
       tslib: 2.8.1
+
+  three@0.181.2: {}
 
   throttle-debounce@5.0.2: {}
 
