@@ -24,7 +24,7 @@ npx create-rslib --template react-ts --tools rstest --dir my-project
 
 ## 复用 Rslib 配置
 
-[@rstest/adapter-rslib](https://www.npmjs.com/package/@rstest/adapter-rslib) 是 Rstest 官方提供的适配器，允许 Rstest 自动继承现有 Rslib 配置文件中的配置。这样可以确保测试环境与构建配置一致，避免重复配置。
+[@rstest/adapter-rslib](https://www.npmjs.com/package/@rstest/adapter-rslib) 是 Rstest 官方提供的适配器，允许 Rstest 自动继承现有 Rslib 配置文件中的测试相关配置。这样可以确保测试环境与构建配置尽量保持一致，同时避免把只服务于构建产物的选项带进测试流程。
 
 ### 安装适配器
 
@@ -49,8 +49,10 @@ export default defineConfig({
 这将自动：
 
 - 加载你的 `rslib.config.ts` 文件
-- 将兼容的 Rslib 选项映射到 Rstest 配置
+- 提取并映射测试相关的 Rslib 选项到 Rstest 配置
 - 与你提供的其他 Rstest 配置合并
+
+适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
 
 默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。更多详情请参阅 [API](#api)。
 
@@ -123,6 +125,8 @@ export default defineConfig({
 
 你可以在 Rstest 配置中引用特定的 lib 配置。Rstest 会将 Rslib 的共享配置和具有匹配 `libId` 的 lib 配置调整为 Rstest 格式。
 
+这里也不是直接复用整个 lib 配置。适配器只会提取该 lib 中与测试执行相关的 `source`、`output`、`tools`、`plugins` 和 `resolve` 配置，再与共享配置合并后转换为 Rstest 配置。
+
 ```ts
 // 用于测试 'core' 环境
 export default defineConfig({
@@ -171,6 +175,8 @@ export default defineConfig({
 ## 配置映射
 
 适配器会自动将以下 Rslib 选项映射到 Rstest：
+
+下表中列出的字段会被继承；没有列出的 Rslib 选项默认不会进入 Rstest 配置。这意味着 `dev`、`server`、`html` 等与测试运行无关的配置会被自动忽略。
 
 | Rslib 选项            | Rstest 等效项         | 说明                                                 |
 | --------------------- | --------------------- | ---------------------------------------------------- |
