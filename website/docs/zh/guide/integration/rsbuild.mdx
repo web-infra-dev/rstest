@@ -24,7 +24,7 @@ npm create rsbuild@latest -- --tools rstest
 
 ## 复用 Rsbuild 配置
 
-[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rsbuild 配置文件中继承配置。这可以确保你的测试环境与构建配置相匹配，而无需重复配置。
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) 是一个官方适配器，它允许 Rstest 自动从你现有的 Rsbuild 配置文件中继承测试相关配置。这可以确保测试环境与构建配置尽量保持一致，同时避免把仅用于开发服务器或页面构建的选项带进测试流程。
 
 ### 安装适配器
 
@@ -49,8 +49,10 @@ export default defineConfig({
 这将自动：
 
 - 加载你的 `rsbuild.config.ts` 文件
-- 将兼容的 Rsbuild 选项映射到 Rstest 配置
+- 提取并映射测试相关的 Rsbuild 选项到 Rstest 配置
 - 与你提供的任何其他 Rstest 配置合并
+
+适配器不会原样复用整份 Rsbuild 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules 和 `target`。像 `dev`、`server`、`html` 这类面向开发服务器、页面入口或产物输出的配置，会在转换时自动裁剪掉，避免把测试无关配置带入 Rstest。
 
 默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果你的配置文件在其他地方，你可以使用 `cwd` 选项。更多详情请参阅 [API](#api) 部分。
 
@@ -171,6 +173,8 @@ export default defineConfig({
 
 适配器会自动将这些 Rsbuild 选项映射到 Rstest：
 
+下表中列出的字段会被继承；没有列出的 Rsbuild 选项默认不会进入 Rstest 配置。这意味着 `dev`、`server`、`html` 等与测试运行无关的配置会被自动忽略。
+
 | Rsbuild 选项            | Rstest 等效项         | 说明                                       |
 | ----------------------- | --------------------- | ------------------------------------------ |
 | `name` from environment | `name`                | 环境标识符                                 |
@@ -186,6 +190,8 @@ export default defineConfig({
 | `tools.swc`             | `tools.swc`           | SWC 配置                                   |
 | `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler 链配置                             |
 | `output.target`         | `testEnvironment`     | web 环境为 'happy-dom'，node 环境为 'node' |
+
+另外，适配器还会移除 `rsbuild:type-check` 插件，因为类型检查不属于测试运行时所需的构建链路。
 
 ## 调试配置
 

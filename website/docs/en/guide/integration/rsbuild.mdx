@@ -24,7 +24,7 @@ To add Rstest to an existing project, follow the [Quick Start](/guide/start/quic
 
 ## Reuse Rsbuild config
 
-[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) is an official adapter that allows Rstest to automatically inherit configuration from your existing Rsbuild config file. This ensures your test environment matches your build configuration without duplication.
+[@rstest/adapter-rsbuild](https://www.npmjs.com/package/@rstest/adapter-rsbuild) is an official adapter that allows Rstest to automatically inherit test-relevant configuration from your existing Rsbuild config file. This keeps your test environment aligned with your build setup without carrying over options that only matter to dev servers or page output.
 
 ### Install adapter
 
@@ -49,8 +49,10 @@ export default defineConfig({
 This will automatically:
 
 - Load your `rsbuild.config.ts` file
-- Map compatible Rsbuild options to Rstest configuration
+- Extract and map test-relevant Rsbuild options to Rstest configuration
 - Merge with any additional Rstest config you provide
+
+The adapter does not reuse the entire Rsbuild config as-is. It keeps the parts that matter for test execution, such as module resolution, transforms, CSS Modules, and `target`, and automatically drops options like `dev`, `server`, and `html` that are specific to the dev server, page entry, or production output.
 
 By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
 
@@ -171,6 +173,8 @@ export default defineConfig({
 
 The adapter automatically maps these Rsbuild options to Rstest:
 
+Only the fields listed below are inherited. Rsbuild options that are not listed are ignored by default, which means test-irrelevant sections such as `dev`, `server`, and `html` are automatically pruned during conversion.
+
 | Rsbuild option          | Rstest equivalent     | Notes                                |
 | ----------------------- | --------------------- | ------------------------------------ |
 | `name` from environment | `name`                | Environment identifier               |
@@ -186,6 +190,8 @@ The adapter automatically maps these Rsbuild options to Rstest:
 | `tools.swc`             | `tools.swc`           | SWC configuration                    |
 | `tools.bundlerChain`    | `tools.bundlerChain`  | Bundler chain configuration          |
 | `output.target`         | `testEnvironment`     | 'happy-dom' for web, 'node' for node |
+
+The adapter also removes the `rsbuild:type-check` plugin because type checking is not part of the test runtime pipeline.
 
 ## Debug config
 
