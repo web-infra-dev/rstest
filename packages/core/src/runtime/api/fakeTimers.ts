@@ -164,6 +164,8 @@ export class FakeTimers {
       ...fakeTimersConfig,
     });
 
+    // temporary fix fake-timers 15.1.1 → 15.2.0 timerHeap.push error
+    this._clock.reset();
     this._fakingTime = true;
   }
 

@@ -142,6 +142,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -159,8 +160,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -192,6 +191,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -209,8 +209,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -681,6 +679,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -698,8 +697,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -731,6 +728,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -748,8 +746,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -1203,6 +1199,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -1220,8 +1217,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -1253,6 +1248,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -1270,8 +1266,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -1727,6 +1721,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -1744,8 +1739,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -1777,6 +1770,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -1794,8 +1788,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -2484,6 +2476,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -2501,8 +2494,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -2534,6 +2525,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -2551,8 +2543,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -3006,6 +2996,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -3023,8 +3014,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
                       "decoratorVersion": "2022-03",
@@ -3056,6 +3045,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -3073,8 +3063,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorVersion": "2022-03",
@@ -3422,6 +3410,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -3439,8 +3428,6 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorMetadata": true,
