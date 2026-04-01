@@ -227,6 +227,11 @@ Patterns only affect dependency requests that rstest can still process in the cu
 - `bundleDependencies: true` + `externals: ['lodash']`: Bundle all dependencies, but externalize `lodash`.
 - `bundleDependencies: false` + `externals` is not needed, since all dependencies are already externalized.
 
+In practice, the two options are most useful in opposite situations:
+
+- Use `bundleDependencies` patterns when most dependencies should stay external, and you only want to bundle a small set of packages or subpaths.
+- Use `output.externals` when most dependencies should stay bundled, and you only want to externalize a small set of packages.
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 For custom CSS Modules configuration.

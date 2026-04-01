@@ -225,6 +225,11 @@ export default defineConfig({
 - `bundleDependencies: true` + `externals: ['lodash']`：打包所有依赖，但外部化 `lodash`。
 - `bundleDependencies: false` + `externals` 无需配置，因为所有依赖已被外部化。
 
+实际使用时，这两个配置更适合相反的场景：
+
+- 当大部分依赖都应该保持 external，只有少量包或子路径需要被打包时，更适合使用 `bundleDependencies` pattern。
+- 当大部分依赖都应该保持打包，只有少量包需要被 externalize 时，更适合使用 `output.externals`。
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 用于自定义 CSS Modules 的配置。
