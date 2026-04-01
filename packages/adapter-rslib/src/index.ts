@@ -94,6 +94,7 @@ export function withRslibConfig(
       include,
       exclude,
       tsconfigPath,
+      transformImport,
     } = finalLibConfig.source || {};
 
     // Convert rslib config to rstest config
@@ -112,6 +113,7 @@ export function withRslibConfig(
         include,
         exclude,
         tsconfigPath,
+        transformImport,
       },
       resolve: finalLibConfig.resolve,
       output: {

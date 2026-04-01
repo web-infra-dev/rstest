@@ -55,6 +55,36 @@ If you want certain files not to be bundled into the outputs, you can use [outpu
 
 Specify additional JavaScript files that need to be compiled.
 
+## source.transformImport <RsbuildDocBadge path="/config/source/transform-import" text="source.transformImport" />
+
+<ApiMeta addedVersion="0.9.6" />
+
+Configure on-demand import transforms.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  source: {
+    transformImport: [
+      {
+        libraryName: 'demo-lib',
+        libraryDirectory: '.',
+        camelToDashComponentName: false,
+      },
+    ],
+  },
+});
+```
+
+:::caution
+
+`source.transformImport` rewrites the final module request at compile time.
+
+In the current implementation, module-level mocking APIs that still use the original specifier, such as `rs.mock('pkg')`, `rs.doMock('pkg')`, `rs.importActual('pkg')`, and `rs.requireActual('pkg')`, may no longer target the transformed module request.
+
+:::
+
 ## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
 
 Configure a custom `tsconfig.json` file path to use, can be a relative or absolute path.
