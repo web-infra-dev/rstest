@@ -4,6 +4,7 @@ import { relative } from 'pathe';
 import type {
   Duration,
   JsonReporterOptions,
+  NormalizedConfig,
   Reporter,
   SnapshotSummary,
   TestFileResult,
@@ -54,17 +55,21 @@ type JsonReport = {
 };
 
 export class JsonReporter implements Reporter {
+  private readonly config: NormalizedConfig;
   private readonly rootPath: string;
   private readonly outputPath?: string;
   private readonly consoleLogs: UserConsoleLog[] = [];
 
   constructor({
+    config,
     rootPath,
     options,
   }: {
+    config: NormalizedConfig;
     rootPath: string;
     options?: JsonReporterOptions;
   }) {
+    this.config = config;
     this.rootPath = rootPath;
     this.outputPath = options?.outputPath;
   }
@@ -105,14 +110,17 @@ export class JsonReporter implements Reporter {
     );
     const todoTests = testResults.filter((result) => result.status === 'todo');
     const failedFiles = results.filter((result) => result.status === 'fail');
+    const noTestsDiscovered = results.length === 0 && testResults.length === 0;
+    const hasFailedStatus =
+      failedTests.length > 0 ||
+      failedFiles.length > 0 ||
+      (unhandledErrors?.length ?? 0) > 0 ||
+      (noTestsDiscovered && !this.config.passWithNoTests);
 
     return {
       tool: 'rstest',
       version: RSTEST_VERSION,
-      status:
-        failedTests.length || failedFiles.length || unhandledErrors?.length
-          ? 'fail'
-          : 'pass',
+      status: hasFailedStatus ? 'fail' : 'pass',
       summary: {
         testFiles: results.length,
         failedFiles: failedFiles.length,
