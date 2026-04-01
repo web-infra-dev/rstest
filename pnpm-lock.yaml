@@ -62,8 +62,8 @@ importers:
         specifier: ^2.13.1
         version: 2.13.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e:
     devDependencies:
@@ -75,7 +75,7 @@ importers:
         version: 1.4.6(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/browser':
         specifier: workspace:*
         version: link:../packages/browser
@@ -155,8 +155,8 @@ importers:
         specifier: ^1.2.2
         version: 1.2.2
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e/browser-mode/fixtures/browser-coverage:
     devDependencies:
@@ -214,8 +214,8 @@ importers:
         specifier: ^29.0.1
         version: 29.0.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e/externals:
     devDependencies:
@@ -358,21 +358,21 @@ importers:
         specifier: ^29.0.1
         version: 29.0.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e/projects/fixtures-shard/packages/client-vue:
     dependencies:
       vue:
         specifier: ^3.5.31
-        version: 3.5.31(typescript@5.9.3)
+        version: 3.5.31(typescript@6.0.2)
     devDependencies:
       '@rsbuild/core':
         specifier: 2.0.0-rc.0
         version: 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.7
-        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))
+        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -381,10 +381,10 @@ importers:
         version: 3.5.31
       '@vue/server-renderer':
         specifier: ^3.5.31
-        version: 3.5.31(vue@3.5.31(typescript@5.9.3))
+        version: 3.5.31(vue@3.5.31(typescript@6.0.2))
       '@vue/test-utils':
         specifier: ^2.4.6
-        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3)))(vue@3.5.31(typescript@5.9.3))
+        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
 
   e2e/projects/fixtures/packages/client:
     dependencies:
@@ -420,21 +420,21 @@ importers:
         specifier: ^29.0.1
         version: 29.0.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e/projects/fixtures/packages/client-vue:
     dependencies:
       vue:
         specifier: ^3.5.31
-        version: 3.5.31(typescript@5.9.3)
+        version: 3.5.31(typescript@6.0.2)
     devDependencies:
       '@rsbuild/core':
         specifier: 2.0.0-rc.0
         version: 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.7
-        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))
+        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -443,10 +443,10 @@ importers:
         version: 3.5.31
       '@vue/server-renderer':
         specifier: ^3.5.31
-        version: 3.5.31(vue@3.5.31(typescript@5.9.3))
+        version: 3.5.31(vue@3.5.31(typescript@6.0.2))
       '@vue/test-utils':
         specifier: ^2.4.6
-        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3)))(vue@3.5.31(typescript@5.9.3))
+        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
 
   e2e/reporter:
     devDependencies:
@@ -492,8 +492,8 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e/test-coverage/fixtures:
     devDependencies:
@@ -517,7 +517,7 @@ importers:
     dependencies:
       vue:
         specifier: ^3.5.31
-        version: 3.5.31(typescript@5.9.3)
+        version: 3.5.31(typescript@6.0.2)
     devDependencies:
       '@rsbuild/core':
         specifier: 2.0.0-rc.0
@@ -527,7 +527,7 @@ importers:
         version: 1.1.2(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
       '@rsbuild/plugin-vue':
         specifier: ^1.2.7
-        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))
+        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^1.1.2
         version: 1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
@@ -539,10 +539,10 @@ importers:
         version: 3.5.31
       '@vue/server-renderer':
         specifier: ^3.5.31
-        version: 3.5.31(vue@3.5.31(typescript@5.9.3))
+        version: 3.5.31(vue@3.5.31(typescript@6.0.2))
       '@vue/test-utils':
         specifier: ^2.4.6
-        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3)))(vue@3.5.31(typescript@5.9.3))
+        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
 
   e2e/watch:
     devDependencies:
@@ -581,8 +581,8 @@ importers:
         specifier: ^1.59.0
         version: 1.59.0
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/node:
     devDependencies:
@@ -596,8 +596,8 @@ importers:
         specifier: ^22.16.5
         version: 22.18.6
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/react:
     dependencies:
@@ -636,8 +636,8 @@ importers:
         specifier: ^20.8.9
         version: 20.8.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/react-rsbuild:
     dependencies:
@@ -676,8 +676,8 @@ importers:
         specifier: ^20.8.9
         version: 20.8.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/react-rspack:
     dependencies:
@@ -731,8 +731,8 @@ importers:
         specifier: ^0.18.0
         version: 0.18.0
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/react-rspack-browser:
     dependencies:
@@ -777,14 +777,14 @@ importers:
         specifier: ^1.59.0
         version: 1.59.0
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   examples/vue:
     dependencies:
       vue:
         specifier: ^3.5.31
-        version: 3.5.31(typescript@5.9.3)
+        version: 3.5.31(typescript@6.0.2)
     devDependencies:
       '@rsbuild/core':
         specifier: 2.0.0-rc.0
@@ -794,7 +794,7 @@ importers:
         version: 1.1.2(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
       '@rsbuild/plugin-vue':
         specifier: ^1.2.7
-        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))
+        version: 1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^1.1.2
         version: 1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
@@ -806,16 +806,16 @@ importers:
         version: 3.5.31
       '@vue/server-renderer':
         specifier: ^3.5.31
-        version: 3.5.31(vue@3.5.31(typescript@5.9.3))
+        version: 3.5.31(vue@3.5.31(typescript@6.0.2))
       '@vue/test-utils':
         specifier: ^2.4.6
-        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3)))(vue@3.5.31(typescript@5.9.3))
+        version: 2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))
       happy-dom:
         specifier: ^20.8.9
         version: 20.8.9
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   packages/adapter-rsbuild:
     devDependencies:
@@ -824,7 +824,7 @@ importers:
         version: 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -836,7 +836,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -845,16 +845,16 @@ importers:
         version: link:../../scripts/tsconfig
       tsconfck:
         specifier: 3.1.6
-        version: 3.1.6(typescript@5.9.3)
+        version: 3.1.6(typescript@6.0.2)
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   packages/adapter-rspack:
     devDependencies:
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rspack/cli':
         specifier: 2.0.0-rc.0
         version: 2.0.0-rc.0(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.20))(@rspack/dev-server@2.0.0-rc.0(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.20)))
@@ -891,7 +891,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -930,7 +930,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -950,8 +950,8 @@ importers:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   packages/browser-ui:
     dependencies:
@@ -979,7 +979,7 @@ importers:
         version: 1.4.6(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
       '@rsbuild/plugin-svgr':
         specifier: ^1.3.1
-        version: 1.3.1(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@5.9.3)
+        version: 1.3.1(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@6.0.2)
       '@tailwindcss/postcss':
         specifier: ^4.2.2
         version: 4.2.2
@@ -993,8 +993,8 @@ importers:
         specifier: ^4.2.2
         version: 4.2.2
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   packages/core:
     dependencies:
@@ -1031,7 +1031,7 @@ importers:
         version: 1.5.1(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -1161,7 +1161,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1184,8 +1184,8 @@ importers:
         specifier: ^22.16.5
         version: 22.18.6
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
   packages/vscode:
     devDependencies:
@@ -1194,7 +1194,7 @@ importers:
         version: 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rslib/core':
         specifier: 0.20.2
-        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+        version: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1250,11 +1250,11 @@ importers:
         specifier: ^0.2.15
         version: 0.2.15
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
       valibot:
         specifier: ^1.3.1
-        version: 1.3.1(typescript@5.9.3)
+        version: 1.3.1(typescript@6.0.2)
 
   scripts/tsconfig: {}
 
@@ -1303,8 +1303,8 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
 packages:
 
@@ -7530,8 +7530,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@6.0.2:
+    resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -9441,12 +9441,12 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
 
-  '@rsbuild/plugin-svgr@1.3.1(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@5.9.3)':
+  '@rsbuild/plugin-svgr@1.3.1(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(typescript@6.0.2)':
     dependencies:
       '@rsbuild/plugin-react': 1.4.6(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))
-      '@svgr/core': 8.1.0(typescript@5.9.3)
-      '@svgr/plugin-jsx': 8.1.0(@svgr/core@8.1.0(typescript@5.9.3))
-      '@svgr/plugin-svgo': 8.1.0(@svgr/core@8.1.0(typescript@5.9.3))(typescript@5.9.3)
+      '@svgr/core': 8.1.0(typescript@6.0.2)
+      '@svgr/plugin-jsx': 8.1.0(@svgr/core@8.1.0(typescript@6.0.2))
+      '@svgr/plugin-svgo': 8.1.0(@svgr/core@8.1.0(typescript@6.0.2))(typescript@6.0.2)
       deepmerge: 4.3.1
       loader-utils: 3.3.1
     optionalDependencies:
@@ -9467,9 +9467,9 @@ snapshots:
       - '@babel/core'
       - supports-color
 
-  '@rsbuild/plugin-vue@1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))':
+  '@rsbuild/plugin-vue@1.2.7(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1))(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))':
     dependencies:
-      rspack-vue-loader: 17.5.0(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3))
+      rspack-vue-loader: 17.5.0(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2))
     optionalDependencies:
       '@rsbuild/core': 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
     transitivePeerDependencies:
@@ -9577,13 +9577,13 @@ snapshots:
       - '@rspack/core'
       - webpack
 
-  '@rslib/core@0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)':
+  '@rslib/core@0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)':
     dependencies:
       '@rsbuild/core': 2.0.0-beta.11
-      rsbuild-plugin-dts: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.11)(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3)
+      rsbuild-plugin-dts: 0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.11)(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2)
     optionalDependencies:
       '@microsoft/api-extractor': 7.57.8(@types/node@22.18.6)
-      typescript: 5.9.3
+      typescript: 6.0.2
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'
       - '@typescript/native-preview'
@@ -10121,12 +10121,12 @@ snapshots:
       '@svgr/babel-plugin-transform-react-native-svg': 8.1.0(@babel/core@7.29.0)
       '@svgr/babel-plugin-transform-svg-component': 8.0.0(@babel/core@7.29.0)
 
-  '@svgr/core@8.1.0(typescript@5.9.3)':
+  '@svgr/core@8.1.0(typescript@6.0.2)':
     dependencies:
       '@babel/core': 7.29.0
       '@svgr/babel-preset': 8.1.0(@babel/core@7.29.0)
       camelcase: 6.3.0
-      cosmiconfig: 8.3.6(typescript@5.9.3)
+      cosmiconfig: 8.3.6(typescript@6.0.2)
       snake-case: 3.0.4
     transitivePeerDependencies:
       - supports-color
@@ -10137,20 +10137,20 @@ snapshots:
       '@babel/types': 7.29.0
       entities: 4.5.0
 
-  '@svgr/plugin-jsx@8.1.0(@svgr/core@8.1.0(typescript@5.9.3))':
+  '@svgr/plugin-jsx@8.1.0(@svgr/core@8.1.0(typescript@6.0.2))':
     dependencies:
       '@babel/core': 7.29.0
       '@svgr/babel-preset': 8.1.0(@babel/core@7.29.0)
-      '@svgr/core': 8.1.0(typescript@5.9.3)
+      '@svgr/core': 8.1.0(typescript@6.0.2)
       '@svgr/hast-util-to-babel-ast': 8.0.0
       svg-parser: 2.0.4
     transitivePeerDependencies:
       - supports-color
 
-  '@svgr/plugin-svgo@8.1.0(@svgr/core@8.1.0(typescript@5.9.3))(typescript@5.9.3)':
+  '@svgr/plugin-svgo@8.1.0(@svgr/core@8.1.0(typescript@6.0.2))(typescript@6.0.2)':
     dependencies:
-      '@svgr/core': 8.1.0(typescript@5.9.3)
-      cosmiconfig: 8.3.6(typescript@5.9.3)
+      '@svgr/core': 8.1.0(typescript@6.0.2)
+      cosmiconfig: 8.3.6(typescript@6.0.2)
       deepmerge: 4.3.1
       svgo: 3.3.2
     transitivePeerDependencies:
@@ -10814,20 +10814,20 @@ snapshots:
       '@vue/shared': 3.5.31
       csstype: 3.2.3
 
-  '@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3))':
+  '@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2))':
     dependencies:
       '@vue/compiler-ssr': 3.5.31
       '@vue/shared': 3.5.31
-      vue: 3.5.31(typescript@5.9.3)
+      vue: 3.5.31(typescript@6.0.2)
 
   '@vue/shared@3.5.31': {}
 
-  '@vue/test-utils@2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@5.9.3)))(vue@3.5.31(typescript@5.9.3))':
+  '@vue/test-utils@2.4.6(@vue/compiler-dom@3.5.31)(@vue/server-renderer@3.5.31(vue@3.5.31(typescript@6.0.2)))(vue@3.5.31(typescript@6.0.2))':
     dependencies:
       '@vue/compiler-dom': 3.5.31
-      '@vue/server-renderer': 3.5.31(vue@3.5.31(typescript@5.9.3))
+      '@vue/server-renderer': 3.5.31(vue@3.5.31(typescript@6.0.2))
       js-beautify: 1.15.4
-      vue: 3.5.31(typescript@5.9.3)
+      vue: 3.5.31(typescript@6.0.2)
       vue-component-type-helpers: 2.2.12
 
   '@webassemblyjs/ast@1.14.1':
@@ -11486,14 +11486,14 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  cosmiconfig@8.3.6(typescript@5.9.3):
+  cosmiconfig@8.3.6(typescript@6.0.2):
     dependencies:
       import-fresh: 3.3.1
       js-yaml: 4.1.1
       parse-json: 5.2.0
       path-type: 4.0.0
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.2
 
   create-ecdh@4.0.4:
     dependencies:
@@ -14339,14 +14339,14 @@ snapshots:
       hash-base: 3.1.2
       inherits: 2.0.4
 
-  rsbuild-plugin-dts@0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.11)(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@5.9.3):
+  rsbuild-plugin-dts@0.20.2(@microsoft/api-extractor@7.57.8(@types/node@22.18.6))(@rsbuild/core@2.0.0-beta.11)(@typescript/native-preview@7.0.0-dev.20260331.1)(typescript@6.0.2):
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@rsbuild/core': 2.0.0-beta.11
     optionalDependencies:
       '@microsoft/api-extractor': 7.57.8(@types/node@22.18.6)
       '@typescript/native-preview': 7.0.0-dev.20260331.1
-      typescript: 5.9.3
+      typescript: 6.0.2
 
   rsbuild-plugin-google-analytics@1.0.5(@rsbuild/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)):
     optionalDependencies:
@@ -14360,13 +14360,13 @@ snapshots:
 
   rslog@2.1.1: {}
 
-  rspack-vue-loader@17.5.0(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@5.9.3)):
+  rspack-vue-loader@17.5.0(@rspack/core@2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20))(vue@3.5.31(typescript@6.0.2)):
     dependencies:
       '@rspack/lite-tapable': 1.1.0
       chalk: 4.1.2
     optionalDependencies:
       '@rspack/core': 2.0.0-rc.0(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@swc/helpers@0.5.20)
-      vue: 3.5.31(typescript@5.9.3)
+      vue: 3.5.31(typescript@6.0.2)
 
   rspress-plugin-font-open-sans@1.0.3(@rspress/core@2.0.8(@types/mdast@4.0.4)(@types/react@19.2.14)(micromark-util-types@2.0.2)(micromark@4.0.2)):
     dependencies:
@@ -15002,9 +15002,9 @@ snapshots:
 
   trough@2.2.0: {}
 
-  tsconfck@3.1.6(typescript@5.9.3):
+  tsconfck@3.1.6(typescript@6.0.2):
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.2
 
   tslib@2.8.1: {}
 
@@ -15043,7 +15043,7 @@ snapshots:
 
   typescript@5.8.2: {}
 
-  typescript@5.9.3: {}
+  typescript@6.0.2: {}
 
   uc.micro@2.1.0: {}
 
@@ -15160,9 +15160,9 @@ snapshots:
       '@types/istanbul-lib-coverage': 2.0.6
       convert-source-map: 2.0.0
 
-  valibot@1.3.1(typescript@5.9.3):
+  valibot@1.3.1(typescript@6.0.2):
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.2
 
   validate-npm-package-license@3.0.4:
     dependencies:
@@ -15194,15 +15194,15 @@ snapshots:
 
   vue-component-type-helpers@2.2.12: {}
 
-  vue@3.5.31(typescript@5.9.3):
+  vue@3.5.31(typescript@6.0.2):
     dependencies:
       '@vue/compiler-dom': 3.5.31
       '@vue/compiler-sfc': 3.5.31
       '@vue/runtime-dom': 3.5.31
-      '@vue/server-renderer': 3.5.31(vue@3.5.31(typescript@5.9.3))
+      '@vue/server-renderer': 3.5.31(vue@3.5.31(typescript@6.0.2))
       '@vue/shared': 3.5.31
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.2
 
   w-json@1.3.10: {}
 
