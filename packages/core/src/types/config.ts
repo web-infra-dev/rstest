@@ -468,6 +468,8 @@ export interface RstestConfig {
     | 'decorators'
     | 'include'
     | 'exclude'
+    | 'transformImport'
+    | 'assetsInclude'
   >;
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;

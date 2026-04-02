@@ -32,8 +32,15 @@ export function toRstestConfig({
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
   const { cssModules, target, module } = finalBuildConfig.output || {};
-  const { assetsInclude, decorators, define, include, exclude, tsconfigPath } =
-    finalBuildConfig.source || {};
+  const {
+    assetsInclude,
+    decorators,
+    define,
+    include,
+    exclude,
+    tsconfigPath,
+    transformImport,
+  } = finalBuildConfig.source || {};
 
   return {
     root: finalBuildConfig.root,
@@ -54,6 +61,7 @@ export function toRstestConfig({
       include,
       exclude,
       tsconfigPath,
+      transformImport,
     },
     resolve: finalBuildConfig.resolve,
     output: {
