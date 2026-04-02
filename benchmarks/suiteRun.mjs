@@ -24,11 +24,10 @@ const benchmarkOptions = {
 
 const bench = withCodSpeed(
   new Bench({
-    // Allow generous time — each task runs the full rstest pipeline.
     time: 0,
-    iterations: 3,
+    iterations: 100,
     warmupTime: 0,
-    warmupIterations: 0,
+    warmupIterations: 5,
   }),
 );
 
