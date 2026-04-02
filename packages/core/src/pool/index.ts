@@ -168,15 +168,22 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
-  // Some options may crash worker, e.g. --prof, --title.
+  // Propagate parent execArgv to workers, except flags known to cause issues
+  // in child processes (--prof writes per-worker profiling logs, --title is
+  // meaningless for workers). Safe for child_process.fork; the referenced
+  // Node.js issue (#41103) only affects worker_threads.
   // https://github.com/nodejs/node/issues/41103
-  const execArgv = process.execArgv.filter(
-    (execArg) =>
-      execArg.startsWith('--perf') ||
-      execArg.startsWith('--cpu-prof') ||
-      execArg.startsWith('--heap-prof') ||
-      execArg.startsWith('--diagnostic-dir'),
-  );
+  const blockedFlags = ['--prof', '--title'];
+  const execArgv = process.execArgv.filter((arg, i, arr) => {
+    if (blockedFlags.some((f) => arg === f || arg.startsWith(`${f}=`))) {
+      return false;
+    }
+    // skip standalone value following --title (handles `--title foo` form)
+    if (i > 0 && arr[i - 1] === '--title') {
+      return false;
+    }
+    return true;
+  });
 
   const numCpus = getNumCpus();
 
