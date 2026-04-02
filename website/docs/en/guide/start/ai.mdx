@@ -3,16 +3,26 @@ description: This chapter introduces how to help AI better understand Rstest's f
 ---
 
 import { PackageManagerTabs } from '@theme';
+import { AgentPrompt } from '@components/AgentPrompt';
 
 # AI
 
 To help AI better understand Rstest's features, configuration, and best practices so it can provide more accurate assistance during day-to-day development and troubleshooting, Rstest provides the following capabilities:
 
+- [Agent prompt](#agent-prompt)
 - [Agent Skills](#agent-skills)
 - [llms.txt](#llmstxt)
 - [Markdown docs](#markdown-docs)
 - [Markdown reporter](#markdown-reporter)
 - [AGENTS.md](#agentsmd)
+
+## Agent prompt
+
+If you are using a coding agent (such as Claude Code, Cursor, Copilot, etc.), you can copy the following prompt to set up Rstest in your project:
+
+<AgentPrompt />
+
+The agent will read the linked instructions and automatically install dependencies, create configuration, and write tests based on your project type.
 
 ## Agent Skills
 

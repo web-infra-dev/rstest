@@ -4,6 +4,14 @@ description: This chapter introduces how to quickly get started with Rstest.
 
 # Quick start
 
+import { MdOnly } from '@components/MdOnly';
+
+<MdOnly>
+  NOTE FOR AI CODING AGENTS: Do not follow this page. Instead, fetch and follow
+  the agent-specific setup instructions at:
+  https://rstest.rs/guide/start/agent-install.md
+</MdOnly>
+
 ## Online examples
 
 You can try Rstest online without any setup by using the following examples:
@@ -33,9 +41,18 @@ nvm use --lts
 
 ## Using Rstest
 
-You can install Rstest using the following command:
-
 import { PackageManagerTabs } from '@theme';
+import { AgentPrompt } from '@components/AgentPrompt';
+
+### Agent prompt
+
+If you are using a coding agent, you can copy the following prompt to set up Rstest automatically:
+
+<AgentPrompt />
+
+### Manual installation
+
+You can install Rstest using the following command:
 
 <PackageManagerTabs command="add @rstest/core -D" />
 
