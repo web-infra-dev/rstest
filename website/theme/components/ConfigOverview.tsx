@@ -124,6 +124,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'source',
     items: [
       'source.decorators',
+      'source.transformImport',
+      'source.assetsInclude',
       'source.define',
       'source.exclude',
       'source.include',

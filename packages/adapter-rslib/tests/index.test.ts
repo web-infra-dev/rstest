@@ -14,7 +14,14 @@ export default defineConfig({
     assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"test"'
-    }
+    },
+    transformImport: [
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false
+      }
+    ]
   },
   resolve: {
     alias: {
@@ -46,6 +53,13 @@ export default defineConfig({
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });
+    expect(config.source?.transformImport).toEqual([
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false,
+      },
+    ]);
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });

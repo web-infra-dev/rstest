@@ -9,6 +9,13 @@ describe('toRstestConfig', () => {
       define: {
         'process.env.NODE_ENV': '"common"',
       },
+      transformImport: [
+        {
+          libraryName: 'lodash',
+          libraryDirectory: '',
+          camelToDashComponentName: false,
+        },
+      ],
     },
     resolve: {
       alias: {
@@ -38,6 +45,13 @@ describe('toRstestConfig', () => {
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
     });
+    expect(config.source?.transformImport).toEqual([
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '',
+        camelToDashComponentName: false,
+      },
+    ]);
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });

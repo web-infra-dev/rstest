@@ -175,22 +175,23 @@ export default defineConfig({
 
 下表中列出的字段会被继承；没有列出的 Rsbuild 选项默认不会进入 Rstest 配置。这意味着 `dev`、`server`、`html` 等与测试运行无关的配置会被自动忽略。
 
-| Rsbuild 选项            | Rstest 等效项          | 说明                                       |
-| ----------------------- | ---------------------- | ------------------------------------------ |
-| `name` from environment | `name`                 | 环境标识符                                 |
-| `plugins`               | `plugins`              | 插件配置                                   |
-| `source.decorators`     | `source.decorators`    | 装饰器支持                                 |
-| `source.assetsInclude`  | `source.assetsInclude` | 额外的静态资源匹配规则                     |
-| `source.define`         | `source.define`        | 全局常量                                   |
-| `source.include`        | `source.include`       | 源文件包含模式                             |
-| `source.exclude`        | `source.exclude`       | 源文件排除模式                             |
-| `source.tsconfigPath`   | `source.tsconfigPath`  | TypeScript 配置文件路径                    |
-| `resolve`               | `resolve`              | 模块解析                                   |
-| `output.cssModules`     | `output.cssModules`    | CSS 模块配置                               |
-| `tools.rspack`          | `tools.rspack`         | Rspack 配置                                |
-| `tools.swc`             | `tools.swc`            | SWC 配置                                   |
-| `tools.bundlerChain`    | `tools.bundlerChain`   | Bundler 链配置                             |
-| `output.target`         | `testEnvironment`      | web 环境为 'happy-dom'，node 环境为 'node' |
+| Rsbuild 选项             | Rstest 等效项            | 说明                                       |
+| ------------------------ | ------------------------ | ------------------------------------------ |
+| `name` from environment  | `name`                   | 环境标识符                                 |
+| `plugins`                | `plugins`                | 插件配置                                   |
+| `source.decorators`      | `source.decorators`      | 装饰器支持                                 |
+| `source.assetsInclude`   | `source.assetsInclude`   | 额外的静态资源匹配规则                     |
+| `source.define`          | `source.define`          | 全局常量                                   |
+| `source.include`         | `source.include`         | 源文件包含模式                             |
+| `source.exclude`         | `source.exclude`         | 源文件排除模式                             |
+| `source.transformImport` | `source.transformImport` | 按需导入转换规则                           |
+| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript 配置文件路径                    |
+| `resolve`                | `resolve`                | 模块解析                                   |
+| `output.cssModules`      | `output.cssModules`      | CSS 模块配置                               |
+| `tools.rspack`           | `tools.rspack`           | Rspack 配置                                |
+| `tools.swc`              | `tools.swc`              | SWC 配置                                   |
+| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler 链配置                             |
+| `output.target`          | `testEnvironment`        | web 环境为 'happy-dom'，node 环境为 'node' |
 
 另外，适配器还会移除 `rsbuild:type-check` 插件，因为类型检查不属于测试运行时所需的构建链路。
 
