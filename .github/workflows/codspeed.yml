@@ -76,4 +76,18 @@ jobs:
         uses: CodSpeedHQ/action@1c8ae4843586d3ba879736b7f6b7b0c990757fab # v4.12.1
         with:
           mode: memory
-          run: node benchmarks/memorySuiteRun.mjs
+          # Memory mode does not auto-inject V8 flags via introspection
+          # (unlike simulation mode), so we pass them explicitly.
+          run: >-
+            node
+            --interpreted-frames-native-stack
+            --allow-natives-syntax
+            --hash-seed=1
+            --random-seed=1
+            --no-opt
+            --predictable
+            --predictable-gc-schedule
+            --expose-gc
+            --no-concurrent-sweeping
+            --max-old-space-size=4096
+            benchmarks/memorySuiteRun.mjs
