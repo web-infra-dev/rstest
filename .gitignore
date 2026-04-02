@@ -47,3 +47,6 @@ packages/vscode/*.vsix
 packages/vscode/icon.png
 
 .rstest-temp/
+
+# Generated memory benchmark fixture
+benchmarks/fixtures/memory/

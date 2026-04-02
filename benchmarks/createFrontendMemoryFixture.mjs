@@ -1,15 +1,15 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const benchmarksNodeModules = join(__dirname, 'node_modules');
+const fixturesMemoryDir = join(__dirname, 'fixtures', 'memory');
 const workload = {
-  featureCount: 20,
+  featureCount: 10,
   rowsPerModule: 80,
   sharedModuleCount: 12,
-  testFileCount: 180,
+  testFileCount: 60,
 };
 
 async function writeGeneratedFile(filePath, content) {
@@ -199,7 +199,10 @@ describe('synthetic frontend test ${index}', () => {
 }
 
 export async function createFrontendMemoryFixture() {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rstest-memory-bench-'));
+  const fixtureRoot = fixturesMemoryDir;
+
+  await rm(fixtureRoot, { force: true, recursive: true });
+  await mkdir(fixtureRoot, { recursive: true });
 
   try {
     const nodeModulesLink = join(fixtureRoot, 'node_modules');
