@@ -150,6 +150,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'resolve.alias',
       'resolve.dedupe',
       'resolve.extensions',
+      'resolve.conditionNames',
+      'resolve.mainFields',
     ],
   },
   {
