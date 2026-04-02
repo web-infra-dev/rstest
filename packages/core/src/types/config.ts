@@ -462,7 +462,12 @@ export interface RstestConfig {
 
   source?: Pick<
     NonNullable<RsbuildConfig['source']>,
-    'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
+    | 'assetsInclude'
+    | 'define'
+    | 'tsconfigPath'
+    | 'decorators'
+    | 'include'
+    | 'exclude'
   >;
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;

@@ -32,7 +32,7 @@ export function toRstestConfig({
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
   const { cssModules, target, module } = finalBuildConfig.output || {};
-  const { decorators, define, include, exclude, tsconfigPath } =
+  const { assetsInclude, decorators, define, include, exclude, tsconfigPath } =
     finalBuildConfig.source || {};
 
   return {
@@ -48,6 +48,7 @@ export function toRstestConfig({
       },
     ],
     source: {
+      assetsInclude,
       decorators,
       define,
       include,

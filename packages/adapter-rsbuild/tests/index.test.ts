@@ -10,6 +10,7 @@ import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
   source: {
+    assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"common"'
     }
@@ -49,6 +50,7 @@ export default defineConfig({
     })({});
 
     expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
     });
@@ -66,6 +68,7 @@ export default defineConfig({
 
     expect(config).toBeDefined();
     expect(config.name).toBe('test');
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });

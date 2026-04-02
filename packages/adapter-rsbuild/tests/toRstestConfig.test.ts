@@ -5,6 +5,7 @@ import { toRstestConfig } from '../src';
 describe('toRstestConfig', () => {
   const rsbuildConfig = defineConfig({
     source: {
+      assetsInclude: /\.json5$/,
       define: {
         'process.env.NODE_ENV': '"common"',
       },
@@ -33,6 +34,7 @@ describe('toRstestConfig', () => {
   it('should convert rsbuild config to rstest config', () => {
     const config = toRstestConfig({ rsbuildConfig });
 
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
     });
@@ -49,6 +51,7 @@ describe('toRstestConfig', () => {
     });
 
     expect(config.name).toBe('test');
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });
