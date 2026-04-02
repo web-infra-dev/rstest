@@ -52,7 +52,7 @@ export default defineConfig({
 - 提取并映射测试相关的 Rslib 选项到 Rstest 配置
 - 与你提供的其他 Rstest 配置合并
 
-适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
+适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置、静态资源处理和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
 
 默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。更多详情请参阅 [API](#api)。
 
@@ -178,21 +178,22 @@ export default defineConfig({
 
 下表中列出的字段会被继承；没有列出的 Rslib 选项默认不会进入 Rstest 配置。这意味着 `dev`、`server`、`html` 等与测试运行无关的配置会被自动忽略。
 
-| Rslib 选项            | Rstest 等效项         | 说明                                                 |
-| --------------------- | --------------------- | ---------------------------------------------------- |
-| `lib.id`              | `name`                | Lib 名称                                             |
-| `plugins`             | `plugins`             | 插件配置                                             |
-| `source.decorators`   | `source.decorators`   | 装饰器支持                                           |
-| `source.define`       | `source.define`       | 全局常量                                             |
-| `source.include`      | `source.include`      | 额外需要 SWC 编译的代码文件                          |
-| `source.exclude`      | `source.exclude`      | 不需要 SWC 编译的代码文件                            |
-| `source.tsconfigPath` | `source.tsconfigPath` | TypeScript 配置路径                                  |
-| `resolve`             | `resolve`             | 模块解析                                             |
-| `output.cssModules`   | `output.cssModules`   | CSS Modules 配置                                     |
-| `tools.rspack`        | `tools.rspack`        | Rspack 配置                                          |
-| `tools.swc`           | `tools.swc`           | SWC 配置                                             |
-| `tools.bundlerChain`  | `tools.bundlerChain`  | Bundler chain 配置                                   |
-| `output.target`       | `testEnvironment`     | `web` 映射为 'happy-dom'，`node` 及其他映射为 'node' |
+| Rslib 选项             | Rstest 等效项          | 说明                                                 |
+| ---------------------- | ---------------------- | ---------------------------------------------------- |
+| `lib.id`               | `name`                 | Lib 名称                                             |
+| `plugins`              | `plugins`              | 插件配置                                             |
+| `source.decorators`    | `source.decorators`    | 装饰器支持                                           |
+| `source.assetsInclude` | `source.assetsInclude` | 额外的静态资源匹配规则                               |
+| `source.define`        | `source.define`        | 全局常量                                             |
+| `source.include`       | `source.include`       | 额外需要 SWC 编译的代码文件                          |
+| `source.exclude`       | `source.exclude`       | 不需要 SWC 编译的代码文件                            |
+| `source.tsconfigPath`  | `source.tsconfigPath`  | TypeScript 配置路径                                  |
+| `resolve`              | `resolve`              | 模块解析                                             |
+| `output.cssModules`    | `output.cssModules`    | CSS Modules 配置                                     |
+| `tools.rspack`         | `tools.rspack`         | Rspack 配置                                          |
+| `tools.swc`            | `tools.swc`            | SWC 配置                                             |
+| `tools.bundlerChain`   | `tools.bundlerChain`   | Bundler chain 配置                                   |
+| `output.target`        | `testEnvironment`      | `web` 映射为 'happy-dom'，`node` 及其他映射为 'node' |
 
 ## 调试配置
 

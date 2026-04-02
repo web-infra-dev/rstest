@@ -11,6 +11,7 @@ import { defineConfig } from '@rslib/core';
 export default defineConfig({
   lib: [{ format: 'esm', id: 'test-lib' }],
   source: {
+    assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"test"'
     }
@@ -41,6 +42,7 @@ export default defineConfig({
     })({});
 
     expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });

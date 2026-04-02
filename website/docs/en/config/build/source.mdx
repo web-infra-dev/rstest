@@ -3,6 +3,7 @@ description: Options for input source code. Includes practical guidance, options
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # source
 
@@ -13,6 +14,26 @@ Options for input source code.
 Used to configure the decorators syntax.
 
 If you are using TypeScript's [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators), you should set `source.decorators.version` to `legacy` in this case.
+
+## source.assetsInclude <RsbuildDocBadge path="/config/source/assets-include" text="source.assetsInclude" />
+
+<ApiMeta addedVersion="0.9.6" />
+
+Specify additional files that should be treated as static assets.
+
+This is useful when your tests import file types that are not included in Rsbuild's default asset handling, such as `.txt` or `.md`.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  source: {
+    assetsInclude: /\.(txt|md)$/,
+  },
+});
+```
+
+If you already reuse Rsbuild or Rslib config through `@rstest/adapter-rsbuild` or `@rstest/adapter-rslib`, `source.assetsInclude` will be inherited automatically.
 
 ## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
 
