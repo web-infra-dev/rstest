@@ -56,7 +56,7 @@ if (failedTask?.result?.error) {
   throw failedTask.result.error;
 }
 
-if (!process.env.CODSPEED) {
+if (!process.env.CODSPEED_ENV) {
   console.table(
     bench.tasks.map((task) => ({
       name: task.name,

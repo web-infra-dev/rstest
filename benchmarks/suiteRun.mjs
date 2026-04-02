@@ -73,7 +73,7 @@ if (failedTask?.result?.error) {
 }
 
 // Print a summary table when running locally (not in CodSpeed simulation).
-if (!process.env.CODSPEED) {
+if (!process.env.CODSPEED_ENV) {
   console.table(
     bench.tasks.map((t) => ({
       name: t.name,
