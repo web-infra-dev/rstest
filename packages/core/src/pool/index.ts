@@ -133,6 +133,33 @@ const getNodeExecArgv = () => {
   ].filter(Boolean) as string[];
 };
 
+/**
+ * Remove blocklisted flags (and their values) from an execArgv array.
+ * Handles both `--flag=value` and `--flag value` forms for flags that
+ * accept a value (`hasValue: true`).
+ */
+const stripExecArgv = (
+  argv: string[],
+  blocklist: { flag: string; hasValue?: boolean }[],
+): string[] => {
+  const result: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const match = blocklist.find(
+      ({ flag }) => arg === flag || arg.startsWith(`${flag}=`),
+    );
+    if (match) {
+      // For flags with a separate value (--title foo), skip the next element
+      if (match.hasValue && arg === match.flag) {
+        i++;
+      }
+      continue;
+    }
+    result.push(arg);
+  }
+  return result;
+};
+
 export const createPool = async ({
   context,
   recommendWorkerCount = Number.POSITIVE_INFINITY,
@@ -168,15 +195,15 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
-  // Some options may crash worker, e.g. --prof, --title.
+  // Propagate parent execArgv to workers, except flags known to cause issues
+  // in child processes (--prof writes per-worker profiling logs, --title is
+  // meaningless for workers). Note: the referenced Node.js issue (#41103) only
+  // affects worker_threads; child_process.fork (used here) is safe.
   // https://github.com/nodejs/node/issues/41103
-  const execArgv = process.execArgv.filter(
-    (execArg) =>
-      execArg.startsWith('--perf') ||
-      execArg.startsWith('--cpu-prof') ||
-      execArg.startsWith('--heap-prof') ||
-      execArg.startsWith('--diagnostic-dir'),
-  );
+  const execArgv = stripExecArgv(process.execArgv, [
+    { flag: '--prof' },
+    { flag: '--title', hasValue: true },
+  ]);
 
   const numCpus = getNumCpus();
 
