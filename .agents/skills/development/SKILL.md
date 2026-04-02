@@ -108,14 +108,15 @@ Documentation is not a follow-up task — it ships with the code. **Do not merge
 
 ### What to Update
 
-| Change Type               | Docs Action                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------- |
-| New API / config option   | Add to `website/docs/en/api/` and `website/docs/zh/api/`                                    |
-| New feature               | Add guide page in `website/docs/en/basic/` (or appropriate section) and Chinese counterpart |
-| Changed behavior          | Update affected docs pages                                                                  |
-| New CLI flag              | Update CLI reference in `website/docs/en/basic/cli.mdx` and `website/docs/zh/basic/cli.mdx` |
-| Migration-relevant change | Update migration guides in `website/docs/en/migration/`                                     |
-| Browser-specific feature  | Update `website/docs/en/browser-testing/` section                                           |
+| Change Type               | Docs Action                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| New config option         | Add to `website/docs/en/config/` and `website/docs/zh/config/`, and register in `website/theme/components/ConfigOverview.tsx` |
+| New runtime API           | Add to `website/docs/en/api/` and `website/docs/zh/api/`                                                                      |
+| New feature               | Add guide page in `website/docs/en/guide/` (or appropriate section) and Chinese counterpart                                   |
+| Changed behavior          | Update affected docs pages                                                                                                    |
+| New CLI flag              | Update CLI reference in `website/docs/en/basic/cli.mdx` and `website/docs/zh/basic/cli.mdx`                                   |
+| Migration-relevant change | Update migration guides in `website/docs/en/migration/`                                                                       |
+| Browser-specific feature  | Update `website/docs/en/browser-testing/` section                                                                             |
 
 ### Docs Conventions
 
