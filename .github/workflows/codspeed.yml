@@ -44,7 +44,7 @@ jobs:
         uses: CodSpeedHQ/action@1c8ae4843586d3ba879736b7f6b7b0c990757fab # v4.12.1
         with:
           mode: simulation
-          run: pnpm bench:cpu
+          run: node benchmarks/suiteRun.mjs
 
   codspeed-memory:
     name: Run memory benchmark
@@ -76,4 +76,4 @@ jobs:
         uses: CodSpeedHQ/action@1c8ae4843586d3ba879736b7f6b7b0c990757fab # v4.12.1
         with:
           mode: memory
-          run: pnpm bench:memory
+          run: node benchmarks/memorySuiteRun.mjs
