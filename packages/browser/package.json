@@ -42,7 +42,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser/tsconfig.json"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",

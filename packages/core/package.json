@@ -57,7 +57,7 @@
     "build": "rslib build && npx prettier ./LICENSE.md --write",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "npx rstest --globals",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/core/tsconfig.json"
   },
   "dependencies": {
     "@rsbuild/core": "2.0.0-rc.0",

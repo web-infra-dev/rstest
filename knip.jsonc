@@ -67,6 +67,8 @@
 
     "packages/vscode": {
       "entry": [
+        // VS Code extension host entry (loaded by VS Code via package.json "main")
+        "src/extension.ts",
         // Worker process entry (not in package.json exports)
         "src/worker/index.ts",
         // Test files

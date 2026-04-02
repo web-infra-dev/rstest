@@ -41,7 +41,7 @@
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "rstest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
   },
   "devDependencies": {
     "@rslib/core": "0.20.2",
@@ -51,7 +51,7 @@
     "@types/react-dom": "^19.2.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",

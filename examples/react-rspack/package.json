@@ -28,6 +28,6 @@
     "@types/react-dom": "^19.2.3",
     "happy-dom": "^20.8.9",
     "react-refresh": "^0.18.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
