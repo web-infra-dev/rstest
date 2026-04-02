@@ -133,33 +133,6 @@ const getNodeExecArgv = () => {
   ].filter(Boolean) as string[];
 };
 
-/**
- * Remove blocklisted flags (and their values) from an execArgv array.
- * Handles both `--flag=value` and `--flag value` forms for flags that
- * accept a value (`hasValue: true`).
- */
-const stripExecArgv = (
-  argv: string[],
-  blocklist: { flag: string; hasValue?: boolean }[],
-): string[] => {
-  const result: string[] = [];
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    const match = blocklist.find(
-      ({ flag }) => arg === flag || arg.startsWith(`${flag}=`),
-    );
-    if (match) {
-      // For flags with a separate value (--title foo), skip the next element
-      if (match.hasValue && arg === match.flag) {
-        i++;
-      }
-      continue;
-    }
-    result.push(arg);
-  }
-  return result;
-};
-
 export const createPool = async ({
   context,
   recommendWorkerCount = Number.POSITIVE_INFINITY,
@@ -197,13 +170,20 @@ export const createPool = async ({
 }> => {
   // Propagate parent execArgv to workers, except flags known to cause issues
   // in child processes (--prof writes per-worker profiling logs, --title is
-  // meaningless for workers). Note: the referenced Node.js issue (#41103) only
-  // affects worker_threads; child_process.fork (used here) is safe.
+  // meaningless for workers). Safe for child_process.fork; the referenced
+  // Node.js issue (#41103) only affects worker_threads.
   // https://github.com/nodejs/node/issues/41103
-  const execArgv = stripExecArgv(process.execArgv, [
-    { flag: '--prof' },
-    { flag: '--title', hasValue: true },
-  ]);
+  const blockedFlags = ['--prof', '--title'];
+  const execArgv = process.execArgv.filter((arg, i, arr) => {
+    if (blockedFlags.some((f) => arg === f || arg.startsWith(`${f}=`))) {
+      return false;
+    }
+    // skip standalone value following --title (handles `--title foo` form)
+    if (i > 0 && arr[i - 1] === '--title') {
+      return false;
+    }
+    return true;
+  });
 
   const numCpus = getNumCpus();
 
