@@ -31,7 +31,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/coverage-istanbul/tsconfig.json"
   },
   "dependencies": {
     "istanbul-lib-coverage": "^3.2.2",

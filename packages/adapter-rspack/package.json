@@ -33,7 +33,7 @@
     "build": "rslib build",
     "dev": "rslib build --watch",
     "test": "rstest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/adapter-rspack/tsconfig.json"
   },
   "devDependencies": {
     "@rslib/core": "0.20.2",

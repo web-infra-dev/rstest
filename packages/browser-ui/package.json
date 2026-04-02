@@ -24,7 +24,7 @@
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
     "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-ui/tsconfig.json"
   },
   "dependencies": {
     "antd": "^6.3.5",
