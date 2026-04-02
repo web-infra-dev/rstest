@@ -21,7 +21,7 @@
     "pre-commit": "npx nano-staged"
   },
   "nano-staged": {
-    "*.{md,mdx,css,less,scss,json,jsonc,json5}": "prettier --write",
+    "!(CLAUDE).{md,mdx,css,less,scss,json,jsonc,json5}": "prettier --write",
     "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}": [
       "biome check --write"
     ],
