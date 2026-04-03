@@ -2,6 +2,7 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
   CoverageOptions,
   CoverageProvider,
+  InlineProjectConfig,
   NormalizedCoverageOptions,
   ProjectConfig,
   RstestConfig,
@@ -42,30 +43,52 @@ export function defineConfig(config: RstestConfigExport) {
 }
 
 type NestedProjectConfig = {
-  projects: (ProjectConfig | string)[];
+  projects: (InlineProjectConfig | string)[];
 };
 
-type ProjectConfigAsyncFn = () => Promise<ProjectConfig | NestedProjectConfig>;
+type ExportedProjectConfig = ProjectConfig;
 
-type ProjectConfigSyncFn = () => ProjectConfig | NestedProjectConfig;
+type ProjectConfigAsyncFn = () => Promise<ExportedProjectConfig>;
+type NestedProjectConfigAsyncFn = () => Promise<NestedProjectConfig>;
+type ProjectConfigSyncFn = () => ExportedProjectConfig;
+type NestedProjectConfigSyncFn = () => NestedProjectConfig;
 
 type RstestProjectConfigExport =
-  | ProjectConfig
+  | ExportedProjectConfig
   | NestedProjectConfig
   | ProjectConfigSyncFn
-  | ProjectConfigAsyncFn;
+  | NestedProjectConfigSyncFn
+  | ProjectConfigAsyncFn
+  | NestedProjectConfigAsyncFn;
 
 /**
- * This function helps you to autocomplete configuration types.
- * It accepts a Rstest project config object, or a function that returns a config.
+ * This function helps you to autocomplete inline project configuration types.
+ */
+export function defineInlineProject(
+  config: InlineProjectConfig,
+): InlineProjectConfig;
+export function defineInlineProject(config: InlineProjectConfig) {
+  return config;
+}
+
+/**
+ * This function helps you to autocomplete project configuration types.
+ * It accepts an inline or nested Rstest project config object, or a function that returns one.
  */
 export function defineProject(
-  config: ProjectConfig | NestedProjectConfig,
-): ProjectConfig | NestedProjectConfig;
+  config: ExportedProjectConfig,
+): ExportedProjectConfig;
+export function defineProject(config: NestedProjectConfig): NestedProjectConfig;
 export function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
+export function defineProject(
+  config: NestedProjectConfigSyncFn,
+): NestedProjectConfigSyncFn;
 export function defineProject(
   config: ProjectConfigAsyncFn,
 ): ProjectConfigAsyncFn;
+export function defineProject(
+  config: NestedProjectConfigAsyncFn,
+): NestedProjectConfigAsyncFn;
 export function defineProject(config: RstestProjectConfigExport) {
   return config;
 }
