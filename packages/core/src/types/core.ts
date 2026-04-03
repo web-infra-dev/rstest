@@ -94,6 +94,7 @@ export type ListCommandOptions = {
   json?: boolean | string;
   includeSuites?: boolean;
   printLocation?: boolean;
+  summary?: boolean;
 };
 
 export type ListCommandResult = {

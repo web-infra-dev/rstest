@@ -126,6 +126,51 @@ describe('test projects', () => {
       logs.find((log) => log.includes('No test files found')),
     ).toBeTruthy();
   });
+
+  it('should print project summary correctly in list mode', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.slice(-3)).toMatchInlineSnapshot(`
+      [
+        "   Projects 4 matched",
+        " Test Files 10 matched",
+        "      Tests 13 matched",
+      ]
+    `);
+  });
+
+  it('should include project summary in list json output', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const json = JSON.parse(cli.stdout);
+
+    expect(json.summary).toEqual({
+      files: 10,
+      projects: 4,
+      tests: 13,
+    });
+  });
+
   it('should run projects with extends correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

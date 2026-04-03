@@ -135,6 +135,27 @@ b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
 ```
 
+你可以使用 `--summary` 在列表输出后追加一段简要统计：
+
+```bash
+$ npx rstest list --summary
+
+# 输出如下：
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+c.test.ts > test c it each 0
+c.test.ts > test c it for 0
+c.test.ts > test c it runIf
+c.test.ts > test c it skipIf
+
+ Test Files 3 matched
+      Tests 8 matched
+```
+
+当与 `--json` 一起使用时，`--summary` 会把 JSON 输出从数组切换为包含 `items` 和 `summary` 字段的对象。
+
 ## rstest merge-reports
 
 <ApiMeta addedVersion="0.9.3" />
@@ -264,6 +285,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--json [boolean/path]` | 以 JSON 输出，或写入文件    |
 | `--includeSuites`       | 在输出中包含 suite          |
 | `--printLocation`       | 输出测试和 suite 的位置信息 |
+| `--summary`             | 在列表后输出简要统计        |
 
 ### rstest merge-reports
 

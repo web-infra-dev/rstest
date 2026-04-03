@@ -156,6 +156,7 @@ const listCommandOptionDefinitions: OptionDefinition[] = [
   ['--json [boolean/path]', 'print tests as JSON or write to a file'],
   ['--includeSuites', 'include suites in output'],
   ['--printLocation', 'print test case location'],
+  ['--summary', 'print a summary after the list'],
 ];
 
 const applyOptions = (
@@ -356,6 +357,7 @@ export function createCli(): CAC {
           json: options.json,
           includeSuites: options.includeSuites,
           printLocation: options.printLocation,
+          summary: options.summary,
         });
       } catch (err) {
         logger.error('Failed to run Rstest list.');
