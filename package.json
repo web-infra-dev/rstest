@@ -2,6 +2,8 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
+    "bench:cpu": "pnpm --filter @rstest/benchmarks bench:cpu",
+    "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
     "bump": "node --experimental-strip-types scripts/version.mts",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",

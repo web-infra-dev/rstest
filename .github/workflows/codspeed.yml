@@ -1,0 +1,134 @@
+name: CodSpeed
+
+on:
+  schedule:
+    # Run every 6 hours on main to build a continuous baseline
+    - cron: '0 */6 * * *'
+  # Allow manual runs on any branch (CodSpeed backtest + on-demand profiling)
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to benchmark (branch, tag, or SHA). Defaults to the selected branch.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Skip the entire workflow when the current HEAD has already been benchmarked
+  # (e.g. a schedule run fires but no new commits landed since the last run).
+  check-skip:
+    name: Check duplicate run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }}
+    steps:
+      - name: Check for existing successful run
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Always run when manually triggered
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Query completed runs of this workflow for the current commit
+          count=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/codspeed.yml/runs?head_sha=${{ github.sha }}&status=success&per_page=1" \
+            --jq '.total_count')
+          if [ "$count" -gt 0 ]; then
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping: commit ${{ github.sha }} already benchmarked."
+          else
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  codspeed-cpu:
+    name: Run CPU benchmarks
+    needs: check-skip
+    if: needs.check-skip.outputs.should_skip != 'true'
+    # Walltime mode requires CodSpeed bare-metal runners for stable measurements.
+    # CPU simulation (Valgrind) is incompatible with child_process.fork — rstest's
+    # worker pool generates excessive system calls, making flame graphs unavailable.
+    runs-on: codspeed-macro
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref || '' }}
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Packages
+        run: pnpm build
+
+      - name: Run benchmarks
+        uses: CodSpeedHQ/action@1c8ae4843586d3ba879736b7f6b7b0c990757fab # v4.12.1
+        with:
+          mode: walltime
+          run: node benchmarks/suiteRun.mjs
+
+  codspeed-memory:
+    name: Run memory benchmark
+    needs: check-skip
+    if: needs.check-skip.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref || '' }}
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Packages
+        run: pnpm build
+
+      - name: Run memory benchmark
+        uses: CodSpeedHQ/action@1c8ae4843586d3ba879736b7f6b7b0c990757fab # v4.12.1
+        with:
+          mode: memory
+          # Memory mode does not auto-inject V8 flags via introspection
+          # (unlike simulation mode), so we pass them explicitly.
+          run: >-
+            node
+            --interpreted-frames-native-stack
+            --allow-natives-syntax
+            --hash-seed=1
+            --random-seed=1
+            --no-opt
+            --predictable
+            --predictable-gc-schedule
+            --expose-gc
+            --no-concurrent-sweeping
+            --max-old-space-size=4096
+            benchmarks/memorySuiteRun.mjs

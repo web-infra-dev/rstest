@@ -4,6 +4,21 @@
     ".": {
       "entry": ["cspell.config.cjs", "rslint.config.mts"],
     },
+    "benchmarks": {
+      "entry": [
+        "createFrontendMemoryFixture.mjs",
+        // Benchmark fixtures are loaded dynamically by the benchmark entrypoints.
+        "fixtures/**/rstest.config.mts",
+        "fixtures/**/*.ts",
+      ],
+      "ignoreDependencies": [
+        // Used by the generated synthetic memory workload source files.
+        "antd",
+        "react",
+        "react-dom",
+        "three",
+      ],
+    },
     "packages/core": {
       "entry": [
         // Package export: "./browser-runtime" (separate rslib env targeting web)
