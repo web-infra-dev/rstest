@@ -192,6 +192,30 @@ describe('test list command', () => {
     `);
   });
 
+  it('should print suite summary correctly with --includeSuites', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--includeSuites', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs.slice(-3)).toMatchInlineSnapshot(`
+      [
+        " Test Files 3 matched",
+        "     Suites 6 matched",
+        "      Tests 8 matched",
+      ]
+    `);
+  });
+
   it('should list tests and suites correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

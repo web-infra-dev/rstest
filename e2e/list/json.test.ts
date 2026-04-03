@@ -272,6 +272,29 @@ describe('test list command with --json', () => {
     expect(cli.stderr?.trim()).toBe('');
   });
 
+  it('should include suite summary when using --json with --includeSuites', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--includeSuites', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const json = JSON.parse(cli.stdout ?? '');
+
+    expect(json.summary).toEqual({
+      files: 3,
+      suites: 6,
+      tests: 8,
+    });
+    expect(cli.stderr?.trim()).toBe('');
+  });
+
   it('should list tests and suites json correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
