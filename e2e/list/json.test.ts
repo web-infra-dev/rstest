@@ -124,8 +124,152 @@ describe('test list command with --json', () => {
     await expectExecSuccess();
 
     expect(fs.existsSync(outputPath)).toBeTruthy();
+    expect(() => JSON.parse(fs.readFileSync(outputPath, 'utf8'))).not.toThrow();
 
     fs.rmSync(outputPath, { force: true });
+  });
+
+  it('should keep output file as valid json when using --summary', async () => {
+    const outputPath = join(__dirname, 'fixtures', 'summary-output.json');
+
+    fs.rmSync(outputPath, { force: true });
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', `--json=${outputPath}`, '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(fs.existsSync(outputPath)).toBeTruthy();
+    expect(
+      JSON.parse(fs.readFileSync(outputPath, 'utf8')),
+    ).toMatchInlineSnapshot(`
+      {
+        "items": [
+          {
+            "file": "<ROOT>/e2e/list/fixtures/a.test.ts",
+            "name": "test a > test a-1",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/a.test.ts",
+            "name": "test a-2",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/b.test.ts",
+            "name": "test b > test b-1",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/b.test.ts",
+            "name": "test b-2",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it each 0",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it for 0",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it runIf",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it skipIf",
+            "type": "case",
+          },
+        ],
+        "summary": {
+          "files": 3,
+          "tests": 8,
+        },
+      }
+    `);
+    expect(cli.stderr?.trim()).toBe('');
+
+    fs.rmSync(outputPath, { force: true });
+  });
+
+  it('should output summary object when using --json', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const json = JSON.parse(cli.stdout ?? '');
+
+    expect(json).toMatchInlineSnapshot(`
+      {
+        "items": [
+          {
+            "file": "<ROOT>/e2e/list/fixtures/a.test.ts",
+            "name": "test a > test a-1",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/a.test.ts",
+            "name": "test a-2",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/b.test.ts",
+            "name": "test b > test b-1",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/b.test.ts",
+            "name": "test b-2",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it each 0",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it for 0",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it runIf",
+            "type": "case",
+          },
+          {
+            "file": "<ROOT>/e2e/list/fixtures/c.test.ts",
+            "name": "test c it skipIf",
+            "type": "case",
+          },
+        ],
+        "summary": {
+          "files": 3,
+          "tests": 8,
+        },
+      }
+    `);
+    expect(cli.stderr?.trim()).toBe('');
   });
 
   it('should list tests and suites json correctly', async () => {

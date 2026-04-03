@@ -18,6 +18,14 @@ const renderHelp = (argv: string[]): string => {
 };
 
 describe('CLI help output', () => {
+  it('shows list-specific options for list help', () => {
+    const help = renderHelp(['node', 'rstest', 'list', '--help']);
+
+    expect(help).toContain('--summary');
+    expect(help).toContain('--filesOnly');
+    expect(help).not.toContain('--cleanup');
+  });
+
   it('shows only init-specific options for init help', () => {
     const help = renderHelp(['node', 'rstest', 'init', '--help']);
 
