@@ -7,7 +7,7 @@ metadata:
 
 # Feature / Bug-Fix Development Checklist
 
-This skill acts as a **shift-left** gate — catch missing work during development, not at PR review time.
+This skill acts as a **shift-left** gate and routing checklist: catch missing work during development, then hand off to the more specific workflow when needed.
 
 ## When to Use
 
@@ -34,22 +34,13 @@ Before writing code, determine the **blast radius**:
 
 Every behavioral change — feature or bug fix — must have a corresponding e2e test. Unit tests alone are not enough; e2e tests verify the full CLI → runner → reporter pipeline.
 
-### Adding E2E Tests
+Use this section to decide whether test work is required. For test layout, fixture strategy, rebuild requirements, and exact commands, switch to the `testing` skill.
 
-- **Prefer reusing** an existing fixture when the scenario fits. Add a new test case to the relevant `e2e/<feature>/index.test.ts`.
-- **Create a new fixture** only when the scenario needs different config, dependencies, or file layout. Each fixture is a self-contained mini-project:
-  ```
-  e2e/<feature>/fixtures/<scenario>/
-    ├── rstest.config.mts
-    ├── tests/
-    │   └── example.test.ts
-    └── package.json          # only if extra deps needed
-  ```
-- Run the e2e test against **built output** — rebuild first:
-  ```bash
-  pnpm --filter @rstest/core build   # rebuild changed packages
-  cd e2e && pnpm test <feature>/index.test.ts
-  ```
+### When Test Work Is Required
+
+- New feature or config behavior → add or extend an e2e test that exercises the user-facing flow.
+- Bug fix → add a regression test that fails before the fix and passes after it.
+- Internal refactor with no observable behavior change → evaluate whether existing coverage is enough, and note why if no new test is added.
 
 ### Bug-Fix Tests
 
@@ -73,10 +64,7 @@ Not every feature needs browser mode support, but you must **consciously decide*
 ### If Browser Mode Is Affected
 
 1. Update `packages/browser/` if the runtime behavior differs.
-2. Add or update browser e2e tests in `e2e/browser-mode/`:
-   ```bash
-   cd e2e && pnpm test browser-mode/<test>.test.ts
-   ```
+2. Add or update browser e2e coverage via the `testing` skill.
 3. If the feature requires a new browser fixture, follow the pattern in `e2e/browser-mode/fixtures/`.
 4. If the feature involves React component testing, check `@rstest/browser-react` as well.
 
@@ -102,21 +90,15 @@ If the new or changed configuration option also exists in Rsbuild, check whether
 
 - Update adapter-specific documentation when a new transform is added, so users know which Rsbuild configs are auto-converted.
 
-## 5. Documentation Must Be Synchronous
+## 5. Documentation Must Stay In Sync
 
 Documentation is not a follow-up task — it ships with the code. **Do not merge features without docs.**
 
-### What to Update
+### Route The Docs Work
 
-| Change Type               | Docs Action                                                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| New config option         | Add to `website/docs/en/config/` and `website/docs/zh/config/`, and register in `website/theme/components/ConfigOverview.tsx` |
-| New runtime API           | Add to `website/docs/en/api/` and `website/docs/zh/api/`                                                                      |
-| New feature               | Add guide page in `website/docs/en/guide/` (or appropriate section) and Chinese counterpart                                   |
-| Changed behavior          | Update affected docs pages                                                                                                    |
-| New CLI flag              | Update CLI reference in `website/docs/en/guide/basic/cli.mdx` and `website/docs/zh/guide/basic/cli.mdx`                       |
-| Migration-relevant change | Update migration guides in `website/docs/en/guide/migration/` and `website/docs/zh/guide/migration/`                          |
-| Browser-specific feature  | Update `website/docs/en/guide/browser-testing/` and `website/docs/zh/guide/browser-testing/`                                  |
+- Public API, config, CLI, or behavior changes usually require docs updates.
+- Treat this skill as the routing step: identify that docs must be updated, then inspect the existing docs structure under `website/docs/en/` and `website/docs/zh/` to edit the right pages.
+- If the change introduces a new docs surface or convention, follow the established structure in the surrounding guide/config/api pages instead of guessing a new location.
 
 ### Docs Conventions
 
