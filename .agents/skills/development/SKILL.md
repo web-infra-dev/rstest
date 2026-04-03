@@ -114,9 +114,9 @@ Documentation is not a follow-up task — it ships with the code. **Do not merge
 | New runtime API           | Add to `website/docs/en/api/` and `website/docs/zh/api/`                                                                      |
 | New feature               | Add guide page in `website/docs/en/guide/` (or appropriate section) and Chinese counterpart                                   |
 | Changed behavior          | Update affected docs pages                                                                                                    |
-| New CLI flag              | Update CLI reference in `website/docs/en/basic/cli.mdx` and `website/docs/zh/basic/cli.mdx`                                   |
-| Migration-relevant change | Update migration guides in `website/docs/en/migration/`                                                                       |
-| Browser-specific feature  | Update `website/docs/en/browser-testing/` section                                                                             |
+| New CLI flag              | Update CLI reference in `website/docs/en/guide/basic/cli.mdx` and `website/docs/zh/guide/basic/cli.mdx`                       |
+| Migration-relevant change | Update migration guides in `website/docs/en/guide/migration/` and `website/docs/zh/guide/migration/`                          |
+| Browser-specific feature  | Update `website/docs/en/guide/browser-testing/` and `website/docs/zh/guide/browser-testing/`                                  |
 
 ### Docs Conventions
 
