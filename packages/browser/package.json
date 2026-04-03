@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
