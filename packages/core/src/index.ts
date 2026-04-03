@@ -2,6 +2,7 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
   CoverageOptions,
   CoverageProvider,
+  InlineProjectConfig,
   NormalizedCoverageOptions,
   ProjectConfig,
   RstestConfig,
@@ -44,8 +45,6 @@ export function defineConfig(config: RstestConfigExport) {
 type NestedProjectConfig = {
   projects: (InlineProjectConfig | string)[];
 };
-
-type InlineProjectConfig = ProjectConfig & { name: string };
 
 type ExportedProjectConfig = ProjectConfig;
 

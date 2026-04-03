@@ -179,7 +179,7 @@ type SnapshotFormat = Omit<
 /**
  * Inline project config must include a name.
  */
-type InlineProjectConfig = ProjectConfig & { name: string };
+export type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
 type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {

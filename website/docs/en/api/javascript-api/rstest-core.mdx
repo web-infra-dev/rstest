@@ -42,14 +42,22 @@ This function helps you to autocomplete configuration types for [Rstest Project]
 - **Type:**
 
 ```ts
-function defineProject(config: InlineProjectConfig): InlineProjectConfig;
+type NestedProjectConfig = {
+  projects: (InlineProjectConfig | string)[];
+};
+
+function defineProject(config: ProjectConfig): ProjectConfig;
 function defineProject(config: NestedProjectConfig): NestedProjectConfig;
-function defineProject<T extends ProjectConfigValue>(
-  config: ProjectConfigSyncFn<T>,
-): ProjectConfigSyncFn<T>;
-function defineProject<T extends ProjectConfigValue>(
-  config: ProjectConfigAsyncFn<T>,
-): ProjectConfigAsyncFn<T>;
+function defineProject(config: () => ProjectConfig): () => ProjectConfig;
+function defineProject(
+  config: () => NestedProjectConfig,
+): () => NestedProjectConfig;
+function defineProject(
+  config: () => Promise<ProjectConfig>,
+): () => Promise<ProjectConfig>;
+function defineProject(
+  config: () => Promise<NestedProjectConfig>,
+): () => Promise<NestedProjectConfig>;
 ```
 
 - **Example:**
