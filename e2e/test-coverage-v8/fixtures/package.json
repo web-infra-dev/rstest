@@ -1,0 +1,12 @@
+{
+  "name": "@rstest/tests-coverage",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": true,
+  "type": "module",
+  "main": "index.js",
+  "devDependencies": {
+    "@rstest/core": "workspace:*",
+    "@rstest/coverage-istanbul": "workspace:*"
+  }
+}

@@ -91,7 +91,7 @@ export type CoverageOptions = {
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
 
   /**
    * The reporters to use for coverage collection.
@@ -150,16 +150,19 @@ export type NormalizedCoverageOptions = Required<
 };
 
 export declare class CoverageProvider {
-  constructor(options: CoverageOptions);
+  constructor(options: CoverageOptions, root?: string);
   /**
    * Initialize coverage collection
    */
-  init(): void;
+  init(): void | Promise<void>;
 
   /**
    * Collect coverage data from global coverage object
    */
-  collect(): CoverageMap | null;
+  collect(options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

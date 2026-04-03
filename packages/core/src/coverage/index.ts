@@ -5,6 +5,7 @@ import type { CoverageOptions, CoverageProvider } from '../types/coverage';
 import { color } from '../utils';
 export const CoverageProviderMap: Record<string, string> = {
   istanbul: '@rstest/coverage-istanbul',
+  v8: '@rstest/coverage-v8',
 };
 
 export const loadCoverageProvider = async (
@@ -51,7 +52,7 @@ export async function createCoverageProvider(
 
   if (!options.provider || CoverageProviderMap[options.provider]) {
     const { CoverageProvider } = await loadCoverageProvider(options, root);
-    return new CoverageProvider(options);
+    return new CoverageProvider(options, root);
   }
 
   throw new Error(`Unknown coverage provider: ${options.provider}`);
