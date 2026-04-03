@@ -21,6 +21,8 @@ describe('toRstestConfig', () => {
       alias: {
         '@': './src',
       },
+      conditionNames: ['custom', 'import'],
+      mainFields: ['module', 'main'],
     },
     environments: {
       test: {
@@ -55,6 +57,8 @@ describe('toRstestConfig', () => {
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
+    expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
+    expect(config.resolve?.mainFields).toEqual(['module', 'main']);
     expect(config.testEnvironment).toBe('happy-dom');
   });
 
@@ -72,6 +76,8 @@ describe('toRstestConfig', () => {
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
+    expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
+    expect(config.resolve?.mainFields).toEqual(['module', 'main']);
   });
 
   it('should map node target to node test environment', () => {
