@@ -2,6 +2,8 @@
 description: Rstest offers these core methods. Includes practical guidance, options, and examples for real projects.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rstest core
 
 Rstest offers these core methods.
@@ -40,11 +42,14 @@ This function helps you to autocomplete configuration types for [Rstest Project]
 - **Type:**
 
 ```ts
-function defineProject(
-  config: ProjectConfig | NestedProjectConfig,
-): ProjectConfig | NestedProjectConfig;
-function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
-function defineProject(config: ProjectConfigAsyncFn): ProjectConfigAsyncFn;
+function defineProject(config: InlineProjectConfig): InlineProjectConfig;
+function defineProject(config: NestedProjectConfig): NestedProjectConfig;
+function defineProject<T extends ProjectConfigValue>(
+  config: ProjectConfigSyncFn<T>,
+): ProjectConfigSyncFn<T>;
+function defineProject<T extends ProjectConfigValue>(
+  config: ProjectConfigAsyncFn<T>,
+): ProjectConfigAsyncFn<T>;
 ```
 
 - **Example:**
@@ -55,6 +60,40 @@ import { defineProject } from '@rstest/core';
 export default defineProject({
   root: './apps/web',
   testTimeout: 15000,
+});
+```
+
+Use `defineProject` for the top-level export of a project config file. If that file returns a nested `projects` object, the object items inside `projects` are still inline projects.
+
+Compared with `defineInlineProject`, `defineProject` does not require `name` on the top-level exported project. If `name` is omitted, Rstest will resolve it the same way as the [name](/config/test/name) option: first from the current project's `package.json`, then from the folder name.
+
+## defineInlineProject
+
+<ApiMeta addedVersion="0.9.6" />
+
+This function helps you to autocomplete inline project configuration types inside `defineConfig({ projects: [...] })`. Inline projects must include a `name`.
+
+Unlike `defineProject`, `defineInlineProject` is for object items inside a `projects` array. Inline projects must provide `name` explicitly because they do not have a standalone project root to infer it from.
+
+- **Type:**
+
+```ts
+function defineInlineProject(config: InlineProjectConfig): InlineProjectConfig;
+```
+
+- **Example:**
+
+```ts
+import { defineConfig, defineInlineProject } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    defineInlineProject({
+      name: 'web',
+      root: './apps/web',
+      testTimeout: 15000,
+    }),
+  ],
 });
 ```
 

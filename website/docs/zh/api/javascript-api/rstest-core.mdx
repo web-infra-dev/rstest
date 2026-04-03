@@ -2,6 +2,8 @@
 description: 本章节介绍了 Rstest 提供的一些核心方法。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rstest core
 
 本章节介绍了 Rstest 提供的一些核心方法。
@@ -40,11 +42,14 @@ export default defineConfig({
 - **类型：**
 
 ```ts
-function defineProject(
-  config: ProjectConfig | NestedProjectConfig,
-): ProjectConfig | NestedProjectConfig;
-function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
-function defineProject(config: ProjectConfigAsyncFn): ProjectConfigAsyncFn;
+function defineProject(config: InlineProjectConfig): InlineProjectConfig;
+function defineProject(config: NestedProjectConfig): NestedProjectConfig;
+function defineProject<T extends ProjectConfigValue>(
+  config: ProjectConfigSyncFn<T>,
+): ProjectConfigSyncFn<T>;
+function defineProject<T extends ProjectConfigValue>(
+  config: ProjectConfigAsyncFn<T>,
+): ProjectConfigAsyncFn<T>;
 ```
 
 - **示例：**
@@ -55,6 +60,40 @@ import { defineProject } from '@rstest/core';
 export default defineProject({
   root: './apps/web',
   testTimeout: 15000,
+});
+```
+
+`defineProject` 用于项目配置文件的顶层导出。如果该文件返回一个嵌套 `projects` 对象，`projects` 里的对象项仍然属于 inline project。
+
+与 `defineInlineProject` 不同，`defineProject` 在顶层导出的 project 上不要求必须提供 `name`。如果省略 `name`，Rstest 会按照 [name](/config/test/name) 配置项的规则自动推导：优先读取当前项目 `package.json` 中的 `name`，否则使用文件夹名称。
+
+## defineInlineProject
+
+<ApiMeta addedVersion="0.9.6" />
+
+此函数可用于在 `defineConfig({ projects: [...] })` 中自动补全内联 Project 配置的类型。内联 project 必须提供 `name`。
+
+与 `defineProject` 不同，`defineInlineProject` 只用于 `projects` 数组中的对象项。由于这类 inline project 没有独立项目上下文可用于推导名称，因此必须显式提供 `name`。
+
+- **类型：**
+
+```ts
+function defineInlineProject(config: InlineProjectConfig): InlineProjectConfig;
+```
+
+- **示例：**
+
+```ts
+import { defineConfig, defineInlineProject } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    defineInlineProject({
+      name: 'web',
+      root: './apps/web',
+      testTimeout: 15000,
+    }),
+  ],
 });
 ```
 
