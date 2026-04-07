@@ -1,5 +1,3 @@
-import { relative } from 'pathe';
-import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   DefaultReporterOptions,
   Duration,
@@ -13,8 +11,9 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger } from '../utils';
+import { color } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
+import { logUserConsoleLog } from './utils';
 
 const DOT_BY_STATUS = {
   fail: 'F',
@@ -75,30 +74,7 @@ export class DotReporter implements Reporter {
 
   onUserConsoleLog(log: UserConsoleLog): void {
     this.flushLine();
-
-    const titles = [];
-
-    const testPath = relative(this.rootPath, log.testPath);
-
-    if (log.trace) {
-      const [frame] = stackTraceParse(log.trace);
-      const filePath = relative(this.rootPath, frame!.file || '');
-
-      if (filePath !== testPath) {
-        titles.push(testPath);
-      }
-      titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
-    } else {
-      titles.push(testPath);
-    }
-    const logOutput = log.type === 'stdout' ? logger.log : logger.stderr;
-
-    logOutput('');
-    logOutput(
-      `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
-    );
-    logOutput(log.content);
-    logOutput('');
+    logUserConsoleLog(this.rootPath, log);
   }
 
   onExit(): void {
