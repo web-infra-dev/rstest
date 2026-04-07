@@ -15,8 +15,9 @@ const SLOW_CASE_THRESHOLD_MS = 10_000;
 export class CIProgressReporter {
   private readonly rootPath: string;
   private readonly testState: RstestTestState;
-  private reportInterval: ReturnType<typeof setInterval> | undefined;
+  private reportTimeout: ReturnType<typeof setTimeout> | undefined;
   private startTime: number | undefined;
+  private started = false;
 
   constructor(rootPath: string, testState: RstestTestState) {
     this.rootPath = rootPath;
@@ -24,21 +25,38 @@ export class CIProgressReporter {
   }
 
   start(): void {
-    if (this.reportInterval) {
+    if (this.started) {
       return;
     }
+    this.started = true;
     this.startTime ??= Date.now();
-    this.reportInterval = setInterval(() => {
-      this.report();
-    }, REPORT_INTERVAL_MS);
-    this.reportInterval.unref();
+    this.scheduleReport();
+  }
+
+  /** Reset the idle timer — call when other output is written to the console. */
+  notifyOutput(): void {
+    if (this.started) {
+      this.scheduleReport();
+    }
   }
 
   stop(): void {
-    if (this.reportInterval) {
-      clearInterval(this.reportInterval);
-      this.reportInterval = undefined;
+    this.started = false;
+    if (this.reportTimeout) {
+      clearTimeout(this.reportTimeout);
+      this.reportTimeout = undefined;
     }
+  }
+
+  private scheduleReport(): void {
+    if (this.reportTimeout) {
+      clearTimeout(this.reportTimeout);
+    }
+    this.reportTimeout = setTimeout(() => {
+      this.report();
+      this.scheduleReport();
+    }, REPORT_INTERVAL_MS);
+    this.reportTimeout.unref();
   }
 
   private report(): void {

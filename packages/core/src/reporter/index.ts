@@ -24,7 +24,7 @@ export class DefaultReporter implements Reporter {
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
   private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
-  private ciProgressReporter: CIProgressReporter | undefined;
+  protected ciProgressReporter: CIProgressReporter | undefined;
   private readonly testState: RstestTestState;
 
   constructor({
@@ -63,6 +63,7 @@ export class DefaultReporter implements Reporter {
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
+    this.ciProgressReporter?.notifyOutput();
 
     const projectConfig = this.projectConfigs.get(test.project);
     const hideSkippedTestFiles =
@@ -107,6 +108,8 @@ export class DefaultReporter implements Reporter {
     if (!shouldLog) {
       return;
     }
+
+    this.ciProgressReporter?.notifyOutput();
 
     logUserConsoleLog(this.rootPath, log);
   }
