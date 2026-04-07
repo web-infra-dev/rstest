@@ -33,6 +33,23 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 }
 ```
 
+### CLI option mappings
+
+Some Jest CLI flags map directly to Rstest, while others move into config. Use this table for the common option differences you are likely to hit during migration:
+
+| Jest CLI option                          | Rstest equivalent                                 | Notes                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `jest`                                   | `rstest`                                          | Rstest already runs tests once and exits by default.                                                                      |
+| `jest --watch`                           | `rstest --watch` or `rstest watch`                | Both commands start watch mode.                                                                                           |
+| `jest --watchAll`                        | `rstest --watch` or `rstest watch`                | Rstest does not distinguish between `--watch` and `--watchAll`.                                                           |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                      | Forces serial execution by limiting the worker pool to one worker.                                                        |
+| `jest --maxWorkers=50%` or `jest -w 50%` | `rstest --pool.maxWorkers 50%`                    | In Jest, `-w` is the short flag for `--maxWorkers`. In Rstest, worker count moves under `pool`, and `-w` means `--watch`. |
+| `jest --selectProjects app`              | `rstest --project app`                            | Filters by project name.                                                                                                  |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                  | The option is renamed.                                                                                                    |
+| `jest --coverage`                        | `rstest --coverage`                               | Both enable coverage collection.                                                                                          |
+| `jest --coverageDirectory=coverage`      | `coverage.reportsDirectory` in `rstest.config.ts` | This is configured in the Rstest config file rather than through a dedicated CLI flag.                                    |
+| `jest --coverageProvider=v8`             | `coverage.provider` in `rstest.config.ts`         | Move the provider choice into config.                                                                                     |
+
 ## Configuration migration
 
 Update your Jest config file (e.g., `jest.config.js` or `jest.config.ts`) to a `rstest.config.ts` file.

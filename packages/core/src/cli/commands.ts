@@ -219,13 +219,17 @@ const resolveCliRuntime = async (options: CommonOptions) => {
   };
 };
 
+export const normalizeCliFilters = (
+  filters: ReadonlyArray<string | number>,
+): string[] => filters.map((filter) => normalize(String(filter)));
+
 export const runRest = async ({
   options,
   filters,
   command,
 }: {
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   command: RstestCommand;
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
@@ -239,7 +243,7 @@ export const runRest = async ({
     rstest = createRstest(
       { config, configFilePath, projects },
       command,
-      filters.map(normalize),
+      normalizeCliFilters(filters),
     );
 
     process.on('uncaughtException', unexpectedlyExitHandler);
@@ -348,7 +352,7 @@ export function createCli(): CAC {
         const rstest = createRstest(
           { config, configFilePath, projects },
           'list',
-          filters.map(normalize),
+          normalizeCliFilters(filters),
         );
 
         await rstest.listTests({
