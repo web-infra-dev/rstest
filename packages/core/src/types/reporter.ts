@@ -54,11 +54,6 @@ export type DefaultReporterOptions = {
 
 export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
-export type DotReporterOptions = Pick<
-  DefaultReporterOptions,
-  'logger' | 'summary'
->;
-
 export type MdReporterOptions = {
   /**
    * Output detail level preset.
@@ -165,7 +160,7 @@ export type JsonReporterOptions = {
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
-  dot: DotReporterOptions;
+  dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': Record<string, unknown>;
