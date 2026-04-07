@@ -1,8 +1,9 @@
+import type { ChildProcess } from 'node:child_process';
 import EventEmitter from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { createBirpc } from 'birpc';
 import { dirname, resolve } from 'pathe';
-import { type Options, Tinypool } from 'tinypool';
+import { type Options, Tinypool, type TinypoolWorker } from 'tinypool';
 import type {
   FormattedError,
   RuntimeRPC,
@@ -16,6 +17,7 @@ import { parseWorkerMetaMessage, type WorkerMetaMessage } from './workerMeta';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const patchedWorkerSendSymbol = Symbol('rstestTinypoolProcessSendPatched');
 
 type ForksChannel = {
   onMessage: (callback: (...args: any[]) => void) => void;
@@ -25,6 +27,70 @@ type ForksChannel = {
 type ForksChannelContext = {
   channel: ForksChannel;
   cleanup: () => void;
+};
+
+type TinypoolProcessWorker = TinypoolWorker & {
+  process?: ChildProcess;
+  send: (message: any) => void;
+};
+
+export const isIgnorableTinypoolProcessSendError = (
+  error: unknown,
+  platform: NodeJS.Platform = process.platform,
+): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const errno = error as NodeJS.ErrnoException;
+  if (
+    errno.code === 'ERR_IPC_CHANNEL_CLOSED' ||
+    errno.code === 'EPIPE' ||
+    errno.code === 'ECONNRESET'
+  ) {
+    return true;
+  }
+
+  return platform === 'win32' && error.message.includes('write UNKNOWN');
+};
+
+export const patchTinypoolProcessWorkerSend = (
+  pool: Pick<Tinypool, 'threads'>,
+  platform: NodeJS.Platform = process.platform,
+): void => {
+  const processWorker = pool.threads.find(
+    (worker): worker is TinypoolProcessWorker =>
+      worker.runtime === 'child_process',
+  );
+
+  if (!processWorker) {
+    return;
+  }
+
+  const prototype = Object.getPrototypeOf(
+    processWorker,
+  ) as TinypoolProcessWorker &
+    Partial<Record<typeof patchedWorkerSendSymbol, true>>;
+
+  if (prototype[patchedWorkerSendSymbol]) {
+    return;
+  }
+
+  const originalSend = prototype.send;
+  prototype.send = function patchedSend(
+    this: TinypoolProcessWorker,
+    message: any,
+  ) {
+    try {
+      return originalSend.call(this, message);
+    } catch (error) {
+      if (isIgnorableTinypoolProcessSendError(error, platform)) {
+        return;
+      }
+      throw error;
+    }
+  };
+  prototype[patchedWorkerSendSymbol] = true;
 };
 
 export function createForksChannel(
@@ -104,6 +170,7 @@ export const createForksPool = (poolOptions: {
   };
 
   const pool = new Tinypool(options);
+  patchTinypoolProcessWorkerSend(pool);
   const stderrCapture = createWorkerStderrCapture(pool);
   let nextTaskId = 0;
 
