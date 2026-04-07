@@ -13,7 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { isTTY } from '../utils';
-import { CIProgressReporter } from './ciProgressReporter';
+import { CIProgressNotifier } from './ciProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
@@ -24,7 +24,7 @@ export class DefaultReporter implements Reporter {
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
   private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
-  protected ciProgressReporter: CIProgressReporter | undefined;
+  protected ciProgressNotifier: CIProgressNotifier | undefined;
   private readonly testState: RstestTestState;
 
   constructor({
@@ -52,18 +52,18 @@ export class DefaultReporter implements Reporter {
         options.logger,
       );
     } else {
-      this.ciProgressReporter = new CIProgressReporter(rootPath, testState);
+      this.ciProgressNotifier = new CIProgressNotifier(rootPath, testState);
     }
   }
 
   onTestFileStart(): void {
     this.statusRenderer?.onTestFileStart();
-    this.ciProgressReporter?.start();
+    this.ciProgressNotifier?.start();
   }
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
-    this.ciProgressReporter?.notifyOutput();
+    this.ciProgressNotifier?.notifyOutput();
 
     const projectConfig = this.projectConfigs.get(test.project);
     const hideSkippedTestFiles =
@@ -109,14 +109,14 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    this.ciProgressReporter?.notifyOutput();
+    this.ciProgressNotifier?.notifyOutput();
 
     logUserConsoleLog(this.rootPath, log);
   }
 
   onExit(): void {
     this.statusRenderer?.clear();
-    this.ciProgressReporter?.stop();
+    this.ciProgressNotifier?.stop();
   }
 
   async onTestRunEnd({
@@ -137,7 +137,7 @@ export class DefaultReporter implements Reporter {
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
-    this.ciProgressReporter?.stop();
+    this.ciProgressNotifier?.stop();
 
     if (this.options.summary === false) {
       return;

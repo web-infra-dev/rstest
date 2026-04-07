@@ -40,7 +40,7 @@ export class VerboseReporter extends DefaultReporter {
 
   override onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
-    this.ciProgressReporter?.notifyOutput();
+    this.ciProgressNotifier?.notifyOutput();
 
     const projectConfig = this.projectConfigs.get(test.project);
     const hideSkippedTestFiles =
