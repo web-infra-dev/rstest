@@ -33,6 +33,23 @@ import { PackageManagerTabs } from '@theme';
 }
 ```
 
+### CLI 参数映射
+
+Jest 的一部分 CLI 参数可以直接映射到 Rstest，另一部分则需要迁移到配置文件中。迁移时，最常遇到的差异可以参考下表：
+
+| Jest CLI 参数                            | Rstest 对应写法                                          | 说明                                                                                                                 |
+| ---------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `jest`                                   | `rstest`                                                 | Rstest 默认就是执行一次测试并退出。                                                                                  |
+| `jest --watch`                           | `rstest --watch` 或 `rstest watch`                       | 两种写法都会进入 watch 模式。                                                                                        |
+| `jest --watchAll`                        | `rstest --watch` 或 `rstest watch`                       | Rstest 不区分 `--watch` 和 `--watchAll`。                                                                            |
+| `jest --runInBand`                       | `rstest --pool.maxWorkers 1`                             | 通过把 worker 池限制为 1 来强制串行执行。                                                                            |
+| `jest --maxWorkers=50%` 或 `jest -w 50%` | `rstest --pool.maxWorkers 50%`                           | 在 Jest 中，`-w` 是 `--maxWorkers` 的短参数；在 Rstest 中，worker 数量移动到了 `pool` 下，而且 `-w` 表示 `--watch`。 |
+| `jest --selectProjects app`              | `rstest --project app`                                   | 按项目名称过滤。                                                                                                     |
+| `jest --env=jsdom`                       | `rstest --testEnvironment jsdom`                         | 参数名称发生了变化。                                                                                                 |
+| `jest --coverage`                        | `rstest --coverage`                                      | 两者都会开启覆盖率收集。                                                                                             |
+| `jest --coverageDirectory=coverage`      | 在 `rstest.config.ts` 中配置 `coverage.reportsDirectory` | Rstest 没有单独的 CLI 参数，需要写到配置文件中。                                                                     |
+| `jest --coverageProvider=v8`             | 在 `rstest.config.ts` 中配置 `coverage.provider`         | 将 provider 选择迁移到配置文件中。                                                                                   |
+
 ## 配置迁移
 
 将你的 Jest 配置文件（例如 `jest.config.js` 或 `jest.config.ts`）更新为 `rstest.config.ts` 文件：
