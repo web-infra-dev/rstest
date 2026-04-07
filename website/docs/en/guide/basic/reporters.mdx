@@ -44,6 +44,7 @@ Rstest provides several built-in reporters:
 | Reporter         | Purpose                    | Use case                 |
 | ---------------- | -------------------------- | ------------------------ |
 | `default`        | Console output with colors | Local development        |
+| `dot`            | Compact per-test markers   | Fast local feedback      |
 | `verbose`        | Detailed test case output  | Debugging test failures  |
 | `github-actions` | CI error annotations       | GitHub Actions workflows |
 | `junit`          | JUnit XML format           | CI/CD integration        |
@@ -102,6 +103,34 @@ export default defineConfig({
       Tests 2 passed
    Duration 112ms (build 19ms, tests 93ms)
 ```
+
+### Dot reporter
+
+The dot reporter emits a compact marker stream with one character per test case:
+
+- `.` for passed tests
+- `F` for failed tests
+- `S` for skipped tests
+- `T` for todo tests
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=dot
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: 'dot'
+});
+```
+  </Tab>
+</Tabs>
+
+It still prints the regular failing-test summary and duration footer after the marker line.
 
 ### GitHub Actions reporter
 

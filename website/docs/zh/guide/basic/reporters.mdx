@@ -44,6 +44,7 @@ Rstest 提供了多种内置报告器：
 | 报告器           | 用途                | 使用场景              |
 | ---------------- | ------------------- | --------------------- |
 | `default`        | 带颜色的控制台输出  | 本地开发              |
+| `dot`            | 紧凑的逐测试标记流  | 快速本地反馈          |
 | `verbose`        | 详细的测试用例输出  | 调试测试失败          |
 | `github-actions` | CI 错误注释         | GitHub Actions 工作流 |
 | `junit`          | JUnit XML 格式      | CI/CD 集成            |
@@ -102,6 +103,34 @@ export default defineConfig({
       Tests 2 passed
    Duration 112ms (build 19ms, tests 93ms)
 ```
+
+### Dot 报告器
+
+Dot 报告器会为每个测试用例输出一个紧凑字符：
+
+- `.` 表示通过
+- `F` 表示失败
+- `S` 表示跳过
+- `T` 表示 todo
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=dot
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: 'dot'
+});
+```
+  </Tab>
+</Tabs>
+
+在标记行之后，它仍然会输出常规的失败摘要和耗时汇总。
 
 ### GitHub Actions 报告器
 

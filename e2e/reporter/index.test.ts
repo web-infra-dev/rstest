@@ -59,6 +59,25 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('- basic > c');
   });
 
+  it('dot', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/index.test.ts', '--reporter=dot'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('.FS');
+    expect(cli.stdout).toContain('1 failed');
+    expect(cli.stdout).toContain('1 passed');
+    expect(cli.stdout).toContain('1 skipped');
+  });
+
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
