@@ -135,6 +135,27 @@ b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
 ```
 
+You can use `--summary` to append a compact summary after the list output:
+
+```bash
+$ npx rstest list --summary
+
+# the output is shown below:
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+c.test.ts > test c it each 0
+c.test.ts > test c it for 0
+c.test.ts > test c it runIf
+c.test.ts > test c it skipIf
+
+ Test Files 3 matched
+      Tests 8 matched
+```
+
+When used with `--json`, `--summary` changes the JSON output shape from an array to an object with `items` and `summary` fields.
+
 ## rstest merge-reports
 
 <ApiMeta addedVersion="0.9.3" />
@@ -264,6 +285,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--json [boolean/path]` | Print tests as JSON or write JSON to a file |
 | `--includeSuites`       | Include suites in the output                |
 | `--printLocation`       | Print test and suite locations              |
+| `--summary`             | Print a compact summary after the list      |
 
 ### rstest merge-reports
 
