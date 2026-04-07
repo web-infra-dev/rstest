@@ -71,6 +71,37 @@ The default reporter displays test run status, results, and summary information 
 - `summary`: Whether to display summary information (default: `true`)
 - `logger`: Custom logger function for output (default: `process.stdout/process.stderr`)
 
+#### Progress reporting
+
+The default reporter provides progress feedback during test execution, adapting to your environment.
+
+**TTY environments (interactive terminal)**
+
+In interactive terminals, the default reporter displays real-time test progress at the bottom of the terminal. This includes currently running test files and individual test cases that have been running for more than 2 seconds.
+
+```bash
+ RUNS  src/database.test.ts
+   > should handle concurrent writes 5s
+
+ Test Files 12 passed | 1 running
+      Tests 45 passed
+   Duration 30s
+```
+
+This live status updates every second and is automatically cleared when tests complete.
+
+**Non-TTY environments (CI, piped output, AI agents)**
+
+In non-TTY environments, the default reporter automatically logs periodic progress updates every 30 seconds. This prevents CI "no output" timeouts (e.g., GitHub Actions kills processes after 10 minutes of silence) and provides visibility into test execution.
+
+```bash
+[PROGRESS] test files: 20 done, 4 running | tests: 380 passed, 3 failed | 2m 30s
+            Running: src/heavy.test.ts > database > concurrent writes 45s
+            Running: src/other.test.ts
+```
+
+When a test case runs longer than 10 seconds, its name and elapsed time are shown. This helps identify stuck or slow tests.
+
 ### Verbose reporter
 
 The verbose reporter outputs detailed information for all test cases, including successful ones. Use this when you need complete visibility into test execution.

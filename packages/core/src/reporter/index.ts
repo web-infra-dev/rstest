@@ -13,6 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { isTTY } from '../utils';
+import { CIProgressReporter } from './ciProgressReporter';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
@@ -23,6 +24,7 @@ export class DefaultReporter implements Reporter {
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
   private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  private ciProgressReporter: CIProgressReporter | undefined;
   private readonly testState: RstestTestState;
 
   constructor({
@@ -49,11 +51,14 @@ export class DefaultReporter implements Reporter {
         testState,
         options.logger,
       );
+    } else {
+      this.ciProgressReporter = new CIProgressReporter(rootPath, testState);
     }
   }
 
   onTestFileStart(): void {
     this.statusRenderer?.onTestFileStart();
+    this.ciProgressReporter?.start();
   }
 
   onTestFileResult(test: TestFileResult): void {
@@ -108,6 +113,7 @@ export class DefaultReporter implements Reporter {
 
   onExit(): void {
     this.statusRenderer?.clear();
+    this.ciProgressReporter?.stop();
   }
 
   async onTestRunEnd({
@@ -128,6 +134,7 @@ export class DefaultReporter implements Reporter {
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
+    this.ciProgressReporter?.stop();
 
     if (this.options.summary === false) {
       return;
