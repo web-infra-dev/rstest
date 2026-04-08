@@ -5,6 +5,7 @@ import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
+import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
 import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
@@ -248,6 +249,7 @@ export class Rstest implements RstestContext {
 
 const reportersMap: {
   default: typeof DefaultReporter;
+  dot: typeof DotReporter;
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
@@ -256,6 +258,7 @@ const reportersMap: {
   blob: typeof BlobReporter;
 } = {
   default: DefaultReporter,
+  dot: DotReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,

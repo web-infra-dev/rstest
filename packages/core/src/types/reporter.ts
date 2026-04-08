@@ -25,6 +25,7 @@ export type GetSourcemap = (
 
 export type BuiltInReporterNames =
   | 'default'
+  | 'dot'
   | 'verbose'
   | 'md'
   | 'github-actions'
@@ -159,6 +160,7 @@ export type JsonReporterOptions = {
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': Record<string, unknown>;

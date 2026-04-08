@@ -1,0 +1,43 @@
+{
+  "name": "@rstest/gauge",
+  "version": "0.0.1",
+  "description": "Lightweight Gauge spec parser and step expansion for agent-native test generation",
+  "keywords": ["rstest", "gauge", "testing", "codegen"],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/gauge"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "gauge-expand": "dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch",
+    "test": "rstest",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/gauge/tsconfig.json"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.20.2",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "typescript": "^6.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
