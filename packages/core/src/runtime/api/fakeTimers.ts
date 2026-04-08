@@ -6,14 +6,15 @@
  */
 
 import type {
-  FakeTimerInstallOpts,
-  FakeTimerWithContext,
-  InstalledClock,
+  Config as FakeTimerInstallOpts,
+  FakeTimers as FakeTimerWithContext,
+  Clock as InstalledClock,
 } from '@sinonjs/fake-timers';
 
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
+type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
 
 const loadFakeTimersModule = () => {
   // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
@@ -125,7 +126,6 @@ export class FakeTimers {
 
   runAllTicks(): void {
     if (this._checkFakeTimers()) {
-      // @ts-expect-error - doesn't exist?
       this._clock.runMicrotasks();
     }
   }
@@ -145,8 +145,11 @@ export class FakeTimers {
     const toFake = Object.keys(this._fakeTimers.timers)
       // Do not mock timers internally used by node by default. It can still be mocked through userConfig.
       .filter(
-        (timer) => timer !== 'nextTick' && timer !== 'queueMicrotask',
-      ) as (keyof FakeTimerWithContext['timers'])[];
+        (timer): timer is FakeMethod =>
+          timer !== 'Intl' &&
+          timer !== 'nextTick' &&
+          timer !== 'queueMicrotask',
+      );
 
     const isChildProcess = typeof process !== 'undefined' && !!process.send;
 
@@ -159,7 +162,6 @@ export class FakeTimers {
       shouldClearNativeTimers: true,
       now: Date.now(),
       toFake: [...toFake],
-      // @ts-expect-error untyped but supported
       ignoreMissingTimers: true,
       ...fakeTimersConfig,
     });

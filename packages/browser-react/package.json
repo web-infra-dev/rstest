@@ -44,7 +44,7 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.20.2",
+    "@rslib/core": "0.21.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.2.14",

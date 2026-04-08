@@ -162,7 +162,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -211,7 +211,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -699,7 +699,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -748,7 +748,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -1219,7 +1219,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -1268,7 +1268,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -1741,7 +1741,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -1790,7 +1790,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -2496,7 +2496,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -2545,7 +2545,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -3016,7 +3016,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                       "decorators": true,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -3065,7 +3065,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                   "decorators": true,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },

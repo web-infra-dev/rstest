@@ -53,18 +53,18 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@rslib/core": "0.20.2",
+    "@rslib/core": "0.21.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/convert-source-map": "^2.0.3",
-    "@types/picomatch": "^4.0.2",
+    "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260331.1",
+    "@typescript/native-preview": "7.0.0-dev.20260408.1",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.4",
-    "playwright": "^1.59.0"
+    "playwright": "^1.59.1"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",
