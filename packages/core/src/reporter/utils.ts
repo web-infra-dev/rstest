@@ -1,4 +1,6 @@
-import type { TestFileResult, TestResult } from '../types';
+import { relative } from 'pathe';
+import { parse as stackTraceParse } from 'stacktrace-parser';
+import type { TestFileResult, TestResult, UserConsoleLog } from '../types';
 import {
   color,
   getTaskNameWithPrefix,
@@ -104,4 +106,33 @@ export const logFileTitle = (
   }
 
   logger.log(title);
+};
+
+export const logUserConsoleLog = (
+  rootPath: string,
+  log: UserConsoleLog,
+): void => {
+  const titles = [];
+  const testPath = relative(rootPath, log.testPath);
+
+  if (log.trace) {
+    const [frame] = stackTraceParse(log.trace);
+    const filePath = relative(rootPath, frame!.file || '');
+
+    if (filePath !== testPath) {
+      titles.push(testPath);
+    }
+    titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
+  } else {
+    titles.push(testPath);
+  }
+
+  const logOutput = log.type === 'stdout' ? logger.log : logger.stderr;
+
+  logOutput('');
+  logOutput(
+    `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
+  );
+  logOutput(log.content);
+  logOutput('');
 };
