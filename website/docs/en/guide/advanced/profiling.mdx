@@ -6,6 +6,121 @@ description: Rstest provides various tools and methods to analyze the performanc
 
 Rstest provides various tools and methods to analyze the performance of test runs, helping you identify and resolve performance bottlenecks.
 
+## Common performance bottlenecks
+
+When a test run becomes noticeably slower, first determine whether the bottleneck is in the build stage or the test execution stage:
+
+- If startup takes a long time and reruns remain slow after a small code change, the bottleneck is usually in the build stage.
+- If tests begin quickly but individual test cases or test files take a long time to finish, the bottleneck is usually in test execution.
+
+These two categories can then be investigated separately from the build stage and the test execution stage.
+
+### Investigating build performance
+
+For projects using browser-like environments such as `jsdom` or `happy-dom`, the build stage is one of the most common bottlenecks. In these environments, rstest bundles third-party dependencies from `node_modules` by default instead of externalizing them like it does in the `node` environment.
+
+As a result, test performance can degrade when:
+
+- A test entry indirectly pulls in a large UI library, charting library, or editor package.
+- Application code imports a barrel file that brings in many modules the test does not actually require.
+- The test only needs a small subset of DOM functionality, but the bundle includes a large amount of third-party runtime code.
+
+For these cases, the following workflow is a practical way to narrow down build-related slowdowns.
+
+**1. Enable rstest debug output**
+
+Run rstest with `DEBUG=rstest`:
+
+```bash
+DEBUG=rstest rstest run
+```
+
+With DEBUG enabled, rstest prints more detailed build logs and writes temporary build artifacts to disk. By default, they are written to `dist/.rstest-temp`; if you configure [`output.distPath.root`](/config/build/output#outputdistpath), they are written to that directory instead.
+
+At this stage, focus on two signals:
+
+- Whether the logs spend a long time in build-related stages.
+- Whether the temporary output directory contains unusually large artifacts.
+
+If bundle size is already the primary suspect, this step often provides enough evidence for an initial conclusion.
+
+**2. Identify size overhead introduced by third-party dependencies**
+
+In `jsdom`, `happy-dom`, and similar browser-like environments, large temporary outputs are not surprising because rstest bundles third-party dependencies by default.
+
+In particular, check the following:
+
+- Whether a large artifact maps back to a specific test entry or dependency chain.
+- Whether a heavy package from `node_modules` is being pulled in.
+- Whether the test only needs a small API surface while the entire package is being bundled.
+
+If the problem is concentrated in third-party dependencies, adjusting the bundling strategy is usually more effective than immediately introducing heavyweight profiling tools.
+
+**3. Use output.bundleDependencies to validate the bundling strategy**
+
+Set [`output.bundleDependencies`](/config/build/output#outputbundledependencies) to `false` so browser-like environments externalize third-party dependencies like the `node` environment:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  output: {
+    bundleDependencies: false,
+  },
+});
+```
+
+Then rerun with `DEBUG=rstest` and compare the following:
+
+- Whether build time drops noticeably.
+- Whether the temporary artifacts under `dist/.rstest-temp` become much smaller.
+
+If both improve, the primary bottleneck was likely the cost of bundling third-party dependencies.
+
+**4. Use output.externals for fine-grained control**
+
+If you do not want to disable bundling for all third-party dependencies, use [`output.externals`](/config/build/output#outputexternals) to externalize only selected heavy packages:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: ['react', 'lodash'],
+  },
+});
+```
+
+This approach is a better fit when:
+
+- Only a few packages are disproportionately large.
+- You still want to keep bundling for the rest of the dependency graph.
+- You have already confirmed that the bottleneck is concentrated in a small set of third-party packages.
+
+**5. Use Rsdoctor when the build bottleneck is still unclear**
+
+Once you know the slowdown is in the build stage but still do not know whether the cost comes from entries, loaders, plugins, or a dependency chain, Rsdoctor becomes much more effective. The earlier steps help determine whether the problem is related to bundle size, while Rsdoctor helps identify how compile time is distributed.
+
+:::warning
+`output.bundleDependencies: false` only applies to non-browser mode. In [browser mode](/guide/browser-testing), dependencies are always bundled, so this path is not available for reducing bundle size.
+:::
+
+### Investigating test execution performance
+
+Once the problem has been narrowed down to the test execution stage, the main question is no longer bundle size, but which test file, which test case, or which part of the runtime is consuming the time.
+
+**1. Use the verbose reporter to inspect file-level and case-level duration**
+
+With [`verbose-reporter`](/guide/basic/reporters#verbose-reporter) enabled, you can directly inspect the execution time of each test file and individual test case. This is usually the first step for execution-stage troubleshooting because it helps narrow the problem down to a specific file, a group of tests, or a small set of cases.
+
+**2. Inspect detailed time distribution after narrowing the scope**
+
+Once the slow tests have been identified but the actual runtime cost is still unclear, use [samply](#using-samply) or [Node.js profiling](#nodejs-profiling) below for deeper analysis.
+
+- `samply` is useful for inspecting detailed time distribution across both the rstest main process and test processes.
+- `Node.js profiling` is useful for further analyzing CPU or memory overhead on the Node.js side.
+
 ## Using Rsdoctor
 
 [Rsdoctor](https://rsdoctor.rs/) is a build analysis tool that can visually display the compilation time of each loaders and plugins.
