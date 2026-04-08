@@ -22,7 +22,6 @@ For projects using browser-like environments such as `jsdom` or `happy-dom`, the
 As a result, test performance can degrade when:
 
 - A test entry indirectly pulls in a large UI library, charting library, or editor package.
-- Application code imports a barrel file that brings in many modules the test does not actually require.
 - The test only needs a small subset of DOM functionality, but the bundle includes a large amount of third-party runtime code.
 
 For these cases, the following workflow is a practical way to narrow down build-related slowdowns.
