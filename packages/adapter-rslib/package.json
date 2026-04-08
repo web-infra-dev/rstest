@@ -36,7 +36,7 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/adapter-rslib/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.20.2",
+    "@rslib/core": "0.21.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "tsconfck": "3.1.6",

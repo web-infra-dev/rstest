@@ -14,17 +14,17 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@rspack/cli": "2.0.0-rc.0",
+    "@rspack/cli": "2.0.0-rc.1",
     "@rspack/core": "2.0.0-beta.9",
-    "@rspack/dev-server": "2.0.0-rc.0",
-    "@rspack/plugin-react-refresh": "^1.6.1",
+    "@rspack/dev-server": "2.0.0-rc.2",
+    "@rspack/plugin-react-refresh": "^1.6.2",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "playwright": "^1.59.0",
+    "playwright": "^1.59.1",
     "typescript": "^6.0.2"
   }
 }

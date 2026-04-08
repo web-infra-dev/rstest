@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-rc.0",
+    "@rsbuild/core": "2.0.0-rc.1",
     "@rsbuild/plugin-react": "^1.4.6",
-    "@rslib/core": "0.20.2",
+    "@rslib/core": "0.21.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
@@ -36,7 +36,7 @@
     "react-dom": "^19.2.4",
     "redux": "^5.0.1",
     "strip-ansi": "^7.2.0",
-    "tinyexec": "^1.0.4",
+    "tinyexec": "^1.1.1",
     "tree-kill": "^1.2.2",
     "typescript": "^6.0.2"
   }
