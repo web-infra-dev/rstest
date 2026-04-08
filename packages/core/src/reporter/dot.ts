@@ -16,10 +16,10 @@ import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logUserConsoleLog } from './utils';
 
 const DOT_BY_STATUS = {
-  fail: 'F',
-  pass: '.',
-  skip: 'S',
-  todo: 'T',
+  fail: 'x',
+  pass: '·',
+  skip: '-',
+  todo: '*',
 } as const;
 
 const COLOR_BY_STATUS: Record<

@@ -72,7 +72,7 @@ describe.concurrent('reporters', () => {
     });
 
     await cli.exec;
-    expect(cli.stdout).toContain('.FS');
+    expect(cli.stdout).toContain('·x-');
     expect(cli.stdout).toContain('1 failed');
     expect(cli.stdout).toContain('1 passed');
     expect(cli.stdout).toContain('1 skipped');
