@@ -34,24 +34,36 @@ type TinypoolProcessWorker = TinypoolWorker & {
   send: (message: any) => void;
 };
 
+const isWorkerProcessUnavailable = (
+  childProcess?: ChildProcess,
+): childProcess is ChildProcess => {
+  return (
+    !!childProcess &&
+    (childProcess.connected === false ||
+      childProcess.exitCode !== null ||
+      childProcess.killed)
+  );
+};
+
 export const isIgnorableTinypoolProcessSendError = (
   error: unknown,
   platform: NodeJS.Platform = process.platform,
 ): boolean => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  const errno = error as NodeJS.ErrnoException;
+  const errno = error as NodeJS.ErrnoException | undefined;
+  const message =
+    typeof errno?.message === 'string' ? errno.message : String(error ?? '');
   if (
-    errno.code === 'ERR_IPC_CHANNEL_CLOSED' ||
-    errno.code === 'EPIPE' ||
-    errno.code === 'ECONNRESET'
+    errno?.code === 'ERR_IPC_CHANNEL_CLOSED' ||
+    errno?.code === 'EPIPE' ||
+    errno?.code === 'ECONNRESET'
   ) {
     return true;
   }
 
-  return platform === 'win32' && error.message.includes('write UNKNOWN');
+  return (
+    platform === 'win32' &&
+    (errno?.code === 'UNKNOWN' || message.includes('write UNKNOWN'))
+  );
 };
 
 export const patchTinypoolProcessWorkerSend = (
@@ -81,6 +93,10 @@ export const patchTinypoolProcessWorkerSend = (
     this: TinypoolProcessWorker,
     message: any,
   ) {
+    if (isWorkerProcessUnavailable(this.process)) {
+      return;
+    }
+
     try {
       return originalSend.call(this, message);
     } catch (error) {

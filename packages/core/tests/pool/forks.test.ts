@@ -59,6 +59,15 @@ describe('isIgnorableTinypoolProcessSendError', () => {
     expect(isIgnorableTinypoolProcessSendError(error, 'darwin')).toBe(true);
   });
 
+  it('should ignore Windows UNKNOWN code errors even without Error instances', () => {
+    const error = {
+      code: 'UNKNOWN',
+      message: 'write UNKNOWN',
+    };
+
+    expect(isIgnorableTinypoolProcessSendError(error, 'win32')).toBe(true);
+  });
+
   it('should not ignore unrelated errors', () => {
     expect(
       isIgnorableTinypoolProcessSendError(new Error('boom'), 'win32'),
@@ -106,5 +115,32 @@ describe('patchTinypoolProcessWorkerSend', () => {
     });
 
     expect(() => worker.send({ taskId: 1 })).toThrow('boom');
+  });
+
+  it('should skip sends for disconnected child-process workers', () => {
+    let called = 0;
+    const worker = Object.create({
+      send() {
+        called += 1;
+      },
+    }) as {
+      process: { connected: boolean; exitCode: null; killed: boolean };
+      runtime: string;
+      send: (message: { taskId: number }) => void;
+    };
+    worker.runtime = 'child_process';
+    worker.process = {
+      connected: false,
+      exitCode: null,
+      killed: false,
+    };
+
+    patchTinypoolProcessWorkerSend({
+      threads: [worker as any],
+    });
+
+    worker.send({ taskId: 1 });
+
+    expect(called).toBe(0);
   });
 });
