@@ -14,7 +14,7 @@ const MAX_REPORT_COUNT = 20;
  * Prevents CI "no output" timeouts (e.g. GitHub Actions kills after 10 min of silence)
  * and gives visibility into overall progress.
  */
-export class CIProgressNotifier {
+export class NonTTYProgressNotifier {
   private readonly rootPath: string;
   private readonly testState: RstestTestState;
   private reportTimeout: ReturnType<typeof setTimeout> | undefined;
