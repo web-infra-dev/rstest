@@ -1082,9 +1082,6 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3
-      '@types/sinonjs__fake-timers':
-        specifier: ^8.1.5
-        version: 8.1.5
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
@@ -3738,9 +3735,6 @@ packages:
 
   '@types/semver@7.7.1':
     resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
-
-  '@types/sinonjs__fake-timers@8.1.5':
-    resolution: {integrity: sha512-mQkU2jY8jJEF7YHjHvsQO8+3ughTL1mcnn96igfhONmR+fUPSKIkefQYpSe8bsly2Ep7oQbn/6VG5/9/0qcArQ==}
 
   '@types/source-map-support@0.5.10':
     resolution: {integrity: sha512-tgVP2H469x9zq34Z0m/fgPewGhg/MLClalNOiPIzQlXrSS2YrKu/xCdSCKnEDwkFha51VKEKB6A9wW26/ZNwzA==}
@@ -10538,8 +10532,6 @@ snapshots:
   '@types/sarif@2.1.7': {}
 
   '@types/semver@7.7.1': {}
-
-  '@types/sinonjs__fake-timers@8.1.5': {}
 
   '@types/source-map-support@0.5.10':
     dependencies:

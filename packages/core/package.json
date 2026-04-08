@@ -81,7 +81,6 @@
     "@types/istanbul-reports": "^3.0.4",
     "@types/jsdom": "^21.1.7",
     "@types/picomatch": "^4.0.3",
-    "@types/sinonjs__fake-timers": "^8.1.5",
     "@types/source-map-support": "^0.5.10",
     "@typescript/native-preview": "7.0.0-dev.20260408.1",
     "@vitest/expect": "^3.2.4",
