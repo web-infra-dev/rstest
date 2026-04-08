@@ -4,6 +4,8 @@ import { getTaskNameWithPrefix, prettyTime } from '../utils';
 
 const REPORT_INTERVAL_MS = 30_000;
 const SLOW_CASE_THRESHOLD_MS = 10_000;
+/** Stop reporting after this many reports to let CI timeout mechanisms take over. */
+const MAX_REPORT_COUNT = 20;
 
 /**
  * Periodically logs test progress in non-TTY environments (CI, piped output, AI agents)
@@ -18,6 +20,7 @@ export class CIProgressNotifier {
   private reportTimeout: ReturnType<typeof setTimeout> | undefined;
   private startTime: number | undefined;
   private started = false;
+  private reportCount = 0;
 
   constructor(rootPath: string, testState: RstestTestState) {
     this.rootPath = rootPath;
@@ -54,7 +57,10 @@ export class CIProgressNotifier {
     }
     this.reportTimeout = setTimeout(() => {
       this.report();
-      this.scheduleReport();
+      this.reportCount++;
+      if (this.reportCount < MAX_REPORT_COUNT) {
+        this.scheduleReport();
+      }
     }, REPORT_INTERVAL_MS);
     this.reportTimeout.unref();
   }

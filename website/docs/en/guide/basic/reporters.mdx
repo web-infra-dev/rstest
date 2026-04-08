@@ -100,7 +100,7 @@ In non-TTY environments, the default reporter automatically logs a progress summ
             Running: src/other.test.ts
 ```
 
-When a test case runs longer than 10 seconds, its name and elapsed time are shown. This helps identify stuck or slow tests.
+When a test case runs longer than 10 seconds, its name and elapsed time are shown. This helps identify stuck or slow tests. Progress reporting stops after 20 reports (~10 minutes of idle time) to avoid blocking CI timeout mechanisms when tests are truly stuck.
 
 ### Verbose reporter
 
