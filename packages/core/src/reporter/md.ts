@@ -561,7 +561,6 @@ const stackIgnores: (RegExp | string)[] = [
   /\/node_modules\//,
   /\/rstest\/packages\/core\/dist/,
   /\/@rstest\/core/,
-  /\/tinypool/,
   /\/chai/,
   /\/node:\w+/,
   /webpack\/runtime/,
