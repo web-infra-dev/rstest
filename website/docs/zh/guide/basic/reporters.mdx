@@ -351,13 +351,11 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-默认输出总是先给出摘要，然后在需要时列出测试项，最后给出失败信息。
+默认输出总是先给出报告标题，然后是摘要；在需要时列出测试项，最后给出失败信息。
 
-当所有测试都通过时，输出大致如下：
+当所有测试都通过时，输出摘录大致如下：
 
 ````md
-# Rstest Test Execution Report
-
 ## Summary
 
 ```json
@@ -382,11 +380,9 @@ No test failures reported.
 Note: all tests passed. Lists omitted for brevity.
 ````
 
-当存在失败时，输出会保留同样的摘要结构，并附带结构化失败详情：
+当存在失败时，输出摘录大致如下：
 
 ````md
-# Rstest Test Execution Report
-
 ## Summary
 
 ```json

@@ -353,13 +353,11 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-The default output always starts with a summary section, then shows test lists when needed, and ends with a failures section.
+The default output always starts with a report title, then shows a summary section, test lists when needed, and a failures section.
 
-When all tests pass, the output looks like this:
+When all tests pass, an excerpt looks like this:
 
 ````md
-# Rstest Test Execution Report
-
 ## Summary
 
 ```json
@@ -384,11 +382,9 @@ No test failures reported.
 Note: all tests passed. Lists omitted for brevity.
 ````
 
-When there are failures, the output keeps the same summary format and adds structured failure details:
+When there are failures, an excerpt looks like this:
 
 ````md
-# Rstest Test Execution Report
-
 ## Summary
 
 ```json
