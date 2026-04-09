@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { basename, dirname, join } from 'pathe';
+import { basename, dirname, join, resolve } from 'pathe';
 import type {
   EntryInfo,
   FormattedError,
@@ -24,7 +24,10 @@ import {
   needFlagExperimentalDetectModule,
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { createForksPool } from './forks';
+import { Pool } from './pool';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
@@ -118,8 +121,6 @@ const filterAssetsByEntry = async (
 };
 
 const getNodeExecArgv = () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
   const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
 
   return [
@@ -217,8 +218,8 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
-  const pool = createForksPool({
-    ...poolOptions,
+  const pool = new Pool({
+    workerEntry: resolve(__dirname, './worker.js'),
     isolate,
     maxWorkers,
     minWorkers,
@@ -231,7 +232,7 @@ export const createPool = async ({
       NODE_ENV: 'test',
       ...getForceColorEnv(),
       ...process.env,
-    },
+    } as Record<string, string>,
   });
 
   const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
@@ -310,6 +311,8 @@ export const createPool = async ({
         entries.map(async (entryInfo, index) => {
           const result = await pool
             .runTest({
+              worker: 'forks',
+              type: 'run',
               options: {
                 entryInfo,
                 context: {
@@ -418,6 +421,8 @@ export const createPool = async ({
         entries.map(async (entryInfo, index) => {
           return pool
             .collectTests({
+              worker: 'forks',
+              type: 'collect',
               options: {
                 entryInfo,
                 context: {
