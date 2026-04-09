@@ -66,7 +66,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
             },
           },
           resolve: {
-            // override default resolve conditionNames for web-like environment, use `browser` field instead of `node` field
+            // override default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
             conditionNames:
               testEnvironment.name === 'node'
                 ? undefined
