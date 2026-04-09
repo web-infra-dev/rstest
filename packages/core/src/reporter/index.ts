@@ -13,6 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { isTTY } from '../utils';
+import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
@@ -23,6 +24,7 @@ export class DefaultReporter implements Reporter {
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
   private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  protected nonTTYProgressNotifier: NonTTYProgressNotifier | undefined;
   private readonly testState: RstestTestState;
 
   constructor({
@@ -49,15 +51,22 @@ export class DefaultReporter implements Reporter {
         testState,
         options.logger,
       );
+    } else {
+      this.nonTTYProgressNotifier = new NonTTYProgressNotifier(
+        rootPath,
+        testState,
+      );
     }
   }
 
   onTestFileStart(): void {
     this.statusRenderer?.onTestFileStart();
+    this.nonTTYProgressNotifier?.start();
   }
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
+    this.nonTTYProgressNotifier?.notifyOutput();
 
     const projectConfig = this.projectConfigs.get(test.project);
     const hideSkippedTestFiles =
@@ -103,11 +112,14 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
+    this.nonTTYProgressNotifier?.notifyOutput();
+
     logUserConsoleLog(this.rootPath, log);
   }
 
   onExit(): void {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
   }
 
   async onTestRunEnd({
@@ -128,6 +140,7 @@ export class DefaultReporter implements Reporter {
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
 
     if (this.options.summary === false) {
       return;

@@ -71,9 +71,40 @@ Rstest 提供了多种内置报告器：
 - `summary`: 是否显示汇总信息 (默认: `true`)
 - `logger`: 用于输出的自定义日志函数 (默认: `process.stdout/process.stderr`)
 
+#### 进度报告
+
+默认报告器在测试执行期间提供进度反馈，并根据你的环境自动调整。
+
+**TTY 环境（交互式终端）**
+
+在交互式终端中，默认报告器会在终端底部显示实时测试进度，包括当前正在运行的测试文件，以及运行超过 2 秒的测试用例。
+
+```bash
+ RUNS  src/database.test.ts
+   > should handle concurrent writes 5s
+
+ Test Files 12 passed | 1 running
+      Tests 45 passed
+   Duration 30s
+```
+
+此实时状态每秒更新一次，测试完成后会自动清除。
+
+**非 TTY 环境（CI、管道输出、AI agents）**
+
+在非 TTY 环境中，默认报告器会在控制台 30 秒无输出时自动输出一次进度日志。这可以防止 CI "无输出" 超时（例如，GitHub Actions 在 10 分钟无输出后会终止进程），同时不会干扰正常的测试结果输出。
+
+```bash
+[PROGRESS] test files: 20 done, 4 running | tests: 380 passed, 3 failed | 2m 30s
+            Running: src/heavy.test.ts > database > concurrent writes 45s
+            Running: src/other.test.ts
+```
+
+当某个测试用例运行超过 10 秒时，会显示其名称和耗时。这有助于识别卡住或慢速的测试。进度报告在输出 20 次后（约 10 分钟空闲时间）会自动停止，以避免在测试真正卡死时阻止 CI 超时机制生效。
+
 ### 详细报告器
 
-详细报告器为所有测试用例输出详细信息，包括成功的测试用例。当你需要对测试执行有完整可见性时使用此报告器。
+详细报告器继承自默认报告器，为所有测试用例输出详细信息，包括成功的测试用例。进度报告等默认报告器的功能同样适用。当你需要对测试执行有完整可见性时使用此报告器。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
