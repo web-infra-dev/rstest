@@ -510,8 +510,6 @@ describe('prepareRsbuild', () => {
     } = await rsbuildInstance.inspectConfig();
 
     expect(bundlerConfigs[0]?.resolve?.conditionNames).toEqual([
-      'webpack',
-      'development',
       'browser',
       '...',
     ]);
