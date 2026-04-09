@@ -13,4 +13,5 @@ declare global {
   const rs: typeof import('@rstest/core')['rs'];
   const rstest: typeof import('@rstest/core')['rstest'];
 }
+
 export {};

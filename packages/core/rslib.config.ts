@@ -23,7 +23,7 @@ export default defineConfig({
           ? false
           : {
               bundledPackages: [
-                '@types/sinonjs__fake-timers',
+                '@sinonjs/fake-timers',
                 '@types/istanbul-reports',
                 '@types/istanbul-lib-report',
                 '@types/istanbul-lib-coverage',
@@ -40,9 +40,6 @@ export default defineConfig({
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
-          // Temporary fix: `import * as timers from 'timers'` reassign error
-          timers: 'commonjs timers',
-          'timers/promises': 'commonjs timers/promises',
           // fix deduplicate import from fs & node:fs
           fs: 'node:fs',
           os: 'node:os',
