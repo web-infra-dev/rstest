@@ -1023,6 +1023,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
     },
+    "conditionNames": [
+      "webpack",
+      "development",
+      "browser",
+      "...",
+    ],
     "extensionAlias": {
       ".js": [
         ".js",
@@ -2820,6 +2826,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
     },
+    "conditionNames": [
+      "webpack",
+      "development",
+      "browser",
+      "...",
+    ],
     "extensionAlias": {
       ".js": [
         ".js",
