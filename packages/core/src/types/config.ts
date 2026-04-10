@@ -29,7 +29,7 @@ export type RstestPoolOptions = {
 
 export type RstestOutputConfig = Pick<
   NonNullable<RsbuildConfig['output']>,
-  'cssModules' | 'externals' | 'cleanDistPath' | 'module'
+  'cssModules' | 'emitAssets' | 'externals' | 'cleanDistPath' | 'module'
 > & {
   distPath?: string | { root?: string };
   /**

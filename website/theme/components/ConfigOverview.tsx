@@ -139,6 +139,7 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'output.externals',
       'output.bundleDependencies',
       'output.cssModules',
+      'output.emitAssets',
       'output.cleanDistPath',
       'output.distPath',
     ],

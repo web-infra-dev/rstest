@@ -42,7 +42,7 @@ import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
 
 export default defineConfig({
   extends: withRsbuildConfig(),
-  // 额外的 rstest 特定配置
+  // 额外的 Rstest 特定配置
 });
 ```
 
@@ -189,6 +189,7 @@ export default defineConfig({
 | `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript 配置文件路径                    |
 | `resolve`                | `resolve`                | 模块解析                                   |
 | `output.cssModules`      | `output.cssModules`      | CSS 模块配置                               |
+| `output.emitAssets`      | `output.emitAssets`      | 是否将导入的静态资源输出到磁盘             |
 | `output.module`          | `output.module`          | 输出模块类型                               |
 | `tools.rspack`           | `tools.rspack`           | Rspack 配置                                |
 | `tools.swc`              | `tools.swc`              | SWC 配置                                   |

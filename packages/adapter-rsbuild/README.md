@@ -18,7 +18,7 @@ import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
 
 export default defineConfig({
   extends: withRsbuildConfig(),
-  // other rstest config options
+  // other Rstest config options
 });
 ```
 
