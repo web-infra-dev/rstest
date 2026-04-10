@@ -497,7 +497,18 @@ export async function runTests(context: Rstest): Promise<void> {
       // so we should not merge stale browser results into node results
       if (shouldUnifyReporter && browserResult?.results) {
         results.push(...browserResult.results);
-        coverageResults.push(...browserResult.results);
+        // Strip coverage from browser results to avoid memory bloat in reporter/state caches,
+        // same as the node-side pool layer does via `delete result.coverage`
+        for (const r of browserResult.results) {
+          if (r.coverage) {
+            coverageResults.push({
+              testPath: r.testPath,
+              project: r.project,
+              coverage: r.coverage,
+            });
+            delete r.coverage;
+          }
+        }
       }
       if (shouldUnifyReporter && browserResult?.testResults) {
         testResults.push(...browserResult.testResults);
