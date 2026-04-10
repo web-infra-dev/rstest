@@ -324,6 +324,16 @@ Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout
 - console 默认开启，但带有严格的输出上限，避免报告体积失控。
 - 当失败数量超过 `failures.max` 时，会先输出包含最小字段的完整失败列表（repro / type / message / expected / actual），并且只展开前 `failures.max` 个失败的完整详情。
 
+几个 preset 的主要区别，在于失败信息默认会保留多少上下文：
+
+| Preset    | 适用场景                                         | 失败详情                             | Console logs                                         | Code frames           |
+| --------- | ------------------------------------------------ | ------------------------------------ | ---------------------------------------------------- | --------------------- |
+| `normal`  | 默认的 agent 工作流                              | `stack: 'top'`、`failures.max: 50`   | 开启，每个 test path 最多 10 条、每条最多 500 字符   | 开启，默认上下各 2 行 |
+| `compact` | CI 日志、多轮 agent 调用、对 token 更敏感的场景  | `stack: 'top'`、`failures.max: 20`   | 关闭                                                 | 关闭                  |
+| `full`    | 希望一份报告里保留尽可能多调试信息的深度排查场景 | `stack: 'full'`、`failures.max: 200` | 开启，每个 test path 最多 200 条、每条最多 5000 字符 | 开启，默认上下各 3 行 |
+
+这些 preset 不会改变 markdown 的整体结构，主要影响的是失败部分默认展开的上下文多少。
+
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
@@ -341,7 +351,81 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-你也可以通过 reporter options 进一步调整输出：
+默认输出总是先给出报告标题，然后是摘要；在需要时列出测试项，最后给出失败信息。
+
+当所有测试都通过时，输出摘录大致如下：
+
+````md
+## Summary
+
+```json
+{
+  "status": "pass",
+  "counts": {
+    "testFiles": 2,
+    "failedFiles": 0,
+    "tests": 14,
+    "failedTests": 0,
+    "passedTests": 13,
+    "skippedTests": 1,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+No test failures reported.
+
+Note: all tests passed. Lists omitted for brevity.
+````
+
+当存在失败时，输出摘录大致如下：
+
+````md
+## Summary
+
+```json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1,
+    "passedTests": 0,
+    "skippedTests": 0,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+
+details:
+
+```json
+{
+  "testPath": "fixtures/agent-md/index.test.ts",
+  "fullName": "agent-md > fails with diff",
+  "status": "fail"
+}
+```
+
+diff:
+
+```diff
+- Expected
++ Received
+
+- 3
++ 2
+```
+````
+
+如果你希望在 CI 日志或多轮 agent 工作流里进一步压缩输出，可以切到 `compact` preset，并收紧失败详情数量：
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
@@ -351,10 +435,9 @@ export default defineConfig({
     [
       'md',
       {
-        preset: 'normal',
-        failures: { max: 50 },
-        stack: 'top',
-        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+        preset: 'compact',
+        failures: { max: 20 },
+        reproduction: 'file+name',
       },
     ],
   ],

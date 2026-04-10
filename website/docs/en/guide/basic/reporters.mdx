@@ -326,6 +326,16 @@ The default preset is `normal`, which is tuned for agent workflows:
 - Console output is enabled by default, but limited to keep the report size under control.
 - When the number of failures exceeds `failures.max`, the reporter prints a full failure list with minimal fields (repro / type / message / expected / actual), and only expands full details for the first `failures.max` failures.
 
+The available presets mainly differ in how much detail they keep in failure sections:
+
+| Preset    | Best for                                                   | Failure details                      | Console logs                                                       | Code frames                      |
+| --------- | ---------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | -------------------------------- |
+| `normal`  | Default agent workflows                                    | `stack: 'top'`, `failures.max: 50`   | Enabled, capped at 10 logs per test path and 500 chars per entry   | Enabled, 2 lines above and below |
+| `compact` | CI logs, repeated agent loops, token-sensitive runs        | `stack: 'top'`, `failures.max: 20`   | Disabled                                                           | Disabled                         |
+| `full`    | Deep debugging when you want maximum context in one report | `stack: 'full'`, `failures.max: 200` | Enabled, capped at 200 logs per test path and 5000 chars per entry | Enabled, 3 lines above and below |
+
+All presets still keep the same markdown structure. The main difference is how much failure context is expanded by default.
+
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
@@ -343,7 +353,81 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-You can further tune the output via reporter options:
+The default output always starts with a report title, then shows a summary section, test lists when needed, and a failures section.
+
+When all tests pass, an excerpt looks like this:
+
+````md
+## Summary
+
+```json
+{
+  "status": "pass",
+  "counts": {
+    "testFiles": 2,
+    "failedFiles": 0,
+    "tests": 14,
+    "failedTests": 0,
+    "passedTests": 13,
+    "skippedTests": 1,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+No test failures reported.
+
+Note: all tests passed. Lists omitted for brevity.
+````
+
+When there are failures, an excerpt looks like this:
+
+````md
+## Summary
+
+```json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1,
+    "passedTests": 0,
+    "skippedTests": 0,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+
+details:
+
+```json
+{
+  "testPath": "fixtures/agent-md/index.test.ts",
+  "fullName": "agent-md > fails with diff",
+  "status": "fail"
+}
+```
+
+diff:
+
+```diff
+- Expected
++ Received
+
+- 3
++ 2
+```
+````
+
+If you want a smaller payload for CI logs or multi-step agent loops, switch to the `compact` preset and lower the failure cap:
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
@@ -353,10 +437,9 @@ export default defineConfig({
     [
       'md',
       {
-        preset: 'normal',
-        failures: { max: 50 },
-        stack: 'top',
-        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+        preset: 'compact',
+        failures: { max: 20 },
+        reproduction: 'file+name',
       },
     ],
   ],
