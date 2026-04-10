@@ -83,6 +83,10 @@ export async function generateCoverage(
         logger.info('Generating coverage for untested files...');
       }, 1000);
 
+      // Process projects sequentially to limit peak memory — parallel
+      // instrumentation of untested files across many projects can multiply
+      // the resident set. Sequential processing lets each project's
+      // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
       for (const p of projects) {
         const includedFiles = await getIncludedFiles(coverage, p.rootPath);
@@ -149,6 +153,12 @@ async function generateCoverageForUntestedFiles(
     return;
   }
 
+  /**
+   * Process untested files in batches to bound peak memory — each batch is
+   * instrumented, merged into the coverage map, and then released before the
+   * next batch starts. 25 is an empirical sweet-spot that keeps memory
+   * reasonable without adding noticeable per-batch overhead.
+   */
   const batchSize = 25;
 
   for (let index = 0; index < uncoveredFiles.length; index += batchSize) {

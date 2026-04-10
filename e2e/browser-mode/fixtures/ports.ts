@@ -28,6 +28,7 @@ export const BROWSER_PORTS = {
   reporter: 5220,
   'reporter-watch': 5222,
   'github-actions': 5224,
+  'browser-coverage-multiproject': 5228,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

@@ -8,7 +8,7 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS['browser-coverage'],
   },
-  include: ['tests/**/*.test.ts'],
+  include: ['tests/*.test.ts'],
   coverage: {
     enabled: true,
     include: ['src/**/*.ts'],
