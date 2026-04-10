@@ -65,6 +65,11 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               'import.meta.env': 'process.env',
             },
           },
+          resolve: {
+            // Extend the default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
+            conditionNames:
+              testEnvironment.name === 'node' ? undefined : ['browser', '...'],
+          },
           output: {
             assetPrefix: '',
             // Pass resources to the worker on demand according to entry
