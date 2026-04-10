@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rsbuild",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Rstest adapter for rsbuild configuration",
   "keywords": [
     "rstest",
