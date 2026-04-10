@@ -26,6 +26,9 @@ describe('toRstestConfig', () => {
     },
     environments: {
       test: {
+        output: {
+          emitAssets: false,
+        },
         source: {
           define: {
             'process.env.NODE_ENV': '"test"',
@@ -59,6 +62,7 @@ describe('toRstestConfig', () => {
     });
     expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
     expect(config.resolve?.mainFields).toEqual(['module', 'main']);
+    expect(config.output?.emitAssets).toBeUndefined();
     expect(config.testEnvironment).toBe('happy-dom');
   });
 
@@ -78,6 +82,7 @@ describe('toRstestConfig', () => {
     });
     expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
     expect(config.resolve?.mainFields).toEqual(['module', 'main']);
+    expect(config.output?.emitAssets).toBe(false);
   });
 
   it('should map node target to node test environment', () => {

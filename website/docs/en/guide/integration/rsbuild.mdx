@@ -42,7 +42,7 @@ import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
 
 export default defineConfig({
   extends: withRsbuildConfig(),
-  // Additional rstest-specific configuration
+  // Additional Rstest-specific configuration
 });
 ```
 
@@ -189,6 +189,7 @@ Only the fields listed below are inherited. Rsbuild options that are not listed 
 | `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript config path               |
 | `resolve`                | `resolve`                | Module resolution                    |
 | `output.cssModules`      | `output.cssModules`      | CSS modules configuration            |
+| `output.emitAssets`      | `output.emitAssets`      | Emit imported static assets to disk  |
 | `output.module`          | `output.module`          | Output module type                   |
 | `tools.rspack`           | `tools.rspack`           | Rspack configuration                 |
 | `tools.swc`              | `tools.swc`              | SWC configuration                    |

@@ -33,7 +33,7 @@ When you output JavaScript files in ES module format (`output.module: true`), Rs
 - Dependencies imported via `import` syntax will be treated as ES module type externals.
 - Dependencies imported via `require` syntax will be treated as CommonJS externals.
 
-When you import CommonJS modules using the `import` syntax, Rstest will attempt interop handling, allowing you to import CommonJS module exports normally using `import` syntax. The following code works correctly in rstest:
+When you import CommonJS modules using the `import` syntax, Rstest will attempt interop handling, allowing you to import CommonJS module exports normally using `import` syntax. The following code works correctly in Rstest:
 
 ```ts title="cjs-module"
 Object.defineProperty(exports, '__esModule', { value: true });
@@ -158,7 +158,7 @@ Controls whether third-party dependencies from `node_modules` are bundled or ext
 - `true`: Always bundle all third-party dependencies, regardless of test environment.
 - `false`: Always externalize third-party dependencies, regardless of test environment.
 
-When this option is unset, rstest bundles dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalizes them in the `node` environment.
+When this option is unset, Rstest bundles dependencies in browser-like test environments (jsdom, happy-dom, etc.), and externalizes them in the `node` environment.
 
 :::warning
 This option only applies to non-browser mode. In [browser mode](/guide/browser-testing), all dependencies are always bundled, so `output.bundleDependencies: false` is not supported.
@@ -200,6 +200,23 @@ export default defineConfig({
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 For custom CSS Modules configuration.
+
+## output.emitAssets <RsbuildDocBadge path="/config/output/emit-assets" text="output.emitAssets" />
+
+<ApiMeta addedVersion="0.9.7" />
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Controls whether imported static assets such as images, fonts, audio, and video are emitted as build assets during test builds.
+
+Rstest forwards this option to the underlying Rsbuild pipeline and follows the same behavior as Rsbuild. When `output.emitAssets` is `true`, imported asset modules are emitted into the build output file system. When it is `false`, those asset files are not emitted.
+
+In Rstest, emitted assets are written to disk only when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled or when you run with DEBUG output enabled. Otherwise, they stay in the temporary in-memory output used by the test build.
+
+This option is mainly useful when you want Rstest to match an existing Rsbuild setup, or when your tests do not need to validate emitted static assets.
+
+If you are already reusing your Rsbuild config through [@rstest/adapter-rsbuild](/guide/integration/rsbuild), `output.emitAssets` is inherited automatically.
 
 ## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
 

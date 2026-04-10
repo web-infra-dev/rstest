@@ -31,7 +31,8 @@ export function toRstestConfig({
     : rsbuildConfig;
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
-  const { cssModules, target, module } = finalBuildConfig.output || {};
+  const { cssModules, emitAssets, target, module } =
+    finalBuildConfig.output || {};
   const {
     assetsInclude,
     decorators,
@@ -66,6 +67,7 @@ export function toRstestConfig({
     resolve: finalBuildConfig.resolve,
     output: {
       cssModules,
+      emitAssets,
       module,
     },
     tools: {
