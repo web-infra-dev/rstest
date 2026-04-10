@@ -162,6 +162,11 @@ export type TestFileResult = TestResult & {
   coverage?: Record<string, FileCoverageData>;
 };
 
+export type TestFileCoverageResult = Pick<
+  TestFileResult,
+  'testPath' | 'project' | 'coverage'
+>;
+
 export interface UserConsoleLog {
   content: string;
   name: string;

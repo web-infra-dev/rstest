@@ -1,7 +1,7 @@
 import type FS from 'node:fs';
 import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext, TestFileResult } from '../types';
+import type { RstestContext, TestFileCoverageResult } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -48,7 +48,7 @@ export const getIncludedFiles = async (
 
 export async function generateCoverage(
   context: RstestContext,
-  results: TestFileResult[],
+  results: TestFileCoverageResult[],
   coverageProvider: CoverageProvider,
 ): Promise<void> {
   const {
@@ -83,28 +83,24 @@ export async function generateCoverage(
         logger.info('Generating coverage for untested files...');
       }, 1000);
 
-      const allFiles = (
-        await Promise.all(
-          projects.map(async (p) => {
-            const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+      const allFiles: string[] = [];
+      for (const p of projects) {
+        const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+        allFiles.push(...includedFiles);
 
-            const uncoveredFiles = includedFiles.filter(
-              (file) => !coveredFilesSet.has(normalize(file)),
-            );
+        const uncoveredFiles = includedFiles.filter(
+          (file) => !coveredFilesSet.has(normalize(file)),
+        );
 
-            if (uncoveredFiles.length) {
-              await generateCoverageForUntestedFiles(
-                p.environmentName,
-                uncoveredFiles,
-                finalCoverageMap,
-                coverageProvider,
-              );
-            }
-
-            return includedFiles;
-          }),
-        )
-      ).flat();
+        if (uncoveredFiles.length) {
+          await generateCoverageForUntestedFiles(
+            p.environmentName,
+            uncoveredFiles,
+            finalCoverageMap,
+            coverageProvider,
+          );
+        }
+      }
 
       clearTimeout(timeoutId);
 
@@ -153,12 +149,16 @@ async function generateCoverageForUntestedFiles(
     return;
   }
 
-  const coverages = await coverageProvider.generateCoverageForUntestedFiles({
-    environmentName,
-    files: uncoveredFiles,
-  });
+  const batchSize = 25;
 
-  coverages.forEach((coverageData) => {
-    coverageMap.addFileCoverage(coverageData);
-  });
+  for (let index = 0; index < uncoveredFiles.length; index += batchSize) {
+    const coverages = await coverageProvider.generateCoverageForUntestedFiles({
+      environmentName,
+      files: uncoveredFiles.slice(index, index + batchSize),
+    });
+
+    coverages.forEach((coverageData) => {
+      coverageMap.addFileCoverage(coverageData);
+    });
+  }
 }

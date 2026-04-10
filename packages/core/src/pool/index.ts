@@ -10,6 +10,7 @@ import type {
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
+  TestFileCoverageResult,
   TestFileInfo,
   TestFileResult,
   TestInfo,
@@ -148,6 +149,7 @@ export const createPool = async ({
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
   }) => Promise<{
+    coverageResults: TestFileCoverageResult[];
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
@@ -305,6 +307,7 @@ export const createPool = async ({
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+      const coverageResults: TestFileCoverageResult[] = [];
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
@@ -385,6 +388,14 @@ export const createPool = async ({
                 errors: [err],
               } as TestFileResult;
             });
+          if (result.coverage) {
+            coverageResults.push({
+              testPath: result.testPath,
+              project: result.project,
+              coverage: result.coverage,
+            });
+            delete result.coverage;
+          }
           context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));
           return result;
@@ -399,7 +410,7 @@ export const createPool = async ({
 
       const testResults = results.flatMap((r) => r.results);
 
-      return { results, testResults, project };
+      return { coverageResults, results, testResults, project };
     },
     collectTests: async ({
       entries,
