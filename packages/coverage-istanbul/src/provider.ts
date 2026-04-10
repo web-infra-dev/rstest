@@ -7,12 +7,14 @@ import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
+  mapWithConcurrency,
   readInitialCoverage,
   registerSourceMapURL,
   transformCoverage,
 } from './utils';
 
 const { createCoverageMap } = istanbulLibCoverage;
+const UNTESTED_FILES_CONCURRENCY = 4;
 
 // Global type declaration for coverage
 declare global {
@@ -44,8 +46,10 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const { readFile } = await import('node:fs/promises');
 
-    return await Promise.all(
-      files.map(async (file) => {
+    return mapWithConcurrency(
+      files,
+      UNTESTED_FILES_CONCURRENCY,
+      async (file) => {
         try {
           const content = await readFile(file, 'utf-8');
           const { code } = await transformCoverage(
@@ -62,7 +66,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           process.exitCode = 1;
           return undefined;
         }
-      }),
+      },
     ).then((results) => results.filter((r): r is FileCoverageData => !!r));
   }
 

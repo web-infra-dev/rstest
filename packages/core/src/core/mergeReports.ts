@@ -5,6 +5,7 @@ import type { BlobData } from '../reporter/blob';
 import type {
   Duration,
   SnapshotSummary,
+  TestFileCoverageResult,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -114,6 +115,7 @@ export async function mergeReports(
   );
 
   const allResults: TestFileResult[] = [];
+  const allCoverageResults: TestFileCoverageResult[] = [];
   const allTestResults: TestResult[] = [];
   const allDurations: Duration[] = [];
   const shardDurations: { label: string; duration: Duration }[] = [];
@@ -122,6 +124,7 @@ export async function mergeReports(
 
   for (const blob of blobs) {
     allResults.push(...blob.results);
+    allCoverageResults.push(...(blob.coverageResults || blob.results));
     allTestResults.push(...blob.testResults);
     allDurations.push(blob.duration);
     allSnapshotSummaries.push(blob.snapshotSummary);
@@ -204,7 +207,7 @@ export async function mergeReports(
 
     if (coverageProvider) {
       const { generateCoverage } = await import('../coverage/generate');
-      await generateCoverage(context, allResults, coverageProvider);
+      await generateCoverage(context, allCoverageResults, coverageProvider);
     }
   }
 

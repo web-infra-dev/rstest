@@ -1,7 +1,12 @@
 import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
+import type {
+  EntryInfo,
+  ProjectEntries,
+  SourceMapInput,
+  TestFileCoverageResult,
+} from '../types';
 import {
   clearScreen,
   color,
@@ -366,6 +371,7 @@ export async function runTests(context: Rstest): Promise<void> {
           });
           if (!success) {
             return {
+              coverageResults: [],
               results: [],
               testResults: [],
               errors,
@@ -407,7 +413,7 @@ export async function runTests(context: Rstest): Promise<void> {
         }
 
         currentEntries.push(...finalEntries);
-        const { results, testResults } = await pool.runTests({
+        const { coverageResults, results, testResults } = await pool.runTests({
           entries: finalEntries,
           getSourceMaps,
           setupEntries,
@@ -417,6 +423,7 @@ export async function runTests(context: Rstest): Promise<void> {
         });
 
         return {
+          coverageResults,
           results,
           testResults,
           assetNames,
@@ -479,6 +486,9 @@ export async function runTests(context: Rstest): Promise<void> {
             };
 
       const results = returns.flatMap((r) => r.results);
+      const coverageResults: TestFileCoverageResult[] = returns.flatMap(
+        (r) => r.coverageResults || [],
+      );
       const testResults = returns.flatMap((r) => r.testResults);
       const errors = returns.flatMap((r) => r.errors || []);
 
@@ -487,6 +497,7 @@ export async function runTests(context: Rstest): Promise<void> {
       // so we should not merge stale browser results into node results
       if (shouldUnifyReporter && browserResult?.results) {
         results.push(...browserResult.results);
+        coverageResults.push(...browserResult.results);
       }
       if (shouldUnifyReporter && browserResult?.testResults) {
         testResults.push(...browserResult.testResults);
@@ -562,6 +573,7 @@ export async function runTests(context: Rstest): Promise<void> {
       for (const reporter of reporters) {
         await reporter.onTestRunEnd?.({
           results: context.reporterResults.results,
+          coverageResults,
           testResults: context.reporterResults.testResults,
           unhandledErrors: errors,
           snapshotSummary: snapshotManager.summary,
@@ -577,7 +589,7 @@ export async function runTests(context: Rstest): Promise<void> {
       if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
         const { generateCoverage } = await import('../coverage/generate');
 
-        await generateCoverage(context, results, coverageProvider);
+        await generateCoverage(context, coverageResults, coverageProvider);
       }
 
       if (isFailure) {

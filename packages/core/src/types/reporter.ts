@@ -3,6 +3,7 @@ import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type {
   TestCaseInfo,
+  TestFileCoverageResult,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -215,6 +216,7 @@ export interface Reporter {
    */
   onTestRunEnd?: ({
     results,
+    coverageResults,
     testResults,
     duration,
     getSourcemap,
@@ -222,6 +224,7 @@ export interface Reporter {
     unhandledErrors,
   }: {
     results: TestFileResult[];
+    coverageResults?: TestFileCoverageResult[];
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
