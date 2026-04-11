@@ -12,16 +12,27 @@ rs.setConfig({
 
 const allTestFiles = ['index.test.ts', 'other.test.ts'];
 
+/**
+ * Extract the "Test files to re-run" section from stdout.
+ * Only check this section to avoid false positives from delayed error output
+ * (e.g., GitHub Actions reporter output that arrives after resetStd).
+ */
+const getRerunSection = (stdout: string): string => {
+  const match = stdout.match(/Test files to re-run.*?:\n([\s\S]*?)\n\n/);
+  return match?.[1] ?? '';
+};
+
 const expectRerun = (
   stdout: string,
   expected: string[],
   all = allTestFiles,
 ) => {
+  const rerunSection = getRerunSection(stdout);
   for (const file of expected) {
-    expect(stdout).toMatch(file);
+    expect(rerunSection).toMatch(file);
   }
   for (const file of all.filter((f) => !expected.includes(f))) {
-    expect(stdout).not.toMatch(file);
+    expect(rerunSection).not.toMatch(file);
   }
 };
 
