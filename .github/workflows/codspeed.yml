@@ -1,8 +1,13 @@
 name: CodSpeed
 
 on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
   schedule:
-    # Run every 6 hours on main to build a continuous baseline
+    # Run every 6 hours on main to build a continuous baseline for CPU benchmark
     - cron: '0 */6 * * *'
   # Allow manual runs on any branch (CodSpeed backtest + on-demand profiling)
   workflow_dispatch:
@@ -49,7 +54,10 @@ jobs:
   codspeed-cpu:
     name: Run CPU benchmarks
     needs: check-skip
-    if: needs.check-skip.outputs.should_skip != 'true'
+    # CPU walltime benchmark runs on codspeed-macro (expensive), only on schedule or manual trigger
+    if: |
+      needs.check-skip.outputs.should_skip != 'true' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     # Walltime mode requires CodSpeed bare-metal runners for stable measurements.
     # CPU simulation (Valgrind) is incompatible with child_process.fork — rstest's
     # worker pool generates excessive system calls, making flame graphs unavailable.
@@ -87,7 +95,10 @@ jobs:
   codspeed-memory:
     name: Run memory benchmark
     needs: check-skip
-    if: needs.check-skip.outputs.should_skip != 'true'
+    # Memory benchmark builds baseline on push to main, runs on PRs for comparison
+    if: |
+      needs.check-skip.outputs.should_skip != 'true' &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
