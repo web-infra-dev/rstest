@@ -74,7 +74,10 @@ export class CoverageProvider implements RstestCoverageProvider {
     return createCoverageMap({});
   }
 
-  collect(): CoverageMap | null {
+  collect(_options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): CoverageMap | null {
     if (typeof globalThis === 'undefined' || !globalThis.__coverage__) {
       return null;
     }
