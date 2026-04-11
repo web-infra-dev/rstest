@@ -29,7 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type TestEntryToChunkHashes = {
   name: string;
-  /** key is chunk name, value is chunk hash */
+  /** key is chunk asset file path, value is chunk hash */
   chunks: Record<string, string>;
 }[];
 
@@ -39,7 +39,7 @@ function parseInlineSourceMapStr(code: string) {
     /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
   const match = inlineSourceMapRegex.exec(code);
 
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return null;
   }
 
@@ -172,35 +172,52 @@ const calcEntriesToRerun = (
   buildData: {
     entryToChunkHashes?: TestEntryToChunkHashes;
     setupEntryToChunkHashes?: TestEntryToChunkHashes;
+    chunkHashesByFile?: Record<string, string>;
+    runtimeChunkFiles?: string[];
   },
+  outputPath: string,
   runtimeChunkName: string,
   setupEntries: EntryInfo[],
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
 } => {
+  const entryByTestPath = new Map(
+    entries.map((entry) => [entry.testPath, entry] as const),
+  );
+  const chunkHashesByFile = new Map(
+    Object.entries(buildData.chunkHashesByFile || {}),
+  );
+  const runtimeChunkFiles = new Set(buildData.runtimeChunkFiles || []);
+
+  for (const chunk of chunks || []) {
+    const isRuntimeChunk =
+      chunk.id === runtimeChunkName || chunk.names?.includes(runtimeChunkName);
+
+    for (const file of chunk.files || []) {
+      const filePath = path.join(outputPath, String(file));
+      chunkHashesByFile.set(filePath, chunk.hash ?? '');
+
+      if (isRuntimeChunk) {
+        runtimeChunkFiles.add(filePath);
+      }
+    }
+  }
+
   const buildChunkHashes = (
     entry: EntryInfo,
     map: Map<string, Record<string, string>>,
   ) => {
-    const validChunks = (entry.chunks || []).filter(
-      (chunk) => chunk !== runtimeChunkName,
+    const chunkHashes = Object.fromEntries(
+      (entry.files || [])
+        .filter((file) => !runtimeChunkFiles.has(file))
+        .map((file) => [file, chunkHashesByFile.get(file) ?? '']),
     );
 
-    validChunks.forEach((chunkName) => {
-      const chunkInfo = chunks?.find((c) =>
-        c.names?.includes(chunkName as string),
-      );
-      if (chunkInfo) {
-        const existing = map.get(entry.testPath) || {};
-        existing[chunkName] = chunkInfo.hash ?? '';
-        map.set(entry.testPath, existing);
-      }
-    });
+    map.set(entry.testPath, chunkHashes);
   };
 
   const processEntryChanges = (
-    _entries: EntryInfo[],
     prevHashes: TestEntryToChunkHashes | undefined,
     currentHashesMap: Map<string, Record<string, string>>,
   ): {
@@ -218,28 +235,28 @@ const calcEntriesToRerun = (
         ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
       );
 
-      const findAffectedEntry = (testPath: string) => {
-        const currentChunks = currentHashesMap.get(testPath);
+      currentHashesMap.forEach((currentChunks, testPath) => {
         const prevChunks = prevMap.get(testPath);
-
-        if (!currentChunks) return;
 
         if (!prevChunks) {
           affectedPaths.add(testPath);
           return;
         }
 
-        const hasChanges = Object.entries(currentChunks).some(
-          ([chunkName, hash]) => prevChunks[chunkName] !== hash,
+        const currentChunkNames = Object.keys(currentChunks);
+        const prevChunkNames = Object.keys(prevChunks);
+        if (currentChunkNames.length !== prevChunkNames.length) {
+          affectedPaths.add(testPath);
+          return;
+        }
+
+        const hasChanges = currentChunkNames.some(
+          (chunkName) => prevChunks[chunkName] !== currentChunks[chunkName],
         );
 
         if (hasChanges) {
           affectedPaths.add(testPath);
         }
-      };
-
-      currentHashesMap.forEach((_, testPath) => {
-        findAffectedEntry(testPath);
       });
     }
 
@@ -258,11 +275,10 @@ const calcEntriesToRerun = (
     setupEntryToChunkHashesMap.entries(),
   ).map(([name, chunks]) => ({ name, chunks }));
 
-  // apply latest setup entry chunk hashes
   buildData.setupEntryToChunkHashes = setupEntryToChunkHashes;
 
   const entryToChunkHashesMap = new Map<string, Record<string, string>>();
-  (entries || []).forEach((entry) => {
+  entries.forEach((entry) => {
     buildChunkHashes(entry, entryToChunkHashesMap);
   });
 
@@ -270,34 +286,35 @@ const calcEntriesToRerun = (
     entryToChunkHashesMap.entries(),
   ).map(([name, chunks]) => ({ name, chunks }));
 
-  // apply latest entry chunk hashes
   buildData.entryToChunkHashes = entryToChunkHashes;
 
-  const isSetupChanged = () => {
-    const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
-      processEntryChanges(
-        setupEntries,
-        previousSetupHashes,
-        setupEntryToChunkHashesMap,
-      );
+  const referencedChunkFiles = new Set<string>();
+  for (const entry of [...setupEntries, ...entries]) {
+    for (const file of entry.files || []) {
+      referencedChunkFiles.add(file);
+    }
+  }
+  buildData.chunkHashesByFile = Object.fromEntries(
+    Array.from(chunkHashesByFile.entries()).filter(([file]) =>
+      referencedChunkFiles.has(file),
+    ),
+  );
+  buildData.runtimeChunkFiles = Array.from(runtimeChunkFiles).filter((file) =>
+    referencedChunkFiles.has(file),
+  );
 
-    const affectedSetups = Array.from(affectedSetupPaths)
-      .map((testPath) => setupEntries.find((e) => e.testPath === testPath))
-      .filter((entry): entry is EntryInfo => entry !== undefined);
+  const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
+    processEntryChanges(previousSetupHashes, setupEntryToChunkHashesMap);
 
-    return affectedSetups.length > 0 || deletedSetups.length > 0;
-  };
-
-  if (isSetupChanged()) {
-    // if setup files changed, all test entries are affected
+  if (affectedSetupPaths.size > 0 || deletedSetups.length > 0) {
     return { affectedEntries: entries, deletedEntries: [] };
   }
 
   const { affectedPaths: affectedTestPaths, deletedPaths } =
-    processEntryChanges(entries, previousEntryHashes, entryToChunkHashesMap);
+    processEntryChanges(previousEntryHashes, entryToChunkHashesMap);
 
   const affectedEntries = Array.from(affectedTestPaths)
-    .map((testPath) => entries.find((e) => e.testPath === testPath))
+    .map((testPath) => entryByTestPath.get(testPath))
     .filter((entry): entry is EntryInfo => entry !== undefined);
 
   return { affectedEntries, deletedEntries: deletedPaths };
@@ -437,6 +454,8 @@ export const createRsbuildServer = async ({
     {
       entryToChunkHashes?: TestEntryToChunkHashes;
       setupEntryToChunkHashes?: TestEntryToChunkHashes;
+      chunkHashesByFile?: Record<string, string>;
+      runtimeChunkFiles?: string[];
     }
   > = {};
 
@@ -482,7 +501,6 @@ export const createRsbuildServer = async ({
       assets: true,
       relatedAssets: true,
       cachedAssets: true,
-      // get the compilation time
       chunks: true,
       timings: true,
     });
@@ -563,6 +581,7 @@ export const createRsbuildServer = async ({
           entries,
           chunks,
           buildData[environmentName],
+          outputPath!,
           `${environmentName}-${RUNTIME_CHUNK_NAME}`,
           setupEntries,
         )
