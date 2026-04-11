@@ -9,6 +9,7 @@ import type {
   SnapshotSummary,
   TestFileResult,
   TestResult,
+  TestRunEndContext,
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
@@ -183,13 +184,7 @@ export class JsonReporter implements Reporter {
     duration,
     snapshotSummary,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): Promise<void> {
+  }: TestRunEndContext): Promise<void> {
     const report = this.createReport({
       results,
       testResults,

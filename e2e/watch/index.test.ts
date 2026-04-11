@@ -53,7 +53,8 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     );
 
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 2 passed');
+    expect(cli.stdout).toMatch('Test Files 1 passed');
+    expect(cli.stdout).toMatch('Tests 1 passed');
     expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
 
     // update
@@ -64,15 +65,50 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 1 failed');
+    expect(cli.stdout).toMatch('Tests 1 failed');
     expect(cli.stdout).toMatch('✗ bar > bar should be to bar');
     expect(cli.stdout).toMatch(/Test files to re-run.*:\n.*bar\.test\.ts\n\n/);
 
     // delete
     cli.resetStd();
     fs.delete(testFilePath);
-    await cli.waitForStdout('Duration');
+    await cli.waitForStdout('No test files need re-run.');
+    await new Promise((resolve) => setTimeout(resolve, 100));
     expect(cli.stdout).toMatch('No test files need re-run.');
-    expect(cli.stdout).toMatch('Test Files 1 passed');
+    expect(cli.stdout).not.toMatch('Test Files');
+    expect(cli.stdout).not.toMatch('Duration');
+
+    cli.exec.kill();
+  });
+
+  it('should clear stale passed cases when a dependent module stops building', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-build-fail${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures`,
+      fixturesTargetPath,
+    });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--disableConsoleIntercept'],
+      options: {
+        nodeOptions: {
+          env: { DEBUG: 'rstest' },
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Tests 1 passed');
+
+    cli.resetStd();
+    fs.delete(path.join(fixturesTargetPath, 'src/index.ts'));
+
+    await cli.waitForStdout('Duration');
+    expect(cli.stdout).toMatch('Test Files 1 failed');
+    expect(cli.stdout).not.toMatch('Tests 1 passed');
 
     cli.exec.kill();
   });

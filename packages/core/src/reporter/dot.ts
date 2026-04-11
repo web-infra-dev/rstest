@@ -87,7 +87,6 @@ export class DotReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
-    filterRerunTestPaths,
     unhandledErrors,
   }: {
     results: TestFileResult[];
@@ -96,7 +95,6 @@ export class DotReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.flushLine();
 
@@ -110,7 +108,6 @@ export class DotReporter implements Reporter {
       unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
-      filterRerunTestPaths,
     });
 
     printSummaryLog({

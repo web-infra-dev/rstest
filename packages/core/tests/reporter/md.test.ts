@@ -1,5 +1,33 @@
-import { describe, expect, it } from '@rstest/core';
-import { resolveOptions } from '../../src/reporter/md';
+import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
+import { MdReporter, resolveOptions } from '../../src/reporter/md';
+import type {
+  Duration,
+  NormalizedConfig,
+  SnapshotSummary,
+  TestFileResult,
+  TestResult,
+} from '../../src/types';
+
+const baseConfig = {
+  passWithNoTests: false,
+} as NormalizedConfig;
+
+const emptySnapshotSummary: SnapshotSummary = {
+  added: 0,
+  didUpdate: false,
+  failure: false,
+  filesAdded: 0,
+  filesRemoved: 0,
+  filesRemovedList: [],
+  filesUnmatched: 0,
+  filesUpdated: 0,
+  matched: 0,
+  total: 0,
+  unchecked: 0,
+  uncheckedKeysByFile: [],
+  unmatched: 0,
+  updated: 0,
+};
 
 describe('resolveOptions', () => {
   describe('defaults', () => {
@@ -183,6 +211,74 @@ describe('resolveOptions', () => {
     it('allows partial override', () => {
       const result = resolveOptions({ errors: { unhandled: false } });
       expect(result.errors.unhandled).toBe(false);
+    });
+  });
+
+  describe('run payload contract', () => {
+    it('should render only the current run payload in markdown output', async () => {
+      const reporter = new MdReporter({
+        config: baseConfig,
+        rootPath: '/test/root',
+        options: {},
+        testState: {} as never,
+      });
+
+      const testResults: TestResult[] = [
+        {
+          status: 'pass',
+          name: 'fresh pass',
+          testPath: '/test/root/fresh.test.ts',
+          duration: 50,
+          project: 'default',
+          testId: 'fresh-case',
+        },
+      ];
+      const results: TestFileResult[] = [
+        {
+          status: 'pass',
+          name: 'fresh.test.ts',
+          testPath: '/test/root/fresh.test.ts',
+          duration: 50,
+          results: [testResults[0]!],
+          project: 'default',
+          testId: 'fresh-file',
+        },
+      ];
+      const duration: Duration = {
+        totalTime: 150,
+        buildTime: 20,
+        testTime: 130,
+      };
+      const logs: string[] = [];
+
+      rs.spyOn(process.stdout, 'write').mockImplementation(((chunk: string) => {
+        logs.push(chunk);
+        return true;
+      }) as typeof process.stdout.write);
+
+      onTestFinished(() => {
+        rs.resetAllMocks();
+      });
+
+      await reporter.onTestRunEnd({
+        results,
+        testResults,
+        duration,
+        getSourcemap: () => Promise.resolve(null),
+        snapshotSummary: emptySnapshotSummary,
+        reason: 'passed',
+        runKind: 'rerun',
+      });
+
+      const output = logs.join('\n');
+
+      expect(output).toContain('"testFiles": 1');
+      expect(output).toContain('"failedFiles": 0');
+      expect(output).toContain('"tests": 1');
+      expect(output).toContain('"passedTests": 1');
+      expect(output).toContain('"failedTests": 0');
+      expect(output).toContain('No test failures reported.');
+      expect(output).toContain('fresh.test.ts');
     });
   });
 });

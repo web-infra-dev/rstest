@@ -507,23 +507,14 @@ const resolveStackPayload = ({
 const collectFailures = ({
   results,
   testResults,
-  filterRerunTestPaths,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
-  filterRerunTestPaths?: string[];
 }): FailureItem[] => {
-  const shouldIncludePath = (testPath: string) =>
-    filterRerunTestPaths ? filterRerunTestPaths.includes(testPath) : true;
-
   const failures: FailureItem[] = [];
 
   for (const result of results) {
-    if (
-      result.status === 'fail' &&
-      result.errors?.length &&
-      shouldIncludePath(result.testPath)
-    ) {
+    if (result.status === 'fail' && result.errors?.length) {
       failures.push({
         test: result,
         errors: result.errors,
@@ -532,7 +523,7 @@ const collectFailures = ({
   }
 
   for (const result of testResults) {
-    if (result.status === 'fail' && shouldIncludePath(result.testPath)) {
+    if (result.status === 'fail') {
       failures.push({
         test: result,
         errors: result.errors || [],
@@ -1012,7 +1003,6 @@ export class MdReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
-    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -1020,13 +1010,11 @@ export class MdReporter implements Reporter {
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
     const failures = collectFailures({
       results,
       testResults,
-      filterRerunTestPaths,
     });
 
     const packageManagerAgent = this.options.reproduction

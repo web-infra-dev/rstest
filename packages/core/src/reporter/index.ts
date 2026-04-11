@@ -128,7 +128,6 @@ export class DefaultReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
-    filterRerunTestPaths,
     unhandledErrors,
   }: {
     results: TestFileResult[];
@@ -137,7 +136,6 @@ export class DefaultReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
     this.nonTTYProgressNotifier?.stop();
@@ -152,7 +150,6 @@ export class DefaultReporter implements Reporter {
       unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
-      filterRerunTestPaths,
     });
 
     printSummaryLog({

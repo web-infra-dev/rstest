@@ -163,8 +163,15 @@ export async function mergeReports(
     process.exitCode = 1;
   }
 
+  const testPaths = Array.from(
+    new Set(allResults.map((result) => result.testPath)),
+  );
+
   for (const reporter of context.reporters) {
-    await reporter.onTestRunStart?.();
+    await reporter.onTestRunStart?.({
+      testPaths,
+      runKind: 'full',
+    });
   }
 
   // Print per-shard durations
@@ -195,6 +202,13 @@ export async function mergeReports(
         ? allUnhandledErrors
         : undefined,
       getSourcemap: async () => null,
+      reason:
+        allResults.length === 0 && allTestResults.length === 0
+          ? 'no-tests'
+          : hasFailure
+            ? 'failed'
+            : 'passed',
+      runKind: 'full',
     });
   }
 

@@ -226,8 +226,12 @@ export class Rstest implements RstestContext {
       }
     });
 
-    // Clear existing test results for updated paths and add new ones
-    const testPathsToUpdate = new Set(testResults.map((r) => r.testPath));
+    // File-level results must replace any previously accumulated case-level
+    // state for the same path, even when the new run produced no testResults.
+    const testPathsToUpdate = new Set([
+      ...results.map((r) => r.testPath),
+      ...testResults.map((r) => r.testPath),
+    ]);
     this.reporterResults.testResults = this.reporterResults.testResults.filter(
       (r) => !testPathsToUpdate.has(r.testPath),
     );

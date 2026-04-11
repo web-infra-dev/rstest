@@ -74,6 +74,24 @@ describe('JUnitReporter', () => {
       testResults: mockTestResults,
       duration: mockDuration,
       getSourcemap: () => null,
+      snapshotSummary: {
+        added: 0,
+        didUpdate: false,
+        failure: false,
+        filesAdded: 0,
+        filesRemoved: 0,
+        filesRemovedList: [],
+        filesUnmatched: 0,
+        filesUpdated: 0,
+        matched: 0,
+        total: 0,
+        unchecked: 0,
+        uncheckedKeysByFile: [],
+        unmatched: 0,
+        updated: 0,
+      },
+      reason: 'failed',
+      runKind: 'full',
     });
 
     // Verify that XML was generated
@@ -120,6 +138,24 @@ describe('JUnitReporter', () => {
       testResults: [],
       duration: mockDuration,
       getSourcemap: () => null,
+      snapshotSummary: {
+        added: 0,
+        didUpdate: false,
+        failure: false,
+        filesAdded: 0,
+        filesRemoved: 0,
+        filesRemovedList: [],
+        filesUnmatched: 0,
+        filesUpdated: 0,
+        matched: 0,
+        total: 0,
+        unchecked: 0,
+        uncheckedKeysByFile: [],
+        unmatched: 0,
+        updated: 0,
+      },
+      reason: 'no-tests',
+      runKind: 'full',
     });
 
     expect(logs.some((log) => log.includes('tests="0"'))).toBe(true);
@@ -177,6 +213,24 @@ describe('JUnitReporter', () => {
       testResults: mockTestResults,
       duration: mockDuration,
       getSourcemap: () => null,
+      snapshotSummary: {
+        added: 0,
+        didUpdate: false,
+        failure: false,
+        filesAdded: 0,
+        filesRemoved: 0,
+        filesRemovedList: [],
+        filesUnmatched: 0,
+        filesUpdated: 0,
+        matched: 0,
+        total: 0,
+        unchecked: 0,
+        uncheckedKeysByFile: [],
+        unmatched: 0,
+        updated: 0,
+      },
+      reason: 'failed',
+      runKind: 'full',
     });
 
     // Verify XML is properly escaped

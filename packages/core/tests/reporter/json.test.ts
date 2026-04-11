@@ -104,6 +104,9 @@ describe('JsonReporter', () => {
       testResults: mockTestResults,
       duration: mockDuration,
       snapshotSummary: emptySnapshotSummary,
+      getSourcemap: () => Promise.resolve(null),
+      reason: 'failed',
+      runKind: 'full',
     });
 
     const report = JSON.parse(logs.join('\n'));
@@ -150,6 +153,9 @@ describe('JsonReporter', () => {
         testTime: 0,
       },
       snapshotSummary: emptySnapshotSummary,
+      getSourcemap: () => Promise.resolve(null),
+      reason: 'no-tests',
+      runKind: 'full',
     });
 
     const report = JSON.parse(logs.join('\n'));

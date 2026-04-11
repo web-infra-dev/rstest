@@ -112,5 +112,9 @@ export type {
   TestFileResult,
   TestInfo,
   TestResult,
+  TestRunEndContext,
+  TestRunEndReason,
+  TestRunKind,
+  TestRunStartContext,
   TestSuiteInfo,
 } from './types';

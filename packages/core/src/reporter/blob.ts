@@ -8,6 +8,7 @@ import type {
   TestFileCoverageResult,
   TestFileResult,
   TestResult,
+  TestRunEndContext,
   UserConsoleLog,
 } from '../types';
 import type { BlobReporterOptions } from '../types/reporter';
@@ -57,14 +58,7 @@ export class BlobReporter implements Reporter {
     duration,
     snapshotSummary,
     unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    coverageResults?: TestFileCoverageResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-  }): Promise<void> {
+  }: TestRunEndContext): Promise<void> {
     const shard = this.config.shard;
     const fileName = shard
       ? `blob-${shard.index}-${shard.count}.json`

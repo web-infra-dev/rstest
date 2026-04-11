@@ -1731,6 +1731,8 @@ export const runBrowserController = async (
           snapshotSummary: context.snapshotManager.summary,
           getSourcemap: getBrowserSourcemap,
           unhandledErrors: errorResult.unhandledErrors,
+          reason: 'failed',
+          runKind: 'full',
         });
       }
     }
@@ -1771,42 +1773,47 @@ export const runBrowserController = async (
       .filter((testPath) => !currentPathSet.has(testPath));
   };
 
-  const notifyTestRunStart = async (): Promise<void> => {
+  const notifyTestRunStart = async ({
+    testPaths,
+    runKind,
+  }: ReporterHookArg<'onTestRunStart'>): Promise<void> => {
     if (skipOnTestRunEnd) {
       return;
     }
 
     for (const reporter of context.reporters) {
-      await reporter.onTestRunStart?.();
+      await reporter.onTestRunStart?.({
+        testPaths,
+        runKind,
+      });
     }
   };
 
   const notifyTestRunEnd = async ({
+    results,
+    testResults,
     duration,
+    reason,
+    runKind,
     unhandledErrors,
-    filterRerunTestPaths,
-  }: {
-    duration: {
-      totalTime: number;
-      buildTime: number;
-      testTime: number;
-    };
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
-  }): Promise<void> => {
+  }: Omit<
+    ReporterHookArg<'onTestRunEnd'>,
+    'getSourcemap' | 'snapshotSummary'
+  >): Promise<void> => {
     if (skipOnTestRunEnd) {
       return;
     }
 
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
+        results,
+        testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
         getSourcemap: getBrowserSourcemap,
         unhandledErrors,
-        filterRerunTestPaths,
+        reason,
+        runKind,
       });
     }
   };
@@ -1842,6 +1849,17 @@ export const runBrowserController = async (
     context,
     options?.shardedEntries,
   );
+  // Track test results from browser runners
+  const reporterResults: TestFileResult[] = [];
+  const caseResults: TestResult[] = [];
+  let currentRunResults: TestFileResult[] = [];
+  let currentRunTestResults: TestResult[] = [];
+  let fatalError: Error | null = null;
+
+  const resetCurrentRunState = (): void => {
+    currentRunResults = [];
+    currentRunTestResults = [];
+  };
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -1850,12 +1868,27 @@ export const runBrowserController = async (
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
+      await notifyTestRunStart({
+        testPaths: [],
+        runKind: 'full',
+      });
       const message = `No test files found, exiting with code ${code}.`;
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
       }
+      await notifyTestRunEnd({
+        results: [],
+        testResults: [],
+        duration: {
+          totalTime: 0,
+          buildTime: 0,
+          testTime: 0,
+        },
+        reason: 'no-tests',
+        runKind: 'full',
+      });
     }
 
     if (code !== 0) {
@@ -1863,8 +1896,6 @@ export const runBrowserController = async (
     }
     return;
   }
-
-  await notifyTestRunStart();
 
   const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
@@ -1942,6 +1973,12 @@ export const runBrowserController = async (
       projectName: entry.project.name,
     })),
   );
+
+  resetCurrentRunState();
+  await notifyTestRunStart({
+    testPaths: allTestFiles.map((file) => file.testPath),
+    runKind: 'full',
+  });
 
   // Only include browser mode projects in runtime configs
   // Normalize projectRoot to posix format for cross-platform compatibility
@@ -2055,11 +2092,6 @@ export const runBrowserController = async (
 
   runtime.setContainerOptions(hostOptions);
 
-  // Track test results from browser runners
-  const reporterResults: TestFileResult[] = [];
-  const caseResults: TestResult[] = [];
-  let fatalError: Error | null = null;
-
   const snapshotRpcMethods = {
     async resolveSnapshotPath(testPath: string): Promise<string> {
       const snapExtension = '.snap';
@@ -2149,6 +2181,7 @@ export const runBrowserController = async (
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
+    currentRunTestResults.push(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestCaseResult?.(payload),
@@ -2160,6 +2193,7 @@ export const runBrowserController = async (
     payload: TestFileResult,
   ): Promise<void> => {
     reporterResults.push(payload);
+    currentRunResults.push(payload);
     context.updateReporterResultState([payload], payload.results);
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
@@ -2539,7 +2573,11 @@ export const runBrowserController = async (
         await cancelRun(run, false);
       },
       runFiles: async (files) => {
-        await notifyTestRunStart();
+        resetCurrentRunState();
+        await notifyTestRunStart({
+          testPaths: files.map((file) => file.testPath),
+          runKind: 'rerun',
+        });
 
         const rerunStartTime = Date.now();
         const fatalErrorBeforeRun = fatalError;
@@ -2557,12 +2595,22 @@ export const runBrowserController = async (
               ? fatalError
               : undefined;
           await notifyTestRunEnd({
+            results: currentRunResults,
+            testResults: currentRunTestResults,
             duration: {
               totalTime: testTime,
               buildTime: 0,
               testTime,
             },
-            filterRerunTestPaths: files.map((file) => file.testPath),
+            reason:
+              currentRunResults.length === 0 && !rerunError && !rerunFatalError
+                ? 'no-tests'
+                : rerunError || rerunFatalError
+                  ? 'failed'
+                  : currentRunResults.some((result) => result.status === 'fail')
+                    ? 'failed'
+                    : 'passed',
+            runKind: 'rerun',
             unhandledErrors: rerunError
               ? [rerunError]
               : rerunFatalError
@@ -2684,7 +2732,13 @@ export const runBrowserController = async (
 
     if (!skipOnTestRunEnd) {
       try {
-        await notifyTestRunEnd({ duration });
+        await notifyTestRunEnd({
+          results: currentRunResults,
+          testResults: currentRunTestResults,
+          duration,
+          reason: isFailure ? 'failed' : 'passed',
+          runKind: 'full',
+        });
       } finally {
         await closeHeadlessRuntime?.();
       }
@@ -3115,7 +3169,11 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        await notifyTestRunStart();
+        resetCurrentRunState();
+        await notifyTestRunStart({
+          testPaths: rerunPlan.normalizedAffectedTestFiles,
+          runKind: 'rerun',
+        });
 
         const rerunStartTime = Date.now();
         const fatalErrorBeforeRun = fatalError;
@@ -3135,12 +3193,22 @@ export const runBrowserController = async (
               ? fatalError
               : undefined;
           await notifyTestRunEnd({
+            results: currentRunResults,
+            testResults: currentRunTestResults,
             duration: {
               totalTime: testTime,
               buildTime: 0,
               testTime,
             },
-            filterRerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
+            reason:
+              currentRunResults.length === 0 && !rerunError && !rerunFatalError
+                ? 'no-tests'
+                : rerunError || rerunFatalError
+                  ? 'failed'
+                  : currentRunResults.some((result) => result.status === 'fail')
+                    ? 'failed'
+                    : 'passed',
+            runKind: 'rerun',
             unhandledErrors: rerunError
               ? [rerunError]
               : rerunFatalError
@@ -3205,7 +3273,13 @@ export const runBrowserController = async (
 
   if (!skipOnTestRunEnd) {
     try {
-      await notifyTestRunEnd({ duration });
+      await notifyTestRunEnd({
+        results: currentRunResults,
+        testResults: currentRunTestResults,
+        duration,
+        reason: isFailure ? 'failed' : 'passed',
+        runKind: 'full',
+      });
     } finally {
       await closeContainerRuntime?.();
     }

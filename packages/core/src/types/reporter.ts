@@ -176,6 +176,27 @@ export type ReporterWithOptions<
   ? [Name, Partial<BuiltinReporterOptions[Name]>]
   : [Name, Record<string, unknown>];
 
+export type TestRunKind = 'full' | 'rerun';
+
+export type TestRunEndReason = 'passed' | 'failed' | 'no-tests';
+
+export interface TestRunStartContext {
+  testPaths: string[];
+  runKind: TestRunKind;
+}
+
+export interface TestRunEndContext {
+  results: TestFileResult[];
+  coverageResults?: TestFileCoverageResult[];
+  testResults: TestResult[];
+  duration: Duration;
+  getSourcemap: GetSourcemap;
+  unhandledErrors?: Error[];
+  snapshotSummary: SnapshotSummary;
+  reason: TestRunEndReason;
+  runKind: TestRunKind;
+}
+
 export interface Reporter {
   /**
    * Called before test file run.
@@ -210,28 +231,11 @@ export interface Reporter {
   /**
    * Called before all tests start
    */
-  onTestRunStart?: () => MaybePromise<void>;
+  onTestRunStart?: (context: TestRunStartContext) => MaybePromise<void>;
   /**
    * Called after all tests have finished running.
    */
-  onTestRunEnd?: ({
-    results,
-    coverageResults,
-    testResults,
-    duration,
-    getSourcemap,
-    snapshotSummary,
-    unhandledErrors,
-  }: {
-    results: TestFileResult[];
-    coverageResults?: TestFileCoverageResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    snapshotSummary: SnapshotSummary;
-    filterRerunTestPaths?: string[];
-  }) => MaybePromise<void>;
+  onTestRunEnd?: (context: TestRunEndContext) => MaybePromise<void>;
 
   /**
    * Called when console log is calling.

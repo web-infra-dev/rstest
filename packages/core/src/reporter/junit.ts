@@ -3,11 +3,11 @@ import path from 'node:path';
 import { relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
-  Duration,
   GetSourcemap,
   Reporter,
   TestFileResult,
   TestResult,
+  TestRunEndContext,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
 import { formatStack, parseErrorStacktrace } from '../utils/error';
@@ -223,12 +223,7 @@ export class JUnitReporter implements Reporter {
     testResults,
     duration,
     getSourcemap,
-  }: {
-    getSourcemap: GetSourcemap;
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-  }): Promise<void> {
+  }: TestRunEndContext): Promise<void> {
     const testSuites = await Promise.all(
       results.map(async (fileResult) =>
         this.createJUnitTestSuite(fileResult, getSourcemap),

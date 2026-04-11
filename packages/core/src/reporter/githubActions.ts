@@ -1,11 +1,5 @@
 import { relative } from 'pathe';
-import type {
-  Duration,
-  GetSourcemap,
-  SnapshotSummary,
-  TestFileResult,
-  TestResult,
-} from '../types';
+import type { TestResult, TestRunEndContext } from '../types';
 import { getTaskNameWithPrefix, logger, TEST_DELIMITER } from '../utils';
 
 export class GithubActionsReporter {
@@ -31,14 +25,7 @@ export class GithubActionsReporter {
     results,
     testResults,
     getSourcemap,
-  }: {
-    results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    getSourcemap: GetSourcemap;
-    filterRerunTestPaths?: string[];
-  }): Promise<void> {
+  }: TestRunEndContext): Promise<void> {
     const failedTests: TestResult[] = [
       ...results.filter((i) => i.status === 'fail' && i.errors?.length),
       ...testResults.filter((i) => i.status === 'fail'),

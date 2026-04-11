@@ -17,6 +17,10 @@ Create a custom reporter by implementing the `Reporter` interface:
 import type { Reporter, TestFileResult } from '@rstest/core';
 
 const customReporter: Reporter = {
+  onTestRunStart({ testPaths, runKind }) {
+    console.log(`Starting ${runKind} run for ${testPaths.length} file(s)`);
+  },
+
   onTestFileStart(test) {
     console.log(`Starting: ${test.testPath}`);
   },
@@ -25,8 +29,8 @@ const customReporter: Reporter = {
     console.log(`Finished: ${result.testPath}`);
   },
 
-  onTestRunEnd({ results, duration }) {
-    console.log(`All tests completed in ${duration.totalTime}ms`);
+  onTestRunEnd({ results, duration, reason }) {
+    console.log(`Run finished with ${reason} in ${duration.totalTime}ms`);
   },
 };
 ```
@@ -66,11 +70,14 @@ interface Reporter {
   onTestSuiteResult?(result: TestResult): void;
   onTestCaseStart?(test: TestCaseInfo): void;
   onTestCaseResult?(result: TestResult): void;
+  onTestRunStart?(context: TestRunStartContext): MaybePromise<void>;
   onTestRunEnd?(context: TestRunEndContext): MaybePromise<void>;
   onUserConsoleLog?(log: UserConsoleLog): void;
   onExit?(): void;
 }
 ```
+
+`onTestRunStart` and `onTestRunEnd` always describe the current run only. In watch mode, reruns receive just the affected files for that rerun, not accumulated session state.
 
 ## Examples
 
@@ -80,6 +87,10 @@ interface Reporter {
 import type { Reporter } from '@rstest/core';
 
 const simpleReporter: Reporter = {
+  onTestRunStart({ testPaths, runKind }) {
+    console.log(`\n▶ ${runKind} run: ${testPaths.length} file(s)`);
+  },
+
   onTestFileStart(test) {
     console.log(`📁 ${test.testPath}`);
   },
@@ -89,10 +100,10 @@ const simpleReporter: Reporter = {
     console.log(`${status} ${result.name}`);
   },
 
-  onTestRunEnd({ results }) {
+  onTestRunEnd({ results, reason }) {
     const passed = results.filter((r) => r.status === 'pass').length;
     const failed = results.filter((r) => r.status === 'fail').length;
-    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+    console.log(`\n📊 ${passed} passed, ${failed} failed (${reason})`);
   },
 };
 ```
@@ -104,9 +115,11 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
-  onTestRunEnd({ results }) {
+  onTestRunEnd({ results, runKind, reason }) {
     const report = {
       timestamp: new Date().toISOString(),
+      runKind,
+      reason,
       results: results.map((r) => ({
         path: r.testPath,
         status: r.status,
