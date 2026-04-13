@@ -2731,7 +2731,6 @@ export const runBrowserController = async (
     await new Promise<void>((resolve, reject) => {
       const waiters =
         runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const cleanup = () => {
         const currentWaiters = runnerFramesWaiters.get(signature);
@@ -2752,7 +2751,7 @@ export const runBrowserController = async (
         resolve();
       };
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         cleanup();
         reject(
           new Error(

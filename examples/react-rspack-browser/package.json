@@ -10,8 +10,8 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@rspack/cli": "2.0.0-rc.1",
