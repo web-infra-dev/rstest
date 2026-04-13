@@ -170,7 +170,7 @@ suite('Test Progress Reporting', () => {
       createMockRun,
     );
 
-    await promise;
+    await deferred.promise;
 
     assert.equal(failedMessages.length, 0);
     assert.equal(skippedItems.length, 0);
@@ -220,7 +220,7 @@ suite('Test Progress Reporting', () => {
       createMockRun,
     );
 
-    await promise;
+    await deferred.promise;
 
     assert.match(output, /3 failed/);
     assert.match(output, /1 passed/);
@@ -231,7 +231,7 @@ suite('Test Progress Reporting', () => {
     const waitForNextRun = async () => {
       const prev = createMockRunCalledTimes;
       await waitFor(() => assert.ok(createMockRunCalledTimes > prev));
-      await promise;
+      await deferred.promise;
     };
 
     const replaceContentInFile = async (
