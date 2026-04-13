@@ -18,7 +18,7 @@
     "@rspack/cli": "2.0.0-rc.1",
     "@rspack/core": "2.0.0-beta.9",
     "@rspack/dev-server": "2.0.0-rc.2",
-    "@rspack/plugin-react-refresh": "^1.6.2",
+    "@rspack/plugin-react-refresh": "^2.0.0",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/core": "workspace:*",
     "@testing-library/dom": "^10.4.1",

@@ -727,8 +727,8 @@ importers:
         specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.21))
       '@rspack/plugin-react-refresh':
-        specifier: ^1.6.2
-        version: 1.6.2(react-refresh@0.18.0)
+        specifier: ^2.0.0
+        version: 2.0.0(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.21))(react-refresh@0.18.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
         version: link:../../packages/adapter-rspack
@@ -779,8 +779,8 @@ importers:
         specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.21))
       '@rspack/plugin-react-refresh':
-        specifier: ^1.6.2
-        version: 1.6.2(react-refresh@0.18.0)
+        specifier: ^2.0.0
+        version: 2.0.0(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.21))(react-refresh@0.18.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
         version: link:../../packages/adapter-rspack
@@ -3121,6 +3121,15 @@ packages:
       webpack-hot-middleware: 2.x
     peerDependenciesMeta:
       webpack-hot-middleware:
+        optional: true
+
+  '@rspack/plugin-react-refresh@2.0.0':
+    resolution: {integrity: sha512-Cf6CxBStNDJbiXMc/GmsvG1G8PRlUpa0MSfWsMTI+e8npzuTN/p8nwLs3shriBZOLciqgkSZpBtPTd10BLpj1g==}
+    peerDependencies:
+      '@rspack/core': ^2.0.0-0
+      react-refresh: '>=0.10.0 <1.0.0'
+    peerDependenciesMeta:
+      '@rspack/core':
         optional: true
 
   '@rspack/resolver-binding-darwin-arm64@0.2.8':
@@ -9909,6 +9918,12 @@ snapshots:
     dependencies:
       error-stack-parser: 2.1.4
       react-refresh: 0.18.0
+
+  '@rspack/plugin-react-refresh@2.0.0(@rspack/core@2.0.0-beta.9(@swc/helpers@0.5.21))(react-refresh@0.18.0)':
+    dependencies:
+      react-refresh: 0.18.0
+    optionalDependencies:
+      '@rspack/core': 2.0.0-beta.9(@swc/helpers@0.5.21)
 
   '@rspack/resolver-binding-darwin-arm64@0.2.8':
     optional: true
