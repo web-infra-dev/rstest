@@ -6,7 +6,7 @@ import { runRstestCli } from '../scripts';
 const githubWorkspace = __dirname;
 
 const expectWorkspacePath = (stepSummary: string) => {
-  expect(stepSummary).toContain('> Under path: <ROOT>');
+  expect(stepSummary).toContain('> Under path: `<ROOT>`');
 };
 
 it.skipIf(!process.env.CI)('github-actions', async () => {

@@ -79,12 +79,14 @@ export class GithubActionsReporter {
     testResults,
     duration,
     getSourcemap,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     const failures = collectFailures({
@@ -148,6 +150,7 @@ export class GithubActionsReporter {
           rootPath: this.rootPath,
           failures,
           getSourcemap,
+          unhandledErrors,
         }),
       );
     }
@@ -195,7 +198,7 @@ export function getStepSummaryDisplayPath(
     const workspacePrefixLength = normalizedWorkspacePath.endsWith('/')
       ? normalizedWorkspacePath.length
       : normalizedWorkspacePath.length + 1;
-    return normalizedRootPath.slice(workspacePrefixLength);
+    return `${ROOT_PATH_PLACEHOLDER}/${normalizedRootPath.slice(workspacePrefixLength)}`;
   }
 
   return normalizedRootPath;
@@ -212,6 +215,7 @@ async function renderStepSummary({
   rootPath,
   failures,
   getSourcemap,
+  unhandledErrors,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
@@ -219,11 +223,13 @@ async function renderStepSummary({
   rootPath: string;
   failures: FailureItem[];
   getSourcemap: GetSourcemap;
+  unhandledErrors?: Error[];
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
   const displayPath = getStepSummaryDisplayPath(rootPath);
-  const isSuccess = failures.length === 0;
+  const hasUnhandledErrors = (unhandledErrors?.length ?? 0) > 0;
+  const isSuccess = failures.length === 0 && !hasUnhandledErrors;
   const reportIcon = isSuccess ? '✅' : '❌';
   const reportTitle = `Rstest Test Reporter ${reportIcon}`;
 
@@ -232,7 +238,7 @@ async function renderStepSummary({
   lines.push(`<summary>${reportTitle}</summary>`);
   lines.push('');
   lines.push(`# ${reportTitle}`);
-  lines.push(`> Under path: ${displayPath || '<ROOT>'}`);
+  lines.push(`> Under path: \`${displayPath || ROOT_PATH_PLACEHOLDER}\``);
   lines.push('');
   pushHeading(lines, 2, 'Summary');
 
@@ -251,6 +257,21 @@ async function renderStepSummary({
 
   if (!isSuccess) {
     pushHeading(lines, 2, 'Failures');
+
+    for (let index = 0; index < (unhandledErrors?.length ?? 0); index += 1) {
+      const error = unhandledErrors?.[index];
+      if (!error) continue;
+
+      pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);
+      lines.push(
+        `**${error.name || 'Error'}**: ${trimForSummary(error.message)}`,
+      );
+      lines.push('');
+
+      if (error.stack) {
+        pushFencedBlock(lines, '', stripAnsi(trimForSummary(error.stack)));
+      }
+    }
 
     const displayedFailures = failures.slice(0, STEP_SUMMARY_MAX_FAILURES);
 
