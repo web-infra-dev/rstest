@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { relative } from 'pathe';
+import { normalize, relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
   Duration,
@@ -18,13 +18,15 @@ import {
 import { formatStack } from '../utils/error';
 import { getPlainSummaryStatusString } from './summary';
 import {
+  buildPackageManagerReproCommand,
   collectFailures,
+  detectPackageManagerAgent,
+  escapeMarkdownTableCell,
   type FailureItem,
   formatFullTestName,
   getErrorType,
   pushFencedBlock,
   pushHeading,
-  quoteShellArg,
 } from './utils';
 
 export class GithubActionsReporter {
@@ -163,6 +165,45 @@ function escapeData(s: string): string {
 
 const STEP_SUMMARY_MAX_FAILURES = 20;
 const STEP_SUMMARY_MAX_MESSAGE_LENGTH = 400;
+const ROOT_PATH_PLACEHOLDER = '<ROOT>';
+
+export function getStepSummaryDisplayPath(
+  rootPath: string,
+  githubWorkspace: string | undefined = process.env.GITHUB_WORKSPACE,
+): string {
+  const normalizedRootPath = normalize(rootPath);
+  if (!githubWorkspace) {
+    return normalizedRootPath;
+  }
+
+  const normalizedWorkspacePath = normalize(githubWorkspace);
+  const comparableRootPath =
+    normalizeForWorkspaceComparison(normalizedRootPath);
+  const comparableWorkspacePath = normalizeForWorkspaceComparison(
+    normalizedWorkspacePath,
+  );
+
+  if (comparableRootPath === comparableWorkspacePath) {
+    return ROOT_PATH_PLACEHOLDER;
+  }
+
+  const comparableWorkspacePrefix = comparableWorkspacePath.endsWith('/')
+    ? comparableWorkspacePath
+    : `${comparableWorkspacePath}/`;
+
+  if (comparableRootPath.startsWith(comparableWorkspacePrefix)) {
+    const workspacePrefixLength = normalizedWorkspacePath.endsWith('/')
+      ? normalizedWorkspacePath.length
+      : normalizedWorkspacePath.length + 1;
+    return normalizedRootPath.slice(workspacePrefixLength);
+  }
+
+  return normalizedRootPath;
+}
+
+function normalizeForWorkspaceComparison(value: string): string {
+  return /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
+}
 
 async function renderStepSummary({
   results,
@@ -180,25 +221,23 @@ async function renderStepSummary({
   getSourcemap: GetSourcemap;
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
-
-  const githubWorkspace = process.env.GITHUB_WORKSPACE;
-  const displayPath =
-    githubWorkspace && rootPath.startsWith(githubWorkspace)
-      ? rootPath === githubWorkspace
-        ? '.'
-        : rootPath.slice(githubWorkspace.length + 1)
-      : rootPath;
+  const packageManagerAgent = await detectPackageManagerAgent(rootPath);
+  const displayPath = getStepSummaryDisplayPath(rootPath);
 
   const lines: string[] = [];
   lines.push('# Rstest Test Reporter');
-  lines.push(`> Under path: ${displayPath}`);
+  lines.push(`> Workspace path: ${displayPath}`);
   lines.push('');
   pushHeading(lines, 2, 'Summary');
 
   lines.push('| | Result |');
   lines.push('| :-- | :-- |');
-  lines.push(`| **Test Files** | ${getPlainSummaryStatusString(results)} |`);
-  lines.push(`| **Tests** | ${getPlainSummaryStatusString(testResults)} |`);
+  lines.push(
+    `| **Test Files** | ${escapeMarkdownTableCell(getPlainSummaryStatusString(results))} |`,
+  );
+  lines.push(
+    `| **Tests** | ${escapeMarkdownTableCell(getPlainSummaryStatusString(testResults))} |`,
+  );
   lines.push(
     `| **Duration** | ${prettyTime(duration.totalTime)} (build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}) |`,
   );
@@ -257,9 +296,19 @@ async function renderStepSummary({
     }
 
     lines.push('<details>');
-    lines.push('<summary>Repro command</summary>');
+    lines.push(
+      '<summary>Repro command (or via your package manager)</summary>',
+    );
     lines.push('');
-    pushFencedBlock(lines, 'bash', buildReproCommand(relativePath, fullName));
+    pushFencedBlock(
+      lines,
+      'bash',
+      buildPackageManagerReproCommand(
+        relativePath,
+        fullName,
+        packageManagerAgent,
+      ),
+    );
     lines.push('</details>');
     lines.push('');
   }
@@ -273,14 +322,4 @@ function trimForSummary(input: string): string {
   }
 
   return `${input.slice(0, STEP_SUMMARY_MAX_MESSAGE_LENGTH - 1)}…`;
-}
-
-function buildReproCommand(relativePath: string, fullName: string): string {
-  const args = ['pnpm', 'exec', 'rstest', quoteShellArg(relativePath, true)];
-
-  if (fullName) {
-    args.push('--testNamePattern', quoteShellArg(fullName, true));
-  }
-
-  return args.join(' ');
 }

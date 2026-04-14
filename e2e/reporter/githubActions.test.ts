@@ -41,7 +41,7 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
     .readFileSync(stepSummaryPath, 'utf-8')
     .replaceAll(process.cwd(), '<ROOT>');
   expect(stepSummary).toContain('# Rstest Test Reporter');
-  expect(stepSummary).toContain('> Under path: <ROOT>');
+  expect(stepSummary).toContain('> Workspace path: <ROOT>');
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ❌ 1 failed |');
   expect(stepSummary).toContain('| **Tests** | ❌ 2 failed |');
@@ -123,11 +123,11 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
     .replaceAll(process.cwd(), '<ROOT>');
 
   expect(stepSummary).toContain('# Rstest Test Reporter');
-  expect(stepSummary).toContain('> Under path: <ROOT>');
+  expect(stepSummary).toContain('> Workspace path: <ROOT>');
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ✅ 2 passed |');
   expect(stepSummary).toContain(
-    '| **Tests** | ✅ 13 passed | 1 skipped (14) |',
+    '| **Tests** | ✅ 13 passed \\| 1 skipped (14) |',
   );
   expect(stepSummary).toMatch(
     /\| \*\*Duration\*\* \| \d+ms \(build \d+ms, tests \d+ms\) \|/,
@@ -137,3 +137,47 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
   fs.rmSync(stepSummaryPath, { force: true });
   fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
 });
+
+it.skipIf(!process.env.CI)(
+  'github-actions summary derives repro command from package manager',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-npm.md',
+    );
+    const packageLockPath = join(__dirname, 'package-lock.json');
+
+    fs.rmSync(stepSummaryPath, { force: true });
+    fs.writeFileSync(packageLockPath, '{}');
+
+    try {
+      const { cli } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'githubActions', '--reporter', 'github-actions'],
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+            env: {
+              GITHUB_STEP_SUMMARY: stepSummaryPath,
+            },
+          },
+        },
+      });
+
+      await cli.exec;
+      await cli.waitForStreamsEnd();
+      expect(cli.exec.process?.exitCode).toBe(1);
+
+      const stepSummary = fs.readFileSync(stepSummaryPath, 'utf-8');
+
+      expect(stepSummary).toContain(
+        "npx rstest 'fixtures/githubActions.test.ts' --testNamePattern 'should add two numbers correctly'",
+      );
+    } finally {
+      fs.rmSync(packageLockPath, { force: true });
+      fs.rmSync(stepSummaryPath, { force: true });
+      fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+    }
+  },
+);

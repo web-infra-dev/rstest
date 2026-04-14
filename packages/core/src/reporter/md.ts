@@ -82,9 +82,6 @@ import {
   type SourceMapInput,
   TraceMap,
 } from '@jridgewell/trace-mapping';
-import type { Agent } from 'package-manager-detector';
-import { resolveCommand } from 'package-manager-detector/commands';
-import { detect as detectPackageManager } from 'package-manager-detector/detect';
 import { relative, resolve } from 'pathe';
 import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
@@ -101,14 +98,15 @@ import type {
   UserConsoleLog,
 } from '../types';
 import {
+  buildPackageManagerReproCommand,
   collectFailures,
+  detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
   formatFullTestName,
   getErrorType,
   pushFencedBlock,
   pushHeading,
-  quoteShellArg,
   stringifyJson,
 } from './utils';
 
@@ -536,34 +534,14 @@ const buildReproCommand = (
   relativePath: string,
   fullName: string,
   reproMode: ResolvedOptions['reproduction'],
-  agent: Agent,
-): string => {
-  const args = ['rstest', relativePath];
-  if (reproMode === 'file+name' && fullName) {
-    args.push('--testNamePattern', fullName);
-  }
-
-  const resolved = resolveCommand(agent, 'execute-local', args);
-  if (!resolved) {
-    const formattedArgs = args
-      .map((arg) => quoteShellArg(arg, arg === relativePath))
-      .join(' ');
-    return `npx ${formattedArgs}`;
-  }
-
-  const formattedArgs = resolved.args
-    .map((arg) => quoteShellArg(arg, arg === relativePath))
-    .join(' ');
-
-  return formattedArgs.length
-    ? `${resolved.command} ${formattedArgs}`
-    : resolved.command;
-};
-
-const detectPackageManagerAgent = async (cwd: string): Promise<Agent> => {
-  const result = await detectPackageManager({ cwd });
-  return result?.agent ?? 'npm';
-};
+  agent: Parameters<typeof buildPackageManagerReproCommand>[2],
+): string =>
+  buildPackageManagerReproCommand(
+    relativePath,
+    fullName,
+    agent,
+    reproMode === 'file+name',
+  );
 
 const normalizeFilePath = (value?: string | null): string | undefined => {
   if (!value) return undefined;

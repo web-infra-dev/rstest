@@ -1,3 +1,6 @@
+import type { Agent } from 'package-manager-detector';
+import { resolveCommand } from 'package-manager-detector/commands';
+import { detect as detectPackageManager } from 'package-manager-detector/detect';
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
@@ -151,6 +154,46 @@ export const quoteShellArg = (value: string, alwaysQuote = false): string => {
     return `'${value.replace(/'/g, "'\\''")}'`;
   }
   return value;
+};
+
+export const detectPackageManagerAgent = async (
+  cwd: string,
+): Promise<Agent> => {
+  const result = await detectPackageManager({ cwd });
+  return result?.agent ?? 'npm';
+};
+
+export const buildPackageManagerReproCommand = (
+  relativePath: string,
+  fullName: string,
+  agent: Agent,
+  includeTestName = true,
+): string => {
+  const args = ['rstest', relativePath];
+
+  if (includeTestName && fullName) {
+    args.push('--testNamePattern', fullName);
+  }
+
+  const resolved = resolveCommand(agent, 'execute-local', args);
+  if (!resolved) {
+    const formattedArgs = args
+      .map((arg) => quoteShellArg(arg, arg === relativePath))
+      .join(' ');
+    return `npx ${formattedArgs}`;
+  }
+
+  const formattedArgs = resolved.args
+    .map((arg) => quoteShellArg(arg, arg === relativePath))
+    .join(' ');
+
+  return formattedArgs.length
+    ? `${resolved.command} ${formattedArgs}`
+    : resolved.command;
+};
+
+export const escapeMarkdownTableCell = (value: string): string => {
+  return value.replaceAll('|', '\\|');
 };
 
 const formatHeapUsed = (heap: number) => {
