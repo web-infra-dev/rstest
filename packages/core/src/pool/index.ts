@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join } from 'pathe';
 import type {
+  CoverageMapData,
   EntryInfo,
   FormattedError,
   ProjectContext,
@@ -148,12 +149,7 @@ export const createPool = async ({
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
-    onCoverageResult?: (
-      coverage: Record<
-        string,
-        import('istanbul-lib-coverage').FileCoverageData
-      >,
-    ) => void;
+    onCoverageResult?: (coverage: CoverageMapData) => void;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
