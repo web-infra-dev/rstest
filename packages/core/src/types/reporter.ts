@@ -144,7 +144,7 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
-export type GithubActionsReporterOptions = {
+type GithubActionsReporterOptions = {
   /**
    * Whether to output `::error` annotations for failed tests.
    * @default true
