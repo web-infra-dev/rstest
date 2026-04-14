@@ -101,7 +101,7 @@ describe('Pool - fatal error', () => {
   });
 });
 
-// ── isolate behaviour ───────────────────────────────────────────────────────
+// ── isolate behavior ───────────────────────────────────────────────────────
 
 describe('Pool - isolate', () => {
   it('should use distinct PIDs when isolate is true', async () => {
@@ -160,7 +160,7 @@ describe('Pool - isolate', () => {
 describe('Pool - exit-based lifecycle (not close)', () => {
   it('should reclaim worker slot on exit, not blocked by grandchild holding stdio', async () => {
     const pool = new Pool(createPoolOptions({ maxWorkers: 1, isolate: true }));
-    const grandchildPids: number[] = [];
+    const grandchildPidList: number[] = [];
     try {
       // Task 1: worker spawns a 30s grandchild that inherits stdout/stderr,
       // then sends its result and exits. With a `close`-based lifecycle this
@@ -171,7 +171,7 @@ describe('Pool - exit-based lifecycle (not close)', () => {
         createTask('run', { __testMode: 'spawn-orphan' }),
       );
       if ((r1 as any)._grandchildPid) {
-        grandchildPids.push((r1 as any)._grandchildPid);
+        grandchildPidList.push((r1 as any)._grandchildPid);
       }
 
       // Task 2: must start promptly after task 1's worker exits, not after
@@ -188,7 +188,7 @@ describe('Pool - exit-based lifecycle (not close)', () => {
     } finally {
       await pool.close();
       // Clean up orphaned grandchildren.
-      for (const pid of grandchildPids) {
+      for (const pid of grandchildPidList) {
         try {
           process.kill(pid);
         } catch {
@@ -230,17 +230,24 @@ describe('Pool - failure recovery', () => {
   });
 });
 
-// ── close() behaviour ──────────────────────────────────────────────────────
+// ── close() behavior ──────────────────────────────────────────────────────
 
 describe('Pool - close()', () => {
   it('should not drop in-flight task result', async () => {
-    const pool = new Pool(createPoolOptions());
+    // Use isolate: false so the warm-up run establishes a reusable worker.
+    // The slow task then dispatches instantly on the existing process,
+    // eliminating the fork+handshake race that makes timer-based
+    // synchronization unreliable on slow CI.
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    // Warm up: ensure the worker is started and idle.
+    await pool.runTest(createTask());
+
     const taskPromise = pool.runTest(
       createTask('run', { __testMode: 'slow', __delayMs: 500 }),
     );
-    // Give the worker time to fork + handshake + receive the run request.
-    // Windows CI can be slow to spawn, so use a generous delay.
-    await new Promise((r) => setTimeout(r, 200));
+    // The reused worker receives the run request on an already-open IPC
+    // channel, so a short delay is enough for the message to arrive.
+    await new Promise((r) => setTimeout(r, 50));
     const closePromise = pool.close();
     // The task should still resolve (worker sends result before stopping).
     const result = await taskPromise;

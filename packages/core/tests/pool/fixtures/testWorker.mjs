@@ -1,7 +1,7 @@
 /**
  * Minimal worker that speaks the pool protocol without Rsbuild.
  *
- * Behaviour is controlled by `request.options.__testMode`:
+ * Behavior is controlled by `request.options.__testMode`:
  *   - undefined / 'normal' → immediate success result
  *   - 'slow'               → delay `__delayMs` ms then succeed
  *   - 'fatal'              → send `fatal_error` then exit(1)
@@ -36,7 +36,7 @@ const makeRunResult = (request, extra) => ({
   status: 'pass',
   name: '',
   results: [],
-  // Test-only fields so the test can verify pool behaviour.
+  // Test-only fields so the test can verify pool behavior.
   _workerPid: process.pid,
   _runCount: ++runCount,
   ...extra,
