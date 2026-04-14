@@ -1,9 +1,9 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
+import type { CoverageMapData } from './coverage';
 import type {
   TestCaseInfo,
-  TestFileCoverageResult,
   TestFileInfo,
   TestFileResult,
   TestResult,
@@ -216,7 +216,7 @@ export interface Reporter {
    */
   onTestRunEnd?: ({
     results,
-    coverageResults,
+    coverage,
     testResults,
     duration,
     getSourcemap,
@@ -224,7 +224,7 @@ export interface Reporter {
     unhandledErrors,
   }: {
     results: TestFileResult[];
-    coverageResults?: TestFileCoverageResult[];
+    coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;

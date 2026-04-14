@@ -1,12 +1,8 @@
 import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type {
-  EntryInfo,
-  ProjectEntries,
-  SourceMapInput,
-  TestFileCoverageResult,
-} from '../types';
+import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
+import type { CoverageMap } from '../types/coverage';
 import {
   clearScreen,
   color,
@@ -91,12 +87,14 @@ export async function runTests(context: Rstest): Promise<void> {
         context.rootPath,
       );
       if (coverageProvider) {
+        const browserCoverageMap = coverageProvider.createCoverageMap();
+        for (const result of browserResult.results) {
+          if (result.coverage) {
+            browserCoverageMap.merge(result.coverage);
+          }
+        }
         const { generateCoverage } = await import('../coverage/generate');
-        await generateCoverage(
-          context,
-          browserResult.results,
-          coverageProvider,
-        );
+        await generateCoverage(context, browserCoverageMap, coverageProvider);
       }
     }
 
@@ -332,6 +330,10 @@ export async function runTests(context: Rstest): Promise<void> {
     // TODO: this is not the best practice for collecting test files
     context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
 
+    const mergedCoverageMap: CoverageMap | undefined = coverageProvider
+      ? coverageProvider.createCoverageMap()
+      : undefined;
+
     const returns = await Promise.all(
       projects.map(async (p) => {
         const {
@@ -371,7 +373,6 @@ export async function runTests(context: Rstest): Promise<void> {
           });
           if (!success) {
             return {
-              coverageResults: [],
               results: [],
               testResults: [],
               errors,
@@ -413,17 +414,17 @@ export async function runTests(context: Rstest): Promise<void> {
         }
 
         currentEntries.push(...finalEntries);
-        const { coverageResults, results, testResults } = await pool.runTests({
+        const { results, testResults } = await pool.runTests({
           entries: finalEntries,
           getSourceMaps,
           setupEntries,
           getAssetFiles,
           project: p,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
         });
 
         return {
-          coverageResults,
           results,
           testResults,
           assetNames,
@@ -486,9 +487,6 @@ export async function runTests(context: Rstest): Promise<void> {
             };
 
       const results = returns.flatMap((r) => r.results);
-      const coverageResults: TestFileCoverageResult[] = returns.flatMap(
-        (r) => r.coverageResults || [],
-      );
       const testResults = returns.flatMap((r) => r.testResults);
       const errors = returns.flatMap((r) => r.errors || []);
 
@@ -501,11 +499,7 @@ export async function runTests(context: Rstest): Promise<void> {
         // same as the node-side pool layer does via `delete result.coverage`
         for (const r of browserResult.results) {
           if (r.coverage) {
-            coverageResults.push({
-              testPath: r.testPath,
-              project: r.project,
-              coverage: r.coverage,
-            });
+            mergedCoverageMap?.merge(r.coverage);
             delete r.coverage;
           }
         }
@@ -584,7 +578,7 @@ export async function runTests(context: Rstest): Promise<void> {
       for (const reporter of reporters) {
         await reporter.onTestRunEnd?.({
           results: context.reporterResults.results,
-          coverageResults,
+          coverage: mergedCoverageMap?.toJSON(),
           testResults: context.reporterResults.testResults,
           unhandledErrors: errors,
           snapshotSummary: snapshotManager.summary,
@@ -600,7 +594,7 @@ export async function runTests(context: Rstest): Promise<void> {
       if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
         const { generateCoverage } = await import('../coverage/generate');
 
-        await generateCoverage(context, coverageResults, coverageProvider);
+        await generateCoverage(context, mergedCoverageMap!, coverageProvider);
       }
 
       if (isFailure) {

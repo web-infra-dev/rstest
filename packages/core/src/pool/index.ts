@@ -10,7 +10,6 @@ import type {
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
-  TestFileCoverageResult,
   TestFileInfo,
   TestFileResult,
   TestInfo,
@@ -148,8 +147,14 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
+    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+    onCoverageResult?: (
+      coverage: Record<
+        string,
+        import('istanbul-lib-coverage').FileCoverageData
+      >,
+    ) => void;
   }) => Promise<{
-    coverageResults: TestFileCoverageResult[];
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
@@ -303,11 +308,11 @@ export const createPool = async ({
       setupEntries,
       project,
       updateSnapshot,
+      onCoverageResult,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
-      const coverageResults: TestFileCoverageResult[] = [];
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
@@ -389,11 +394,7 @@ export const createPool = async ({
               } as TestFileResult;
             });
           if (result.coverage) {
-            coverageResults.push({
-              testPath: result.testPath,
-              project: result.project,
-              coverage: result.coverage,
-            });
+            onCoverageResult?.(result.coverage);
             delete result.coverage;
           }
           context.stateManager.onTestFileResult(result);
@@ -410,7 +411,7 @@ export const createPool = async ({
 
       const testResults = results.flatMap((r) => r.results);
 
-      return { coverageResults, results, testResults, project };
+      return { results, testResults, project };
     },
     collectTests: async ({
       entries,
