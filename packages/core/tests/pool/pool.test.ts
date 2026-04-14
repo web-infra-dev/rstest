@@ -236,10 +236,11 @@ describe('Pool - close()', () => {
   it('should not drop in-flight task result', async () => {
     const pool = new Pool(createPoolOptions());
     const taskPromise = pool.runTest(
-      createTask('run', { __testMode: 'slow', __delayMs: 200 }),
+      createTask('run', { __testMode: 'slow', __delayMs: 500 }),
     );
-    // Give the worker time to start, then close the pool.
-    await new Promise((r) => setTimeout(r, 50));
+    // Give the worker time to fork + handshake + receive the run request.
+    // Windows CI can be slow to spawn, so use a generous delay.
+    await new Promise((r) => setTimeout(r, 200));
     const closePromise = pool.close();
     // The task should still resolve (worker sends result before stopping).
     const result = await taskPromise;

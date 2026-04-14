@@ -25,7 +25,9 @@ type GlobalSetupResponse = {
   result: any;
 };
 
-const isGlobalSetupResponse = (value: unknown): value is GlobalSetupResponse => {
+const isGlobalSetupResponse = (
+  value: unknown,
+): value is GlobalSetupResponse => {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -45,25 +47,21 @@ class GlobalSetupWorker {
   start(): ChildProcess {
     if (this.child) return this.child;
 
-    const child = fork(
-      resolve(__dirname, './globalSetupWorker.js'),
-      [],
-      {
-        execArgv: [
-          ...process.execArgv,
-          '--experimental-vm-modules',
-          '--experimental-import-meta-resolve',
-          '--no-warnings',
-        ],
-        env: {
-          NODE_ENV: 'test',
-          ...getForceColorEnv(),
-          ...process.env,
-        } as NodeJS.ProcessEnv,
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        serialization: 'advanced',
-      },
-    );
+    const child = fork(resolve(__dirname, './globalSetupWorker.js'), [], {
+      execArgv: [
+        ...process.execArgv,
+        '--experimental-vm-modules',
+        '--experimental-import-meta-resolve',
+        '--no-warnings',
+      ],
+      env: {
+        NODE_ENV: 'test',
+        ...getForceColorEnv(),
+        ...process.env,
+      } as NodeJS.ProcessEnv,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      serialization: 'advanced',
+    });
 
     child.stdout?.on('data', (chunk: Buffer) => process.stdout.write(chunk));
     child.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
@@ -89,7 +87,9 @@ class GlobalSetupWorker {
     return child;
   }
 
-  call<T>(payload: { type: 'setup'; payload: any } | { type: 'teardown' }): Promise<T> {
+  call<T>(
+    payload: { type: 'setup'; payload: any } | { type: 'teardown' },
+  ): Promise<T> {
     const child = this.start();
     const id = ++this.nextId;
     return new Promise<T>((resolve, reject) => {

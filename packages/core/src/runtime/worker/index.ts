@@ -1,9 +1,9 @@
 import './setup';
 import {
-  type WorkerRequest,
-  type WorkerResponse,
   isWorkerRequestEnvelope,
   serializeError,
+  type WorkerRequest,
+  type WorkerResponse,
   wrapWorkerResponse,
 } from '../../pool/protocol';
 import { runInPool } from './runInPool';
