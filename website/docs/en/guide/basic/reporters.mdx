@@ -198,6 +198,12 @@ These outputs are parsed by GitHub Actions and generate comments at the correspo
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
+When `GITHUB_STEP_SUMMARY` is available (GitHub Actions sets this automatically), Rstest also appends a Markdown summary that includes:
+
+- a test summary table (files/tests/duration)
+- failure sections with error message, diff, and stack trace
+- repro commands for each failed test
+
 #### Auto-enablement
 
 When no reporter is manually set, Rstest automatically enables this reporter when it detects a GitHub Actions environment (`process.env.GITHUB_ACTIONS` is `'true'`).
@@ -222,6 +228,21 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+#### Options
+
+| Option        | Type      | Default | Description                                                    |
+| :------------ | :-------- | :------ | :------------------------------------------------------------- |
+| `annotations` | `boolean` | `true`  | Whether to output `::error` annotations for failed tests.      |
+| `summary`     | `boolean` | `true`  | Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`. |
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['github-actions', { annotations: true, summary: false }]],
+});
+```
 
 ### JUnit reporter
 

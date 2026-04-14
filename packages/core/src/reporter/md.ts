@@ -100,6 +100,17 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
+import {
+  collectFailures,
+  ensureSingleBlankLine,
+  type FailureItem,
+  formatFullTestName,
+  getErrorType,
+  pushFencedBlock,
+  pushHeading,
+  quoteShellArg,
+  stringifyJson,
+} from './utils';
 
 type HeaderOptions = {
   env: boolean;
@@ -164,19 +175,12 @@ type CodeFrameOptions = {
   column?: number;
 };
 
-type FailureItem = {
-  test: TestResult;
-  errors: FormattedError[];
-};
-
 type FormattedStackFrame = {
   file?: string;
   line?: number;
   column?: number;
   method?: string;
 };
-
-type FormattedError = NonNullable<TestResult['errors']>[number];
 
 const require = createRequire(import.meta.url);
 
@@ -344,11 +348,6 @@ export const resolveOptions = (
   };
 };
 
-const formatFullTestName = (test: Pick<TestResult, 'name' | 'parentNames'>) => {
-  const names = (test.parentNames || []).concat(test.name).filter(Boolean);
-  return names.join(' > ');
-};
-
 const formatFailureTitle = (
   failure: FailureItem,
   index: number,
@@ -397,26 +396,6 @@ const formatFailureListValue = (value: unknown): string => {
     toSingleLine(cleanString(raw)),
     FAILURE_LIST_VALUE_MAX_CHARS,
   );
-};
-
-const getErrorType = (
-  error: Pick<FormattedError, 'name' | 'message'>,
-): string => {
-  const rawName = error.name || 'Error';
-
-  if (rawName.includes('AssertionError')) {
-    return 'AssertionError';
-  }
-
-  // @vitest/snapshot mismatch errors are often plain `Error` with a message like:
-  // - "Snapshot `...` mismatched"
-  // - "Snapshot mismatched"
-  // - "Snapshot properties mismatched"
-  if (/\bSnapshot\b.*\bmismatched\b/i.test(error.message)) {
-    return 'SnapshotMismatchError';
-  }
-
-  return rawName;
 };
 
 const formatPath = (
@@ -504,45 +483,6 @@ const resolveStackPayload = ({
   };
 };
 
-const collectFailures = ({
-  results,
-  testResults,
-  filterRerunTestPaths,
-}: {
-  results: TestFileResult[];
-  testResults: TestResult[];
-  filterRerunTestPaths?: string[];
-}): FailureItem[] => {
-  const shouldIncludePath = (testPath: string) =>
-    filterRerunTestPaths ? filterRerunTestPaths.includes(testPath) : true;
-
-  const failures: FailureItem[] = [];
-
-  for (const result of results) {
-    if (
-      result.status === 'fail' &&
-      result.errors?.length &&
-      shouldIncludePath(result.testPath)
-    ) {
-      failures.push({
-        test: result,
-        errors: result.errors,
-      });
-    }
-  }
-
-  for (const result of testResults) {
-    if (result.status === 'fail' && shouldIncludePath(result.testPath)) {
-      failures.push({
-        test: result,
-        errors: result.errors || [],
-      });
-    }
-  }
-
-  return failures;
-};
-
 const formatConsoleLog = (
   log: UserConsoleLog,
   options: Pick<ResolvedOptions, 'console'>,
@@ -580,35 +520,6 @@ const buildCandidateFiles = (
     .map(([path, meta]) => ({ path, line: meta.line }));
 };
 
-const stringifyJson = (value: unknown): string =>
-  JSON.stringify(value, null, 2);
-
-const ensureSingleBlankLine = (lines: string[]): void => {
-  if (lines.length === 0) return;
-  while (lines.length > 0 && lines[lines.length - 1] === '') {
-    lines.pop();
-  }
-  lines.push('');
-};
-
-const pushHeading = (lines: string[], level: 1 | 2 | 3, text: string): void => {
-  ensureSingleBlankLine(lines);
-  lines.push(`${'#'.repeat(level)} ${text}`);
-  lines.push('');
-};
-
-const pushFencedBlock = (
-  lines: string[],
-  lang: string,
-  content: string,
-): void => {
-  ensureSingleBlankLine(lines);
-  lines.push(`\`\`\`${lang}`);
-  lines.push(content);
-  lines.push('```');
-  lines.push('');
-};
-
 const stringifyYamlValue = (value: unknown): string => {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
@@ -619,18 +530,6 @@ const stringifyYamlValue = (value: unknown): string => {
     return JSON.stringify(value);
   }
   return JSON.stringify(value);
-};
-
-/**
- * Quotes a shell argument. When `alwaysQuote` is true, the value is always
- * wrapped in single quotes (useful for file paths that may contain spaces).
- */
-const quoteShellArg = (value: string, alwaysQuote = false): string => {
-  if (value.length === 0) return "''";
-  if (alwaysQuote || /[^A-Za-z0-9_\-./]/.test(value)) {
-    return `'${value.replace(/'/g, "'\\''")}'`;
-  }
-  return value;
 };
 
 const buildReproCommand = (

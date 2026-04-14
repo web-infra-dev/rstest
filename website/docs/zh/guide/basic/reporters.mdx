@@ -196,6 +196,12 @@ export default defineConfig({
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
+当存在 `GITHUB_STEP_SUMMARY`（GitHub Actions 会自动注入）时，Rstest 还会追加一份 Markdown 摘要，包含：
+
+- 测试汇总表（files/tests/duration）
+- 失败用例详情（错误信息、diff、错误堆栈）
+- 每个失败用例的复现命令
+
 #### 自动启用
 
 当没有手动设置报告器时，Rstest 在检测到 GitHub Actions 环境（`process.env.GITHUB_ACTIONS` 为 `'true'`）时会自动启用此报告器。
@@ -220,6 +226,21 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+#### 选项
+
+| 选项          | 类型      | 默认值 | 说明                                              |
+| :------------ | :-------- | :----- | :------------------------------------------------ |
+| `annotations` | `boolean` | `true` | 是否为失败的测试输出 `::error` 注解。             |
+| `summary`     | `boolean` | `true` | 是否向 `GITHUB_STEP_SUMMARY` 追加 Markdown 摘要。 |
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['github-actions', { annotations: true, summary: false }]],
+});
+```
 
 ### JUnit 报告器
 
