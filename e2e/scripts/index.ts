@@ -180,7 +180,7 @@ export async function runRstestCli({
   (onTestFailed || onRstestFailed)?.(({ task }) => {
     if (task.result?.errors?.[0]) {
       task.result.errors![0]!.message +=
-        `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
+        `\n\n--- CLI Log Start ---\n\`\`\`text\n${cli.log}\n\`\`\`\n--- CLI Log End ---\n`;
     }
   });
 

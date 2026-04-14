@@ -232,7 +232,7 @@ async function renderStepSummary({
   lines.push(`<summary>${reportTitle}</summary>`);
   lines.push('');
   lines.push(`# ${reportTitle}`);
-  lines.push(`> Workspace path: ${displayPath}`);
+  lines.push(`> Under path: ${displayPath || '<ROOT>'}`);
   lines.push('');
   pushHeading(lines, 2, 'Summary');
 

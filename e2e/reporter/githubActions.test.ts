@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
+const githubWorkspace = __dirname;
+
+const expectWorkspacePath = (stepSummary: string) => {
+  expect(stepSummary).toContain('> Under path: <ROOT>');
+};
+
 it.skipIf(!process.env.CI)('github-actions', async () => {
   const stepSummaryPath = join(__dirname, '.tmp', 'github-step-summary.md');
   fs.rmSync(stepSummaryPath, { force: true });
@@ -14,6 +20,7 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
       nodeOptions: {
         cwd: __dirname,
         env: {
+          GITHUB_WORKSPACE: githubWorkspace,
           GITHUB_STEP_SUMMARY: stepSummaryPath,
         },
       },
@@ -43,7 +50,7 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
   expect(stepSummary).toContain('<details open>');
   expect(stepSummary).toContain('<summary>Rstest Test Reporter ❌</summary>');
   expect(stepSummary).toContain('# Rstest Test Reporter ❌');
-  expect(stepSummary).toContain('> Workspace path: <ROOT>');
+  expectWorkspacePath(stepSummary);
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ❌ 1 failed |');
   expect(stepSummary).toContain('| **Tests** | ❌ 2 failed |');
@@ -102,6 +109,7 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
       nodeOptions: {
         cwd: __dirname,
         env: {
+          GITHUB_WORKSPACE: githubWorkspace,
           GITHUB_STEP_SUMMARY: stepSummaryPath,
         },
       },
@@ -128,7 +136,7 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
   expect(stepSummary).not.toContain('<details open>');
   expect(stepSummary).toContain('<summary>Rstest Test Reporter ✅</summary>');
   expect(stepSummary).toContain('# Rstest Test Reporter ✅');
-  expect(stepSummary).toContain('> Workspace path: <ROOT>');
+  expectWorkspacePath(stepSummary);
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ✅ 2 passed |');
   expect(stepSummary).toContain(
@@ -164,6 +172,7 @@ it.skipIf(!process.env.CI)(
           nodeOptions: {
             cwd: __dirname,
             env: {
+              GITHUB_WORKSPACE: githubWorkspace,
               GITHUB_STEP_SUMMARY: stepSummaryPath,
             },
           },
@@ -210,6 +219,7 @@ it.skipIf(!process.env.CI)(
         nodeOptions: {
           cwd: __dirname,
           env: {
+            GITHUB_WORKSPACE: githubWorkspace,
             GITHUB_STEP_SUMMARY: stepSummaryPath,
           },
         },
@@ -227,6 +237,7 @@ it.skipIf(!process.env.CI)(
         nodeOptions: {
           cwd: __dirname,
           env: {
+            GITHUB_WORKSPACE: githubWorkspace,
             GITHUB_STEP_SUMMARY: stepSummaryPath,
           },
         },
