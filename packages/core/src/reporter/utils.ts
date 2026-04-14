@@ -148,7 +148,7 @@ export const collectFailures = ({
   return failures;
 };
 
-export const quoteShellArg = (value: string, alwaysQuote = false): string => {
+const quoteShellArg = (value: string, alwaysQuote = false): string => {
   if (value.length === 0) return "''";
   if (alwaysQuote || /[^A-Za-z0-9_\-./]/.test(value)) {
     return `'${value.replace(/'/g, "'\\''")}'`;
