@@ -38,7 +38,7 @@ describe('mergeRstestConfig', () => {
       },
     });
 
-    expect(merged.output?.distPath?.root).toBe('custom/.rstest-temp');
+    expect(merged.output?.distPath?.root).toBe('custom/.rstest-temp1111');
     expect(merged.exclude.patterns).toContain('**/custom/.rstest-temp');
   });
 

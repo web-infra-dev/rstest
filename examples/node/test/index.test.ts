@@ -7,6 +7,6 @@ describe('Index', () => {
   });
 
   it('should test source code correctly', () => {
-    expect(sayHi()).toBe('hi');
+    expect(sayHi()).toBe('hii');
   });
 });
