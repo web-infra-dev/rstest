@@ -40,7 +40,9 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
   const stepSummary = fs
     .readFileSync(stepSummaryPath, 'utf-8')
     .replaceAll(process.cwd(), '<ROOT>');
-  expect(stepSummary).toContain('# Rstest Test Reporter');
+  expect(stepSummary).toContain('<details open>');
+  expect(stepSummary).toContain('<summary>Rstest Test Reporter ❌</summary>');
+  expect(stepSummary).toContain('# Rstest Test Reporter ❌');
   expect(stepSummary).toContain('> Workspace path: <ROOT>');
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ❌ 1 failed |');
@@ -122,7 +124,10 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
     .readFileSync(stepSummaryPath, 'utf-8')
     .replaceAll(process.cwd(), '<ROOT>');
 
-  expect(stepSummary).toContain('# Rstest Test Reporter');
+  expect(stepSummary).toContain('<details>');
+  expect(stepSummary).not.toContain('<details open>');
+  expect(stepSummary).toContain('<summary>Rstest Test Reporter ✅</summary>');
+  expect(stepSummary).toContain('# Rstest Test Reporter ✅');
   expect(stepSummary).toContain('> Workspace path: <ROOT>');
   expect(stepSummary).toContain('## Summary');
   expect(stepSummary).toContain('| **Test Files** | ✅ 2 passed |');
@@ -179,5 +184,69 @@ it.skipIf(!process.env.CI)(
       fs.rmSync(stepSummaryPath, { force: true });
       fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
     }
+  },
+);
+
+it.skipIf(!process.env.CI)(
+  'github-actions summary groups multiple runs with collapsible sections',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-multi.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    const passingRun = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        './rstest.agentMd.pass.config.mts',
+        '--reporter',
+        'github-actions',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            GITHUB_STEP_SUMMARY: stepSummaryPath,
+          },
+        },
+      },
+    });
+
+    await passingRun.cli.exec;
+    await passingRun.cli.waitForStreamsEnd();
+    expect(passingRun.cli.exec.process?.exitCode).toBe(0);
+
+    const failingRun = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            GITHUB_STEP_SUMMARY: stepSummaryPath,
+          },
+        },
+      },
+    });
+
+    await failingRun.cli.exec;
+    await failingRun.cli.waitForStreamsEnd();
+    expect(failingRun.cli.exec.process?.exitCode).toBe(1);
+
+    const stepSummary = fs
+      .readFileSync(stepSummaryPath, 'utf-8')
+      .replaceAll(process.cwd(), '<ROOT>');
+
+    expect(stepSummary).toContain('<summary>Rstest Test Reporter ✅</summary>');
+    expect(stepSummary).toContain('<summary>Rstest Test Reporter ❌</summary>');
+    expect(stepSummary.match(/<details>/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(stepSummary.match(/<details open>/g)?.length).toBe(1);
+
+    fs.rmSync(stepSummaryPath, { force: true });
+    fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
   },
 );

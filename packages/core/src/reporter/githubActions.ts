@@ -223,9 +223,15 @@ async function renderStepSummary({
   const { parseErrorStacktrace } = await import('../utils/error');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
   const displayPath = getStepSummaryDisplayPath(rootPath);
+  const isSuccess = failures.length === 0;
+  const reportIcon = isSuccess ? '✅' : '❌';
+  const reportTitle = `Rstest Test Reporter ${reportIcon}`;
 
   const lines: string[] = [];
-  lines.push('# Rstest Test Reporter');
+  lines.push(isSuccess ? '<details>' : '<details open>');
+  lines.push(`<summary>${reportTitle}</summary>`);
+  lines.push('');
+  lines.push(`# ${reportTitle}`);
   lines.push(`> Workspace path: ${displayPath}`);
   lines.push('');
   pushHeading(lines, 2, 'Summary');
@@ -243,75 +249,76 @@ async function renderStepSummary({
   );
   lines.push('');
 
-  if (failures.length === 0) {
-    return `${lines.join('\n')}\n`;
-  }
+  if (!isSuccess) {
+    pushHeading(lines, 2, 'Failures');
 
-  pushHeading(lines, 2, 'Failures');
+    const displayedFailures = failures.slice(0, STEP_SUMMARY_MAX_FAILURES);
 
-  const displayedFailures = failures.slice(0, STEP_SUMMARY_MAX_FAILURES);
-
-  if (failures.length > STEP_SUMMARY_MAX_FAILURES) {
-    lines.push(
-      `Showing first ${STEP_SUMMARY_MAX_FAILURES} of ${failures.length} failures.`,
-    );
-    lines.push('');
-  }
-
-  for (let index = 0; index < displayedFailures.length; index += 1) {
-    const failure = displayedFailures[index];
-    if (!failure) continue;
-
-    const { test, errors } = failure;
-    const relativePath = relative(rootPath, test.testPath);
-    const fullName = formatFullTestName(test);
-    const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
-    pushHeading(lines, 3, `❌ FAIL ${title}`);
-
-    for (const error of errors.length
-      ? errors
-      : [{ message: 'Unknown error' }]) {
-      const errorType = getErrorType(error);
-      const message = trimForSummary(error.message);
-      lines.push(`**${errorType}**: ${message}`);
+    if (failures.length > STEP_SUMMARY_MAX_FAILURES) {
+      lines.push(
+        `Showing first ${STEP_SUMMARY_MAX_FAILURES} of ${failures.length} failures.`,
+      );
       lines.push('');
-
-      if (error.diff) {
-        pushFencedBlock(lines, 'diff', stripAnsi(trimForSummary(error.diff)));
-      }
-
-      if (error.stack) {
-        const stackFrames = await parseErrorStacktrace({
-          stack: error.stack,
-          fullStack: error.fullStack,
-          getSourcemap,
-        });
-        if (stackFrames.length > 0) {
-          const stackLines = stackFrames.map((frame) =>
-            stripAnsi(formatStack(frame, rootPath)),
-          );
-          pushFencedBlock(lines, '', stackLines.join('\n'));
-        }
-      }
     }
 
-    lines.push('<details>');
-    lines.push(
-      '<summary>Repro command (or via your package manager)</summary>',
-    );
-    lines.push('');
-    pushFencedBlock(
-      lines,
-      'bash',
-      buildPackageManagerReproCommand(
-        relativePath,
-        fullName,
-        packageManagerAgent,
-      ),
-    );
-    lines.push('</details>');
-    lines.push('');
+    for (let index = 0; index < displayedFailures.length; index += 1) {
+      const failure = displayedFailures[index];
+      if (!failure) continue;
+
+      const { test, errors } = failure;
+      const relativePath = relative(rootPath, test.testPath);
+      const fullName = formatFullTestName(test);
+      const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
+      pushHeading(lines, 3, `❌ FAIL ${title}`);
+
+      for (const error of errors.length
+        ? errors
+        : [{ message: 'Unknown error' }]) {
+        const errorType = getErrorType(error);
+        const message = trimForSummary(error.message);
+        lines.push(`**${errorType}**: ${message}`);
+        lines.push('');
+
+        if (error.diff) {
+          pushFencedBlock(lines, 'diff', stripAnsi(trimForSummary(error.diff)));
+        }
+
+        if (error.stack) {
+          const stackFrames = await parseErrorStacktrace({
+            stack: error.stack,
+            fullStack: error.fullStack,
+            getSourcemap,
+          });
+          if (stackFrames.length > 0) {
+            const stackLines = stackFrames.map((frame) =>
+              stripAnsi(formatStack(frame, rootPath)),
+            );
+            pushFencedBlock(lines, '', stackLines.join('\n'));
+          }
+        }
+      }
+
+      lines.push('<details>');
+      lines.push(
+        '<summary>Repro command (or via your package manager)</summary>',
+      );
+      lines.push('');
+      pushFencedBlock(
+        lines,
+        'bash',
+        buildPackageManagerReproCommand(
+          relativePath,
+          fullName,
+          packageManagerAgent,
+        ),
+      );
+      lines.push('</details>');
+      lines.push('');
+    }
   }
+
+  lines.push('</details>');
+  lines.push('');
 
   return `${lines.join('\n')}\n`;
 }
