@@ -1,8 +1,8 @@
-import type { CollectTaskResult } from './protocol';
+import type { TestFileResult } from '../types';
 import { PoolRunner } from './poolRunner';
+import type { CollectTaskResult } from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
-import type { TestFileResult } from '../types';
 
 let nextWorkerId = 0;
 
@@ -94,7 +94,7 @@ export class Pool {
       // Spawn a fresh runner. We claim the slot by inserting the runner into
       // activeRunners up-front; on start failure we drop it and wake a waiter.
       const workerId = ++nextWorkerId;
-      const worker = createPoolWorker(task, this.options);
+      const worker = createPoolWorker(task, this.options, workerId);
       const runner = new PoolRunner(worker, { workerId });
       this.activeRunners.add(runner);
       try {

@@ -1,10 +1,4 @@
-import type {
-  FormattedError,
-  RunWorkerOptions,
-  RuntimeRPC,
-  Test,
-  TestFileResult,
-} from '../types';
+import type { RuntimeRPC, RunWorkerOptions } from '../types';
 
 export type PoolWorkerKind = 'forks';
 
@@ -23,14 +17,3 @@ export type PoolOptions = {
   env?: Record<string, string>;
   execArgv?: string[];
 };
-
-export type PoolRunResult = TestFileResult;
-
-export type PoolCollectResult = {
-  tests: Test[];
-  testPath: string;
-  project: string;
-  errors?: FormattedError[];
-};
-
-export type PoolTaskResult = PoolRunResult | PoolCollectResult;

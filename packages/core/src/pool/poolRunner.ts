@@ -3,10 +3,10 @@ import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
-  type WorkerResponse,
   deserializeError,
   isRpcEnvelope,
   isWorkerResponseEnvelope,
+  type WorkerResponse,
   wrapRpc,
 } from './protocol';
 import type { PoolTask } from './types';

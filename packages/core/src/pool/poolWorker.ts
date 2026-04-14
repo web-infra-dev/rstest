@@ -26,8 +26,14 @@ export interface PoolWorker {
   send(request: WorkerRequest): void;
   /** Raw envelope path, used by birpc RPC passthrough. */
   sendRaw(envelope: Envelope): void;
-  on<E extends PoolWorkerEventName>(event: E, listener: PoolWorkerEvents[E]): void;
-  off<E extends PoolWorkerEventName>(event: E, listener: PoolWorkerEvents[E]): void;
+  on<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void;
+  off<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void;
   /** Captured stderr buffer for crash enrichment. */
   getCapturedStderr(): string;
   /**

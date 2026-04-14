@@ -1,18 +1,16 @@
-import type { PoolOptions, PoolTask } from '../types';
 import type { PoolWorker } from '../poolWorker';
+import type { PoolOptions, PoolTask } from '../types';
 import { ForksPoolWorker } from './forksPoolWorker';
-
-let nextWorkerSeq = 0;
 
 export function createPoolWorker(
   task: PoolTask,
   options: PoolOptions,
+  workerId: number,
 ): PoolWorker {
   switch (task.worker) {
     case 'forks': {
-      const seq = ++nextWorkerSeq;
       return new ForksPoolWorker({
-        name: `forks-${seq}`,
+        name: `forks-${workerId}`,
         filename: options.workerEntry,
         env: options.env,
         execArgv: options.execArgv,

@@ -1,8 +1,4 @@
-import {
-  type ChildProcess,
-  type ForkOptions,
-  fork,
-} from 'node:child_process';
+import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import EventEmitter from 'node:events';
 import type {
   PoolWorker,
@@ -128,14 +124,16 @@ export class ForksPoolWorker implements PoolWorker {
         settleReject(err);
       });
 
-      // Listen to `close`, not `exit`. Node emits `exit` as soon as the
-      // child process exits, but its stdio streams may still be draining —
-      // native crashes / V8 aborts / large final stack dumps arrive on
-      // stderr after `exit`. `close` fires after both the process has
-      // ended *and* all stdio streams have closed, which is when the
-      // captured stderr buffer is truly complete. Node guarantees `close`
-      // fires after `exit` (or after `error` for spawn failures).
-      child.on('close', (code, signal) => {
+      // Use `exit`, not `close`. `close` waits for all processes holding
+      // the stdio pipes to release them — if a test spawns a subprocess
+      // that inherits the worker's stdout/stderr, `close` blocks until
+      // that grandchild exits too, stalling slot reclaim and potentially
+      // hanging the pool until WORKER_STOP_TIMEOUT_MS force-kills.
+      // `exit` fires as soon as the worker process itself exits, which
+      // is what the pool lifecycle actually cares about. The stderr
+      // `data` listener above already captures output incrementally, so
+      // the buffer is nearly complete by the time `exit` fires.
+      child.on('exit', (code, signal) => {
         this.exited = true;
         this.emitter.emit('exit', code, signal);
         settleReject(
@@ -155,7 +153,7 @@ export class ForksPoolWorker implements PoolWorker {
 
   async stop(options?: { force?: boolean }): Promise<void> {
     if (!this.hasLiveChild()) return;
-    await this.signalAndAwaitClose(options?.force ? 'SIGKILL' : 'SIGTERM');
+    await this.signalAndAwaitExit(options?.force ? 'SIGKILL' : 'SIGTERM');
   }
 
   send(request: WorkerRequest): void {
@@ -212,24 +210,24 @@ export class ForksPoolWorker implements PoolWorker {
   }
 
   /**
-   * Send a termination signal to the child and wait for the final `close`
-   * event. If `child.kill` throws (ESRCH or benign IPC tear-down), we treat
-   * the child as already gone and resolve immediately rather than deadlock
-   * on an event that will never arrive.
+   * Send a termination signal to the child and wait for the `exit` event.
+   * If `child.kill` throws (ESRCH or benign IPC tear-down), we treat the
+   * child as already gone and resolve immediately rather than deadlock on
+   * an event that will never arrive.
    */
-  private signalAndAwaitClose(signal: NodeJS.Signals): Promise<void> {
+  private signalAndAwaitExit(signal: NodeJS.Signals): Promise<void> {
     return new Promise<void>((resolve) => {
       const child = this.childProcess;
       if (!child || this.exited) {
         resolve();
         return;
       }
-      const onClose = () => resolve();
-      child.once('close', onClose);
+      const onExit = () => resolve();
+      child.once('exit', onExit);
       try {
         child.kill(signal);
       } catch (err) {
-        child.off('close', onClose);
+        child.off('exit', onExit);
         if (!isBenignIpcError(err)) {
           // ignore: best-effort shutdown
         }
