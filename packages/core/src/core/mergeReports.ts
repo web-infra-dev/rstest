@@ -97,22 +97,12 @@ function mergeDurations(durations: Duration[]): Duration {
 }
 
 function mergeBlobCoverage(blob: BlobData, coverageMap: CoverageMap): boolean {
-  if (blob.coverage) {
-    coverageMap.merge(blob.coverage);
-    return true;
+  if (!blob.coverage) {
+    return false;
   }
 
-  // Fallback: browser-only blobs may not have a top-level `coverage` field
-  // because hostController.ts calls onTestRunEnd without it. Extract coverage
-  // from individual results instead.
-  let found = false;
-  for (const result of blob.results) {
-    if (result.coverage) {
-      coverageMap.merge(result.coverage);
-      found = true;
-    }
-  }
-  return found;
+  coverageMap.merge(blob.coverage);
+  return true;
 }
 
 export async function mergeReports(

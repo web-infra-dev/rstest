@@ -8,7 +8,9 @@ import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
+  type CoverageMapData,
   color,
+  createCoverageProvider,
   type FormattedError,
   getSetupFiles,
   getTestEntries,
@@ -1781,6 +1783,13 @@ export const runBrowserController = async (
     }
   };
 
+  const coverageConfig = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
+  const coverageProvider = coverageConfig?.enabled
+    ? await createCoverageProvider(coverageConfig, context.rootPath)
+    : null;
+
   const notifyTestRunEnd = async ({
     duration,
     unhandledErrors,
@@ -1798,9 +1807,26 @@ export const runBrowserController = async (
       return;
     }
 
+    // Merge per-file coverage into a single CoverageMapData for reporters
+    let mergedCoverage: CoverageMapData | undefined;
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.createCoverageMap();
+      let hasCoverage = false;
+      for (const result of context.reporterResults.results) {
+        if (result.coverage) {
+          coverageMap.merge(result.coverage);
+          hasCoverage = true;
+        }
+      }
+      if (hasCoverage) {
+        mergedCoverage = coverageMap.toJSON();
+      }
+    }
+
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
+        coverage: mergedCoverage,
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
