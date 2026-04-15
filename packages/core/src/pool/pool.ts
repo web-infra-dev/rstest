@@ -7,8 +7,7 @@ import { createPoolWorker } from './workers';
 let nextWorkerId = 0;
 
 /**
- * Phase 1 scheduler. Deliberately minimal — matches the prior tinypool
- * behavior:
+ * Deliberately minimal scheduler — matches the prior tinypool behavior:
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background

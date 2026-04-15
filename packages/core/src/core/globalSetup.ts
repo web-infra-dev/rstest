@@ -2,7 +2,9 @@ import { type ChildProcess, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import type { EntryInfo, FormattedError } from '../types';
-import { bgColor, color, getForceColorEnv } from '../utils';
+import { bgColor, color, getForceColorEnv, killAndWait } from '../utils';
+
+const CLOSE_TIMEOUT_MS = 10_000;
 
 let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
 
@@ -106,14 +108,7 @@ class GlobalSetupWorker {
   async close(): Promise<void> {
     const child = this.child;
     if (!child) return;
-    await new Promise<void>((resolve) => {
-      child.once('exit', () => resolve());
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        resolve();
-      }
-    });
+    await killAndWait(child, 'SIGTERM', CLOSE_TIMEOUT_MS);
     this.child = undefined;
   }
 }

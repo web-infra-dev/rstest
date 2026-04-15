@@ -1,5 +1,6 @@
 import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import EventEmitter from 'node:events';
+import { killAndWait } from '../../utils';
 import type {
   PoolWorker,
   PoolWorkerEventName,
@@ -38,7 +39,7 @@ export type ForksPoolWorkerOptions = {
 };
 
 /**
- * Phase 1's only `PoolWorker` implementation. Spawns a child via
+ * The current `PoolWorker` implementation. Spawns a child via
  * `node:child_process.fork`, pipes stdio to the host, buffers stderr for
  * crash enrichment, and swallows benign IPC errors observed during shutdown
  * (rstest#1142).
@@ -153,7 +154,10 @@ export class ForksPoolWorker implements PoolWorker {
 
   async stop(options?: { force?: boolean }): Promise<void> {
     if (!this.hasLiveChild()) return;
-    await this.signalAndAwaitExit(options?.force ? 'SIGKILL' : 'SIGTERM');
+    await killAndWait(
+      this.childProcess!,
+      options?.force ? 'SIGKILL' : 'SIGTERM',
+    );
   }
 
   send(request: WorkerRequest): void {
@@ -207,32 +211,5 @@ export class ForksPoolWorker implements PoolWorker {
       this.stderrBuffer = this.stderrBuffer.slice(overflow);
       this.stderrBytes = Buffer.byteLength(this.stderrBuffer);
     }
-  }
-
-  /**
-   * Send a termination signal to the child and wait for the `exit` event.
-   * If `child.kill` throws (ESRCH or benign IPC tear-down), we treat the
-   * child as already gone and resolve immediately rather than deadlock on
-   * an event that will never arrive.
-   */
-  private signalAndAwaitExit(signal: NodeJS.Signals): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const child = this.childProcess;
-      if (!child || this.exited) {
-        resolve();
-        return;
-      }
-      const onExit = () => resolve();
-      child.once('exit', onExit);
-      try {
-        child.kill(signal);
-      } catch (err) {
-        child.off('exit', onExit);
-        if (!isBenignIpcError(err)) {
-          // ignore: best-effort shutdown
-        }
-        resolve();
-      }
-    });
   }
 }

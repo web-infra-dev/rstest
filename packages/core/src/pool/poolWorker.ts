@@ -14,9 +14,9 @@ export type PoolWorkerEventName = keyof PoolWorkerEvents;
  * machine, birpc wiring, scheduling, or task attribution — those live in
  * `PoolRunner` and `Pool`.
  *
- * Phase 1 ships exactly one implementation (`ForksPoolWorker`). The interface
- * is deliberately minimal so threads / browser implementations in later
- * phases can be added without touching `Pool` or `PoolRunner`.
+ * Currently ships exactly one implementation (`ForksPoolWorker`). The interface
+ * is deliberately minimal so threads / browser implementations can be added
+ * without touching `Pool` or `PoolRunner`.
  */
 export interface PoolWorker {
   readonly name: string;
