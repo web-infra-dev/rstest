@@ -31,7 +31,7 @@ const isBenignIpcError = (err: unknown): boolean => {
   return /write UNKNOWN|channel closed/i.test(err.message);
 };
 
-export type ForksPoolWorkerOptions = {
+type ForksPoolWorkerOptions = {
   name: string;
   filename: string;
   env?: NodeJS.ProcessEnv;

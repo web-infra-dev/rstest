@@ -5,9 +5,9 @@ import type {
   TestFileResult,
 } from '../types';
 
-export const WORKER_REQUEST_TAG = '__rstest_worker_request__' as const;
-export const WORKER_RESPONSE_TAG = '__rstest_worker_response__' as const;
-export const RPC_TAG = '__rstest_rpc__' as const;
+const WORKER_REQUEST_TAG = '__rstest_worker_request__' as const;
+const WORKER_RESPONSE_TAG = '__rstest_worker_response__' as const;
+const RPC_TAG = '__rstest_rpc__' as const;
 
 export type WorkerRequest =
   | { type: 'start'; workerId: number }

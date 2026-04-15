@@ -11,8 +11,8 @@ import {
 } from './protocol';
 import type { PoolTask } from './types';
 
-export const WORKER_START_TIMEOUT_MS = 90_000;
-export const WORKER_STOP_TIMEOUT_MS = 60_000;
+const WORKER_START_TIMEOUT_MS = 90_000;
+const WORKER_STOP_TIMEOUT_MS = 60_000;
 
 type RunnerState =
   | 'IDLE'
@@ -52,7 +52,7 @@ const toError = (err: unknown): Error =>
 
 let nextTaskSeq = 0;
 
-export type PoolRunnerOptions = {
+type PoolRunnerOptions = {
   workerId: number;
 };
 

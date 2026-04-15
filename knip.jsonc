@@ -37,8 +37,9 @@
         "src/coverage/checkThresholds.ts",
         // Webpack license plugin used by rslib.config.ts
         "licensePlugin.ts",
-        // Test files
+        // Test files and fixtures
         "tests/**/*.ts",
+        "tests/**/fixtures/**",
       ],
       "ignoreDependencies": [
         // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
