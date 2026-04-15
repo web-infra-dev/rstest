@@ -205,21 +205,36 @@ export class PoolRunner {
       this.stopDeferred = createDeferred();
 
       // Best-effort graceful stop. The worker defers its own exit until
-      // after any in-flight task completes teardown; SIGTERM (sent by the
-      // worker implementation) is the nudge that kicks the handler in.
+      // after any in-flight task completes teardown.
       try {
         this.worker.send({ type: 'stop' });
       } catch {
         // ignore: worker may already be down
       }
 
-      // Escalate to SIGKILL if graceful teardown exceeds the budget.
+      // Escalate to SIGTERM after the budget expires, then SIGKILL shortly
+      // after. On Windows, SIGTERM is unconditionally fatal (the process
+      // cannot trap it), so sending it immediately would kill workers with
+      // in-flight tasks. Instead, rely on the IPC `stop` message for
+      // graceful shutdown and only signal when the worker fails to exit in
+      // time.
       this.stopTimer = setTimeout(() => {
-        void this.worker.stop({ force: true }).catch(() => undefined);
+        void this.worker
+          .stop()
+          .catch(() => undefined)
+          .then(() => {
+            // If SIGTERM didn't finish it, force-kill.
+            this.stopTimer = setTimeout(() => {
+              void this.worker.stop({ force: true }).catch(() => undefined);
+            }, 5_000);
+            this.stopTimer.unref();
+          });
       }, WORKER_STOP_TIMEOUT_MS);
       this.stopTimer.unref();
 
-      await this.worker.stop({ force: options?.force === true });
+      if (options?.force) {
+        await this.worker.stop({ force: true });
+      }
       await this.stopDeferred.promise;
     });
   }
