@@ -10,6 +10,12 @@ const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, 'fixtures-related-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 
+const collectRunTestFileLogs = (stdout: string) =>
+  stdout
+    .split('\n')
+    .filter((log) => log.includes('.test.ts'))
+    .sort();
+
 describe('related test filtering', () => {
   it('should run only tests related to a leaf source file', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
@@ -24,9 +30,7 @@ describe('related test filtering', () => {
 
     await expectExecSuccess();
 
-    const logs = cli.stdout
-      .split('\n')
-      .filter((log) => log.includes('.test.ts'));
+    const logs = collectRunTestFileLogs(cli.stdout);
 
     expect(logs).toMatchInlineSnapshot(`
       [
@@ -48,9 +52,7 @@ describe('related test filtering', () => {
 
     await expectExecSuccess();
 
-    const logs = cli.stdout
-      .split('\n')
-      .filter((log) => log.includes('.test.ts'));
+    const logs = collectRunTestFileLogs(cli.stdout);
 
     expect(logs).toMatchInlineSnapshot(`
       [
@@ -73,9 +75,7 @@ describe('related test filtering', () => {
 
     await expectExecSuccess();
 
-    const logs = cli.stdout
-      .split('\n')
-      .filter((log) => log.includes('.test.ts'));
+    const logs = collectRunTestFileLogs(cli.stdout);
 
     expect(logs).toMatchInlineSnapshot(`
       [
@@ -139,9 +139,7 @@ describe('related test filtering', () => {
 
     await expectExecSuccess();
 
-    const logs = cli.stdout
-      .split('\n')
-      .filter((log) => log.includes('.test.ts'));
+    const logs = collectRunTestFileLogs(cli.stdout);
 
     expect(logs).toMatchInlineSnapshot(`
       [
