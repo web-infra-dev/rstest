@@ -27,10 +27,6 @@ interface BrowserModule {
     list: ListCommandResult[];
     close: () => Promise<void>;
   }>;
-  resolveRelatedBrowserTestFiles: (
-    context: unknown,
-    sourceFilters: string[],
-  ) => Promise<string[]>;
 }
 
 interface LoadBrowserModuleOptions {

@@ -6,7 +6,6 @@ import type {
 import {
   type ListBrowserTestsResult,
   listBrowserTests as listBrowserTestsImpl,
-  resolveRelatedBrowserTestFiles as resolveRelatedBrowserTestFilesImpl,
   runBrowserController,
 } from './hostController';
 
@@ -28,13 +27,6 @@ export async function listBrowserTests(
   context: Rstest,
 ): Promise<ListBrowserTestsResult> {
   return listBrowserTestsImpl(context);
-}
-
-export async function resolveRelatedBrowserTestFiles(
-  context: Rstest,
-  sourceFilters: string[],
-): Promise<string[]> {
-  return resolveRelatedBrowserTestFilesImpl(context, sourceFilters);
 }
 
 export type {

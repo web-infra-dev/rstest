@@ -1,10 +1,9 @@
 import { existsSync } from 'node:fs';
-import type { Rspack } from '@rsbuild/core';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { normalize, resolve } from 'pathe';
 import type { ProjectContext, RstestContext } from '../types';
 import { filterFiles, getTestEntries } from '../utils';
 import { getSetupFiles } from '../utils/getSetupFiles';
-import { loadBrowserModule } from './browserLoader';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -215,37 +214,29 @@ const buildSetupFiles = (
   );
 };
 
-const isSourceFilterRelevantToProject = ({
-  project,
-  rootPath,
-  sourceFilters,
-}: {
-  project: ProjectContext;
-  rootPath: string;
-  sourceFilters: string[];
-}): boolean => {
-  return sourceFilters.some((sourceFilter) => {
-    const normalizedFilter = normalize(sourceFilter);
-
-    if (normalizedFilter.startsWith(project.rootPath)) {
-      return true;
-    }
-
-    const rootCandidate = normalize(resolve(rootPath, sourceFilter));
-    if (
-      rootCandidate.startsWith(project.rootPath) &&
-      existsSync(rootCandidate)
-    ) {
-      return true;
-    }
-
-    const projectCandidate = normalize(resolve(project.rootPath, sourceFilter));
-    return (
-      projectCandidate.startsWith(project.rootPath) &&
-      existsSync(projectCandidate)
-    );
-  });
-};
+const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
+  name: 'rstest:related-build-safeguards',
+  setup(api) {
+    api.modifyRsbuildConfig((config) => ({
+      ...config,
+      dev: {
+        ...(config.dev || {}),
+        lazyCompilation: false,
+      },
+      performance: {
+        ...(config.performance || {}),
+        buildCache: false,
+      },
+    }));
+    api.modifyRspackConfig((rspackConfig) => {
+      // Related-file graph collection needs a complete, fresh graph.
+      // Keep it independent from user-enabled lazy compilation and
+      // persistent cache settings.
+      rspackConfig.lazyCompilation = false;
+      rspackConfig.cache = false;
+    });
+  },
+});
 
 export async function resolveRelatedTestFiles(
   context: RstestContext,
@@ -268,126 +259,85 @@ export async function resolveRelatedTestFiles(
     ),
   );
 
-  const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
+  const globTestSourceEntries = async (environmentName: string) =>
+    projectEntries.get(environmentName) ?? {};
+
+  const setupFiles = buildSetupFiles(context.projects, 'setupFiles');
+  const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
+
+  const rsbuildInstance = await prepareRsbuild(
+    context,
+    globTestSourceEntries,
+    setupFiles,
+    globalSetupFiles,
+    context.projects,
+    [createRelatedBuildSafeguardsPlugin()],
   );
-  const browserProjects = context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
-  );
 
-  if (nodeProjects.length > 0) {
-    const globTestSourceEntries = async (environmentName: string) =>
-      projectEntries.get(environmentName) ?? {};
+  const devServer = await rsbuildInstance.createDevServer({
+    getPortSilently: true,
+  });
 
-    const setupFiles = buildSetupFiles(nodeProjects, 'setupFiles');
-    const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
+  try {
+    for (const project of context.projects) {
+      const environment = devServer.environments[project.environmentName]!;
+      const stats = await environment.getStats();
+      const { modules } = stats.toJson({
+        all: false,
+        modules: true,
+        nestedModules: true,
+        reasons: true,
+      });
 
-    const rsbuildInstance = await prepareRsbuild(
-      context,
-      globTestSourceEntries,
-      setupFiles,
-      globalSetupFiles,
-      nodeProjects,
-    );
+      const moduleGraph = collectModuleGraph({
+        modules,
+        projectRoot: project.rootPath,
+      });
+      const testPaths = Object.values(
+        projectEntries.get(project.environmentName) || {},
+      );
+      const setupPaths = Object.values(
+        setupFiles[project.environmentName] || {},
+      );
+      const globalSetupPaths = Object.values(
+        globalSetupFiles[project.environmentName] || {},
+      );
+      const matchedSources = filterFiles(
+        Array.from(moduleGraph.allSources),
+        sourceFilters,
+        context.rootPath,
+      );
 
-    const devServer = await rsbuildInstance.createDevServer({
-      getPortSilently: true,
-    });
+      if (matchedSources.length === 0) {
+        continue;
+      }
 
-    try {
-      for (const project of nodeProjects) {
-        const environment = devServer.environments[project.environmentName]!;
-        const stats = await environment.getStats();
-        const { modules } = stats.toJson({
-          all: false,
-          modules: true,
-          nestedModules: true,
-          reasons: true,
-        });
+      const reachableDependents = collectReachableDependents({
+        dependentsBySource: moduleGraph.dependentsBySource,
+        initialSources: matchedSources,
+      });
 
-        const moduleGraph = collectModuleGraph({
-          modules,
-          projectRoot: project.rootPath,
-        });
-        const testPaths = Object.values(
-          projectEntries.get(project.environmentName) || {},
-        );
-        const setupPaths = Object.values(
-          setupFiles[project.environmentName] || {},
-        );
-        const globalSetupPaths = Object.values(
-          globalSetupFiles[project.environmentName] || {},
-        );
-        const matchedSources = filterFiles(
-          Array.from(moduleGraph.allSources),
-          sourceFilters,
-          context.rootPath,
+      const shouldRerunWholeProject =
+        setupPaths.some((setupPath) => reachableDependents.has(setupPath)) ||
+        globalSetupPaths.some((setupPath) =>
+          reachableDependents.has(setupPath),
         );
 
-        if (matchedSources.length === 0) {
-          continue;
-        }
-
-        const reachableDependents = collectReachableDependents({
-          dependentsBySource: moduleGraph.dependentsBySource,
-          initialSources: matchedSources,
-        });
-
-        const shouldRerunWholeProject =
-          setupPaths.some((setupPath) => reachableDependents.has(setupPath)) ||
-          globalSetupPaths.some((setupPath) =>
-            reachableDependents.has(setupPath),
-          );
-
-        if (shouldRerunWholeProject) {
-          for (const testPath of testPaths) {
-            matchedTestFiles.add(testPath);
-          }
-          continue;
-        }
-
+      if (shouldRerunWholeProject) {
         for (const testPath of testPaths) {
-          if (reachableDependents.has(testPath)) {
-            matchedTestFiles.add(testPath);
-          }
+          matchedTestFiles.add(testPath);
+        }
+        continue;
+      }
+
+      for (const testPath of testPaths) {
+        if (reachableDependents.has(testPath)) {
+          matchedTestFiles.add(testPath);
         }
       }
-    } finally {
-      await devServer.close();
     }
-  }
-
-  if (browserProjects.length > 0) {
-    const relevantBrowserProjects = browserProjects.filter((project) =>
-      isSourceFilterRelevantToProject({
-        project,
-        rootPath: context.rootPath,
-        sourceFilters,
-      }),
-    );
-
-    if (relevantBrowserProjects.length === 0) {
-      return Array.from(matchedTestFiles).sort();
-    }
-
-    const { resolveRelatedBrowserTestFiles } = await loadBrowserModule({
-      projectRoots: relevantBrowserProjects.map((project) => project.rootPath),
-    });
-    const browserRelatedFiles = await resolveRelatedBrowserTestFiles(
-      {
-        ...context,
-        projects: context.projects.filter(
-          (project) =>
-            !project.normalizedConfig.browser.enabled ||
-            relevantBrowserProjects.includes(project),
-        ),
-      },
-      sourceFilters,
-    );
-
-    for (const testPath of browserRelatedFiles) {
-      matchedTestFiles.add(testPath);
-    }
+  } finally {
+    await devServer.close();
   }
 
   return Array.from(matchedTestFiles).sort();
