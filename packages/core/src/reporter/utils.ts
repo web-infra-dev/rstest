@@ -1,6 +1,14 @@
+import type { Agent } from 'package-manager-detector';
+import { resolveCommand } from 'package-manager-detector/commands';
+import { detect as detectPackageManager } from 'package-manager-detector/detect';
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
-import type { TestFileResult, TestResult, UserConsoleLog } from '../types';
+import type {
+  FormattedError,
+  TestFileResult,
+  TestResult,
+  UserConsoleLog,
+} from '../types';
 import {
   color,
   getTaskNameWithPrefix,
@@ -14,6 +22,11 @@ const statusStr = {
   pass: '✓',
   todo: '-',
   skip: '-',
+};
+
+export type FailureItem = {
+  test: TestResult;
+  errors: NonNullable<TestResult['errors']>;
 };
 
 const statusColor: Record<keyof typeof statusStr, (str: string) => string> = {
@@ -71,6 +84,116 @@ export const logCase = (
       logger.log(color.red(`    ${error.message}`));
     }
   }
+};
+
+export const formatFullTestName = (
+  test: Pick<TestResult, 'name' | 'parentNames'>,
+): string => {
+  const names = (test.parentNames || []).concat(test.name).filter(Boolean);
+  return names.join(' > ');
+};
+
+export const getErrorType = (
+  error: Pick<FormattedError, 'name' | 'message'>,
+): string => {
+  const rawName = error.name || 'Error';
+
+  if (rawName.includes('AssertionError')) {
+    return 'AssertionError';
+  }
+
+  if (/\bSnapshot\b.*\bmismatched\b/i.test(error.message)) {
+    return 'SnapshotMismatchError';
+  }
+
+  return rawName;
+};
+
+export const collectFailures = ({
+  results,
+  testResults,
+  filterRerunTestPaths,
+}: {
+  results: TestFileResult[];
+  testResults: TestResult[];
+  filterRerunTestPaths?: string[];
+}): FailureItem[] => {
+  const shouldIncludePath = (testPath: string) =>
+    filterRerunTestPaths ? filterRerunTestPaths.includes(testPath) : true;
+
+  const failures: FailureItem[] = [];
+
+  for (const result of results) {
+    if (
+      result.status === 'fail' &&
+      result.errors?.length &&
+      shouldIncludePath(result.testPath)
+    ) {
+      failures.push({
+        test: result,
+        errors: result.errors,
+      });
+    }
+  }
+
+  for (const result of testResults) {
+    if (result.status === 'fail' && shouldIncludePath(result.testPath)) {
+      failures.push({
+        test: result,
+        errors: result.errors || [],
+      });
+    }
+  }
+
+  return failures;
+};
+
+const quoteShellArg = (value: string, alwaysQuote = false): string => {
+  if (value.length === 0) return "''";
+  if (alwaysQuote || /[^A-Za-z0-9_\-./]/.test(value)) {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  }
+  return value;
+};
+
+export const detectPackageManagerAgent = async (
+  cwd: string,
+): Promise<Agent> => {
+  const result = await detectPackageManager({ cwd });
+  return result?.agent ?? 'npm';
+};
+
+export const buildPackageManagerReproCommand = (
+  relativePath: string,
+  fullName: string,
+  agent: Agent,
+  includeTestName = true,
+): string => {
+  const args = ['rstest', relativePath];
+
+  if (includeTestName && fullName) {
+    args.push('--testNamePattern', fullName);
+  }
+
+  const resolved = resolveCommand(agent, 'execute-local', args);
+  if (!resolved) {
+    const formattedArgs = args
+      .map((arg) => quoteShellArg(arg, arg === relativePath))
+      .join(' ');
+    return `npx ${formattedArgs}`;
+  }
+
+  const formattedArgs = resolved.args
+    .map((arg) => quoteShellArg(arg, arg === relativePath))
+    .join(' ');
+
+  return formattedArgs.length
+    ? `${resolved.command} ${formattedArgs}`
+    : resolved.command;
+};
+
+export const escapeMarkdownTableCell = (value: string): string => {
+  return value.replaceAll('|', '\\|');
 };
 
 const formatHeapUsed = (heap: number) => {
@@ -135,4 +258,38 @@ export const logUserConsoleLog = (
   );
   logOutput(log.content);
   logOutput('');
+};
+
+export const ensureSingleBlankLine = (lines: string[]): void => {
+  if (lines.length === 0) return;
+  while (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  lines.push('');
+};
+
+export const pushHeading = (
+  lines: string[],
+  level: 1 | 2 | 3,
+  text: string,
+): void => {
+  ensureSingleBlankLine(lines);
+  lines.push(`${'#'.repeat(level)} ${text}`);
+  lines.push('');
+};
+
+export const pushFencedBlock = (
+  lines: string[],
+  lang: string,
+  content: string,
+): void => {
+  ensureSingleBlankLine(lines);
+  lines.push(`\`\`\`${lang}`);
+  lines.push(content);
+  lines.push('```');
+  lines.push('');
+};
+
+export const stringifyJson = (value: unknown): string => {
+  return JSON.stringify(value, null, 2);
 };

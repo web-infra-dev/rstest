@@ -144,6 +144,19 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
+type GithubActionsReporterOptions = {
+  /**
+   * Whether to output `::error` annotations for failed tests.
+   * @default true
+   */
+  annotations?: boolean;
+  /**
+   * Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+   * @default true
+   */
+  summary?: boolean;
+};
+
 export type BlobReporterOptions = {
   /**
    * Directory to store blob report files.
@@ -164,7 +177,7 @@ type BuiltinReporterOptions = {
   dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
-  'github-actions': Record<string, unknown>;
+  'github-actions': GithubActionsReporterOptions;
   junit: Record<string, unknown>;
   json: JsonReporterOptions;
   blob: BlobReporterOptions;

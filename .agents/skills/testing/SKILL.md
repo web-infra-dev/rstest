@@ -85,3 +85,9 @@ Important:
 - For package/unit tests from repository root, use `-u` / `--update`: `pnpm rstest -u packages/core/tests/core/rsbuild.test.ts`
 - Do **not** use snapshot updates as a default way to silence test failures — investigate first
 - When updating, review the snapshot diff to confirm it matches expected changes
+
+## Validation before wrapping up
+
+- Do not stop at targeted tests only. Before finishing a code change, run the narrowest relevant tests first, then decide whether broader validation is needed.
+- `pnpm run check-unused` is part of the default validation pass for code changes in this repo. Run it before wrapping up, even when focused tests already pass.
+- Treat `check-unused` failures as real regressions unless you have confirmed the reported item is an intentional temporary state.
