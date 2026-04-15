@@ -3,12 +3,13 @@ import { join, relative } from 'pathe';
 import { createCoverageProvider } from '../coverage';
 import type { BlobData } from '../reporter/blob';
 import type {
+  CoverageMapData,
   Duration,
   SnapshotSummary,
-  TestFileCoverageResult,
   TestFileResult,
   TestResult,
 } from '../types';
+import type { CoverageMap } from '../types/coverage';
 import { color, logger, prettyTime } from '../utils';
 import type { Rstest } from './rstest';
 
@@ -95,6 +96,15 @@ function mergeDurations(durations: Duration[]): Duration {
   return { totalTime, buildTime, testTime };
 }
 
+function mergeBlobCoverage(blob: BlobData, coverageMap: CoverageMap): boolean {
+  if (!blob.coverage) {
+    return false;
+  }
+
+  coverageMap.merge(blob.coverage);
+  return true;
+}
+
 export async function mergeReports(
   context: Rstest,
   options?: {
@@ -108,6 +118,10 @@ export async function mergeReports(
     : join(context.rootPath, DEFAULT_BLOB_DIR);
 
   const blobs = loadBlobFiles(blobDir);
+  const coverageOptions = context.normalizedConfig.coverage;
+  const coverageProvider = coverageOptions.enabled
+    ? await createCoverageProvider(coverageOptions, context.rootPath)
+    : null;
 
   const relativeBlobDir = relative(context.rootPath, blobDir) || '.';
   logger.log(
@@ -115,16 +129,16 @@ export async function mergeReports(
   );
 
   const allResults: TestFileResult[] = [];
-  const allCoverageResults: TestFileCoverageResult[] = [];
   const allTestResults: TestResult[] = [];
   const allDurations: Duration[] = [];
   const shardDurations: { label: string; duration: Duration }[] = [];
   const allSnapshotSummaries: SnapshotSummary[] = [];
   const allUnhandledErrors: Error[] = [];
+  const mergedCoverageMap = coverageProvider?.createCoverageMap();
+  let hasCoverage = false;
 
   for (const blob of blobs) {
     allResults.push(...blob.results);
-    allCoverageResults.push(...(blob.coverageResults || blob.results));
     allTestResults.push(...blob.testResults);
     allDurations.push(blob.duration);
     allSnapshotSummaries.push(blob.snapshotSummary);
@@ -133,6 +147,10 @@ export async function mergeReports(
       ? `Shard ${blob.shard.index}/${blob.shard.count}`
       : 'Shard';
     shardDurations.push({ label: shardLabel, duration: blob.duration });
+
+    if (mergedCoverageMap && mergeBlobCoverage(blob, mergedCoverageMap)) {
+      hasCoverage = true;
+    }
 
     if (blob.unhandledErrors) {
       for (const e of blob.unhandledErrors) {
@@ -154,6 +172,8 @@ export async function mergeReports(
 
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
+  const mergedCoverage: CoverageMapData | undefined =
+    hasCoverage && mergedCoverageMap ? mergedCoverageMap.toJSON() : undefined;
 
   const hasFailure =
     allResults.some((r) => r.status === 'fail') ||
@@ -188,6 +208,7 @@ export async function mergeReports(
   for (const reporter of context.reporters) {
     await reporter.onTestRunEnd?.({
       results: allResults,
+      coverage: mergedCoverage,
       testResults: allTestResults,
       duration: mergedDuration,
       snapshotSummary: mergedSnapshotSummary,
@@ -198,17 +219,13 @@ export async function mergeReports(
     });
   }
 
-  const { coverage } = context.normalizedConfig;
-  if (coverage.enabled && (!hasFailure || coverage.reportOnFailure)) {
-    const coverageProvider = await createCoverageProvider(
-      coverage,
-      context.rootPath,
-    );
-
-    if (coverageProvider) {
-      const { generateCoverage } = await import('../coverage/generate');
-      await generateCoverage(context, allCoverageResults, coverageProvider);
-    }
+  if (
+    coverageProvider &&
+    mergedCoverageMap &&
+    (!hasFailure || coverageOptions.reportOnFailure)
+  ) {
+    const { generateCoverage } = await import('../coverage/generate');
+    await generateCoverage(context, mergedCoverageMap, coverageProvider);
   }
 
   if (cleanup && existsSync(blobDir)) {

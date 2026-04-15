@@ -1,7 +1,7 @@
 import type FS from 'node:fs';
 import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext, TestFileCoverageResult } from '../types';
+import type { RstestContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -48,7 +48,7 @@ export const getIncludedFiles = async (
 
 export async function generateCoverage(
   context: RstestContext,
-  results: TestFileCoverageResult[],
+  coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
 ): Promise<void> {
   const {
@@ -57,14 +57,7 @@ export async function generateCoverage(
     projects,
   } = context;
   try {
-    const finalCoverageMap = coverageProvider.createCoverageMap();
-
-    // Merge coverage data from all test files
-    for (const result of results) {
-      if (result.coverage) {
-        finalCoverageMap.merge(result.coverage);
-      }
-    }
+    const finalCoverageMap = coverageMap;
 
     if (!coverage.allowExternal) {
       finalCoverageMap.filter((filePath) => {

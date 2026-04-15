@@ -1,11 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import type {
+  CoverageMapData,
   Duration,
   NormalizedConfig,
   Reporter,
   SnapshotSummary,
-  TestFileCoverageResult,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -16,7 +16,7 @@ export type BlobData = {
   version: string;
   shard?: { index: number; count: number };
   results: TestFileResult[];
-  coverageResults?: TestFileCoverageResult[];
+  coverage?: CoverageMapData;
   testResults: TestResult[];
   duration: Duration;
   snapshotSummary: SnapshotSummary;
@@ -52,14 +52,14 @@ export class BlobReporter implements Reporter {
 
   async onTestRunEnd({
     results,
-    coverageResults,
+    coverage,
     testResults,
     duration,
     snapshotSummary,
     unhandledErrors,
   }: {
     results: TestFileResult[];
-    coverageResults?: TestFileCoverageResult[];
+    coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
@@ -74,7 +74,7 @@ export class BlobReporter implements Reporter {
       version: RSTEST_VERSION,
       shard: shard ? { index: shard.index, count: shard.count } : undefined,
       results,
-      coverageResults,
+      coverage,
       testResults,
       duration,
       snapshotSummary,
