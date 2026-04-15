@@ -46,6 +46,7 @@ export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
+  public relatedFilters?: string[];
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;

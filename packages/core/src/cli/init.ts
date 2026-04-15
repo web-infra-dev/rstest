@@ -17,6 +17,8 @@ export type CommonOptions = {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
+  related?: boolean;
+  findRelatedTests?: boolean;
   globals?: boolean;
   /**
    * Pool options.

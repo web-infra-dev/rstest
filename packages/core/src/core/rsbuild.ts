@@ -343,7 +343,7 @@ export const createRsbuildServer = async ({
 }: {
   isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
-  inspectedConfig: RstestContext['normalizedConfig'] & {
+  inspectedConfig?: RstestContext['normalizedConfig'] & {
     projects: NormalizedProjectConfig[];
   };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -399,7 +399,7 @@ export const createRsbuildServer = async ({
     getPortSilently: true,
   });
 
-  if (isDebug()) {
+  if (isDebug() && inspectedConfig) {
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {

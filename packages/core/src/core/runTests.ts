@@ -549,7 +549,12 @@ export async function runTests(context: Rstest): Promise<void> {
           process.exitCode = code;
         }
         if (mode === 'all') {
-          if (context.fileFilters?.length) {
+          if (context.relatedFilters?.length) {
+            logger.log(
+              color.gray('related: '),
+              context.relatedFilters.join(color.gray(', ')),
+            );
+          } else if (context.fileFilters?.length) {
             logger.log(
               color.gray('filter: '),
               context.fileFilters.join(color.gray(', ')),

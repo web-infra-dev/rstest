@@ -10,6 +10,7 @@ import {
   type BrowserTestRunResult,
   color,
   type FormattedError,
+  filterFiles,
   getSetupFiles,
   getTestEntries,
   isDebug,
@@ -399,6 +400,13 @@ type BrowserRuntime = {
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
+};
+
+type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
+
+type ModuleGraph = {
+  allSources: Set<string>;
+  dependentsBySource: Map<string, Set<string>>;
 };
 
 // ============================================================================
@@ -924,6 +932,168 @@ const collectProjectEntries = async (
       };
     }),
   );
+};
+
+const stripSourceProtocol = (source: string): string =>
+  source.replace(/^[a-zA-Z]+:\/\/\/?/, '');
+
+const normalizeStatsPathCandidate = ({
+  candidate,
+  projectRoot,
+}: {
+  candidate: string;
+  projectRoot: string;
+}): string | null => {
+  let normalizedCandidate = stripSourceProtocol(candidate.trim());
+
+  if (!normalizedCandidate) {
+    return null;
+  }
+
+  const bangIndex = normalizedCandidate.lastIndexOf('!');
+  if (bangIndex !== -1) {
+    normalizedCandidate = normalizedCandidate.slice(bangIndex + 1);
+  }
+
+  if (
+    normalizedCandidate.startsWith('builtin:') ||
+    normalizedCandidate.startsWith('data:') ||
+    normalizedCandidate.startsWith('webpack/') ||
+    normalizedCandidate.startsWith('rspack/')
+  ) {
+    return null;
+  }
+
+  const queryIndex = normalizedCandidate.search(/[?#]/);
+  if (queryIndex !== -1) {
+    normalizedCandidate = normalizedCandidate.slice(0, queryIndex);
+  }
+
+  if (!normalizedCandidate) {
+    return null;
+  }
+
+  const absolutePath = normalizedCandidate.startsWith('/')
+    ? normalize(normalizedCandidate)
+    : normalize(resolve(projectRoot, normalizedCandidate));
+
+  return existsSync(absolutePath) ? absolutePath : null;
+};
+
+const normalizeStatsModulePath = ({
+  module,
+  projectRoot,
+}: {
+  module: Rspack.StatsModule;
+  projectRoot: string;
+}): string | null => {
+  const candidate =
+    typeof module.nameForCondition === 'string' && module.nameForCondition
+      ? module.nameForCondition
+      : module.identifier || '';
+
+  return normalizeStatsPathCandidate({
+    candidate,
+    projectRoot,
+  });
+};
+
+const normalizeStatsReasonPath = ({
+  reason,
+  projectRoot,
+}: {
+  reason: StatsModuleReason;
+  projectRoot: string;
+}): string | null => {
+  const candidate =
+    reason.moduleIdentifier || reason.moduleName || reason.module || '';
+
+  return normalizeStatsPathCandidate({
+    candidate,
+    projectRoot,
+  });
+};
+
+const collectModuleGraph = ({
+  modules,
+  projectRoot,
+}: {
+  modules: Rspack.StatsModule[] | undefined;
+  projectRoot: string;
+}): ModuleGraph => {
+  const allSources = new Set<string>();
+  const dependentsBySource = new Map<string, Set<string>>();
+
+  const visitModules = (statsModules: Rspack.StatsModule[] | undefined) => {
+    for (const module of statsModules || []) {
+      const sourcePath = normalizeStatsModulePath({
+        module,
+        projectRoot,
+      });
+
+      if (sourcePath) {
+        allSources.add(sourcePath);
+
+        for (const reason of module.reasons || []) {
+          const dependentPath = normalizeStatsReasonPath({
+            reason,
+            projectRoot,
+          });
+
+          if (!dependentPath) {
+            continue;
+          }
+
+          allSources.add(dependentPath);
+
+          const dependents = dependentsBySource.get(sourcePath) || new Set();
+          dependents.add(dependentPath);
+          dependentsBySource.set(sourcePath, dependents);
+        }
+      }
+
+      if (module.modules?.length) {
+        visitModules(module.modules);
+      }
+    }
+  };
+
+  visitModules(modules);
+
+  return {
+    allSources,
+    dependentsBySource,
+  };
+};
+
+const collectReachableDependents = ({
+  dependentsBySource,
+  initialSources,
+}: {
+  dependentsBySource: Map<string, Set<string>>;
+  initialSources: Iterable<string>;
+}): Set<string> => {
+  const visited = new Set<string>();
+  const queue = Array.from(initialSources);
+
+  for (const source of queue) {
+    visited.add(source);
+  }
+
+  while (queue.length > 0) {
+    const currentSource = queue.shift()!;
+
+    for (const dependent of dependentsBySource.get(currentSource) || []) {
+      if (visited.has(dependent)) {
+        continue;
+      }
+
+      visited.add(dependent);
+      queue.push(dependent);
+    }
+  }
+
+  return visited;
 };
 
 const resolveBrowserFile = (relativePath: string): string => {
@@ -1855,6 +2025,18 @@ export const runBrowserController = async (
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
+      }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
       }
     }
 
@@ -3465,4 +3647,108 @@ export const listBrowserTests = async (
     list: collectResults,
     close: cleanup,
   };
+};
+
+export const resolveRelatedBrowserTestFiles = async (
+  context: Rstest,
+  sourceFilters: string[],
+): Promise<string[]> => {
+  const projectEntries = await collectProjectEntries(context);
+
+  if (projectEntries.length === 0) {
+    return [];
+  }
+
+  const matchedTestFiles = new Set<string>(
+    filterFiles(
+      projectEntries.flatMap((projectEntry) => projectEntry.testFiles),
+      sourceFilters,
+      context.rootPath,
+    ),
+  );
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (totalTests === 0) {
+    return Array.from(matchedTestFiles).sort();
+  }
+
+  const tempDir = join(
+    context.rootPath,
+    context.normalizedConfig.output.distPath.root,
+    'browser',
+    `related-${Date.now()}`,
+  );
+  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
+  const manifestSource = generateManifestModule({
+    manifestPath,
+    entries: projectEntries,
+  });
+
+  const runtime = await createBrowserRuntime({
+    context,
+    manifestPath,
+    manifestSource,
+    tempDir,
+    isWatchMode: false,
+    containerDistPath: undefined,
+    containerDevServer: undefined,
+    forceHeadless: true,
+  });
+
+  try {
+    for (const projectEntry of projectEntries) {
+      const stats =
+        await runtime.devServer.environments[
+          projectEntry.project.environmentName
+        ]!.getStats();
+      const { modules } = stats.toJson({
+        all: false,
+        modules: true,
+        nestedModules: true,
+        reasons: true,
+      });
+      const moduleGraph = collectModuleGraph({
+        modules,
+        projectRoot: projectEntry.project.rootPath,
+      });
+      const matchedSources = filterFiles(
+        Array.from(moduleGraph.allSources),
+        sourceFilters,
+        context.rootPath,
+      );
+
+      if (matchedSources.length === 0) {
+        continue;
+      }
+
+      const reachableDependents = collectReachableDependents({
+        dependentsBySource: moduleGraph.dependentsBySource,
+        initialSources: matchedSources,
+      });
+
+      if (
+        projectEntry.setupFiles.some((setupPath) =>
+          reachableDependents.has(setupPath),
+        )
+      ) {
+        for (const testPath of projectEntry.testFiles) {
+          matchedTestFiles.add(testPath);
+        }
+        continue;
+      }
+
+      for (const testPath of projectEntry.testFiles) {
+        if (reachableDependents.has(testPath)) {
+          matchedTestFiles.add(testPath);
+        }
+      }
+    }
+  } finally {
+    await destroyBrowserRuntime(runtime);
+  }
+
+  return Array.from(matchedTestFiles).sort();
 };

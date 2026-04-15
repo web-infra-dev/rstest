@@ -61,6 +61,8 @@ export type RstestContext = {
   normalizedConfig: NormalizedConfig;
   /** filter by a filename regex pattern */
   fileFilters?: string[];
+  /** Original source filters passed to `--related` / `--findRelatedTests`. */
+  relatedFilters?: string[];
   /** The config file path. */
   configFilePath?: string;
   /**

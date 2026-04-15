@@ -2,7 +2,9 @@ import cac, { type CAC, type Command } from 'cac';
 import { normalize } from 'pathe';
 import type {
   ListCommandOptions,
+  Project,
   RstestCommand,
+  RstestConfig,
   RstestInstance,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
@@ -35,6 +37,11 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '-r, --root <root>',
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
+  [
+    '--related',
+    'Treat positional arguments as source file paths and run only related tests',
+  ],
+  ['--findRelatedTests', 'Alias for --related for Jest compatibility'],
   ['--globals', 'Provide global APIs'],
   ['--isolate', 'Run tests in an isolated environment'],
   ['--include <include>', 'Match test files'],
@@ -224,6 +231,56 @@ export const normalizeCliFilters = (
   filters: ReadonlyArray<string | number>,
 ): string[] => filters.map((filter) => normalize(String(filter)));
 
+const isRelatedRun = (options: CommonOptions): boolean =>
+  options.related === true || options.findRelatedTests === true;
+
+const resolveEffectiveCliFilters = async ({
+  options,
+  filters,
+  createRstest,
+  config,
+  configFilePath,
+  projects,
+}: {
+  options: CommonOptions;
+  filters: Array<string | number>;
+  createRstest: (
+    input: {
+      config: RstestConfig;
+      configFilePath?: string;
+      projects: Project[];
+    },
+    command: RstestCommand,
+    fileFilters: string[],
+  ) => RstestInstance;
+  config: RstestConfig;
+  configFilePath?: string;
+  projects: Project[];
+}): Promise<{
+  effectiveFilters: string[];
+  relatedFilters?: string[];
+}> => {
+  const normalizedFilters = normalizeCliFilters(filters);
+
+  if (!isRelatedRun(options)) {
+    return { effectiveFilters: normalizedFilters };
+  }
+
+  const { resolveRelatedTestFiles } = await import('../core/related');
+  const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
+
+  const relatedFiles = await resolveRelatedTestFiles(
+    rstest.context,
+    normalizedFilters,
+  );
+
+  return {
+    effectiveFilters:
+      relatedFiles.length > 0 ? relatedFiles : normalizedFilters,
+    relatedFilters: normalizedFilters,
+  };
+};
+
 export const runRest = async ({
   options,
   filters,
@@ -241,11 +298,22 @@ export const runRest = async ({
   try {
     const { config, configFilePath, projects, createRstest } =
       await resolveCliRuntime(options);
+    const { effectiveFilters, relatedFilters } =
+      await resolveEffectiveCliFilters({
+        options,
+        filters,
+        createRstest,
+        config,
+        configFilePath,
+        projects,
+      });
+
     rstest = createRstest(
       { config, configFilePath, projects },
       command,
-      normalizeCliFilters(filters),
+      effectiveFilters,
     );
+    rstest.context.relatedFilters = relatedFilters;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -350,11 +418,22 @@ export function createCli(): CAC {
           config.includeTaskLocation = true;
         }
 
+        const { effectiveFilters, relatedFilters } =
+          await resolveEffectiveCliFilters({
+            options,
+            filters,
+            createRstest,
+            config,
+            configFilePath,
+            projects,
+          });
+
         const rstest = createRstest(
           { config, configFilePath, projects },
           'list',
-          normalizeCliFilters(filters),
+          effectiveFilters,
         );
+        rstest.context.relatedFilters = relatedFilters;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
