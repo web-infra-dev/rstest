@@ -215,6 +215,38 @@ const buildSetupFiles = (
   );
 };
 
+const isSourceFilterRelevantToProject = ({
+  project,
+  rootPath,
+  sourceFilters,
+}: {
+  project: ProjectContext;
+  rootPath: string;
+  sourceFilters: string[];
+}): boolean => {
+  return sourceFilters.some((sourceFilter) => {
+    const normalizedFilter = normalize(sourceFilter);
+
+    if (normalizedFilter.startsWith(project.rootPath)) {
+      return true;
+    }
+
+    const rootCandidate = normalize(resolve(rootPath, sourceFilter));
+    if (
+      rootCandidate.startsWith(project.rootPath) &&
+      existsSync(rootCandidate)
+    ) {
+      return true;
+    }
+
+    const projectCandidate = normalize(resolve(project.rootPath, sourceFilter));
+    return (
+      projectCandidate.startsWith(project.rootPath) &&
+      existsSync(projectCandidate)
+    );
+  });
+};
+
 export async function resolveRelatedTestFiles(
   context: RstestContext,
   sourceFilters: string[],
@@ -326,11 +358,30 @@ export async function resolveRelatedTestFiles(
   }
 
   if (browserProjects.length > 0) {
+    const relevantBrowserProjects = browserProjects.filter((project) =>
+      isSourceFilterRelevantToProject({
+        project,
+        rootPath: context.rootPath,
+        sourceFilters,
+      }),
+    );
+
+    if (relevantBrowserProjects.length === 0) {
+      return Array.from(matchedTestFiles).sort();
+    }
+
     const { resolveRelatedBrowserTestFiles } = await loadBrowserModule({
-      projectRoots: browserProjects.map((project) => project.rootPath),
+      projectRoots: relevantBrowserProjects.map((project) => project.rootPath),
     });
     const browserRelatedFiles = await resolveRelatedBrowserTestFiles(
-      context,
+      {
+        ...context,
+        projects: context.projects.filter(
+          (project) =>
+            !project.normalizedConfig.browser.enabled ||
+            relevantBrowserProjects.includes(project),
+        ),
+      },
       sourceFilters,
     );
 

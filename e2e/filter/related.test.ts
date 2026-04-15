@@ -8,6 +8,7 @@ const __dirname = dirname(__filename);
 
 const relatedFixturePath = join(__dirname, 'fixtures-related');
 const dynamicFixturePath = join(__dirname, 'fixtures-related-dynamic');
+const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 
 describe('related test filtering', () => {
   it('should run only tests related to a leaf source file', async () => {
@@ -123,5 +124,30 @@ describe('related test filtering', () => {
     expect(cli.log).toContain('related:');
     expect(cli.log).toContain('404.ts');
     expect(cli.log).not.toContain('__rstest_related_no_match__');
+  });
+
+  it('should not initialize browser related resolution for node-only sources', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'node/src/index.ts'],
+      options: {
+        nodeOptions: {
+          cwd: mixedFixturePath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout
+      .split('\n')
+      .filter((log) => log.includes('.test.ts'));
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        " ✓ [node-project] node/index.test.ts (1)",
+      ]
+    `);
+    expect(cli.log).not.toContain('invalid');
   });
 });
