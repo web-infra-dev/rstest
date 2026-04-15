@@ -88,6 +88,37 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
   fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
 });
 
+it.skipIf(!process.env.CI)(
+  'github-actions skips summary rendering when GITHUB_STEP_SUMMARY is unset',
+  async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            GITHUB_WORKSPACE: githubWorkspace,
+            GITHUB_STEP_SUMMARY: undefined,
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.exec.process?.exitCode).toBe(1);
+
+    const logs = cli.stdout
+      .split('\n')
+      .filter(Boolean)
+      .filter((log) => log.startsWith('::error'));
+
+    expect(logs).toHaveLength(2);
+    expect(cli.stdout).not.toContain('Failed to write GitHub step summary');
+  },
+);
+
 it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
   const stepSummaryPath = join(
     __dirname,

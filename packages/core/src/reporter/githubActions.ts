@@ -141,7 +141,7 @@ export class GithubActionsReporter {
       this.log('::endgroup::');
     }
 
-    if (this.enableSummary) {
+    if (this.enableSummary && this.stepSummaryPath) {
       await this.appendStepSummary(
         await renderStepSummary({
           results,
@@ -241,10 +241,6 @@ function getStepSummaryProjectLabel({
 
   if (projectNames.size === 1) {
     return projectNames.values().next().value;
-  }
-
-  if (projectNames.size > 1) {
-    return `${projectNames.size} projects`;
   }
 
   return undefined;
