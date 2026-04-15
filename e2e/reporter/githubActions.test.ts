@@ -152,6 +152,54 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
 });
 
 it.skipIf(!process.env.CI)(
+  'github-actions summary includes explicit project name in title',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-named-project.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        './rstest.githubActions.namedProject.config.mts',
+        '--reporter',
+        'github-actions',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            GITHUB_WORKSPACE: githubWorkspace,
+            GITHUB_STEP_SUMMARY: stepSummaryPath,
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const stepSummary = fs
+      .readFileSync(stepSummaryPath, 'utf-8')
+      .replaceAll(process.cwd(), '<ROOT>');
+
+    expect(stepSummary).toContain(
+      '<summary>Rstest Test Reporter (named-project) ✅</summary>',
+    );
+    expect(stepSummary).toContain('# Rstest Test Reporter (named-project) ✅');
+
+    fs.rmSync(stepSummaryPath, { force: true });
+    fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+  },
+);
+
+it.skipIf(!process.env.CI)(
   'github-actions summary derives repro command from package manager',
   async () => {
     const stepSummaryPath = join(

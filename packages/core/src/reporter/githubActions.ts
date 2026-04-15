@@ -169,6 +169,7 @@ function escapeData(s: string): string {
 const STEP_SUMMARY_MAX_FAILURES = 20;
 const STEP_SUMMARY_MAX_MESSAGE_LENGTH = 400;
 const ROOT_PATH_PLACEHOLDER = '<ROOT>';
+const DEFAULT_PROJECT_NAME = 'rstest';
 
 export function getStepSummaryDisplayPath(
   rootPath: string,
@@ -208,6 +209,47 @@ function normalizeForWorkspaceComparison(value: string): string {
   return /^[A-Za-z]:\//.test(value) ? value.toLowerCase() : value;
 }
 
+function getStepSummaryProjectLabel({
+  results,
+  testResults,
+  failures,
+}: {
+  results: TestFileResult[];
+  testResults: TestResult[];
+  failures: FailureItem[];
+}): string | undefined {
+  const projectNames = new Set<string>();
+
+  const collectProjectName = (project?: string) => {
+    if (!project || project === DEFAULT_PROJECT_NAME) {
+      return;
+    }
+    projectNames.add(project);
+  };
+
+  for (const result of results) {
+    collectProjectName(result.project);
+  }
+
+  for (const testResult of testResults) {
+    collectProjectName(testResult.project);
+  }
+
+  for (const failure of failures) {
+    collectProjectName(failure.test.project);
+  }
+
+  if (projectNames.size === 1) {
+    return projectNames.values().next().value;
+  }
+
+  if (projectNames.size > 1) {
+    return `${projectNames.size} projects`;
+  }
+
+  return undefined;
+}
+
 async function renderStepSummary({
   results,
   testResults,
@@ -231,7 +273,14 @@ async function renderStepSummary({
   const hasUnhandledErrors = (unhandledErrors?.length ?? 0) > 0;
   const isSuccess = failures.length === 0 && !hasUnhandledErrors;
   const reportIcon = isSuccess ? '✅' : '❌';
-  const reportTitle = `Rstest Test Reporter ${reportIcon}`;
+  const projectLabel = getStepSummaryProjectLabel({
+    results,
+    testResults,
+    failures,
+  });
+  const reportTitle = projectLabel
+    ? `Rstest Test Reporter (${projectLabel}) ${reportIcon}`
+    : `Rstest Test Reporter ${reportIcon}`;
 
   const lines: string[] = [];
   lines.push(isSuccess ? '<details>' : '<details open>');
