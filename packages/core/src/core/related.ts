@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { normalize, resolve } from 'pathe';
+import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import type { ProjectContext, RstestContext } from '../types';
-import { filterFiles, getTestEntries } from '../utils';
+import { getTestEntries } from '../utils';
 import { getSetupFiles } from '../utils/getSetupFiles';
 import { prepareRsbuild } from './rsbuild';
 
@@ -16,7 +16,7 @@ type ModuleGraph = {
 const stripSourceProtocol = (source: string): string =>
   source.replace(/^[a-zA-Z]+:\/\/\/?/, '');
 
-const normalizeStatsPathCandidate = ({
+export const resolveStatsPathCandidate = ({
   candidate,
   projectRoot,
 }: {
@@ -52,11 +52,26 @@ const normalizeStatsPathCandidate = ({
     return null;
   }
 
-  const absolutePath = normalizedCandidate.startsWith('/')
+  const absolutePath = isAbsolute(normalizedCandidate)
     ? normalize(normalizedCandidate)
     : normalize(resolve(projectRoot, normalizedCandidate));
 
-  return existsSync(absolutePath) ? absolutePath : null;
+  return absolutePath;
+};
+
+const normalizeStatsPathCandidate = ({
+  candidate,
+  projectRoot,
+}: {
+  candidate: string;
+  projectRoot: string;
+}): string | null => {
+  const absolutePath = resolveStatsPathCandidate({
+    candidate,
+    projectRoot,
+  });
+
+  return absolutePath && existsSync(absolutePath) ? absolutePath : null;
 };
 
 const normalizeStatsModulePath = ({
@@ -238,6 +253,45 @@ const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   },
 });
 
+const normalizeExactPathMatch = (filePath: string): string => {
+  const normalizedPath = normalize(filePath);
+
+  return process.platform === 'win32'
+    ? normalizedPath.toLocaleLowerCase()
+    : normalizedPath;
+};
+
+const collectDirectlyMatchedFiles = ({
+  files,
+  sourceFilters,
+  rootPath,
+}: {
+  files: string[];
+  sourceFilters: string[];
+  rootPath: string;
+}): string[] => {
+  const exactSourcePaths = new Set<string>();
+
+  for (const sourceFilter of sourceFilters) {
+    exactSourcePaths.add(normalizeExactPathMatch(sourceFilter));
+    exactSourcePaths.add(
+      normalizeExactPathMatch(resolve(rootPath, sourceFilter)),
+    );
+  }
+
+  return files.filter((filePath) => {
+    const normalizedFilePath = normalizeExactPathMatch(filePath);
+    const normalizedRelativeFilePath = normalizeExactPathMatch(
+      relative(rootPath, filePath),
+    );
+
+    return (
+      exactSourcePaths.has(normalizedFilePath) ||
+      exactSourcePaths.has(normalizedRelativeFilePath)
+    );
+  });
+};
+
 export async function resolveRelatedTestFiles(
   context: RstestContext,
   sourceFilters: string[],
@@ -250,13 +304,13 @@ export async function resolveRelatedTestFiles(
 
   const projectEntries = await collectProjectEntries(context);
   const matchedTestFiles = new Set(
-    filterFiles(
-      Array.from(projectEntries.values()).flatMap((entries) =>
+    collectDirectlyMatchedFiles({
+      files: Array.from(projectEntries.values()).flatMap((entries) =>
         Object.values(entries),
       ),
       sourceFilters,
-      context.rootPath,
-    ),
+      rootPath: context.rootPath,
+    }),
   );
 
   const globTestSourceEntries = async (environmentName: string) =>
@@ -302,11 +356,11 @@ export async function resolveRelatedTestFiles(
       const globalSetupPaths = Object.values(
         globalSetupFiles[project.environmentName] || {},
       );
-      const matchedSources = filterFiles(
-        Array.from(moduleGraph.allSources),
+      const matchedSources = collectDirectlyMatchedFiles({
+        files: Array.from(moduleGraph.allSources),
         sourceFilters,
-        context.rootPath,
-      );
+        rootPath: context.rootPath,
+      });
 
       if (matchedSources.length === 0) {
         continue;
