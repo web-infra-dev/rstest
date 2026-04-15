@@ -80,6 +80,7 @@ export class PoolRunner {
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
   private stopTimer: NodeJS.Timeout | undefined;
+  private forceKillTimer: NodeJS.Timeout | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -219,18 +220,15 @@ export class PoolRunner {
       // graceful shutdown and only signal when the worker fails to exit in
       // time.
       this.stopTimer = setTimeout(() => {
-        void this.worker
-          .stop()
-          .catch(() => undefined)
-          .then(() => {
-            // If SIGTERM didn't finish it, force-kill.
-            this.stopTimer = setTimeout(() => {
-              void this.worker.stop({ force: true }).catch(() => undefined);
-            }, 5_000);
-            this.stopTimer.unref();
-          });
+        void this.worker.stop().catch(() => undefined);
       }, WORKER_STOP_TIMEOUT_MS);
       this.stopTimer.unref();
+      // Arm a hard SIGKILL fallback independently so it fires even if
+      // SIGTERM is trapped/ignored and `worker.stop()` never resolves.
+      this.forceKillTimer = setTimeout(() => {
+        void this.worker.stop({ force: true }).catch(() => undefined);
+      }, WORKER_STOP_TIMEOUT_MS + 5_000);
+      this.forceKillTimer.unref();
 
       if (options?.force) {
         await this.worker.stop({ force: true });
@@ -455,8 +453,13 @@ export class PoolRunner {
   }
 
   private clearStopTimer(): void {
-    if (!this.stopTimer) return;
-    clearTimeout(this.stopTimer);
-    this.stopTimer = undefined;
+    if (this.stopTimer) {
+      clearTimeout(this.stopTimer);
+      this.stopTimer = undefined;
+    }
+    if (this.forceKillTimer) {
+      clearTimeout(this.forceKillTimer);
+      this.forceKillTimer = undefined;
+    }
   }
 }
