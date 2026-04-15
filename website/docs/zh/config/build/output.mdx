@@ -148,13 +148,17 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.5" />
 
-- **类型：** `boolean`
+- **类型：** `boolean | (string | RegExp)[]`
 - **默认值：** 取决于 `testEnvironment`
 
 控制是否打包 `node_modules` 中的第三方依赖。
 
 - `true`：无论测试环境如何，始终打包所有第三方依赖。
 - `false`：无论测试环境如何，始终外部化第三方依赖。
+- `['pkg-name']`：仅打包列出的包，其余依赖保持外部化。
+- `['pkg-name/subpath']`：仅打包指定的包子路径。
+- `['pkg-name/*']`：按类似 glob 的模式匹配并打包包请求。
+- `[/^pkg-name\\/subpath/]`：按正则表达式匹配并打包包请求。
 
 当未设置该选项时，Rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
 
@@ -188,12 +192,43 @@ export default defineConfig({
 });
 ```
 
+如果你只想打包少量依赖包，而把其他依赖继续外部化，可以直接传入包名列表：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi'],
+  },
+});
+```
+
+你也可以直接匹配子路径或模式：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi/lib/index.js', 'strip-ansi/*'],
+  },
+});
+```
+
+这些模式只会影响 rstest 在当前构建图里仍然能够处理到的依赖请求。如果某个包本身已经被 externalize 了，那么它内部继续引用的子依赖也会保持 external。也就是说，`bundleDependencies` 不会把仅通过某个已 externalize 父包间接到达的传递依赖重新打包回来。
+
 ### 与 output.externals 的关系
 
 `output.bundleDependencies` 控制所有 `node_modules` 依赖的整体打包策略，而 [`output.externals`](#outputexternals) 允许对单个包进行细粒度控制。当两者同时配置时，`output.externals` 的优先级更高：
 
 - `bundleDependencies: true` + `externals: ['lodash']`：打包所有依赖，但外部化 `lodash`。
 - `bundleDependencies: false` + `externals` 无需配置，因为所有依赖已被外部化。
+
+实际使用时，这两个配置更适合相反的场景：
+
+- 当大部分依赖都应该保持 external，只有少量包或子路径需要被打包时，更适合使用 `bundleDependencies` pattern。
+- 当大部分依赖都应该保持打包，只有少量包需要被 externalize 时，更适合使用 `output.externals`。
 
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
