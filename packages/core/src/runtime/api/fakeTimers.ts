@@ -5,15 +5,26 @@
  * LICENSE file in the root directory of https://github.com/facebook/jest.
  */
 
-import {
-  type FakeTimerInstallOpts,
-  type FakeTimerWithContext,
-  type InstalledClock,
-  withGlobal,
+import type {
+  Config as FakeTimerInstallOpts,
+  FakeTimers as FakeTimerWithContext,
+  Clock as InstalledClock,
 } from '@sinonjs/fake-timers';
+
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
+type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
+
+const loadFakeTimersModule = () => {
+  // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
+  // preserving that pattern without breaking bundling/runtime resolution.
+  // Preserve the public sync timer API while avoiding module init work
+  // on worker startup when fake timers are never used.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const loaded = require('@sinonjs/fake-timers');
+  return { withGlobal: loaded.withGlobal };
+};
 
 export class FakeTimers {
   private _clock!: InstalledClock;
@@ -30,7 +41,7 @@ export class FakeTimers {
   }) {
     this._config = config;
     this._fakingTime = false;
-    this._fakeTimers = withGlobal(global);
+    this._fakeTimers = loadFakeTimersModule().withGlobal(global);
   }
 
   clearAllTimers(): void {
@@ -115,7 +126,6 @@ export class FakeTimers {
 
   runAllTicks(): void {
     if (this._checkFakeTimers()) {
-      // @ts-expect-error - doesn't exist?
       this._clock.runMicrotasks();
     }
   }
@@ -135,8 +145,11 @@ export class FakeTimers {
     const toFake = Object.keys(this._fakeTimers.timers)
       // Do not mock timers internally used by node by default. It can still be mocked through userConfig.
       .filter(
-        (timer) => timer !== 'nextTick' && timer !== 'queueMicrotask',
-      ) as (keyof FakeTimerWithContext['timers'])[];
+        (timer): timer is FakeMethod =>
+          timer !== 'Intl' &&
+          timer !== 'nextTick' &&
+          timer !== 'queueMicrotask',
+      );
 
     const isChildProcess = typeof process !== 'undefined' && !!process.send;
 
@@ -149,11 +162,12 @@ export class FakeTimers {
       shouldClearNativeTimers: true,
       now: Date.now(),
       toFake: [...toFake],
-      // @ts-expect-error untyped but supported
       ignoreMissingTimers: true,
       ...fakeTimersConfig,
     });
 
+    // temporary fix fake-timers 15.1.1 → 15.2.0 timerHeap.push error
+    this._clock.reset();
     this._fakingTime = true;
   }
 

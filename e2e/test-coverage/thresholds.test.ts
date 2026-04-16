@@ -4,7 +4,7 @@ import { runRstestCli } from '../scripts';
 
 describe('coverageThresholds', () => {
   it('should check global threshold correctly', async () => {
-    const { expectLog, cli, expectExecFailed } = await runRstestCli({
+    const { expectStderrLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.thresholds.config.ts'],
       options: {
@@ -16,21 +16,17 @@ describe('coverageThresholds', () => {
 
     await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expectLog(
+    expectStderrLog(
       /Coverage for statements .* does not meet global threshold/i,
-      logs,
     );
 
-    expectLog(
+    expectStderrLog(
       /Uncovered lines .* exceeds maximum global threshold allowed/i,
-      logs,
     );
   });
 
   it('should check glob threshold correctly', async () => {
-    const { expectLog, expectExecFailed, cli } = await runRstestCli({
+    const { expectStderrLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.globThresholds.config.ts'],
       options: {
@@ -42,18 +38,15 @@ describe('coverageThresholds', () => {
 
     await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expectLog(
+    expectStderrLog(
       /Error: coverage for statements .* does not meet "src\/\*\*" threshold/i,
-      logs,
     );
 
-    expectLog(/Coverage data for "node\/\*\*" was not found/i, logs);
+    expectStderrLog(/Coverage data for "node\/\*\*" was not found/i);
   });
 
   it('should check per files threshold correctly', async () => {
-    const { expectLog, expectExecFailed, cli } = await runRstestCli({
+    const { expectStderrLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args: ['run', '-c', 'rstest.perFileThresholds.config.ts'],
       options: {
@@ -65,11 +58,8 @@ describe('coverageThresholds', () => {
 
     await expectExecFailed();
 
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
-    expectLog(
+    expectStderrLog(
       /src\/string.ts coverage for statements .* does not meet "src\/\*\*" threshold/,
-      logs,
     );
   });
 });

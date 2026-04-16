@@ -1,7 +1,7 @@
 {
   "name": "@examples/node",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "build": "rsbuild build",
     "test": "rstest",
@@ -12,6 +12,6 @@
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*",
     "@types/node": "^22.16.5",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }

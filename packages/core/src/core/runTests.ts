@@ -1,39 +1,128 @@
+import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo } from '../types';
+import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
+import type { CoverageMap } from '../types/coverage';
 import {
   clearScreen,
   color,
-  getSetupFiles,
   getTestEntries,
   logger,
+  resolveShardedEntries,
 } from '../utils';
+import {
+  type BrowserTestRunOptions,
+  type BrowserTestRunResult,
+  loadBrowserModule,
+} from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
+/**
+ * Run browser mode tests.
+ * Returns the result for unified reporter output.
+ */
+async function runBrowserModeTests(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+  options: BrowserTestRunOptions,
+): Promise<BrowserTestRunResult | void> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
+  return runBrowserTests(context, options);
+}
+
+const getSignalExitCode = (signal: NodeJS.Signals): number => {
+  const signalNumber = osConstants.signals[signal];
+  return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
+};
+
 export async function runTests(context: Rstest): Promise<void> {
-  const {
-    rootPath,
-    reporters,
-    projects,
-    snapshotManager,
-    command,
-    normalizedConfig: { coverage },
-  } = context;
+  // Separate browser mode and node mode projects
+  const browserProjects = context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
 
-  const entriesCache = new Map<
-    string,
-    {
-      entries: Record<string, string>;
-      fileFilters?: string[];
+  const hasBrowserProjects = browserProjects.length > 0;
+  const hasNodeProjects = nodeProjects.length > 0;
+
+  const isWatchMode = context.command === 'watch';
+
+  // For non-watch mode with both browser and node tests, we need to unify reporter output
+  const shouldUnifyReporter =
+    !isWatchMode && hasBrowserProjects && hasNodeProjects;
+
+  // If only browser tests, run them and generate coverage
+  if (hasBrowserProjects && !hasNodeProjects) {
+    const { coverage } = context.normalizedConfig;
+
+    if (coverage.enabled) {
+      logger.log(
+        ` ${color.gray('Coverage enabled with')} %s\n`,
+        color.yellow(coverage.provider),
+      );
     }
-  >();
 
+    const browserResult = await runBrowserModeTests(context, browserProjects, {
+      skipOnTestRunEnd: false,
+    });
+
+    // Generate coverage reports for browser-only tests when execution produced test results.
+    // Skip coverage on early startup failures surfaced via unhandledErrors.
+    if (
+      coverage.enabled &&
+      browserResult?.results.length &&
+      !browserResult.unhandledErrors?.length
+    ) {
+      const coverageProvider = await createCoverageProvider(
+        coverage,
+        context.rootPath,
+      );
+      if (coverageProvider) {
+        const browserCoverageMap = coverageProvider.createCoverageMap();
+        for (const result of browserResult.results) {
+          if (result.coverage) {
+            browserCoverageMap.merge(result.coverage);
+          }
+        }
+        const { generateCoverage } = await import('../coverage/generate');
+        await generateCoverage(context, browserCoverageMap, coverageProvider);
+      }
+    }
+
+    return;
+  }
+
+  // If only node tests, run them (handled below)
+  // If both, run them in parallel
+
+  let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
+
+  const allProjects = context.projects;
+
+  const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
+    context;
+  const { coverage, shard } = normalizedConfig;
+
+  const entriesCache: Map<string, ProjectEntries> =
+    (await resolveShardedEntries(context)) || new Map();
+
+  // Define globTestSourceEntries after entriesCache is potentially populated
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
-    const { include, exclude, includeSource, root } = projects.find(
+    if (!isWatchMode && shard && entriesCache.has(name)) {
+      return entriesCache.get(name)!.entries;
+    }
+    const { include, exclude, includeSource, root } = allProjects.find(
       (p) => p.environmentName === name,
     )!.normalizedConfig;
     const entries = await getTestEntries({
@@ -53,8 +142,88 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
+  let browserProjectsToRun = browserProjects;
+  let nodeProjectsToRun = nodeProjects;
+
+  // In non-watch mode, proactively skip projects with no test files to avoid unnecessary builds
+  if (!isWatchMode) {
+    // Populate entries cache for all projects
+    await Promise.all(
+      allProjects.map((p) => globTestSourceEntries(p.environmentName)),
+    );
+
+    const hasEntries = (env: string) =>
+      Object.keys(entriesCache.get(env)?.entries || {}).length > 0;
+
+    browserProjectsToRun = browserProjects.filter((p) =>
+      hasEntries(p.environmentName),
+    );
+    nodeProjectsToRun = nodeProjects.filter((p) =>
+      hasEntries(p.environmentName),
+    );
+  } else if (shard) {
+    // In watch mode with sharding, only run projects that have sharded entries
+    browserProjectsToRun = browserProjects.filter((p) => {
+      return (
+        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
+        0
+      );
+    });
+    nodeProjectsToRun = nodeProjects.filter((p) => {
+      return (
+        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
+        0
+      );
+    });
+  }
+
+  const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
+  const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
+
+  // If there are browser tests to run, start them.
+  if (hasBrowserTestsToRun) {
+    const browserEntries = new Map();
+    if (shard) {
+      for (const p of browserProjectsToRun) {
+        browserEntries.set(
+          p.environmentName,
+          entriesCache.get(p.environmentName),
+        );
+      }
+    }
+    browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
+      skipOnTestRunEnd: shouldUnifyReporter,
+      shardedEntries: shard ? browserEntries : undefined,
+    });
+
+    // Prevent an unhandled rejection window in mixed node+browser runs.
+    // We still await the original promise later to surface the error.
+    browserResultPromise.catch(() => undefined);
+  }
+
+  // If there are no node tests to run, we can potentially exit early.
+  if (!hasNodeTestsToRun) {
+    if (browserResultPromise) {
+      await browserResultPromise;
+    }
+    // If only browser tests were to run and they ran, we should return.
+    if (hasBrowserTestsToRun) {
+      return;
+    }
+    // If no node projects at all, and no browser tests to run,
+    // then nothing to do here. This handles the original early exit for no node projects.
+    if (!hasNodeProjects) {
+      return;
+    }
+  }
+
+  // The `projects` variable now refers to node projects that have tests to run.
+  const projects = nodeProjectsToRun;
+
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    projects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -65,38 +234,60 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    // Global setup still applies to all original projects in context
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
+    projects,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      // Pass only the relevant node projects for Rsbuild processing
+      projects: projects.map((p) => p.normalizedConfig),
     },
-    globTestSourceEntries:
-      command === 'watch'
-        ? globTestSourceEntries
-        : async (name) => {
-            if (entriesCache.has(name)) {
-              return entriesCache.get(name)!.entries;
-            }
-            return globTestSourceEntries(name);
-          },
+    isWatchMode,
+    globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
     rsbuildInstance,
     rootPath,
   });
 
+  const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+    (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+    [],
+  );
+
+  const getRecommendWorkerCount = (): number => {
+    // TODO: the best way is to create workers on demand
+    const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
+      const project = projects.find((p) => p.environmentName === key);
+      return project?.normalizedConfig.browser.enabled !== true;
+    });
+
+    return nodeEntries.flatMap(
+      ([_key, entry]) => Object.values(entry.entries) || [],
+    ).length;
+  };
+
   const recommendWorkerCount =
-    command === 'watch'
-      ? Number.POSITIVE_INFINITY
-      : Array.from(entriesCache.values()).reduce(
-          (acc, entry) => acc + Object.keys(entry.entries).length,
-          0,
-        );
+    command === 'watch' ? Number.POSITIVE_INFINITY : getRecommendWorkerCount();
 
   const pool = await createPool({
     context,
@@ -126,18 +317,30 @@ export async function runTests(context: Rstest): Promise<void> {
     mode?: Mode;
     buildStart?: number;
   } = {}) => {
+    for (const reporter of reporters) {
+      await reporter.onTestRunStart?.();
+    }
+
     let testStart: number;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
     context.stateManager.reset();
 
+    // TODO: this is not the best practice for collecting test files
+    context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
+
+    const mergedCoverageMap: CoverageMap | undefined = coverageProvider
+      ? coverageProvider.createCoverageMap()
+      : undefined;
+
     const returns = await Promise.all(
-      context.projects.map(async (p) => {
+      projects.map(async (p) => {
         const {
           assetNames,
           entries,
           setupEntries,
+          globalSetupEntries,
           getAssetFiles,
           getSourceMaps,
           affectedEntries,
@@ -148,6 +351,37 @@ export async function runTests(context: Rstest): Promise<void> {
         });
 
         testStart ??= Date.now();
+
+        // Global setup only run once per project
+        // Global setup runs only if there is at least one running test
+        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
+          p._globalSetups = true;
+          const files = globalSetupEntries.flatMap((e) => e.files!);
+          const assetFilesPromise = getAssetFiles(files);
+          const sourceMapsPromise = getSourceMaps(files);
+          const [assetFiles, sourceMaps] = await Promise.all([
+            assetFilesPromise,
+            sourceMapsPromise,
+          ]);
+
+          const { success, errors } = await runGlobalSetup({
+            globalSetupEntries,
+            assetFiles,
+            sourceMaps,
+            interopDefault: true,
+            outputModule: p.outputModule,
+          });
+          if (!success) {
+            return {
+              results: [],
+              testResults: [],
+              errors,
+              assetNames,
+              // sourcemap is useless since we install source-map-support in worker
+              getSourceMaps: () => null,
+            };
+          }
+        }
 
         currentDeletedEntries.push(...deletedEntries);
 
@@ -187,6 +421,7 @@ export async function runTests(context: Rstest): Promise<void> {
           getAssetFiles,
           project: p,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
+          onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
         });
 
         return {
@@ -202,108 +437,212 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const testTime = Date.now() - testStart!;
 
-    const duration = {
-      totalTime: testTime + buildTime,
-      buildTime,
-      testTime,
-    };
+    // Wait for browser tests to complete if running in parallel
+    const browserResult = browserResultPromise
+      ? await browserResultPromise
+      : undefined;
+    const browserResolveSourcemap = browserResult?.resolveSourcemap;
+    const browserClose = browserResult?.close;
 
-    const results = returns.flatMap((r) => r.results);
-    const testResults = returns.flatMap((r) => r.testResults);
+    try {
+      const nodeResourceByAssetName = new Map<
+        string,
+        (typeof returns)[number]['getSourceMaps']
+      >();
 
-    context.updateReporterResultState(
-      results,
-      testResults,
-      currentDeletedEntries,
-    );
-
-    if (results.length === 0) {
-      if (command === 'watch') {
-        if (mode === 'on-demand') {
-          logger.log(color.yellow('No test files need re-run.'));
-        } else {
-          logger.log(color.yellow('No test files found.'));
+      for (const item of returns) {
+        for (const assetName of item.assetNames) {
+          nodeResourceByAssetName.set(assetName, item.getSourceMaps);
         }
-      } else {
-        const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-        logger.log(
-          color[code ? 'red' : 'yellow'](
-            `No test files found, exiting with code ${code}.`,
-          ),
-        );
-        process.exitCode = code;
       }
-      if (mode === 'all') {
-        if (context.fileFilters?.length) {
-          logger.log(
-            color.gray('filter: '),
-            context.fileFilters.join(color.gray(', ')),
-          );
+
+      const getSourcemap = async (
+        sourcePath: string,
+      ): Promise<SourceMapInput | null> => {
+        if (browserResolveSourcemap) {
+          const resolved = await browserResolveSourcemap(sourcePath);
+          if (resolved.handled) {
+            return resolved.sourcemap;
+          }
         }
 
-        context.projects.forEach((p) => {
-          if (context.projects.length > 1) {
-            logger.log('');
-            logger.log(color.gray('project:'), p.name);
+        const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
+        const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
+        return sourceMap ? JSON.parse(sourceMap) : null;
+      };
+
+      // When unifying reporter output, combine browser and node durations
+      const duration =
+        shouldUnifyReporter && browserResult
+          ? {
+              totalTime:
+                testTime + buildTime + browserResult.duration.totalTime,
+              buildTime: buildTime + browserResult.duration.buildTime,
+              testTime: testTime + browserResult.duration.testTime,
+            }
+          : {
+              totalTime: testTime + buildTime,
+              buildTime,
+              testTime,
+            };
+
+      const results = returns.flatMap((r) => r.results);
+      const testResults = returns.flatMap((r) => r.testResults);
+      const errors = returns.flatMap((r) => r.errors || []);
+
+      // Merge browser test results for coverage collection (only when unifying reporter output)
+      // In watch mode, browser and node tests run independently with their own reporters,
+      // so we should not merge stale browser results into node results
+      if (shouldUnifyReporter && browserResult?.results) {
+        results.push(...browserResult.results);
+        // Strip coverage from browser results to avoid memory bloat in reporter/state caches,
+        // same as the node-side pool layer does via `delete result.coverage`
+        for (const r of browserResult.results) {
+          if (r.coverage) {
+            mergedCoverageMap?.merge(r.coverage);
+            delete r.coverage;
           }
-          logger.log(
-            color.gray('include:'),
-            p.normalizedConfig.include.join(color.gray(', ')),
-          );
-          logger.log(
-            color.gray('exclude:'),
-            p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-          );
+        }
+      }
+      if (shouldUnifyReporter && browserResult?.testResults) {
+        testResults.push(...browserResult.testResults);
+      }
+      if (shouldUnifyReporter && browserResult?.unhandledErrors) {
+        errors.push(...browserResult.unhandledErrors);
+      }
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        currentDeletedEntries,
+      );
+
+      // Check for failures including browser results when unified
+      const nodeHasFailure =
+        results.some((r) => r.status === 'fail') || errors.length;
+      const browserHasFailure =
+        shouldUnifyReporter && browserResult?.hasFailure;
+
+      if (results.length === 0 && !errors.length) {
+        if (command === 'watch') {
+          if (mode === 'on-demand') {
+            logger.log(color.yellow('No test files need re-run.'));
+          } else {
+            logger.log(color.yellow('No test files found.'));
+          }
+        } else {
+          const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+
+          const message = `No test files found, exiting with code ${code}.`;
+          if (code === 0) {
+            logger.log(color.yellow(message));
+          } else {
+            logger.error(color.red(message));
+          }
+
+          process.exitCode = code;
+        }
+        if (mode === 'all') {
+          if (context.fileFilters?.length) {
+            logger.log(
+              color.gray('filter: '),
+              context.fileFilters.join(color.gray(', ')),
+            );
+          }
+
+          allProjects.forEach((p) => {
+            if (allProjects.length > 1) {
+              logger.log('');
+              logger.log(color.gray('project:'), p.name);
+            }
+            logger.log(color.gray('root:'), p.rootPath);
+
+            logger.log(
+              color.gray('include:'),
+              p.normalizedConfig.include.join(color.gray(', ')),
+            );
+            logger.log(
+              color.gray('exclude:'),
+              p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
+            );
+          });
+        }
+      }
+
+      const isFailure = nodeHasFailure || browserHasFailure;
+
+      if (isFailure) {
+        process.exitCode = 1;
+      }
+
+      for (const reporter of reporters) {
+        await reporter.onTestRunEnd?.({
+          results: context.reporterResults.results,
+          coverage: mergedCoverageMap?.toJSON(),
+          testResults: context.reporterResults.testResults,
+          unhandledErrors: errors,
+          snapshotSummary: snapshotManager.summary,
+          duration,
+          getSourcemap,
+          filterRerunTestPaths: currentEntries.length
+            ? currentEntries.map((e) => e.testPath)
+            : undefined,
         });
       }
-    }
 
-    const isFailure = results.some((r) => r.status === 'fail');
+      // Generate coverage reports after all tests complete
+      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+        const { generateCoverage } = await import('../coverage/generate');
 
-    if (isFailure) {
-      process.exitCode = 1;
-    }
-
-    for (const reporter of reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
-        snapshotSummary: snapshotManager.summary,
-        duration,
-        getSourcemap: async (name: string) => {
-          const resource = returns.find((r) => r.assetNames.includes(name));
-
-          const sourceMap = (await resource?.getSourceMaps([name]))?.[name];
-          return sourceMap ? JSON.parse(sourceMap) : null;
-        },
-        filterRerunTestPaths: currentEntries.length
-          ? currentEntries.map((e) => e.testPath)
-          : undefined,
-      });
-    }
-
-    // Generate coverage reports after all tests complete
-    if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
-      const { generateCoverage } = await import('../coverage/generate');
-
-      await generateCoverage(context, results, coverageProvider);
-    }
-
-    if (isFailure) {
-      const bail = context.normalizedConfig.bail;
-
-      if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-        logger.log(
-          color.yellow(
-            `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
-          ),
-        );
+        await generateCoverage(context, mergedCoverageMap!, coverageProvider);
       }
+
+      if (isFailure) {
+        const bail = context.normalizedConfig.bail;
+
+        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+          logger.log(
+            color.yellow(
+              `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
+            ),
+          );
+        }
+      }
+    } finally {
+      await browserClose?.();
     }
   };
 
   if (command === 'watch') {
     const enableCliShortcuts = isCliShortcutsEnabled();
+
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
+
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(getSignalExitCode(signal));
+    };
+
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -325,6 +664,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const { onBeforeRestart } = await import('./restart');
 
     onBeforeRestart(async () => {
+      await runGlobalTeardown();
       await pool.close();
       await closeServer();
     });
@@ -463,6 +803,22 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   } else {
     let isTeardown = false;
+    let isCleaningUp = false;
+
+    const cleanup = async () => {
+      if (isCleaningUp) {
+        return;
+      }
+      isCleaningUp = true;
+
+      try {
+        await runGlobalTeardown();
+        await pool.close();
+        await closeServer();
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    };
 
     const unExpectedExit = (code?: number) => {
       if (isTeardown) {
@@ -477,15 +833,41 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
+
+        // Run global teardown before exit
+        runGlobalTeardown().catch((error) => {
+          logger.log(color.red(`Error in global teardown: ${error}`));
+        });
+
         process.exitCode = 1;
       }
     };
-    process.on('exit', unExpectedExit);
 
-    await run();
-    isTeardown = true;
-    await pool.close();
-    await closeServer();
-    process.off('exit', unExpectedExit);
+    const handleSignal = async (signal: NodeJS.Signals) => {
+      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+      await cleanup();
+      // Exit with appropriate code (128 + signal number is Unix convention)
+      process.exit(getSignalExitCode(signal));
+    };
+
+    process.on('exit', unExpectedExit);
+    process.on('SIGINT', handleSignal);
+    process.on('SIGTERM', handleSignal);
+    process.on('SIGTSTP', handleSignal);
+
+    try {
+      await run();
+      isTeardown = true;
+      await pool.close();
+      await closeServer();
+
+      // Run global teardown after all tests are done
+      await runGlobalTeardown();
+    } finally {
+      process.off('exit', unExpectedExit);
+      process.off('SIGINT', handleSignal);
+      process.off('SIGTERM', handleSignal);
+      process.off('SIGTSTP', handleSignal);
+    }
   }
 }

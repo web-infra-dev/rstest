@@ -1,8 +1,7 @@
-import * as path from 'node:path';
+import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
-import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
@@ -17,11 +16,14 @@ export default defineConfig({
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
+  description:
+    'Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.',
   markdown: {
     link: {
       checkDeadLinks: true,
     },
   },
+  llms: true,
   search: {
     codeBlocks: true,
   },
@@ -74,7 +76,6 @@ export default defineConfig({
     pluginSitemap({
       domain: siteUrl,
     }),
-    pluginLlms(),
   ],
   builderConfig: {
     plugins: [

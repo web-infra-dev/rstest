@@ -51,13 +51,13 @@ describe('test interop', () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args:
-        process.env.RSTEST_OUTPUT_MODULE === 'true'
+        process.env.RSTEST_OUTPUT_MODULE !== 'false'
           ? [
               'run',
               './fixtures/interopLodash',
               '--testEnvironment=node',
               '-c',
-              './fixtures/rstest.lodash.config.ts',
+              './fixtures/rstest.lodash.config.mts',
             ]
           : ['run', './fixtures/interopLodash', '--testEnvironment=node'],
       options: {

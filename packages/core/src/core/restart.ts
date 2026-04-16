@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runRest } from '../cli/commands';
 import type { RstestInstance } from '../types';
-import { color, isTTY, logger } from '../utils';
+import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
 type Cleaner = () => unknown;
@@ -17,7 +17,7 @@ export const onBeforeRestart = (cleaner: Cleaner): void => {
 };
 
 const clearConsole = () => {
-  if (isTTY() && !process.env.DEBUG) {
+  if (isTTY() && !process.env.DEBUG && isColorSupported) {
     process.stdout.write('\x1B[H\x1B[2J');
   }
 };
@@ -48,7 +48,7 @@ const beforeRestart = async ({
   cleaners = [];
 };
 
-export const restart = async ({
+const restart = async ({
   filePath,
   clear = true,
   options,
@@ -57,7 +57,7 @@ export const restart = async ({
 }: {
   root: string;
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
@@ -75,7 +75,7 @@ export async function watchFilesForRestart({
   filters,
 }: {
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   rstest: RstestInstance;
   watchOptions?: ChokidarOptions;
 }): Promise<void> {

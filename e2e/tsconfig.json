@@ -2,12 +2,18 @@
   "extends": "@rstest/tsconfig/base",
   "compilerOptions": {
     "outDir": "./dist",
-    "baseUrl": "./",
     "rootDir": "./",
     "declaration": false,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
   },
   "include": ["./"],
-  "exclude": ["vue/", "projects/fixtures/", "globals/fixtures/"]
+  "exclude": [
+    "vue/",
+    "projects/fixtures/",
+    "projects/fixtures-shard/",
+    "globals/fixtures/",
+    "browser-mode/fixtures/react/"
+  ]
 }

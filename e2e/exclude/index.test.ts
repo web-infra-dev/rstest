@@ -59,7 +59,7 @@ describe('test exclude option', () => {
   it('should not exclude dist when override is true', async () => {
     const { expectLog, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.override.config.ts'],
+      args: ['run', '-c', 'rstest.override.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

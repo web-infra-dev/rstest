@@ -1,0 +1,194 @@
+---
+description: Rstest offers these core methods. Includes practical guidance, options, and examples for real projects.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Rstest core
+
+Rstest offers these core methods.
+
+## defineConfig
+
+This function helps you to autocomplete configuration types. It accepts a Rstest config object, or a function that returns a config.
+
+- **Type:**
+
+```ts
+function defineConfig(config: RstestConfig): RstestConfig;
+function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
+function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
+function defineConfig(config: RstestConfigExport): RstestConfigExport;
+```
+
+- **Example:**
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 10000,
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+  },
+});
+```
+
+## defineProject
+
+This function helps you to autocomplete configuration types for [Rstest Project](/guide/basic/projects). It accepts a Rstest project config object, or a function that returns a config.
+
+- **Type:**
+
+```ts
+type NestedProjectConfig = {
+  projects: (InlineProjectConfig | string)[];
+};
+
+function defineProject(config: ProjectConfig): ProjectConfig;
+function defineProject(config: NestedProjectConfig): NestedProjectConfig;
+function defineProject(config: () => ProjectConfig): () => ProjectConfig;
+function defineProject(
+  config: () => NestedProjectConfig,
+): () => NestedProjectConfig;
+function defineProject(
+  config: () => Promise<ProjectConfig>,
+): () => Promise<ProjectConfig>;
+function defineProject(
+  config: () => Promise<NestedProjectConfig>,
+): () => Promise<NestedProjectConfig>;
+```
+
+- **Example:**
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  root: './apps/web',
+  testTimeout: 15000,
+});
+```
+
+Use `defineProject` for the top-level export of a project config file. If that file returns a nested `projects` object, the object items inside `projects` are still inline projects.
+
+Compared with `defineInlineProject`, `defineProject` does not require `name` on the top-level exported project. If `name` is omitted, Rstest will resolve it the same way as the [name](/config/test/name) option: first from the current project's `package.json`, then from the folder name.
+
+## defineInlineProject
+
+<ApiMeta addedVersion="0.9.6" />
+
+This function helps you to autocomplete inline project configuration types inside `defineConfig({ projects: [...] })`. Inline projects must include a `name`.
+
+Unlike `defineProject`, `defineInlineProject` is for object items inside a `projects` array. Inline projects must provide `name` explicitly because they do not have a standalone project root to infer it from.
+
+- **Type:**
+
+```ts
+function defineInlineProject(config: InlineProjectConfig): InlineProjectConfig;
+```
+
+- **Example:**
+
+```ts
+import { defineConfig, defineInlineProject } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    defineInlineProject({
+      name: 'web',
+      root: './apps/web',
+      testTimeout: 15000,
+    }),
+  ],
+});
+```
+
+## mergeRstestConfig
+
+Merge multiple Rstest config objects into a single config. It deeply merges each configuration object, automatically combining multiple function values into an array of sequentially executed functions, and returns a merged configuration object.
+
+- **Type:**
+
+```ts
+function mergeRstestConfig(...configs: RstestConfig[]): RstestConfig;
+```
+
+- **Example:**
+
+```ts
+import { mergeRstestConfig } from '@rstest/core';
+
+const config = mergeRstestConfig(
+  {
+    testTimeout: 5000,
+  },
+  {
+    coverage: {
+      enabled: true,
+    },
+  },
+);
+```
+
+## mergeProjectConfig
+
+Merge multiple Project config objects into a single config.
+
+- **Type:**
+
+```ts
+function mergeProjectConfig(...configs: ProjectConfig[]): ProjectConfig;
+```
+
+- **Example:**
+
+```ts
+import { mergeProjectConfig } from '@rstest/core';
+
+const config = mergeProjectConfig(
+  {
+    projects: ['packages/*'],
+  },
+  {
+    testTimeout: 10000,
+  },
+);
+```
+
+## loadConfig
+
+Load Rstest configuration.
+
+- **Type:**
+
+```ts
+function loadConfig(params?: {
+  // Default is process.cwd()
+  cwd?: string;
+  // Specify the configuration file (relative or absolute path)
+  path?: string;
+  envMode?: string;
+  configLoader?: 'auto' | 'jiti' | 'native';
+}): Promise<{
+  content: RstestConfig;
+  filePath: string | null;
+}>;
+```
+
+- **Example:**
+
+```ts
+import { loadConfig } from '@rstest/core';
+
+const { content, filePath } = await loadConfig({
+  cwd: './my-project',
+  path: './rstest.config.ts',
+});
+
+console.log('Config loaded from:', filePath);
+console.log('Config:', content);
+```
+
+If the Rstest config file does not exist in the cwd directory, the return value of the loadConfig method is `{ content: {}, filePath: null }`.

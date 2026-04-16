@@ -16,6 +16,7 @@ export class TestStateManager {
   >();
 
   public testModules: TestFileResult[] = [];
+  public testFiles: string[] | undefined = undefined;
 
   onTestFileStart(testPath: string): void {
     this.runningModules.set(testPath, { runningTests: [], results: [] });
@@ -62,7 +63,13 @@ export class TestStateManager {
   getCountOfFailedTests(): number {
     const testResults: TestResult[] = Array.from(this.runningModules.values())
       .flatMap(({ results }) => results)
-      .concat(this.testModules.flatMap((mod) => mod.results));
+      .concat(
+        this.testModules.flatMap((mod) =>
+          mod.results.length > 0
+            ? mod.results
+            : [{ status: mod.status } as TestResult],
+        ),
+      );
 
     return testResults.filter((t) => t.status === 'fail').length;
   }
@@ -75,5 +82,6 @@ export class TestStateManager {
   reset(): void {
     this.runningModules.clear();
     this.testModules = [];
+    this.testFiles = undefined;
   }
 }

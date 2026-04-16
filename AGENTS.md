@@ -1,37 +1,84 @@
-# Repository guidelines
+# Rstest monorepo
 
-## Project structure & module organization
+Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 
-- Run workspace commands from the repository root; `pnpm-workspace.yaml` wires packages and shared tooling.
-- Core implementation lives in `packages/core/src`, with mirrored tests in `packages/core/tests` (for example, `src/core/plugins/mockLoader.mjs` ↔ `tests/core/mockLoader.test.ts`).
-- `examples/` holds usage demos, `e2e/` carries integration suites and fixtures, and `scripts/` plus `website/` supply build utilities and documentation assets.
-- Keep assets, fixtures, and build artifacts inside the package that owns them to avoid cross-package coupling.
+## Sub-package Instructions
 
-## Build, test, and development commands
+When working on code in a specific package, use the Read tool to load that package's AGENTS.md file for package-specific guidelines:
 
-- `pnpm install` installs the entire workspace.
-- `pnpm --filter @rstest/core build` compiles the core package via Rslib.
-- `pnpm --filter @rstest/core dev` watches the core build for rapid iteration.
-- `pnpm --filter @rstest/core test` executes the unit suite; add `-- tests/core/mockLoader.test.ts` for a single file and append `-- --updateSnapshot` only when behavior changes.
-- `pnpm e2e` runs the browser-level regression suite inside `e2e/`.
-- `pnpm biome check` (aliased by `pnpm lint`) formats code, enforces lint rules, and performs spell checks.
+- For @rstest/core: @packages/core/AGENTS.md
+- For @rstest/browser: @packages/browser/AGENTS.md
+- For @rstest/browser-ui: @packages/browser-ui/AGENTS.md
+- For @rstest/browser-react: @packages/browser-react/AGENTS.md
+- For @rstest/coverage-istanbul: @packages/coverage-istanbul/AGENTS.md
+- For @rstest/adapter-rslib: @packages/adapter-rslib/AGENTS.md
+- For @rstest/adapter-rsbuild: @packages/adapter-rsbuild/AGENTS.md
+- For rstest VS Code extension: @packages/vscode/AGENTS.md
+- For documentation site: @website/AGENTS.md
 
-## Coding style & naming conventions
+## Monorepo structure
 
-- Treat packages as ESM-first: use `.mjs` for runtime loaders and `.ts` for typed utilities; avoid mixing CommonJS helpers.
-- Follow two-space indentation, LF line endings, and keep files ASCII unless the feature already relies on Unicode.
-- Use `camelCase` for locals, `PascalCase` for exported types/components, and `SCREAMING_SNAKE_CASE` only for shared constants.
-- Keep modules focused on a primary export with internal helpers defined nearby, and run `pnpm biome check` or `pnpm format` before committing.
+- `packages/core/` — @rstest/core: Core testing framework (CLI, runtime, reporter, pool)
+- `packages/browser/` — @rstest/browser: Browser mode support (Playwright, WebSocket RPC)
+- `packages/browser-ui/` — @rstest/browser-ui: Browser test UI (React + Tailwind + Ant Design)
+- `packages/browser-react/` — @rstest/browser-react: React component testing utilities
+- `packages/coverage-istanbul/` — @rstest/coverage-istanbul: Istanbul coverage provider
+- `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
+- `packages/adapter-rsbuild/` — @rstest/adapter-rsbuild: Rsbuild configuration adapter
+- `packages/vscode/` — rstest: VS Code extension
+- `e2e/` — End-to-end integration tests
+- `examples/` — Example projects (node, react, browser)
+- `website/` — Documentation site (Rspress)
+- `scripts/` — Build scripts and shared configs
 
-## Testing guidelines
+## Commands
 
-- Unit tests use `@rstest/core`; place new specs under `packages/<pkg>/tests` mirroring the source layout.
-- Run targeted suites during development (`pnpm --filter @rstest/core test -- tests/core/<suite>.test.ts`), then execute the full filter before pushing.
-- Integration flows live in `e2e/`; isolate fixtures per scenario and trigger them via `pnpm e2e`.
-- Cover success paths, error handling, and transformation edge cases. Update snapshots deliberately and keep coverage thresholds from `rstest.config.ts` intact.
+```bash
+# Root commands
+pnpm install                  # Install all workspace dependencies
+pnpm build                    # Build all packages (excludes examples)
+pnpm test                     # Run unit tests via rstest
+pnpm e2e                      # Run e2e tests
+pnpm lint                     # Biome check + spell check + type lint
+pnpm format                   # Prettier format
+pnpm typecheck                # Type check all packages
 
-## Commit & pull request guidelines
+# Package-specific
+pnpm --filter @rstest/core build
+pnpm --filter @rstest/core dev
+pnpm --filter @rstest/core test
+pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
-- Follow Conventional Commits (`type(scope): subject`) consistent with the existing history (`feat`, `fix`, `docs`, `chore`).
-- Each PR should explain motivation, summarize key changes, attach relevant test command output, and reference issues or discussions.
-- Ensure `pnpm lint` and the necessary test commands succeed before requesting review, and keep diffs scoped for efficient feedback.
+# File-scoped (faster feedback)
+pnpm biome check --write path/to/file.ts   # Lint + auto-fix
+pnpm prettier --write path/to/file.ts       # Format
+pnpm tsc --noEmit path/to/file.ts           # Type check
+```
+
+_Note_: E2E tests and examples consume built package output — rebuild affected packages before running them (e.g., `pnpm --filter @rstest/browser build`). For testing workflows, see the testing skill.
+
+## Do
+
+- Use ESM-first: `.mjs` for runtime loaders, `.ts` for typed utilities
+- Use 2-space indentation, LF line endings
+- Use camelCase for locals, PascalCase for types/components, SCREAMING_SNAKE_CASE for constants
+- Keep changes small and focused
+- Place tests mirroring source structure
+
+## Don't
+
+- Don't mix CommonJS and ESM in the same module
+- Don't add heavy dependencies without discussion
+- Don't use namespace imports like `import * as foo from 'foo'` unless the module shape requires it
+- Don't make repo-wide rewrites unless explicitly asked
+
+## Skills
+
+Available workflow skills in `.agents/skills/`:
+
+| Skill       | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| development | Feature / bug-fix checklist for scope review and workflow routing                 |
+| pr          | Create a PR for the current branch                                                |
+| testing     | Testing workflow for the rstest monorepo (run tests, write tests, debug failures) |
+| typescript  | TypeScript anti-slop guardrails for .ts, .tsx, and .mts files                     |

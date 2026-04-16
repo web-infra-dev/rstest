@@ -4,8 +4,12 @@ import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
+import { BlobReporter } from '../reporter/blob';
+import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
+import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   NormalizedConfig,
@@ -20,7 +24,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath, TS_CONFIG_FILE } from '../utils';
+import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -43,7 +47,7 @@ export class Rstest implements RstestContext {
   public command: RstestCommand;
   public fileFilters?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter | JUnitReporter)[];
+  public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public version: string;
   public rootPath: string;
@@ -61,6 +65,13 @@ export class Rstest implements RstestContext {
   public testState: RstestTestState = {
     getRunningModules: () => this.stateManager.runningModules,
     getTestModules: () => this.stateManager.testModules,
+    getTestFiles: () => {
+      // TODO: support collecting test files in watch mode
+      if (this.command === 'watch') {
+        return undefined;
+      }
+      return this.stateManager.testFiles;
+    },
   };
 
   public projects: ProjectContext[] = [];
@@ -89,18 +100,15 @@ export class Rstest implements RstestContext {
       root: rootPath,
     });
 
-    const reporters =
-      command !== 'list'
-        ? createReporters(rstestConfig.reporters, {
-            rootPath,
-            config: rstestConfig,
-            testState: this.testState,
-          })
-        : [];
+    if (command === 'watch' && rstestConfig.shard) {
+      logger.error('Test sharding is not supported in watch mode.');
+      process.exit(1);
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
-    this.reporters = reporters;
+
     this.snapshotManager = snapshotManager;
     this.version = RSTEST_VERSION;
     this.rootPath = rootPath;
@@ -109,6 +117,21 @@ export class Rstest implements RstestContext {
     this.projects = projects.length
       ? projects.map((project) => {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
+          if (
+            project.config.shard &&
+            (project.config.shard.count !== rstestConfig.shard?.count ||
+              project.config.shard.index !== rstestConfig.shard?.index)
+          ) {
+            logger.error(
+              'The `shard` option is a global option and cannot be set per-project.\n' +
+                'global `shard` option:\n' +
+                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
+                `project "${project.config.name}" shard option:\n` +
+                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
+            );
+            process.exit(1);
+          }
 
           // TODO: support extend projects config
           const config = withDefaultConfig(
@@ -136,9 +159,10 @@ export class Rstest implements RstestContext {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
+            _globalSetups: false,
             outputModule:
               config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE === 'true',
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
             environmentName: formatEnvironmentName(config.name),
             normalizedConfig: config,
           };
@@ -147,14 +171,42 @@ export class Rstest implements RstestContext {
           {
             configFilePath,
             rootPath,
+            _globalSetups: false,
             name: rstestConfig.name,
             outputModule:
               rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE === 'true',
+              process.env.RSTEST_OUTPUT_MODULE !== 'false',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
         ];
+
+    // Create a map of project name to project config for reporters
+    const projectConfigs = new Map(
+      this.projects.map((p) => [p.name, p.normalizedConfig]),
+    );
+
+    const reporters =
+      command !== 'list'
+        ? createReporters(rstestConfig.reporters, {
+            rootPath,
+            config: rstestConfig,
+            testState: this.testState,
+            fileFilters: this.fileFilters,
+            projectConfigs,
+            options: {
+              showProjectName: projects.length > 1,
+            },
+          }).filter((r) => {
+            // Exclude blob reporter when merging (we consume blobs, not produce them)
+            if (command === 'merge-reports' && r instanceof BlobReporter) {
+              return false;
+            }
+            return true;
+          })
+        : [];
+
+    this.reporters = reporters;
   }
 
   public updateReporterResultState(
@@ -197,21 +249,27 @@ export class Rstest implements RstestContext {
 
 const reportersMap: {
   default: typeof DefaultReporter;
+  dot: typeof DotReporter;
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  json: typeof JsonReporter;
+  md: typeof MdReporter;
+  blob: typeof BlobReporter;
 } = {
   default: DefaultReporter,
+  dot: DotReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  json: JsonReporter,
+  md: MdReporter,
+  blob: BlobReporter,
 };
 
-export type BuiltInReporterNames = keyof typeof reportersMap;
-
-export function createReporters(
+function createReporters(
   reporters: RstestConfig['reporters'],
-  initOptions: any = {},
+  initConfig: any = {},
 ): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
@@ -221,14 +279,17 @@ export function createReporters(
       if (name in reportersMap) {
         const Reporter = reportersMap[name];
         return new Reporter({
-          ...initOptions,
-          options,
+          ...initConfig,
+          options: {
+            ...(initConfig.options || {}),
+            ...options,
+          },
         });
       }
 
       // TODO: load third-party reporters
       throw new Error(
-        `Reporter ${reporter} not found. Please install it or use a built-in reporter.`,
+        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
       );
     }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, rstest } from '@rstest/core';
+// biome-ignore lint/performance/noNamespaceImport: this test verifies spyOn behavior against a module namespace.
 import * as utils from './fixtures/util';
 
 describe('test spyOn', () => {
@@ -77,5 +78,16 @@ describe('test spyOn', () => {
 
     spy.mockReset();
     expect(util1.sayHi()).toBe('hi');
+  });
+
+  it('spyOn re-spy', () => {
+    const hi = {
+      sayHi: () => 'hi',
+    };
+    rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+
+    expect(hi.sayHi()).toBe('hello');
+    // should get the same spy instance
+    expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
   });
 });

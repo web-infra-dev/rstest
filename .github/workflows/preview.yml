@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           ref: ${{ github.event.inputs.branch }}
@@ -31,7 +31,7 @@ jobs:
           npm install -g corepack@latest --force
           corepack enable
 
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -42,7 +42,7 @@ jobs:
 
       - name: Setup Node.js
         if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22.x
           cache: 'pnpm'
@@ -52,5 +52,41 @@ jobs:
         run: pnpm install
 
       - name: Publish Preview
+        id: publish
         if: steps.changes.outputs.changed == 'true'
         run: pnpx pkg-pr-new publish --pnpm ./packages/*
+
+      - name: Preview summary
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          sha='${{ steps.publish.outputs.sha }}'
+          packages='${{ steps.publish.outputs.packages }}'
+          urls='${{ steps.publish.outputs.urls }}'
+
+          shaDisplay="${sha:-N/A}"
+
+          {
+            echo "## pkg.pr.new preview"
+            echo ""
+            echo "**sha**: \`$shaDisplay\`"
+
+            if [ -n "$packages" ]; then
+              echo ""
+              echo "### packages"
+              echo ""
+              for pkg in $packages; do
+                echo "- \`$pkg\`"
+              done
+            fi
+
+            if [ -n "$urls" ]; then
+              echo ""
+              echo "### URLs"
+              echo ""
+              for url in $urls; do
+                echo "- <$url>"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::notice title=pkg.pr.new::sha=$shaDisplay (see Summary for packages/urls)"

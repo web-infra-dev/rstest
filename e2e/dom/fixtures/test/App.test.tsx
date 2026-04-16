@@ -19,3 +19,11 @@ test('should get window property correctly', async () => {
 test('should get global property correctly', async () => {
   expect(global.URL).toBeDefined();
 });
+
+test('should support fetch', async () => {
+  await expect(
+    fetch(new URL('/404', location.href), {
+      signal: AbortSignal.timeout(0),
+    }),
+  ).rejects.toHaveProperty('name', 'TimeoutError');
+});

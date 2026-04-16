@@ -7,7 +7,9 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
+import type { MaybePromise } from './utils';
 
+// TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
 >;
@@ -25,6 +27,36 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+export type BundleDependencyPattern = string | RegExp;
+
+export type RstestOutputConfig = Pick<
+  NonNullable<RsbuildConfig['output']>,
+  'cssModules' | 'emitAssets' | 'externals' | 'cleanDistPath' | 'module'
+> & {
+  distPath?: string | { root?: string };
+  /**
+   * Whether to bundle third-party dependencies from node_modules.
+   * - `true`: Always bundle all third-party dependencies.
+   * - `false`: Always externalize third-party dependencies.
+   * - `['pkg']`: Bundle the package and all of its subpaths.
+   * - `['pkg/subpath']`: Bundle a specific package subpath.
+   * - `['pkg/*']`: Bundle package subpaths that match the pattern.
+   * - `[/^pkg\\/subpath/]`: Bundle package requests matched by a regular
+   *   expression.
+   *
+   * When unset, rstest bundles dependencies in browser-like test
+   * environments (jsdom, happy-dom, etc.) and externalizes them in the node
+   * environment. This option is not supported in browser mode.
+   */
+  bundleDependencies?: boolean | BundleDependencyPattern[];
+};
+
+export type NormalizedOutputConfig = Partial<
+  Omit<RstestOutputConfig, 'distPath'>
+> & {
+  distPath: { root: string };
+};
+
 export type ProjectConfig = Omit<
   RstestConfig,
   | 'projects'
@@ -34,9 +66,112 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'hideSkippedTests'
   | 'bail'
->;
+  | 'shard'
+  | 'output'
+> & {
+  output?: Omit<RstestOutputConfig, 'distPath'>;
+};
+
+/**
+ * Supported browser types for browser mode testing.
+ *
+ * - `chromium` - Google Chrome, Microsoft Edge
+ * - `firefox` - Mozilla Firefox
+ * - `webkit` - Safari
+ */
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
+/**
+ * Device presets aligned with Chrome DevTools device toolbar.
+ *
+ * These values are stable identifiers (not user-facing labels).
+ *
+ * IMPORTANT: Keep this union in sync with
+ * `@rstest/browser` preset runtime source:
+ * `packages/browser/src/viewportPresets.ts`.
+ *
+ * `@rstest/core` owns `defineConfig` typing, while `@rstest/browser` owns
+ * runtime validation and resolution for preset ids.
+ */
+export type DevicePreset =
+  | 'iPhoneSE'
+  | 'iPhoneXR'
+  | 'iPhone12Pro'
+  | 'iPhone14ProMax'
+  | 'Pixel7'
+  | 'SamsungGalaxyS8Plus'
+  | 'SamsungGalaxyS20Ultra'
+  | 'iPadMini'
+  | 'iPadAir'
+  | 'iPadPro'
+  | 'SurfacePro7'
+  | 'SurfaceDuo'
+  | 'GalaxyZFold5'
+  | 'AsusZenbookFold'
+  | 'SamsungGalaxyA51A71'
+  | 'NestHub'
+  | 'NestHubMax';
+
+export type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
+
+export type BrowserModeConfig = {
+  /**
+   * Enable browser mode when running tests.
+   *
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Browser provider to use for running tests.
+   *
+   * Currently only 'playwright' is supported.
+   */
+  provider: 'playwright';
+  /**
+   * Which browser to use for testing.
+   *
+   * @default 'chromium'
+   */
+  browser?: BrowserName;
+  /**
+   * Run browser in headless mode.
+   *
+   * @default Inferred from CI environment. `true` in CI, `false` otherwise.
+   */
+  headless?: boolean;
+  /**
+   * Port for the browser mode dev server.
+   *
+   * If not specified, a random available port will be used.
+   */
+  port?: number;
+
+  /**
+   * Default runner iframe viewport.
+   *
+   * When not specified, the browser UI fills the preview panel.
+   */
+  viewport?: BrowserViewport;
+  /**
+   * Whether to exit if the specified port is already in use.
+   *
+   * @default false
+   */
+  strictPort?: boolean;
+  /**
+   * Provider-specific config passed through to the selected browser provider.
+   *
+   * Use provider-owned types or helpers in user config when you want richer
+   * IntelliSense for this field.
+   */
+  providerOptions?: Record<string, unknown>;
+};
 
 type SnapshotFormat = Omit<
   NonNullable<SnapshotStateOptions['snapshotFormat']>,
@@ -51,10 +186,32 @@ type SnapshotFormat = Omit<
 /**
  * Inline project config must include a name.
  */
-type InlineProjectConfig = ProjectConfig & { name: string };
+export type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
+type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
+  reporters?: any;
+};
+
+export type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
+
+export type ExtendConfigFn = (
+  userConfig: Readonly<LooseRstestConfig>,
+) => MaybePromise<ExtendConfig>;
+
+export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+
+export type EnvironmentWithOptions = {
+  name: EnvironmentName;
+  options?: Record<string, any>;
+};
+
 export interface RstestConfig {
+  /**
+   * Extend configuration from adapters
+   */
+  extends?: ExtendConfigFn | ExtendConfig | (ExtendConfigFn | ExtendConfig)[];
+
   /**
    * Project root
    *
@@ -104,6 +261,13 @@ export interface RstestConfig {
   setupFiles?: string[] | string;
 
   /**
+   * Path to global setup files, relative to project root.
+   * A global setup file can either export named functions `setup` and `teardown`
+   * or a `default` function that returns a teardown function.
+   */
+  globalSetup?: string[] | string;
+
+  /**
    * Retry the test specific number of times if it fails.
    * @default 0
    */
@@ -136,7 +300,7 @@ export interface RstestConfig {
    *
    * @default 'node'
    */
-  testEnvironment?: 'node' | 'jsdom' | 'happy-dom';
+  testEnvironment?: EnvironmentName | EnvironmentWithOptions;
 
   /**
    * Stop running tests after n failures.
@@ -145,6 +309,15 @@ export interface RstestConfig {
    * @default 0
    */
   bail?: number;
+
+  /**
+   * Split tests into several shards.
+   * This is useful for running tests in parallel on multiple machines.
+   */
+  shard?: {
+    count: number;
+    index: number;
+  };
 
   /**
    * print console traces when calling any console method.
@@ -185,6 +358,12 @@ export interface RstestConfig {
    * @default false
    */
   hideSkippedTests?: boolean;
+  /**
+   * Hide skipped test files logs.
+   *
+   * @default false
+   */
+  hideSkippedTestFiles?: boolean;
   /**
    * Run only tests with a name that matches the regex.
    */
@@ -229,7 +408,7 @@ export interface RstestConfig {
    */
   unstubGlobals?: boolean;
   /**
-   * Restores all `process.env` values that were changed with `rstest.stubEnv` before every test.
+   * Restores all runtime env values that were changed with `rstest.stubEnv` before every test.
    * @default false
    */
   unstubEnvs?: boolean;
@@ -265,6 +444,11 @@ export interface RstestConfig {
   env?: Partial<NodeJS.ProcessEnv>;
 
   /**
+   * Browser mode configuration.
+   */
+  browser?: BrowserModeConfig;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;
@@ -274,26 +458,30 @@ export interface RstestConfig {
    */
   chaiConfig?: ChaiConfig;
 
+  /**
+   * Include `location` property in `TestInfo` received by reporters
+   */
+  includeTaskLocation?: boolean;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];
 
   source?: Pick<
     NonNullable<RsbuildConfig['source']>,
-    'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
-  >;
-
-  performance?: Pick<
-    NonNullable<RsbuildConfig['performance']>,
-    'bundleAnalyze'
+    | 'assetsInclude'
+    | 'define'
+    | 'tsconfigPath'
+    | 'decorators'
+    | 'include'
+    | 'exclude'
+    | 'transformImport'
+    | 'assetsInclude'
   >;
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;
 
-  output?: Pick<
-    NonNullable<RsbuildConfig['output']>,
-    'cssModules' | 'externals' | 'cleanDistPath' | 'module'
-  >;
+  output?: RstestOutputConfig;
 
   resolve?: RsbuildConfig['resolve'];
 
@@ -308,36 +496,69 @@ type OptionalKeys =
   | 'plugins'
   | 'source'
   | 'resolve'
-  | 'output'
-  | 'performance'
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
   | 'chaiConfig'
-  | 'resolveSnapshotPath';
+  | 'hideSkippedTestFiles'
+  | 'resolveSnapshotPath'
+  | 'extends'
+  | 'shard';
+
+export type NormalizedBrowserModeConfig = {
+  enabled: boolean;
+  provider: 'playwright';
+  browser: BrowserName;
+  headless: boolean;
+  port?: number;
+  strictPort: boolean;
+  viewport?: BrowserViewport;
+  providerOptions: Record<string, unknown>;
+};
 
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
-    OptionalKeys | 'pool' | 'projects' | 'coverage' | 'setupFiles' | 'exclude'
+    | OptionalKeys
+    | 'pool'
+    | 'projects'
+    | 'coverage'
+    | 'setupFiles'
+    | 'globalSetup'
+    | 'exclude'
+    | 'testEnvironment'
+    | 'browser'
+    | 'output'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
     pool: RstestPoolOptions;
+    testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
+    browser: NormalizedBrowserModeConfig;
     setupFiles: string[];
+    globalSetup: string[];
     exclude: {
       patterns: string[];
       override?: boolean;
     };
+    output: NormalizedOutputConfig;
   };
 
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,
-    OptionalKeys | 'projects' | 'reporters' | 'pool' | 'setupFiles'
+    | OptionalKeys
+    | 'projects'
+    | 'reporters'
+    | 'pool'
+    | 'setupFiles'
+    | 'globalSetup'
+    | 'output'
   >
 > &
   Pick<NormalizedConfig, OptionalKeys> & {
     setupFiles: string[];
+    globalSetup: string[];
+    output?: Omit<NormalizedOutputConfig, 'distPath'>;
   };

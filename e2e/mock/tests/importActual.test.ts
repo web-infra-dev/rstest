@@ -1,4 +1,4 @@
-import { expect, it, rs } from '@rstest/core';
+import { afterAll, expect, it, rs } from '@rstest/core';
 import axiosActual from 'axios' with { rstest: 'importActual' };
 import axios from 'axios';
 import { b as bActual } from '../src/b' with { rstest: 'importActual' };
@@ -6,6 +6,12 @@ import { b } from '../src/b';
 
 // #region axios
 rs.mock('axios');
+
+afterAll(() => {
+  rs.doUnmock('../src/b');
+  rs.doUnmock('../src/c');
+  rs.doUnmock('../src/d');
+});
 
 it('mocked axios (axios is externalized)', async () => {
   await axios.get('string');

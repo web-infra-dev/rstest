@@ -1,10 +1,10 @@
 import { relative } from 'pathe';
-import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
   NormalizedConfig,
+  NormalizedProjectConfig,
   Reporter,
   RstestTestState,
   SnapshotSummary,
@@ -12,61 +12,91 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, isTTY, logger } from '../utils';
+import { isTTY } from '../utils';
+import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
-import { logCase, logFileTitle } from './utils';
+import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
   protected rootPath: string;
   protected config: NormalizedConfig;
-  private options: DefaultReporterOptions = {};
+  protected projectConfigs: Map<string, NormalizedProjectConfig>;
+  private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  protected nonTTYProgressNotifier: NonTTYProgressNotifier | undefined;
+  private readonly testState: RstestTestState;
 
   constructor({
     rootPath,
     options,
     config,
     testState,
+    projectConfigs,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: DefaultReporterOptions;
     testState: RstestTestState;
+    projectConfigs?: Map<string, NormalizedProjectConfig>;
   }) {
     this.rootPath = rootPath;
     this.config = config;
+    this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
+    this.testState = testState;
     if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
         rootPath,
         testState,
         options.logger,
       );
+    } else {
+      this.nonTTYProgressNotifier = new NonTTYProgressNotifier(
+        rootPath,
+        testState,
+      );
     }
   }
 
   onTestFileStart(): void {
     this.statusRenderer?.onTestFileStart();
+    this.nonTTYProgressNotifier?.start();
   }
 
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
+    this.nonTTYProgressNotifier?.notifyOutput();
+
+    const projectConfig = this.projectConfigs.get(test.project);
+    const hideSkippedTestFiles =
+      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+
+    if (hideSkippedTestFiles && test.status === 'skip') {
+      return;
+    }
 
     const relativePath = relative(this.rootPath, test.testPath);
-    const { slowTestThreshold } = this.config;
+    const slowTestThreshold =
+      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
 
-    logFileTitle(test, relativePath);
+    logFileTitle(test, relativePath, false, this.options.showProjectName);
+    // Always display all test cases when running a single test file
+    const showAllCases = this.testState.getTestFiles()?.length === 1;
+
+    const hideSkippedTests =
+      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
     for (const result of test.results) {
       const isDisplayed =
+        showAllCases ||
         result.status === 'fail' ||
         (result.duration ?? 0) > slowTestThreshold ||
         (result.retryCount ?? 0) > 0;
       isDisplayed &&
         logCase(result, {
           slowTestThreshold,
-          hideSkippedTests: this.config.hideSkippedTests,
+          hideSkippedTests,
         });
     }
   }
@@ -82,33 +112,14 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    const titles = [];
+    this.nonTTYProgressNotifier?.notifyOutput();
 
-    const testPath = relative(this.rootPath, log.testPath);
-
-    if (log.trace) {
-      const [frame] = stackTraceParse(log.trace);
-      const filePath = relative(this.rootPath, frame!.file || '');
-
-      if (filePath !== testPath) {
-        titles.push(testPath);
-      }
-      titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
-    } else {
-      titles.push(testPath);
-    }
-    const logOutput = log.type === 'stdout' ? logger.log : logger.stderr;
-
-    logOutput('');
-    logOutput(
-      `${log.name}${color.gray(color.dim(` | ${titles.join(color.gray(color.dim(' | ')))}`))}`,
-    );
-    logOutput(log.content);
-    logOutput('');
+    logUserConsoleLog(this.rootPath, log);
   }
 
-  async onExit(): Promise<void> {
+  onExit(): void {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
   }
 
   async onTestRunEnd({
@@ -118,15 +129,18 @@ export class DefaultReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     filterRerunTestPaths,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
 
     if (this.options.summary === false) {
       return;
@@ -135,6 +149,7 @@ export class DefaultReporter implements Reporter {
     await printSummaryErrorLogs({
       testResults,
       results,
+      unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
       filterRerunTestPaths,

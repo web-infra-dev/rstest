@@ -20,17 +20,18 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'include',
       'exclude',
       'setupFiles',
+      'globalSetup',
       'projects',
-      'update',
-      'globals',
       'passWithNoTests',
       'includeSource',
       'testNamePattern',
+      'extends',
     ],
   },
   {
     name: 'runtime',
     items: [
+      'globals',
       'env',
       'bail',
       'retry',
@@ -54,16 +55,31 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: ['pool', 'isolate', 'testEnvironment'],
   },
   {
+    name: 'browser',
+    items: [
+      'browser.enabled',
+      'browser.provider',
+      'browser.browser',
+      'browser.headless',
+      'browser.port',
+      'browser.providerOptions',
+    ],
+  },
+  {
+    name: 'snapshot',
+    items: ['update', 'snapshotFormat', 'resolveSnapshotPath'],
+  },
+  {
     name: 'output',
     items: [
       'coverage',
       'reporters',
+      'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
+      'hideSkippedTestFiles',
       'slowTestThreshold',
-      'snapshotFormat',
       'chaiConfig',
-      'resolveSnapshotPath',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
@@ -84,9 +100,13 @@ export default function Overview() {
       text: item.name,
       link: '',
       items: item.items?.map((item) => {
+        const [page, anchor] = item.split('.');
+        const target = page ?? item;
+        const hash = anchor ? `#${camelToKebab(anchor)}` : '';
+
         return {
-          link: tUrl(`/config/test/${camelToKebab(item)}`),
-          text: item,
+          link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),
+          text: anchor ?? item,
         };
       }),
     })),
@@ -104,6 +124,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'source',
     items: [
       'source.decorators',
+      'source.transformImport',
+      'source.assetsInclude',
       'source.define',
       'source.exclude',
       'source.include',
@@ -115,8 +137,11 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'output.module',
       'output.externals',
+      'output.bundleDependencies',
       'output.cssModules',
+      'output.emitAssets',
       'output.cleanDistPath',
+      'output.distPath',
     ],
   },
   {
@@ -126,6 +151,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'resolve.alias',
       'resolve.dedupe',
       'resolve.extensions',
+      'resolve.conditionNames',
+      'resolve.mainFields',
     ],
   },
   {
@@ -135,10 +162,6 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'dev',
     items: ['dev.writeToDisk'],
-  },
-  {
-    name: 'performance',
-    items: ['performance.bundleAnalyze'],
   },
 ];
 
@@ -159,7 +182,7 @@ export function BuildOverview() {
             groupItem.name === 'top level'
               ? tUrl(`/config/build/${item}`)
               : tUrl(
-                  `/config/build/${groupItem.name}#${item.replace('.', '')}`,
+                  `/config/build/${groupItem.name}#${item.toLowerCase().replace('.', '')}`,
                 ),
           text: item,
         };

@@ -1,4 +1,9 @@
+---
+description: 与输入的源代码相关的选项，如配置装饰器语法等。
+---
+
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # source
 
@@ -9,6 +14,26 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 用于配置装饰器语法。
 
 如果你使用了 TypeScript 的 [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators)，此处应将 `source.decorators.version` 设置为 legacy。
+
+## source.assetsInclude <RsbuildDocBadge path="/config/source/assets-include" text="source.assetsInclude" />
+
+<ApiMeta addedVersion="0.9.6" />
+
+指定额外需要按静态资源处理的文件。
+
+当你的测试会导入 Rsbuild 默认资源规则之外的文件类型时，这个配置很有用，比如 `.txt` 或 `.md`。
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  source: {
+    assetsInclude: /\.(txt|md)$/,
+  },
+});
+```
+
+如果你已经通过 `@rstest/adapter-rsbuild` 或 `@rstest/adapter-rslib` 复用 Rsbuild / Rslib 配置，`source.assetsInclude` 也会被自动继承。
 
 ## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
 
@@ -28,6 +53,36 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 ## source.include <RsbuildDocBadge path="/config/source/include" text="source.include" />
 
 指定额外需要编译的 JavaScript 文件。
+
+## source.transformImport <RsbuildDocBadge path="/config/source/transform-import" text="source.transformImport" />
+
+<ApiMeta addedVersion="0.9.6" />
+
+配置按需导入转换规则。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  source: {
+    transformImport: [
+      {
+        libraryName: 'demo-lib',
+        libraryDirectory: '.',
+        camelToDashComponentName: false,
+      },
+    ],
+  },
+});
+```
+
+:::caution
+
+`source.transformImport` 会在编译阶段改写最终的模块请求。
+
+当前实现下，`rs.mock('pkg')`、`rs.doMock('pkg')`、`rs.importActual('pkg')`、`rs.requireActual('pkg')` 这类仍然使用原始 specifier 的模块级 mock API，可能无法命中被改写后的模块请求。
+
+:::
 
 ## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
 

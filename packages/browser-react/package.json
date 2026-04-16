@@ -1,0 +1,68 @@
+{
+  "name": "@rstest/browser-react",
+  "version": "0.9.7",
+  "description": "React component testing support for Rstest browser mode",
+  "keywords": [
+    "rstest",
+    "react",
+    "testing",
+    "browser",
+    "component"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/browser-react"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./pure": {
+      "types": "./dist/pure.d.ts",
+      "default": "./dist/pure.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "test": "rstest",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.21.0",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:^",
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "react-dom": "^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

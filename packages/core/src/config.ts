@@ -5,16 +5,30 @@ import {
   mergeRsbuildConfig,
 } from '@rsbuild/core';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
-import type { NormalizedConfig, RstestConfig } from './types';
+import { isCI } from 'std-env';
+import type {
+  ExtendConfig,
+  NormalizedConfig,
+  ProjectConfig,
+  RstestConfig,
+} from './types';
 import {
   castArray,
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
   formatRootStr,
+  getOutputDistPathRoot,
+  getTempRstestOutputDirGlob,
   logger,
-  TEMP_RSTEST_OUTPUT_DIR_GLOB,
+  TEMP_RSTEST_OUTPUT_DIR,
 } from './utils';
+
+type ResolvedExtendEntry =
+  | ExtendConfig
+  | ((
+      userConfig: Readonly<RstestConfig>,
+    ) => Promise<ExtendConfig> | ExtendConfig);
 
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
@@ -73,8 +87,49 @@ export async function loadConfig({
     loader: configLoader,
   });
 
-  return { content: content as RstestConfig, filePath: configFilePath };
+  let config = content as RstestConfig;
+
+  config = await resolveExtends(config);
+
+  return { content: config, filePath: configFilePath };
 }
+
+const resolveExtendEntry = async (
+  entry: ResolvedExtendEntry,
+  userConfig: Readonly<RstestConfig>,
+): Promise<ExtendConfig> => {
+  const resolved =
+    typeof entry === 'function' ? await entry(userConfig) : entry;
+
+  if ('projects' in resolved) {
+    const { projects: _projects, ...rest } = resolved;
+    return rest;
+  }
+
+  return resolved;
+};
+
+export const resolveExtends = async (
+  config: RstestConfig,
+): Promise<RstestConfig> => {
+  if (!config.extends) {
+    return config;
+  }
+
+  const userConfig = Object.freeze({ ...config });
+  const extendsEntries = castArray(config.extends);
+  const resolvedExtends = await Promise.all(
+    extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
+  );
+
+  return mergeRstestConfig(...resolvedExtends, config);
+};
+
+export const mergeProjectConfig = (
+  ...configs: ProjectConfig[]
+): ProjectConfig => {
+  return mergeRstestConfig(...configs) as ProjectConfig;
+};
 
 export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
@@ -91,6 +146,13 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     if (!Array.isArray(config.exclude) && config.exclude?.override) {
       merged.exclude = {
         patterns: config.exclude.patterns,
+      };
+    }
+
+    if (config.browser) {
+      merged.browser = {
+        ...(merged.browser || {}),
+        ...config.browser,
       };
     }
 
@@ -119,6 +181,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     override: false,
   },
   setupFiles: [],
+  globalSetup: [],
   includeSource: [],
   pool: {
     type: 'forks',
@@ -129,7 +192,14 @@ const createDefaultConfig = (): NormalizedConfig => ({
   update: false,
   testTimeout: 5_000,
   hookTimeout: 10_000,
-  testEnvironment: 'node',
+  testEnvironment: {
+    name: 'node',
+  },
+  output: {
+    distPath: {
+      root: TEMP_RSTEST_OUTPUT_DIR,
+    },
+  },
   retry: 0,
   reporters:
     process.env.GITHUB_ACTIONS === 'true'
@@ -147,13 +217,21 @@ const createDefaultConfig = (): NormalizedConfig => ({
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
+  hideSkippedTestFiles: false,
   logHeapUsage: false,
   bail: 0,
+  includeTaskLocation: false,
+  browser: {
+    enabled: false,
+    provider: 'playwright',
+    browser: 'chromium',
+    headless: isCI,
+    strictPort: false,
+    providerOptions: {},
+  },
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/[.]*',
-      '**/dist/**',
       '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
@@ -171,6 +249,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     reportsDirectory: './coverage',
     clean: true,
     reportOnFailure: false,
+    allowExternal: false,
   },
 });
 
@@ -181,8 +260,16 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
+  merged.globalSetup = castArray(merged.globalSetup);
 
-  merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
+  const outputDistPathRoot = getOutputDistPathRoot(merged.output?.distPath);
+  merged.output.distPath = {
+    root: formatRootStr(outputDistPathRoot, merged.root),
+  };
+
+  merged.exclude.patterns.push(
+    getTempRstestOutputDirGlob(merged.output?.distPath?.root),
+  );
 
   const reportsDirectory = formatRootStr(
     merged.coverage.reportsDirectory,
@@ -199,6 +286,24 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
         }
       : merged.pool;
 
+  merged.testEnvironment =
+    typeof config.testEnvironment === 'string'
+      ? {
+          name: config.testEnvironment,
+        }
+      : merged.testEnvironment;
+
+  merged.browser = {
+    enabled: merged.browser?.enabled ?? false,
+    provider: merged.browser?.provider ?? 'playwright',
+    browser: merged.browser?.browser ?? 'chromium',
+    headless: merged.browser?.headless ?? isCI,
+    port: merged.browser?.port,
+    strictPort: merged.browser?.strictPort ?? false,
+    viewport: merged.browser?.viewport,
+    providerOptions: merged.browser?.providerOptions ?? {},
+  };
+
   return {
     ...merged,
     include: merged.include.map((p) => formatRootStr(p, merged.root)),
@@ -209,6 +314,7 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       ),
     },
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
+    globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
       formatRootStr(p, merged.root),
     ),

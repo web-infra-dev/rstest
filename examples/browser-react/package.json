@@ -1,0 +1,23 @@
+{
+  "name": "@examples/browser-react",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@rsbuild/plugin-react": "^1.4.6",
+    "@rstest/browser": "workspace:*",
+    "@rstest/browser-react": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "playwright": "^1.59.1",
+    "typescript": "^6.0.2"
+  }
+}

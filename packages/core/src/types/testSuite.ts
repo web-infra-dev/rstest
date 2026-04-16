@@ -1,11 +1,11 @@
 import type { SnapshotResult } from '@vitest/snapshot';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import type {
   NormalizedFixtures,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   TestContext,
 } from './api';
-import type { CoverageMapData } from './coverage';
 import type { MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
@@ -27,6 +27,11 @@ export interface TaskResult {
   errors?: FormattedError[];
 }
 
+export type Location = {
+  line: number;
+  column: number;
+};
+
 export type TestCaseInfo = {
   testId: string;
   testPath: TestPath;
@@ -35,12 +40,15 @@ export type TestCaseInfo = {
   parentNames?: string[];
   project: string;
   startTime?: number;
+  /** Only included when `includeTaskLocation` config is enabled */
+  location?: Location;
+  type: 'case';
+  runMode: TestRunMode;
 };
 
 export type TestCase = TestCaseInfo & {
   originalFn?: (context: TestContext) => void | Promise<void>;
   fn?: (context: TestContext) => void | Promise<void>;
-  runMode: TestRunMode;
   fails?: boolean;
   each?: boolean;
   fixtures?: NormalizedFixtures;
@@ -51,7 +59,6 @@ export type TestCase = TestCaseInfo & {
   only?: boolean;
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
-  type: 'case';
   /**
    * Store promises (from async expects) to wait for them before finishing the test
    */
@@ -71,13 +78,16 @@ export type SuiteContext = {
 };
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
+
 export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
-export type AfterEachListener = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
-export type BeforeEachListener = () => MaybePromise<void | AfterEachListener>;
+
+export type AfterEachListener = (ctx: TestContext) => MaybePromise<void>;
+
+export type BeforeEachListener = (
+  ctx: TestContext,
+) => MaybePromise<void | AfterEachListener>;
 
 export type TestSuiteInfo = {
   testId: string;
@@ -85,17 +95,19 @@ export type TestSuiteInfo = {
   parentNames?: string[];
   testPath: TestPath;
   project: string;
+  type: 'suite';
+  /** Only included when `includeTaskLocation` config is enabled */
+  location?: Location;
+  runMode: TestRunMode;
 };
 
 export type TestSuite = TestSuiteInfo & {
-  runMode: TestRunMode;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
   sequential?: boolean;
   /** nested cases and suite could in a suite */
-  tests: (TestSuite | TestCase)[];
-  type: 'suite';
+  tests: Test[];
   afterAllListeners?: AfterAllListener[];
   beforeAllListeners?: BeforeAllListener[];
   afterEachListeners?: AfterEachListener[];
@@ -110,8 +122,11 @@ export type TestSuiteListeners = keyof Pick<
   | 'beforeEachListeners'
 >;
 
+export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
+
 export type TestFileInfo = {
   testPath: TestPath;
+  tests: TestInfo[];
 };
 
 export type Test = TestSuite | TestCase;
@@ -144,7 +159,7 @@ export type TestResult = {
 export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
-  coverage?: CoverageMapData;
+  coverage?: Record<string, FileCoverageData>;
 };
 
 export interface UserConsoleLog {

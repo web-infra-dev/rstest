@@ -10,6 +10,9 @@ describe('s1', () => {
   });
 
   it('should pass', () => {
+    // Ensure stderr output is forwarded to VS Code test output.
+    console.log('stdout: progress.test.ts');
+    console.error('stderr: progress.test.ts');
     expect(1).equal(1);
   });
   it('should mismatch number', () => {
@@ -19,7 +22,7 @@ describe('s1', () => {
     expect({ a: 1 }).equal({ b: 1 });
   });
   it('should mismatch inline snapshot', () => {
-    expect('str').toMatchInlineSnapshot(`"value"`);
+    expect('hello').toMatchInlineSnapshot(`"world"`);
   });
   it.skip('should skipped', () => {});
 });

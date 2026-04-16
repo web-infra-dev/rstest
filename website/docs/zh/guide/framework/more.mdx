@@ -1,0 +1,44 @@
+---
+description: 你可以通过注册 Rsbuild 插件，为更多框架启用编译与测试支持。
+---
+
+# 更多框架
+
+Rstest 与 Rsbuild 共享同一套插件系统，因此只要对应框架有可用的 Rsbuild 插件，你通常就可以直接在 `rstest.config.ts` 中注册该插件，为测试启用对应的编译能力。关于插件注册方式，请参阅 [plugins](/config/build/plugins)；可用插件可在 [Rsbuild 插件列表](https://rsbuild.rs/zh/plugins/list/) 中查看。
+
+例如，Rsbuild 官方插件列表中已经包含 Preact、Svelte、Solid 等框架插件，社区生态中也有 Angular 等插件可供使用。
+
+## 基本配置方式
+
+可以按下面的顺序完成接入：
+
+1. 安装目标框架对应的 Rsbuild 插件，以及该框架自己的测试工具。
+2. 在 `rstest.config.ts` 的 `plugins` 中注册该插件。
+3. 根据测试类型选择合适的 `testEnvironment`。
+
+- 组件测试通常使用 `happy-dom` 或 `jsdom`
+- SSR、工具函数或不依赖 DOM 的测试通常使用 `node`
+
+下面是一个最小配置示意：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { pluginFramework } from 'your-rsbuild-plugin';
+
+export default defineConfig({
+  plugins: [pluginFramework()],
+  testEnvironment: 'happy-dom',
+});
+```
+
+## 需要额外准备什么
+
+Rsbuild 插件解决的是框架文件的编译与构建接入，测试体验通常还取决于框架自身的测试工具链。你通常还需要准备：
+
+- 框架推荐的组件测试工具
+- 必要的 setup 文件
+- 与框架生态匹配的断言或查询工具
+
+如果你的项目本身已经在使用 Rsbuild、Rslib 或它们的适配器，也可以优先复用现有配置，这样通常能自动继承插件、别名和其他构建设置。
+
+如果你在接入更多框架时遇到问题，欢迎通过 [GitHub Issues](https://github.com/web-infra-dev/rstest/issues) 与我们联系。

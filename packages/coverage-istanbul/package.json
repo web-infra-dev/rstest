@@ -1,43 +1,7 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.1.0",
-  "type": "module",
+  "version": "0.3.1",
   "description": "Istanbul coverage provider for Rstest",
-  "author": "Travis Zhang<https://github.com/travzhang>",
-  "license": "MIT",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "rslib build",
-    "dev": "rslib build --watch"
-  },
-  "peerDependencies": {
-    "@rstest/core": "workspace:~"
-  },
-  "dependencies": {
-    "swc-plugin-coverage-instrument": "0.0.32",
-    "istanbul-lib-coverage": "^3.2.2",
-    "istanbul-lib-report": "^3.0.1",
-    "istanbul-reports": "^3.2.0"
-  },
-  "devDependencies": {
-    "@rstest/tsconfig": "workspace:*",
-    "@rstest/core": "workspace:*",
-    "@rslib/core": "0.18.3",
-    "@types/node": "^22.16.5",
-    "typescript": "^5.9.3",
-    "@types/istanbul-lib-coverage": "^2.0.6",
-    "@types/istanbul-lib-report": "^3.0.3",
-    "@types/istanbul-reports": "^3.0.4"
-  },
   "keywords": [
     "rstest",
     "coverage",
@@ -50,5 +14,44 @@
     "type": "git",
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/coverage-istanbul"
+  },
+  "license": "MIT",
+  "author": "Travis Zhang<https://github.com/travzhang>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/coverage-istanbul/tsconfig.json"
+  },
+  "dependencies": {
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-lib-source-maps": "^5.0.6",
+    "istanbul-reports": "^3.2.0",
+    "swc-plugin-coverage-instrument": "0.0.32"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.21.0",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-lib-source-maps": "^4.0.4",
+    "@types/istanbul-reports": "^3.0.4",
+    "@types/node": "^22.16.5",
+    "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
   }
 }

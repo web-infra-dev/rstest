@@ -1,0 +1,107 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["cspell.config.cjs", "rslint.config.mts"],
+    },
+    "benchmarks": {
+      "entry": [
+        "createFrontendMemoryFixture.mjs",
+        // Benchmark fixtures are loaded dynamically by the benchmark entrypoints.
+        "fixtures/**/rstest.config.mts",
+        "fixtures/**/*.ts",
+      ],
+      "ignoreDependencies": [
+        // Used by the generated synthetic memory workload source files.
+        "antd",
+        "react",
+        "react-dom",
+        "three",
+      ],
+    },
+    "packages/core": {
+      "entry": [
+        // Package export: "./browser-runtime" (separate rslib env targeting web)
+        "src/browserRuntime.ts",
+        // Worker entries bundled by rslib
+        "src/runtime/worker/index.ts",
+        "src/runtime/worker/globalSetupWorker.ts",
+        // Loader entry bundled by rslib (rstest_loaders env)
+        "src/core/plugins/css-filter/loader.ts",
+        // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
+        "src/core/plugins/mockRuntimeCode.js",
+        "src/core/plugins/importActualLoader.mjs",
+        "src/pool/rstestSuppressWarnings.cjs",
+        // coverage/checkThresholds.ts uses picomatch but is only reachable via
+        // nested dynamic imports that knip cannot fully trace
+        "src/coverage/checkThresholds.ts",
+        // Webpack license plugin used by rslib.config.ts
+        "licensePlugin.ts",
+        // Test files
+        "tests/**/*.ts",
+      ],
+      "ignoreDependencies": [
+        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
+        "@typescript/native-preview",
+      ],
+    },
+    "packages/browser": {
+      "entry": [
+        // Browser-side iframe entry (loaded at runtime by hostController)
+        "src/client/entry.ts",
+        // Aliased at build time via rspack resolve.alias in hostController.ts
+        "src/client/fakeTimersStub.ts",
+        "src/client/public.ts",
+        // Test files
+        "tests/**/*.ts",
+      ],
+      "ignoreDependencies": [
+        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
+        "@typescript/native-preview",
+        // Virtual module resolved at build time by rspack alias in hostController.ts
+        "@rstest/browser-manifest",
+      ],
+    },
+    "packages/browser-ui": {
+      "entry": [
+        // PostCSS config (not auto-detected by knip)
+        "postcss.config.cjs",
+        // Test files
+        "src/**/*.test.ts",
+      ],
+      "ignoreDependencies": [
+        // Used in postcss.config.cjs which knip doesn't parse
+        "@tailwindcss/postcss",
+        // Path-mapped imports (@rstest/browser/protocol) resolved via tsconfig, not package dependency
+        "@rstest/browser",
+      ],
+    },
+    // No explicit entry needed for the following packages — knip auto-infers from package.json exports:
+    // packages/browser-react, packages/coverage-istanbul,
+    // packages/adapter-rslib, packages/adapter-rsbuild, packages/adapter-rspack
+
+    "packages/vscode": {
+      "entry": [
+        // VS Code extension host entry (loaded by VS Code via package.json "main")
+        "src/extension.ts",
+        // Worker process entry (not in package.json exports)
+        "src/worker/index.ts",
+        // Test files
+        "tests/**/*.ts",
+        // Test fixture files (read by parser at runtime, not imported)
+        "tests/fixtures/**/test/*.{jsx,tsx}",
+        // Sample project for e2e testing
+        "sample/**/*.ts",
+        // VS Code test runner config
+        ".vscode-test.mjs",
+      ],
+      "ignoreDependencies": [
+        // CLI tool used in CI/release scripts, not in code
+        "ovsx",
+        // Used in sample/rsbuild.config.ts for testing the extension
+        "@rsbuild/plugin-react",
+      ],
+    },
+  },
+  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"],
+}

@@ -1,3 +1,5 @@
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig({});
+export default defineConfig({
+  root: __dirname,
+});

@@ -1,3 +1,7 @@
+---
+description: 与模块解析相关的选项，如配置别名策略、解析扩展名等。
+---
+
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # resolve
@@ -21,3 +25,11 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 ## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
 
 自动添加导入文件的扩展名。这意味着你可以导入文件，而不需要显式地写它们的扩展名。
+
+## resolve.conditionNames <RsbuildDocBadge path="/config/resolve/condition-names" text="resolve.conditionNames" />
+
+控制解析包 `exports` 字段时使用的条件名称列表。
+
+## resolve.mainFields <RsbuildDocBadge path="/config/resolve/main-fields" text="resolve.mainFields" />
+
+控制包入口字段的优先级顺序，例如 `main`、`module` 和 `browser`。

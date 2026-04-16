@@ -1,0 +1,449 @@
+---
+title: Expect
+description: expect is used to assert values in tests. It provides a rich set of matchers, supports chainable modifiers, soft assertions, polling, and snapshot testing.
+overviewHeaders: [2, 3]
+---
+
+# Expect
+
+`expect` is used to assert values in tests. It provides a rich set of matchers, supports chainable modifiers, soft assertions, polling, and snapshot testing.
+
+You can import the `expect` API from the `@rstest/core` package:
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('should add two numbers correctly', () => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+You can also get the `expect` API from the [test context](/api/runtime-api/test-api/test#testcontext), which is helpful for tracing assertion belonging in concurrent tests.
+
+```ts
+import { test } from '@rstest/core';
+
+test('should add two numbers correctly', ({ expect }) => {
+  expect(1 + 1).toBe(2);
+  expect(1 + 2).toBe(3);
+});
+```
+
+## expect
+
+- **Type:** `<T>(actual: T, message?: string) => Assertion<T>`
+
+Creates an assertion object for the given value.
+
+- `actual`: The value under test.
+- `message`: Optional custom message shown when the assertion fails.
+
+```ts
+import { expect } from '@rstest/core';
+
+expect(1 + 1).toBe(2);
+expect('hello').toBeDefined();
+expect([1, 2, 3]).toContain(2);
+```
+
+## expect.element (Browser Mode)
+
+- **Type:** `(locator: Locator) => BrowserElementExpect`
+
+In Browser Mode, `expect.element` is used to assert against a Locator provided by `@rstest/browser` (for example, `toBeVisible`, `toHaveText`, `toHaveValue`).
+
+```ts
+import { page } from '@rstest/browser';
+import { expect, test } from '@rstest/core';
+
+test('asserts by locator', async () => {
+  document.body.innerHTML = '<button>Save</button>';
+  await expect
+    .element(page.getByRole('button', { name: 'Save' }))
+    .toBeVisible();
+});
+```
+
+`expect.element` is only available in Browser Mode and requires importing `@rstest/browser` to install the browser-side adapter. See [Assertion (Browser Mode)](/api/runtime-api/browser-mode/assertion) for the complete reference.
+
+## expect.not
+
+Negates the assertion.
+
+```ts
+expect(1 + 1).not.toBe(3);
+expect('foo').not.toBeUndefined();
+```
+
+## expect.soft
+
+- **Type:** `<T>(actual: T, message?: string) => Assertion<T>`
+
+Performs a soft assertion. The test will continue even if the assertion fails, and all failures will be reported at the end.
+
+```ts
+expect.soft(1 + 1).toBe(3); // will not stop the test
+expect.soft(1 + 2).toBe(4);
+```
+
+## expect.poll
+
+- **Type:** `<T>(actual: () => T | Promise<T>, options?: { interval?: number, timeout?: number, message?: string }) => PromiseLike<Assertion<Awaited<T>>>`
+
+Repeatedly calls `actual` and retries the matcher until it passes or times out.
+
+- **Default `interval`:** `50` (ms)
+- **Default `timeout`:** `1000` (ms)
+
+`options`:
+
+- `interval`: Time between retry attempts (in milliseconds).
+- `timeout`: Maximum total polling time before failing (in milliseconds).
+- `message`: Custom assertion message shown when the poll assertion fails.
+
+Notes:
+
+- `expect.poll(...)` assertions are asynchronous and **must** be awaited.
+- `expect.poll(...)` does not support `resolves`/`rejects`, `toThrow*`, or snapshot matchers. Use `rstest.waitFor()` for those unstable conditions.
+
+```ts
+await expect.poll(() => getStatus()).toBe('ready');
+
+await expect
+  .poll(
+    async () => {
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      return data.status;
+    },
+    {
+      interval: 100,
+      timeout: 5000,
+      message: 'Service should become healthy within 5s',
+    },
+  )
+  .toBe('healthy');
+```
+
+## expect.unreachable
+
+- **Type:** `(message?: string) => never`
+
+Marks a code path as unreachable. Throws if called.
+
+```ts
+if (shouldNotHappen) {
+  expect.unreachable('This should never happen');
+}
+```
+
+## expect.assertions
+
+- **Type:** `(expected: number) => void`
+
+Asserts that a certain number of assertions are called during a test, typically used to verify async code or expected exceptions.
+
+```ts
+expect.assertions(1);
+
+try {
+  await someAsyncFunction();
+} catch (e) {
+  expect(e).toBeInstanceOf(Error);
+}
+```
+
+## expect.hasAssertions
+
+- **Type:** `() => void`
+
+Asserts that at least one assertion is called during a test.
+
+Useful for tests where assertion count can vary, but at least one assertion must run.
+
+```ts
+expect.hasAssertions();
+expect(1 + 1).toBe(2);
+```
+
+## expect.addEqualityTesters
+
+- **Type:** `(testers: Array<Tester>) => void`
+
+Adds custom equality testers for use in assertions.
+
+Each tester can return:
+
+- `true`: values are considered equal
+- `false`: values are considered not equal
+- `undefined`: defer to the next tester/default equality
+
+```ts
+expect.addEqualityTesters([
+  (a, b) => {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return Math.abs(a - b) < 0.01;
+    }
+  },
+]);
+expect(0.1 + 0.2).toEqual(0.3); // true with custom tester
+```
+
+## expect.addSnapshotSerializer
+
+- **Type:** `(serializer: SnapshotSerializer) => void`
+
+Adds a custom serializer for snapshot testing.
+
+```ts
+expect.addSnapshotSerializer({
+  test: (val) => typeof val === 'string' && val.startsWith('secret:'),
+  print: (val) => '***MASKED***',
+});
+expect('secret:123').toMatchSnapshot(); // snapshot will be masked
+```
+
+## expect.getState / expect.setState
+
+- **Type:**
+  - `getState: () => MatcherState`
+  - `setState: (state: Partial<MatcherState>) => void`
+
+Gets or sets the internal matcher state.
+
+```ts
+const state = expect.getState();
+console.log(state.currentTestName);
+expect.setState({ currentTestName: 'custom name' });
+console.log(expect.getState().currentTestName); // will output 'custom name'
+```
+
+## Matchers
+
+### Common matchers
+
+Common matchers are the primary tools for value, structure, and type assertions.
+
+Equality and identity:
+
+- `toBe(value)`: strict equality with `Object.is`.
+- `toEqual(value)`: deep equality for object/array shapes.
+- `toStrictEqual(value)`: stricter deep equality (includes `undefined` keys and sparse arrays).
+- `toBeOneOf(array)`: value must be one of the provided candidates.
+
+Type and existence:
+
+- `toBeTruthy()` / `toBeFalsy()`: truthiness checks.
+- `toBeNull()` / `toBeUndefined()` / `toBeDefined()`: null/undefined checks.
+- `toBeNaN()`: `NaN` check.
+- `toBeInstanceOf(class)`: instance check.
+- `toBeTypeOf(type)`: runtime type check (for example `'string'`).
+
+Numbers:
+
+- `toBeGreaterThan(number)` / `toBeGreaterThanOrEqual(number)`.
+- `toBeLessThan(number)` / `toBeLessThanOrEqual(number)`.
+- `toBeCloseTo(number, numDigits?)`: floating-point tolerant comparison.
+
+Collections and strings:
+
+- `toContain(item)`: array/string contains a value or substring.
+- `toContainEqual(item)`: array contains an item by deep equality.
+- `toMatch(stringOrRegExp)`: string matches regex or substring.
+- `toMatchObject(object)`: object contains a subset of properties.
+- `toHaveLength(length)`: has expected `.length`.
+- `toHaveProperty(path, value?)`: has property at path, optionally with expected value.
+
+Custom predicate and errors:
+
+- `toSatisfy(fn)`: passes a user-defined predicate.
+- `toThrowError(expected?)`: function throws an error (string/regex/error type supported).
+
+```ts
+// toBe vs toEqual
+expect(1 + 1).toBe(2);
+expect({ id: 1, name: 'a' }).toEqual({ id: 1, name: 'a' });
+
+// strict deep checks
+expect({ a: undefined, b: 1 }).toStrictEqual({ a: undefined, b: 1 });
+
+// number checks
+expect(0.1 + 0.2).toBeCloseTo(0.3, 5);
+expect(10).toBeGreaterThan(5);
+
+// collection checks
+expect([1, 2, 3]).toContain(2);
+expect([{ id: 1 }]).toContainEqual({ id: 1 });
+expect({ user: { role: 'admin' } }).toHaveProperty('user.role', 'admin');
+expect({ id: 1, role: 'admin', active: true }).toMatchObject({
+  id: 1,
+  role: 'admin',
+});
+
+// text and predicates
+expect('request id: 42').toMatch(/id:\s\d+/);
+expect(21).toSatisfy((n) => n % 3 === 0);
+
+// error assertions (must wrap in a function)
+expect(() => {
+  throw new TypeError('invalid input');
+}).toThrowError(TypeError);
+```
+
+### Mock matchers
+
+Mock matchers verify interactions with `rstest.fn` / `rstest.spyOn`: calls, call order, return values, and async outcomes.
+
+Call assertions:
+
+- `toHaveBeenCalled()`: called at least once.
+- `toHaveBeenCalledTimes(times)`: called exact number of times.
+- `toHaveBeenCalledWith(...args)`: called with specified args (any call).
+- `toHaveBeenLastCalledWith(...args)`: last call args match.
+- `toHaveBeenNthCalledWith(n, ...args)`: nth call args match.
+- `toHaveBeenCalledExactlyOnceWith(...args)`: called exactly once with args.
+- `toHaveBeenCalledBefore(mock)` / `toHaveBeenCalledAfter(mock)`: relative call order.
+
+Return assertions:
+
+- `toHaveReturned()`: returned at least once.
+- `toHaveReturnedTimes(times)`: returned exact number of times.
+- `toHaveReturnedWith(value)`: returned specific value in any call.
+- `toHaveLastReturnedWith(value)`: last return value matches.
+- `toHaveNthReturnedWith(n, value)`: nth return value matches.
+
+Promise resolution assertions:
+
+- `toHaveResolved()`: resolved at least once.
+- `toHaveResolvedTimes(times)`: resolved exact number of times.
+- `toHaveResolvedWith(value)`: resolved to value in any call.
+- `toHaveLastResolvedWith(value)`: last resolved value matches.
+- `toHaveNthResolvedWith(n, value)`: nth resolved value matches.
+
+Notes:
+
+- `Nth` matchers are 1-based (`1` = first call).
+- `toHaveBeenCalledWith` checks any call; use `Last` or `Nth` variants for strict position checks.
+- These matchers require a mock/spied function, not a plain function.
+
+```ts
+const sum = rstest.fn((a: number, b: number) => a + b);
+sum(1, 2);
+sum(2, 3);
+
+expect(sum).toHaveBeenCalledTimes(2);
+expect(sum).toHaveBeenNthCalledWith(1, 1, 2);
+expect(sum).toHaveBeenLastCalledWith(2, 3);
+expect(sum).toHaveReturnedWith(3);
+expect(sum).toHaveLastReturnedWith(5);
+
+const fetchUser = rstest.fn(async (id: number) => ({ id, name: 'alice' }));
+await fetchUser(1);
+await fetchUser(2);
+
+expect(fetchUser).toHaveResolvedTimes(2);
+expect(fetchUser).toHaveNthResolvedWith(1, { id: 1, name: 'alice' });
+
+const before = rstest.fn();
+const after = rstest.fn();
+before();
+after();
+expect(before).toHaveBeenCalledBefore(after);
+```
+
+### Snapshot matchers
+
+Snapshot matchers are used to compare values, errors, or files against previously recorded snapshots, making it easy to track changes in output over time.
+
+- `toMatchSnapshot()`. Compares the value to a saved snapshot.
+- `toMatchInlineSnapshot()`. Compares the value to an inline snapshot in the test file.
+- `toThrowErrorMatchingSnapshot()`. Checks if a thrown error matches a saved snapshot.
+- `toThrowErrorMatchingInlineSnapshot()`. Checks if a thrown error matches an inline snapshot in the test file.
+- `toMatchFileSnapshot(filepath)`. Compares the value to a snapshot saved in a specific file.
+
+```ts
+expect('hello world').toMatchSnapshot();
+
+expect(() => {
+  throw new Error('fail');
+}).toThrowErrorMatchingSnapshot();
+
+await expect('hello world').toMatchFileSnapshot(
+  '__snapshots__/file.output.txt',
+);
+```
+
+### Promise matchers
+
+- `resolves`. Asserts on the resolved value of a Promise.
+- `rejects`. Asserts on the rejected value of a Promise.
+
+```ts
+await expect(Promise.resolve('ok')).resolves.toBe('ok');
+await expect(Promise.reject(new Error('fail'))).rejects.toThrow('fail');
+```
+
+### Asymmetric matchers
+
+Asymmetric matchers are helpers that allow for flexible matching of values, such as partial matches, type matches, or pattern matches. They are useful for writing more expressive and less brittle tests.
+
+- `expect.anything()`. Matches any value except null or undefined.
+- `expect.any(constructor)`. Matches any value of the given type.
+- `expect.closeTo(number, precision?)`. Matches a number close to the expected value.
+- `expect.arrayContaining(array)`. Matches an array containing the expected elements.
+- `expect.objectContaining(object)`. Matches an object containing the expected properties.
+- `expect.stringContaining(string)`. Matches a string containing the expected substring.
+- `expect.stringMatching(stringOrRegExp)`. Matches a string matching the expected pattern.
+
+```ts
+expect({ a: 1 }).toEqual({ a: expect.anything() });
+
+expect(1).toEqual(expect.any(Number));
+
+expect(0.1 + 0.2).toEqual(expect.closeTo(0.3, 5));
+
+expect([1, 2, 3]).toEqual(expect.arrayContaining([2, 1]));
+
+expect({ a: 1, b: 2 }).toEqual(expect.objectContaining({ a: 1 }));
+
+expect('hello world').toEqual(expect.stringContaining('world'));
+
+expect('hello world').toEqual(expect.stringMatching(/^hello/));
+```
+
+### Custom matchers
+
+You can extend expect with custom matchers:
+
+```ts
+expect.extend({
+  toBeDivisibleBy(received, argument) {
+    const pass = received % argument === 0;
+    if (pass) {
+      return {
+        message: () =>
+          `expected ${received} not to be divisible by ${argument}`,
+        pass: true,
+      };
+    } else {
+      return {
+        message: () => `expected ${received} to be divisible by ${argument}`,
+        pass: false,
+      };
+    }
+  },
+});
+
+expect(10).toBeDivisibleBy(2);
+```
+
+If you want to add TypeScript typings for your custom matchers, you can extend the `Assertion` interface in the `@rstest/core` module:
+
+```ts
+declare module '@rstest/core' {
+  interface Assertion<T> {
+    toBeDivisibleBy(argument: number): void;
+  }
+}
+```

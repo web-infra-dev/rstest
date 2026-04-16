@@ -4,9 +4,9 @@ import type {
   RunnerHooks,
   Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
-import { getSnapshotClient } from '../api/snapshot';
 import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
@@ -19,7 +19,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
-    collectTests: () => Promise<Test[]>;
+    collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
   };
 } {
@@ -47,12 +47,16 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
-        const snapshotClient = getSnapshotClient();
+        const snapshotClient = workerState.snapshotClient!;
 
         await snapshotClient.setup(testPath, workerState.snapshotOptions);
 
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
+        hooks.onTestFileReady?.({
+          testPath,
+          tests: tests.map(toTestInfo),
+        });
         runtime.instance.updateStatus('running');
 
         const results = await testRunner.runTests({
@@ -70,9 +74,23 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
 
-        return tests;
+        return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
     },
+  };
+}
+
+function toTestInfo(test: Test): TestInfo {
+  return {
+    testId: test.testId,
+    name: test.name,
+    parentNames: test.parentNames,
+    testPath: test.testPath,
+    project: test.project,
+    type: test.type,
+    location: test.location,
+    tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
+    runMode: test.runMode,
   };
 }

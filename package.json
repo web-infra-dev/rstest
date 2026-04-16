@@ -2,26 +2,29 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
-    "typecheck": "cross-env NX_DAEMON=false nx run-many -t typecheck --exclude @examples/* --parallel=10",
-    "build": "cross-env NX_DAEMON=false nx run-many -t build --exclude @examples/* @rstest/tests-* --parallel=10",
-    "test:vscode": "pnpm --filter ./packages/vscode test",
-    "e2e": "cd e2e && pnpm test && pnpm test:esm",
-    "test": "rstest",
-    "change": "changeset",
-    "changeset": "changeset",
-    "check-dependency-version": "pnpx check-dependency-version-consistency . && echo",
+    "bench:cpu": "pnpm --filter @rstest/benchmarks bench:cpu",
+    "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
+    "build": "pnpm --filter \"./packages/*\" run build",
+    "bump": "node --experimental-strip-types scripts/version.mts",
+    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
-    "format": "prettier --write . && heading-case --write",
+    "check-unused": "knip",
+    "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
+    "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
     "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
-    "prepare": "pnpm run build && simple-git-hooks"
+    "prepare": "simple-git-hooks && pnpm run build",
+    "test": "rstest",
+    "test:examples": "pnpm --filter \"@examples/*\" test",
+    "test:vscode": "pnpm --filter ./packages/vscode test",
+    "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
   "simple-git-hooks": {
     "pre-commit": "npx nano-staged"
   },
   "nano-staged": {
-    "*.{md,mdx,css,less,scss,json,jsonc,json5}": "prettier --write",
-    "*.{js,jsx,ts,tsx,mjs,cjs}": [
+    "!(CLAUDE).{md,mdx,css,less,scss,json,jsonc,json5}": "prettier --write",
+    "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}": [
       "biome check --write"
     ],
     "package.json": [
@@ -31,52 +34,48 @@
     "pnpm-lock.yaml": "pnpm dedupe --check"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.8",
-    "@changesets/cli": "^2.29.8",
-    "@rsdoctor/rspack-plugin": "^1.3.12",
-    "@rslint/core": "^0.1.14",
+    "@biomejs/biome": "^2.4.11",
+    "@rsdoctor/rspack-plugin": "^1.5.7",
+    "@rslint/core": "^0.4.1",
     "@rstest/core": "workspace:*",
-    "@rstest/coverage-istanbul": "workspace:*",
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.16.5",
-    "check-dependency-version-consistency": "^5.0.1",
+    "bumpp": "^11.0.1",
+    "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
-    "fs-extra": "^11.3.2",
-    "heading-case": "^1.0.3",
+    "heading-case": "^1.1.0",
+    "knip": "^6.4.1",
     "nano-staged": "^0.9.0",
-    "nx": "^21.6.10",
-    "path-serializer": "0.5.1",
-    "prettier": "^3.7.4",
-    "prettier-plugin-packagejson": "^2.5.20",
+    "path-serializer": "0.6.0",
+    "playwright": "^1.59.1",
+    "prettier": "^3.8.2",
+    "prettier-plugin-packagejson": "^3.0.2",
     "simple-git-hooks": "^2.13.1",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   },
   "packageManager": "pnpm@10.12.4",
   "engines": {
-    "node": ">=18.12.0",
+    "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=10.12.4"
   },
   "pnpm": {
-    "ignoredBuiltDependencies": [
-      "@biomejs/biome",
-      "nx",
-      "simple-git-hooks"
-    ],
     "onlyBuiltDependencies": [
       "@biomejs/biome",
       "core-js",
-      "nx",
       "simple-git-hooks"
     ],
     "packageExtensions": {
       "@vue/test-utils": {
         "peerDependencies": {
-          "vue": "^3.5.17",
           "@vue/compiler-dom": "3.5.17",
-          "@vue/server-renderer": "3.5.17"
+          "@vue/server-renderer": "3.5.17",
+          "vue": "^3.5.17"
         }
       }
-    }
+    },
+    "ignoredBuiltDependencies": [
+      "@biomejs/biome",
+      "simple-git-hooks"
+    ]
   }
 }

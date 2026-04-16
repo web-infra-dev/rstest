@@ -1,19 +1,18 @@
-import { expect, rs, test } from '@rstest/core';
+import { expect, test } from '@rstest/core';
 import { render, screen } from '@testing-library/react';
 import App from '../src/App';
 
-rs.mock('../src/module', () => ({
-  h2Title: () => 'mocked',
-}));
-
-test('should render App correctly', async () => {
+test('should render App with default greeting', () => {
   render(<App />);
 
-  const h1 = screen.getByText('Rsbuild with React');
+  const h1 = screen.getByText('Hello World');
   expect(h1.tagName).toBe('H1');
   expect(h1).toBeInTheDocument();
+});
 
-  const h2 = screen.getByText('mocked');
-  expect(h2.tagName).toBe('H2');
-  expect(h2).toBeInTheDocument();
+test('should render App with custom greeting', () => {
+  render(<App greeting="Custom Greeting" />);
+
+  const h1 = screen.getByText('Custom Greeting');
+  expect(h1).toBeInTheDocument();
 });

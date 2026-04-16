@@ -1,3 +1,7 @@
+---
+description: 本章节介绍如何配置 Rstest 以及其底层使用的 Rsbuild 和 Rspack。
+---
+
 # 配置 Rstest
 
 ## 配置文件
@@ -136,3 +140,10 @@ export const myPlugin = {
   },
 };
 ```
+
+## 配置集成
+
+在大型项目中，你往往已经有构建/工具链的既有配置（别名、全局变量、插件等）。Rstest 通过 [适配器（Adapter）](/guide/integration/adapters) 与 [extends](/config/test/extends) 选项，支持将这些外部配置转换并整合到测试配置中，从而避免重复维护、保持一致性。
+
+- 使用 `extends` 可加载一个函数（适配器）或对象，返回的配置会与当前 Rstest 配置深度合并。
+- 适用于复用 Rsbuild/Rspack 等工具的配置，或为框架模板预设测试行为（如默认测试环境、setup 脚本）。

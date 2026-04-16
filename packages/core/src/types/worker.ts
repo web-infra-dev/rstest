@@ -1,4 +1,4 @@
-import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { ProjectContext, RstestContext } from './core';
 import type {
@@ -24,6 +24,7 @@ export type ServerRPC = {};
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
+  onTestFileReady: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: () => Promise<{
     assetFiles: Record<string, string>;
     sourceMaps: Record<string, string>;
@@ -61,6 +62,7 @@ export type RuntimeConfig = Pick<
   | 'logHeapUsage'
   | 'bail'
   | 'chaiConfig'
+  | 'includeTaskLocation'
 >;
 
 export type WorkerContext = {
@@ -92,6 +94,7 @@ export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
   distPath: DistPath;
+  snapshotClient?: SnapshotClient;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;

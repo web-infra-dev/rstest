@@ -4,27 +4,72 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "core dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "packages/core",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
+      "isBackground": true,
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "coverage-istanbul dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "packages/coverage-istanbul",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
+      "isBackground": true,
+      "dependsOn": ["core dev"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "vscode dev",
       "type": "npm",
       "script": "watch:local",
       "path": "packages/vscode",
       "problemMatcher": {
-        // tells vscode when the build task is running
+        "owner": "rslib",
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "build started|building",
-          "endsPattern": "built in|build complete"
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
         },
-        // although we don't care about it, pattern is required to implement problemMatcher
-        "pattern": { "regexp": "build failed in" }
+        "pattern": {
+          "regexp": "build failed in"
+        }
       },
       "isBackground": true,
-      "presentation": {
-        "reveal": "never"
-      },
       "group": {
         "kind": "build",
         "isDefault": true
-      }
+      },
+      "dependsOn": ["core dev", "coverage-istanbul dev"],
+      "dependsOrder": "parallel"
     }
   ]
 }

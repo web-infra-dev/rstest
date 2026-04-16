@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -7,14 +7,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe.concurrent('reporters', () => {
-  it('default', async ({ onTestFinished }) => {
+  it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index'],
+      args: ['run', 'fixtures/index.test.ts', '--exclude', 'ansi/**'],
       onTestFinished,
       options: {
         nodeOptions: {
           cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('✗ basic > b');
+    // should show all test cases when running a single test file
+    expect(cli.stdout).toContain('- basic > c');
+  });
+
+  it('default - multiple files', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
         },
       },
     });
@@ -27,7 +45,7 @@ describe.concurrent('reporters', () => {
   it('verbose', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '--reporter=verbose'],
+      args: ['run', 'fixtures/index.test.ts', '--reporter=verbose'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -41,10 +59,34 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('- basic > c');
   });
 
+  it('dot', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/index.test.ts', '--reporter=dot'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('·x-');
+    expect(cli.stdout).toContain('1 failed');
+    expect(cli.stdout).toContain('1 passed');
+    expect(cli.stdout).toContain('1 skipped');
+  });
+
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '--reporter=verbose', '--hideSkippedTests'],
+      args: [
+        'run',
+        'fixtures/index.test.ts',
+        '--reporter=verbose',
+        '--hideSkippedTests',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -58,10 +100,32 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('- basic > c');
   });
 
+  it('hideSkippedTestFiles', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--hideSkippedTestFiles'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('index.test.ts');
+    expect(cli.stdout).not.toContain('allSkipped.test.ts');
+  });
+
   it('custom', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'index', '-c', './rstest.customReporterConfig.ts'],
+      args: [
+        'run',
+        'fixtures/index.test.ts',
+        '-c',
+        './rstest.customReporterConfig.ts',
+      ],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -88,11 +152,13 @@ describe.concurrent('reporters', () => {
     ).toBe(3);
 
     expect(cli.stdout).toContain('[custom reporter] onTestFileStart');
+    expect(cli.stdout).toContain('[custom reporter] onTestFileReady');
 
     expect(
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);
 
+    expect(cli.stdout).toContain('[custom reporter] onTestRunStart');
     expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
   });
 

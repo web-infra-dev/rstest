@@ -3,6 +3,7 @@ antd
 apng
 apos
 applescript
+Asus
 atrules
 autodocs
 biomejs
@@ -12,6 +13,7 @@ browserslistrc
 bundleless
 bytedance
 caniuse
+canyonjs
 CEHQ
 chunkhash
 Chunktmp
@@ -25,6 +27,7 @@ consolas
 contentful
 corejs
 corepack
+cpuprofile
 craco
 crossorigin
 ctsx
@@ -39,8 +42,10 @@ endgroup
 envinfo
 estree
 facti
+fastpaths
 filenaming
 flac
+flamegraph
 flexbox
 flexbugs
 fnames
@@ -63,6 +68,7 @@ koppers
 lightningcss
 liyincode
 llms
+lockfiles
 longpaths
 manypkg
 mattcompiles
@@ -72,17 +78,20 @@ metafile
 microfrontend
 microfrontends
 mjsx
+modu
 modularly
 mtsx
 napi
-nosources
 nodenext
+noglobstar
 nolyfill
+nosources
 npmjs
 ntqry
 onclosetag
 onopentag
 ontext
+opencode
 osascript
 outbase
 outro
@@ -117,6 +126,7 @@ rslog
 rspack
 rspress
 rstack
+rstackjs
 rstest
 Samply
 selfsign
@@ -161,3 +171,5 @@ vnode
 watchpack
 webm
 webp
+worktrees
+Zenbook

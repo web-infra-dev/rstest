@@ -1,7 +1,7 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
-import type { BuiltInReporterNames } from '../core/rstest';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
+import type { CoverageMapData } from './coverage';
 import type {
   TestCaseInfo,
   TestFileInfo,
@@ -18,13 +18,21 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SourceMapInput, SnapshotSummary };
+export type { SnapshotSummary, SourceMapInput };
 
 export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
 
-export type { BuiltInReporterNames };
+export type BuiltInReporterNames =
+  | 'default'
+  | 'dot'
+  | 'verbose'
+  | 'md'
+  | 'github-actions'
+  | 'junit'
+  | 'json'
+  | 'blob';
 
 export type DefaultReporterOptions = {
   /**
@@ -37,10 +45,142 @@ export type DefaultReporterOptions = {
    * @default process.stdout/process.stderr
    */
   logger?: WindowRendererOptionsOptions['logger'];
+
+  /**
+   * prints out project name in test file title
+   * show project name by default when running multiple projects
+   */
+  showProjectName?: boolean;
+};
+
+export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
+
+export type MdReporterOptions = {
+  /**
+   * Output detail level preset.
+   * - `'normal'`: balanced output with code frames, repro commands, and candidate files
+   * - `'compact'`: minimal output without code frames, candidate files, or full stack traces
+   * - `'full'`: verbose output including console logs and environment info
+   * @default 'normal'
+   */
+  preset?: 'normal' | 'compact' | 'full';
+
+  /**
+   * Header section controls.
+   * - `false`: omit all header extras (runtime/env)
+   * - `true`: include all default header extras
+   * - object form: toggle individual parts
+   * @default { env: true }
+   */
+  header?: boolean | { env?: boolean };
+
+  /**
+   * Reproduction command controls.
+   * - `false`: omit reproduction commands
+   * - `'file'`: only include the test file path
+   * - `'file+name'`: include both file path and `--testNamePattern`
+   * - `true`: same as `'file+name'`
+   * @default 'file+name'
+   */
+  reproduction?: boolean | 'file' | 'file+name';
+
+  /**
+   * Test lists (Passed / Skipped / Todo) display mode.
+   * - `'auto'`: show only when all tests pass and the run is focused
+   * - `'always'`: always show regardless of test status or focus
+   * @default 'auto'
+   */
+  testLists?: 'auto' | 'always';
+
+  /**
+   * Failure output controls.
+   * @default { max: 50 }
+   */
+  failures?: { max?: number };
+
+  /**
+   * Code frame controls.
+   * - `false`: disable code frames
+   * - `true`: enable with default line window
+   * - object form: customize line window
+   * @default { linesAbove: 2, linesBelow: 2 }
+   */
+  codeFrame?: boolean | { linesAbove?: number; linesBelow?: number };
+
+  /**
+   * Stack output controls.
+   * - `false`: omit stack info
+   * - `'top'`: include only the top frame
+   * - `number`: include up to N stack frames
+   * - `'full'`: include a large default number of stack frames
+   * @default 'top'
+   */
+  stack?: number | false | 'full' | 'top';
+
+  /**
+   * Candidate files controls (best-effort files extracted from stack traces).
+   * - `false`: omit candidate files
+   * - `true`: enable with defaults
+   * - object form: customize max items
+   * @default { max: 5 }
+   */
+  candidateFiles?: boolean | { max?: number };
+
+  /**
+   * Console output controls.
+   * - `false`: omit console logs
+   * - `true`: include console logs with defaults
+   * - object form: customize limits
+   * @default { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }
+   */
+  console?:
+    | boolean
+    | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
+
+  /**
+   * Error section controls.
+   * @default { unhandled: true }
+   */
+  errors?: boolean | { unhandled?: boolean };
+};
+
+type GithubActionsReporterOptions = {
+  /**
+   * Whether to output `::error` annotations for failed tests.
+   * @default true
+   */
+  annotations?: boolean;
+  /**
+   * Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+   * @default true
+   */
+  summary?: boolean;
+};
+
+export type BlobReporterOptions = {
+  /**
+   * Directory to store blob report files.
+   * @default '.rstest-reports'
+   */
+  outputDir?: string;
+};
+
+export type JsonReporterOptions = {
+  /**
+   * Write report JSON to a file instead of stdout.
+   */
+  outputPath?: string;
 };
 
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
+  verbose: VerboseReporterOptions;
+  md: MdReporterOptions;
+  'github-actions': GithubActionsReporterOptions;
+  junit: Record<string, unknown>;
+  json: JsonReporterOptions;
+  blob: BlobReporterOptions;
 };
 
 export type ReporterWithOptions<
@@ -54,6 +194,10 @@ export interface Reporter {
    * Called before test file run.
    */
   onTestFileStart?: (test: TestFileInfo) => void;
+  /**
+   * Called after tests in file collected.
+   */
+  onTestFileReady?: (test: TestFileInfo) => void;
   /**
    * Called when the test file has finished running.
    */
@@ -77,19 +221,27 @@ export interface Reporter {
    */
   onTestCaseStart?: (test: TestCaseInfo) => void;
   /**
+   * Called before all tests start
+   */
+  onTestRunStart?: () => MaybePromise<void>;
+  /**
    * Called after all tests have finished running.
    */
   onTestRunEnd?: ({
     results,
+    coverage,
     testResults,
     duration,
     getSourcemap,
     snapshotSummary,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
+    coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     snapshotSummary: SnapshotSummary;
     filterRerunTestPaths?: string[];
   }) => MaybePromise<void>;

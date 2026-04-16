@@ -52,6 +52,60 @@ describe('test testNamePattern', () => {
     `);
   });
 
+  it('should filter test full name success', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/testNamePattern.test.ts',
+        '-t',
+        'level-A > level-B > it in level-B-A',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.filter((log) => log.startsWith('['))).toMatchInlineSnapshot(`
+      [
+        "[test] in level-B-A",
+      ]
+    `);
+  });
+
+  it('should filter test with suite name success', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/testNamePattern.test.ts',
+        '-t',
+        'level-B it in level-B-A',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.filter((log) => log.startsWith('['))).toMatchInlineSnapshot(`
+      [
+        "[test] in level-B-A",
+      ]
+    `);
+  });
+
   it('should not run tests when filter test skipped', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

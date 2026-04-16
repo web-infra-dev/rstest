@@ -1,0 +1,202 @@
+---
+description: "The extends option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format"
+---
+
+# extends
+
+- **Type:** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
+- **Default:** `undefined`
+
+The `extends` option allows you to extend your Rstest configuration from external sources, such as adapters that convert other build tools' configurations to Rstest-compatible format.
+
+This enables:
+
+- **Adapter Integration**: Extend from adapters like `@rstest/adapter-rslib`
+- **Async Configuration**: Load configuration from external sources asynchronously
+- **Config Merging**: Automatically merge extended configuration with your local Rstest config
+- **Composable Presets**: Combine multiple shared configs in a single `extends` array
+
+## Basic usage (object)
+
+```ts
+type ExtendConfig = Omit<RstestConfig, 'projects'>;
+```
+
+`ExtendConfig` is a plain subset of `RstestConfig` without `projects`.
+
+You can use it to extend your Rstest configuration from external sources.
+Rstest will merge the extended config with your local config following the [configuration merging rules](#configuration-merging).
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { sharedConfig } from './shared.config';
+
+export default defineConfig({
+  extends: sharedConfig,
+  // Local configuration
+  testTimeout: 10000,
+  retry: 2,
+});
+```
+
+## Function usage
+
+```ts
+type ExtendConfigFn = (
+  userConfig: Readonly<RstestConfig>,
+) => ExtendConfig | Promise<ExtendConfig>;
+```
+
+`ExtendConfigFn` is a function that takes the user's Rstest config as input and returns an extended config.
+
+You can use this to load external configuration files, fetch remote configs, or conditionally modify the config based on user settings.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: async (user) => {
+    const useJsdom = user.testEnvironment === 'jsdom';
+    return {
+      setupFiles: useJsdom ? ['<rootDir>/setupDomTests.ts'] : undefined,
+      source: {
+        define: {
+          BUILD_TARGET: '"test"',
+        },
+      },
+    };
+  },
+  testTimeout: 10_000,
+});
+```
+
+## Multiple extends
+
+You can pass an array to `extends` when you want to compose multiple presets.
+
+Rstest resolves the array from left to right. Later entries override earlier ones, and your local config still has the highest priority.
+
+When an entry is a function, each `ExtendConfigFn` is resolved independently against the original user config. Array order only affects merge precedence, not the input passed to each function.
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+import { sharedConfig } from './shared.config';
+
+export default defineConfig({
+  extends: [
+    sharedConfig,
+    withRslibConfig({}),
+    (userConfig) => ({
+      globals: userConfig.retry !== undefined,
+    }),
+  ],
+  testTimeout: 10_000,
+});
+```
+
+## Configuration merging
+
+Rstest deep-merges object fields and overrides primitives. Local config always takes precedence over the extended config.
+
+When `extends` is an array, precedence is:
+
+```ts
+extends[0] < extends[1] < ... < extends[n] < local config
+```
+
+Important merge rules:
+
+- Primitive fields like `testTimeout`, `retry`, and `globals` are overridden by the later value.
+- `setupFiles`, `globalSetup`, and `plugins` are concatenated so multiple presets can contribute entries.
+- `include`, `reporters`, and `coverage.reporters` are replaced by the later value.
+- Object fields like `source`, `resolve`, `output`, `tools`, `env`, and `coverage` are deep-merged.
+- `browser` is shallow-merged, so later keys override earlier keys.
+- `projects` is ignored in every extended config.
+
+Example:
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  extends: [
+    {
+      testEnvironment: 'jsdom',
+      setupFiles: ['./setup-a.ts'],
+      testTimeout: 5000,
+      source: {
+        define: {
+          BASE_URL: '"https://example.com"',
+        },
+      },
+    },
+    {
+      globals: true,
+      setupFiles: ['./setup-b.ts'],
+      source: {
+        define: {
+          API_URL: '"https://api.example.com"',
+        },
+      },
+    },
+  ],
+  // Local configuration
+  testTimeout: 10000,
+  retry: 2,
+});
+
+// Result:
+// {
+//   testEnvironment: 'jsdom',
+//   globals: true,
+//   testTimeout: 10000,
+//   retry: 2,
+//   setupFiles: ['./setup-a.ts', './setup-b.ts'],
+//   source: {
+//     define: {
+//       BASE_URL: '"https://example.com"',
+//       API_URL: '"https://api.example.com"',
+//     },
+//   },
+// }
+```
+
+## Using adapters
+
+### Example: extend from Rslib config
+
+Use the `@rstest/adapter-rslib` adapter to extend Rstest configuration from an existing Rslib config file. The adapter automatically maps compatible options like `source.define`, `source.include`, `source.exclude`, `source.transformImport`, and more.
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig({}),
+  // Additional rstest-specific configuration
+  coverage: {
+    enabled: true,
+    reporters: ['text', 'html'],
+  },
+});
+```
+
+## Limitations
+
+The `extends` configuration cannot include the `projects` field. To define multiple projects, extend each project individually:
+
+```ts
+export default defineConfig({
+  projects: [
+    {
+      extends: withRslibConfig({ libId: 'node' }),
+      include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s'],
+    },
+    {
+      extends: withRslibConfig({ libId: 'react' }),
+      include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    },
+  ],
+});
+```

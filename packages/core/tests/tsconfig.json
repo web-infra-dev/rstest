@@ -1,7 +1,7 @@
 {
   "extends": "@rstest/tsconfig/base",
   "compilerOptions": {
-    "baseUrl": "./"
+    "types": ["node"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "./rstestEnv.d.ts"]
 }

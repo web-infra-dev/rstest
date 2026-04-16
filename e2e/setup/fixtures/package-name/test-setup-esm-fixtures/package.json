@@ -1,0 +1,10 @@
+{
+  "name": "@rstest/tests-setup-esm",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./index.js"
+    }
+  }
+}

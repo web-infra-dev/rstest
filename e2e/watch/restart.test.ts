@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE ? '-module' : ''}`;
+    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
@@ -38,7 +38,7 @@ export default defineConfig({});
 
     // initial run
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
     // trigger restart by updating config file
     cli.resetStd();
@@ -46,8 +46,13 @@ export default defineConfig({});
 
     await cli.waitForStdout('restart');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
+    // Ensure we kill the entire process tree (important on Windows where child
+    // processes may survive and keep the test worker alive).
     cli.exec.kill();
-  }, 15_000);
+
+    // Give the OS a moment to release file handles (especially on Windows CI).
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  });
 });

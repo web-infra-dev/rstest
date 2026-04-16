@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "vcs": {
     "enabled": true,
@@ -64,7 +64,8 @@
         "noConfusingVoidType": "off"
       },
       "performance": {
-        "noDelete": "off"
+        "noDelete": "off",
+        "noNamespaceImport": "error"
       },
       "correctness": {
         "useHookAtTopLevel": "off"
@@ -88,6 +89,16 @@
         "rules": {
           "style": {
             "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["e2e/mock/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noNamespaceImport": "off"
           }
         }
       }

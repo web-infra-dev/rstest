@@ -1,7 +1,7 @@
 import { NodeSnapshotEnvironment } from '@vitest/snapshot/environment';
 
 export class RstestSnapshotEnvironment extends NodeSnapshotEnvironment {
-  private resolveSnapshotPath: (filepath: string) => Promise<string>;
+  private readonly resolveSnapshotPath: (filepath: string) => Promise<string>;
 
   constructor(options: {
     resolveSnapshotPath: (filepath: string) => Promise<string>;

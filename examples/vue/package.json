@@ -1,0 +1,27 @@
+{
+  "name": "@examples/vue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "test": "pnpm run test:clinet && pnpm run test:ssr",
+    "test:clinet": "rstest",
+    "test:ssr": "rstest -c rstest.config.ssr.ts",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "2.0.0-rc.2",
+    "@rsbuild/plugin-babel": "^1.1.2",
+    "@rsbuild/plugin-vue": "^1.2.7",
+    "@rsbuild/plugin-vue-jsx": "^2.0.0",
+    "@rstest/core": "workspace:*",
+    "@vue/compiler-dom": "^3.5.32",
+    "@vue/server-renderer": "^3.5.32",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^20.8.9",
+    "typescript": "^6.0.2"
+  }
+}

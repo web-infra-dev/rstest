@@ -20,6 +20,7 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  type ChaiPlugin,
   customMatchers,
   GLOBAL_EXPECT,
   getState,
@@ -28,7 +29,13 @@ import {
   JestExtend,
   setState,
 } from '@vitest/expect';
-import * as chai from 'chai';
+import {
+  assert,
+  config as chaiConfig,
+  expect as chaiExpect,
+  use,
+  util,
+} from 'chai';
 import type {
   Assertion,
   ChaiConfig,
@@ -38,30 +45,34 @@ import type {
   WorkerState,
 } from '../../types';
 import { createExpectPoll } from './poll';
-import { SnapshotPlugin } from './snapshot';
 
+export { assert } from 'chai';
 export { GLOBAL_EXPECT };
 
 export function setupChaiConfig(config: ChaiConfig): void {
-  Object.assign(chai.config, config);
+  Object.assign(chaiConfig, config);
 }
 
 export function createExpect({
   getCurrentTest,
   workerState,
+  snapshotPlugin,
 }: {
   workerState: WorkerState;
   getCurrentTest: () => TestCase | undefined;
+  snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
-  chai.use(JestExtend);
-  chai.use(JestChaiExpect);
-  chai.use(SnapshotPlugin(workerState));
-  chai.use(JestAsymmetricMatchers);
+  use(JestExtend);
+  use(JestChaiExpect);
+  if (snapshotPlugin) {
+    use(snapshotPlugin);
+  }
+  use(JestAsymmetricMatchers);
 
   const expect = ((value: any, message?: string): Assertion => {
     const { assertionCalls } = getState(expect);
     setState({ assertionCalls: assertionCalls + 1 }, expect);
-    const assert = chai.expect(value, message) as unknown as Assertion;
+    const assert = chaiExpect(value, message) as unknown as Assertion;
     const _test = getCurrentTest();
     if (_test) {
       // @ts-expect-error internal
@@ -69,7 +80,7 @@ export function createExpect({
     }
     return assert;
   }) as RstestExpect;
-  Object.assign(expect, chai.expect);
+  Object.assign(expect, chaiExpect);
   Object.assign(expect, (globalThis as any)[ASYMMETRIC_MATCHERS_OBJECT]);
 
   expect.getState = () => getState<MatcherState>(expect);
@@ -93,7 +104,7 @@ export function createExpect({
   );
 
   // @ts-expect-error chai.expect.extend untyped
-  expect.extend = (matchers) => chai.expect.extend(expect, matchers);
+  expect.extend = (matchers) => chaiExpect.extend(expect, matchers);
   expect.addEqualityTesters = (customTesters) =>
     addCustomEqualityTesters(customTesters);
 
@@ -104,10 +115,15 @@ export function createExpect({
 
   expect.poll = createExpectPoll(expect);
 
-  expect.unreachable = (message?: string) => {
-    chai.assert.fail(
-      `expected ${message ? `"${message}" ` : ''}not to be reached`,
+  (expect as any).element = () => {
+    throw new Error(
+      'expect.element() is only available in browser mode. ' +
+        'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
     );
+  };
+
+  expect.unreachable = (message?: string) => {
+    assert.fail(`expected ${message ? `"${message}" ` : ''}not to be reached`);
   };
 
   function assertions(expected: number) {
@@ -139,12 +155,10 @@ export function createExpect({
     });
   }
 
-  chai.util.addMethod(expect, 'assertions', assertions);
-  chai.util.addMethod(expect, 'hasAssertions', hasAssertions);
+  util.addMethod(expect, 'assertions', assertions);
+  util.addMethod(expect, 'hasAssertions', hasAssertions);
 
   expect.extend(customMatchers);
 
   return expect;
 }
-
-export { assert } from 'chai';

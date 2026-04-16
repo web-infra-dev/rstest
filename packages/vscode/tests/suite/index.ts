@@ -1,8 +1,8 @@
 import path from 'node:path';
-import glob from 'glob';
 import Mocha from 'mocha';
+import { glob } from 'tinyglobby';
 
-export function run(): Promise<void> {
+export async function run() {
   // Force color output
   process.env.FORCE_COLOR = '1';
   process.env.NO_COLOR = '';
@@ -16,29 +16,20 @@ export function run(): Promise<void> {
 
   const testsRoot = path.resolve(__dirname, '..');
 
-  return new Promise((c, e) => {
-    glob('**/**.test.js', { cwd: testsRoot }, (err, files) => {
-      if (err) {
-        return e(err);
-      }
+  const files = await glob('**/**.test.js', { cwd: testsRoot });
 
-      // Add files to the test suite
-      for (const f of files) {
-        mocha.addFile(path.resolve(testsRoot, f));
-      }
+  // Add files to the test suite
+  for (const f of files) {
+    mocha.addFile(path.resolve(testsRoot, f));
+  }
 
-      try {
-        // Run the mocha test
-        mocha.run((failures) => {
-          if (failures > 0) {
-            e(new Error(`${failures} tests failed.`));
-          } else {
-            c();
-          }
-        });
-      } catch (err) {
-        console.error(err);
-        e(err);
+  // Run the mocha test
+  return new Promise((resolve, reject) => {
+    mocha.run((failures) => {
+      if (failures > 0) {
+        reject(new Error(`${failures} tests failed.`));
+      } else {
+        resolve(null);
       }
     });
   });

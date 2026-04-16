@@ -68,7 +68,7 @@ export const asModule = async (
 
   if (unlinked) return m;
 
-  await m.link((() => {}) as unknown as vm.ModuleLinker);
+  await m.link((() => undefined) as unknown as vm.ModuleLinker);
 
   // @ts-expect-error copy from webpack
   if (m.instantiate) m.instantiate();

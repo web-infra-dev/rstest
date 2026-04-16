@@ -16,8 +16,7 @@ it('importActual works', async () => {
   expect(typeof rx.applyMiddleware).toBe('function');
 });
 
-// TODO: fix `rs.requireActual` parser bug.
-it.todo('requireActual and importActual works together', async () => {
+it('requireActual and importActual works together', async () => {
   const rxCjs = rs.requireActual<typeof redux>('redux');
   expect(rs.isMockFunction(rxCjs.isAction)).toBe(false);
   expect(typeof rxCjs.applyMiddleware).toBe('function');

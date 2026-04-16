@@ -1,4 +1,12 @@
+---
+description: Collect code coverage and generate coverage reports.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
 # coverage
+
+<ApiMeta addedVersion="0.4.0" />
 
 - **Type:**
 
@@ -12,12 +20,12 @@ type CoverageOptions = {
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
+  allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
 ```
 
 - **Default:** `undefined`
-- **Version:** `>=0.4.0`
 
 Collect code coverage and generate coverage reports.
 
@@ -38,7 +46,7 @@ All files |     100 |      100 |     100 |     100 |
 
 - **Type:** `boolean`
 - **Default:** `false`
-- **CLI:** `--coverage`, `--coverage=false`
+- **CLI:** `--coverage`, `--coverage=false`, `--no-coverage`
 
 Enable or disable test coverage collection.
 
@@ -102,6 +110,8 @@ A list of glob patterns that should be included for coverage collection.
 
 By default, rstest will only collect coverage for files that are tested. If you want to include untested files in the coverage report, you can use the `include` option to specify the files or patterns to include.
 
+Note that you should use standard glob syntax here. For a single extension, write `src/**/*.ts` instead of `src/**/*.{ts}`. Single-value braces are treated literally by the underlying glob libraries, so `src/**/*.{ts}` will not match `.ts` files.
+
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
@@ -121,11 +131,9 @@ export default defineConfig({
 ```ts
 [
   '**/node_modules/**',
-  '**/dist/**',
   '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
-  '**/[.]*',
   '**/*.d.ts',
   '**/*.{test,spec}.[jt]s',
   '**/*.{test,spec}.[cm][jt]s',
@@ -205,6 +213,29 @@ export default defineConfig({
   coverage: {
     enabled: true,
     reportOnFailure: true,
+  },
+});
+```
+
+### allowExternal
+
+<ApiMeta addedVersion="0.9.3" />
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `--coverage.allowExternal`
+
+Whether to collect coverage for source files outside the project root directory. This is useful in monorepo setups where tests import modules from sibling packages.
+
+By default, rstest excludes files outside the project root from coverage reports, which aligns with the behavior of Jest and Vitest.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    allowExternal: true,
   },
 });
 ```

@@ -1,6 +1,7 @@
+import type FS from 'node:fs';
 import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext, TestFileResult } from '../types';
+import type { RstestContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -8,9 +9,10 @@ import type {
 } from '../types/coverage';
 import { logger } from '../utils';
 
-const getIncludedFiles = async (
+export const getIncludedFiles = async (
   coverage: CoverageOptions,
   rootPath: string,
+  fs?: typeof FS,
 ): Promise<string[]> => {
   // fix issue with glob not working correctly when exclude path was not in the cwd
   const ignoredPatterns = coverage.exclude?.filter(
@@ -24,8 +26,8 @@ const getIncludedFiles = async (
     absolute: true,
     onlyFiles: true,
     ignore: ignoredPatterns,
-    dot: true,
     expandDirectories: false,
+    fs,
   });
 
   // 'a.ts' should match 'src/a.ts'
@@ -46,7 +48,7 @@ const getIncludedFiles = async (
 
 export async function generateCoverage(
   context: RstestContext,
-  results: TestFileResult[],
+  coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
 ): Promise<void> {
   const {
@@ -55,17 +57,17 @@ export async function generateCoverage(
     projects,
   } = context;
   try {
-    const finalCoverageMap = coverageProvider.createCoverageMap();
+    const finalCoverageMap = coverageMap;
 
-    // Merge coverage data from all test files
-    for (const result of results) {
-      if (result.coverage) {
-        finalCoverageMap.merge(result.coverage);
-      }
+    if (!coverage.allowExternal) {
+      finalCoverageMap.filter((filePath) => {
+        const normalizedFile = normalize(filePath);
+        return normalizedFile.startsWith(normalize(rootPath));
+      });
     }
 
     if (coverage.include?.length) {
-      const coveredFiles = finalCoverageMap.files();
+      const coveredFilesSet = new Set(finalCoverageMap.files().map(normalize));
 
       let isTimeout = false;
 
@@ -74,28 +76,28 @@ export async function generateCoverage(
         logger.info('Generating coverage for untested files...');
       }, 1000);
 
-      const allFiles = (
-        await Promise.all(
-          projects.map(async (p) => {
-            const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+      // Process projects sequentially to limit peak memory — parallel
+      // instrumentation of untested files across many projects can multiply
+      // the resident set. Sequential processing lets each project's
+      // intermediate data be GC'd before the next one starts.
+      const allFiles: string[] = [];
+      for (const p of projects) {
+        const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+        allFiles.push(...includedFiles);
 
-            const uncoveredFiles = includedFiles.filter(
-              (file) => !coveredFiles.includes(normalize(file)),
-            );
+        const uncoveredFiles = includedFiles.filter(
+          (file) => !coveredFilesSet.has(normalize(file)),
+        );
 
-            if (uncoveredFiles.length) {
-              await generateCoverageForUntestedFiles(
-                p.environmentName,
-                uncoveredFiles,
-                finalCoverageMap,
-                coverageProvider,
-              );
-            }
-
-            return includedFiles;
-          }),
-        )
-      ).flat();
+        if (uncoveredFiles.length) {
+          await generateCoverageForUntestedFiles(
+            p.environmentName,
+            uncoveredFiles,
+            finalCoverageMap,
+            coverageProvider,
+          );
+        }
+      }
 
       clearTimeout(timeoutId);
 
@@ -104,7 +106,8 @@ export async function generateCoverage(
       }
 
       // should be better to filter files before swc coverage is processed
-      finalCoverageMap.filter((file) => allFiles.includes(normalize(file)));
+      const allFilesSet = new Set(allFiles.map(normalize));
+      finalCoverageMap.filter((file) => allFilesSet.has(normalize(file)));
     }
 
     // Generate coverage reports
@@ -120,12 +123,13 @@ export async function generateCoverage(
       });
       if (!thresholdResult.success) {
         logger.log('');
-        logger.log(thresholdResult.message);
+        logger.stderr(thresholdResult.message);
         process.exitCode = 1;
       }
     }
   } catch (error) {
-    logger.error('Failed to generate coverage reports:', error);
+    logger.stderr('Failed to generate coverage reports:', error);
+    process.exitCode = 1;
   }
 }
 
@@ -142,12 +146,22 @@ async function generateCoverageForUntestedFiles(
     return;
   }
 
-  const coverages = await coverageProvider.generateCoverageForUntestedFiles({
-    environmentName,
-    files: uncoveredFiles,
-  });
+  /**
+   * Process untested files in batches to bound peak memory — each batch is
+   * instrumented, merged into the coverage map, and then released before the
+   * next batch starts. 25 is an empirical sweet-spot that keeps memory
+   * reasonable without adding noticeable per-batch overhead.
+   */
+  const batchSize = 25;
 
-  coverages.forEach((coverageData) => {
-    coverageMap.addFileCoverage(coverageData);
-  });
+  for (let index = 0; index < uncoveredFiles.length; index += batchSize) {
+    const coverages = await coverageProvider.generateCoverageForUntestedFiles({
+      environmentName,
+      files: uncoveredFiles.slice(index, index + batchSize),
+    });
+
+    coverages.forEach((coverageData) => {
+      coverageMap.addFileCoverage(coverageData);
+    });
+  }
 }

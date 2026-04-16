@@ -1,25 +1,28 @@
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join } from 'pathe';
 import type {
+  CoverageMapData,
   EntryInfo,
   FormattedError,
   ProjectContext,
   RstestContext,
   RuntimeConfig,
   RuntimeRPC,
-  Test,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
   TestSuiteInfo,
   UserConsoleLog,
 } from '../types';
 import {
   color,
+  getForceColorEnv,
+  isDeno,
   needFlagExperimentalDetectModule,
-  serializableConfig,
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { createForksPool } from './forks';
@@ -64,10 +67,15 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   } = context.normalizedConfig;
 
   return {
-    env,
+    env: {
+      // get process.env correctly when globalSetup modified it
+      ...process.env,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -84,11 +92,12 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     disableConsoleIntercept,
     testEnvironment,
     isolate,
-    coverage,
+    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
     bail,
     chaiConfig,
+    includeTaskLocation,
   };
 };
 
@@ -99,11 +108,30 @@ const filterAssetsByEntry = async (
   setupAssets: string[],
 ) => {
   const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
-  const neededFiles = await getAssetFiles(assetNames);
-
-  const neededSourceMaps = await getSourceMaps(assetNames);
+  const neededFilesPromise = getAssetFiles(assetNames);
+  const neededSourceMapsPromise = getSourceMaps(assetNames);
+  const [neededFiles, neededSourceMaps] = await Promise.all([
+    neededFilesPromise,
+    neededSourceMapsPromise,
+  ]);
 
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+};
+
+const getNodeExecArgv = () => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
+
+  return [
+    '--experimental-vm-modules',
+    '--experimental-import-meta-resolve',
+    needFlagExperimentalDetectModule()
+      ? '--experimental-detect-module'
+      : undefined,
+    '--require',
+    suppressFile,
+  ].filter(Boolean) as string[];
 };
 
 export const createPool = async ({
@@ -120,6 +148,8 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
+    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+    onCoverageResult?: (coverage: CoverageMapData) => void;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -133,7 +163,7 @@ export const createPool = async ({
     project: ProjectContext;
   }) => Promise<
     {
-      tests: Test[];
+      tests: TestInfo[];
       testPath: string;
       errors?: FormattedError[];
       project: string;
@@ -141,15 +171,22 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
-  // Some options may crash worker, e.g. --prof, --title.
+  // Propagate parent execArgv to workers, except flags known to cause issues
+  // in child processes (--prof writes per-worker profiling logs, --title is
+  // meaningless for workers). Safe for child_process.fork; the referenced
+  // Node.js issue (#41103) only affects worker_threads.
   // https://github.com/nodejs/node/issues/41103
-  const execArgv = process.execArgv.filter(
-    (execArg) =>
-      execArg.startsWith('--perf') ||
-      execArg.startsWith('--cpu-prof') ||
-      execArg.startsWith('--heap-prof') ||
-      execArg.startsWith('--diagnostic-dir'),
-  );
+  const blockedFlags = ['--prof', '--title'];
+  const execArgv = process.execArgv.filter((arg, i, arr) => {
+    if (blockedFlags.some((f) => arg === f || arg.startsWith(`${f}=`))) {
+      return false;
+    }
+    // skip standalone value following --title (handles `--title foo` form)
+    if (i > 0 && arr[i - 1] === '--title') {
+      return false;
+    }
+    return true;
+  });
 
   const numCpus = getNumCpus();
 
@@ -191,17 +228,11 @@ export const createPool = async ({
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,
-      '--experimental-vm-modules',
-      '--experimental-import-meta-resolve',
-      '--no-warnings',
-      needFlagExperimentalDetectModule()
-        ? '--experimental-detect-module'
-        : undefined,
-    ].filter(Boolean) as string[],
+      ...(isDeno ? [] : getNodeExecArgv()),
+    ],
     env: {
       NODE_ENV: 'test',
-      // enable diff color by default
-      FORCE_COLOR: process.env.NO_COLOR === '1' ? '0' : '1',
+      ...getForceColorEnv(),
       ...process.env,
     },
   });
@@ -231,6 +262,11 @@ export const createPool = async ({
       context.stateManager.onTestFileStart(test.testPath);
       await Promise.all(
         reporters.map((reporter) => reporter.onTestFileStart?.(test)),
+      );
+    },
+    onTestFileReady: async (test: TestFileInfo) => {
+      await Promise.all(
+        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
       );
     },
     onTestSuiteStart: async (test: TestSuiteInfo) => {
@@ -268,8 +304,9 @@ export const createPool = async ({
       setupEntries,
       project,
       updateSnapshot,
+      onCoverageResult,
     }) => {
-      const projectName = context.normalizedConfig.name;
+      const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
@@ -285,7 +322,7 @@ export const createPool = async ({
                   project: projectName,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
-                  runtimeConfig: serializableConfig(runtimeConfig),
+                  runtimeConfig,
                 },
                 type: 'run',
                 setupEntries,
@@ -352,6 +389,10 @@ export const createPool = async ({
                 errors: [err],
               } as TestFileResult;
             });
+          if (result.coverage) {
+            onCoverageResult?.(result.coverage);
+            delete result.coverage;
+          }
           context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));
           return result;
@@ -393,7 +434,7 @@ export const createPool = async ({
                   outputModule: project.outputModule,
                   rootPath: context.rootPath,
                   projectRoot: project.rootPath,
-                  runtimeConfig: serializableConfig(runtimeConfig),
+                  runtimeConfig,
                 },
                 type: 'collect',
                 setupEntries,

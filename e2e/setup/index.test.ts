@@ -56,4 +56,59 @@ describe('test setup file', async () => {
     });
     await expectExecSuccess();
   });
+
+  it('should resolve setup file correctly when setupFiles path with file protocol', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.fileProtocol.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('should resolve setup file correctly when setupFile is pure es module', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.esm.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('should run setup file correctly with no-isolate', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/no-isolate'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n');
+    await expectExecSuccess();
+
+    expect(
+      logs.filter((log) => log.endsWith('no-isolate/foo.test.ts')),
+    ).toHaveLength(1);
+    expect(
+      logs.filter((log) => log.endsWith('no-isolate/bar.test.ts')),
+    ).toHaveLength(1);
+    expect(logs.filter((log) => log.endsWith('[beforeAll] root'))).toHaveLength(
+      2,
+    );
+    expect(logs.filter((log) => log.endsWith('[afterAll] setup'))).toHaveLength(
+      2,
+    );
+  });
 });

@@ -1,6 +1,5 @@
 import EventEmitter from 'node:events';
 import { fileURLToPath } from 'node:url';
-import v8 from 'node:v8';
 import { createBirpc } from 'birpc';
 import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
@@ -12,27 +11,45 @@ import type {
   Test,
   TestFileResult,
 } from '../types';
+import { createWorkerStderrCapture } from './stderrCapture';
+import { parseWorkerMetaMessage, type WorkerMetaMessage } from './workerMeta';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-function createChannel(rpcMethods: RuntimeRPC) {
-  const emitter = new EventEmitter();
-  const cleanup = () => emitter.removeAllListeners();
+type ForksChannel = {
+  onMessage: (callback: (...args: any[]) => void) => void;
+  postMessage: (message: any) => void;
+};
 
+type ForksChannelContext = {
+  channel: ForksChannel;
+  cleanup: () => void;
+};
+
+export function createForksChannel(
+  rpcMethods: RuntimeRPC,
+  onWorkerMeta?: (message: WorkerMetaMessage) => void,
+  createBirpcImpl: typeof createBirpc = createBirpc,
+): ForksChannelContext {
+  const emitter = new EventEmitter();
   const events = { message: 'message', response: 'response' };
-  const channel = {
-    onMessage: (callback: any) => {
+  const channel: ForksChannel = {
+    onMessage: (callback: (...args: any[]) => void): void => {
       emitter.on(events.message, callback);
     },
-    postMessage: (message: any) => {
+    postMessage: (message: any): void => {
+      const workerMeta = parseWorkerMetaMessage(message);
+      if (workerMeta) {
+        onWorkerMeta?.(workerMeta);
+        return;
+      }
       emitter.emit(events.response, message);
     },
   };
 
-  createBirpc<ServerRPC, RuntimeRPC>(rpcMethods, {
-    serialize: v8.serialize,
-    deserialize: (v) => v8.deserialize(Buffer.from(v)),
+  const rpc = createBirpcImpl<ServerRPC, RuntimeRPC>(rpcMethods, {
+    timeout: -1,
     post(v) {
       emitter.emit(events.message, v);
     },
@@ -41,7 +58,12 @@ function createChannel(rpcMethods: RuntimeRPC) {
     },
   });
 
-  return { channel, cleanup };
+  const cleanup = (): void => {
+    rpc.$close(new Error('[rstest-pool]: Pending methods while closing rpc'));
+    emitter.removeAllListeners();
+  };
+
+  return { channel: channel, cleanup: cleanup };
 }
 
 export const createForksPool = (poolOptions: {
@@ -78,28 +100,50 @@ export const createForksPool = (poolOptions: {
     minThreads,
     concurrentTasksPerWorker: 1,
     isolateWorkers: isolate,
+    serialization: 'advanced',
   };
 
   const pool = new Tinypool(options);
+  const stderrCapture = createWorkerStderrCapture(pool);
+  let nextTaskId = 0;
 
   return {
     name: 'forks',
     runTest: async ({ options, rpcMethods }: RunWorkerOptions) => {
-      const { channel, cleanup } = createChannel(rpcMethods);
+      const taskId = ++nextTaskId;
+      stderrCapture.createTask(taskId);
+      const { channel, cleanup } = createForksChannel(rpcMethods, ({ pid }) => {
+        stderrCapture.bindTaskToPid(taskId, pid);
+      });
       try {
         return await pool.run(options, { channel });
+      } catch (err) {
+        await stderrCapture.enhanceWorkerExitError(taskId, err);
+        throw err;
       } finally {
         cleanup();
+        stderrCapture.clearTask(taskId);
       }
     },
     collectTests: async ({ options, rpcMethods }: RunWorkerOptions) => {
-      const { channel, cleanup } = createChannel(rpcMethods);
+      const taskId = ++nextTaskId;
+      stderrCapture.createTask(taskId);
+      const { channel, cleanup } = createForksChannel(rpcMethods, ({ pid }) => {
+        stderrCapture.bindTaskToPid(taskId, pid);
+      });
       try {
         return await pool.run(options, { channel });
+      } catch (err) {
+        await stderrCapture.enhanceWorkerExitError(taskId, err);
+        throw err;
       } finally {
         cleanup();
+        stderrCapture.clearTask(taskId);
       }
     },
-    close: () => pool.destroy(),
+    close: async () => {
+      stderrCapture.cleanup();
+      await pool.destroy();
+    },
   };
 };

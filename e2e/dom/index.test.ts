@@ -4,7 +4,7 @@ import { runCli } from './utils';
 const appFilters = 'test/App';
 const jestDomFilters = 'test/jestDom';
 
-const externalConfigArgs = ['--config', 'rstest.externals.config.ts'];
+const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
 describe('jsdom', () => {
   it('should run test correctly', async () => {
@@ -21,6 +21,13 @@ describe('jsdom', () => {
 
   it('should run test correctly with jest-dom', async () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should run test correctly with custom environment options', async () => {
+    const { expectExecSuccess } = await runCli('test/envOptions', undefined, {
+      args: ['--config', 'rstest.envOptions.config.mts'],
+    });
     await expectExecSuccess();
   });
 });
@@ -45,6 +52,11 @@ describe('happy-dom', () => {
 
   it('should run test correctly with jest-dom', async () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should run TextEncoder correctly in happy-dom', async () => {
+    const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
     await expectExecSuccess();
   });
 });

@@ -1,7 +1,7 @@
 import type { Rstest, RstestUtilities } from '../../types';
 
 export type { Assertion } from '../../types/expect';
-export type { Mock } from '../../types/mock';
+export type { Mock, Mocked } from '../../types/mock';
 
 declare global {
   var RSTEST_API: Rstest | undefined;
@@ -29,8 +29,13 @@ const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
 
   return new Proxy(fn, {
     get(_target, key, receiver) {
-      check(name);
-      return Reflect.get(globalThis.RSTEST_API?.[name] || {}, key, receiver);
+      // Don't throw error on property access when RSTEST_API is not initialized.
+      // This allows React Fast Refresh to safely iterate over exports without triggering errors.
+      // The actual check happens when the API is called (in `fn`).
+      if (!globalThis.RSTEST_API?.[name]) {
+        return Reflect.get(fn, key, receiver);
+      }
+      return Reflect.get(globalThis.RSTEST_API[name], key, receiver);
     },
   }) as Rstest[T];
 };

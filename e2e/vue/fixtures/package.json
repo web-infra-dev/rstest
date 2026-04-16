@@ -1,23 +1,23 @@
 {
   "name": "@rstest/tests-vue",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
   "scripts": {
-    "dev": "rsbuild dev --open",
     "build": "rsbuild build",
+    "dev": "rsbuild dev --open",
     "preview": "rsbuild preview"
   },
   "dependencies": {
-    "vue": "^3.5.25"
+    "vue": "^3.5.32"
   },
   "devDependencies": {
+    "@rsbuild/core": "2.0.0-rc.2",
+    "@rsbuild/plugin-babel": "^1.1.2",
+    "@rsbuild/plugin-vue": "^1.2.7",
+    "@rsbuild/plugin-vue-jsx": "^2.0.0",
     "@rstest/core": "workspace:*",
-    "@rsbuild/core": "1.6.12-canary-20251204065915",
-    "@rsbuild/plugin-babel": "^1.0.6",
-    "@rsbuild/plugin-vue": "^1.2.1",
-    "@rsbuild/plugin-vue-jsx": "^1.1.1",
-    "@vue/test-utils": "^2.4.6",
-    "@vue/compiler-dom": "^3.5.25",
-    "@vue/server-renderer": "^3.5.25"
+    "@vue/compiler-dom": "^3.5.32",
+    "@vue/server-renderer": "^3.5.32",
+    "@vue/test-utils": "^2.4.6"
   }
 }

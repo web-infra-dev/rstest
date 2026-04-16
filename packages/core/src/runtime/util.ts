@@ -1,71 +1,120 @@
-import { createRequire } from 'node:module';
-import { format } from 'node:util';
-import { diff } from 'jest-diff';
-import {
-  format as prettyFormat,
-  plugins as prettyFormatPlugins,
-} from 'pretty-format';
 import type { FormattedError, Test } from '../types';
+
+const loadDiffModules = async () => {
+  const [{ diff }, { format, plugins }] = await Promise.all([
+    import('@vitest/utils/diff'),
+    import('@vitest/pretty-format'),
+  ]);
+
+  return {
+    diff,
+    format,
+    formatPlugins: Object.values(plugins),
+  };
+};
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
+  clearTimeout?: typeof globalThis.clearTimeout;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
+  REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
 
-export const formatTestError = (err: any, test?: Test): FormattedError[] => {
+export const formatTestError = async (
+  err: any,
+  test?: Test,
+): Promise<FormattedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
-  return errors.map((rawError) => {
-    const error =
-      typeof rawError === 'string' ? { message: rawError } : rawError;
-    const errObj: FormattedError = {
-      fullStack: error.fullStack,
-      // Some error attributes cannot be enumerated
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    };
+  return Promise.all(
+    errors.map(async (rawError) => {
+      const error =
+        typeof rawError === 'string' ? { message: rawError } : rawError;
+      const errObj: FormattedError = {
+        fullStack: error.fullStack,
+        // Some error attributes cannot be enumerated
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      };
 
-    if (error instanceof TestRegisterError && test?.type === 'case') {
-      errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
-    }
+      if (error instanceof TestRegisterError && test?.type === 'case') {
+        errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+      }
 
-    if (
-      error.showDiff ||
-      (error.showDiff === undefined &&
-        error.expected !== undefined &&
-        error.actual !== undefined)
-    ) {
-      errObj.diff = diff(err.expected, err.actual, {
-        expand: false,
-      })!;
-      errObj.expected =
-        typeof error.expected === 'string'
-          ? error.expected
-          : prettyFormat(error.expected, {
-              plugins: Object.values(prettyFormatPlugins),
-            });
-      errObj.actual =
-        typeof error.actual === 'string'
-          ? error.actual
-          : prettyFormat(error.actual, {
-              plugins: Object.values(prettyFormatPlugins),
-            });
-    }
+      if (
+        error.showDiff ||
+        (error.showDiff === undefined &&
+          error.expected !== undefined &&
+          error.actual !== undefined)
+      ) {
+        const expected = error.expected;
+        const actual = error.actual;
+        const { diff, format, formatPlugins } = await loadDiffModules();
 
-    return errObj;
-  });
+        errObj.diff = diff(expected, actual, {
+          expand: false,
+        })!;
+        errObj.expected =
+          typeof expected === 'string'
+            ? expected
+            : format(expected, { plugins: formatPlugins });
+        errObj.actual =
+          typeof actual === 'string'
+            ? actual
+            : format(actual, { plugins: formatPlugins });
+      }
+
+      return errObj;
+    }),
+  );
 };
 // cspell:ignore sdjifo
 const formatRegExp = /%[sdjifoOc%]/;
+
+const formatTemplate = (template: string, values: any[]): string => {
+  if (!formatRegExp.test(template)) {
+    return template;
+  }
+
+  let valueIndex = 0;
+  return template.replace(/%[sdjifoOc%]/g, (specifier) => {
+    if (specifier === '%%') {
+      return '%';
+    }
+
+    const value = values[valueIndex++];
+
+    switch (specifier) {
+      case '%s':
+      case '%O':
+      case '%o':
+      case '%c':
+        return String(value);
+      case '%d':
+      case '%i':
+        return Number.parseInt(String(value), 10).toString();
+      case '%f':
+        return Number(value).toString();
+      case '%j':
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return '[Circular]';
+        }
+      default:
+        return String(value ?? '');
+    }
+  });
+};
 
 export const formatName = (
   template: string,
@@ -88,13 +137,14 @@ export const formatName = (
   if (Array.isArray(param)) {
     // format printf-like string
     // https://nodejs.org/api/util.html#util_util_format_format_args
-    return formatRegExp.test(templateStr)
-      ? format(templateStr, ...param)
-      : templateStr;
+    if (formatRegExp.test(templateStr)) {
+      return formatTemplate(templateStr, param);
+    }
+    return templateStr;
   }
 
   if (formatRegExp.test(templateStr)) {
-    templateStr = format(templateStr, param);
+    templateStr = formatTemplate(templateStr, [param]);
   }
 
   return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
@@ -116,23 +166,74 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
   return result;
 }
 
+export function isTemplateStringsArray(
+  value: unknown,
+): value is TemplateStringsArray {
+  return Array.isArray(value) && 'raw' in value && Array.isArray(value.raw);
+}
+
+export function parseTemplateTable(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): Record<string, unknown>[] {
+  const raw = strings.join('\0');
+  const lines = raw.split('\n').filter((line) => line.trim());
+
+  if (lines.length === 0) return [];
+
+  const headers = lines[0]!
+    .split('|')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+  if (headers.length === 0) return [];
+
+  const result: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < expressions.length; i += headers.length) {
+    const row: Record<string, unknown> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]!] = expressions[i + j];
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
 export class TestRegisterError extends Error {}
 
-export class RstestError extends Error {
+class RstestError extends Error {
   public fullStack?: boolean;
 }
 
 export function checkPkgInstalled(name: string): void {
-  const require = createRequire(import.meta.url);
+  if (typeof process === 'undefined' || !process.versions?.node) {
+    return;
+  }
+
+  let resolveFn: ((id: string) => string) | undefined;
   try {
-    require.resolve(name);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const req = Function('return require')();
+    resolveFn = req?.resolve?.bind(req);
+  } catch {
+    resolveFn = undefined;
+  }
+
+  if (!resolveFn) {
+    return;
+  }
+
+  try {
+    resolveFn(name);
   } catch (error: any) {
-    if (error.code === 'MODULE_NOT_FOUND') {
-      const error = new RstestError(
+    if (error?.code === 'MODULE_NOT_FOUND') {
+      const missingError = new RstestError(
         `Missing dependency "${name}". Please install it first.`,
       );
-      error.fullStack = true;
-      throw error;
+      missingError.fullStack = true;
+      throw missingError;
     }
     throw error;
   }

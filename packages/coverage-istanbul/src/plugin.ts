@@ -1,5 +1,9 @@
 import { createRequire } from 'node:module';
-import type { NormalizedCoverageOptions, RsbuildPlugin } from '@rstest/core';
+import type {
+  NormalizedCoverageOptions,
+  RsbuildPlugin,
+  Rspack,
+} from '@rstest/core';
 
 type TransformCoverageFn = (
   code: string,
@@ -28,38 +32,36 @@ export const pluginCoverage: (
 ) => RsbuildPlugin = (options) => ({
   name: 'rstest:coverage',
   setup: (api) => {
-    api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig }) => {
-      const require = createRequire(import.meta.url);
+    const require = createRequire(import.meta.url);
 
-      const swcPluginPath = require.resolve('swc-plugin-coverage-instrument');
-
-      return mergeEnvironmentConfig(config, {
-        tools: {
-          swc: {
-            jsc: {
-              experimental: {
-                plugins: [
-                  [
-                    swcPluginPath,
-                    {
-                      unstableExclude: options.exclude,
-                    },
-                  ],
-                ],
-              },
-            },
-          },
-        },
-      });
-    });
+    const swcPluginPath = require.resolve('swc-plugin-coverage-instrument');
 
     api.modifyBundlerChain({
       handler: (chain, { rspack, CHAIN_ID, environment }) => {
-        const { rspackExperiments: _rspackExperiments, ...swcOptions } =
-          chain.module
-            .rule(CHAIN_ID.RULE.JS)
-            .use(CHAIN_ID.USE.SWC)
-            .get('options') || {};
+        const isV1 = api.context.version.startsWith('1.');
+        const jsRule = isV1
+          ? chain.module.rule(CHAIN_ID.RULE.JS)
+          : chain.module.rule(CHAIN_ID.RULE.JS).oneOf(CHAIN_ID.ONE_OF.JS_MAIN);
+
+        const {
+          rspackExperiments: _rspackExperiments,
+          collectTypeScriptInfo: _collectTypeScriptInfo,
+          detectSyntax: _detectSyntax,
+          ...swcOptions
+        } = (jsRule.use(CHAIN_ID.USE.SWC).get('options') ||
+          {}) as Rspack.SwcLoaderOptions;
+
+        swcOptions.jsc ??= {};
+        swcOptions.jsc.experimental ??= {};
+        swcOptions.jsc.experimental.plugins ??= [];
+
+        // only apply coverage instrument plugin for main JS rule
+        swcOptions.jsc.experimental.plugins.push([
+          swcPluginPath,
+          {
+            unstableExclude: options.exclude,
+          },
+        ]);
 
         transformCoverageFns[environment.name] = async (
           code: string,
@@ -67,6 +69,15 @@ export const pluginCoverage: (
         ) =>
           rspack.experiments.swc.transform(code, {
             ...swcOptions,
+            // the Builtin swc-loader options is not same with swc transform options
+            jsc: {
+              ...swcOptions.jsc,
+              parser: {
+                syntax: 'typescript',
+                tsx: Boolean(swcOptions.jsc?.transform?.react),
+                ...(swcOptions.jsc?.parser || {}),
+              },
+            },
             filename,
           });
       },

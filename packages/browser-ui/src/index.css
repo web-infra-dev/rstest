@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+.ant-typography.font-mono {
+  font-family: var(--font-mono);
+}
+
+:root {
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  /* Core Backgrounds */
+  --background: #ffffff;
+  --foreground: #000000;
+
+  /* Geist Gray Scale (Accents) */
+  --ds-gray-100: #fafafa;
+  --ds-gray-200: #eaeaea;
+  --ds-gray-300: #999999;
+  --ds-gray-400: #888888;
+  --ds-gray-500: #666666;
+  --ds-gray-600: #444444;
+  --ds-gray-700: #333333;
+  --ds-gray-800: #111111;
+  --ds-gray-900: #000000;
+  --ds-gray-1000: #000000;
+
+  /* Geist Red Scale (Light) */
+  --ds-red-100: #fff0f0;
+  --ds-red-200: #ffebeb;
+  --ds-red-300: #ffe6e6;
+  --ds-red-700: #e5484d;
+  --ds-red-800: #da2f35;
+  --ds-red-900: #cb2a2f;
+
+  /* Geist Green Scale (Light) */
+  --ds-green-100: #effbef;
+  --ds-green-200: #ebfaeb;
+  --ds-green-300: #daf6da;
+  --ds-green-700: #45a557;
+  --ds-green-800: #398e4a;
+  --ds-green-900: #297a3a;
+
+  /* Geist Amber Scale (Light) */
+  --ds-amber-100: #fff6e6;
+  --ds-amber-200: #fff4d6;
+  --ds-amber-300: #fef0cd;
+  --ds-amber-700: #ffb224;
+  --ds-amber-800: #ff990a;
+  --ds-amber-900: #a35200;
+
+  /* Geist Blue Scale (Light) */
+  --ds-blue-700: #0070f3;
+
+  /* Semantic Mappings */
+  --accents-1: var(--ds-gray-100);
+  --accents-2: var(--ds-gray-200);
+  --accents-3: var(--ds-gray-300);
+  --accents-4: var(--ds-gray-400);
+  --accents-5: var(--ds-gray-500);
+  --accents-6: var(--ds-gray-600);
+  --accents-7: var(--ds-gray-700);
+  --accents-8: var(--ds-gray-800);
+
+  --border: var(--accents-2);
+  --muted: var(--accents-1);
+  --muted-foreground: var(--accents-5);
+  --primary: var(--foreground);
+  --success: var(--ds-green-700);
+  --error: var(--ds-red-800);
+  --warning: var(--ds-amber-700);
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  /* Core Backgrounds */
+  --background: #000000;
+  --foreground: #ffffff;
+
+  /* Geist Gray Scale (Accents) */
+  --ds-gray-100: #111111;
+  --ds-gray-200: #333333;
+  --ds-gray-300: #444444;
+  --ds-gray-400: #666666;
+  --ds-gray-500: #888888;
+  --ds-gray-600: #999999;
+  --ds-gray-700: #eaeaea;
+  --ds-gray-800: #fafafa;
+  --ds-gray-900: #ffffff;
+  --ds-gray-1000: #ffffff;
+
+  /* Geist Red Scale (Dark) */
+  --ds-red-100: #2a1314;
+  --ds-red-200: #3c1618;
+  --ds-red-300: #561a1e;
+  --ds-red-700: #e5484d;
+  --ds-red-800: #d93036;
+  --ds-red-900: #ff6166;
+
+  /* Geist Green Scale (Dark) */
+  --ds-green-100: #0b2212;
+  --ds-green-200: #0f2e18;
+  --ds-green-300: #12361b;
+  --ds-green-700: #45a557;
+  --ds-green-800: #398e4a;
+  --ds-green-900: #62c073;
+
+  /* Geist Amber Scale (Dark) */
+  --ds-amber-100: #291800;
+  --ds-amber-200: #331b00;
+  --ds-amber-300: #4d2a00;
+  --ds-amber-700: #ffb224;
+  --ds-amber-800: #ff990a;
+  --ds-amber-900: #f2a20d;
+
+  /* Geist Blue Scale (Dark) */
+  --ds-blue-700: #0070f3;
+
+  /* Semantic Mappings */
+  --accents-1: var(--ds-gray-100);
+  --accents-2: var(--ds-gray-200);
+  --accents-3: var(--ds-gray-300);
+  --accents-4: var(--ds-gray-400);
+  --accents-5: var(--ds-gray-500);
+  --accents-6: var(--ds-gray-600);
+  --accents-7: var(--ds-gray-700);
+  --accents-8: var(--ds-gray-800);
+
+  --border: var(--accents-2);
+  --muted: var(--accents-1);
+  --muted-foreground: var(--accents-5);
+  --primary: var(--foreground);
+  --success: var(--ds-green-700);
+  --error: var(--ds-red-800);
+  --warning: var(--ds-amber-700);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  overflow: hidden;
+}
+
+/* Ant Design Input Customization - Fallback to variables where theme might not reach */
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--foreground);
+}
+
+/* Ant Design Tree Customization */
+.ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  transition: none;
+}
+
+/* Flash effect for status icon transitions (flashbang style) */
+@keyframes status-flash {
+  0% {
+    filter: brightness(1);
+  }
+  5% {
+    filter: brightness(2.5);
+  }
+  15% {
+    filter: brightness(1.8);
+  }
+  40% {
+    filter: brightness(1.3);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+.status-icon-flash {
+  animation: status-flash 1.5s ease-out;
+}
+
+/* Progress bar flash/glow effect */
+@keyframes progress-segment-flash {
+  0% {
+    filter: brightness(1);
+    box-shadow: none;
+  }
+  10% {
+    filter: brightness(2.5);
+    box-shadow: 0 0 8px 1px currentColor;
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow: none;
+  }
+}
+
+.progress-flash-active {
+  animation: progress-segment-flash 1s cubic-bezier(0.4, 0, 0.2, 1);
+}

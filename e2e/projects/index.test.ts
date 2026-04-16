@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 describe('test projects', () => {
   describe('merge configs', () => {
     it('should run projects correctly with cli options', async () => {
-      const { cli, expectExecSuccess } = await runRstestCli({
+      const { cli, expectExecSuccess, expectLog } = await runRstestCli({
         command: 'rstest',
         args: ['run', '--globals'],
         options: {
@@ -22,16 +22,13 @@ describe('test projects', () => {
       await expectExecSuccess();
       const logs = cli.stdout.split('\n').filter(Boolean);
 
+      // test project name print
+      expectLog('[node]', logs);
+      expectLog('[client-jsdom]', logs);
       // test log print
-      expect(
-        logs.find((log) => log.includes('packages/node/test/index.test.ts')),
-      ).toBeTruthy();
-      expect(
-        logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
-      ).toBeTruthy();
-      expect(
-        logs.find((log) => log.includes('packages/client/test/node.test.ts')),
-      ).toBeTruthy();
+      expectLog('packages/node/test/index.test.ts', logs);
+      expectLog('packages/client/test/App.test.tsx', logs);
+      expectLog('packages/client/test/node.test.ts', logs);
     });
 
     it('should not inherit projects config and run projects failed ', async () => {
@@ -48,13 +45,40 @@ describe('test projects', () => {
       await expectExecFailed();
       // test log print
       expectStderrLog('it is not defined');
-    }, 15_000);
+    });
+  });
+
+  it('should run project correctly with specified config root', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--globals', '-c', 'packages/client/rstest.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    // test log print
+    // should only run client project
+    expect(
+      logs.find((log) => log.includes('packages/node/test/index.test.ts')),
+    ).toBeFalsy();
+    expect(
+      logs.find((log) => log.includes('packages/client/test/App.test.tsx')),
+    ).toBeTruthy();
+    expect(
+      logs.find((log) => log.includes('packages/client/test/node.test.ts')),
+    ).toBeTruthy();
   });
 
   it('should run projects fail when project not found', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.404.config.ts'],
+      args: ['run', '-c', 'rstest.404.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -68,7 +92,7 @@ describe('test projects', () => {
   });
 
   it('should run test failed when test file not found', async () => {
-    const { cli } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', '404-file', '--globals'],
       options: {
@@ -78,14 +102,9 @@ describe('test projects', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
-    const logs = cli.stdout.split('\n').filter(Boolean);
-
+    await expectExecFailed();
     // test log print
-    expect(
-      logs.find((log) => log.includes('No test files found')),
-    ).toBeTruthy();
+    expectStderrLog('No test files found');
   });
 
   it('should run test success when test file not found with passWithNoTests flag', async () => {
@@ -106,5 +125,154 @@ describe('test projects', () => {
     expect(
       logs.find((log) => log.includes('No test files found')),
     ).toBeTruthy();
+  });
+
+  it('should print project summary correctly in list mode', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.slice(-3)).toMatchInlineSnapshot(`
+      [
+        "   Projects 4 matched",
+        " Test Files 10 matched",
+        "      Tests 13 matched",
+      ]
+    `);
+  });
+
+  it('should include project summary in list json output', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const json = JSON.parse(cli.stdout);
+
+    expect(json.summary).toEqual({
+      files: 10,
+      projects: 4,
+      tests: 13,
+    });
+  });
+
+  it('should run projects with extends correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'extends'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.find((log) => log.includes('project-a'))).toBeTruthy();
+    expect(logs.find((log) => log.includes('project-b'))).toBeTruthy();
+  });
+
+  describe('project-specific configs', () => {
+    it('should respect hideSkippedTests per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.projectConfig.config.mts',
+          '--reporter',
+          'verbose',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // node-hide-skip project should hide skipped tests (only "should pass" visible)
+      expect(
+        logs.find(
+          (log) => log.includes('should be skipped') && !log.includes('client'),
+        ),
+      ).toBeFalsy();
+
+      // client-show-skip project should show skipped tests
+      expect(
+        logs.find((log) => log.includes('should be skipped in client')),
+      ).toBeTruthy();
+    });
+
+    it('should respect slowTestThreshold per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '-c',
+          'rstest.slowTest.config.mts',
+          '--reporter',
+          'verbose',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // Both projects run slow test, but we check the test count display
+      // node-slow project shows test with (51ms) - above 10ms threshold
+      // client-fast project shows test with (51ms) - below 1000ms threshold
+      // The slow indicator is in the icon color (yellow vs green), not text
+      // We just verify both tests are shown
+      expect(logs.find((log) => log.includes('[node-slow]'))).toBeTruthy();
+      expect(logs.find((log) => log.includes('[client-fast]'))).toBeTruthy();
+    });
+
+    it('should respect hideSkippedTestFiles per project', async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.mts'],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      // node-hide-file project should hide skipped test files
+      expect(logs.find((log) => log.includes('[node-hide-file]'))).toBeFalsy();
+
+      // client-show-file project should show skipped test files
+      expect(
+        logs.find((log) => log.includes('[client-show-file]')),
+      ).toBeTruthy();
+    });
   });
 });

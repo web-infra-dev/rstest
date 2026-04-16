@@ -7,6 +7,9 @@ on:
   push:
     branches: [main]
 
+  schedule:
+    - cron: '0 16 * * *'
+
   workflow_dispatch:
 
 permissions:
@@ -17,27 +20,17 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  # ======== ut ========
-  ut:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      matrix:
-        # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
-
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
-      - name: Install Pnpm
-        run: |
-          npm install -g corepack@latest --force
-          corepack enable
-
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -48,27 +41,114 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
+  # ======== lint ========
+  lint:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Install pnpm
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
+
       - name: Setup Node.js
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
           cache: 'pnpm'
 
       - name: Install Dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm install
+        run: pnpm install --ignore-scripts
+
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check Dependency Version
+        run: pnpm run check-dependency-version
+
+      - name: Check pnpm Dedupe
+        run: pnpm dedupe --check
+
+      - name: Check Unused Code
+        run: pnpm run check-unused
+
+  # ======== ut ========
+  ut:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # run ut in macOS, as SWC cases will fail in Ubuntu CI
+        os: [macos-14, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: pnpm fetch
+        run: pnpm fetch
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Set Playwright cache path
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
+          else
+            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium webkit
 
       - name: Run Type Check
-        if: steps.changes.outputs.changed == 'true'
         run: pnpm run typecheck
 
       - name: Run Test
-        if: steps.changes.outputs.changed == 'true'
         run: pnpm run test
+
+      - name: Run Examples Test
+        run: pnpm run test:examples
 
   # ======== e2e ========
   e2e:
+    needs: [prepare, lint, ut]
+    if: |
+      always() &&
+      (needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule') &&
+      needs.ut.result == 'success' &&
+      (github.event_name == 'schedule' || needs.lint.result == 'success')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -76,45 +156,73 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: [18, 20, 22, 24]
+        node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
+        test_script: ['test', 'test:commonjs', 'test:no-isolate']
+        exclude:
+          # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
+          - node_version: '20'
+            test_script: 'test:no-isolate'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
-      - name: Install Pnpm
-        run: |
-          npm install -g corepack@latest --force
-          corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
 
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: changes
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            changed:
-              - "!**/*.md"
-              - "!**/*.mdx"
-              - "!**/_meta.json"
-              - "!**/dictionary.txt"
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      - name: Setup Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: ${{ matrix.node_version }}
           cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: pnpm fetch
+        run: pnpm fetch
 
       - name: Install Dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: E2E Test
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm run e2e
+      - name: Set Playwright cache path
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
+          else
+            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium webkit
+
+      - name: E2E Test (${{ matrix.test_script }})
+        run: cd e2e && pnpm ${{ matrix.test_script }}
 
       - name: VS Code Extension Test
-        if: steps.changes.outputs.changed == 'true'
+        if: matrix.test_script == 'test'
         run: pnpm run test:vscode
+
+  # ======== gate ========
+  test-gate:
+    needs: [prepare, lint, ut, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test requirement
+        run: |
+          for result in \
+            "${{ needs.lint.result }}" \
+            "${{ needs.ut.result }}" \
+            "${{ needs.e2e.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              exit 1
+            fi
+          done

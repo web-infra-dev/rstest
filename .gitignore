@@ -25,6 +25,8 @@ test-temp-*
 !.vscode/extensions.json
 !.vscode/launch.json
 !.vscode/tasks.json
+!.vscode/extensions/
+!.vscode/extensions/**
 .idea/
 .nx/
 .history/
@@ -35,9 +37,16 @@ test-temp-*
 test-results/
 fixtures-test/
 fixtures-test-*/
+.rstest-reports/
 .rslib/
 !packages/core/src/coverage
+!packages/core/tests/coverage
 tests-dist/
 .vscode-test/
 packages/vscode/*.vsix
 packages/vscode/icon.png
+
+.rstest-temp/
+
+# Generated memory benchmark fixture
+benchmarks/fixtures/memory/

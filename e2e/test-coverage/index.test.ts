@@ -142,4 +142,27 @@ describe('test coverage-istanbul', () => {
       fs.existsSync(join(__dirname, 'fixtures/test-temp-coverage/index.html')),
     ).toBeTruthy();
   });
+
+  it('should show 0% coverage when no source files match coverage include patterns', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.noCoverageFiles.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+
+    // When no files match the coverage include patterns, all coverage should be 0
+    expect(
+      logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"Allfiles|0|0|0|0|"`);
+  });
 });

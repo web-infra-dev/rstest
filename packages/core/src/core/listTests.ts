@@ -4,29 +4,160 @@ import { createPool } from '../pool';
 import type {
   FormattedError,
   ListCommandOptions,
+  ListCommandResult,
+  Location,
+  ProjectContext,
   RstestContext,
-  Test,
+  TestInfo,
 } from '../types';
 import {
   bgColor,
   color,
-  getSetupFiles,
   getTaskNameWithPrefix,
   getTestEntries,
   logger,
   prettyTestPath,
+  ROOT_SUITE_NAME,
+  resolveShardedEntries,
 } from '../utils';
+import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
-const collectTests = async ({
+type ListedTest = {
+  file: string;
+  name?: string;
+  project?: string;
+  location?: Location;
+  type: 'file' | 'suite' | 'case';
+};
+
+const SummaryProjectLabel = color.gray('Projects'.padStart(11));
+const SummaryTestFileLabel = color.gray('Test Files'.padStart(11));
+const SummarySuiteLabel = color.gray('Suites'.padStart(11));
+const SummaryTestLabel = color.gray('Tests'.padStart(11));
+
+const getListSummaryCounts = (tests: ListedTest[]) => {
+  const projects = new Set<string>();
+  const files = new Set<string>();
+  let suites = 0;
+  let testCases = 0;
+
+  for (const test of tests) {
+    if (test.project) {
+      projects.add(test.project);
+    }
+
+    files.add(`${test.project ?? ''}\0${test.file}`);
+
+    if (test.type === 'suite') {
+      suites += 1;
+    }
+
+    if (test.type === 'case') {
+      testCases += 1;
+    }
+  }
+
+  return {
+    projects: projects.size,
+    files: files.size,
+    suites,
+    testCases,
+  };
+};
+
+const printListSummary = ({
+  tests,
+  filesOnly,
+  includeSuites,
+  showProject,
+  write,
+}: {
+  tests: ListedTest[];
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  showProject: boolean;
+  write: (message: string) => void;
+}) => {
+  const counts = getListSummaryCounts(tests);
+
+  write('');
+
+  if (showProject) {
+    write(`${SummaryProjectLabel} ${color.bold(`${counts.projects} matched`)}`);
+  }
+
+  write(`${SummaryTestFileLabel} ${color.bold(`${counts.files} matched`)}`);
+
+  if (filesOnly) {
+    return;
+  }
+
+  if (includeSuites) {
+    write(`${SummarySuiteLabel} ${color.bold(`${counts.suites} matched`)}`);
+  }
+
+  write(`${SummaryTestLabel} ${color.bold(`${counts.testCases} matched`)}`);
+};
+
+const createListSummaryPayload = ({
+  tests,
+  filesOnly,
+  includeSuites,
+  showProject,
+}: {
+  tests: ListedTest[];
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  showProject: boolean;
+}) => {
+  const counts = getListSummaryCounts(tests);
+  const summary: {
+    files: number;
+    projects?: number;
+    suites?: number;
+    tests?: number;
+  } = {
+    files: counts.files,
+  };
+
+  if (showProject) {
+    summary.projects = counts.projects;
+  }
+
+  if (!filesOnly) {
+    if (includeSuites) {
+      summary.suites = counts.suites;
+    }
+    summary.tests = counts.testCases;
+  }
+
+  return summary;
+};
+
+/**
+ * Collect tests from node mode projects using Rsbuild and worker pool.
+ */
+const collectNodeTests = async ({
   context,
+  nodeProjects,
   globTestSourceEntries,
 }: {
   context: RstestContext;
+  nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+  if (nodeProjects.length === 0) {
+    return {
+      list: [],
+      getSourceMap: async () => null,
+      close: async () => undefined,
+    };
+  }
+
   const setupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+    nodeProjects.map((project) => {
       const {
         environmentName,
         rootPath,
@@ -37,17 +168,33 @@ const collectTests = async ({
     }),
   );
 
+  const globalSetupFiles = Object.fromEntries(
+    context.projects.map((project) => {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      return [environmentName, getSetupFiles(globalSetup, rootPath)];
+    }),
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
+    globalSetupFiles,
+    nodeProjects,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
+    globalSetupFiles,
+    isWatchMode: false,
     inspectedConfig: {
       ...context.normalizedConfig,
-      projects: context.projects.map((p) => p.normalizedConfig),
+      projects: nodeProjects.map((p) => p.normalizedConfig),
     },
     setupFiles,
     rsbuildInstance,
@@ -61,14 +208,46 @@ const collectTests = async ({
   const updateSnapshot = context.snapshotManager.options.updateSnapshot;
 
   const returns = await Promise.all(
-    context.projects.map(async (project) => {
+    nodeProjects.map(async (project) => {
       const {
         entries,
         setupEntries,
+        globalSetupEntries,
         getSourceMaps,
         getAssetFiles,
         assetNames,
       } = await getRsbuildStats({ environmentName: project.environmentName });
+
+      if (
+        entries.length &&
+        globalSetupEntries.length &&
+        !project._globalSetups
+      ) {
+        project._globalSetups = true;
+        const files = globalSetupEntries.flatMap((e) => e.files!);
+        const assetFilesPromise = getAssetFiles(files);
+        const sourceMapsPromise = getSourceMaps(files);
+        const [assetFiles, sourceMaps] = await Promise.all([
+          assetFilesPromise,
+          sourceMapsPromise,
+        ]);
+
+        const { success, errors } = await runGlobalSetup({
+          globalSetupEntries,
+          assetFiles,
+          sourceMaps,
+          interopDefault: true,
+          outputModule: project.outputModule,
+        });
+        if (!success) {
+          return {
+            list: [],
+            errors,
+            assetNames,
+            getSourceMaps: () => null,
+          };
+        }
+      }
 
       const list = await pool.collectTests({
         entries,
@@ -89,15 +268,49 @@ const collectTests = async ({
 
   return {
     list: returns.flatMap((r) => r.list),
+    errors: returns.flatMap((r) => r.errors || []),
     getSourceMap: async (name: string) => {
       const resource = returns.find((r) => r.assetNames.includes(name));
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
+      await runGlobalTeardown();
       await closeServer();
       await pool.close();
     },
   };
+};
+
+/**
+ * Collect tests from browser mode projects using headless browser.
+ */
+const collectBrowserTests = async ({
+  context,
+  browserProjects,
+  shardedEntries,
+}: {
+  context: RstestContext;
+  browserProjects: ProjectContext[];
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
+}): Promise<{
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+}> => {
+  if (browserProjects.length === 0) {
+    return {
+      list: [],
+      close: async () => undefined,
+    };
+  }
+
+  const { loadBrowserModule } = await import('./browserLoader');
+  // Pass project roots to resolve @rstest/browser from project-specific node_modules
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
+    projectRoots,
+  });
+  validateBrowserConfig(context);
+  return listBrowserTests(context, { shardedEntries });
 };
 
 const collectTestFiles = async ({
@@ -107,36 +320,109 @@ const collectTestFiles = async ({
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
 }) => {
-  const list: {
-    tests: Test[];
-    testPath: string;
-    project: string;
-    errors?: FormattedError[];
-  }[] = [];
-  for (const project of context.projects) {
-    const files = await globTestSourceEntries(project.environmentName);
-    list.push(
-      ...Object.values(files).map((testPath) => ({
+  const projectLists: ListCommandResult[][] = await Promise.all(
+    context.projects.map(async (project) => {
+      const files = await globTestSourceEntries(project.environmentName);
+      return Object.values(files).map((testPath) => ({
         testPath,
         project: project.name,
         tests: [],
-      })),
-    );
-  }
+      }));
+    }),
+  );
+
+  const list = projectLists.flat();
+
   return {
-    close: async () => {},
+    close: async () => undefined,
+    errors: [],
     list,
-    getSourceMap: async (_name: string) => null,
+    getSourceMap: async () => null,
+  };
+};
+
+/**
+ * Collect all tests by separating browser and node mode projects.
+ */
+const collectAllTests = async ({
+  context,
+  globTestSourceEntries,
+  shardedEntries,
+}: {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
+}): Promise<{
+  errors?: FormattedError[];
+  list: ListCommandResult[];
+  getSourceMap: (name: string) => Promise<string | null | undefined>;
+  close: () => Promise<void>;
+}> => {
+  // Separate browser and node mode projects
+  const browserProjects = context.projects.filter(
+    (p) => p.normalizedConfig.browser.enabled,
+  );
+  const nodeProjects = context.projects.filter(
+    (p) => !p.normalizedConfig.browser.enabled,
+  );
+
+  // Collect from both in parallel
+  const [nodeResult, browserResult] = await Promise.all([
+    collectNodeTests({
+      context,
+      nodeProjects,
+      globTestSourceEntries,
+    }),
+    collectBrowserTests({
+      context,
+      browserProjects,
+      shardedEntries,
+    }),
+  ]);
+
+  return {
+    errors: nodeResult.errors,
+    list: [...nodeResult.list, ...browserResult.list],
+    getSourceMap: nodeResult.getSourceMap,
+    close: async () => {
+      await Promise.all([nodeResult.close(), browserResult.close()]);
+    },
   };
 };
 
 export async function listTests(
   context: RstestContext,
-  { filesOnly, json }: ListCommandOptions,
-): Promise<void> {
+  {
+    filesOnly,
+    json,
+    printLocation,
+    includeSuites,
+    summary,
+  }: ListCommandOptions,
+): Promise<ListCommandResult[]> {
   const { rootPath } = context;
+  const { shard } = context.normalizedConfig;
 
+  const shardedEntries = await resolveShardedEntries(context);
   const testEntries: Record<string, Record<string, string>> = {};
+  let shardedBrowserEntries:
+    | Map<string, { entries: Record<string, string> }>
+    | undefined;
+
+  if (shard && shardedEntries) {
+    for (const [key, value] of shardedEntries.entries()) {
+      testEntries[key] = value.entries;
+    }
+
+    shardedBrowserEntries = new Map();
+    for (const p of context.projects.filter(
+      (p) => p.normalizedConfig.browser.enabled,
+    )) {
+      shardedBrowserEntries.set(p.environmentName, {
+        entries: testEntries[p.environmentName] || {},
+      });
+    }
+  }
 
   const globTestSourceEntries = async (
     name: string,
@@ -162,48 +448,49 @@ export async function listTests(
     return entries;
   };
 
-  const { list, close, getSourceMap } = filesOnly
+  const {
+    list,
+    close,
+    getSourceMap,
+    errors = [],
+  } = filesOnly
     ? await collectTestFiles({
         context,
         globTestSourceEntries,
       })
-    : await collectTests({
+    : await collectAllTests({
         context,
         globTestSourceEntries,
+        shardedEntries: shardedBrowserEntries,
       });
 
-  const tests: {
-    file: string;
-    name?: string;
-    project?: string;
-  }[] = [];
+  const tests: ListedTest[] = [];
 
-  const traverseTests = (test: Test) => {
+  const traverseTests = (test: TestInfo) => {
     if (['skip', 'todo'].includes(test.runMode)) {
       return;
     }
 
-    if (test.type === 'case') {
-      if (showProject) {
-        tests.push({
-          file: test.testPath,
-          name: getTaskNameWithPrefix(test),
-          project: test.project,
-        });
-      } else {
-        tests.push({
-          file: test.testPath,
-          name: getTaskNameWithPrefix(test),
-        });
-      }
-    } else {
+    if (
+      test.type === 'case' ||
+      (includeSuites && test.type === 'suite' && test.name !== ROOT_SUITE_NAME)
+    )
+      tests.push({
+        file: test.testPath,
+        name: getTaskNameWithPrefix(test),
+        location: test.location,
+        type: test.type,
+        project: showProject ? test.project : undefined,
+      });
+
+    if (test.type === 'suite') {
       for (const child of test.tests) {
         traverseTests(child);
       }
     }
   };
 
-  const hasError = list.some((file) => file.errors?.length);
+  const hasError = list.some((file) => file.errors?.length) || errors.length;
   const showProject = context.projects.length > 1;
 
   if (hasError) {
@@ -229,8 +516,23 @@ export async function listTests(
       }
     }
 
+    if (errors.length) {
+      const { printError } = await import('../utils/error');
+      for (const error of errors || []) {
+        logger.stderr(bgColor('bgRed', ' Unhandled Error '));
+        await printError(
+          error,
+          async (name) => {
+            const sourceMap = await getSourceMap(name);
+            return sourceMap ? JSON.parse(sourceMap) : null;
+          },
+          rootPath,
+        );
+      }
+    }
+
     await close();
-    return;
+    return list;
   }
 
   for (const file of list) {
@@ -239,10 +541,12 @@ export async function listTests(
         tests.push({
           file: file.testPath,
           project: file.project,
+          type: 'file',
         });
       } else {
         tests.push({
           file: file.testPath,
+          type: 'file',
         });
       }
       continue;
@@ -253,7 +557,21 @@ export async function listTests(
   }
 
   if (json && json !== 'false') {
-    const content = JSON.stringify(tests, null, 2);
+    const content = JSON.stringify(
+      summary
+        ? {
+            items: tests,
+            summary: createListSummaryPayload({
+              tests,
+              filesOnly,
+              includeSuites,
+              showProject,
+            }),
+          }
+        : tests,
+      null,
+      2,
+    );
     if (json !== true && json !== 'true') {
       const jsonPath = isAbsolute(json) ? json : join(rootPath, json);
       mkdirSync(dirname(jsonPath), { recursive: true });
@@ -263,14 +581,29 @@ export async function listTests(
     }
   } else {
     for (const test of tests) {
-      const shortPath = relative(rootPath, test.file);
+      let shortPath = relative(rootPath, test.file);
+      if (test.location && printLocation) {
+        shortPath = `${shortPath}:${test.location.line}:${test.location.column}`;
+      }
       logger.log(
         test.name
           ? `${color.dim(`${shortPath} > `)}${test.name}`
           : prettyTestPath(shortPath),
       );
     }
+
+    if (summary) {
+      printListSummary({
+        tests,
+        filesOnly,
+        includeSuites,
+        showProject,
+        write: logger.log,
+      });
+    }
   }
 
   await close();
+
+  return list;
 }

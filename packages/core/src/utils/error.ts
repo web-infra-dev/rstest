@@ -1,11 +1,18 @@
 import fs from 'node:fs';
+import { resolve } from 'node:path';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, globalApis, isDebug, logger } from '../utils';
+import { globalApis } from './constants';
+import { color, isDebug, logger } from './logger';
+import { formatTestPath } from './testFiles';
+
+const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
+
+const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 
 const hintNotDefinedError = (message: string): string => {
-  const [, varName] = message.match(/(\w+) is not defined/) || [];
+  const [, varName] = /(\w+) is not defined/.exec(message) || [];
   if (varName) {
     if ((globalApis as string[]).includes(varName)) {
       return message.replace(
@@ -159,6 +166,10 @@ export async function parseErrorStacktrace({
   stack: string;
   getSourcemap?: GetSourcemap;
 }): Promise<StackFrame[]> {
+  // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
+  // stack frames originate from the same source file.
+  const traceMapCache = new Map<string, TraceMap>();
+
   const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
@@ -170,7 +181,11 @@ export async function parseErrorStacktrace({
       .map(async (frame) => {
         const sourcemap = await getSourcemap?.(frame.file!);
         if (sourcemap) {
-          const traceMap = new TraceMap(sourcemap);
+          let traceMap = traceMapCache.get(frame.file!);
+          if (!traceMap) {
+            traceMap = new TraceMap(sourcemap);
+            traceMapCache.set(frame.file!, traceMap);
+          }
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
             column: frame.column!,
@@ -182,7 +197,18 @@ export async function parseErrorStacktrace({
           }
           return {
             ...frame,
-            file: source,
+            file: isRelativePath(source)
+              ? resolve(frame.file!, '../', source)
+              : (() => {
+                  // `source` can be a filesystem path (e.g. `C:\...`) or a URL-like
+                  // string (e.g. `webpack://...`). `new URL()` throws for plain paths,
+                  // so fall back to the raw value instead of crashing the reporter.
+                  try {
+                    return new URL(source).pathname;
+                  } catch {
+                    return source;
+                  }
+                })(),
             lineNumber: line,
             name,
             column,
@@ -194,5 +220,22 @@ export async function parseErrorStacktrace({
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
 
-  return stackFrames;
+  if (fullStack) {
+    return stackFrames;
+  }
+
+  const filteredFrames = stackFrames.filter((frame) => {
+    if (!frame.file) {
+      return false;
+    }
+
+    if (isHttpLikeFile(frame.file)) {
+      return false;
+    }
+
+    const normalizedFile = frame.file.replace(/\\/g, '/');
+    return !stackIgnores.some((entry) => normalizedFile.match(entry));
+  });
+
+  return filteredFrames;
 }

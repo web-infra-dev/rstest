@@ -1,10 +1,16 @@
+---
+description: 隐藏已跳过的测试用例的日志，以减少测试输出中的噪声。当跳过大量测试用例时（例如启用过滤器运行测试时），此功能尤其有用。
+---
+
 # hideSkippedTests
 
 - **类型：** `boolean`
 - **默认值：** `false`
 - **CLI：** `--hideSkippedTests`
 
-不展示跳过测试的日志。
+隐藏已跳过的测试用例的日志，以减少测试输出中的噪声。当跳过大量测试用例时（例如启用过滤器运行测试时），此功能尤其有用。
+
+此功能在你使用默认报告器并运行多个测试文件时默认启用。
 
 import { Tab, Tabs } from '@theme';
 
@@ -27,7 +33,7 @@ export default defineConfig({
 
 ## 示例
 
-默认情况下，在你使用 [verbose 报告器](/config/test/reporters#verbose-reporter)时，Rstest 会显示所有测试用例的日志。
+默认情况下，在你使用 [verbose 报告器](/guide/basic/reporters#详细报告器)时，Rstest 会显示所有测试用例的日志。
 
 ```bash
  ✓ test/index.test.ts (2) 1ms

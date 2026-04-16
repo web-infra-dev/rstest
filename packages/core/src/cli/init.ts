@@ -2,11 +2,12 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
-import { loadConfig } from '../config';
-import type { Project, RstestConfig } from '../types';
+import { loadConfig, resolveExtends } from '../config';
+import type { BrowserName, Project, RstestConfig } from '../types';
 import {
   castArray,
   color,
+  determineAgent,
   filterProjects,
   formatRootStr,
   getAbsolutePath,
@@ -17,12 +18,49 @@ export type CommonOptions = {
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
   globals?: boolean;
+  /**
+   * Pool options.
+   * - `string`: shorthand for `{ type: string }` (from `--pool` flag)
+   * - `object`: detailed pool config (from `--pool.*` options)
+   */
+  pool?:
+    | string
+    | {
+        type?: string;
+        maxWorkers?: string | number;
+        minWorkers?: string | number;
+        execArgv?: string[] | string;
+      };
+  /**
+   * Browser mode options.
+   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--browser` flag)
+   * - `object`: detailed browser config (from `--browser.*` options)
+   */
+  browser?:
+    | boolean
+    | {
+        enabled?: boolean;
+        name?: BrowserName;
+        headless?: boolean;
+        port?: number;
+        strictPort?: boolean;
+      };
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
   reporter?: string[];
   project?: string[];
-  coverage?: boolean;
+  /**
+   * Coverage options.
+   * - `boolean`: shorthand for `{ enabled: boolean }` (from `--coverage` flag)
+   * - `object`: detailed coverage config (from `--coverage.*` options)
+   */
+  coverage?:
+    | boolean
+    | {
+        enabled?: boolean;
+        allowExternal?: boolean;
+      };
   passWithNoTests?: boolean;
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
@@ -41,7 +79,9 @@ export type CommonOptions = {
   maxConcurrency?: number;
   slowTestThreshold?: number;
   hideSkippedTests?: boolean;
+  hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
+  shard?: string;
 };
 
 function mergeWithCLIOptions(
@@ -69,6 +109,7 @@ function mergeWithCLIOptions(
     'disableConsoleIntercept',
     'testEnvironment',
     'hideSkippedTests',
+    'hideSkippedTestFiles',
     'logHeapUsage',
   ];
   for (const key of keys) {
@@ -81,6 +122,26 @@ function mergeWithCLIOptions(
     config.reporters = castArray(options.reporter) as typeof config.reporters;
   }
 
+  if (options.shard) {
+    const [index, count] = options.shard.split('/').map(Number);
+    if (
+      !index ||
+      !count ||
+      Number.isNaN(index) ||
+      Number.isNaN(count) ||
+      index < 1 ||
+      index > count
+    ) {
+      throw new Error(
+        `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
+      );
+    }
+    config.shard = {
+      index,
+      count,
+    };
+  }
+
   if (
     options.bail !== undefined &&
     (typeof options.bail === 'number' || typeof options.bail === 'boolean')
@@ -90,7 +151,16 @@ function mergeWithCLIOptions(
 
   if (options.coverage !== undefined) {
     config.coverage ??= {};
-    config.coverage.enabled = options.coverage;
+    if (typeof options.coverage === 'boolean') {
+      config.coverage.enabled = options.coverage;
+    } else {
+      if (options.coverage.enabled !== undefined) {
+        config.coverage.enabled = options.coverage.enabled;
+      }
+      if (options.coverage.allowExternal !== undefined) {
+        config.coverage.allowExternal = options.coverage.allowExternal;
+      }
+    }
   }
 
   if (options.exclude) {
@@ -100,23 +170,99 @@ function mergeWithCLIOptions(
   if (options.include) {
     config.include = castArray(options.include);
   }
+
+  if (options.browser !== undefined) {
+    config.browser ??= { provider: 'playwright' };
+    // Handle --browser as shorthand for --browser.enabled
+    if (typeof options.browser === 'boolean') {
+      config.browser.enabled = options.browser;
+    } else {
+      if (options.browser.enabled !== undefined) {
+        config.browser.enabled = options.browser.enabled;
+      }
+      if (options.browser.name !== undefined) {
+        config.browser.browser = options.browser.name;
+      }
+      if (options.browser.headless !== undefined) {
+        config.browser.headless = options.browser.headless;
+      }
+      if (options.browser.port !== undefined) {
+        config.browser.port = Number(options.browser.port);
+      }
+      if (options.browser.strictPort !== undefined) {
+        config.browser.strictPort = options.browser.strictPort;
+      }
+    }
+  }
+
+  if (options.pool !== undefined) {
+    const poolFromCli = options.pool;
+
+    if (typeof poolFromCli === 'string') {
+      if (typeof config.pool === 'string') {
+        config.pool = { type: config.pool };
+      }
+
+      config.pool ??= {};
+      if (typeof config.pool !== 'object') {
+        config.pool = {};
+      }
+
+      const pool = config.pool;
+      pool.type = poolFromCli as any;
+    } else {
+      if (typeof config.pool === 'string') {
+        config.pool = { type: config.pool };
+      }
+
+      config.pool ??= {};
+      if (typeof config.pool !== 'object') {
+        config.pool = {};
+      }
+
+      const pool = config.pool;
+
+      if (poolFromCli.type !== undefined) {
+        pool.type = poolFromCli.type as any;
+      }
+
+      if (poolFromCli.maxWorkers !== undefined) {
+        pool.maxWorkers = poolFromCli.maxWorkers as any;
+      }
+
+      if (poolFromCli.minWorkers !== undefined) {
+        pool.minWorkers = poolFromCli.minWorkers as any;
+      }
+
+      if (poolFromCli.execArgv !== undefined) {
+        pool.execArgv = castArray(poolFromCli.execArgv);
+      }
+    }
+  }
+
   return config;
 }
 
 async function resolveConfig(
-  options: CommonOptions & Required<Pick<CommonOptions, 'root'>>,
+  options: CommonOptions & { cwd: string },
 ): Promise<{
   config: RstestConfig;
   configFilePath?: string;
 }> {
   const { content: config, filePath: configFilePath } = await loadConfig({
-    cwd: options.root,
+    cwd: options.cwd,
     path: options.config,
     configLoader: options.configLoader,
   });
 
+  const mergedConfig = mergeWithCLIOptions(config, options);
+
+  if (!mergedConfig.root) {
+    mergedConfig.root = options.cwd;
+  }
+
   return {
-    config: mergeWithCLIOptions(config, options),
+    config: mergedConfig,
     configFilePath: configFilePath ?? undefined,
   };
 }
@@ -162,50 +308,71 @@ export async function resolveProjects({
   const resolvedProjectPaths = new Set<string>();
 
   const getProjects = async (rstestConfig: RstestConfig, root: string) => {
-    const { projectPaths, projectPatterns, projectConfigs } = (
-      rstestConfig.projects || []
-    ).reduce(
-      (total, p) => {
-        if (typeof p === 'object') {
-          const projectRoot = p.root ? formatRootStr(p.root, root) : root;
-          total.projectConfigs.push({
-            config: mergeWithCLIOptions(
-              {
-                root: projectRoot,
-                ...p,
-                name: p.name ? p.name : getDefaultProjectName(projectRoot),
-              },
-              options,
-            ),
-            configFilePath: undefined,
-          });
-          return total;
-        }
-        const projectStr = formatRootStr(p, root);
-
-        if (isDynamicPattern(projectStr)) {
-          total.projectPatterns.push(projectStr);
-        } else {
-          const absolutePath = getAbsolutePath(root, projectStr);
-
-          if (!existsSync(absolutePath)) {
-            throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
-          }
-          total.projectPaths.push(absolutePath);
-        }
-        return total;
-      },
-      {
-        projectPaths: [] as string[],
-        projectPatterns: [] as string[],
-        projectConfigs: [] as {
+    const projectPaths: string[] = [];
+    const projectPatterns: string[] = [];
+    const inlineProjectConfigPromises: Promise<
+      | {
           config: RstestConfig;
           configFilePath: string | undefined;
-        }[],
-      },
+        }
+      | {
+          error: unknown;
+        }
+    >[] = [];
+
+    for (const p of rstestConfig.projects || []) {
+      if (typeof p === 'object') {
+        const projectRoot = p.root ? formatRootStr(p.root, root) : root;
+
+        inlineProjectConfigPromises.push(
+          resolveExtends({ ...p }).then(
+            (projectConfig) => ({
+              config: mergeWithCLIOptions(
+                {
+                  root: projectRoot,
+                  ...projectConfig,
+                  name: p.name ? p.name : getDefaultProjectName(projectRoot),
+                },
+                options,
+              ),
+              configFilePath: undefined,
+            }),
+            (error) => ({ error }),
+          ),
+        );
+        continue;
+      }
+
+      const projectStr = formatRootStr(p, root);
+
+      if (isDynamicPattern(projectStr)) {
+        projectPatterns.push(projectStr);
+      } else {
+        const absolutePath = getAbsolutePath(root, projectStr);
+
+        if (!existsSync(absolutePath)) {
+          throw `Can't resolve project "${p}", please make sure "${p}" is a existing file or a directory.`;
+        }
+        projectPaths.push(absolutePath);
+      }
+    }
+
+    const [inlineProjectConfigResults, globbedProjectPaths] = await Promise.all(
+      [
+        Promise.all(inlineProjectConfigPromises),
+        globProjects(projectPatterns, root),
+      ],
     );
 
-    projectPaths.push(...(await globProjects(projectPatterns, root)));
+    const projectConfigs = inlineProjectConfigResults.map((result) => {
+      if ('error' in result) {
+        throw result.error;
+      }
+
+      return result;
+    });
+
+    projectPaths.push(...globbedProjectPaths);
 
     const projects: {
       config: RstestConfig;
@@ -219,7 +386,7 @@ export async function resolveProjects({
         const { config, configFilePath } = await resolveConfig({
           ...options,
           config: isDirectory ? undefined : project,
-          root: projectRoot,
+          cwd: projectRoot,
         });
 
         if (configFilePath) {
@@ -290,8 +457,18 @@ export async function initCli(options: CommonOptions): Promise<{
 
   const { config, configFilePath } = await resolveConfig({
     ...options,
-    root,
+    cwd: options.root ? getAbsolutePath(cwd, options.root) : cwd,
   });
+
+  // In agent environments, default to markdown output when the user didn't
+  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+  if (
+    determineAgent().isAgent &&
+    !options.reporter &&
+    config.reporters == null
+  ) {
+    config.reporters = ['md'];
+  }
 
   const projects = await resolveProjects({ config, root, options });
 

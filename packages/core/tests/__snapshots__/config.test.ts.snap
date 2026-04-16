@@ -3,14 +3,23 @@
 exports[`mergeRstestConfig > should merge config correctly with default config 1`] = `
 {
   "bail": 0,
+  "browser": {
+    "browser": "chromium",
+    "enabled": false,
+    "headless": false,
+    "port": undefined,
+    "provider": "playwright",
+    "providerOptions": {},
+    "strictPort": false,
+    "viewport": undefined,
+  },
   "clearMocks": false,
   "coverage": {
+    "allowExternal": false,
     "clean": true,
     "enabled": false,
     "exclude": [
       "**/node_modules/**",
-      "**/[.]*",
-      "**/dist/**",
       "**/test/**",
       "**/__tests__/**",
       "**/__mocks__/**",
@@ -42,17 +51,27 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "globalSetup": [
+    "./global-setup.ts",
+  ],
   "globals": false,
+  "hideSkippedTestFiles": false,
   "hideSkippedTests": false,
   "hookTimeout": 10000,
   "include": [
     "tests/**/*.test.ts",
   ],
   "includeSource": [],
+  "includeTaskLocation": false,
   "isolate": true,
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -70,7 +89,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   ],
   "slowTestThreshold": 300,
   "snapshotFormat": {},
-  "testEnvironment": "node",
+  "testEnvironment": {
+    "name": "node",
+  },
   "testTimeout": 5000,
   "unstubEnvs": false,
   "unstubGlobals": false,

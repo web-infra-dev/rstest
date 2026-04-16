@@ -1,46 +1,45 @@
 {
   "name": "rstest",
-  "icon": "icon.png",
   "displayName": "Rstest",
-  "publisher": "rstack",
-  "description": "VS Code extension for Rstest",
-  "version": "0.7.2",
+  "version": "0.9.7",
   "private": true,
-  "license": "MIT",
+  "description": "VS Code extension for Rstest",
+  "categories": [
+    "Testing"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/vscode"
   },
-  "engines": {
-    "vscode": "^1.97.0"
-  },
-  "categories": [
-    "Testing"
-  ],
-  "activationEvents": [
-    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
-    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
-  ],
+  "license": "MIT",
+  "publisher": "rstack",
   "main": "./dist/extension.js",
+  "scripts": {
+    "build": "rslib build",
+    "build:local": "cross-env SOURCEMAP=true rslib build",
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
+    "lint": "biome check . --diagnostic-level=warn",
+    "package:vsce": "npm run build && vsce package",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:unit": "rstest",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/vscode/tsconfig.json",
+    "watch": "rslib build --watch",
+    "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
+  },
   "contributes": {
+    "commands": [
+      {
+        "command": "rstest.updateSnapshot",
+        "title": "Update Snapshot",
+        "category": "Testing",
+        "icon": "$(merge)"
+      }
+    ],
     "configuration": {
       "title": "Rstest",
       "properties": {
-        "rstest.testFileGlobPattern": {
-          "markdownDescription": "Glob patterns used to discover test files. Must be an array of strings.",
-          "scope": "resource",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "**/*.{test,spec}.[jt]s",
-            "**/*.{test,spec}.[cm][jt]s",
-            "**/*.{test,spec}.[jt]sx",
-            "**/*.{test,spec}.[cm][jt]sx"
-          ]
-        },
         "rstest.rstestPackagePath": {
           "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
           "scope": "resource",
@@ -55,17 +54,30 @@
           "default": [
             "**/rstest.config.{mjs,ts,js,cjs,mts,cts}"
           ]
+        },
+        "rstest.testCaseCollectMethod": {
+          "type": "string",
+          "default": "ast",
+          "enum": [
+            "ast",
+            "runtime"
+          ],
+          "enumItemLabels": [
+            "Static AST Analyze",
+            "Run Test File"
+          ],
+          "enumDescriptions": [
+            "Fast, only supports basic test cases.",
+            "Slow, supports all test cases, including dynamic test generation methods (each/for/extend)."
+          ]
+        },
+        "rstest.applyDiagnostic": {
+          "description": "Show diagnostics in editor and Problems panel for failed tests.",
+          "type": "boolean",
+          "default": true
         }
       }
     },
-    "commands": [
-      {
-        "command": "rstest.updateSnapshot",
-        "title": "Update Snapshot",
-        "category": "Testing",
-        "icon": "$(merge)"
-      }
-    ],
     "menus": {
       "commandPalette": [
         {
@@ -88,37 +100,36 @@
       ]
     }
   },
-  "scripts": {
-    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
-    "build": "rslib build",
-    "lint": "biome check . --diagnostic-level=warn",
-    "build:local": "cross-env SOURCEMAP=true rslib build",
-    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
-    "test:unit": "rstest",
-    "test": "npm run test:unit && npm run test:e2e",
-    "typecheck": "tsc --noEmit",
-    "watch": "rslib build --watch",
-    "watch:local": "cross-env SOURCEMAP=true rslib build --watch",
-    "package:vsce": "npm run build && vsce package"
-  },
+  "activationEvents": [
+    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
+    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
+  ],
   "devDependencies": {
-    "@rsbuild/core": "1.6.12-canary-20251204065915",
-    "@rslib/core": "0.18.3",
+    "@rsbuild/core": "2.0.0-rc.2",
+    "@rslib/core": "0.21.0",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.3",
-    "@types/glob": "^7.2.0",
+    "@swc/core": "^1.15.24",
+    "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
+    "@types/picomatch": "^4.0.3",
+    "@types/semver": "^7.7.1",
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.7.1",
-    "birpc": "2.9.0",
-    "core-js-pure": "^3.47.0",
-    "glob": "^7.2.3",
+    "birpc": "^4.0.0",
+    "core-js-pure": "^3.49.0",
     "mocha": "^11.7.5",
-    "ovsx": "^0.10.7",
-    "typescript": "^5.9.3",
-    "valibot": "^1.2.0"
-  }
+    "ovsx": "^0.10.10",
+    "picomatch": "^4.0.4",
+    "semver": "^7.7.4",
+    "tinyglobby": "^0.2.16",
+    "typescript": "^6.0.2",
+    "valibot": "^1.3.1"
+  },
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "icon": "icon.png"
 }

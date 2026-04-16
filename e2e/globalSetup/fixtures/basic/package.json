@@ -1,0 +1,5 @@
+{
+  "name": "e2e-globalsetup-basic",
+  "private": true,
+  "type": "module"
+}

@@ -1,3 +1,7 @@
+---
+description: This chapter introduces how to configure Rstest and its underlying Rsbuild and Rspack.
+---
+
 # Configure Rstest
 
 ## Configuration file
@@ -136,3 +140,10 @@ export const myPlugin = {
   },
 };
 ```
+
+## Configuration integration
+
+In large projects, you often already have existing build/toolchain configurations (aliases, global variables, plugins, etc.). Through [adapters](/guide/integration/adapters) and the [extends](/config/test/extends) option, Rstest can transform and integrate these external configurations into your test setup, helping you avoid duplicate maintenance and keep configurations consistent.
+
+- With `extends`, you can load a function (adapter) or object, and the returned configuration will be deeply merged with the current Rstest configuration.
+- This is suitable for reusing configurations from tools such as Rsbuild and Rspack, or presetting testing behavior for framework templates (for example, default test environments and setup scripts).

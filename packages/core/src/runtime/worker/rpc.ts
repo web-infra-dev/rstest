@@ -1,31 +1,24 @@
-import v8 from 'node:v8';
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import type { TinypoolWorkerMessage } from 'tinypool';
-import type {
-  RuntimeRPC,
-  ServerRPC,
-  TestCaseInfo,
-  TestResult,
-} from '../../types';
+import type { RuntimeRPC, ServerRPC } from '../../types';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
 const processSend = process.send!.bind(process);
 const processOn = process.on.bind(process);
 const processOff = process.off.bind(process);
-const dispose: (() => void)[] = [];
 
-export type WorkerRpcOptions = Pick<
+type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
 >;
 
-export function createForksRpcOptions(
-  nodeV8: typeof v8 = v8,
-): WorkerRpcOptions {
+export function createForksRpcOptions({
+  dispose = [],
+}: {
+  dispose?: (() => void)[];
+}): WorkerRpcOptions {
   return {
-    serialize: nodeV8.serialize,
-    deserialize: (v) => nodeV8.deserialize(Buffer.from(v)),
     post(v) {
       processSend(v);
     },
@@ -44,46 +37,15 @@ export function createForksRpcOptions(
 }
 
 export function createRuntimeRpc(
-  options: Pick<
-    BirpcOptions<void>,
-    'on' | 'post' | 'serialize' | 'deserialize'
-  >,
-  {
-    originalConsole,
-  }: {
-    originalConsole: Console;
-  },
+  options: Pick<BirpcOptions, 'on' | 'post' | 'serialize' | 'deserialize'>,
+  createBirpcImpl: typeof createBirpc = createBirpc,
 ): { rpc: WorkerRPC } {
-  const rpc = createBirpc<RuntimeRPC, ServerRPC>(
+  const rpc = createBirpcImpl<RuntimeRPC, ServerRPC>(
     {},
     {
       ...options,
-      onTimeoutError: (functionName, error) => {
-        switch (functionName) {
-          case 'onTestCaseStart': {
-            const caseTest = error[0] as unknown as TestCaseInfo;
-            console.error(
-              `[Rstest] timeout on calling "onTestCaseStart" rpc method (Case: "${caseTest.name}")`,
-            );
-            return true;
-          }
-          case 'onTestCaseResult': {
-            const caseResult = error[0] as unknown as TestResult;
-            console.error(
-              `[Rstest] timeout on calling "onTestCaseResult" rpc method (Case: "${caseResult.name}", Result: "${caseResult.status}")`,
-            );
-            return true;
-          }
-          case 'onConsoleLog': {
-            originalConsole.error(
-              `[Rstest] timeout on calling "onConsoleLog" rpc method (Original log: ${error[0].content})`,
-            );
-            return true;
-          }
-          default:
-            return false;
-        }
-      },
+      // Disable timeout for worker RPC calls, as some operations may take a long time and we don't want them to fail due to timeout.
+      timeout: -1,
     },
   );
 

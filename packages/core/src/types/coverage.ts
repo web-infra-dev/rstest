@@ -5,12 +5,23 @@ import type {
   FileCoverageData,
   Totals,
 } from 'istanbul-lib-coverage';
+import type { ReportBase } from 'istanbul-lib-report';
 import type { ReportOptions } from 'istanbul-reports';
 
 type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
   Name extends keyof ReportOptions
     ? [Name, Partial<ReportOptions[Name]>]
     : [Name, Record<string, unknown>];
+
+/** Custom reporter configuration for non-istanbul reporters */
+type CustomReporter = string | [string, Record<string, unknown>];
+
+/** Union type for all supported reporter types */
+type SupportedReporter =
+  | keyof ReportOptions
+  | ReportWithOptions
+  | ReportBase
+  | CustomReporter;
 
 export type CoverageThreshold = {
   /** Threshold for statements */
@@ -64,11 +75,14 @@ export type CoverageOptions = {
    * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
    *
    * @default ['**\/node_modules/**',
-   *           '**\/dist/**',
    *           '**\/test/**',
    *           '**\/__tests__/**',
-   *           '**\/*.{test,spec}.?(c|m)[jt]s?(x)',
-   *           '**\/__mocks__/**'
+   *           '**\/__mocks__/**',
+   *           '**\/*.d.ts',
+   *           '**\/*.{test,spec}.[jt]s',
+   *           '**\/*.{test,spec}.[cm][jt]s',
+   *           '**\/*.{test,spec}.[jt]sx',
+   *           '**\/*.{test,spec}.[cm][jt]sx'
    * ]
    */
   exclude?: string[];
@@ -81,9 +95,19 @@ export type CoverageOptions = {
 
   /**
    * The reporters to use for coverage collection.
+   * Supports built-in istanbul reporters and custom reporters (e.g., '@canyonjs/report-html').
    * @default ['text', 'html', 'clover', 'json']
+   * @example
+   * // Built-in reporters
+   * reporters: ['text', 'html', ['json', { file: 'coverage.json' }]]
+   *
+   * // Custom reporters
+   * reporters: ['@canyonjs/report-html', ['custom-reporter', { outputDir: './reports' }]]
+   *
+   * // Mixed usage
+   * reporters: ['text', '@canyonjs/report-html', ['html', { subdir: 'html-report' }]]
    */
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: SupportedReporter[];
 
   /**
    * The directory to store coverage reports.
@@ -109,6 +133,13 @@ export type CoverageOptions = {
    * @default false
    */
   reportOnFailure?: boolean;
+
+  /**
+   * Whether to collect coverage for source files outside the project root directory.
+   * This is useful in monorepo setups where tests import modules from sibling packages.
+   * @default false
+   */
+  allowExternal?: boolean;
 };
 
 export type NormalizedCoverageOptions = Required<

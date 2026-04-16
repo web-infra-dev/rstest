@@ -1,4 +1,5 @@
-import type { Rstest } from '../types';
+import { isAbsolute, join, normalize } from 'pathe';
+import type { Rstest, RstestConfig } from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
 
@@ -10,13 +11,42 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 
-export const TEMP_RSTEST_OUTPUT_DIR_GLOB = '**/dist/.rstest-temp';
+export const getOutputDistPathRoot = (
+  distPath?: NonNullable<RstestConfig['output']>['distPath'],
+): string =>
+  (typeof distPath === 'string' ? distPath : distPath?.root) ??
+  TEMP_RSTEST_OUTPUT_DIR;
+
+export const getTempRstestOutputDir = ({
+  distPathRoot,
+  environmentName,
+  multipleProjects = false,
+}: {
+  distPathRoot: string;
+  environmentName?: string;
+  multipleProjects?: boolean;
+}): string => {
+  const outputRoot = normalize(distPathRoot);
+  return multipleProjects && environmentName
+    ? join(outputRoot, environmentName)
+    : outputRoot;
+};
+
+export const getTempRstestOutputDirGlob = (distPathRoot: string): string => {
+  const outputRoot = normalize(distPathRoot);
+
+  if (isAbsolute(outputRoot)) {
+    return outputRoot;
+  }
+
+  return `**/${outputRoot.replace(/^\.?\//, '')}`;
+};
 
 export const DEFAULT_CONFIG_EXTENSIONS = [
-  '.js',
-  '.ts',
-  '.mjs',
   '.mts',
+  '.mjs',
+  '.ts',
+  '.js',
   '.cjs',
   '.cts',
 ] as const;

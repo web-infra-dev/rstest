@@ -1,10 +1,16 @@
+---
+description: Hide logs for skipped test cases to reduce noise in the test output, especially when running tests with filters.
+---
+
 # hideSkippedTests
 
 - **Type:** `boolean`
 - **Default:** `false`
 - **CLI:** `--hideSkippedTests`
 
-Hide skipped tests logs.
+Hide logs for skipped test cases to reduce noise in the test output, especially when running tests with filters.
+
+When you use the default reporter and run multiple test files, skipped tests from other files are already hidden by the reporter's display logic, even when `hideSkippedTests` remains at its default value of `false`.
 
 import { Tab, Tabs } from '@theme';
 
@@ -27,7 +33,7 @@ export default defineConfig({
 
 ## Example
 
-By default, Rstest displays logs for all test cases when you use the [verbose reporter](/config/test/reporters#verbose-reporter).
+By default, Rstest displays logs for all test cases when you use the [verbose reporter](/guide/basic/reporters#verbose-reporter).
 
 ```bash
  ✓ test/index.test.ts (2) 1ms

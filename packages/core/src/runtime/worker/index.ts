@@ -2,15 +2,16 @@ import type {
   MaybePromise,
   Rstest,
   RunWorkerOptions,
-  Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import './setup';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { install } from 'source-map-support';
-import { createCoverageProvider } from '../../coverage';
+import { createWorkerMetaMessage } from '../../pool/workerMeta';
 import { globalApis } from '../../utils/constants';
-import { color, undoSerializableConfig } from '../../utils/helper';
+import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -42,12 +43,38 @@ const registerGlobalApi = (api: Rstest) => {
   }, {});
 };
 
-const listeners: (() => void)[] = [];
+const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
+
+const setErrorName = (error: Error, type: string): Error => {
+  try {
+    error.name = type;
+    return error;
+  } catch {
+    try {
+      Object.defineProperty(error, 'name', {
+        value: type,
+        configurable: true,
+      });
+      return error;
+    } catch {
+      const fallbackError = new Error(error.message);
+      fallbackError.name = type;
+      fallbackError.stack = error.stack;
+      return fallbackError;
+    }
+  }
+};
 
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
-    Object.assign(process.env, env);
+    Object.entries(env).forEach(([key, value]) => {
+      if (value === undefined) {
+        Reflect.deleteProperty(process.env, key);
+      } else {
+        process.env[key] = value;
+      }
+    });
   }
 };
 
@@ -56,8 +83,13 @@ const preparePool = async ({
   updateSnapshot,
   context,
 }: RunWorkerOptions['options']) => {
+  // Reset globalCleanups only when preparePool is called again (running without isolation)
+  globalCleanups.forEach((fn) => {
+    fn();
+  });
+  globalCleanups.length = 0;
+
   setRealTimers();
-  context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
 
   // Prefer public env var from tinypool, fallback to context.taskId
   process.env.RSTEST_WORKER_ID = String(
@@ -66,11 +98,18 @@ const preparePool = async ({
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
-  const originalConsole = global.console;
+  const disposeFns: (() => void)[] = [];
+  const { rpc } = createRuntimeRpc(
+    createForksRpcOptions({ dispose: disposeFns }),
+  );
 
-  const { rpc } = createRuntimeRpc(createForksRpcOptions(), {
-    originalConsole,
+  globalCleanups.push(() => {
+    disposeFns.forEach((fn) => {
+      fn();
+    });
+    rpc.$close();
   });
+
   const {
     runtimeConfig: {
       globals,
@@ -113,18 +152,14 @@ const preparePool = async ({
 
   const { createRstestRuntime } = await import('../api');
 
-  // Reset listeners only when preparePool is called again (running without isolation)
-  listeners.forEach((fn) => {
-    fn();
-  });
-  listeners.length = 0;
-
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: Error | string, type: string) => {
-    const error: Error = typeof e === 'string' ? new Error(e) : e;
-
-    error.name = type;
+    const rawError: Error = typeof e === 'string' ? new Error(e) : e;
+    const error =
+      !rawError.name || rawError.name === 'Error'
+        ? setErrorName(rawError, type)
+        : rawError;
 
     if (isTeardown) {
       error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
@@ -141,30 +176,36 @@ const preparePool = async ({
   process.on('uncaughtException', uncaughtException);
   process.on('unhandledRejection', unhandledRejection);
 
-  listeners.push(() => {
+  globalCleanups.push(() => {
     process.off('uncaughtException', uncaughtException);
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = createRstestRuntime(workerState);
+  const { api, runner } = await createRstestRuntime(workerState);
 
-  switch (testEnvironment) {
+  switch (testEnvironment.name) {
     case 'node':
       break;
     case 'jsdom': {
       const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(global, {});
+      const { teardown } = await environment.setup(
+        global,
+        testEnvironment.options || {},
+      );
       cleanupFns.push(() => teardown(global));
       break;
     }
     case 'happy-dom': {
       const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(global, {});
+      const { teardown } = await environment.setup(
+        global,
+        testEnvironment.options || {},
+      );
       cleanupFns.push(async () => teardown(global));
       break;
     }
     default:
-      throw new Error(`Unknown test environment: ${testEnvironment}`);
+      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
   }
 
   if (globals) {
@@ -258,11 +299,15 @@ const runInPool = async (
   options: RunWorkerOptions['options'],
 ): Promise<
   | {
-      tests: Test[];
+      tests: TestInfo[];
       testPath: string;
     }
   | TestFileResult
 > => {
+  if (typeof process.send === 'function') {
+    process.send(createWorkerMetaMessage(process.pid));
+  }
+
   isTeardown = false;
   const {
     entryInfo: { distPath, testPath },
@@ -300,7 +345,16 @@ const runInPool = async (
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
+    // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
+
+    if (!isolate) {
+      const { clearModuleCache } = options.context.outputModule
+        ? await import('./loadEsModule')
+        : await import('./loadModule');
+      clearModuleCache();
+    }
+
     isTeardown = true;
   };
 
@@ -335,14 +389,14 @@ const runInPool = async (
         project,
         testPath,
         tests,
-        errors: formatTestError(unhandledErrors),
+        errors: await formatTestError(unhandledErrors),
       };
     } catch (err) {
       return {
         project,
         testPath,
         tests: [],
-        errors: formatTestError(err),
+        errors: await formatTestError(err),
       };
     } finally {
       await teardown();
@@ -371,10 +425,16 @@ const runInPool = async (
       };
     }
     // Initialize coverage collector if coverage is enabled
-    const coverageProvider = await createCoverageProvider(
-      options.context.runtimeConfig.coverage || {},
-      options.context.rootPath,
-    );
+    let coverageProvider: Awaited<
+      ReturnType<typeof import('../../coverage').createCoverageProvider>
+    > | null = null;
+    if (options.context.runtimeConfig.coverage?.enabled) {
+      const { createCoverageProvider } = await import('../../coverage');
+      coverageProvider = await createCoverageProvider(
+        options.context.runtimeConfig.coverage,
+        options.context.rootPath,
+      );
+    }
     if (coverageProvider) {
       coverageProvider.init();
     }
@@ -385,7 +445,7 @@ const runInPool = async (
 
     cleanups.push(cleanup);
 
-    rpc.onTestFileStart?.({ testPath });
+    rpc.onTestFileStart?.({ testPath, tests: [] });
 
     await loadFiles({
       rstestContext,
@@ -400,6 +460,9 @@ const runInPool = async (
     const results = await runner.runTests(
       testPath,
       {
+        onTestFileReady: async (test) => {
+          await rpc.onTestFileReady(test);
+        },
         onTestSuiteStart: async (test) => {
           await rpc.onTestSuiteStart(test);
         },
@@ -422,7 +485,7 @@ const runInPool = async (
     if (unhandledErrors.length > 0) {
       results.status = 'fail';
       results.errors = (results.errors || []).concat(
-        ...formatTestError(unhandledErrors),
+        ...(await formatTestError(unhandledErrors)),
       );
     }
 
@@ -431,7 +494,12 @@ const runInPool = async (
       const coverageMap = coverageProvider.collect();
       if (coverageMap) {
         // Attach coverage data to test result
-        results.coverage = coverageMap.toJSON();
+        results.coverage = {};
+        Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+          if ('toJSON' in value)
+            results.coverage![key] = value.toJSON() as FileCoverageData;
+          else results.coverage![key] = value;
+        });
       }
       // Cleanup
       coverageProvider.cleanup();
@@ -446,7 +514,7 @@ const runInPool = async (
       status: 'fail',
       name: '',
       results: [],
-      errors: formatTestError(err),
+      errors: await formatTestError(err),
     };
   } finally {
     await teardown();

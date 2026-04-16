@@ -4,7 +4,7 @@ import type {
   NormalizedFixtures,
   TestCase,
 } from '../../types';
-import { isObject } from '../../utils';
+import { isObject } from '../../utils/helper';
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -103,7 +103,7 @@ export const handleFixtures = async (
       }
     }
 
-    // This API behavior follows vitest & playwright
+    // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
     await new Promise<void>((fixtureResolve) => {
       let useDone: (() => void) | undefined;
@@ -199,14 +199,14 @@ function filterOutComments(s: string): string {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-export function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
+function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const text = filterOutComments(fn.toString());
-  const match = text.match(/(?:async)?(?:\s+function)?[^(]*\(([^)]*)/);
+  const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(text);
   if (!match) return [];
   const trimmedParams = match[1]!.trim();
   if (!trimmedParams) return [];
   const [firstParam] = splitByComma(trimmedParams);
-  if (firstParam?.[0] !== '{' || firstParam[firstParam.length - 1] !== '}') {
+  if (firstParam?.[0] !== '{' || !firstParam.endsWith('}')) {
     if (firstParam?.startsWith('_')) {
       return [];
     }

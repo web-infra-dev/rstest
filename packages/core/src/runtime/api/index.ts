@@ -2,30 +2,33 @@ import type {
   Rstest,
   RstestExpect,
   RunnerHooks,
-  Test,
   TestCase,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
 import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
-export const createRstestRuntime = (
+export const createRstestRuntime = async (
   workerState: WorkerState,
-): {
+): Promise<{
   runner: {
     runTests: (
       testPath: string,
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
-    collectTests: () => Promise<Test[]>;
+    collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
   };
   api: Rstest;
-} => {
-  const { runner, api: runnerAPI } = createRunner({ workerState });
+}> => {
+  const [{ runner, api: runnerAPI }, { SnapshotPlugin }] = await Promise.all([
+    Promise.resolve(createRunner({ workerState })),
+    import(/* webpackChunkName: "snapshot" */ './snapshot'),
+  ]);
 
   if (workerState.runtimeConfig.chaiConfig) {
     setupChaiConfig(workerState.runtimeConfig.chaiConfig);
@@ -34,6 +37,7 @@ export const createRstestRuntime = (
   const expect: RstestExpect = createExpect({
     workerState,
     getCurrentTest: () => runner.getCurrentTest(),
+    snapshotPlugin: SnapshotPlugin(workerState),
   });
 
   Object.defineProperty(globalThis, GLOBAL_EXPECT, {
@@ -42,7 +46,7 @@ export const createRstestRuntime = (
     configurable: true,
   });
 
-  const rstest = createRstestUtilities(workerState);
+  const rstest = await createRstestUtilities(workerState);
 
   const runtime = {
     runner,

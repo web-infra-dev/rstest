@@ -1,4 +1,7 @@
+import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
@@ -9,16 +12,18 @@ export default defineConfig({
     {
       id: 'rstest',
       format: 'esm',
-      syntax: ['node 18'],
+      syntax: 'es2023',
       experiments: {
         advancedEsm: true,
       },
       dts: {
+        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
+        tsgo: !process.env.CI,
         bundle: process.env.SOURCEMAP
           ? false
           : {
               bundledPackages: [
-                '@types/sinonjs__fake-timers',
+                '@sinonjs/fake-timers',
                 '@types/istanbul-reports',
                 '@types/istanbul-lib-report',
                 '@types/istanbul-lib-coverage',
@@ -35,9 +40,6 @@ export default defineConfig({
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
-          // Temporary fix: `import * as timers from 'timers'` reassign error
-          timers: 'commonjs timers',
-          'timers/promises': 'commonjs timers/promises',
           // fix deduplicate import from fs & node:fs
           fs: 'node:fs',
           os: 'node:os',
@@ -75,10 +77,9 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
-        },
-        define: {
-          RSTEST_VERSION: JSON.stringify(version),
+          globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
         },
       },
       tools: {
@@ -92,12 +93,17 @@ export default defineConfig({
                   to: 'mockRuntimeCode.js',
                 },
                 {
+                  from: 'src/pool/rstestSuppressWarnings.cjs',
+                  to: 'rstestSuppressWarnings.cjs',
+                },
+                {
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
                 },
               ],
             }),
             isBuildWatch ? null : licensePlugin(),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/main' }),
           ].filter(Boolean),
         },
       },
@@ -105,7 +111,7 @@ export default defineConfig({
     {
       id: 'rstest_loaders',
       format: 'esm',
-      syntax: 'es2021',
+      syntax: 'es2023',
       dts: false,
       source: {
         entry: {
@@ -117,10 +123,72 @@ export default defineConfig({
           js: '[name].mjs',
         },
       },
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/loaders' }),
+          ].filter(Boolean),
+        },
+      },
+    },
+    {
+      id: 'browser_runtime',
+      format: 'esm',
+      syntax: 'es2023',
+      dts: {
+        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
+        tsgo: !process.env.CI,
+        bundle: true,
+      },
+      source: {
+        entry: {
+          index: './src/browserRuntime.ts',
+        },
+      },
+      output: {
+        target: 'web',
+        distPath: 'dist/browser-runtime',
+        sourceMap: process.env.SOURCEMAP === 'true',
+        minify: {
+          jsOptions: {
+            minimizerOptions: {
+              mangle: false,
+              minify: false,
+              compress: {
+                defaults: false,
+                unused: true,
+                dead_code: true,
+                toplevel: true,
+                // fix `Couldn't infer stack frame for inline snapshot` error
+                // should keep function name __INLINE_SNAPSHOT__ used to filter stack trace
+                keep_fnames: true,
+              },
+              format: {
+                comments: 'some',
+                preserve_annotations: true,
+              },
+            },
+          },
+        },
+      },
+      plugins: [pluginNodePolyfill()],
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
+          ].filter(Boolean),
+        },
+      },
     },
   ],
   performance: {
     printFileSize: !isBuildWatch,
+  },
+  source: {
+    define: {
+      RSTEST_VERSION: JSON.stringify(version),
+      PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
+    },
   },
   tools: {
     rspack: {

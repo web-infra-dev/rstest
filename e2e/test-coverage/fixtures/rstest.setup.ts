@@ -1,5 +1,5 @@
 import { beforeAll } from '@rstest/core';
 
 beforeAll(() => {
-  process.env.rstest = '1';
+  process.env.rstest_1 = '1';
 });

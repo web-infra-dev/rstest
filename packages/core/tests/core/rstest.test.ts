@@ -1,6 +1,11 @@
 import { join } from 'pathe';
 import { Rstest } from '../../src/core/rstest';
 
+// Mock std-env to ensure consistent snapshot across environments
+rs.mock('std-env', () => ({
+  isCI: false,
+}));
+
 process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');

@@ -1,6 +1,0 @@
-# Redirect rstest.dev to rstest.rs
-[[redirects]]
-from = "https://rstest.dev/*"
-to = "https://rstest.rs/:splat"
-status = 301
-force = true

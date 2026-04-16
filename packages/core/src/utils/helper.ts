@@ -1,10 +1,12 @@
 import { isAbsolute, join, normalize, parse, sep } from 'pathe';
-import color from 'picocolors';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
+import { color } from './logger';
 
 export const formatRootStr = (rootStr: string, root: string): string => {
-  return rootStr.replace('<rootDir>', normalize(root));
+  return rootStr.includes('<rootDir>')
+    ? normalize(rootStr.replace('<rootDir>', normalize(root)))
+    : rootStr;
 };
 
 export function getAbsolutePath(base: string, filepath: string): string {
@@ -20,10 +22,6 @@ export const parsePosix = (filePath: string): { dir: string; base: string } => {
   };
 };
 
-export function slash(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
 export const isObject = (obj: unknown): obj is Record<string, any> =>
   Object.prototype.toString.call(obj) === '[object Object]';
 
@@ -34,7 +32,7 @@ export const castArray = <T>(arr?: T | T[]): T[] => {
   return Array.isArray(arr) ? arr : [arr];
 };
 
-export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+const isPlainObject = (obj: unknown): obj is Record<string, any> => {
   return (
     obj !== null &&
     typeof obj === 'object' &&
@@ -97,25 +95,12 @@ const getTaskNames = (
 export const getTaskNameWithPrefix = (
   test: Pick<TestResult, 'name' | 'parentNames'>,
   delimiter: string = TEST_DELIMITER,
-): string => getTaskNames(test).join(` ${delimiter} `);
+): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
 const wrapRegex = (value: RegExp): string =>
   `${REGEXP_FLAG_PREFIX}${value.toString()}`;
-
-const unwrapRegex = (value: string): RegExp | string => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
-
-    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
-    if (matches) {
-      const [, pattern, flags] = matches;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.
@@ -134,20 +119,7 @@ export const serializableConfig = (
   };
 };
 
-export const undoSerializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
-  const { testNamePattern } = normalizedConfig;
-  return {
-    ...normalizedConfig,
-    testNamePattern:
-      testNamePattern && typeof testNamePattern === 'string'
-        ? unwrapRegex(testNamePattern)
-        : testNamePattern,
-  };
-};
-
-export const getNodeVersion = (): {
+const getNodeVersion = (): {
   major: number;
   minor: number;
   patch: number;
@@ -194,8 +166,6 @@ export const bgColor = (background: BackgroundColor, str: string): string => {
   return color[background](color.blackBright(color.bold(str)));
 };
 
-export { color };
-
 /**
  * Check if running in a TTY context
  */
@@ -205,3 +175,6 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
     !process.env.CI
   );
 };
+
+export const isDeno: boolean =
+  typeof process !== 'undefined' && process.versions?.deno !== undefined;

@@ -1,9 +1,10 @@
 import { defineConfig } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
   lib: [
     {
-      syntax: ['node 20'],
+      syntax: 'es2023',
       source: {
         entry: {
           extension: './src/extension.ts',
@@ -22,11 +23,14 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
+          ].filter(Boolean),
         },
       },
     },
     {
-      syntax: ['node 20'],
+      syntax: 'es2023',
       format: 'cjs',
       source: {
         entry: {
@@ -44,6 +48,9 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' })].filter(
+            Boolean,
+          ),
         },
       },
     },

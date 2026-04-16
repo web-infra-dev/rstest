@@ -1,4 +1,124 @@
+---
+description: Rstest 提供了多种工具和方法来分析测试运行的性能，帮助你识别和解决性能瓶颈。
+---
+
 # 性能分析
+
+Rstest 提供了多种工具和方法来分析测试运行的性能，帮助你识别和解决性能瓶颈。
+
+## 常见性能瓶颈
+
+当测试运行出现明显性能下降时，通常应先区分瓶颈位于“构建阶段”还是“测试执行阶段”：
+
+- 如果测试启动前等待时间较长，且在少量代码变更后重新运行仍然耗时较高，通常说明瓶颈位于构建阶段。
+- 如果测试能够快速开始执行，但单个用例或测试文件本身耗时较长，通常说明瓶颈位于测试执行阶段。
+
+围绕这两类瓶颈，可以分别从构建阶段和测试执行阶段进行排查。
+
+### 构建性能排查
+
+对于使用 `jsdom`、`happy-dom` 等类浏览器测试环境的项目，构建阶段通常是最常见的性能瓶颈之一。原因在于这类环境下，rstest 默认会将 `node_modules` 中的第三方依赖一并打包，而不是像 `node` 环境那样默认 externalize。
+
+这意味着以下情况都可能导致测试运行变慢：
+
+- 某个测试入口间接引入了体积较大的 UI 库、图表库或编辑器库。
+- 测试仅依赖少量 DOM 能力，但构建产物中包含了大量第三方运行时代码。
+
+对于这类场景，推荐按照以下顺序进行排查。
+
+**1. 启用 rstest 调试输出**
+
+运行测试时添加 `DEBUG=rstest`：
+
+```bash
+DEBUG=rstest rstest run
+```
+
+启用 DEBUG 后，rstest 会输出更详细的构建日志，并将临时构建产物写入磁盘。默认输出目录为 `dist/.rstest-temp`；如果你配置了 [`output.distPath.root`](/config/build/output#outputdistpath)，则会写入对应目录。
+
+此时应优先观察以下两个信号：
+
+- 构建相关日志阶段是否存在明显的长时间停留。
+- 临时输出目录中是否存在异常大的产物文件。
+
+如果已经怀疑问题与 bundle 体积有关，这一步通常可以提供第一轮证据。
+
+**2. 识别第三方依赖带来的体积开销**
+
+在 `jsdom`、`happy-dom` 等类浏览器环境中，构建产物较大并不罕见，因为 rstest 默认会打包第三方依赖。
+
+此时可以重点检查以下内容：
+
+- 较大的产物文件是否对应某个测试入口及其依赖链。
+- 是否引入了体积较大的 `node_modules` 包。
+- 是否仅使用了少量 API，却将整个包打入了产物。
+
+如果问题集中在第三方依赖本身，通常无需立即引入更复杂的 profiling 工具，优先调整打包策略会更直接。
+
+**3. 使用 output.bundleDependencies 验证打包策略的影响**
+
+可以将 [`output.bundleDependencies`](/config/build/output#outputbundledependencies) 设为 `false`，使类浏览器环境也采用与 `node` 环境一致的第三方依赖 externalize 策略：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  output: {
+    bundleDependencies: false,
+  },
+});
+```
+
+修改后，建议重新使用 `DEBUG=rstest` 运行一次，并对比以下两项指标：
+
+- 构建耗时是否明显下降。
+- `dist/.rstest-temp` 中的临时产物是否明显减小。
+
+如果两者都得到改善，通常可以判断性能瓶颈主要来自第三方依赖的打包成本。
+
+**4. 使用 output.externals 进行细粒度控制**
+
+如果只需要 externalize 少数几个体积较大的依赖，而不是关闭所有第三方依赖的打包，可以继续使用 [`output.externals`](/config/build/output#outputexternals)：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: ['react', 'lodash'],
+  },
+});
+```
+
+这种方式适用于以下场景：
+
+- 只有少数几个包的体积或构建成本显著偏高。
+- 仍然希望其余依赖保留 bundle 带来的优化。
+- 已经确认瓶颈集中在少量第三方依赖上。
+
+**5. 在构建瓶颈仍不明确时使用 Rsdoctor**
+
+当已经确认问题位于构建阶段，但仍无法确定瓶颈究竟来自入口、loader、插件还是某条依赖链时，再使用下文的 Rsdoctor 会更高效。前面的步骤更适合快速判断问题是否与 bundle 体积相关，而 Rsdoctor 更适合回答编译时间的具体分布。
+
+:::warning
+上面的 `output.bundleDependencies: false` 只适用于非浏览器模式。在 [浏览器模式](/guide/browser-testing) 下，依赖始终会被打包，因此不能用这条路径来缩小 bundle。
+:::
+
+### 测试执行性能排查
+
+当问题已经定位到测试执行阶段时，排查重点通常不再是构建产物体积，而是具体哪个测试文件、哪个测试用例，或哪一段运行时代码消耗了更多时间。
+
+**1. 使用 verbose 报告器观察测试文件和测试用例耗时**
+
+启用 [`verbose reporter`](/guide/basic/reporters#详细报告器) 后，可以直接看到测试文件和单个测试用例的执行时间。这通常是定位执行阶段瓶颈的第一步，因为它可以先帮助你缩小范围，判断问题集中在某个测试文件、某组测试，还是少量特定用例上。
+
+**2. 在范围缩小后查看更细的耗时分布**
+
+当已经知道慢点集中在哪些测试文件或测试用例上，但仍不清楚具体耗时来自哪一段运行时代码时，可以进一步使用下文的 [Samply](#使用-samply) 或 [Node.js profiling](#nodejs-profiling)。
+
+- `Samply` 适合查看 rstest 主进程与测试进程的详细耗时分布。
+- `Node.js profiling` 适合继续分析 Node.js 侧的 CPU 或内存开销。
 
 ## 使用 Rsdoctor
 

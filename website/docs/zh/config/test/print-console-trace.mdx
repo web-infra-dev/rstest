@@ -1,3 +1,7 @@
+---
+description: console 方法调用时始终打印调用栈，这将有助于调试。
+---
+
 # printConsoleTrace
 
 - **类型：** `boolean`
@@ -26,5 +30,5 @@ export default defineConfig({
 </Tabs>
 
 :::note
-当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`printConsoleTrace` 将被忽略。
+当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`printConsoleTrace` 将不会生效。
 :::

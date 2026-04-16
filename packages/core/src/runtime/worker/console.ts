@@ -21,14 +21,15 @@ import {
   type InspectOptions,
   inspect,
 } from 'node:util';
-import { color, prettyTime } from '../../utils';
+import { prettyTime } from '../../utils/helper';
+import { color } from '../../utils/logger';
 import type { WorkerRPC } from './rpc';
 
 const RealDate = Date;
 
-export type LogCounters = Record<string, number>;
+type LogCounters = Record<string, number>;
 
-export type LogTimers = Record<string, Date>;
+type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
   rpc,
@@ -177,7 +178,7 @@ export function createCustomConsole({
         const endTime = RealDate.now();
         const time = endTime - startTime.getTime();
         this._log('time', format(`${label}: ${prettyTime(time)}`));
-        delete this._timers[label];
+        Reflect.deleteProperty(this._timers, label);
       }
     }
 

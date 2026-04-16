@@ -1,19 +1,80 @@
+---
+description: 配置 Rstest 输出的选项，例如是否以 ES 模块格式输出 JavaScript 文件。
+---
+
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # output
 
 ## output.module <RsbuildDocBadge path="/config/output/module" text="output.module" />
 
+- **类型：** `boolean`
+- **默认值：** `true`
+
 是否以 ES 模块格式输出 JavaScript 文件。
 
-Rstest 默认会以 CommonJS 格式输出并执行测试代码。如果你希望以 ES 模块格式输出测试代码，可以通过如下配置项开启：
+Rstest 默认会以 ES 模块格式输出并执行测试代码。如果你希望以 CommonJS 格式输出测试代码，可以通过如下配置项开启：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   output: {
-    module: true,
+    module: false,
+  },
+});
+```
+
+### Commonjs interop
+
+当你以 ES 模块格式输出 JavaScript 文件时（`output.module: true`），Rstest 会默认根据依赖的引用方式来判断 external 的类型：
+
+- 通过 `import` 语法引用的依赖会被视为 ES 模块类型的 external。
+- 通过 `require` 语法引用的依赖会被视为 CommonJS 的 external。
+
+当你通过 import 语法引用 CommonJS 模块时，Rstest 会尝试进行 interop 处理，使得你可以通过 `import` 语法正常引用 CommonJS 模块的导出。以下代码在 rstest 中可以正常工作：
+
+```ts title="cjs-module"
+Object.defineProperty(exports, '__esModule', { value: true });
+
+const a = require('./a');
+
+exports.a = a.a;
+
+exports.default = () => {
+  return `hello ${a.a}`;
+};
+```
+
+```ts title="test/index.test.ts"
+import defaultExport, { a } from 'cjs-module'; // ✅
+```
+
+然而，这种 interop 处理并不总是完美的，具体取决于被引用的 CommonJS 模块的导出方式。目前 Rstest 还不支持将 CommonJS 模块的 default 导出作为命名导出进行 interop。
+
+```ts
+function lodash(_value) {}
+
+lodash.VERSION = VERSION;
+
+module.exports = lodash;
+```
+
+```ts
+import { VERSION } from 'lodash'; // ❌
+```
+
+如果你在使用过程中遇到问题，可以通过 [指定 external 类型](#指定-external-类型) 的方式来指定某个依赖的 external 类型为 CommonJS。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    externals: {
+      lodash: 'commonjs lodash', // 将 lodash 作为 CommonJS 模块进行 external
+    },
   },
 });
 ```
@@ -83,12 +144,147 @@ export default defineConfig({
 });
 ```
 
+## output.bundleDependencies
+
+<ApiMeta addedVersion="0.9.5" />
+
+- **类型：** `boolean | (string | RegExp)[]`
+- **默认值：** 取决于 `testEnvironment`
+
+控制是否打包 `node_modules` 中的第三方依赖。
+
+- `true`：无论测试环境如何，始终打包所有第三方依赖。
+- `false`：无论测试环境如何，始终外部化第三方依赖。
+- `['pkg-name']`：仅打包列出的包，其余依赖保持外部化。
+- `['pkg-name/subpath']`：仅打包指定的包子路径。
+- `['pkg-name/*']`：按类似 glob 的模式匹配并打包包请求。
+- `[/^pkg-name\\/subpath/]`：按正则表达式匹配并打包包请求。
+
+当未设置该选项时，Rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
+
+:::warning
+此选项仅适用于非浏览器模式。在[浏览器模式](/guide/browser-testing)下，所有依赖始终会被打包，因此不支持 `output.bundleDependencies: false`。
+:::
+
+此选项提供了一种简单的方式来覆盖与 `testEnvironment` 绑定的默认打包策略。例如，如果你使用 `jsdom` 但希望与 `node` 环境相同的外部化行为：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  output: {
+    bundleDependencies: false,
+  },
+});
+```
+
+或者如果你希望在 `node` 环境中打包所有依赖以获得 [lazy barrel](https://rspack.rs/guide/optimization/lazy-barrel) 等优化：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'node',
+  output: {
+    bundleDependencies: true,
+  },
+});
+```
+
+如果你只想打包少量依赖包，而把其他依赖继续外部化，可以直接传入包名列表：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi'],
+  },
+});
+```
+
+你也可以直接匹配子路径或模式：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi/lib/index.js', 'strip-ansi/*'],
+  },
+});
+```
+
+这些模式只会影响 rstest 在当前构建图里仍然能够处理到的依赖请求。如果某个包本身已经被 externalize 了，那么它内部继续引用的子依赖也会保持 external。也就是说，`bundleDependencies` 不会把仅通过某个已 externalize 父包间接到达的传递依赖重新打包回来。
+
+### 与 output.externals 的关系
+
+`output.bundleDependencies` 控制所有 `node_modules` 依赖的整体打包策略，而 [`output.externals`](#outputexternals) 允许对单个包进行细粒度控制。当两者同时配置时，`output.externals` 的优先级更高：
+
+- `bundleDependencies: true` + `externals: ['lodash']`：打包所有依赖，但外部化 `lodash`。
+- `bundleDependencies: false` + `externals` 无需配置，因为所有依赖已被外部化。
+
+实际使用时，这两个配置更适合相反的场景：
+
+- 当大部分依赖都应该保持 external，只有少量包或子路径需要被打包时，更适合使用 `bundleDependencies` pattern。
+- 当大部分依赖都应该保持打包，只有少量包需要被 externalize 时，更适合使用 `output.externals`。
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 用于自定义 CSS Modules 的配置。
+
+## output.emitAssets <RsbuildDocBadge path="/config/output/emit-assets" text="output.emitAssets" />
+
+<ApiMeta addedVersion="0.9.7" />
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+控制在测试构建期间，是否将图片、字体、音频、视频等导入的静态资源作为构建产物输出。
+
+Rstest 会将该选项透传给底层的 Rsbuild 构建流程，因此它的行为与 Rsbuild 保持一致。当 `output.emitAssets` 为 `true` 时，导入的 asset module 会被输出到构建产物文件系统中；当它为 `false` 时，这些静态资源文件不会被输出。
+
+在 Rstest 中，只有当你开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 或启用 DEBUG 产物输出时，这些资源才会真正写入磁盘。否则它们会保留在测试构建使用的临时内存文件系统里。
+
+当你希望 Rstest 与现有的 Rsbuild 配置保持一致，或者在测试中不需要对静态资源进行验证时，这个选项会比较有用。
+
+如果你已经通过 [@rstest/adapter-rsbuild](/guide/integration/rsbuild) 复用 Rsbuild 配置，`output.emitAssets` 也会被自动继承。
 
 ## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
 
 是否在测试开始前，清空输出目录下的所有测试临时文件。
 
 默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 Rstest 产物调试时可能需要此配置项。
+
+## output.distPath <RsbuildDocBadge path="/config/output/dist-path" text="output.distPath" />
+
+<ApiMeta addedVersion="0.9.5" />
+
+- **类型：** `string | { root?: string }`
+- **默认值：** `{ root: 'dist/.rstest-temp' }`
+
+控制 Rstest 临时构建产物的全局输出根目录。
+
+默认情况下，Rstest 不会将测试临时文件写入磁盘，当你开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 选项或在 DEBUG 模式下运行时，Rstest 会把临时产物写入磁盘，输出到 `dist/.rstest-temp` 目录下。这包括 Node.js 测试运行时使用的编译产物，也包括 browser mode 下生成的 runner 文件、virtual manifest 等临时资源。
+
+在多 project 场景下，Rstest 仍然只使用一个全局输出根目录。它可能会在这个目录下继续为不同 project 创建子目录，但基础输出根目录本身不会切换到各个 project 的 `root`。
+
+如果你希望这些文件输出到其他目录，可以通过 `output.distPath.root` 配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  dev: {
+    writeToDisk: true,
+  },
+  output: {
+    distPath: {
+      root: 'custom/.rstest-temp',
+    },
+  },
+});
+```
+
+配置后，Rstest 会把 `<root>/custom/.rstest-temp` 作为临时输出根目录，而不是 `<root>/dist/.rstest-temp`。

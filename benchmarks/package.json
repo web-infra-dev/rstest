@@ -1,0 +1,18 @@
+{
+  "name": "@rstest/benchmarks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench:cpu": "node suiteRun.mjs",
+    "bench:memory": "node memorySuiteRun.mjs"
+  },
+  "dependencies": {
+    "@codspeed/tinybench-plugin": "^5.2.0",
+    "@rstest/core": "workspace:*",
+    "antd": "^6.3.5",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "three": "^0.183.2",
+    "tinybench": "^5.1.0"
+  }
+}

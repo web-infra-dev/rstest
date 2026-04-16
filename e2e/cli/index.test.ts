@@ -38,6 +38,38 @@ describe.concurrent('test exit code', () => {
     expect(cli.exec.process?.exitCode).toBe(1);
   });
 
+  it('should return code 1 when cli options error', async ({
+    onTestFinished,
+  }) => {
+    const { expectStderrLog, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-a', 'success.test.ts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+    expectStderrLog(/Unknown option `-a`/);
+  });
+
+  it('should support --pool shorthand', async ({ onTestFinished }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'success.test.ts', '--pool', 'forks'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {

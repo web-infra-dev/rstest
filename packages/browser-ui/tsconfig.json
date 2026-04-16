@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "lib": ["DOM", "ES2020"],
+    "jsx": "react-jsx",
+    "target": "ES2020",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@rstest/browser/rpc-protocol": ["../browser/src/rpcProtocol.ts"],
+      "@rstest/browser/protocol": ["../browser/src/protocol.ts"],
+      "@rstest/browser/viewport-presets": ["../browser/src/viewportPresets.ts"]
+    },
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noUncheckedSideEffectImports": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["src"]
+}

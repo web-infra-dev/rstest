@@ -1,12 +1,14 @@
 import './App.css';
-import { h2Title } from './module';
 
-const App = () => {
+interface AppProps {
+  greeting?: string;
+}
+
+const App = ({ greeting = 'Hello World' }: AppProps) => {
   return (
     <div className="content">
-      <h1>Rsbuild with React</h1>
-      <h2>{h2Title()}</h2>
-      <p>Start building amazing things with Rsbuild.</p>
+      <h1>{greeting}</h1>
+      <p>Start building amazing things with React.</p>
     </div>
   );
 };

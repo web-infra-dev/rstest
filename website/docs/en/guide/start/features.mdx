@@ -1,3 +1,7 @@
+---
+description: Here you can learn about the key features supported by Rstest.
+---
+
 # Features
 
 Here you can learn about the key features supported by Rstest.
@@ -10,13 +14,25 @@ Learn more about [Configuring Rstest](/guide/basic/configure-rstest).
 
 ### Built on Rspack
 
-Rstest is powered by Rspack, enabling high-performance builds and optimizations such as Tree Shaking and [lazyBarrel](https://rspack.dev/config/experiments#experimentslazybarrel).
+Rstest is powered by Rspack, enabling high-performance builds and optimizations such as Tree Shaking and [lazyBarrel](https://rspack.rs/guide/optimization/lazy-barrel).
+
+### Transpiled with SWC
+
+Rstest includes a built-in SWC transpiler, providing out-of-the-box JavaScript/TypeScript transpilation. You can easily customize SWC behavior through the configuration file to meet different project needs.
+
+Learn more about [Configuring SWC](/guide/basic/configure-rstest#configure-swc).
 
 ## Multi-project testing
 
 Rstest provides multi-project testing capabilities, allowing you to run tests for multiple projects in parallel within a single Rstest process.
 
 Learn more about [Test projects](/guide/basic/projects).
+
+## Test sharding
+
+Rstest supports splitting test files into multiple shards for parallel execution. In CI, you can distribute the same test suite across multiple machines to reduce overall execution time. With the `blob` reporter and `rstest merge-reports`, you can merge test results and coverage data after all shards complete.
+
+Learn more about [Test sharding](/config/test/shard).
 
 ## In-source tests
 
@@ -34,6 +50,14 @@ Rstest supports simulating the DOM and browser APIs using jsdom and happy-dom. I
 
 Learn more about [DOM testing](/config/test/test-environment#dom-testing).
 
+## Browser mode
+
+Rstest provides Browser Mode, allowing you to run tests in real browsers instead of relying on simulated environments like jsdom or happy-dom. This helps validate real browser API behavior and reduces gaps between test and production environments.
+
+Browser Mode is powered by [Playwright](https://playwright.dev/) and can run tests in Chromium, Firefox, and WebKit, which is a good fit for cross-browser verification and scenarios that depend on real rendering behavior.
+
+Learn more about [Browser mode](/guide/browser-testing).
+
 ## Code coverage
 
 Rstest supports code coverage collection using [istanbul](https://istanbul.js.org/). You can enable code coverage collection by setting `coverage.enabled` to `true` in your Rstest configuration file.
@@ -48,3 +72,4 @@ Learn more about [Code coverage](/config/test/coverage).
 - Rich lifecycle hooks
 - Reporters and CI integration
 - Filtering by directory / project / test name
+- VS Code extension

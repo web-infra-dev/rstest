@@ -7,8 +7,6 @@ import type {
 } from '../types';
 import { Rstest } from './rstest';
 
-export { initCli } from '../cli';
-
 export function createRstest(
   {
     config,
@@ -38,14 +36,23 @@ export function createRstest(
     await runTests(context);
   };
 
-  const listTests = async (options: ListCommandOptions): Promise<void> => {
+  const listTests = async (options: ListCommandOptions) => {
     const { listTests } = await import('./listTests');
-    await listTests(context, options);
+    return listTests(context, options);
+  };
+
+  const mergeReports = async (options?: {
+    path?: string;
+    cleanup?: boolean;
+  }): Promise<void> => {
+    const { mergeReports } = await import('./mergeReports');
+    await mergeReports(context, options);
   };
 
   return {
     context,
     runTests,
     listTests,
+    mergeReports,
   };
 }
