@@ -257,19 +257,166 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 - **类型：** `test.extend(fixtures: Fixtures)`
 
-通过自定义 fixture 扩展测试上下文。
+通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
+
+Fixture 是可复用的上下文条目，用来准备测试资源并按需注入到测试里。常见用途包括：
+
+- 共享测试数据和辅助客户端（例如 API client、token、测试用户）。
+- 把 setup/teardown 逻辑集中在一处，避免每个测试重复写。
+- 构建 fixture 依赖（一个 fixture 可以依赖另一个 fixture）。
+- 通过 `auto` fixture 自动执行每个测试都需要的副作用（例如日志记录）。
 
 ```ts
-const testWithUser = test.extend({
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
   user: async ({}, use) => {
     await use({ name: 'Alice' });
   },
 });
 
-testWithUser('has user in context', ({ user, expect }) => {
+// 使用 myTest（而非 test）来定义需要 fixture 的测试
+myTest('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
+
+// 原始 test 不受影响，也无法访问 user
+test('plain test', ({ expect }) => {
+  expect(1).toBe(1);
+});
 ```
+
+返回的 API 拥有与 `test` 相同的链式修饰符（`only`、`skip`、`each`、`concurrent` 等），并且可以继续调用 `.extend()` 进行二次扩展。
+
+### Fixture 函数的生命周期
+
+Fixture 函数接收两个参数：
+
+1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
+2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
+
+`await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
+
+```ts
+import { test } from '@rstest/core';
+
+const testWithDb = test.extend({
+  db: async ({}, use) => {
+    // setup：创建连接
+    const db = await connectTestDb();
+    await use(db);
+    // teardown：关闭连接
+    await db.close();
+  },
+});
+```
+
+### 普通值 fixture
+
+如果 fixture 不需要 setup/teardown 逻辑，可以直接提供一个普通值：
+
+```ts
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
+  baseURL: 'https://api.example.com',
+});
+
+myTest('uses baseURL', ({ baseURL, expect }) => {
+  expect(baseURL).toBe('https://api.example.com');
+});
+```
+
+### 访问 TestContext
+
+Fixture 函数的第一个参数中同时包含 `TestContext`，因此你可以在 fixture 内直接读取当前测试信息或使用 `expect`：
+
+```ts
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
+  traceId: async ({ task }, use) => {
+    // task.name 来自 TestContext
+    await use(`trace:${task.name}`);
+  },
+});
+```
+
+### Fixture 之间的依赖
+
+一个 fixture 可以在第一个参数中解构其他 fixture，Rstest 会自动按依赖顺序初始化它们，并按反序执行 teardown：
+
+```ts
+import { test } from '@rstest/core';
+
+const testWithApi = test.extend({
+  baseURL: 'https://api.example.com',
+  token: async ({ baseURL }, use) => {
+    const token = await createTestToken(baseURL);
+    await use(token);
+    await revokeTestToken(token);
+  },
+});
+
+testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
+  // baseURL → token 的初始化顺序由依赖关系自动决定
+  const res = await fetch(`${baseURL}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(res.ok).toBe(true);
+});
+```
+
+### 自动 fixture（`auto`）
+
+Fixture 默认是按需执行的：只有测试函数中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使测试没有解构它——可以使用元组语法并设置 `{ auto: true }`：
+
+```ts
+import { test } from '@rstest/core';
+
+const events: string[] = [];
+
+const myTest = test.extend({
+  logger: [
+    async ({ task }, use) => {
+      events.push(`start:${task.name}`);
+      await use(undefined);
+      events.push(`end:${task.name}`);
+    },
+    { auto: true },
+  ],
+});
+
+myTest('runs logger automatically', ({ expect }) => {
+  // 虽然没有解构 logger，但因为 auto: true，fixture 仍会执行
+  expect(events).toContain('start:runs logger automatically');
+});
+```
+
+### 类型推断与显式泛型
+
+Fixture 的类型通常可以自动推断。如果推断不够精确，可以为 `test.extend` 传入显式泛型：
+
+```ts
+import { test } from '@rstest/core';
+
+interface MyFixtures {
+  user: { name: string; role: 'admin' | 'guest' };
+}
+
+const myTest = test.extend<MyFixtures>({
+  user: async ({}, use) => {
+    await use({ name: 'Alice', role: 'admin' });
+  },
+});
+
+myTest('typed fixture', ({ user, expect }) => {
+  // user 的类型为 { name: string; role: 'admin' | 'guest' }
+  expect(user.role).toBe('admin');
+});
+```
+
+注意：fixture 类型只在 `test.extend` 返回的新 API 上生效。原始 `test` 的类型签名不会改变。
 
 ## Types
 
