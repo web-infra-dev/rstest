@@ -1579,6 +1579,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
+  "experiments": {
+    "nativeWatcher": true,
+  },
   "externals": [
     [Function],
     {
