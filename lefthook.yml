@@ -2,14 +2,18 @@ pre-commit:
   parallel: true
   commands:
     prettier:
-      glob: "!(CLAUDE).{md,mdx,css,less,scss,json,jsonc,json5}"
-      run: pnpm prettier --write {staged_files} && git add {staged_files}
+      glob: "**/*.{md,mdx,css,less,scss,json,jsonc,json5}"
+      exclude: "CLAUDE.md"
+      stage_fixed: true
+      run: pnpm prettier --write {staged_files}
     biome:
-      glob: "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"
-      run: pnpm biome check --write {staged_files} && git add {staged_files}
+      glob: "**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"
+      stage_fixed: true
+      run: pnpm biome check --write {staged_files}
     check-dependency-version:
-      glob: "package.json"
-      run: pnpm run check-dependency-version && pnpm prettier --write {staged_files} && git add {staged_files}
+      glob: "**/package.json"
+      stage_fixed: true
+      run: pnpm run check-dependency-version && pnpm prettier --write {staged_files}
     pnpm-dedupe:
       glob: "pnpm-lock.yaml"
       run: pnpm dedupe --check
