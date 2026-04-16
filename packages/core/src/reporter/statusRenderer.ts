@@ -51,6 +51,10 @@ export class StatusRenderer {
     const runningModules = this.testState.getRunningModules();
     const testModules = this.testState.getTestModules();
 
+    if (runningModules.size === 0) {
+      return [];
+    }
+
     // only display running tests if they have been running for more than 2 seconds
     const shouldDisplayRunningTests = (runningTests: TestCaseInfo[]) => {
       return (
@@ -116,5 +120,9 @@ export class StatusRenderer {
   clear(): void {
     this.startTime = undefined;
     this.renderer?.finish();
+  }
+
+  withWindowHidden<T>(action: () => T): T {
+    return this.renderer.withWindowHidden(action);
   }
 }

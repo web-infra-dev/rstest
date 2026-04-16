@@ -80,25 +80,34 @@ export class DefaultReporter implements Reporter {
     const slowTestThreshold =
       projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
 
-    logFileTitle(test, relativePath, false, this.options.showProjectName);
-    // Always display all test cases when running a single test file
-    const showAllCases = this.testState.getTestFiles()?.length === 1;
+    const logResults = () => {
+      logFileTitle(test, relativePath, false, this.options.showProjectName);
+      // Always display all test cases when running a single test file
+      const showAllCases = this.testState.getTestFiles()?.length === 1;
 
-    const hideSkippedTests =
-      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
+      const hideSkippedTests =
+        projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
-    for (const result of test.results) {
-      const isDisplayed =
-        showAllCases ||
-        result.status === 'fail' ||
-        (result.duration ?? 0) > slowTestThreshold ||
-        (result.retryCount ?? 0) > 0;
-      isDisplayed &&
-        logCase(result, {
-          slowTestThreshold,
-          hideSkippedTests,
-        });
+      for (const result of test.results) {
+        const isDisplayed =
+          showAllCases ||
+          result.status === 'fail' ||
+          (result.duration ?? 0) > slowTestThreshold ||
+          (result.retryCount ?? 0) > 0;
+        isDisplayed &&
+          logCase(result, {
+            slowTestThreshold,
+            hideSkippedTests,
+          });
+      }
+    };
+
+    if (this.statusRenderer) {
+      this.statusRenderer.withWindowHidden(logResults);
+      return;
     }
+
+    logResults();
   }
 
   onTestCaseResult(): void {
@@ -113,6 +122,12 @@ export class DefaultReporter implements Reporter {
     }
 
     this.nonTTYProgressNotifier?.notifyOutput();
+    if (this.statusRenderer) {
+      this.statusRenderer.withWindowHidden(() =>
+        logUserConsoleLog(this.rootPath, log),
+      );
+      return;
+    }
 
     logUserConsoleLog(this.rootPath, log);
   }

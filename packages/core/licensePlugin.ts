@@ -1,4 +1,4 @@
-import WebpackLicensePlugin from 'webpack-license-plugin';
+import type WebpackLicensePlugin from 'webpack-license-plugin';
 
 type PackageLicenseMeta =
   NonNullable<
@@ -9,7 +9,11 @@ type PackageLicenseMeta =
     ? Meta
     : never;
 
-export function licensePlugin() {
+export async function licensePlugin() {
+  const { default: WebpackLicensePlugin } = await import(
+    'webpack-license-plugin'
+  );
+
   const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {
     const licenseId = packageMeta.license ?? 'undefined';
     const repositoryUrl = packageMeta.repository;

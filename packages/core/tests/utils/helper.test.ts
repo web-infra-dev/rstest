@@ -1,5 +1,9 @@
 import { sep } from 'node:path';
-import { parsePosix, prettyTime } from '../../src/utils/helper';
+import {
+  getWorkerSerialization,
+  parsePosix,
+  prettyTime,
+} from '../../src/utils/helper';
 
 it('parsePosix correctly', () => {
   const splitPaths = ['packages', 'core', 'tests', 'index.test.ts'];
@@ -20,4 +24,30 @@ it('should prettyTime correctly', () => {
   expect(prettyTime(110000)).toBe('1m 50s');
   expect(prettyTime(111100)).toBe('1m 51s');
   expect(prettyTime(111900)).toBe('1m 52s');
+});
+
+it('should use advanced serialization outside Bun', () => {
+  const originalBunVersion = process.versions.bun;
+
+  Reflect.deleteProperty(process.versions, 'bun');
+
+  expect(getWorkerSerialization()).toBe('advanced');
+
+  if (originalBunVersion !== undefined) {
+    process.versions.bun = originalBunVersion;
+  }
+});
+
+it('should use json serialization in Bun', () => {
+  const originalBunVersion = process.versions.bun;
+
+  process.versions.bun = originalBunVersion ?? '1.0.0';
+
+  expect(getWorkerSerialization()).toBe('json');
+
+  if (originalBunVersion === undefined) {
+    Reflect.deleteProperty(process.versions, 'bun');
+  } else {
+    process.versions.bun = originalBunVersion;
+  }
 });

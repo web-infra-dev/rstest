@@ -178,3 +178,12 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
 
 export const isDeno: boolean =
   typeof process !== 'undefined' && process.versions?.deno !== undefined;
+
+export const isBun: boolean =
+  typeof process !== 'undefined' && process.versions?.bun !== undefined;
+
+export const getWorkerSerialization = (): 'advanced' | 'json' => {
+  return typeof process !== 'undefined' && process.versions?.bun !== undefined
+    ? 'json'
+    : 'advanced';
+};

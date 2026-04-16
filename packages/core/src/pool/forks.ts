@@ -11,6 +11,7 @@ import type {
   Test,
   TestFileResult,
 } from '../types';
+import { getWorkerSerialization } from '../utils';
 import { createWorkerStderrCapture } from './stderrCapture';
 import { parseWorkerMetaMessage, type WorkerMetaMessage } from './workerMeta';
 
@@ -100,7 +101,7 @@ export const createForksPool = (poolOptions: {
     minThreads,
     concurrentTasksPerWorker: 1,
     isolateWorkers: isolate,
-    serialization: 'advanced',
+    serialization: getWorkerSerialization(),
   };
 
   const pool = new Tinypool(options);
