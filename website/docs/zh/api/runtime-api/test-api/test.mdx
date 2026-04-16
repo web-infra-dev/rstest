@@ -298,6 +298,8 @@ Fixture 函数接收两个参数：
 `await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
 
 ```ts
+import { test } from '@rstest/core';
+
 const testWithDb = test.extend({
   db: async ({}, use) => {
     // setup：创建连接
@@ -314,6 +316,8 @@ const testWithDb = test.extend({
 如果 fixture 不需要 setup/teardown 逻辑，可以直接提供一个普通值：
 
 ```ts
+import { test } from '@rstest/core';
+
 const myTest = test.extend({
   baseURL: 'https://api.example.com',
 });
@@ -328,6 +332,8 @@ myTest('uses baseURL', ({ baseURL, expect }) => {
 Fixture 函数的第一个参数中同时包含 `TestContext`，因此你可以在 fixture 内直接读取当前测试信息或使用 `expect`：
 
 ```ts
+import { test } from '@rstest/core';
+
 const myTest = test.extend({
   traceId: async ({ task }, use) => {
     // task.name 来自 TestContext
@@ -341,6 +347,8 @@ const myTest = test.extend({
 一个 fixture 可以在第一个参数中解构其他 fixture，Rstest 会自动按依赖顺序初始化它们，并按反序执行 teardown：
 
 ```ts
+import { test } from '@rstest/core';
+
 const testWithApi = test.extend({
   baseURL: 'https://api.example.com',
   token: async ({ baseURL }, use) => {
@@ -350,9 +358,9 @@ const testWithApi = test.extend({
   },
 });
 
-testWithApi('fetch profile', async ({ token, expect }) => {
+testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
   // baseURL → token 的初始化顺序由依赖关系自动决定
-  const res = await fetch('https://api.example.com/profile', {
+  const res = await fetch(`${baseURL}/profile`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(res.ok).toBe(true);
@@ -364,6 +372,8 @@ testWithApi('fetch profile', async ({ token, expect }) => {
 Fixture 默认是按需执行的：只有测试函数中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使测试没有解构它——可以使用元组语法并设置 `{ auto: true }`：
 
 ```ts
+import { test } from '@rstest/core';
+
 const events: string[] = [];
 
 const myTest = test.extend({
@@ -388,6 +398,8 @@ myTest('runs logger automatically', ({ expect }) => {
 Fixture 的类型通常可以自动推断。如果推断不够精确，可以为 `test.extend` 传入显式泛型：
 
 ```ts
+import { test } from '@rstest/core';
+
 interface MyFixtures {
   user: { name: string; role: 'admin' | 'guest' };
 }

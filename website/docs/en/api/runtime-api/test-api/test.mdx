@@ -298,6 +298,8 @@ A fixture function receives two parameters:
 Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
 
 ```ts
+import { test } from '@rstest/core';
+
 const testWithDb = test.extend({
   db: async ({}, use) => {
     // setup: create connection
@@ -314,6 +316,8 @@ const testWithDb = test.extend({
 If a fixture does not need setup/teardown logic, you can provide a plain value directly:
 
 ```ts
+import { test } from '@rstest/core';
+
 const myTest = test.extend({
   baseURL: 'https://api.example.com',
 });
@@ -328,6 +332,8 @@ myTest('uses baseURL', ({ baseURL, expect }) => {
 The first parameter of a fixture function also includes `TestContext`, so you can read current test information or use `expect` directly inside a fixture:
 
 ```ts
+import { test } from '@rstest/core';
+
 const myTest = test.extend({
   traceId: async ({ task }, use) => {
     // task.name comes from TestContext
@@ -341,6 +347,8 @@ const myTest = test.extend({
 A fixture can destructure other fixtures from its first parameter. Rstest automatically initializes them in dependency order and runs teardown in reverse order:
 
 ```ts
+import { test } from '@rstest/core';
+
 const testWithApi = test.extend({
   baseURL: 'https://api.example.com',
   token: async ({ baseURL }, use) => {
@@ -350,9 +358,9 @@ const testWithApi = test.extend({
   },
 });
 
-testWithApi('fetch profile', async ({ token, expect }) => {
+testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
   // baseURL → token initialization order is resolved automatically
-  const res = await fetch('https://api.example.com/profile', {
+  const res = await fetch(`${baseURL}/profile`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(res.ok).toBe(true);
@@ -364,6 +372,8 @@ testWithApi('fetch profile', async ({ token, expect }) => {
 Fixtures are lazy by default: they only run when destructured by the test function (or required by another fixture). To make a fixture run for every test automatically — even when not destructured — use the tuple syntax with `{ auto: true }`:
 
 ```ts
+import { test } from '@rstest/core';
+
 const events: string[] = [];
 
 const myTest = test.extend({
@@ -388,6 +398,8 @@ myTest('runs logger automatically', ({ expect }) => {
 Fixture types are usually inferred automatically. If inference is not precise enough, provide an explicit generic to `test.extend`:
 
 ```ts
+import { test } from '@rstest/core';
+
 interface MyFixtures {
   user: { name: string; role: 'admin' | 'guest' };
 }
