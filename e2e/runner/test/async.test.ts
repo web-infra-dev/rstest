@@ -20,42 +20,49 @@ afterAll(() => {
     'run 2-1',
     'run 3-0',
   ]);
-  expect(runIds).toMatchInlineSnapshot(`
+  const fileHashes = new Set(runIds.map(([id]) => id.split('_')[0]));
+  expect(fileHashes.size).toBe(1);
+
+  const fileHash = [...fileHashes][0]!;
+  expect(fileHash).toMatch(/^[0-9a-f]{10}$/);
+  expect(
+    runIds.map(([id, name]) => [id.slice(fileHash.length), name]),
+  ).toMatchInlineSnapshot(`
     [
       [
-        "419cefd87e_0_0_0",
+        "_0_0_0",
         "0-0",
       ],
       [
-        "419cefd87e_0_0_1_0",
+        "_0_0_1_0",
         "0-1-0",
       ],
       [
-        "419cefd87e_0_0_1_1_0",
+        "_0_0_1_1_0",
         "0-1-1-0",
       ],
       [
-        "419cefd87e_0_0_2_0",
+        "_0_0_2_0",
         "0-2-0",
       ],
       [
-        "419cefd87e_0_0_3",
+        "_0_0_3",
         "0-3",
       ],
       [
-        "419cefd87e_0_1",
+        "_0_1",
         "1",
       ],
       [
-        "419cefd87e_0_2_0_0",
+        "_0_2_0_0",
         "2-0-0",
       ],
       [
-        "419cefd87e_0_2_1",
+        "_0_2_1",
         "2-1",
       ],
       [
-        "419cefd87e_0_3",
+        "_0_3",
         "3",
       ],
     ]
