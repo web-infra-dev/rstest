@@ -595,7 +595,7 @@ export async function runTests(context: Rstest): Promise<void> {
         for (const reporter of reporters) {
           await reporter.onTestRunEnd?.({
             results: context.reporterResults.results,
-            coverageResults,
+            coverage: mergedCoverageMap?.toJSON(),
             testResults: context.reporterResults.testResults,
             unhandledErrors: errors,
             snapshotSummary: snapshotManager.summary,
