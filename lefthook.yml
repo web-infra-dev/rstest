@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    prettier:
+      glob: "!(CLAUDE).{md,mdx,css,less,scss,json,jsonc,json5}"
+      run: pnpm prettier --write {staged_files} && git add {staged_files}
+    biome:
+      glob: "*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"
+      run: pnpm biome check --write {staged_files} && git add {staged_files}
+    check-dependency-version:
+      glob: "package.json"
+      run: pnpm run check-dependency-version && pnpm prettier --write {staged_files} && git add {staged_files}
+    pnpm-dedupe:
+      glob: "pnpm-lock.yaml"
+      run: pnpm dedupe --check
