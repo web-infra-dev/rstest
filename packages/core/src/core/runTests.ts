@@ -46,7 +46,70 @@ const getSignalExitCode = (signal: NodeJS.Signals): number => {
   return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
 };
 
+const reportNoTestFiles = ({
+  context,
+  mode = 'all',
+}: {
+  context: Rstest;
+  mode?: 'all' | 'on-demand';
+}) => {
+  if (context.command === 'watch') {
+    if (mode === 'on-demand') {
+      logger.log(color.yellow('No test files need re-run.'));
+    } else {
+      logger.log(color.yellow('No test files found.'));
+    }
+  } else {
+    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+    const message = `No test files found, exiting with code ${code}.`;
+
+    if (code === 0) {
+      logger.log(color.yellow(message));
+    } else {
+      logger.error(color.red(message));
+    }
+
+    process.exitCode = code;
+  }
+
+  if (mode === 'all') {
+    if (context.relatedFilters?.length) {
+      logger.log(
+        color.gray('related: '),
+        context.relatedFilters.join(color.gray(', ')),
+      );
+    } else if (context.fileFilters?.length) {
+      logger.log(
+        color.gray('filter: '),
+        context.fileFilters.join(color.gray(', ')),
+      );
+    }
+
+    context.projects.forEach((p) => {
+      if (context.projects.length > 1) {
+        logger.log('');
+        logger.log(color.gray('project:'), p.name);
+      }
+      logger.log(color.gray('root:'), p.rootPath);
+
+      logger.log(
+        color.gray('include:'),
+        p.normalizedConfig.include.join(color.gray(', ')),
+      );
+      logger.log(
+        color.gray('exclude:'),
+        p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
+      );
+    });
+  }
+};
+
 export async function runTests(context: Rstest): Promise<void> {
+  if (context.relatedResolutionEmpty) {
+    reportNoTestFiles({ context });
+    return;
+  }
+
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
@@ -530,54 +593,8 @@ export async function runTests(context: Rstest): Promise<void> {
         shouldUnifyReporter && browserResult?.hasFailure;
 
       if (results.length === 0 && !errors.length) {
-        if (command === 'watch') {
-          if (mode === 'on-demand') {
-            logger.log(color.yellow('No test files need re-run.'));
-          } else {
-            logger.log(color.yellow('No test files found.'));
-          }
-        } else {
-          const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-
-          const message = `No test files found, exiting with code ${code}.`;
-          if (code === 0) {
-            logger.log(color.yellow(message));
-          } else {
-            logger.error(color.red(message));
-          }
-
-          process.exitCode = code;
-        }
-        if (mode === 'all') {
-          if (context.relatedFilters?.length) {
-            logger.log(
-              color.gray('related: '),
-              context.relatedFilters.join(color.gray(', ')),
-            );
-          } else if (context.fileFilters?.length) {
-            logger.log(
-              color.gray('filter: '),
-              context.fileFilters.join(color.gray(', ')),
-            );
-          }
-
-          allProjects.forEach((p) => {
-            if (allProjects.length > 1) {
-              logger.log('');
-              logger.log(color.gray('project:'), p.name);
-            }
-            logger.log(color.gray('root:'), p.rootPath);
-
-            logger.log(
-              color.gray('include:'),
-              p.normalizedConfig.include.join(color.gray(', ')),
-            );
-            logger.log(
-              color.gray('exclude:'),
-              p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-            );
-          });
-        }
+        reportNoTestFiles({ context, mode });
+        return;
       }
 
       const isFailure = nodeHasFailure || browserHasFailure;

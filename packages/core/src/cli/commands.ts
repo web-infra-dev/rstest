@@ -259,6 +259,7 @@ const resolveEffectiveCliFilters = async ({
 }): Promise<{
   effectiveFilters: string[];
   relatedFilters?: string[];
+  relatedResolutionEmpty?: boolean;
 }> => {
   const normalizedFilters = normalizeCliFilters(filters);
 
@@ -275,9 +276,9 @@ const resolveEffectiveCliFilters = async ({
   );
 
   return {
-    effectiveFilters:
-      relatedFiles.length > 0 ? relatedFiles : normalizedFilters,
+    effectiveFilters: relatedFiles,
     relatedFilters: normalizedFilters,
+    relatedResolutionEmpty: relatedFiles.length === 0,
   };
 };
 
@@ -298,7 +299,7 @@ export const runRest = async ({
   try {
     const { config, configFilePath, projects, createRstest } =
       await resolveCliRuntime(options);
-    const { effectiveFilters, relatedFilters } =
+    const { effectiveFilters, relatedFilters, relatedResolutionEmpty } =
       await resolveEffectiveCliFilters({
         options,
         filters,
@@ -314,6 +315,7 @@ export const runRest = async ({
       effectiveFilters,
     );
     rstest.context.relatedFilters = relatedFilters;
+    rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -418,7 +420,7 @@ export function createCli(): CAC {
           config.includeTaskLocation = true;
         }
 
-        const { effectiveFilters, relatedFilters } =
+        const { effectiveFilters, relatedFilters, relatedResolutionEmpty } =
           await resolveEffectiveCliFilters({
             options,
             filters,
@@ -434,6 +436,7 @@ export function createCli(): CAC {
           effectiveFilters,
         );
         rstest.context.relatedFilters = relatedFilters;
+        rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,

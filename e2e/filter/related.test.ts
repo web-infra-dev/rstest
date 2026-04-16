@@ -126,6 +126,25 @@ describe('related test filtering', () => {
     expect(cli.log).not.toContain('__rstest_related_no_match__');
   });
 
+  it('should not fall back to substring file matching when related finds no tests', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'src/fallback.ts'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+    expect(cli.log).toContain('related:');
+    expect(cli.log).toContain('src/fallback.ts');
+    expect(cli.log).not.toContain('src/fallback.ts.test.ts');
+  });
+
   it('should not initialize browser related resolution for node-only sources', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
