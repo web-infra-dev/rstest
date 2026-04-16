@@ -50,6 +50,7 @@ export class WindowRenderer {
   private renderScheduled = false;
 
   private windowHeight = 0;
+  private started = false;
   private finished = false;
   private hiddenForOutputCount = 0;
   private readonly cleanups: (() => void)[] = [];
@@ -75,13 +76,13 @@ export class WindowRenderer {
       this.interceptStream(process.stderr, 'error'),
     );
 
-    this.start();
-
     process.once('exit', this.exitHandler);
   }
 
   start(): void {
+    this.started = true;
     this.finished = false;
+    clearInterval(this.renderInterval);
     this.renderInterval = setInterval(
       () => this.schedule(),
       this.options.interval,
@@ -98,15 +99,13 @@ export class WindowRenderer {
    * All intercepted writes are forwarded to actual write after this.
    */
   finish(): void {
-    if (this.finished) {
+    if (this.finished || !this.started) {
       return;
     }
 
-    this.flushBuffer();
     this.finished = true;
-    this.clearWindow();
-    this.stop();
-    process.removeListener('exit', this.exitHandler);
+    this.flushBuffer();
+    clearInterval(this.renderInterval);
   }
 
   /**
@@ -201,7 +200,7 @@ export class WindowRenderer {
     // @ts-expect-error -- not sure how 2 overloads should be typed
     stream.write = (chunk, _, callback) => {
       if (chunk) {
-        if (this.finished || this.hiddenForOutputCount > 0) {
+        if (this.finished || !this.started || this.hiddenForOutputCount > 0) {
           this.write(chunk.toString(), type);
         } else {
           this.buffer.push({ type, message: chunk.toString() });

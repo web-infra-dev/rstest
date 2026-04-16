@@ -106,6 +106,7 @@ export class StatusRenderer {
   }
 
   onTestFileStart(): void {
+    this.renderer.start();
     this.renderer?.schedule();
   }
 
