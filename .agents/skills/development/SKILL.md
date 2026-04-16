@@ -116,5 +116,6 @@ Run through this before you consider the work done:
 - [ ] **Adapter sync** evaluated (see §4) — config transforms updated or noted as N/A
 - [ ] **Docs** updated in both `en/` and `zh/` (see §5)
 - [ ] **Types** are correct — no new `any` leaking into public APIs
+- [ ] **Unused exports / files checked** — run `pnpm run check-unused` before wrapping up
 - [ ] **Build passes** — `pnpm --filter <package> build` succeeds
 - [ ] **Existing tests still pass** — `pnpm test` and relevant e2e tests green

@@ -86,7 +86,7 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, [], provider);
+      await generateCoverage(context, createCoverageMap(), provider);
       expect(batches).toEqual([25, 25, 5]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });

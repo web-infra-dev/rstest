@@ -11,7 +11,7 @@ import * as rsbuild from '@rsbuild/core';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
-export { loadCoverageProvider } from './coverage';
+export { createCoverageProvider, loadCoverageProvider } from './coverage';
 // Runtime API
 export { createRstestRuntime } from './runtime/api';
 // Public runtime API (for browser client usage)
@@ -22,6 +22,7 @@ export { setRealTimers } from './runtime/util';
 export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  CoverageMapData,
   DevicePreset,
   FormattedError,
   ListCommandResult,
