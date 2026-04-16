@@ -257,19 +257,154 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 - **Type:** `test.extend(fixtures: Fixtures)`
 
-Extends the test context with custom fixtures.
+Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
+
+Fixtures are reusable context entries that help you prepare test resources once and inject them where needed. Typical uses include:
+
+- Sharing test data and helper clients (for example, API clients, tokens, test users).
+- Wrapping setup/teardown logic in one place instead of repeating it in every test.
+- Building fixture dependencies (one fixture can consume another fixture).
+- Running global-per-test side effects automatically (for example, logging) via `auto` fixtures.
 
 ```ts
-const testWithUser = test.extend({
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
   user: async ({}, use) => {
     await use({ name: 'Alice' });
   },
 });
 
-testWithUser('has user in context', ({ user, expect }) => {
+// Use myTest (not test) to define tests that need the fixture
+myTest('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
+
+// The original test is unaffected and cannot access user
+test('plain test', ({ expect }) => {
+  expect(1).toBe(1);
+});
 ```
+
+The returned API has the same chainable modifiers as `test` (`only`, `skip`, `each`, `concurrent`, etc.) and can call `.extend()` again for further extension.
+
+### Fixture function lifecycle
+
+A fixture function receives two parameters:
+
+1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
+2. **use** — call `await use(value)` to pass the fixture value to the test.
+
+Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
+
+```ts
+const testWithDb = test.extend({
+  db: async ({}, use) => {
+    // setup: create connection
+    const db = await connectTestDb();
+    await use(db);
+    // teardown: close connection
+    await db.close();
+  },
+});
+```
+
+### Plain value fixtures
+
+If a fixture does not need setup/teardown logic, you can provide a plain value directly:
+
+```ts
+const myTest = test.extend({
+  baseURL: 'https://api.example.com',
+});
+
+myTest('uses baseURL', ({ baseURL, expect }) => {
+  expect(baseURL).toBe('https://api.example.com');
+});
+```
+
+### Accessing TestContext
+
+The first parameter of a fixture function also includes `TestContext`, so you can read current test information or use `expect` directly inside a fixture:
+
+```ts
+const myTest = test.extend({
+  traceId: async ({ task }, use) => {
+    // task.name comes from TestContext
+    await use(`trace:${task.name}`);
+  },
+});
+```
+
+### Fixture dependencies
+
+A fixture can destructure other fixtures from its first parameter. Rstest automatically initializes them in dependency order and runs teardown in reverse order:
+
+```ts
+const testWithApi = test.extend({
+  baseURL: 'https://api.example.com',
+  token: async ({ baseURL }, use) => {
+    const token = await createTestToken(baseURL);
+    await use(token);
+    await revokeTestToken(token);
+  },
+});
+
+testWithApi('fetch profile', async ({ token, expect }) => {
+  // baseURL → token initialization order is resolved automatically
+  const res = await fetch('https://api.example.com/profile', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(res.ok).toBe(true);
+});
+```
+
+### Automatic fixtures (`auto`)
+
+Fixtures are lazy by default: they only run when destructured by the test function (or required by another fixture). To make a fixture run for every test automatically — even when not destructured — use the tuple syntax with `{ auto: true }`:
+
+```ts
+const events: string[] = [];
+
+const myTest = test.extend({
+  logger: [
+    async ({ task }, use) => {
+      events.push(`start:${task.name}`);
+      await use(undefined);
+      events.push(`end:${task.name}`);
+    },
+    { auto: true },
+  ],
+});
+
+myTest('runs logger automatically', ({ expect }) => {
+  // logger is not destructured here, but it still runs because of auto: true
+  expect(events).toContain('start:runs logger automatically');
+});
+```
+
+### Type inference and explicit generics
+
+Fixture types are usually inferred automatically. If inference is not precise enough, provide an explicit generic to `test.extend`:
+
+```ts
+interface MyFixtures {
+  user: { name: string; role: 'admin' | 'guest' };
+}
+
+const myTest = test.extend<MyFixtures>({
+  user: async ({}, use) => {
+    await use({ name: 'Alice', role: 'admin' });
+  },
+});
+
+myTest('typed fixture', ({ user, expect }) => {
+  // user is typed as { name: string; role: 'admin' | 'guest' }
+  expect(user.role).toBe('admin');
+});
+```
+
+Fixture types only take effect on the new API returned by `test.extend`. The type signature of the original `test` remains unchanged.
 
 ## Chainable modifiers
 
