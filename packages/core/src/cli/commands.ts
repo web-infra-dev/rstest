@@ -1,6 +1,7 @@
 import cac, { type CAC, type Command } from 'cac';
 import { normalize } from 'pathe';
 import type {
+  FileFilterMode,
   ListCommandOptions,
   Project,
   RstestCommand,
@@ -258,13 +259,14 @@ const resolveEffectiveCliFilters = async ({
   projects: Project[];
 }): Promise<{
   effectiveFilters: string[];
+  fileFilterMode: FileFilterMode;
   relatedFilters?: string[];
   relatedResolutionEmpty?: boolean;
 }> => {
   const normalizedFilters = normalizeCliFilters(filters);
 
   if (!isRelatedRun(options)) {
-    return { effectiveFilters: normalizedFilters };
+    return { effectiveFilters: normalizedFilters, fileFilterMode: 'fuzzy' };
   }
 
   const { resolveRelatedTestFiles } = await import('../core/related');
@@ -277,6 +279,7 @@ const resolveEffectiveCliFilters = async ({
 
   return {
     effectiveFilters: relatedFiles,
+    fileFilterMode: 'exact',
     relatedFilters: normalizedFilters,
     relatedResolutionEmpty: relatedFiles.length === 0,
   };
@@ -299,20 +302,25 @@ export const runRest = async ({
   try {
     const { config, configFilePath, projects, createRstest } =
       await resolveCliRuntime(options);
-    const { effectiveFilters, relatedFilters, relatedResolutionEmpty } =
-      await resolveEffectiveCliFilters({
-        options,
-        filters,
-        createRstest,
-        config,
-        configFilePath,
-        projects,
-      });
+    const {
+      effectiveFilters,
+      fileFilterMode,
+      relatedFilters,
+      relatedResolutionEmpty,
+    } = await resolveEffectiveCliFilters({
+      options,
+      filters,
+      createRstest,
+      config,
+      configFilePath,
+      projects,
+    });
 
     rstest = createRstest(
       { config, configFilePath, projects },
       command,
       effectiveFilters,
+      fileFilterMode,
     );
     rstest.context.relatedFilters = relatedFilters;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
@@ -420,20 +428,25 @@ export function createCli(): CAC {
           config.includeTaskLocation = true;
         }
 
-        const { effectiveFilters, relatedFilters, relatedResolutionEmpty } =
-          await resolveEffectiveCliFilters({
-            options,
-            filters,
-            createRstest,
-            config,
-            configFilePath,
-            projects,
-          });
+        const {
+          effectiveFilters,
+          fileFilterMode,
+          relatedFilters,
+          relatedResolutionEmpty,
+        } = await resolveEffectiveCliFilters({
+          options,
+          filters,
+          createRstest,
+          config,
+          configFilePath,
+          projects,
+        });
 
         const rstest = createRstest(
           { config, configFilePath, projects },
           'list',
           effectiveFilters,
+          fileFilterMode,
         );
         rstest.context.relatedFilters = relatedFilters;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;

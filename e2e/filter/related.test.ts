@@ -167,4 +167,20 @@ describe('related test filtering', () => {
     `);
     expect(cli.log).not.toContain('invalid');
   });
+
+  it('should keep exact related test paths without prefix matching extra files', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--related', 'index.test.ts', '--filesOnly'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout.split('\n').filter(Boolean)).toEqual(['index.test.ts']);
+  });
 });

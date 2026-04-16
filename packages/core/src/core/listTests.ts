@@ -480,6 +480,7 @@ export async function listTests(
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],
+      fileFilterMode: context.fileFilterMode,
       includeSource,
     });
 

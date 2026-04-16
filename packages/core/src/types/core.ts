@@ -20,6 +20,7 @@ export type ProjectEntries = {
 };
 
 export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
+export type FileFilterMode = 'fuzzy' | 'exact';
 
 export type Project = { config: RstestConfig; configFilePath?: string };
 
@@ -61,6 +62,8 @@ export type RstestContext = {
   normalizedConfig: NormalizedConfig;
   /** filter by a filename regex pattern */
   fileFilters?: string[];
+  /** How file filters should match discovered test files. */
+  fileFilterMode?: FileFilterMode;
   /** Original source filters passed to `--related` / `--findRelatedTests`. */
   relatedFilters?: string[];
   /** `--related` resolved successfully but matched no test files. */

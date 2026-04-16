@@ -100,12 +100,40 @@ const reportNoTestFiles = ({
   }
 };
 
-export async function runTests(context: Rstest): Promise<void> {
-  if (context.relatedResolutionEmpty && context.command !== 'watch') {
-    reportNoTestFiles({ context });
-    return;
+const notifyReportersOnTestRunEnd = async ({
+  context,
+  coverage,
+  duration,
+  getSourcemap,
+  unhandledErrors,
+  filterRerunTestPaths,
+}: {
+  context: Rstest;
+  coverage?: CoverageMap;
+  duration: {
+    totalTime: number;
+    buildTime: number;
+    testTime: number;
+  };
+  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
+  unhandledErrors?: Error[];
+  filterRerunTestPaths?: string[];
+}) => {
+  for (const reporter of context.reporters) {
+    await reporter.onTestRunEnd?.({
+      results: context.reporterResults.results,
+      coverage: coverage?.toJSON(),
+      testResults: context.reporterResults.testResults,
+      unhandledErrors,
+      snapshotSummary: context.snapshotManager.summary,
+      duration,
+      getSourcemap,
+      filterRerunTestPaths,
+    });
   }
+};
 
+export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
@@ -198,6 +226,7 @@ export async function runTests(context: Rstest): Promise<void> {
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],
+      fileFilterMode: context.fileFilterMode,
     });
 
     entriesCache.set(name, {
@@ -243,6 +272,11 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   }
 
+  if (isWatchMode && context.relatedResolutionEmpty) {
+    browserProjectsToRun = browserProjects;
+    nodeProjectsToRun = [];
+  }
+
   const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
 
@@ -260,6 +294,7 @@ export async function runTests(context: Rstest): Promise<void> {
     browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
       skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
+      allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
     });
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
@@ -592,18 +627,13 @@ export async function runTests(context: Rstest): Promise<void> {
 
       if (results.length === 0 && !errors.length) {
         reportNoTestFiles({ context, mode });
-        for (const reporter of reporters) {
-          await reporter.onTestRunEnd?.({
-            results: context.reporterResults.results,
-            coverage: mergedCoverageMap?.toJSON(),
-            testResults: context.reporterResults.testResults,
-            unhandledErrors: errors,
-            snapshotSummary: snapshotManager.summary,
-            duration,
-            getSourcemap,
-            filterRerunTestPaths: undefined,
-          });
-        }
+        await notifyReportersOnTestRunEnd({
+          context,
+          coverage: mergedCoverageMap,
+          duration,
+          getSourcemap,
+          unhandledErrors: errors,
+        });
         return;
       }
 
@@ -613,20 +643,16 @@ export async function runTests(context: Rstest): Promise<void> {
         process.exitCode = 1;
       }
 
-      for (const reporter of reporters) {
-        await reporter.onTestRunEnd?.({
-          results: context.reporterResults.results,
-          coverage: mergedCoverageMap?.toJSON(),
-          testResults: context.reporterResults.testResults,
-          unhandledErrors: errors,
-          snapshotSummary: snapshotManager.summary,
-          duration,
-          getSourcemap,
-          filterRerunTestPaths: currentEntries.length
-            ? currentEntries.map((e) => e.testPath)
-            : undefined,
-        });
-      }
+      await notifyReportersOnTestRunEnd({
+        context,
+        coverage: mergedCoverageMap,
+        duration,
+        getSourcemap,
+        unhandledErrors: errors,
+        filterRerunTestPaths: currentEntries.length
+          ? currentEntries.map((e) => e.testPath)
+          : undefined,
+      });
 
       // Generate coverage reports after all tests complete
       if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
