@@ -103,7 +103,12 @@ export class DefaultReporter implements Reporter {
     };
 
     if (this.statusRenderer) {
-      this.statusRenderer.withWindowHidden(logResults);
+      this.statusRenderer.suspendWindowOutput();
+      try {
+        logResults();
+      } finally {
+        this.statusRenderer.resumeWindowOutput();
+      }
       return;
     }
 
@@ -123,9 +128,12 @@ export class DefaultReporter implements Reporter {
 
     this.nonTTYProgressNotifier?.notifyOutput();
     if (this.statusRenderer) {
-      this.statusRenderer.withWindowHidden(() =>
-        logUserConsoleLog(this.rootPath, log),
-      );
+      this.statusRenderer.suspendWindowOutput();
+      try {
+        logUserConsoleLog(this.rootPath, log);
+      } finally {
+        this.statusRenderer.resumeWindowOutput();
+      }
       return;
     }
 

@@ -244,19 +244,21 @@ export class WindowRenderer {
     return messages;
   }
 
-  withWindowHidden<T>(action: () => T): T {
+  suspendWindowOutput(): void {
     this.flushBuffer();
     this.clearWindow();
     this.hiddenForOutputCount += 1;
+  }
 
-    try {
-      return action();
-    } finally {
-      this.hiddenForOutputCount -= 1;
+  resumeWindowOutput(): void {
+    if (this.hiddenForOutputCount === 0) {
+      return;
+    }
 
-      if (!this.finished && this.hiddenForOutputCount === 0) {
-        this.render();
-      }
+    this.hiddenForOutputCount -= 1;
+
+    if (!this.finished && this.hiddenForOutputCount === 0) {
+      this.render();
     }
   }
 }

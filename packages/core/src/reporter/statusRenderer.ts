@@ -123,7 +123,11 @@ export class StatusRenderer {
     this.renderer?.finish();
   }
 
-  withWindowHidden<T>(action: () => T): T {
-    return this.renderer.withWindowHidden(action);
+  suspendWindowOutput(): void {
+    this.renderer.suspendWindowOutput();
+  }
+
+  resumeWindowOutput(): void {
+    this.renderer.resumeWindowOutput();
   }
 }
