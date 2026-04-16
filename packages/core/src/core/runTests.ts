@@ -105,7 +105,7 @@ const reportNoTestFiles = ({
 };
 
 export async function runTests(context: Rstest): Promise<void> {
-  if (context.relatedResolutionEmpty) {
+  if (context.relatedResolutionEmpty && context.command !== 'watch') {
     reportNoTestFiles({ context });
     return;
   }
@@ -184,6 +184,9 @@ export async function runTests(context: Rstest): Promise<void> {
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
+    if (context.relatedResolutionEmpty) {
+      return {};
+    }
     if (!isWatchMode && shard && entriesCache.has(name)) {
       return entriesCache.get(name)!.entries;
     }
@@ -386,7 +389,7 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunStart?.();
     }
 
-    let testStart: number;
+    let testStart: number | undefined;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
@@ -495,9 +498,10 @@ export async function runTests(context: Rstest): Promise<void> {
       }),
     );
 
-    const buildTime = testStart! - buildStart;
+    testStart ??= buildStart;
+    const buildTime = testStart - buildStart;
 
-    const testTime = Date.now() - testStart!;
+    const testTime = Date.now() - testStart;
 
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
@@ -594,6 +598,18 @@ export async function runTests(context: Rstest): Promise<void> {
 
       if (results.length === 0 && !errors.length) {
         reportNoTestFiles({ context, mode });
+        for (const reporter of reporters) {
+          await reporter.onTestRunEnd?.({
+            results: context.reporterResults.results,
+            coverageResults,
+            testResults: context.reporterResults.testResults,
+            unhandledErrors: errors,
+            snapshotSummary: snapshotManager.summary,
+            duration,
+            getSourcemap,
+            filterRerunTestPaths: undefined,
+          });
+        }
         return;
       }
 

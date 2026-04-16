@@ -13,8 +13,15 @@ type ModuleGraph = {
   dependentsBySource: Map<string, Set<string>>;
 };
 
-const stripSourceProtocol = (source: string): string =>
-  source.replace(/^[a-zA-Z]+:\/\/\/?/, '');
+const stripSourceProtocol = (source: string): string => {
+  if (source.startsWith('file://')) {
+    const path = source.slice('file://'.length);
+    // Windows file URLs look like file:///C:/path — strip only the leading slash
+    // before the drive letter. On POSIX, keep the leading slash: /home/...
+    return /^\/[a-zA-Z]:/.test(path) ? path.slice(1) : path;
+  }
+  return source.replace(/^[a-zA-Z]+:\/\//, '');
+};
 
 export const resolveStatsPathCandidate = ({
   candidate,

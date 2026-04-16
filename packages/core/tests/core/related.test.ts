@@ -1,6 +1,15 @@
 import { resolveStatsPathCandidate } from '../../src/core/related';
 
 describe('resolveStatsPathCandidate', () => {
+  it('preserves POSIX absolute paths after stripping file protocol', () => {
+    expect(
+      resolveStatsPathCandidate({
+        candidate: 'file:///home/app/src/index.ts',
+        projectRoot: '/repo',
+      }),
+    ).toBe('/home/app/src/index.ts');
+  });
+
   it('preserves Windows absolute paths after stripping file protocol', () => {
     expect(
       resolveStatsPathCandidate({
