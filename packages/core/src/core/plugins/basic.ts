@@ -104,7 +104,10 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
-              if (!config.devtool || !config.devtool.includes('inline')) {
+              if (
+                typeof config.devtool !== 'string' ||
+                !config.devtool.includes('inline')
+              ) {
                 config.devtool = 'nosources-source-map';
               }
 
