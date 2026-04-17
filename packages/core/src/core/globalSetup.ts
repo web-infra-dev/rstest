@@ -2,7 +2,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import { type Options, Tinypool } from 'tinypool';
 import type { EntryInfo } from '../types';
-import { bgColor, color, getForceColorEnv } from '../utils';
+import {
+  bgColor,
+  color,
+  getForceColorEnv,
+  getWorkerSerialization,
+} from '../utils';
 
 let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
 
@@ -33,7 +38,7 @@ function createSetupPool() {
     minThreads: 1,
     concurrentTasksPerWorker: 1,
     isolateWorkers: false,
-    serialization: 'advanced',
+    serialization: getWorkerSerialization(),
     env: {
       NODE_ENV: 'test',
       ...getForceColorEnv(),

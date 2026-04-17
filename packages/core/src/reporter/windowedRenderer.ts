@@ -19,10 +19,9 @@ import { stripVTControlCharacters } from 'node:util';
 const DEFAULT_RENDER_INTERVAL_MS = 1_000;
 
 const ESC = '\x1B[';
-const CLEAR_LINE = `${ESC}K`;
+const CLEAR_LINE = `${ESC}2K`;
+const CARRIAGE_RETURN = '\r';
 const MOVE_CURSOR_ONE_ROW_UP = `${ESC}1A`;
-const SYNC_START = `${ESC}?2026h`;
-const SYNC_END = `${ESC}?2026l`;
 
 export interface Options {
   logger: {
@@ -51,7 +50,9 @@ export class WindowRenderer {
   private renderScheduled = false;
 
   private windowHeight = 0;
+  private started = false;
   private finished = false;
+  private hiddenForOutputCount = 0;
   private readonly cleanups: (() => void)[] = [];
   private readonly exitHandler = () => {
     this.finish();
@@ -75,13 +76,13 @@ export class WindowRenderer {
       this.interceptStream(process.stderr, 'error'),
     );
 
-    this.start();
-
     process.once('exit', this.exitHandler);
   }
 
   start(): void {
+    this.started = true;
     this.finished = false;
+    clearInterval(this.renderInterval);
     this.renderInterval = setInterval(
       () => this.schedule(),
       this.options.interval,
@@ -98,16 +99,23 @@ export class WindowRenderer {
    * All intercepted writes are forwarded to actual write after this.
    */
   finish(): void {
+    if (this.finished || !this.started) {
+      return;
+    }
+
     this.finished = true;
     this.flushBuffer();
     clearInterval(this.renderInterval);
-    process.removeListener('exit', this.exitHandler);
   }
 
   /**
    * Queue new render update
    */
   schedule(): void {
+    if (this.hiddenForOutputCount > 0) {
+      return;
+    }
+
     if (!this.renderScheduled) {
       this.renderScheduled = true;
       this.flushBuffer();
@@ -119,40 +127,39 @@ export class WindowRenderer {
   }
 
   private flushBuffer() {
-    if (this.buffer.length === 0) {
+    const messages = this.drainBuffer();
+
+    if (messages.length === 0) {
       return this.render();
     }
 
-    let current: any;
-
-    // Concatenate same types into a single render
-    for (const next of this.buffer.splice(0)) {
-      if (!current) {
-        current = next;
-        continue;
-      }
-
-      if (current.type !== next.type) {
-        this.render(current.message, current.type);
-        current = next;
-        continue;
-      }
-
-      current.message += next.message;
-    }
-
-    if (current) {
-      this.render(current?.message, current?.type);
+    for (const message of messages) {
+      this.render(message.message, message.type);
     }
   }
 
   private render(message?: string, type: StreamType = 'output') {
+    if (this.hiddenForOutputCount > 0) {
+      if (message) {
+        this.write(message, type);
+      }
+      return;
+    }
+
     if (this.finished) {
       this.clearWindow();
       return this.write(message || '', type);
     }
 
     const windowContent = this.options.getWindow();
+    if (windowContent.length === 0) {
+      this.clearWindow();
+      if (message) {
+        this.write(message, type);
+      }
+      return;
+    }
+
     const rowCount = getRenderedRowCount(
       windowContent,
       this.options.logger.getColumns(),
@@ -166,7 +173,6 @@ export class WindowRenderer {
       );
     }
 
-    this.write(SYNC_START);
     this.clearWindow();
 
     if (message) {
@@ -178,7 +184,6 @@ export class WindowRenderer {
     }
 
     this.write(windowContent.join('\n'));
-    this.write(SYNC_END);
 
     this.windowHeight = rowCount + Math.max(0, padding);
   }
@@ -188,10 +193,10 @@ export class WindowRenderer {
       return;
     }
 
-    this.write(CLEAR_LINE);
+    this.write(`${CARRIAGE_RETURN}${CLEAR_LINE}`);
 
     for (let i = 1; i < this.windowHeight; i++) {
-      this.write(`${MOVE_CURSOR_ONE_ROW_UP}${CLEAR_LINE}`);
+      this.write(`${MOVE_CURSOR_ONE_ROW_UP}${CARRIAGE_RETURN}${CLEAR_LINE}`);
     }
 
     this.windowHeight = 0;
@@ -203,7 +208,7 @@ export class WindowRenderer {
     // @ts-expect-error -- not sure how 2 overloads should be typed
     stream.write = (chunk, _, callback) => {
       if (chunk) {
-        if (this.finished) {
+        if (this.finished || !this.started || this.hiddenForOutputCount > 0) {
           this.write(chunk.toString(), type);
         } else {
           this.buffer.push({ type, message: chunk.toString() });
@@ -219,6 +224,50 @@ export class WindowRenderer {
 
   private write(message: string, type: 'output' | 'error' = 'output') {
     this.streams[type](message);
+  }
+
+  private drainBuffer(): { type: StreamType; message: string }[] {
+    const messages: { type: StreamType; message: string }[] = [];
+    let current: { type: StreamType; message: string } | undefined;
+
+    for (const next of this.buffer.splice(0)) {
+      if (!current) {
+        current = { ...next };
+        continue;
+      }
+
+      if (current.type !== next.type) {
+        messages.push(current);
+        current = { ...next };
+        continue;
+      }
+
+      current.message += next.message;
+    }
+
+    if (current) {
+      messages.push(current);
+    }
+
+    return messages;
+  }
+
+  suspendWindowOutput(): void {
+    this.flushBuffer();
+    this.clearWindow();
+    this.hiddenForOutputCount += 1;
+  }
+
+  resumeWindowOutput(): void {
+    if (this.hiddenForOutputCount === 0) {
+      return;
+    }
+
+    this.hiddenForOutputCount -= 1;
+
+    if (!this.finished && this.hiddenForOutputCount === 0) {
+      this.render();
+    }
   }
 }
 

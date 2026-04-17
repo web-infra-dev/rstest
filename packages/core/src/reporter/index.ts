@@ -64,6 +64,20 @@ export class DefaultReporter implements Reporter {
     this.nonTTYProgressNotifier?.start();
   }
 
+  protected withSuspendedStatusRenderer(fn: () => void): void {
+    if (!this.statusRenderer) {
+      fn();
+      return;
+    }
+
+    this.statusRenderer.suspendWindowOutput();
+    try {
+      fn();
+    } finally {
+      this.statusRenderer.resumeWindowOutput();
+    }
+  }
+
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
     this.nonTTYProgressNotifier?.notifyOutput();
@@ -80,25 +94,29 @@ export class DefaultReporter implements Reporter {
     const slowTestThreshold =
       projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
 
-    logFileTitle(test, relativePath, false, this.options.showProjectName);
-    // Always display all test cases when running a single test file
-    const showAllCases = this.testState.getTestFiles()?.length === 1;
+    const logResults = () => {
+      logFileTitle(test, relativePath, false, this.options.showProjectName);
+      // Always display all test cases when running a single test file
+      const showAllCases = this.testState.getTestFiles()?.length === 1;
 
-    const hideSkippedTests =
-      projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
+      const hideSkippedTests =
+        projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
-    for (const result of test.results) {
-      const isDisplayed =
-        showAllCases ||
-        result.status === 'fail' ||
-        (result.duration ?? 0) > slowTestThreshold ||
-        (result.retryCount ?? 0) > 0;
-      isDisplayed &&
-        logCase(result, {
-          slowTestThreshold,
-          hideSkippedTests,
-        });
-    }
+      for (const result of test.results) {
+        const isDisplayed =
+          showAllCases ||
+          result.status === 'fail' ||
+          (result.duration ?? 0) > slowTestThreshold ||
+          (result.retryCount ?? 0) > 0;
+        isDisplayed &&
+          logCase(result, {
+            slowTestThreshold,
+            hideSkippedTests,
+          });
+      }
+    };
+
+    this.withSuspendedStatusRenderer(logResults);
   }
 
   onTestCaseResult(): void {
@@ -113,8 +131,9 @@ export class DefaultReporter implements Reporter {
     }
 
     this.nonTTYProgressNotifier?.notifyOutput();
-
-    logUserConsoleLog(this.rootPath, log);
+    this.withSuspendedStatusRenderer(() => {
+      logUserConsoleLog(this.rootPath, log);
+    });
   }
 
   onExit(): void {
