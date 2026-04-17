@@ -64,6 +64,20 @@ export class DefaultReporter implements Reporter {
     this.nonTTYProgressNotifier?.start();
   }
 
+  protected withSuspendedStatusRenderer(fn: () => void): void {
+    if (!this.statusRenderer) {
+      fn();
+      return;
+    }
+
+    this.statusRenderer.suspendWindowOutput();
+    try {
+      fn();
+    } finally {
+      this.statusRenderer.resumeWindowOutput();
+    }
+  }
+
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
     this.nonTTYProgressNotifier?.notifyOutput();
@@ -102,17 +116,7 @@ export class DefaultReporter implements Reporter {
       }
     };
 
-    if (this.statusRenderer) {
-      this.statusRenderer.suspendWindowOutput();
-      try {
-        logResults();
-      } finally {
-        this.statusRenderer.resumeWindowOutput();
-      }
-      return;
-    }
-
-    logResults();
+    this.withSuspendedStatusRenderer(logResults);
   }
 
   onTestCaseResult(): void {
@@ -127,17 +131,9 @@ export class DefaultReporter implements Reporter {
     }
 
     this.nonTTYProgressNotifier?.notifyOutput();
-    if (this.statusRenderer) {
-      this.statusRenderer.suspendWindowOutput();
-      try {
-        logUserConsoleLog(this.rootPath, log);
-      } finally {
-        this.statusRenderer.resumeWindowOutput();
-      }
-      return;
-    }
-
-    logUserConsoleLog(this.rootPath, log);
+    this.withSuspendedStatusRenderer(() => {
+      logUserConsoleLog(this.rootPath, log);
+    });
   }
 
   onExit(): void {

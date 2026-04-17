@@ -152,6 +152,14 @@ export class WindowRenderer {
     }
 
     const windowContent = this.options.getWindow();
+    if (windowContent.length === 0) {
+      this.clearWindow();
+      if (message) {
+        this.write(message, type);
+      }
+      return;
+    }
+
     const rowCount = getRenderedRowCount(
       windowContent,
       this.options.logger.getColumns(),

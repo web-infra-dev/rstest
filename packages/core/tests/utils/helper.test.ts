@@ -29,25 +29,27 @@ it('should prettyTime correctly', () => {
 it('should use advanced serialization outside Bun', () => {
   const originalBunVersion = process.versions.bun;
 
-  Reflect.deleteProperty(process.versions, 'bun');
-
-  expect(getWorkerSerialization()).toBe('advanced');
-
-  if (originalBunVersion !== undefined) {
-    process.versions.bun = originalBunVersion;
+  try {
+    Reflect.deleteProperty(process.versions, 'bun');
+    expect(getWorkerSerialization()).toBe('advanced');
+  } finally {
+    if (originalBunVersion !== undefined) {
+      process.versions.bun = originalBunVersion;
+    }
   }
 });
 
 it('should use json serialization in Bun', () => {
   const originalBunVersion = process.versions.bun;
 
-  process.versions.bun = originalBunVersion ?? '1.0.0';
-
-  expect(getWorkerSerialization()).toBe('json');
-
-  if (originalBunVersion === undefined) {
-    Reflect.deleteProperty(process.versions, 'bun');
-  } else {
-    process.versions.bun = originalBunVersion;
+  try {
+    process.versions.bun = originalBunVersion ?? '1.0.0';
+    expect(getWorkerSerialization()).toBe('json');
+  } finally {
+    if (originalBunVersion === undefined) {
+      Reflect.deleteProperty(process.versions, 'bun');
+    } else {
+      process.versions.bun = originalBunVersion;
+    }
   }
 });

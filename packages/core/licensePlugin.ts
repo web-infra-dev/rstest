@@ -1,8 +1,9 @@
-import type WebpackLicensePlugin from 'webpack-license-plugin';
+type WebpackLicensePluginCtor =
+  typeof import('webpack-license-plugin')['default'];
 
 type PackageLicenseMeta =
   NonNullable<
-    ConstructorParameters<typeof WebpackLicensePlugin>[0]
+    ConstructorParameters<WebpackLicensePluginCtor>[0]
   > extends Partial<{
     additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
   }>

@@ -72,16 +72,6 @@ export class VerboseReporter extends DefaultReporter {
       }
     };
 
-    if (this.statusRenderer) {
-      this.statusRenderer.suspendWindowOutput();
-      try {
-        logResults();
-      } finally {
-        this.statusRenderer.resumeWindowOutput();
-      }
-      return;
-    }
-
-    logResults();
+    this.withSuspendedStatusRenderer(logResults);
   }
 }
