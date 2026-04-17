@@ -35,12 +35,17 @@ export class GithubActionsReporter {
   private readonly stepSummaryPath?: string;
   private readonly enableAnnotations: boolean;
   private readonly enableSummary: boolean;
+  private readonly reportName?: string;
 
   constructor({
     options,
     rootPath,
+    config,
   }: {
     rootPath: string;
+    config?: {
+      name?: string;
+    };
     options: {
       onWritePath: (path: string) => string;
       annotations?: boolean;
@@ -52,6 +57,7 @@ export class GithubActionsReporter {
     this.stepSummaryPath = process.env.GITHUB_STEP_SUMMARY;
     this.enableAnnotations = options.annotations !== false;
     this.enableSummary = options.summary !== false;
+    this.reportName = config?.name;
   }
 
   private log(message: string): void {
@@ -148,6 +154,7 @@ export class GithubActionsReporter {
           testResults,
           duration,
           rootPath: this.rootPath,
+          reportName: this.reportName,
           failures,
           getSourcemap,
           unhandledErrors,
@@ -210,14 +217,20 @@ function normalizeForWorkspaceComparison(value: string): string {
 }
 
 function getStepSummaryProjectLabel({
+  reportName,
   results,
   testResults,
   failures,
 }: {
+  reportName?: string;
   results: TestFileResult[];
   testResults: TestResult[];
   failures: FailureItem[];
 }): string | undefined {
+  if (reportName && reportName !== DEFAULT_PROJECT_NAME) {
+    return reportName;
+  }
+
   const projectNames = new Set<string>();
 
   const collectProjectName = (project?: string) => {
@@ -251,6 +264,7 @@ async function renderStepSummary({
   testResults,
   duration,
   rootPath,
+  reportName,
   failures,
   getSourcemap,
   unhandledErrors,
@@ -259,6 +273,7 @@ async function renderStepSummary({
   testResults: TestResult[];
   duration: Duration;
   rootPath: string;
+  reportName?: string;
   failures: FailureItem[];
   getSourcemap: GetSourcemap;
   unhandledErrors?: Error[];
@@ -270,6 +285,7 @@ async function renderStepSummary({
   const isSuccess = failures.length === 0 && !hasUnhandledErrors;
   const reportIcon = isSuccess ? '✅' : '❌';
   const projectLabel = getStepSummaryProjectLabel({
+    reportName,
     results,
     testResults,
     failures,
