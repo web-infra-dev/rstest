@@ -441,6 +441,11 @@ export interface TestContext {
    * Metadata of the current test
    */
   task: {
+    /**
+     * A unique identifier for the test.
+     * The format is `{fileHash}_{suiteIndex}_{testIndex}_...`, for example `419cefd87e_0_0`.
+     */
+    id: string;
     /** Test name provided by user */
     name: string;
     /** Result of the current test, undefined if the test is not run yet */

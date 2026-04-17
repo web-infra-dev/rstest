@@ -3,6 +3,34 @@ import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 
+/**
+ * Generate a stable hash for a file path.
+ * Uses FNV-1a to produce a 10-char hex string.
+ */
+export function generateFilePathHash(
+  project: string,
+  testPath: string,
+): string {
+  const str = `${project}\0${testPath}`;
+
+  // FNV-1a 32-bit hash, produce 10 hex chars by combining two rounds
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h1 ^= str.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193);
+  }
+  for (let i = str.length - 1; i >= 0; i--) {
+    h2 ^= str.charCodeAt(i);
+    h2 = Math.imul(h2, 0x01000193);
+  }
+
+  // Combine to get 10 hex chars
+  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  return (hex1 + hex2).slice(0, 10);
+}
+
 export const formatRootStr = (rootStr: string, root: string): string => {
   return rootStr.includes('<rootDir>')
     ? normalize(rootStr.replace('<rootDir>', normalize(root)))

@@ -1,7 +1,12 @@
-import { afterAll, describe, expect, it } from '@rstest/core';
+import { afterAll, afterEach, describe, expect, it } from '@rstest/core';
 import { sleep } from '../../scripts/utils';
 
 const logs: string[] = [];
+const runIds: [string, string][] = [];
+
+afterEach(({ task }) => {
+  runIds.push([task.id, task.name]);
+});
 
 afterAll(() => {
   expect(logs).toEqual([
@@ -15,6 +20,53 @@ afterAll(() => {
     'run 2-1',
     'run 3-0',
   ]);
+  const fileHashes = new Set(runIds.map(([id]) => id.split('_')[0]));
+  expect(fileHashes.size).toBe(1);
+
+  const fileHash = [...fileHashes][0]!;
+  expect(fileHash).toMatch(/^[0-9a-f]{10}$/);
+  expect(
+    runIds.map(([id, name]) => [id.slice(fileHash.length), name]),
+  ).toMatchInlineSnapshot(`
+    [
+      [
+        "_0_0_0",
+        "0-0",
+      ],
+      [
+        "_0_0_1_0",
+        "0-1-0",
+      ],
+      [
+        "_0_0_1_1_0",
+        "0-1-1-0",
+      ],
+      [
+        "_0_0_2_0",
+        "0-2-0",
+      ],
+      [
+        "_0_0_3",
+        "0-3",
+      ],
+      [
+        "_0_1",
+        "1",
+      ],
+      [
+        "_0_2_0_0",
+        "2-0-0",
+      ],
+      [
+        "_0_2_1",
+        "2-1",
+      ],
+      [
+        "_0_3",
+        "3",
+      ],
+    ]
+  `);
 });
 
 describe('should run async suite in the correct order', () => {
