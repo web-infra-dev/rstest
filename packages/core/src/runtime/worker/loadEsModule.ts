@@ -12,10 +12,34 @@ export enum EsmMode {
   Unlinked = 2,
 }
 
+const sourceUrlCommentRE = /\/\/[#@]\s*sourceURL=/;
+
+export const shouldInjectSourceURL = (): boolean => {
+  return typeof process !== 'undefined' && process.versions?.bun !== undefined;
+};
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const isBuiltinSpecifier = (specifier: string) =>
   specifier.startsWith('node:') || builtinModules.includes(specifier);
+
+export const appendSourceURL = (
+  codeContent: string,
+  sourceUrl: string,
+): string => {
+  if (sourceUrlCommentRE.test(codeContent)) {
+    return codeContent;
+  }
+
+  // Bun's vm.SourceTextModule reports stack frames and source-map-support
+  // lookups as synthetic "[source:n]" ids instead of the module identifier.
+  // Appending sourceURL keeps the emitted source name stable so sourcemaps
+  // still resolve back to the built asset path.
+  const suffix = `//# sourceURL=${sourceUrl}`;
+  return codeContent.endsWith('\n')
+    ? `${codeContent}${suffix}`
+    : `${codeContent}\n${suffix}`;
+};
 
 const defineRstestDynamicImport =
   ({
@@ -203,7 +227,9 @@ export const loadModule = async ({
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): Promise<any> => {
-  const code = codeContent;
+  const code = shouldInjectSourceURL()
+    ? appendSourceURL(codeContent, distPath)
+    : codeContent;
   let esm = esmCache.get(distPath);
   if (!esm) {
     esm = new vm.SourceTextModule(code, {
