@@ -8,6 +8,18 @@ Rstest is a testing framework powered by Rspack. It delivers comprehensive, firs
 
 Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, and more, ensuring a modern and efficient testing experience.
 
+## ✨ Why Rstest
+
+In the Rspack / Rsbuild ecosystem, testing is typically handled by separate toolchains (such as Jest and Vitest). These tools operate independently from the build system, often requiring a parallel set of configurations for testing (e.g., module resolution, code transformation, and plugin systems), which can lead to inconsistencies between test behavior and real runtime environments.
+
+Rstest is built on top of Rspack and Rsbuild, and can directly **reuse your existing build configuration**—including module resolution, code transformation via SWC, and plugin capabilities. This eliminates the need to maintain separate transform or resolver configurations for testing, allowing developers to get started with minimal setup. At the same time, even if you are not using Rspack, Rstest can be adopted without migrating your existing build system.
+
+In terms of execution model, Rstest runs tests using a dependency graph–based **bundle model**, rather than the traditional per-file transform-and-execute approach. This enables it to fully leverage build-time optimizations—such as tree-shaking and skipping unused re-exports in side-effect-free barrel files—bringing test behavior closer to real production output. As a result, Rstest reduces redundant module transformations and executions in large-scale projects, improving both performance and stability.
+
+By integrating testing into the build pipeline, Rstest simplifies the overall toolchain, eliminates duplicated configuration and plugin ecosystems, and allows testing to naturally fit into modern architectures such as monorepos and complex applications.
+
+In the future, Rstest will continue evolving around a unified “build + test” model—exploring more efficient approaches to quality assurance, and integrating more deeply with CI systems and AI-driven workflows.
+
 ## 🔥 Roadmap
 
 Rstest now supports core testing scenarios including Node / DOM testing, mocking, multi-project testing, and coverage collection, and has been successfully implemented in Rstack projects (including Rsbuild, Rslib, Rspack, and others).
