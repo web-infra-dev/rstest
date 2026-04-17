@@ -12,7 +12,9 @@ Rstest 提供兼容 Jest 的 API，同时提供对 TypeScript、ESM 等的原生
 
 在 Rspack / Rsbuild 生态中，测试通常依赖独立的工具链（如 Jest、Vitest）。这类工具与构建系统之间相互独立，往往需要为测试维护一套额外的配置（如模块解析、代码转换、插件体系等），同时也容易导致测试行为与实际运行环境之间存在差异。
 
-Rstest 基于 Rspack 与 Rsbuild 构建，可以直接**复用现有的构建配置**，包括模块解析、SWC 转换以及插件能力。开发者无需为测试维护独立的 transform 或 resolver 配置，即可完成接入，实现真正的开箱即用。同时，即使不在 Rspack 生态中，也无需迁移现有构建体系即可使用 Rstest。
+Rstest 基于 Rspack 与 Rsbuild 构建，开箱即用，对 TypeScript、ESM、CSS Modules 等常见能力提供默认支持。即使不在 Rspack 生态中，也可以在不迁移现有构建体系的前提下接入并使用。
+
+对于已经使用 Rstack 体系（Rspack、Rsbuild、Rslib 等）的项目，Rstest 能够进一步**复用现有的构建配置**，包括模块解析、代码转换以及插件能力，无需为测试维护独立的 transform 或 resolver 配置。
 
 在执行模型上，Rstest 采用基于依赖图的 **bundle 模型**来运行测试，而不是传统测试框架中基于逐文件转换（transform）的执行方式。这种方式能够直接复用构建阶段的优化能力（如 tree-shaking，以及对无副作用的 barrel file 重导出的按需跳过），使测试结果更加接近真实运行产物，同时在大规模项目中减少重复的模块转换与执行开销，从而提升测试效率与稳定性。
 
