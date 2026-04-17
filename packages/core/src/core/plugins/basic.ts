@@ -3,8 +3,7 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir } from '../../utils';
-
-export const RUNTIME_CHUNK_NAME = 'runtime';
+import { getRuntimeChunkName } from '../../utils/runtimeChunk';
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -68,9 +67,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           resolve: {
             // Extend the default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
             conditionNames:
-              testEnvironment.name === 'node' || resolve?.conditionNames
-                ? undefined
-                : ['browser', '...'],
+              testEnvironment.name === 'node' ? undefined : ['browser', '...'],
           },
           output: {
             assetPrefix: '',
@@ -104,7 +101,10 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
-              if (!config.devtool || !config.devtool.includes('inline')) {
+              if (
+                typeof config.devtool !== 'string' ||
+                !config.devtool.includes('inline')
+              ) {
                 config.devtool = 'nosources-source-map';
               }
 
@@ -182,7 +182,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                  name: getRuntimeChunkName(name),
                 },
               };
             },

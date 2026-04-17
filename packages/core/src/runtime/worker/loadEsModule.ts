@@ -13,7 +13,6 @@ export enum EsmMode {
 }
 
 const sourceUrlCommentRE = /\/\/[#@]\s*sourceURL=/;
-
 export const shouldInjectSourceURL = (): boolean => {
   return typeof process !== 'undefined' && process.versions?.bun !== undefined;
 };
@@ -49,11 +48,13 @@ const defineRstestDynamicImport =
     interopDefault,
     returnModule,
     esmMode,
+    runtimeDistPath,
   }: {
     esmMode: EsmMode;
     assetFiles: Record<string, string>;
     returnModule?: boolean;
     distPath: string;
+    runtimeDistPath?: string;
     testPath: string;
     interopDefault: boolean;
   }) =>
@@ -82,6 +83,7 @@ const defineRstestDynamicImport =
           codeContent: content,
           testPath,
           distPath: joinedPath,
+          runtimeDistPath,
           rstestContext: {},
           assetFiles,
           interopDefault,
@@ -218,11 +220,13 @@ export const loadModule = async ({
   assetFiles,
   interopDefault,
   esmMode = EsmMode.Unknown,
+  runtimeDistPath,
 }: {
   esmMode?: EsmMode;
   interopDefault: boolean;
   codeContent: string;
   distPath: string;
+  runtimeDistPath?: string;
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
@@ -238,13 +242,14 @@ export const loadModule = async ({
       columnOffset: 0,
       initializeImportMeta: (meta) => {
         meta.url = pathToFileURL(
-          distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
+          distPath === runtimeDistPath ? distPath : testPath,
         ).toString();
         // @ts-expect-error
         meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
+          runtimeDistPath,
           interopDefault,
           returnModule: false,
           esmMode: EsmMode.Unknown,
@@ -274,6 +279,7 @@ export const loadModule = async ({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
+          runtimeDistPath,
           interopDefault,
           returnModule: true,
           esmMode: EsmMode.Unlinked,
@@ -291,6 +297,7 @@ export const loadModule = async ({
         assetFiles,
         testPath,
         distPath: distPath || testPath,
+        runtimeDistPath,
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,

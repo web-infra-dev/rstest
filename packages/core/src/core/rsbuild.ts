@@ -16,7 +16,8 @@ import type {
 } from '../types';
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
+import { getRuntimeChunkName } from '../utils/runtimeChunk';
+import { pluginBasic } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
@@ -32,6 +33,33 @@ type TestEntryToChunkHashes = {
   /** key is chunk asset file path, value is chunk hash */
   chunks: Record<string, string>;
 }[];
+
+const getRuntimeChunkFiles = ({
+  chunks,
+  outputPath,
+  runtimeChunkName,
+}: {
+  chunks: Rspack.StatsChunk[] | undefined;
+  outputPath: string;
+  runtimeChunkName: string;
+}): Set<string> => {
+  const runtimeChunkFiles = new Set<string>();
+
+  for (const chunk of chunks || []) {
+    const isRuntimeChunk =
+      chunk.id === runtimeChunkName || chunk.names?.includes(runtimeChunkName);
+
+    if (!isRuntimeChunk) {
+      continue;
+    }
+
+    for (const file of chunk.files || []) {
+      runtimeChunkFiles.add(path.join(outputPath, String(file)));
+    }
+  }
+
+  return runtimeChunkFiles;
+};
 
 function parseInlineSourceMapStr(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
@@ -506,6 +534,11 @@ export const createRsbuildServer = async ({
     });
 
     const entryFiles = getEntryFiles(manifest, outputPath!);
+    const runtimeChunkFiles = getRuntimeChunkFiles({
+      chunks,
+      outputPath: outputPath!,
+      runtimeChunkName: getRuntimeChunkName(environmentName),
+    });
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const globalSetupEntries: EntryInfo[] = [];
@@ -521,10 +554,14 @@ export const createRsbuildServer = async ({
         outputPath!,
         filteredAssets[filteredAssets.length - 1]!.name,
       );
+      const runtimeDistPath = entryFiles[entry]?.find((file) =>
+        runtimeChunkFiles.has(file),
+      );
 
       if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -538,6 +575,7 @@ export const createRsbuildServer = async ({
         }
         entries.push({
           distPath,
+          runtimeDistPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -545,6 +583,7 @@ export const createRsbuildServer = async ({
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -582,7 +621,7 @@ export const createRsbuildServer = async ({
           chunks,
           buildData[environmentName],
           outputPath!,
-          `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+          getRuntimeChunkName(environmentName),
           setupEntries,
         )
       : { affectedEntries: [], deletedEntries: [] };
