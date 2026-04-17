@@ -1,5 +1,5 @@
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
-import type { TinypoolWorkerMessage } from 'tinypool';
+import { isRpcEnvelope, wrapRpc } from '../../pool/protocol';
 import type { RuntimeRPC, ServerRPC } from '../../types';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
@@ -20,15 +20,14 @@ export function createForksRpcOptions({
 }): WorkerRpcOptions {
   return {
     post(v) {
-      processSend(v);
+      processSend(wrapRpc(v));
     },
     on(fn) {
       const handler = (message: any, ...extras: any) => {
-        // Do not react on Tinypool's internal messaging
-        if ((message as TinypoolWorkerMessage)?.__tinypool_worker_message__) {
+        if (!isRpcEnvelope(message)) {
           return;
         }
-        return fn(message, ...extras);
+        return fn(message.payload, ...extras);
       };
       processOn('message', handler);
       dispose.push(() => processOff('message', handler));
