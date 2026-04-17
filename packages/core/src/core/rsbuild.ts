@@ -16,8 +16,7 @@ import type {
 } from '../types';
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { getRuntimeChunkName } from '../utils/runtimeChunk';
-import { pluginBasic } from './plugins/basic';
+import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
@@ -537,7 +536,7 @@ export const createRsbuildServer = async ({
     const runtimeChunkFiles = getRuntimeChunkFiles({
       chunks,
       outputPath: outputPath!,
-      runtimeChunkName: getRuntimeChunkName(environmentName),
+      runtimeChunkName: `${environmentName}-${RUNTIME_CHUNK_NAME}`,
     });
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
@@ -621,7 +620,7 @@ export const createRsbuildServer = async ({
           chunks,
           buildData[environmentName],
           outputPath!,
-          getRuntimeChunkName(environmentName),
+          `${environmentName}-${RUNTIME_CHUNK_NAME}`,
           setupEntries,
         )
       : { affectedEntries: [], deletedEntries: [] };

@@ -3,7 +3,8 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir } from '../../utils';
-import { getRuntimeChunkName } from '../../utils/runtimeChunk';
+
+export const RUNTIME_CHUNK_NAME = 'runtime';
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -184,7 +185,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: getRuntimeChunkName(name),
+                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
                 },
               };
             },
