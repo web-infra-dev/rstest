@@ -10,8 +10,6 @@ Rstest offers full Jest-compatible APIs while providing native, out-of-the-box s
 
 ## ✨ Why Rstest
 
-In the Rspack / Rsbuild ecosystem, testing is typically handled by separate toolchains (such as Jest and Vitest). These tools operate independently from the build system, often requiring a parallel set of configurations for testing (e.g., module resolution, code transformation, and plugin systems), which can lead to inconsistencies between test behavior and real runtime environments.
-
 Rstest is built on top of Rspack and Rsbuild, and works out of the box with built-in support for common use cases such as TypeScript, ESM, CJS, and CSS Modules. Even if you are not using Rspack, Rstest can be adopted without migrating your existing build system.
 
 For projects already using the Rstack toolchain (Rspack, Rsbuild, Rslib, etc.), Rstest can further **reuse your existing build configuration**—including module resolution, code transformation, and plugin capabilities—eliminating the need to maintain separate transform or resolver setups for testing.
