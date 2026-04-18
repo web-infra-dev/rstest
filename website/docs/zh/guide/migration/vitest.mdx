@@ -42,6 +42,23 @@ import { PackageManagerTabs } from '@theme';
 }
 ```
 
+### CLI 参数映射
+
+Vitest 的一部分 CLI 参数可以直接映射到 Rstest，另一部分则需要调整写法。迁移时，最常遇到的差异可以参考下表：
+
+| Vitest CLI 参数                              | Rstest 对应写法                             | 说明                                                             |
+| -------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------- |
+| `vitest run` / `vitest --run`                | `rstest`                                    | 没有 `--run` 参数 —— 运行 `rstest` 默认就是执行一次。            |
+| `vitest` / `vitest watch` / `vitest --watch` | `rstest --watch` 或 `rstest watch`          | Rstest 不会自动进入 watch 模式，需要显式加 `--watch`。           |
+| `vitest --coverage`                          | `rstest --coverage`                         | 还需安装 `@rstest/coverage-istanbul`（详见 `coverage` 配置行）。 |
+| `vitest --environment=jsdom`                 | `rstest --testEnvironment jsdom`            |                                                                  |
+| `vitest --reporter=verbose`                  | `rstest --reporter verbose`                 |                                                                  |
+| `vitest --globals`                           | `rstest --globals`                          |                                                                  |
+| `vitest -t <pattern>` / `--testNamePattern`  | `rstest -t <pattern>` / `--testNamePattern` |                                                                  |
+| `vitest -u` / `--update`                     | `rstest -u` / `--update`                    |                                                                  |
+| `vitest -c <path>` / `--config`              | `rstest -c <path>` / `--config`             |                                                                  |
+| `vitest --project <name>`                    | `rstest --project <name>`                   |                                                                  |
+
 ## 配置迁移
 
 将你的 Vitest 配置文件（例如 `vite.config.ts` 或 `vitest.config.ts`）迁移为 `rstest.config.ts`：
@@ -50,48 +67,65 @@ import { PackageManagerTabs } from '@theme';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  // 根据下方映射表，从 vitest.config.ts 中逐字段迁移到这里。
 });
 ```
 
-### 测试配置
-
-Rstest 的测试配置和 Vitest 基本一致。
+### Vitest 配置映射
 
 迁移配置时，重点关注这两点：
 
 - 移除 `test` 字段，将其内部配置提升到顶层。
-- 一些字段名的调整（例如 `test.environment` -> `testEnvironment`）。
+- 一些字段名的调整（例如 `test.environment` → `testEnvironment`）。
 
-你可以在 [Test Configurations](/config/#test-configurations) 查看全部测试配置项。
+请遍历 `test` 下的**每一个**字段，对照下表进行提升、重命名或删除。表中未列出的字段未必能 1:1 映射，直接删除前请先对照 [Rstest 配置参考](/config) 确认。
 
-```diff
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
--  test: {
--    include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
--    exclude: ['dist/**'],
--    setupFiles: ['./test/setup.ts'],
--    globals: true,
--    environment: 'node',
--  },
-+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-+  exclude: ['dist/**'],
-+  setupFiles: ['./test/setup.ts'],
-+  globals: true,
-+  testEnvironment: 'node',
-});
-```
+| Vitest（`test` 下）           | Rstest（顶层）                                                                                 | 说明                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | 将 `test.environmentOptions` 合并到对象形式：`testEnvironment: { name: 'jsdom', options: { ... } }`。不支持自定义 environment 包。                                                                                                                                                                                                                                                                                                                      |
+| `include` / `exclude`         | [`include`](/config/test/include) / [`exclude`](/config/test/exclude)                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `includeSource`               | [`includeSource`](/config/test/include-source)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `setupFiles`                  | [`setupFiles`](/config/test/setup-files)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `globalSetup`                 | [`globalSetup`](/config/test/global-setup)                                                     | Rstest 调用 setup 时不传参数 —— 如果你的 Vitest setup 读取了 `TestProject` 参数（如 `provide`、`onTestsRerun`），迁移时需重写。                                                                                                                                                                                                                                                                                                                         |
+| `globals`                     | [`globals`](/config/test/globals)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `name`                        | [`name`](/config/test/name)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `root`                        | [`root`](/config/test/root)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `env`                         | [`env`](/config/test/env)                                                                      |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `alias`                       | [`resolve.alias`](/config/build/resolve#resolvealias)                                          | Rstest 下不是 `test.*` 字段 —— 迁到顶层 `resolve.alias`。                                                                                                                                                                                                                                                                                                                                                                                               |
+| `passWithNoTests`             | [`passWithNoTests`](/config/test/pass-with-no-tests)                                           |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `isolate`                     | [`isolate`](/config/test/isolate)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `testTimeout` / `hookTimeout` | [`testTimeout`](/config/test/test-timeout) / [`hookTimeout`](/config/test/hook-timeout)        |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `teardownTimeout`             | 移除                                                                                           | 没有对等字段 —— Vitest 的 `teardownTimeout` 是 shutdown 等待超时，与 Rstest 的 `hookTimeout`（生命周期 hook）无关。                                                                                                                                                                                                                                                                                                                                     |
+| `slowTestThreshold`           | [`slowTestThreshold`](/config/test/slow-test-threshold)                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `maxConcurrency`              | [`maxConcurrency`](/config/test/max-concurrency)                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `retry`                       | [`retry`](/config/test/retry)                                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `bail`                        | [`bail`](/config/test/bail)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `clearMocks`                  | [`clearMocks`](/config/test/clear-mocks)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `mockReset`                   | [`resetMocks`](/config/test/reset-mocks)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `restoreMocks`                | [`restoreMocks`](/config/test/restore-mocks)                                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `poolOptions.forks.maxForks`  | [`pool.maxWorkers`](/config/test/pool)                                                         | Rstest 把 `poolOptions` 摊平到顶层 `pool`：`poolOptions.forks.maxForks` → `pool.maxWorkers`、`minForks` → `pool.minWorkers`、`execArgv` → `pool.execArgv`。只支持 `forks` pool —— `pool: 'threads' \| 'vmThreads' \| 'vmForks'` 这些配置会被丢弃（行为回退到 forks）。Vitest 4 的顶层 `test.maxWorkers` / `test.minWorkers` 也映射到 `pool.maxWorkers` / `pool.minWorkers`。                                                                            |
+| `coverage`                    | [`coverage`](/config/test/coverage)                                                            | 仅支持 `provider: 'istanbul'` —— 把 dev 依赖从 `@vitest/coverage-v8` 换成 `@rstest/coverage-istanbul`（去掉 `'v8'` / `'custom'`）。把 `coverage.reporter` 改为 `coverage.reporters`（单数写法会被静默忽略）。下列子字段 1:1 对应：`include`、`exclude`、`reportsDirectory`、`thresholds`。V8 专用字段（`all`、`skipFull`、`thresholdAutoUpdate`、`processingConcurrency`、`customProviderModule`、`watermarks`、`ignoreClassMethods` 等）没有对等字段。 |
+| `reporters`                   | [`reporters`](/config/test/reporters)                                                          | Vitest 独有（需替换或丢弃）：`tap`、`tap-flat`、`html`、`tree`、`hanging-process`。字符串必须是内建 reporter 名称；第三方 reporter 需 import 类并传入实例。                                                                                                                                                                                                                                                                                             |
+| `outputFile`                  | reporter options                                                                               | 没有顶层字段。`junit` / `json` 用 reporter 元组传 `outputPath`：`['junit', { outputPath: '...' }]`；`blob` 用 `{ outputDir: '...' }`；其他 reporter 不接受输出路径。对象形 `{ junit: 'a.xml', json: 'a.json' }` 展开为每个 reporter 一条 tuple。                                                                                                                                                                                                        |
+| `snapshotFormat`              | [`snapshotFormat`](/config/test/snapshot-format)                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `resolveSnapshotPath`         | [`resolveSnapshotPath`](/config/test/resolve-snapshot-path)                                    | Rstest 的 callback 签名是 `(testPath, snapExtension) => string`，没有 Vitest 3+ 的第三个 `context` 参数。                                                                                                                                                                                                                                                                                                                                               |
+| `snapshotSerializers`         | [`expect.addSnapshotSerializer`](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) | 没有配置字段。在 `setupFiles` 模块里 import 每个 serializer，并调用 `expect.addSnapshotSerializer(serializer)`。                                                                                                                                                                                                                                                                                                                                        |
+| `projects`                    | [`projects`](/config/test/projects)                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `logHeapUsage`                | [`logHeapUsage`](/config/test/log-heap-usage)                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `includeTaskLocation`         | [`includeTaskLocation`](/config/test/include-task-location)                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `printConsoleTrace`           | [`printConsoleTrace`](/config/test/print-console-trace)                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `unstubGlobals`               | [`unstubGlobals`](/config/test/unstub-globals)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `unstubEnvs`                  | [`unstubEnvs`](/config/test/unstub-envs)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `chaiConfig`                  | [`chaiConfig`](/config/test/chai-config)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### 编译配置
 
 Rstest 使用 Rsbuild 作为默认测试编译工具，而不是 Vite。你可以在 [Build Configurations](/config/#build-configurations) 查看全部编译配置项。
 
-大部分的配置可以直接迁移(如，`resolve.alias`、`resolve.extensions` 等)，但需要注意以下几点：
+大部分项目中，主要的编译侧变化如下：
 
 - 使用 `source.define` 替代 `define`。
-- 使用 `output.externals`替代 `ssr.external`。
+- 使用 `output.externals` 替代 `ssr.external`。
 - 使用 Rsbuild 插件替代 Vite 插件。
 
 ```diff
@@ -118,12 +152,11 @@ export default defineConfig({
 - Rslib 项目（存在 `rslib.config.*`）使用 `@rstest/adapter-rslib`，并在 `extends` 中配置 `withRslibConfig()`（参考 [Rslib 集成文档](/guide/integration/rslib)）。
 - Rsbuild 项目（存在 `rsbuild.config.*`）使用 `@rstest/adapter-rsbuild`，并在 `extends` 中配置 `withRsbuildConfig()`（参考 [Rsbuild 集成文档](/guide/integration/rsbuild)）。
 
-## 替换测试导入与 API
+## 更新测试 API
 
-测试 API 的迁移通常只需要两步：
+### 测试 API
 
-1. 将 `vitest` 的导入替换为 `@rstest/core`。
-2. 将 `vi` 或 `vitest` 的工具 API 替换为 `rs`。
+Rstest 提供了与 Vitest 兼容的 API，已有的 Vitest 测试文件通常只需要极少改动。将 `vitest` 的导入替换为 `@rstest/core`，并把 `vi` / `vitest` 工具 API 替换为对应的 `rs` / `rstest`：
 
 ```diff
 - import { describe, expect, it, test, vi, type Mock } from 'vitest';
@@ -148,12 +181,12 @@ export default defineConfig({
 
 完整工具 API 请参考 [Rstest APIs](/api/runtime-api/)。
 
-### 如果你使用了 `globals: true`
+### 全局 API
 
 当启用 `globals: true` 时，Vitest 会把 `vi` 和 `vitest` 挂在全局对象上。在 Rstest 中，建议按以下顺序映射：
 
-- `vi.<api>` -> `rs.<api>`
-- `vitest.<api>` -> `rstest.<api>`
+- `vi.<api>` → `rs.<api>`
+- `vitest.<api>` → `rstest.<api>`
 
 `rs` 和 `rstest` 是等价的全局别名，但迁移时按这个一一对应关系更容易阅读和排查。
 
@@ -167,7 +200,7 @@ export default defineConfig({
 
 如果你的测试文件是从 `@rstest/core` 导入 API，建议统一使用 import style 的 `rs.<api>`，不要在同一文件里混用 import style 和 global style。
 
-### 迁移 setup adapter
+### Setup adapter
 
 有些 setup adapter 是 Vitest 专用的。例如 `@testing-library/jest-dom/vitest` 面向的是 Vitest，在 Rstest setup 文件中应替换为 matcher 注册方式。
 
@@ -179,7 +212,7 @@ export default defineConfig({
 + expect.extend(jestDomMatchers);
 ```
 
-### setup 和 helper 中的路径解析
+### 路径解析
 
 在某些 transform/runtime 模式下，`new URL(..., import.meta.url)` 可能会在 setup 或 helper 文件中失效。
 
@@ -233,19 +266,12 @@ test('should be mocked', () => {
 
 作为替代，Rstest 提供了同步 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual) 能力，你可以通过静态 import 导入未 mock 的真实实现：
 
-```diff
-+ import * as apiActual from './api' with { rstest: 'importActual' };
+```ts
+import * as apiActual from './api' with { rstest: 'importActual' };
 
-- vi.mock('./api', async (importOriginal) => {
--   const original = await importOriginal();
--    return {
--     ...original,
--    fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
--  };
-- });
-
-+ rs.mock('./api', () => ({
-+  ...apiActual,
+// 部分 mock './api' 模块
+rs.mock('./api', () => ({
+  ...apiActual,
   fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
 }));
 ```

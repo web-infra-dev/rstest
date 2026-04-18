@@ -16,9 +16,9 @@ npx skills add rstackjs/agent-skills --skill migrate-to-rstest
 
 After installation, let the Coding Agent guide you through the upgrade.
 
-## Install dependencies
+## Installation and setup
 
-First, you need to install the Rstest dependency.
+First, you need to install Rstest as a development dependency.
 
 import { PackageManagerTabs } from '@theme';
 
@@ -42,47 +42,81 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 }
 ```
 
+### CLI option mappings
+
+Some Vitest CLI flags map directly to Rstest, while others change shape. Use this table for the common option differences you are likely to hit during migration:
+
+| Vitest CLI option                            | Rstest equivalent                           | Notes                                                                     |
+| -------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------- |
+| `vitest run` / `vitest --run`                | `rstest`                                    | No `--run` flag — `rstest` already runs once and exits.                   |
+| `vitest` / `vitest watch` / `vitest --watch` | `rstest --watch` or `rstest watch`          | Rstest does not auto-enable watch mode — pass `--watch` explicitly.       |
+| `vitest --coverage`                          | `rstest --coverage`                         | Also install `@rstest/coverage-istanbul` (see the `coverage` config row). |
+| `vitest --environment=jsdom`                 | `rstest --testEnvironment jsdom`            |                                                                           |
+| `vitest --reporter=verbose`                  | `rstest --reporter verbose`                 |                                                                           |
+| `vitest --globals`                           | `rstest --globals`                          |                                                                           |
+| `vitest -t <pattern>` / `--testNamePattern`  | `rstest -t <pattern>` / `--testNamePattern` |                                                                           |
+| `vitest -u` / `--update`                     | `rstest -u` / `--update`                    |                                                                           |
+| `vitest -c <path>` / `--config`              | `rstest -c <path>` / `--config`             |                                                                           |
+| `vitest --project <name>`                    | `rstest --project <name>`                   |                                                                           |
+
 ## Configuration migration
 
-Update your Vitest configuration file (e.g., `vite.config.ts` or `vitest.config.ts`) to an `rstest.config.ts` file:
+Update your Vitest config file (e.g., `vite.config.ts` or `vitest.config.ts`) to a `rstest.config.ts` file:
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  // Fill in by mapping fields from your vitest.config.ts — see the table below.
 });
 ```
 
-### Test configuration
+### Vitest configuration mappings
 
-Rstest test configuration is basically the same as Vitest.
-
-When migrating config, keep these changes in mind:
+When migrating config, keep two changes in mind:
 
 - Remove the `test` field and move its nested properties to the top level.
-- Rename keys when required (for example, `test.environment` -> `testEnvironment`).
+- Rename keys when required (for example, `test.environment` → `testEnvironment`).
 
-You can view all available test configuration options through [Test Configurations](/config/#test-configurations).
+Walk through **every** option under `test` and match it against the table below — move it to the top level, rename it, or drop it. Fields not listed here may not map 1:1; verify against the [Rstest config reference](/config) before dropping them silently.
 
-```diff
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
--  test: {
--    include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
--    exclude: ['dist/**'],
--    setupFiles: ['./test/setup.ts'],
--    globals: true,
--    environment: 'node',
--  },
-+  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-+  exclude: ['dist/**'],
-+  setupFiles: ['./test/setup.ts'],
-+  globals: true,
-+  testEnvironment: 'node',
-});
-```
+| Vitest (under `test`)         | Rstest (top-level)                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Custom environment packages are not supported.                                                                                                                                                                                                                                                                                                                                |
+| `include` / `exclude`         | [`include`](/config/test/include) / [`exclude`](/config/test/exclude)                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `includeSource`               | [`includeSource`](/config/test/include-source)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `setupFiles`                  | [`setupFiles`](/config/test/setup-files)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `globalSetup`                 | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Vitest setup reads the `TestProject` argument (e.g. `provide`, `onTestsRerun`), rewrite without it.                                                                                                                                                                                                                                                                                                                                         |
+| `globals`                     | [`globals`](/config/test/globals)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `name`                        | [`name`](/config/test/name)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `root`                        | [`root`](/config/test/root)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `env`                         | [`env`](/config/test/env)                                                                      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `alias`                       | [`resolve.alias`](/config/build/resolve#resolvealias)                                          | Not a `test.*` field in Rstest — move aliases to top-level `resolve.alias`.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `passWithNoTests`             | [`passWithNoTests`](/config/test/pass-with-no-tests)                                           |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `isolate`                     | [`isolate`](/config/test/isolate)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `testTimeout` / `hookTimeout` | [`testTimeout`](/config/test/test-timeout) / [`hookTimeout`](/config/test/hook-timeout)        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `teardownTimeout`             | Remove                                                                                         | No equivalent — Vitest's `teardownTimeout` is a shutdown-wait timeout, unrelated to Rstest's `hookTimeout` (which covers lifecycle hooks).                                                                                                                                                                                                                                                                                                                                                 |
+| `slowTestThreshold`           | [`slowTestThreshold`](/config/test/slow-test-threshold)                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `maxConcurrency`              | [`maxConcurrency`](/config/test/max-concurrency)                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `retry`                       | [`retry`](/config/test/retry)                                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `bail`                        | [`bail`](/config/test/bail)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `clearMocks`                  | [`clearMocks`](/config/test/clear-mocks)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `mockReset`                   | [`resetMocks`](/config/test/reset-mocks)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `restoreMocks`                | [`restoreMocks`](/config/test/restore-mocks)                                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `poolOptions.forks.maxForks`  | [`pool.maxWorkers`](/config/test/pool)                                                         | Rstest flattens `poolOptions` into top-level `pool`: `poolOptions.forks.maxForks` → `pool.maxWorkers`, `minForks` → `pool.minWorkers`, `execArgv` → `pool.execArgv`. Only the `forks` pool is supported — `pool: 'threads' \| 'vmThreads' \| 'vmForks'` settings are dropped (behavior reverts to forks). Vitest 4's top-level `test.maxWorkers` / `test.minWorkers` map to `pool.maxWorkers` / `pool.minWorkers`.                                                                         |
+| `coverage`                    | [`coverage`](/config/test/coverage)                                                            | Only `provider: 'istanbul'` is supported — swap the dev dep from `@vitest/coverage-v8` to `@rstest/coverage-istanbul` (drop `'v8'` / `'custom'`). Rename `coverage.reporter` → `coverage.reporters` (singular is silently ignored). These sub-keys map 1:1: `include`, `exclude`, `reportsDirectory`, `thresholds`. V8-only keys (`all`, `skipFull`, `thresholdAutoUpdate`, `processingConcurrency`, `customProviderModule`, `watermarks`, `ignoreClassMethods`, etc.) have no equivalent. |
+| `reporters`                   | [`reporters`](/config/test/reporters)                                                          | Vitest-only (drop or replace): `tap`, `tap-flat`, `html`, `tree`, `hanging-process`. String values must be built-in names — for third-party reporters, import the class and pass the instance.                                                                                                                                                                                                                                                                                             |
+| `outputFile`                  | reporter options                                                                               | No top-level field. For `junit` / `json`, pass `outputPath` via the reporter tuple: `['junit', { outputPath: '...' }]`. For `blob`, use `{ outputDir: '...' }`. Other reporters accept no output path. The object form `{ junit: 'a.xml', json: 'a.json' }` expands to one tuple per reporter.                                                                                                                                                                                             |
+| `snapshotFormat`              | [`snapshotFormat`](/config/test/snapshot-format)                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `resolveSnapshotPath`         | [`resolveSnapshotPath`](/config/test/resolve-snapshot-path)                                    | Rstest's signature is `(testPath, snapExtension) => string` — no third `context` argument from Vitest 3+.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `snapshotSerializers`         | [`expect.addSnapshotSerializer`](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) | No config field. In a `setupFiles` module, import each serializer and call `expect.addSnapshotSerializer(serializer)`.                                                                                                                                                                                                                                                                                                                                                                     |
+| `projects`                    | [`projects`](/config/test/projects)                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `logHeapUsage`                | [`logHeapUsage`](/config/test/log-heap-usage)                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `includeTaskLocation`         | [`includeTaskLocation`](/config/test/include-task-location)                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `printConsoleTrace`           | [`printConsoleTrace`](/config/test/print-console-trace)                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `unstubGlobals`               | [`unstubGlobals`](/config/test/unstub-globals)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `unstubEnvs`                  | [`unstubEnvs`](/config/test/unstub-envs)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `chaiConfig`                  | [`chaiConfig`](/config/test/chai-config)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### Build configuration
 
@@ -118,12 +152,11 @@ If you are using Rslib or Rsbuild, you can directly use the corresponding adapte
 - For Rslib projects (with `rslib.config.*`), use `@rstest/adapter-rslib` with `extends: withRslibConfig()` (see [Rslib integration reference](/guide/integration/rslib)).
 - For Rsbuild projects (with `rsbuild.config.*`), use `@rstest/adapter-rsbuild` with `extends: withRsbuildConfig()` (see [Rsbuild integration reference](/guide/integration/rsbuild)).
 
-## Replace test imports and APIs
+## Update test API
 
-For test APIs, migration is usually just two quick changes:
+### Test API
 
-1. Replace imports from `vitest` with imports from `@rstest/core`.
-2. Replace `vi` or `vitest` utility APIs with `rs` equivalents.
+Your existing Vitest test files should work with minimal changes since Rstest provides Vitest-compatible APIs. Update your imports from `vitest` to `@rstest/core`, and replace `vi` / `vitest` utilities with their `rs` / `rstest` equivalents:
 
 ```diff
 - import { describe, expect, it, test, vi, type Mock } from 'vitest';
@@ -148,12 +181,12 @@ For test APIs, migration is usually just two quick changes:
 
 For the full utility API list, see [Rstest APIs](/api/runtime-api/).
 
-### If you are using `globals: true`
+### Global APIs
 
 When `globals: true` is enabled, `vi` and `vitest` are available as globals in Vitest. In Rstest, use this mapping order:
 
-- `vi.<api>` -> `rs.<api>`
-- `vitest.<api>` -> `rstest.<api>`
+- `vi.<api>` → `rs.<api>`
+- `vitest.<api>` → `rstest.<api>`
 
 `rs` and `rstest` are equivalent global aliases, but keeping this one-to-one mapping is easier to read during migration.
 
@@ -167,7 +200,7 @@ When `globals: true` is enabled, `vi` and `vitest` are available as globals in V
 
 If your tests import APIs from `@rstest/core`, prefer `rs.<api>` in import style and avoid mixing import style and global style in the same file.
 
-### Migrate setup adapters
+### Setup adapters
 
 Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom/vitest` is designed for Vitest and should be replaced in Rstest setup files.
 
@@ -179,7 +212,7 @@ Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom
 + expect.extend(jestDomMatchers);
 ```
 
-### Path resolution in setup and test helpers
+### Path resolution
 
 Depending on your transform/runtime mode, `new URL(..., import.meta.url)` may fail in setup or helper files.
 
