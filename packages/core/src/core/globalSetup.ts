@@ -27,6 +27,7 @@ const __dirname = dirname(__filename);
 function createSetupPool() {
   const options: Options = {
     runtime: 'child_process',
+    execPath: process.execPath,
     filename: resolve(__dirname, './globalSetupWorker.js'),
     execArgv: [
       ...process.execArgv,
