@@ -77,6 +77,73 @@ describe('getStepSummaryDisplayPath', () => {
 });
 
 describe('GithubActionsReporter step summary', () => {
+  it('prefers the root config name when multiple project names are present', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        config: {
+          name: 'rstest:unit',
+        },
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+
+      await reporter.onTestRunEnd({
+        results: [
+          {
+            testId: 'file-a',
+            status: 'pass',
+            name: 'file-a',
+            testPath: path.join(tempDir, 'packages/a/a.test.ts'),
+            project: 'pkg-a',
+            results: [],
+          },
+          {
+            testId: 'file-b',
+            status: 'pass',
+            name: 'file-b',
+            testPath: path.join(tempDir, 'packages/b/b.test.ts'),
+            project: 'pkg-b',
+            results: [],
+          },
+        ],
+        testResults: [],
+        duration: emptyDuration,
+        snapshotSummary: emptySnapshotSummary,
+        getSourcemap: () => null,
+      });
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain(
+        '<summary>Rstest Test Reporter (rstest:unit) ✅</summary>',
+      );
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('renders the root placeholder as inline code in markdown', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
     const summaryPath = path.join(tempDir, 'summary.md');

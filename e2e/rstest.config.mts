@@ -10,6 +10,7 @@ import { defineConfig } from '@rstest/core';
 const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
 
 export default defineConfig({
+  name: 'rstest:e2e',
   setupFiles: ['../scripts/rstest.setup.ts'],
   // Increased timeout for CI to handle slower environments (e.g., Node.js 22 on Windows)
   // and reduce flaky timeouts caused by resource contention under high parallelism.
