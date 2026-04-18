@@ -17,8 +17,8 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/codspeed.yml'
   schedule:
-    # Run every 6 hours on main to build a continuous baseline for CPU benchmark
-    - cron: '0 */6 * * *'
+    # Run once a week on main to build a continuous baseline for CPU benchmark
+    - cron: '0 0 * * 0'
   # Allow manual runs on any branch (CodSpeed backtest + on-demand profiling)
   workflow_dispatch:
     inputs:
