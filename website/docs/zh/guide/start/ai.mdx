@@ -18,11 +18,19 @@ import { AgentPrompt } from '@components/AgentPrompt';
 
 ## Agent prompt
 
-如果你正在使用 Coding Agent（如 Claude Code、Cursor、Copilot 等），可以复制以下 prompt 来在项目中设置 Rstest：
+如果你正在使用 Coding Agent（如 Claude Code、Cursor、Copilot 等），请复制下面与你项目匹配的 prompt。Agent 会读取链接中的指令，并根据你的项目类型安装依赖、创建配置并编写测试。
 
-<AgentPrompt />
+### 设置 Rstest
 
-Agent 会读取链接中的指令，根据你的项目类型自动安装依赖、创建配置并编写测试。
+如果当前项目还没有配置测试框架，使用这个 prompt：
+
+<AgentPrompt variant="install" />
+
+### 从 Jest 或 Vitest 迁移
+
+如果要将现有的 Jest 或 Vitest 项目迁移到 Rstest，使用这个 prompt。为方便使用，链接中的指令内联了完整的 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill，无需额外安装；你也可以[安装该 skill](#agent-skills) 后直接使用：
+
+<AgentPrompt variant="migrate" />
 
 ## Agent Skills
 

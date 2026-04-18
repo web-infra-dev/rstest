@@ -46,9 +46,13 @@ import { AgentPrompt } from '@components/AgentPrompt';
 
 ### Agent prompt
 
-如果你正在使用 Coding Agent，可以复制以下 prompt 来自动设置 Rstest：
+如果你正在使用 Coding Agent，可以复制下面的 prompt 来自动设置 Rstest：
 
-<AgentPrompt />
+<AgentPrompt variant="install" />
+
+如果要从已有的 Jest 或 Vitest 项目迁移，请使用这个 prompt：
+
+<AgentPrompt variant="migrate" />
 
 ### 手动安装
 
