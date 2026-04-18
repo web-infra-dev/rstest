@@ -5,7 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "prebuild": "pnpm build:agent-install",
     "build": "rspress build",
+    "build:agent-install": "node scripts/buildAgentInstall.mjs",
     "dev": "rspress dev",
     "preview": "rspress preview"
   },

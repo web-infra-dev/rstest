@@ -1,77 +1,57 @@
 # Rstest setup — agent execution prompt
 
-Follow these steps **in order** to add Rstest to the current project.
-Read the repository first. Make the smallest correct change.
+Set up Rstest in a project that doesn't have a test runner configured yet. Pick the target, detect what it needs, install, verify.
 
-Fetch a linked doc page **only after** choosing that branch. Do **not** fetch docs for branches you did not select.
+## Prerequisite check
 
-## Guardrails
+If the target already has Jest or Vitest configured (any of the signals below), **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — migration has its own flow:
 
-- Always install `@rstest/core`. Config file is always `rstest.config.ts` (even in JS projects).
-- Only add framework plugins, DOM environments, or browser support when the code under test actually needs the transform — not just because `react` or `vue` appears in `dependencies`.
-- Do **not** replace existing Jest/Vitest `test` scripts unless migration is clearly intended — add `"test:unit": "rstest"` or similar instead.
-- If the package already has Jest/Vitest tests and migration is **not** intended, use `include` (https://rstest.rs/config/test/include.md) to target only Rstest's own tests so it does not discover tests written for another runner.
-- If migration **is** intended, follow the migration guide instead of this prompt: Jest → https://rstest.rs/guide/migration/jest.md / Vitest → https://rstest.rs/guide/migration/vitest.md
-- Do **not** reuse Jest/Vitest setup files blindly — only add a setup file (https://rstest.rs/config/test/setup-files.md) if the selected Rstest docs require it and the contents are compatible.
-- If `@rstest/core` or `rstest.config.ts` already exists, extend the existing setup minimally instead of recreating it.
-- Do **not** generate placeholder tests (e.g., `test('placeholder', () => {})`). A real verification test is fine when no tests exist — see Step 8.
-- When signals conflict, the project's existing test/build setup takes precedence.
+- A `jest.config.{js,ts,cjs,mjs,cts,mts,json}` or `vitest.config.{js,ts,cjs,mjs,cts,mts,json}`.
+- A `jest` / `@jest/globals` / `ts-jest` / `vitest` dep, or an inline `"jest"` / `"vitest"` field in `package.json`.
+- A `test` script invoking `jest` / `vitest`.
+- A workspace root with hoisted Jest/Vitest deps or config that affect this target.
+- The user asked to migrate from Jest/Vitest, or to keep Jest/Vitest and add Rstest side-by-side.
 
-## Step 0 — Repo-wide inventory (no changes yet)
+Otherwise, continue below.
 
-Before editing anything, determine:
+## Section 1 — pick the target
 
-- Package manager (from lockfile, or `packageManager` field in root `package.json`)
-- Whether this is a monorepo (`pnpm-workspace.yaml`, `workspaces` in `package.json`, `turbo.json`, `nx.json`)
-- Whether Rstest is already present anywhere (`@rstest/core`, `rstest.config.ts`, scripts)
-- Whether an existing test runner (Jest/Vitest) is in use — if migration is intended, stop here and follow the migration guide (see Guardrails)
+All work in this prompt happens inside a single **target package**.
 
-## Step 1 — find the owning package
+**Single-package repo** → the target is the repo root.
 
-Choose in this order:
+**Monorepo** (signals: `pnpm-workspace.yaml`, `workspaces` in root `package.json`, `turbo.json`, `nx.json`):
 
-1. Package containing the source files being tested
-2. Package containing existing tests for that source
-3. Package containing the relevant build config
-4. If single-package repo, the root
+- If the user named a specific package (by path, package name, or source file), that package is the target.
+- If the user expressed repo-wide scope ("this monorepo", "the whole repo", "every package", "all packages") **and** at least one package has Jest/Vitest signals, **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — that flow iterates per package and handles heterogeneity.
+- Otherwise, **STOP this prompt and ask**:
 
-Note: deps, config, and scripts may live in different places. Determine separately:
+  > This is a monorepo. Rstest setup is applied to one package at a time. Which package should Rstest go in — the workspace root, or a specific package (e.g. `packages/foo`)?
 
-- **Config and test files** → always in the owning package.
-- **devDependencies and scripts** → in the owning package, unless the repo centralizes them at the workspace root — follow that convention.
-- **Validate from** → wherever the test script lives.
+## Section 2 — detect
 
-## Step 2 — Package-scoped inventory
+All detection below runs inside the target.
 
-Now inspect the owning package:
+### 2.1 Language
 
-- Source/test file extensions (`.ts`/`.tsx`/`.mts` vs `.js`/`.jsx`/`.mjs`)
-- Build tool in scope (`rsbuild.config.*`, `rslib.config.*`, or neither)
-- Existing test file naming and location
-- Whether tests need Node only, simulated DOM, or real browser APIs
-
-## Step 3 — detect language
-
-Determine from the owning package's **actual source/test file extensions** first. Use `tsconfig.json` or `typescript` dep only as a tiebreaker.
+Determine from the target's **actual source/test file extensions** first. Only fall back to `tsconfig.json` presence or `typescript` in deps when extensions are mixed or absent.
 
 - TypeScript → `.ts` / `.tsx` test files.
 - JavaScript → `.js` / `.jsx` test files.
 
-## Step 4 — detect build tooling → pick adapter
+### 2.2 Build tool (→ pick adapter)
 
-An adapter auto-inherits plugins, aliases, and build config. If using an adapter, follow that guide first — only fetch a framework guide if the adapter guide does not already cover the required setup.
+- **Rsbuild project** (`rsbuild.config.*` or `@rsbuild/core` dep) → follow https://rstest.rs/guide/integration/rsbuild.md
+- **Rslib project** (`rslib.config.*` or `@rslib/core` dep) → follow https://rstest.rs/guide/integration/rslib.md
+- **Neither** → configure Rstest standalone.
 
-- **Rsbuild project** (has `rsbuild.config.*` or `@rsbuild/core` dep) → follow https://rstest.rs/guide/integration/rsbuild.md
-- **Rslib project** (has `rslib.config.*` or `@rslib/core` dep) → follow https://rstest.rs/guide/integration/rslib.md
-- **Neither** → no adapter; configure Rstest standalone (continue below).
+An adapter auto-inherits plugins, aliases, and build config. Even with an adapter you still need to decide `testEnvironment` or browser mode from 2.3 — adapters do not decide those. If 2.3 picks Browser Mode, that takes precedence over adapters.
 
-When using an adapter you may still need to set `testEnvironment` or `browser` — the adapter does not decide those.
+### 2.3 Test environment
 
-## Step 5 — choose test environment
+Decide based on what the target's tests actually need, not solely from framework deps in `package.json`. See https://rstest.rs/config/test/test-environment.md for all options.
 
-Decide based on what the tests actually need, not solely from framework deps in `package.json`. See https://rstest.rs/config/test/test-environment.md for all options.
-
-### A. No DOM APIs needed → node (default)
+#### A. No DOM APIs needed → node (default)
 
 Omit `testEnvironment`. No extra deps. If not using an adapter and no other options are needed:
 
@@ -80,52 +60,39 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({});
 ```
 
-### B. DOM APIs needed, simulated DOM is sufficient → `happy-dom` / `jsdom`
+#### B. DOM APIs needed, simulated DOM is sufficient → `happy-dom` / `jsdom`
 
-Use for tests that render components or rely on DOM APIs.
+Pick B only if any of these hold for the target's source/test code:
 
-- If the project already depends on `jsdom` or `happy-dom`, follow that choice.
-- Otherwise default to `happy-dom` (lighter).
+- Imports JSX or a UI framework (`react`, `react-dom`, `vue`, `@vue/*`, `svelte`, `solid-js`, `preact`, `lit`).
+- Directly references `document`, `window`, `navigator`, `localStorage`, or other DOM globals.
+- The user's request explicitly mentions component/UI testing.
+
+If none of the above hold, stay on A. Seeing `react` in `dependencies` alone is not sufficient.
+
+- If the target already depends on `jsdom` or `happy-dom`, follow that choice. Otherwise default to `happy-dom` (lighter).
 - **React** → follow https://rstest.rs/guide/framework/react.md
 - **Vue** → follow https://rstest.rs/guide/framework/vue.md
+- Other frameworks (Svelte, Solid, Preact, Lit, etc.) → apply the same DOM-environment reasoning and install the framework's standard compiler/plugin if the adapter doesn't already cover it. Keep config minimal.
 
-### C. Real browser behavior needed → browser mode (experimental)
+#### C. Real browser behavior needed → browser mode (experimental)
 
-Choose **only** when tests explicitly require Canvas, WebGL, CSS computed styles, Web Workers, or cross-browser testing. This is opt-in, not a default escalation. Vue Browser Mode is **not yet supported**. See https://rstest.rs/config/test/browser.md for all options.
+Choose **only** when tests explicitly require Canvas, WebGL, CSS computed styles, Web Workers, or cross-browser testing. This is opt-in, not a default escalation. Vue Browser Mode is **not yet supported**. See https://rstest.rs/config/test/browser.md.
 
-→ Follow https://rstest.rs/guide/browser-testing/getting-started.md
-→ For React component testing in browser, also follow https://rstest.rs/guide/browser-testing/framework-guides.md
+→ **STOP this prompt.** Fetch https://rstest.rs/guide/browser-testing/getting-started.md and follow it end-to-end — Browser Mode has its own setup flow that replaces Sections 3–4. For React component testing in browser, also fetch https://rstest.rs/guide/browser-testing/framework-guides.md.
 
-## Step 6 — install dependencies
+## Section 3 — install and configure
 
-Use the repo's existing package manager (`pnpm add -D`, `npm i -D`, `yarn add -D`, `bun add -d`) based on the lockfile. Fall back to the `packageManager` field in root `package.json` if no lockfile exists. Install only packages justified in previous steps.
+All edits are scoped to the target package. If the target already has `@rstest/core`, `rstest.config.ts`, or an `rstest` script, extend it minimally instead of recreating it.
 
-## Step 7 — create config
+- Always install `@rstest/core`. Add any framework plugin / DOM environment justified in Section 2. Use the repo's package manager (pnpm: `pnpm --filter <target> add -D <pkg>`; npm: `npm i -D <pkg> -w <target>`; yarn: `yarn workspace <target> add -D <pkg>`; bun: `bun add -d <pkg> --filter <target>`). For a single-package repo, drop the workspace flag.
+- Config file is always `rstest.config.ts` (even in JS projects), placed in the target directory. Keep it minimal — include only options justified by Section 2. Do not copy examples blindly; see https://rstest.rs/guide/basic/configure-rstest.md only if the guides linked from Section 2 don't fully specify the config.
+- Add `"test": "rstest"` to the target's `package.json`. Preserve existing naming conventions.
 
-Keep it minimal — include **only** options justified by detection.
-→ See https://rstest.rs/guide/basic/configure-rstest.md only if the selected guide above does not fully specify the config.
+## Section 4 — verify
 
-Config examples are in the guide pages linked in Steps 4–5. Do not copy examples blindly.
-
-## Step 8 — update scripts
-
-If migration is intended, you should already be following the migration guide — skip this step.
-
-- Do not overwrite any existing test-related script. Add a new non-conflicting name.
-- **No test script** → add `"test": "rstest"`.
-- **`test` exists (Jest/Vitest)** → add `"test:unit": "rstest"` or similar.
-- **Browser Mode** → consider a dedicated `"test:browser"` script.
-- Preserve the repo's naming conventions.
-
-## Step 9 — verification test (only if needed)
-
-Only if no tests exist and verification is needed:
-
-- Add **one** small test for a real exported function or module. Prefer a function/module over a UI component to avoid introducing extra test utilities.
-- Match existing naming (`*.test.*` vs `*.spec.*`), placement, and language.
-- If no convention, colocate next to the source file.
-- If there is no small, deterministic real export to test, skip this step.
-
-## Step 10 — validate
-
-Run the test command from wherever the test script lives. If it fails, read the error and fix — do not leave a broken setup. If no tests exist and you skipped Step 9, confirm the setup is valid (config loads, `rstest --passWithNoTests` or equivalent succeeds).
+- Run the target's test command from wherever the target's test script lives. If it fails, read the error and fix — do not leave a broken setup.
+- If the target has **zero** test files, add one small real test before running:
+  - Prefer a real exported function/module over a UI component (to avoid extra test utilities).
+  - Match existing naming (`*.test.*` vs `*.spec.*`), placement, and language. If no convention exists, colocate next to the source file.
+  - Do not write placeholder tests (e.g. `test('placeholder', () => {})`). If no small deterministic export exists, skip the test and rely on `rstest --passWithNoTests`.
