@@ -42,6 +42,97 @@ const getSignalExitCode = (signal: NodeJS.Signals): number => {
   return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
 };
 
+const reportNoTestFiles = ({
+  context,
+  mode = 'all',
+}: {
+  context: Rstest;
+  mode?: 'all' | 'on-demand';
+}) => {
+  if (context.command === 'watch') {
+    if (mode === 'on-demand') {
+      logger.log(color.yellow('No test files need re-run.'));
+    } else {
+      logger.log(color.yellow('No test files found.'));
+    }
+  } else {
+    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+    const message = `No test files found, exiting with code ${code}.`;
+
+    if (code === 0) {
+      logger.log(color.yellow(message));
+    } else {
+      logger.error(color.red(message));
+    }
+
+    process.exitCode = code;
+  }
+
+  if (mode === 'all') {
+    if (context.relatedFilters?.length) {
+      logger.log(
+        color.gray('related: '),
+        context.relatedFilters.join(color.gray(', ')),
+      );
+    } else if (context.fileFilters?.length) {
+      logger.log(
+        color.gray('filter: '),
+        context.fileFilters.join(color.gray(', ')),
+      );
+    }
+
+    context.projects.forEach((p) => {
+      if (context.projects.length > 1) {
+        logger.log('');
+        logger.log(color.gray('project:'), p.name);
+      }
+      logger.log(color.gray('root:'), p.rootPath);
+
+      logger.log(
+        color.gray('include:'),
+        p.normalizedConfig.include.join(color.gray(', ')),
+      );
+      logger.log(
+        color.gray('exclude:'),
+        p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
+      );
+    });
+  }
+};
+
+const notifyReportersOnTestRunEnd = async ({
+  context,
+  coverage,
+  duration,
+  getSourcemap,
+  unhandledErrors,
+  filterRerunTestPaths,
+}: {
+  context: Rstest;
+  coverage?: CoverageMap;
+  duration: {
+    totalTime: number;
+    buildTime: number;
+    testTime: number;
+  };
+  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
+  unhandledErrors?: Error[];
+  filterRerunTestPaths?: string[];
+}) => {
+  for (const reporter of context.reporters) {
+    await reporter.onTestRunEnd?.({
+      results: context.reporterResults.results,
+      coverage: coverage?.toJSON(),
+      testResults: context.reporterResults.testResults,
+      unhandledErrors,
+      snapshotSummary: context.snapshotManager.summary,
+      duration,
+      getSourcemap,
+      filterRerunTestPaths,
+    });
+  }
+};
+
 export async function runTests(context: Rstest): Promise<void> {
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
@@ -119,6 +210,9 @@ export async function runTests(context: Rstest): Promise<void> {
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
+    if (context.relatedResolutionEmpty) {
+      return {};
+    }
     if (!isWatchMode && shard && entriesCache.has(name)) {
       return entriesCache.get(name)!.entries;
     }
@@ -132,6 +226,7 @@ export async function runTests(context: Rstest): Promise<void> {
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],
+      fileFilterMode: context.fileFilterMode,
     });
 
     entriesCache.set(name, {
@@ -177,6 +272,11 @@ export async function runTests(context: Rstest): Promise<void> {
     });
   }
 
+  if (isWatchMode && context.relatedResolutionEmpty) {
+    browserProjectsToRun = browserProjects;
+    nodeProjectsToRun = [];
+  }
+
   const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
 
@@ -194,6 +294,7 @@ export async function runTests(context: Rstest): Promise<void> {
     browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
       skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
+      allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
     });
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
@@ -321,7 +422,7 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunStart?.();
     }
 
-    let testStart: number;
+    let testStart: number | undefined;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
@@ -433,9 +534,10 @@ export async function runTests(context: Rstest): Promise<void> {
       }),
     );
 
-    const buildTime = testStart! - buildStart;
+    testStart ??= buildStart;
+    const buildTime = testStart - buildStart;
 
-    const testTime = Date.now() - testStart!;
+    const testTime = Date.now() - testStart;
 
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
@@ -524,49 +626,15 @@ export async function runTests(context: Rstest): Promise<void> {
         shouldUnifyReporter && browserResult?.hasFailure;
 
       if (results.length === 0 && !errors.length) {
-        if (command === 'watch') {
-          if (mode === 'on-demand') {
-            logger.log(color.yellow('No test files need re-run.'));
-          } else {
-            logger.log(color.yellow('No test files found.'));
-          }
-        } else {
-          const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-
-          const message = `No test files found, exiting with code ${code}.`;
-          if (code === 0) {
-            logger.log(color.yellow(message));
-          } else {
-            logger.error(color.red(message));
-          }
-
-          process.exitCode = code;
-        }
-        if (mode === 'all') {
-          if (context.fileFilters?.length) {
-            logger.log(
-              color.gray('filter: '),
-              context.fileFilters.join(color.gray(', ')),
-            );
-          }
-
-          allProjects.forEach((p) => {
-            if (allProjects.length > 1) {
-              logger.log('');
-              logger.log(color.gray('project:'), p.name);
-            }
-            logger.log(color.gray('root:'), p.rootPath);
-
-            logger.log(
-              color.gray('include:'),
-              p.normalizedConfig.include.join(color.gray(', ')),
-            );
-            logger.log(
-              color.gray('exclude:'),
-              p.normalizedConfig.exclude.patterns.join(color.gray(', ')),
-            );
-          });
-        }
+        reportNoTestFiles({ context, mode });
+        await notifyReportersOnTestRunEnd({
+          context,
+          coverage: mergedCoverageMap,
+          duration,
+          getSourcemap,
+          unhandledErrors: errors,
+        });
+        return;
       }
 
       const isFailure = nodeHasFailure || browserHasFailure;
@@ -575,20 +643,16 @@ export async function runTests(context: Rstest): Promise<void> {
         process.exitCode = 1;
       }
 
-      for (const reporter of reporters) {
-        await reporter.onTestRunEnd?.({
-          results: context.reporterResults.results,
-          coverage: mergedCoverageMap?.toJSON(),
-          testResults: context.reporterResults.testResults,
-          unhandledErrors: errors,
-          snapshotSummary: snapshotManager.summary,
-          duration,
-          getSourcemap,
-          filterRerunTestPaths: currentEntries.length
-            ? currentEntries.map((e) => e.testPath)
-            : undefined,
-        });
-      }
+      await notifyReportersOnTestRunEnd({
+        context,
+        coverage: mergedCoverageMap,
+        duration,
+        getSourcemap,
+        unhandledErrors: errors,
+        filterRerunTestPaths: currentEntries.length
+          ? currentEntries.map((e) => e.testPath)
+          : undefined,
+      });
 
       // Generate coverage reports after all tests complete
       if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {

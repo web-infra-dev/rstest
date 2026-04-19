@@ -63,6 +63,28 @@ $ npx rstest --watch
 
 `rstest run` 将会执行单次测试，该命令适用于 CI 环境或不需要一边修改一边执行测试的场景。
 
+### 运行相关测试
+
+<ApiMeta addedVersion="0.10.0" />
+
+当你希望把命令行位置参数视为源码文件，并只运行依赖这些源码的测试时，可以使用 `--related`：
+
+```bash
+npx rstest run --related src/button.ts
+```
+
+Rstest 会基于构建得到的 module graph 解析相关测试，因此同一套过滤逻辑同时适用于 Node mode 和 Browser Mode。你也可以使用兼容 Jest 的别名：
+
+```bash
+npx rstest run --findRelatedTests src/button.ts
+```
+
+如果你只想查看受影响的测试文件，可以配合 `rstest list` 使用：
+
+```bash
+npx rstest list --related src/button.ts --filesOnly
+```
+
 ## rstest watch
 
 `rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
@@ -234,6 +256,8 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `-c, --config <config>`         | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                  |
 | `--config-loader <loader>`      | 指定配置加载器 （`auto` \| `jiti` \| `native`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
 | `-r, --root <root>`             | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
+| `--related`                     | 将位置参数视为源码文件路径，只运行相关测试                                                                                                               |
+| `--findRelatedTests`            | `--related` 的 Jest 兼容别名                                                                                                                            |
 | `--globals`                     | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                   |
 | `--isolate`                     | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                           |
 | `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |

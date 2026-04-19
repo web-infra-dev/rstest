@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
 import { glob } from 'tinyglobby';
-import type { Project } from '../types';
+import type { FileFilterMode, Project } from '../types';
 import { castArray, parsePosix } from './helper';
 import { color } from './logger';
 
@@ -9,6 +9,7 @@ export const filterFiles = (
   testFiles: string[],
   filters: string[],
   dir: string,
+  mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
     return testFiles;
@@ -18,6 +19,21 @@ export const filterFiles = (
     process.platform === 'win32'
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
+
+  if (mode === 'exact') {
+    const exactFilters = new Set(
+      fileFilters.map((filter) => pathe.normalize(filter).toLocaleLowerCase()),
+    );
+
+    return testFiles.filter((testFilePath) => {
+      const absolutePath = pathe.normalize(testFilePath).toLocaleLowerCase();
+      const relativePath = pathe
+        .normalize(pathe.relative(dir, testFilePath))
+        .toLocaleLowerCase();
+
+      return exactFilters.has(absolutePath) || exactFilters.has(relativePath);
+    });
+  }
 
   return testFiles.filter((t) => {
     const testFile = pathe.relative(dir, t).toLocaleLowerCase();
@@ -77,6 +93,7 @@ export const getTestEntries = async ({
   rootPath,
   projectRoot,
   fileFilters,
+  fileFilterMode,
   includeSource,
 }: {
   rootPath: string;
@@ -84,6 +101,7 @@ export const getTestEntries = async ({
   exclude: string[];
   includeSource: string[];
   fileFilters: string[];
+  fileFilterMode?: FileFilterMode;
   projectRoot: string;
 }): Promise<Record<string, string>> => {
   const testFiles = await glob(include, {
@@ -118,10 +136,12 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, rootPath).map((entry) => {
-      const relativePath = pathe.relative(rootPath, entry);
-      return [formatTestEntryName(relativePath), entry];
-    }),
+    filterFiles(testFiles, fileFilters, rootPath, fileFilterMode).map(
+      (entry) => {
+        const relativePath = pathe.relative(rootPath, entry);
+        return [formatTestEntryName(relativePath), entry];
+      },
+    ),
   );
 };
 

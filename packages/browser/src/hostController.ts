@@ -915,6 +915,7 @@ const collectProjectEntries = async (
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
       });
 
       const setup = getSetupFiles(setupFiles, project.rootPath);
@@ -1654,8 +1655,10 @@ export const runBrowserController = async (
   context: Rstest,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false } = options ?? {};
+  const { skipOnTestRunEnd = false, allowEmptyWatchRun = false } =
+    options ?? {};
   const buildStart = Date.now();
+  const isWatchMode = context.command === 'watch';
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
@@ -1872,27 +1875,43 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      const message = `No test files found, exiting with code ${code}.`;
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : `No test files found, exiting with code ${code}.`;
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
       }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
     }
 
-    if (code !== 0) {
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
       ensureProcessExitCode(code);
     }
-    return;
+    if (!shouldKeepWatchingWithEmptySet) {
+      return;
+    }
   }
 
   await notifyTestRunStart();
 
-  const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
@@ -2612,6 +2631,69 @@ export const runBrowserController = async (
       },
     });
 
+    if (allTestFiles.length === 0) {
+      const duration = {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      };
+      const result = {
+        results: reporterResults,
+        testResults: caseResults,
+        duration,
+        hasFailure: false,
+        getSourcemap: getBrowserSourcemap,
+        resolveSourcemap: resolveBrowserSourcemap,
+        close: skipOnTestRunEnd
+          ? async () => {
+              sessionRegistry.clear();
+              await destroyBrowserRuntime(runtime);
+            }
+          : undefined,
+      };
+
+      if (!skipOnTestRunEnd) {
+        await notifyTestRunEnd({ duration });
+      }
+
+      if (isWatchMode) {
+        triggerRerun = async () => {
+          const newProjectEntries = await collectProjectEntries(context);
+          const rerunPlan = planWatchRerun({
+            projectEntries: newProjectEntries,
+            previousTestFiles: watchContext.lastTestFiles,
+            affectedTestFiles: watchContext.affectedTestFiles,
+          });
+          watchContext.affectedTestFiles = [];
+
+          if (rerunPlan.filesChanged) {
+            watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+            if (rerunPlan.currentTestFiles.length === 0) {
+              logger.log(
+                color.cyan('No browser test files remain after update.\n'),
+              );
+              logBrowserWatchReadyMessage(enableCliShortcuts);
+              return;
+            }
+
+            logger.log(
+              color.cyan(
+                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+              ),
+            );
+            void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+            return;
+          }
+
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        };
+        watchContext.hooksEnabled = true;
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+
+      return result;
+    }
+
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
     const testTime = Date.now() - testStart;
@@ -3088,24 +3170,27 @@ export const runBrowserController = async (
     });
   };
 
-  const testStart = Date.now();
-  try {
-    await waitForRunnerFramesReady(
-      currentTestFiles.map((file) => file.testPath),
-    );
+  let testTime = 0;
+  if (currentTestFiles.length > 0) {
+    const testStart = Date.now();
+    try {
+      await waitForRunnerFramesReady(
+        currentTestFiles.map((file) => file.testPath),
+      );
 
-    for (const file of currentTestFiles) {
-      await enqueueHeadedReload(file);
-      if (fatalError) {
-        break;
+      for (const file of currentTestFiles) {
+        await enqueueHeadedReload(file);
+        if (fatalError) {
+          break;
+        }
       }
+    } catch (error) {
+      fatalError = fatalError ?? toError(error);
+      ensureProcessExitCode(1);
     }
-  } catch (error) {
-    fatalError = fatalError ?? toError(error);
-    ensureProcessExitCode(1);
-  }
 
-  const testTime = Date.now() - testStart;
+    testTime = Date.now() - testStart;
+  }
 
   // Define rerun logic for watch mode
   if (isWatchMode) {
@@ -3129,6 +3214,13 @@ export const runBrowserController = async (
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
         currentTestFiles = rerunPlan.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        if (currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
         await waitForRunnerFramesReady(
           currentTestFiles.map((file) => file.testPath),
         );

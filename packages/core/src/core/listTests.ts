@@ -402,6 +402,46 @@ export async function listTests(
 ): Promise<ListCommandResult[]> {
   const { rootPath } = context;
   const { shard } = context.normalizedConfig;
+  const showProject = context.projects.length > 1;
+
+  if (context.relatedResolutionEmpty) {
+    const tests: ListedTest[] = [];
+
+    if (json && json !== 'false') {
+      const content = JSON.stringify(
+        summary
+          ? {
+              items: tests,
+              summary: createListSummaryPayload({
+                tests,
+                filesOnly,
+                includeSuites,
+                showProject,
+              }),
+            }
+          : tests,
+        null,
+        2,
+      );
+      if (json !== true && json !== 'true') {
+        const jsonPath = isAbsolute(json) ? json : join(rootPath, json);
+        mkdirSync(dirname(jsonPath), { recursive: true });
+        writeFileSync(jsonPath, content);
+      } else {
+        logger.log(content);
+      }
+    } else if (summary) {
+      printListSummary({
+        tests,
+        filesOnly,
+        includeSuites,
+        showProject,
+        write: logger.log,
+      });
+    }
+
+    return [];
+  }
 
   const shardedEntries = await resolveShardedEntries(context);
   const testEntries: Record<string, Record<string, string>> = {};
@@ -440,6 +480,7 @@ export async function listTests(
       rootPath,
       projectRoot: root,
       fileFilters: context.fileFilters || [],
+      fileFilterMode: context.fileFilterMode,
       includeSource,
     });
 
@@ -491,8 +532,6 @@ export async function listTests(
   };
 
   const hasError = list.some((file) => file.errors?.length) || errors.length;
-  const showProject = context.projects.length > 1;
-
   if (hasError) {
     const { printError } = await import('../utils/error');
     process.exitCode = 1;
