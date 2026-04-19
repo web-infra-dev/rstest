@@ -80,6 +80,21 @@ When migrating config, keep two changes in mind:
 
 Walk through **every** option under `test` and match it against the table below — move it to the top level, rename it, or drop it. Fields not listed here may not map 1:1; verify against the [Rstest config reference](/config) before dropping them silently.
 
+:::tip `mergeConfig` is not exported
+Vitest's `mergeConfig` helper is not re-exported from `@rstest/core`. If you compose configs (for example, a shared base + per-package overrides), use plain object spread inside `defineConfig`:
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { baseConfig } from './rstest.base';
+
+export default defineConfig({
+  ...baseConfig,
+  testEnvironment: 'jsdom',
+});
+```
+
+:::
+
 | Vitest (under `test`)         | Rstest (top-level)                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Custom environment packages are not supported.                                                                                                                                                                                                                                                                                                                                |
@@ -200,6 +215,29 @@ When `globals: true` is enabled, `vi` and `vitest` are available as globals in V
 
 If your tests import APIs from `@rstest/core`, prefer `rs.<api>` in import style and avoid mixing import style and global style in the same file.
 
+#### Don't shim — rewrite call sites
+
+When migrating tests in bulk, it can be tempting to alias the old identifier so the diff stays small. All three forms below leave the migration incomplete and should be avoided:
+
+```ts
+// Avoid: direct global aliasing
+globalThis.vi = rs;
+
+// Avoid: local rebinding
+const vi = rs;
+
+// Avoid: aliased named import
+import { rs as vi } from '@rstest/core';
+```
+
+The test body still reads `vi.fn()` after these, so a reviewer cannot tell the migration happened, IDE rename refactors stop following the new identifier, and any future `@rstest/core` deprecation warning will target an identifier the test never actually uses. The correct form is the literal rewrite shown above: every `vi.<api>` call site becomes `rs.<api>`, and every `vitest.<api>` call site becomes `rstest.<api>`.
+
+#### Preserve test names during replace
+
+`vi.` and `vitest.` can also appear inside `describe` / `it` / `test` name strings (for example `it('vi.useFakeTimers advances time', ...)`). A blind find-and-replace that matches the bare identifier will rewrite these strings too, mutating test names that should be preserved.
+
+Constrain the replacement to call sites only. A regex like `\bvi\.(fn|mock|spyOn|useFakeTimers|hoisted|mocked|stubGlobal|unstubAllGlobals|clearAllMocks|resetAllMocks|restoreAllMocks)\s*\(` matches just calls. After replacement, grep for `describe\(|it\(|test\(` and confirm no test name string changed.
+
 ### Setup adapters
 
 Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom/vitest` is designed for Vitest and should be replaced in Rstest setup files.
@@ -277,3 +315,14 @@ rs.mock('./api', () => ({
 ```
 
 Because mock factories are hoisted, avoid relying on values initialized later in the same module. If needed, move shared values to a hoisted initializer (for example `rs.hoisted(...)`) to avoid initialization-order errors.
+
+## Snapshots
+
+Vitest and Rstest use the same snapshot key format and body serializer. Existing `__snapshots__/*.snap` files from a Vitest suite are read verbatim by Rstest, and tests that passed under Vitest continue to pass under Rstest without re-recording. Only the file header line differs:
+
+```diff
+- // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
++ // Rstest Snapshot v1
+```
+
+Running `rstest -u` normalises this header to the Rstest form; the snapshot bodies stay byte-identical.
