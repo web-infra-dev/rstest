@@ -59,12 +59,25 @@ export async function generateCoverage(
   try {
     const finalCoverageMap = coverageMap;
 
-    if (!coverage.allowExternal) {
-      finalCoverageMap.filter((filePath) => {
-        const normalizedFile = normalize(filePath);
+    const distPathRoot = normalize(
+      context.normalizedConfig.output?.distPath?.root || '',
+    );
+    finalCoverageMap.filter((filePath) => {
+      const normalizedFile = normalize(filePath);
+      if (distPathRoot && normalizedFile.startsWith(distPathRoot)) {
+        return false;
+      }
+      if (
+        normalizedFile.includes('webpack/runtime') ||
+        normalizedFile.includes('rstest runtime')
+      ) {
+        return false;
+      }
+      if (!coverage.allowExternal) {
         return normalizedFile.startsWith(normalize(rootPath));
-      });
-    }
+      }
+      return true;
+    });
 
     if (coverage.include?.length) {
       const coveredFilesSet = new Set(finalCoverageMap.files().map(normalize));
