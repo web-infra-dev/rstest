@@ -222,6 +222,7 @@ it.skipIf(!process.env.CI)(
 
     expect(stepSummary).toContain('<summary>Rstest Test Reporter ✅</summary>');
     expectWorkspacePath(stepSummary);
+    expect(stepSummary).toContain('| **Flaky Tests** | 1 passed after retry |');
     expect(stepSummary).toContain('## Flaky Tests');
     expect(stepSummary).toContain(
       '- `flaky-fixtures/githubActionsFlaky.test.ts > passes after retry` (passed after retry x1)',

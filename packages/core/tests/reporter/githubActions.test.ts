@@ -290,6 +290,7 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain('| **Flaky Tests** | 1 passed after retry |');
       expect(summary).toContain('## Flaky Tests');
       expect(summary).toContain(
         '- `tests/flaky.test.ts > describe flaky > retries then passes` (passed after retry x2)',

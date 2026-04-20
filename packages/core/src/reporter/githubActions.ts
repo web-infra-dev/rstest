@@ -317,6 +317,11 @@ async function renderStepSummary({
   lines.push(
     `| **Duration** | ${prettyTime(duration.totalTime)} (build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)}) |`,
   );
+  if (flakyTests.length > 0) {
+    lines.push(
+      `| **Flaky Tests** | ${formatFlakyTestCount(flakyTests.length)} |`,
+    );
+  }
   lines.push('');
 
   if (flakyTests.length > 0) {
@@ -473,4 +478,8 @@ function getPreviousFailureSummary(testResult: TestResult): string | undefined {
   }
 
   return `${summary.slice(0, STEP_SUMMARY_MAX_FLAKY_MESSAGE_LENGTH - 1)}…`;
+}
+
+function formatFlakyTestCount(count: number): string {
+  return count === 1 ? '1 passed after retry' : `${count} passed after retry`;
 }
