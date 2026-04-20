@@ -239,6 +239,7 @@ const loadFiles = async ({
   assetFiles,
   rstestContext,
   distPath,
+  runtimeDistPath,
   testPath,
   interopDefault,
   isolate,
@@ -248,6 +249,7 @@ const loadFiles = async ({
   assetFiles: Record<string, string>;
   rstestContext: Record<string, any>;
   distPath: string;
+  runtimeDistPath?: string;
   testPath: string;
   interopDefault: boolean;
   isolate: boolean;
@@ -278,6 +280,7 @@ const loadFiles = async ({
     await loadModule({
       codeContent: setupCodeContent,
       distPath,
+      runtimeDistPath,
       testPath,
       rstestContext,
       assetFiles,
@@ -288,6 +291,7 @@ const loadFiles = async ({
   await loadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
+    runtimeDistPath,
     testPath,
     rstestContext,
     assetFiles,
@@ -310,7 +314,7 @@ const runInPool = async (
 
   isTeardown = false;
   const {
-    entryInfo: { distPath, testPath },
+    entryInfo: { distPath, runtimeDistPath, testPath },
     setupEntries,
     assets,
     type,
@@ -377,6 +381,7 @@ const runInPool = async (
       await loadFiles({
         rstestContext,
         distPath,
+        runtimeDistPath,
         testPath,
         assetFiles,
         setupEntries,
@@ -450,6 +455,7 @@ const runInPool = async (
     await loadFiles({
       rstestContext,
       distPath,
+      runtimeDistPath,
       testPath,
       assetFiles,
       setupEntries,

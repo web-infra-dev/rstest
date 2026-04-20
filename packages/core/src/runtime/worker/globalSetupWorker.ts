@@ -37,6 +37,7 @@ function captureEnvChanges(): Record<string, string | undefined> {
 const runGlobalSetup = async (data: {
   entries: {
     distPath: string;
+    runtimeDistPath?: string;
     testPath: string;
   }[];
   assetFiles: Record<string, string>;
@@ -73,7 +74,7 @@ const runGlobalSetup = async (data: {
     trackEnvChanges();
 
     for (const entry of data.entries) {
-      const { distPath, testPath } = entry;
+      const { distPath, runtimeDistPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
@@ -82,6 +83,7 @@ const runGlobalSetup = async (data: {
       const module = await loadModule({
         codeContent: setupCodeContent,
         distPath,
+        runtimeDistPath,
         testPath,
         rstestContext: {
           global,
