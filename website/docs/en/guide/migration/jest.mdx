@@ -79,7 +79,7 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `displayName`                | [`name`](/config/test/name)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `rootDir`                    | [`root`](/config/test/root)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setup-files)                                                       | Rstest's `setupFiles` runs after the test framework is registered — equivalent to Jest's `setupFilesAfterEnv` (not Jest's plain `setupFiles`). Strip the `<rootDir>/` prefix. Merge any Jest `setupFiles` entries here too; there is no separate "before framework" hook.                                                                                                                                                               |
-| `globalSetup`                | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Jest setup reads `(globalConfig, projectConfig)`, rewrite without them.                                                                                                                                                                                                                                                                                                                  |
+| `globalSetup`                | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Jest setup reads `(globalConfig, projectConfig)`, rewrite without them. As in Jest, `process.env` mutations made here propagate to every test worker.                                                                                                                                                                                                                                    |
 | `globalTeardown`             | [`globalSetup`](/config/test/global-setup)                                                     | No separate field. Rewrite the file to `globalSetup`'s format (see above) — a bare `export default async function teardown()` from Jest would run at setup, not after tests.                                                                                                                                                                                                                                                            |
 | `verbose`                    | [`reporters: 'verbose'`](/config/test/reporters)                                               | No `verbose` boolean — use the `verbose` reporter.                                                                                                                                                                                                                                                                                                                                                                                      |
 | `reporters`                  | [`reporters`](/config/test/reporters)                                                          | String values must be built-in names. For third-party reporters (e.g. `jest-junit`), import the reporter class and pass the instance.                                                                                                                                                                                                                                                                                                   |
@@ -176,29 +176,6 @@ Rstest provides a `rstest` API that you can use to access Rstest's utilities, su
 
 fn.mockResolvedValue('foo');
 ```
-
-#### Don't shim — rewrite call sites
-
-When migrating tests in bulk, it can be tempting to alias the old identifier so the diff stays small. All three forms below leave the migration incomplete and should be avoided:
-
-```ts
-// Avoid: direct global aliasing
-globalThis.jest = rstest;
-
-// Avoid: local rebinding
-const jest = rstest;
-
-// Avoid: aliased named import
-import { rstest as jest } from '@rstest/core';
-```
-
-The test body still reads `jest.fn()` after these, so a reviewer cannot tell the migration happened, IDE rename refactors stop following the new identifier, and any future `@rstest/core` deprecation warning will target an identifier the test never actually uses. The correct form is the literal rewrite shown above: every `jest.<api>` call site becomes `rstest.<api>`.
-
-#### Preserve test names during replace
-
-`jest.` can also appear inside `describe` / `it` / `test` name strings (for example `it('jest.useFakeTimers advances time', ...)`). A blind find-and-replace that matches the bare identifier will rewrite these strings too, mutating test names that should be preserved.
-
-Constrain the replacement to call sites only. A regex like `\bjest\.(fn|mock|spyOn|useFakeTimers|isolateModules|requireActual|requireMock|clearAllMocks|resetAllMocks|restoreAllMocks)\s*\(` matches just calls. After replacement, grep for `describe\(|it\(|test\(` and confirm no test name string changed.
 
 ### Done callback
 
