@@ -201,6 +201,7 @@ These outputs are parsed by GitHub Actions and generate comments at the correspo
 When `GITHUB_STEP_SUMMARY` is available (GitHub Actions sets this automatically), Rstest also appends a Markdown summary that includes:
 
 - a test summary table (files/tests/duration)
+- a flaky test section for tests that passed after retries, with short summaries of the previous failure messages when available
 - failure sections with error message, diff, and stack trace
 - repro commands for each failed test
 - a status-marked report title (`✅` / `❌`)

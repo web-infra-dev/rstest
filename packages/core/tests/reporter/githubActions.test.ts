@@ -236,4 +236,81 @@ describe('GithubActionsReporter step summary', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('renders flaky tests with a short summary of previous failures', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+    const testPath = path.join(tempDir, 'tests/flaky.test.ts');
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+
+      await reporter.onTestRunEnd({
+        results: [
+          {
+            testId: 'file-1',
+            status: 'pass',
+            name: 'flaky.test.ts',
+            testPath,
+            project: 'rstest',
+            results: [],
+          },
+        ],
+        testResults: [
+          {
+            testId: 'test-1',
+            status: 'pass',
+            name: 'retries then passes',
+            parentNames: ['describe flaky'],
+            testPath,
+            project: 'rstest',
+            retryCount: 2,
+            errors: [
+              {
+                name: 'AssertionError',
+                message: 'expected 1 to be 2\n\nExpected: 2\nReceived: 1',
+              },
+            ],
+          },
+        ],
+        duration: emptyDuration,
+        snapshotSummary: emptySnapshotSummary,
+        getSourcemap: () => null,
+      });
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain('## Flaky Tests');
+      expect(summary).toContain(
+        '- `tests/flaky.test.ts > describe flaky > retries then passes` (passed after retry x2)',
+      );
+      expect(summary).toContain(
+        'Previous failure: AssertionError: expected 1 to be 2 Expected: 2 Received: 1',
+      );
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
