@@ -220,7 +220,9 @@ it.skipIf(!process.env.CI)(
       .readFileSync(stepSummaryPath, 'utf-8')
       .replaceAll(process.cwd(), '<ROOT>');
 
-    expect(stepSummary).toContain('<summary>Rstest Test Reporter ✅</summary>');
+    expect(stepSummary).toContain('<details open>');
+    expect(stepSummary).toContain('<summary>Rstest Test Reporter ⚠️</summary>');
+    expect(stepSummary).toContain('# Rstest Test Reporter ⚠️');
     expectWorkspacePath(stepSummary);
     expect(stepSummary).toContain('| **Flaky Tests** | 1 passed after retry |');
     expect(stepSummary).toContain('## Flaky Tests');
