@@ -179,7 +179,7 @@ export class Rstest implements RstestContext {
               tsconfigPaths: config.source?.tsconfigPath
                 ? [config.source.tsconfigPath]
                 : [],
-              outputDistPathRoot: config.output.distPath.root,
+              outputDistPathRoot: rstestConfig.output.distPath.root,
               environmentName,
               browserEnabled: config.browser.enabled,
               assumeNormalized: true,
