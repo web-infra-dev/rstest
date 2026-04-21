@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
 import type { RstestContext } from '../../types';
-import { getTempRstestOutputDir } from '../../utils';
+import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 
 export const RUNTIME_CHUNK_NAME = 'runtime';
 
@@ -30,6 +30,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
     });
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
+      const project = context.projects.find((p) => p.environmentName === name)!;
       const {
         normalizedConfig: {
           resolve,
@@ -41,7 +42,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         },
         outputModule,
         rootPath,
-      } = context.projects.find((p) => p.environmentName === name)!;
+      } = project;
 
       const distRootDir = getTempRstestOutputDir({
         distPathRoot: outputDistPathRoot,
@@ -52,6 +53,12 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
       return mergeEnvironmentConfig(
         config,
         {
+          performance: {
+            buildCache: resolveProjectBuildCache({
+              context,
+              project,
+            }),
+          },
           tools,
           resolve,
           source,

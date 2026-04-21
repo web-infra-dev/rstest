@@ -1,0 +1,56 @@
+---
+description: 配置 rstest 在测试构建中使用的 Rsbuild performance 选项。
+---
+
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# performance
+
+## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
+
+- **类型：** `boolean | { cacheDirectory?: string; cacheDigest?: Array<string | undefined>; buildDependencies?: string[] }`
+- **默认值：** `false`
+
+为 rstest 的测试构建开启 Rsbuild 持久化构建缓存。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+开启后，rstest 会补上一些更适合测试场景的默认值，以保证缓存目录和失效条件更稳定：
+
+- `cacheDirectory` 默认使用当前 project 根目录下的 `node_modules/.cache/rstest-<project-name>`，即使多个 project 共用同一个 root，也能拥有独立缓存，同时避免写入临时的 `output.distPath` 目录。
+- `cacheDigest` 会自动包含 rstest 的运行输入，例如命令类型、环境名、browser / node 模式，以及最终的 `output.distPath.root`。
+- `buildDependencies` 会自动包含当前 rstest 配置文件、各 project 配置文件，以及已解析到的 `tsconfig` 路径。
+
+你仍然可以自定义这些字段，但行为并不完全一样：
+
+- `cacheDirectory`：**覆盖**。显式提供后，rstest 会直接使用你的目录，而不是当前 project 根目录下默认的 `node_modules/.cache/rstest-<project-name>`。
+- `cacheDigest`：**扩展**。rstest 会保留自己的运行时摘要项，并把你的自定义值追加在后面。
+- `buildDependencies`：**扩展**。rstest 会保留自己的依赖文件，并在把相对路径按当前配置文件目录解析后，再追加你的自定义文件。
+
+例如：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/rstest/browser',
+      cacheDigest: ['playwright'],
+      buildDependencies: ['./scripts/cache-flags.ts'],
+    },
+  },
+});
+```
+
+`buildDependencies` 中的相对路径会相对于当前生效的配置文件目录解析，例如 `rstest.config.*`，或者使用 adapter 时实际加载到的 `rsbuild.config.*`，而不是相对于 `process.cwd()`。
+
+如果你已经通过 `@rstest/adapter-rsbuild` 复用了 Rsbuild 配置，`performance.buildCache` 也会自动继承。

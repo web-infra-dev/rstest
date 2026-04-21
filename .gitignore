@@ -3,6 +3,7 @@
 *.cpuprofile
 node_modules/
 
+.cache/
 dist/
 dist-*
 compiled/

@@ -47,6 +47,7 @@ describe('test build config', () => {
       recursive: true,
       force: true,
     });
+    fs.rmSync(join(defaultOutputPath, 'rstest-manifest.json'), { force: true });
 
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

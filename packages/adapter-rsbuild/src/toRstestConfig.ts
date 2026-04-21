@@ -31,6 +31,7 @@ export function toRstestConfig({
     : rsbuildConfig;
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
+  const { buildCache } = finalBuildConfig.performance || {};
   const { cssModules, emitAssets, target, module } =
     finalBuildConfig.output || {};
   const {
@@ -69,6 +70,20 @@ export function toRstestConfig({
       cssModules,
       emitAssets,
       module,
+    },
+    performance: {
+      buildCache:
+        buildCache === undefined
+          ? undefined
+          : buildCache === false
+            ? false
+            : buildCache === true
+              ? true
+              : {
+                  cacheDirectory: buildCache.cacheDirectory,
+                  cacheDigest: buildCache.cacheDigest,
+                  buildDependencies: buildCache.buildDependencies,
+                },
     },
     tools: {
       rspack,

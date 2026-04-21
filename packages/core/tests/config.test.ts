@@ -1,4 +1,5 @@
 import { mergeRstestConfig, withDefaultConfig } from '../src/config';
+import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
 
 // Mock std-env to ensure consistent snapshot across environments
@@ -52,6 +53,150 @@ describe('mergeRstestConfig', () => {
 
     expect(merged.output?.distPath).toEqual({
       root: 'custom/.rstest-temp',
+    });
+  });
+
+  it('should normalize performance.buildCache defaults for rstest', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      source: {
+        tsconfigPath: './tsconfig.custom.json',
+      },
+      performance: {
+        buildCache: true,
+      },
+    });
+
+    expect(merged.performance?.buildCache).toEqual({
+      cacheDirectory: `${__dirname}/node_modules/.cache/rstest`,
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [`${__dirname}/tsconfig.custom.json`],
+    });
+  });
+
+  it('should preserve custom buildCache fields while appending rstest defaults', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: 'custom/.rstest-temp',
+      },
+      performance: {
+        buildCache: {
+          cacheDirectory: './custom-cache',
+          cacheDigest: ['user-digest'],
+          buildDependencies: ['./a.config.ts'],
+        },
+      },
+    });
+
+    expect(merged.performance?.buildCache).toEqual({
+      cacheDirectory: `${__dirname}/custom-cache`,
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'custom/.rstest-temp',
+        'user-digest',
+      ],
+      buildDependencies: [`${__dirname}/a.config.ts`],
+    });
+  });
+
+  it('should resolve buildCache buildDependencies relative to config file directory', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/configs/rstest.config.mts',
+        projects: [],
+      },
+      {
+        performance: {
+          buildCache: {
+            buildDependencies: ['./cache-flags.ts'],
+          },
+        },
+      },
+    );
+
+    expect(rstest.normalizedConfig.performance?.buildCache).toEqual({
+      cacheDirectory: '/repo/node_modules/.cache/rstest',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
+  });
+
+  it('should append project name to default buildCache directory for per-project caches', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/rstest.config.mts',
+        projects: [
+          {
+            configFilePath: '/repo/projects/browser/rstest.config.mts',
+            config: {
+              name: 'browser',
+              root: './projects/browser',
+              performance: {
+                buildCache: true,
+              },
+            },
+          },
+          {
+            configFilePath: '/repo/projects/node/rstest.config.mts',
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: true,
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toEqual({
+      cacheDirectory:
+        '/repo/projects/browser/node_modules/.cache/rstest-browser',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [],
+    });
+    expect(
+      rstest.projects[1]?.normalizedConfig.performance?.buildCache,
+    ).toEqual({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [],
     });
   });
 

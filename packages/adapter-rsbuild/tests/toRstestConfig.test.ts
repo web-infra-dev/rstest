@@ -4,6 +4,13 @@ import { toRstestConfig } from '../src';
 
 describe('toRstestConfig', () => {
   const rsbuildConfig = defineConfig({
+    performance: {
+      buildCache: {
+        cacheDirectory: '.cache/from-rsbuild',
+        cacheDigest: ['rsbuild-digest'],
+        buildDependencies: ['./rsbuild-extra.ts'],
+      },
+    },
     source: {
       assetsInclude: /\.json5$/,
       define: {
@@ -63,6 +70,11 @@ describe('toRstestConfig', () => {
     expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
     expect(config.resolve?.mainFields).toEqual(['module', 'main']);
     expect(config.output?.emitAssets).toBeUndefined();
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: ['./rsbuild-extra.ts'],
+    });
     expect(config.testEnvironment).toBe('happy-dom');
   });
 

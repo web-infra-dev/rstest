@@ -1,14 +1,26 @@
+import fs from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
 describe('browser mode - coverage', () => {
-  it('should collect coverage data from browser tests', async () => {
+  it('should collect coverage data from browser tests with build cache enabled', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const cacheDir = join(fixtureDir, '.cache/browser-coverage');
+    const coverageReportPath = join(fixtureDir, 'coverage/coverage-final.json');
+
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    fs.rmSync(join(fixtureDir, 'coverage'), { recursive: true, force: true });
+    fs.rmSync(join(fixtureDir, 'dist'), { recursive: true, force: true });
+
     const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage');
 
     await expectExecSuccess();
 
     // Verify coverage report is generated
     expect(cli.stdout).toMatch(/Coverage enabled with istanbul/);
+    expect(fs.existsSync(cacheDir)).toBe(true);
+    expect(fs.existsSync(coverageReportPath)).toBe(true);
 
     // sum.ts should have 100% coverage (tested)
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');

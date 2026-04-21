@@ -39,7 +39,11 @@ export type {
 // Utils needed by browser package
 export { color, isDebug, logger, serializableConfig } from './utils';
 // Constants
-export { globalApis, TEMP_RSTEST_OUTPUT_DIR } from './utils/constants';
+export {
+  globalApis,
+  resolveProjectBuildCache,
+  TEMP_RSTEST_OUTPUT_DIR,
+} from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };

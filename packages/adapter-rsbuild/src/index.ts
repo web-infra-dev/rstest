@@ -49,7 +49,29 @@ export function withRsbuildConfig(
     const rstestConfig = toRstestConfig({
       environmentName,
       rsbuildConfig,
-      modifyRsbuildConfig,
+      modifyRsbuildConfig: (config) => {
+        const nextConfig = modifyRsbuildConfig
+          ? modifyRsbuildConfig(config)
+          : config;
+        const buildCache = nextConfig.performance?.buildCache;
+
+        if (!buildCache || buildCache === true) {
+          return nextConfig;
+        }
+
+        return {
+          ...nextConfig,
+          performance: {
+            ...nextConfig.performance,
+            buildCache: {
+              ...buildCache,
+              buildDependencies: filePath
+                ? [...(buildCache.buildDependencies || []), filePath]
+                : buildCache.buildDependencies,
+            },
+          },
+        };
+      },
     });
 
     return rstestConfig;

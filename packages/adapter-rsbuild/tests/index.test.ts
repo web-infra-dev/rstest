@@ -9,6 +9,13 @@ describe('withRsbuildConfig', () => {
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts']
+    }
+  },
   source: {
     assetsInclude: /\\.json5$/,
     define: {
@@ -56,6 +63,11 @@ export default defineConfig({
     });
     expect(config.resolve?.alias).toEqual({
       '@': './src',
+    });
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts', testConfigPath],
     });
     expect(config.testEnvironment).toBe('happy-dom');
   });

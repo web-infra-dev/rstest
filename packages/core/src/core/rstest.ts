@@ -24,7 +24,14 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
+import {
+  castArray,
+  getAbsolutePath,
+  logger,
+  normalizeBuildCache,
+  resolveBuildCacheDependencyPaths,
+  TS_CONFIG_FILE,
+} from '../utils';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -95,10 +102,15 @@ export class Rstest implements RstestContext {
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig({
-      ...userConfig,
-      root: rootPath,
-    });
+    const rstestConfig = withDefaultConfig(
+      resolveBuildCacheDependencyPaths(
+        {
+          ...userConfig,
+          root: rootPath,
+        },
+        configFilePath,
+      ),
+    );
 
     if (command === 'watch' && rstestConfig.shard) {
       logger.error('Test sharding is not supported in watch mode.');
@@ -135,7 +147,10 @@ export class Rstest implements RstestContext {
 
           // TODO: support extend projects config
           const config = withDefaultConfig(
-            project.config,
+            resolveBuildCacheDependencyPaths(
+              project.config,
+              project.configFilePath,
+            ),
           ) as NormalizedProjectConfig;
           // some configs are global only
           config.isolate = rstestConfig.isolate;
@@ -155,6 +170,22 @@ export class Rstest implements RstestContext {
               config.source.tsconfigPath,
             );
           }
+          const environmentName = formatEnvironmentName(config.name);
+
+          if (config.performance?.buildCache) {
+            config.performance.buildCache = normalizeBuildCache({
+              buildCache: config.performance.buildCache,
+              root: config.root,
+              tsconfigPaths: config.source?.tsconfigPath
+                ? [config.source.tsconfigPath]
+                : [],
+              outputDistPathRoot: config.output.distPath.root,
+              environmentName,
+              browserEnabled: config.browser.enabled,
+              assumeNormalized: true,
+            });
+          }
+
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
@@ -163,7 +194,7 @@ export class Rstest implements RstestContext {
             outputModule:
               config.output?.module ??
               process.env.RSTEST_OUTPUT_MODULE !== 'false',
-            environmentName: formatEnvironmentName(config.name),
+            environmentName,
             normalizedConfig: config,
           };
         })

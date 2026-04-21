@@ -22,6 +22,7 @@ import {
   type Reporter,
   type Rstest,
   type RuntimeConfig,
+  resolveProjectBuildCache,
   rsbuild,
   serializableConfig,
   type Test,
@@ -1279,6 +1280,10 @@ const createBrowserRuntime = async ({
             }
 
             const userRsbuildConfig = project.normalizedConfig;
+            const buildCache = resolveProjectBuildCache({
+              context,
+              project,
+            });
             const setupFiles = Object.values(
               getSetupFiles(
                 project.normalizedConfig.setupFiles,
@@ -1286,53 +1291,65 @@ const createBrowserRuntime = async ({
               ),
             );
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
-            const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
-              resolve: {
-                alias: rstestInternalAliases,
+            const merged = mergeEnvironmentConfig(
+              config,
+              {
+                ...userRsbuildConfig,
+                performance: buildCache
+                  ? {
+                      ...userRsbuildConfig.performance,
+                      buildCache,
+                    }
+                  : userRsbuildConfig.performance,
               },
-              source: {
-                define: {
-                  'process.env': 'globalThis[Symbol.for("rstest.env")]',
-                  'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+              {
+                resolve: {
+                  alias: rstestInternalAliases,
+                },
+                source: {
+                  define: {
+                    'process.env': 'globalThis[Symbol.for("rstest.env")]',
+                    'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                  },
+                },
+                output: {
+                  target: 'web',
+                  // Enable source map for inline snapshot support
+                  sourceMap: {
+                    js: 'source-map',
+                  },
+                },
+                tools: {
+                  rspack: (rspackConfig) => {
+                    rspackConfig.mode = 'development';
+                    rspackConfig.lazyCompilation =
+                      createBrowserLazyCompilationConfig(setupFiles);
+                    rspackConfig.plugins = rspackConfig.plugins || [];
+                    rspackConfig.plugins.push(virtualManifestPlugin);
+
+                    applyDefaultWatchOptions(rspackConfig, isWatchMode);
+
+                    // Extract and merge sourcemaps from pre-built @rstest/core files
+                    // This preserves the sourcemap chain for inline snapshot support
+                    // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                    const browserRuntimeDir = dirname(browserRuntimePath);
+                    rspackConfig.module = rspackConfig.module || {};
+                    rspackConfig.module.rules = rspackConfig.module.rules || [];
+                    rspackConfig.module.rules.unshift({
+                      test: /\.js$/,
+                      include: browserRuntimeDir,
+                      extractSourceMap: true,
+                    });
+
+                    if (isDebug()) {
+                      logger.log(
+                        `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                      );
+                    }
+                  },
                 },
               },
-              output: {
-                target: 'web',
-                // Enable source map for inline snapshot support
-                sourceMap: {
-                  js: 'source-map',
-                },
-              },
-              tools: {
-                rspack: (rspackConfig) => {
-                  rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation =
-                    createBrowserLazyCompilationConfig(setupFiles);
-                  rspackConfig.plugins = rspackConfig.plugins || [];
-                  rspackConfig.plugins.push(virtualManifestPlugin);
-
-                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                  // Extract and merge sourcemaps from pre-built @rstest/core files
-                  // This preserves the sourcemap chain for inline snapshot support
-                  // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
-                  const browserRuntimeDir = dirname(browserRuntimePath);
-                  rspackConfig.module = rspackConfig.module || {};
-                  rspackConfig.module.rules = rspackConfig.module.rules || [];
-                  rspackConfig.module.rules.unshift({
-                    test: /\.js$/,
-                    include: browserRuntimeDir,
-                    extractSourceMap: true,
-                  });
-
-                  if (isDebug()) {
-                    logger.log(
-                      `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                    );
-                  }
-                },
-              },
-            });
+            );
 
             // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
             // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).

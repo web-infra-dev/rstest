@@ -1,0 +1,56 @@
+---
+description: Configure Rsbuild performance options used by rstest test builds.
+---
+
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+
+# performance
+
+## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
+
+- **Type:** `boolean | { cacheDirectory?: string; cacheDigest?: Array<string | undefined>; buildDependencies?: string[] }`
+- **Default:** `false`
+
+Enables Rsbuild persistent build cache for rstest test builds.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+When enabled, rstest applies a few rstest-specific defaults to keep the cache stable across runs:
+
+- `cacheDirectory` defaults to `node_modules/.cache/rstest-<project-name>` under the active project root, so projects that share the same root still get isolated caches without writing into the temporary `output.distPath` directory.
+- `cacheDigest` automatically includes rstest runtime inputs such as command, environment name, browser-vs-node mode, and the effective `output.distPath.root`.
+- `buildDependencies` automatically includes the active rstest config file, project config files, and discovered `tsconfig` paths when available.
+
+You can still customize these fields, but they do not all behave the same:
+
+- `cacheDirectory`: **override**. When you provide it, rstest uses your directory instead of the default `node_modules/.cache/rstest-<project-name>` under the active project root.
+- `cacheDigest`: **extend**. rstest keeps its own runtime digest entries and appends your custom values after them.
+- `buildDependencies`: **extend**. rstest keeps its own dependency files and appends your custom files after resolving relative paths from the active config file directory.
+
+For example:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/rstest/browser',
+      cacheDigest: ['playwright'],
+      buildDependencies: ['./scripts/cache-flags.ts'],
+    },
+  },
+});
+```
+
+Relative paths in `buildDependencies` are resolved from the directory of the active config file (`rstest.config.*` or `rsbuild.config.*` when using the adapter), not from `process.cwd()`.
+
+If you already inherit Rsbuild config through `@rstest/adapter-rsbuild`, `performance.buildCache` is reused automatically.
