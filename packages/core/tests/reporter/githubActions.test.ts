@@ -290,6 +290,8 @@ describe('GithubActionsReporter step summary', () => {
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain('<details open>');
+      expect(summary).toContain('<summary>Rstest Test Reporter ⚠️</summary>');
       expect(summary).toContain('| **Flaky Tests** | 1 passed after retry |');
       expect(summary).toContain('## Flaky Tests');
       expect(summary).toContain(

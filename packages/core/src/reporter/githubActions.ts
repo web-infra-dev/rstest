@@ -285,8 +285,9 @@ async function renderStepSummary({
   const displayPath = getStepSummaryDisplayPath(rootPath);
   const hasUnhandledErrors = (unhandledErrors?.length ?? 0) > 0;
   const flakyTests = collectFlakyTests(testResults);
+  const hasFlakyTests = flakyTests.length > 0;
   const isSuccess = failures.length === 0 && !hasUnhandledErrors;
-  const reportIcon = isSuccess ? '✅' : '❌';
+  const reportIcon = isSuccess ? (hasFlakyTests ? '⚠️' : '✅') : '❌';
   const projectLabel = getStepSummaryProjectLabel({
     reportName,
     results,
@@ -298,7 +299,7 @@ async function renderStepSummary({
     : `Rstest Test Reporter ${reportIcon}`;
 
   const lines: string[] = [];
-  lines.push(isSuccess ? '<details>' : '<details open>');
+  lines.push(isSuccess && !hasFlakyTests ? '<details>' : '<details open>');
   lines.push(`<summary>${reportTitle}</summary>`);
   lines.push('');
   lines.push(`# ${reportTitle}`);
