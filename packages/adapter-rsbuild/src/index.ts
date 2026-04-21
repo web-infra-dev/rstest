@@ -1,3 +1,4 @@
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfigFn } from '@rstest/core';
 import { toRstestConfig } from './toRstestConfig';
@@ -24,6 +25,41 @@ export interface WithRsbuildConfigOptions {
    */
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
 }
+
+const addRsbuildConfigDependency = (
+  config: RsbuildConfig,
+  filePath: string,
+): RsbuildConfig => {
+  const buildCache = config.performance?.buildCache;
+
+  if (!buildCache) {
+    return config;
+  }
+
+  const configDir = dirname(filePath);
+  const buildDependencies =
+    buildCache === true ? [] : buildCache.buildDependencies || [];
+
+  return {
+    ...config,
+    performance: {
+      ...config.performance,
+      buildCache: {
+        ...(buildCache === true ? {} : buildCache),
+        buildDependencies: Array.from(
+          new Set([
+            ...buildDependencies.map((dependency) =>
+              isAbsolute(dependency)
+                ? dependency
+                : resolve(configDir, dependency),
+            ),
+            filePath,
+          ]),
+        ),
+      },
+    },
+  };
+};
 
 export function withRsbuildConfig(
   options: WithRsbuildConfigOptions = {},
@@ -53,24 +89,8 @@ export function withRsbuildConfig(
         const nextConfig = modifyRsbuildConfig
           ? modifyRsbuildConfig(config)
           : config;
-        const buildCache = nextConfig.performance?.buildCache;
 
-        if (!buildCache || buildCache === true) {
-          return nextConfig;
-        }
-
-        return {
-          ...nextConfig,
-          performance: {
-            ...nextConfig.performance,
-            buildCache: {
-              ...buildCache,
-              buildDependencies: filePath
-                ? [...(buildCache.buildDependencies || []), filePath]
-                : buildCache.buildDependencies,
-            },
-          },
-        };
+        return addRsbuildConfigDependency(nextConfig, filePath);
       },
     });
 

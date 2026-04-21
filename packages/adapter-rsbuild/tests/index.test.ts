@@ -67,9 +67,32 @@ export default defineConfig({
     expect(config.performance?.buildCache).toEqual({
       cacheDirectory: '.cache/from-file',
       cacheDigest: ['file-digest'],
-      buildDependencies: ['./cache-extra.ts', testConfigPath],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
     });
     expect(config.testEnvironment).toBe('happy-dom');
+  });
+
+  it('should add rsbuild config file as dependency for boolean build cache', async () => {
+    writeFileSync(
+      testConfigPath,
+      `
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true
+  }
+});
+  `,
+    );
+
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect(config.performance?.buildCache).toEqual({
+      buildDependencies: [testConfigPath],
+    });
   });
 
   it('should load and merge environment config', async () => {

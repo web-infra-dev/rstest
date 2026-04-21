@@ -1,3 +1,4 @@
+import { resolve } from 'pathe';
 import { mergeRstestConfig, withDefaultConfig } from '../src/config';
 import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
@@ -68,7 +69,7 @@ describe('mergeRstestConfig', () => {
     });
 
     expect(merged.performance?.buildCache).toEqual({
-      cacheDirectory: `${__dirname}/node_modules/.cache/rstest`,
+      cacheDirectory: resolve(__dirname, 'node_modules/.cache/rstest'),
       cacheDigest: [
         'rstest',
         undefined,
@@ -76,7 +77,7 @@ describe('mergeRstestConfig', () => {
         'node',
         'dist/.rstest-temp',
       ],
-      buildDependencies: [`${__dirname}/tsconfig.custom.json`],
+      buildDependencies: [resolve(__dirname, 'tsconfig.custom.json')],
     });
   });
 
@@ -96,7 +97,7 @@ describe('mergeRstestConfig', () => {
     });
 
     expect(merged.performance?.buildCache).toEqual({
-      cacheDirectory: `${__dirname}/custom-cache`,
+      cacheDirectory: resolve(__dirname, 'custom-cache'),
       cacheDigest: [
         'rstest',
         undefined,
@@ -105,7 +106,7 @@ describe('mergeRstestConfig', () => {
         'custom/.rstest-temp',
         'user-digest',
       ],
-      buildDependencies: [`${__dirname}/a.config.ts`],
+      buildDependencies: [resolve(__dirname, 'a.config.ts')],
     });
   });
 
