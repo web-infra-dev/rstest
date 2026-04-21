@@ -180,7 +180,7 @@ describe('mergeRstestConfig', () => {
       cacheDigest: [
         'rstest',
         undefined,
-        undefined,
+        'browser',
         'node',
         'dist/.rstest-temp',
       ],
@@ -190,13 +190,7 @@ describe('mergeRstestConfig', () => {
       rstest.projects[1]?.normalizedConfig.performance?.buildCache,
     ).toEqual({
       cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
-      cacheDigest: [
-        'rstest',
-        undefined,
-        undefined,
-        'node',
-        'dist/.rstest-temp',
-      ],
+      cacheDigest: ['rstest', undefined, 'node', 'node', 'dist/.rstest-temp'],
       buildDependencies: [],
     });
   });

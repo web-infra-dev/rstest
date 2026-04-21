@@ -710,7 +710,14 @@ describe('prepareRsbuild', () => {
       (origin as any).environmentConfigs?.test?.performance?.buildCache,
     ).toEqual({
       cacheDirectory: join(rootPath, 'node_modules/.cache/rstest-test'),
-      cacheDigest: ['root-digest'],
+      cacheDigest: [
+        'rstest',
+        'run',
+        'test',
+        'node',
+        TEMP_RSTEST_OUTPUT_DIR,
+        'root-digest',
+      ],
       buildDependencies: [
         join(rootPath, 'projects/test/rstest.config.ts'),
         join(rootPath, 'tsconfig.json'),

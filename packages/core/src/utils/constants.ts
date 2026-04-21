@@ -115,16 +115,18 @@ export const normalizeBuildCache = ({
     ),
   );
 
-  const cacheDigest = assumeNormalized
-    ? userConfig.cacheDigest || []
-    : [
-        'rstest',
-        command,
-        environmentName,
-        browserEnabled ? 'browser' : 'node',
-        outputDistPathRoot,
-        ...(userConfig.cacheDigest || []),
-      ];
+  const userCacheDigest =
+    assumeNormalized && userConfig.cacheDigest?.[0] === 'rstest'
+      ? userConfig.cacheDigest.slice(5)
+      : userConfig.cacheDigest || [];
+  const cacheDigest = [
+    'rstest',
+    command,
+    environmentName,
+    browserEnabled ? 'browser' : 'node',
+    outputDistPathRoot,
+    ...userCacheDigest,
+  ];
 
   const cacheDirectory = isUsingDefaultBuildCacheDir({
     root,

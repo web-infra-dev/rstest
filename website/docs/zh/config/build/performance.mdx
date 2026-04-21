@@ -3,10 +3,13 @@ description: 配置 rstest 在测试构建中使用的 Rsbuild performance 选�
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # performance
 
 ## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
+
+<ApiMeta addedVersion="0.9.8" />
 
 - **类型：** `boolean | { cacheDirectory?: string; cacheDigest?: Array<string | undefined>; buildDependencies?: string[] }`
 - **默认值：** `false`

@@ -3,10 +3,13 @@ description: Configure Rsbuild performance options used by rstest test builds.
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
 
 # performance
 
 ## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
+
+<ApiMeta addedVersion="0.9.8" />
 
 - **Type:** `boolean | { cacheDirectory?: string; cacheDigest?: Array<string | undefined>; buildDependencies?: string[] }`
 - **Default:** `false`
