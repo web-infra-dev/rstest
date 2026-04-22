@@ -2,6 +2,8 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   performance: {
-    buildCache: true,
+    buildCache: {
+      cacheDirectory: '.cache/mock-build-cache',
+    },
   },
 });

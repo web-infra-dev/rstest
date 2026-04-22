@@ -146,8 +146,8 @@ describe('test build cache config', () => {
 
     await runFixture();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    await runFixture();
-
     expect(fs.existsSync(cacheDir)).toBe(true);
+
+    await runFixture();
   });
 });
