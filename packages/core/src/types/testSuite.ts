@@ -151,6 +151,7 @@ export type TestResult = {
   parentNames?: string[];
   duration?: number;
   errors?: FormattedError[];
+  retryErrors?: FormattedError[];
   retryCount?: number;
   project: string;
   heap?: number;

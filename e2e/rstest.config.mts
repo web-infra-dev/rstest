@@ -50,5 +50,6 @@ export default defineConfig({
     '**/dist/**',
     '**/fixtures/**',
     '**/fixtures-*/**',
+    '**/flaky-fixtures/**',
   ].concat(process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : []),
 });

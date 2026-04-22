@@ -60,7 +60,7 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/core/tsconfig.json"
   },
   "dependencies": {
-    "@rsbuild/core": "2.0.0-rc.2",
+    "@rsbuild/core": "^2.0.0",
     "@types/chai": "^5.2.3",
     "tinypool": "^2.1.0"
   },

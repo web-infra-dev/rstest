@@ -383,6 +383,7 @@ export class TestRunner {
       } else {
         const start = RealDate.now();
         let retryCount = 0;
+        const retryErrors: FormattedError[] = [];
         // Call onTestCaseStart hook before running the test
         hooks.onTestCaseStart?.({
           testId: test.testId,
@@ -400,11 +401,15 @@ export class TestRunner {
         do {
           const currentResult = await runTestsCase(test, parentHooks);
 
+          if (currentResult.status === 'fail') {
+            retryErrors.push(...(currentResult.errors || []));
+          }
+
           result = {
             ...currentResult,
             errors:
-              currentResult.status === 'fail' && result && result.errors
-                ? result.errors.concat(...(currentResult.errors || []))
+              currentResult.status === 'fail'
+                ? [...retryErrors]
                 : currentResult.errors,
           };
 
@@ -413,6 +418,9 @@ export class TestRunner {
 
         result.duration = RealDate.now() - start;
         result.retryCount = retryCount - 1;
+        if (result.status === 'pass' && retryErrors.length > 0) {
+          result.retryErrors = retryErrors;
+        }
         result.heap = state.runtimeConfig.logHeapUsage
           ? process.memoryUsage().heapUsed
           : undefined;

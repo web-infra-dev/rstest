@@ -79,7 +79,7 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `displayName`                | [`name`](/config/test/name)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `rootDir`                    | [`root`](/config/test/root)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `setupFilesAfterEnv`         | [`setupFiles`](/config/test/setup-files)                                                       | Rstest's `setupFiles` runs after the test framework is registered — equivalent to Jest's `setupFilesAfterEnv` (not Jest's plain `setupFiles`). Strip the `<rootDir>/` prefix. Merge any Jest `setupFiles` entries here too; there is no separate "before framework" hook.                                                                                                                                                               |
-| `globalSetup`                | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Jest setup reads `(globalConfig, projectConfig)`, rewrite without them.                                                                                                                                                                                                                                                                                                                  |
+| `globalSetup`                | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Jest setup reads `(globalConfig, projectConfig)`, rewrite without them. As in Jest, `process.env` mutations made here propagate to every test worker.                                                                                                                                                                                                                                    |
 | `globalTeardown`             | [`globalSetup`](/config/test/global-setup)                                                     | No separate field. Rewrite the file to `globalSetup`'s format (see above) — a bare `export default async function teardown()` from Jest would run at setup, not after tests.                                                                                                                                                                                                                                                            |
 | `verbose`                    | [`reporters: 'verbose'`](/config/test/reporters)                                               | No `verbose` boolean — use the `verbose` reporter.                                                                                                                                                                                                                                                                                                                                                                                      |
 | `reporters`                  | [`reporters`](/config/test/reporters)                                                          | String values must be built-in names. For third-party reporters (e.g. `jest-junit`), import the reporter class and pass the instance.                                                                                                                                                                                                                                                                                                   |
@@ -220,6 +220,43 @@ If you used `jest.setTimeout()` to set the timeout for a test, you can use `rste
 + rstest.setConfig({ testTimeout: 5_000 })
 ```
 
+## Snapshot format
+
+Rstest snapshots use a different key format than Jest. Existing Jest snapshot files will not match Rstest's generated keys on the first run — the snapshot bodies are unchanged, only the key formatting differs.
+
+### Key separator change
+
+Jest joins the suite name, test name, and snapshot label with `:`. Rstest uses `>`:
+
+```diff
+- overlay should not show a warning when "client.overlay.warnings" is "false": page html 1
++ overlay > should not show a warning when "client.overlay.warnings" is "false" > page html 1
+```
+
+For the example above, the parts are:
+
+1. `overlay` — suite name (`describe(...)`).
+2. `should not show a warning when "client.overlay.warnings" is "false"` — test name (`it(...)` / `test(...)`).
+3. `page html` — snapshot label from `.toMatchSnapshot('page html')`.
+4. `1` — snapshot index for that label in the test.
+
+### Updating snapshots
+
+`rstest -u` re-records snapshots in Rstest's key format:
+
+```bash
+rstest -u                # update everything
+rstest overlay -u        # update a filtered scope
+```
+
+### Reviewing the diff
+
+Most snapshot churn after migration is non-functional:
+
+- Separator-only key renames are formatting changes, not behavior changes.
+- Key-order churn without any body difference is also formatting-only.
+- Body content changes under the same key are the only signal of a real behavior change.
+
 ## ESM and CJS
 
 Rstest supports ESM by default. If your project is using ESM, you don't need to perform any extra configuration, such as setting `NODE_OPTIONS=--experimental-vm-modules`.
@@ -230,7 +267,7 @@ If your project is using CommonJS, Rstest still works, but it is recommended to 
 
 In Rstest, `rstest.mock()` targets ESM entries used by `import`, while `rstest.mockRequire()` targets CJS entries used by `require()`.
 
-If your code uses `require()`, you should use `rstest.mockRequire()` to ensure the correct entry is mocked:
+For code that uses `require()`, `rstest.mockRequire()` targets the CJS entry:
 
 ```ts
 // Mocking a CJS module

@@ -71,6 +71,17 @@ export default defineConfig({
 });
 ```
 
+### Helper imports
+
+Vitest's config-file helpers map to equivalents in `@rstest/core`:
+
+| Vitest (`vitest/config`) | Rstest (`@rstest/core`)                                                  | Notes                                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defineConfig`           | [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)           |                                                                                                                                                                                    |
+| `defineProject`          | [`defineProject`](/api/javascript-api/rstest-core#defineproject)         | For items inside a `projects` array, prefer [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) — it requires an explicit `name`.                         |
+| `defineWorkspace`        | Remove                                                                   | No workspace helper. Declare projects inline via the `projects` field on `defineConfig` — see [Projects](/guide/basic/projects).                                                   |
+| `mergeConfig`            | [`mergeRstestConfig`](/api/javascript-api/rstest-core#mergerstestconfig) | Deep-merges and preserves function-valued fields. For composing configs inside a `projects` array, use [`mergeProjectConfig`](/api/javascript-api/rstest-core#mergeprojectconfig). |
+
 ### Vitest configuration mappings
 
 When migrating config, keep two changes in mind:
@@ -86,7 +97,7 @@ Walk through **every** option under `test` and match it against the table below 
 | `include` / `exclude`         | [`include`](/config/test/include) / [`exclude`](/config/test/exclude)                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `includeSource`               | [`includeSource`](/config/test/include-source)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `setupFiles`                  | [`setupFiles`](/config/test/setup-files)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `globalSetup`                 | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Vitest setup reads the `TestProject` argument (e.g. `provide`, `onTestsRerun`), rewrite without it.                                                                                                                                                                                                                                                                                                                                         |
+| `globalSetup`                 | [`globalSetup`](/config/test/global-setup)                                                     | Rstest calls setup with no arguments — if your Vitest setup reads the `TestProject` argument (e.g. `provide`, `onTestsRerun`), rewrite without it. Vitest's `provide` / `inject` has no direct Rstest equivalent — mutate `process.env` in the setup (Rstest snapshots it post-setup into every worker) or set static values via the [`env`](/config/test/env) config field.                                                                                                               |
 | `globals`                     | [`globals`](/config/test/globals)                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `name`                        | [`name`](/config/test/name)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `root`                        | [`root`](/config/test/root)                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -202,7 +213,7 @@ If your tests import APIs from `@rstest/core`, prefer `rs.<api>` in import style
 
 ### Setup adapters
 
-Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom/vitest` is designed for Vitest and should be replaced in Rstest setup files.
+Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom/vitest` is designed for Vitest; in Rstest, register the matchers directly via `expect.extend`.
 
 ```diff
 - import '@testing-library/jest-dom/vitest';
@@ -242,7 +253,7 @@ test('should be mocked', () => {
 });
 ```
 
-Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will throw an error if one isn't found. To achieve auto-mocking, you must explicitly pass the `{ mock: true }` option.
+Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will throw an error if one isn't found. Auto-mocking requires explicitly passing the `{ mock: true }` option.
 
 ```diff
 // Rstest
@@ -277,3 +288,14 @@ rs.mock('./api', () => ({
 ```
 
 Because mock factories are hoisted, avoid relying on values initialized later in the same module. If needed, move shared values to a hoisted initializer (for example `rs.hoisted(...)`) to avoid initialization-order errors.
+
+## Snapshots
+
+Vitest and Rstest use the same snapshot key format and body serializer. Existing `__snapshots__/*.snap` files from a Vitest suite are read verbatim by Rstest, and tests that passed under Vitest continue to pass under Rstest without re-recording. Only the file header line differs:
+
+```diff
+- // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
++ // Rstest Snapshot v1
+```
+
+Running `rstest -u` normalizes this header to the Rstest form; the snapshot bodies stay byte-identical.
