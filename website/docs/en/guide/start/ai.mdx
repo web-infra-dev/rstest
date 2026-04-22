@@ -18,11 +18,19 @@ To help AI better understand Rstest's features, configuration, and best practice
 
 ## Agent prompt
 
-If you are using a coding agent (such as Claude Code, Cursor, Copilot, etc.), you can copy the following prompt to set up Rstest in your project:
+If you are using a coding agent (such as Claude Code, Cursor, Copilot, etc.), copy the prompt that matches your project. The agent will read the linked instructions and install dependencies, create configuration, and write tests based on your project type.
 
-<AgentPrompt />
+### Set up Rstest
 
-The agent will read the linked instructions and automatically install dependencies, create configuration, and write tests based on your project type.
+Use this prompt to add Rstest to a project that doesn't have a test runner configured yet:
+
+<AgentPrompt variant="install" />
+
+### Migrate from Jest or Vitest
+
+Use this prompt to migrate an existing Jest or Vitest project to Rstest. For convenience, the linked instructions inline the full [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill so nothing needs to be installed; alternatively, you can [install the skill](#agent-skills) and use it directly:
+
+<AgentPrompt variant="migrate" />
 
 ## Agent Skills
 

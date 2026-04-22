@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import styles from './AgentPrompt.module.scss';
 
-const PROMPT_TEXT =
-  'Set up Rstest in this project by following the instructions here:\nhttps://rstest.rs/guide/start/agent-install.md';
+type Variant = 'install' | 'migrate';
+
+const PROMPTS: Record<Variant, string> = {
+  install:
+    'Set up Rstest in this project by following the instructions here:\nhttps://rstest.rs/guide/start/agent-install.md',
+  migrate:
+    'Migrate this project to Rstest by following the instructions here:\nhttps://rstest.rs/guide/start/agent-migrate.md',
+};
 
 /**
  * SVG icons sourced from @lobehub/icons (MIT license).
@@ -119,9 +125,11 @@ function RotatingIcon({ index, fading }: { index: number; fading: boolean }) {
   );
 }
 
-export function AgentPrompt() {
+export function AgentPrompt({ variant = 'install' }: { variant?: Variant }) {
+  const promptText = PROMPTS[variant];
+
   if (import.meta.env.SSG_MD) {
-    return <>{`\`\`\`\n${PROMPT_TEXT}\n\`\`\`\n`}</>;
+    return <>{`\`\`\`\n${promptText}\n\`\`\`\n`}</>;
   }
 
   const [index, setIndex] = useState(0);
@@ -140,11 +148,11 @@ export function AgentPrompt() {
   }, []);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(PROMPT_TEXT).then(() => {
+    navigator.clipboard.writeText(promptText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, []);
+  }, [promptText]);
 
   const headerBg = `${ICONS[index].color}12`;
 
@@ -165,7 +173,7 @@ export function AgentPrompt() {
           {copied ? '✓ Copied' : 'Copy'}
         </button>
       </div>
-      <div className={styles.body}>{PROMPT_TEXT}</div>
+      <div className={styles.body}>{promptText}</div>
     </div>
   );
 }

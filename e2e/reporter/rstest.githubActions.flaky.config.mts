@@ -1,6 +1,6 @@
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/fixtures/**'],
-  exclude: ['**/flaky-fixtures/**'],
+  include: ['flaky-fixtures/githubActionsFlaky.test.ts'],
+  retry: 1,
 });
