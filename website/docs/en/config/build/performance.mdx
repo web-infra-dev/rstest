@@ -11,7 +11,18 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.10.0" />
 
-- **Type:** `boolean | { cacheDirectory?: string; cacheDigest?: Array<string | undefined>; buildDependencies?: string[] }`
+- **Type:**
+
+```ts
+type BuildCacheConfig =
+  | boolean
+  | {
+      cacheDirectory?: string;
+      cacheDigest?: Array<string | undefined>;
+      buildDependencies?: string[];
+    };
+```
+
 - **Default:** `false`
 
 Enables Rsbuild persistent build cache for rstest test builds.
@@ -28,15 +39,15 @@ export default defineConfig({
 
 When enabled, rstest applies a few rstest-specific defaults to keep the cache stable across runs:
 
-- `cacheDirectory` defaults to `node_modules/.cache/rstest-<project-name>` under the active project root, so projects that share the same root still get isolated caches without writing into the temporary `output.distPath` directory.
-- `cacheDigest` automatically includes rstest runtime inputs such as command, environment name, browser-vs-node mode, and the effective `output.distPath.root`.
+- `cacheDirectory` defaults to `node_modules/.cache/rstest-<project-name>` under the active project root, so projects that share the same root still get isolated caches.
+- `cacheDigest` automatically includes rstest runtime inputs such as command, environment name, browser-vs-node mode.
 - `buildDependencies` automatically includes the active rstest config file, project config files, and discovered `tsconfig` paths when available.
 
-You can still customize these fields, but they do not all behave the same:
+You can customize these fields to override or extend the defaults:
 
-- `cacheDirectory`: **override**. When you provide it, rstest uses your directory instead of the default `node_modules/.cache/rstest-<project-name>` under the active project root.
-- `cacheDigest`: **extend**. rstest keeps its own runtime digest entries and appends your custom values after them.
-- `buildDependencies`: **extend**. rstest keeps its own dependency files and appends your custom files after resolving relative paths from the active config file directory.
+- `cacheDirectory`: **override**. When you provide it, rstest uses your directory.
+- `cacheDigest`: **extend**. Rstest keeps its own runtime digest entries and appends your custom values after them.
+- `buildDependencies`: **extend**. Rstest keeps its own dependency files and appends your custom files after resolving relative paths from the active config file directory.
 
 For example:
 
@@ -47,13 +58,9 @@ export default defineConfig({
   performance: {
     buildCache: {
       cacheDirectory: '.cache/rstest/browser',
-      cacheDigest: ['playwright'],
-      buildDependencies: ['./scripts/cache-flags.ts'],
+      cacheDigest: [process.env.CUSTOM_ENV],
+      buildDependencies: ['./scripts/test-env.ts'],
     },
   },
 });
 ```
-
-Relative paths in `buildDependencies` are resolved from the directory of the active config file (`rstest.config.*` or `rsbuild.config.*` when using the adapter), not from `process.cwd()`.
-
-If you already inherit Rsbuild config through `@rstest/adapter-rsbuild`, `performance.buildCache` is reused automatically.
