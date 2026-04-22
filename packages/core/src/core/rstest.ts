@@ -149,7 +149,7 @@ export class Rstest implements RstestContext {
           const config = withDefaultConfig(
             resolveBuildCacheDependencyPaths(
               project.config,
-              project.configFilePath,
+              project.configFilePath ?? configFilePath,
             ),
           ) as NormalizedProjectConfig;
           // some configs are global only

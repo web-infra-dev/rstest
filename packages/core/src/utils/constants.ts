@@ -17,6 +17,9 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
+const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
+  'defaultBuildCacheDirectory',
+);
 
 export const getOutputDistPathRoot = (
   distPath?: NonNullable<RstestConfig['output']>['distPath'],
@@ -67,19 +70,9 @@ const getDefaultBuildCacheDir = (environmentName?: string): string =>
     ? `${DEFAULT_BUILD_CACHE_PREFIX}-${environmentName}`
     : DEFAULT_BUILD_CACHE_PREFIX;
 
-const isUsingDefaultBuildCacheDir = ({
-  root,
-  cacheDirectory,
-  environmentName,
-}: {
-  root: string;
-  cacheDirectory?: string;
-  environmentName?: string;
-}): boolean =>
-  !cacheDirectory ||
-  resolve(root, cacheDirectory) === resolve(root, DEFAULT_BUILD_CACHE_PREFIX) ||
-  resolve(root, cacheDirectory) ===
-    resolve(root, getDefaultBuildCacheDir(environmentName));
+type InternalBuildCacheConfig = RstestBuildCacheConfig & {
+  [DEFAULT_BUILD_CACHE_DIRECTORY_MARKER]?: true;
+};
 
 export const normalizeBuildCache = ({
   buildCache,
@@ -97,7 +90,8 @@ export const normalizeBuildCache = ({
     return false;
   }
 
-  const userConfig = buildCache === true ? {} : buildCache;
+  const userConfig: InternalBuildCacheConfig =
+    buildCache === true ? {} : buildCache;
   const buildDependencies = Array.from(
     new Set(
       [
@@ -128,19 +122,28 @@ export const normalizeBuildCache = ({
     ...userCacheDigest,
   ];
 
-  const cacheDirectory = isUsingDefaultBuildCacheDir({
-    root,
-    cacheDirectory: userConfig.cacheDirectory,
-    environmentName,
-  })
+  const isDefaultCacheDirectory =
+    buildCache === true ||
+    !userConfig.cacheDirectory ||
+    userConfig[DEFAULT_BUILD_CACHE_DIRECTORY_MARKER];
+
+  const cacheDirectory = isDefaultCacheDirectory
     ? getDefaultBuildCacheDir(environmentName)
     : userConfig.cacheDirectory!;
 
-  return {
+  const normalized = {
     cacheDirectory: resolve(root, cacheDirectory),
     cacheDigest,
     buildDependencies,
   };
+
+  if (isDefaultCacheDirectory) {
+    Object.defineProperty(normalized, DEFAULT_BUILD_CACHE_DIRECTORY_MARKER, {
+      value: true,
+    });
+  }
+
+  return normalized;
 };
 
 export const resolveBuildCacheDependencyPaths = <

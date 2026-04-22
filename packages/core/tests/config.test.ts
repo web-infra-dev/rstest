@@ -2,6 +2,7 @@ import { resolve } from 'pathe';
 import { mergeRstestConfig, withDefaultConfig } from '../src/config';
 import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
+import { resolveProjectBuildCache } from '../src/utils';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -137,6 +138,72 @@ describe('mergeRstestConfig', () => {
         'dist/.rstest-temp',
       ],
       buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
+  });
+
+  it('should resolve inline project buildCache buildDependencies relative to root config file directory', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/configs/rstest.config.mts',
+        projects: [
+          {
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: {
+                  buildDependencies: ['./cache-flags.ts'],
+                },
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache
+        ?.buildDependencies,
+    ).toEqual(['/repo/configs/cache-flags.ts']);
+  });
+
+  it('should preserve explicit default buildCache directory for projects', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/rstest.config.mts',
+        projects: [
+          {
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: {
+                  cacheDirectory: 'node_modules/.cache/rstest',
+                },
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache
+        ?.cacheDirectory,
+    ).toBe('/repo/projects/node/node_modules/.cache/rstest');
+    expect(
+      resolveProjectBuildCache({
+        context: rstest,
+        project: rstest.projects[0]!,
+      }),
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest',
     });
   });
 
