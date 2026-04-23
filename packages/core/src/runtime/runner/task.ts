@@ -63,12 +63,20 @@ const createShouldSkipByName = (
     return undefined;
   }
 
-  const delimiter = testNamePattern.toString().includes(TEST_DELIMITER)
+  const regex =
+    typeof testNamePattern === 'string'
+      ? new RegExp(testNamePattern)
+      : testNamePattern;
+  const delimiter = regex.toString().includes(TEST_DELIMITER)
     ? TEST_DELIMITER
     : '';
 
   return (test: TestCase) => {
-    return !getTaskNameWithPrefix(test, delimiter).match(testNamePattern);
+    if (regex.global || regex.sticky) {
+      regex.lastIndex = 0;
+    }
+
+    return !regex.test(getTaskNameWithPrefix(test, delimiter));
   };
 };
 
