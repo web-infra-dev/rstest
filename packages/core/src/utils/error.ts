@@ -145,7 +145,6 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
 const stackIgnores: (RegExp | string)[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
-  /node_modules\/tinypool/,
   /node_modules\/chai/,
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
