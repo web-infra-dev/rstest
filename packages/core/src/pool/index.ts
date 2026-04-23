@@ -122,7 +122,7 @@ const filterAssetsByEntry = async (
 const getNodeExecArgv = () => {
   const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
 
-  return [
+  const argv = [
     '--experimental-vm-modules',
     '--experimental-import-meta-resolve',
     needFlagExperimentalDetectModule()
@@ -131,6 +131,27 @@ const getNodeExecArgv = () => {
     '--require',
     suppressFile,
   ].filter(Boolean) as string[];
+
+  // [DEBUG ONLY — not for main] When RSTEST_POOL_DEBUG=1 the worker is
+  // spawned with Node's diagnostic-report flags so any fatal error / uncaught
+  // exception / SIGUSR2 leaves a JSON report in RSTEST_POOL_REPORT_DIR. CI
+  // uploads that directory plus any macOS core dump as an artifact.
+  // `--report-on-fatalerror` does NOT reliably catch SIGSEGV (V8 may already
+  // be corrupted); the core dump is the fallback for that case.
+  if (process.env.RSTEST_POOL_DEBUG === '1') {
+    const reportDir =
+      process.env.RSTEST_POOL_REPORT_DIR || '/tmp/rstest-node-report';
+    argv.push(
+      '--report-on-fatalerror',
+      '--report-uncaught-exception',
+      '--report-on-signal',
+      '--report-signal=SIGUSR2',
+      `--report-directory=${reportDir}`,
+      '--report-compact',
+    );
+  }
+
+  return argv;
 };
 
 /** Shared parameter type for `runTests` and `collectTests`. */

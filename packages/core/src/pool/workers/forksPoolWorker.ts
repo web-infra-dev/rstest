@@ -56,6 +56,9 @@ export class ForksPoolWorker implements PoolWorker {
   private stderrBytes = 0;
   private startPromise?: Promise<void>;
   private exited = false;
+  // [DEBUG ONLY — not for main] Captured when fork succeeds so we can report
+  // worker uptime on signal-based exits.
+  private forkTs: number | undefined;
 
   constructor(options: ForksPoolWorkerOptions) {
     this.name = options.name;
@@ -74,6 +77,8 @@ export class ForksPoolWorker implements PoolWorker {
 
   start(): Promise<void> {
     if (this.startPromise) return this.startPromise;
+
+    const startTs = Date.now();
 
     this.startPromise = new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -104,6 +109,7 @@ export class ForksPoolWorker implements PoolWorker {
       }
 
       this.childProcess = child;
+      this.forkTs = startTs;
 
       // Pipe child stdio to the host process so native crash logs / warnings
       // remain visible. Tinypool did this by default; preserve the behavior.
@@ -136,6 +142,25 @@ export class ForksPoolWorker implements PoolWorker {
       // the buffer is nearly complete by the time `exit` fires.
       child.on('exit', (code, signal) => {
         this.exited = true;
+        // [DEBUG ONLY — not for main] Signal-based exits (SIGSEGV/SIGBUS/
+        // SIGABRT/SIGKILL) are what we're hunting on the `dp-debug` branch.
+        // Dump PID, uptime and stderr tail so a bare CI log is enough context
+        // to triage even when the Node diagnostic report or macOS core dump
+        // does not land (e.g. V8 too corrupted to run the report handler).
+        if (process.env.RSTEST_POOL_DEBUG === '1' && signal !== null) {
+          const uptime = this.forkTs ? Date.now() - this.forkTs : -1;
+          const stderrTail = this.stderrBuffer
+            .split('\n')
+            .slice(-30)
+            .join('\n');
+          process.stderr.write(
+            `\n[pool-debug] worker name=${this.name} pid=${child.pid} ` +
+              `exited via signal=${signal} (code=${code}) uptime=${uptime}ms\n` +
+              `[pool-debug] stderr tail (last 30 lines):\n${stderrTail}\n` +
+              `[pool-debug] look for core dump at /cores/core.${child.pid} and ` +
+              'diagnostic report under $RSTEST_POOL_REPORT_DIR\n\n',
+          );
+        }
         this.emitter.emit('exit', code, signal);
         settleReject(
           new Error(

@@ -207,12 +207,49 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium webkit
 
-      - name: E2E Test (${{ matrix.test_script }})
+      # [DEBUG ONLY — not for main] Enable macOS core dumps + Node diagnostic
+      # report so a worker SIGSEGV leaves something actionable behind. Core
+      # dumps need both sysctl (kernel config) and ulimit (per-process limit);
+      # the ulimit call lives in the test step below because it does not
+      # persist across GH Actions steps.
+      - name: Enable crash diagnostics (macOS only)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sudo chmod 1777 /cores || true
+          sudo sysctl kern.coredump=1 || true
+          sudo sysctl kern.corefile=/cores/core.%N.%P || true
+          mkdir -p "$RUNNER_TEMP/rstest-node-report"
+          echo "RSTEST_POOL_DEBUG=1" >> "$GITHUB_ENV"
+          echo "RSTEST_POOL_REPORT_DIR=$RUNNER_TEMP/rstest-node-report" >> "$GITHUB_ENV"
+
+      - name: E2E Test (${{ matrix.test_script }}) [macOS]
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          ulimit -c unlimited
+          cd e2e && pnpm ${{ matrix.test_script }}
+
+      - name: E2E Test (${{ matrix.test_script }}) [Windows]
+        if: runner.os == 'Windows'
         run: cd e2e && pnpm ${{ matrix.test_script }}
 
       - name: VS Code Extension Test
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
+
+      # [DEBUG ONLY — not for main] Upload anything the worker left behind.
+      # `if-no-files-found: ignore` keeps green runs quiet.
+      - name: Upload crash artifacts
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: crash-${{ matrix.os }}-node${{ matrix.node_version }}-${{ matrix.test_script }}-attempt${{ github.run_attempt }}
+          path: |
+            /cores/
+            ${{ runner.temp }}/rstest-node-report/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ======== gate ========
   test-gate:
