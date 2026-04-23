@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, join, normalize } from 'node:path';
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
 
@@ -24,14 +24,14 @@ const getCacheDependency = ({
   root?: string;
 }): string => {
   if (isAbsolute(dependency)) {
-    return dependency;
+    return normalize(dependency);
   }
 
   if (configPath) {
-    return resolve(dirname(configPath), dependency);
+    return normalize(join(dirname(configPath), dependency));
   }
 
-  return root ? resolve(root, dependency) : dependency;
+  return root ? normalize(join(root, dependency)) : dependency;
 };
 
 const updateCacheConfig = ({
@@ -52,7 +52,7 @@ const updateCacheConfig = ({
   }
 
   if (buildCache === true) {
-    return configPath ? { buildDependencies: [configPath] } : true;
+    return configPath ? { buildDependencies: [normalize(configPath)] } : true;
   }
 
   const buildDependencies = buildCache.buildDependencies?.map((dependency) =>
@@ -63,7 +63,7 @@ const updateCacheConfig = ({
     }),
   );
   const nextBuildDependencies = configPath
-    ? Array.from(new Set([...(buildDependencies || []), configPath]))
+    ? Array.from(new Set([...(buildDependencies || []), normalize(configPath)]))
     : buildDependencies;
 
   return {
