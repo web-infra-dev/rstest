@@ -1,4 +1,4 @@
-import { type ChildProcess, fork } from 'node:child_process';
+import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
 import type { EntryInfo, FormattedError } from '../types';
@@ -33,6 +33,12 @@ type GlobalSetupResponse = {
   result: any;
 };
 
+type ForkWorker = (
+  modulePath: string,
+  args: string[],
+  options: ForkOptions,
+) => ChildProcess;
+
 const isGlobalSetupResponse = (
   value: unknown,
 ): value is GlobalSetupResponse => {
@@ -44,7 +50,7 @@ const isGlobalSetupResponse = (
   );
 };
 
-class GlobalSetupWorker {
+export class GlobalSetupWorker {
   private child: ChildProcess | undefined;
   private nextId = 0;
   private pending = new Map<
@@ -52,24 +58,44 @@ class GlobalSetupWorker {
     { resolve: (value: any) => void; reject: (err: Error) => void }
   >();
 
+  constructor(private readonly forkWorker: ForkWorker = fork) {}
+
+  private rejectPending(id: number, error: Error): void {
+    const handler = this.pending.get(id);
+    if (!handler) return;
+    this.pending.delete(id);
+    handler.reject(error);
+  }
+
+  private rejectAllPending(error: Error): void {
+    for (const handler of this.pending.values()) {
+      handler.reject(error);
+    }
+    this.pending.clear();
+  }
+
   start(): ChildProcess {
     if (this.child) return this.child;
 
-    const child = fork(resolve(__dirname, './globalSetupWorker.js'), [], {
-      execArgv: [
-        ...process.execArgv,
-        '--experimental-vm-modules',
-        '--experimental-import-meta-resolve',
-        '--no-warnings',
-      ],
-      env: {
-        NODE_ENV: 'test',
-        ...getForceColorEnv(),
-        ...process.env,
-      } as NodeJS.ProcessEnv,
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      serialization: getWorkerSerialization(),
-    });
+    const child = this.forkWorker(
+      resolve(__dirname, './globalSetupWorker.js'),
+      [],
+      {
+        execArgv: [
+          ...process.execArgv,
+          '--experimental-vm-modules',
+          '--experimental-import-meta-resolve',
+          '--no-warnings',
+        ],
+        env: {
+          NODE_ENV: 'test',
+          ...getForceColorEnv(),
+          ...process.env,
+        } as NodeJS.ProcessEnv,
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        serialization: getWorkerSerialization(),
+      },
+    );
 
     child.stdout?.on('data', (chunk: Buffer) => process.stdout.write(chunk));
     child.stderr?.on('data', (chunk: Buffer) => process.stderr.write(chunk));
@@ -82,12 +108,14 @@ class GlobalSetupWorker {
       handler.resolve(message.result);
     });
 
+    child.on('error', (error) => {
+      this.rejectAllPending(error);
+      this.child = undefined;
+    });
+
     child.on('exit', () => {
       const error = new Error('[rstest] global setup worker exited');
-      for (const handler of this.pending.values()) {
-        handler.reject(error);
-      }
-      this.pending.clear();
+      this.rejectAllPending(error);
       this.child = undefined;
     });
 
@@ -103,10 +131,19 @@ class GlobalSetupWorker {
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       try {
-        child.send({ __rstest_global_setup__: true, id, ...payload });
+        child.send(
+          { __rstest_global_setup__: true, id, ...payload },
+          (error) => {
+            if (error) {
+              this.rejectPending(id, error);
+            }
+          },
+        );
       } catch (err) {
-        this.pending.delete(id);
-        reject(err instanceof Error ? err : new Error(String(err)));
+        this.rejectPending(
+          id,
+          err instanceof Error ? err : new Error(String(err)),
+        );
       }
     });
   }
