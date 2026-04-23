@@ -238,18 +238,39 @@ jobs:
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
-      # [DEBUG ONLY — not for main] Upload anything the worker left behind.
-      # `if-no-files-found: ignore` keeps green runs quiet.
+      # [DEBUG ONLY — not for main] Stage only node crash artifacts into a
+      # single directory so the upload step has a clean path and doesn't burn
+      # GH Actions storage quota on unrelated browser core dumps (the VS Code
+      # extension test can leave a ~1 GB chrome-headless core behind during
+      # teardown). Also computes a name-safe suffix — `test:commonjs` /
+      # `test:no-isolate` contain colons which `upload-artifact` rejects.
+      - name: Stage crash artifacts (macOS only)
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        env:
+          MATRIX_TEST_SCRIPT: ${{ matrix.test_script }}
+        run: |
+          STAGE="$RUNNER_TEMP/crash-artifacts"
+          mkdir -p "$STAGE"
+          shopt -s nullglob
+          for f in /cores/core.node.*; do
+            [ -f "$f" ] && cp "$f" "$STAGE/"
+          done
+          if [ -d "$RUNNER_TEMP/rstest-node-report" ]; then
+            cp -R "$RUNNER_TEMP/rstest-node-report" "$STAGE/" 2>/dev/null || true
+          fi
+          SAFE="${MATRIX_TEST_SCRIPT//:/-}"
+          echo "ARTIFACT_SUFFIX=$SAFE" >> "$GITHUB_ENV"
+          echo "Staged contents:" && ls -la "$STAGE" || true
+
       - name: Upload crash artifacts
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: crash-${{ matrix.os }}-node${{ matrix.node_version }}-${{ matrix.test_script }}-attempt${{ github.run_attempt }}
-          path: |
-            /cores/
-            ${{ runner.temp }}/rstest-node-report/
+          name: crash-${{ matrix.os }}-node${{ matrix.node_version }}-${{ env.ARTIFACT_SUFFIX }}-attempt${{ github.run_attempt }}
+          path: ${{ runner.temp }}/crash-artifacts/
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   # ======== gate ========
   test-gate:
