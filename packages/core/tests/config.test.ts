@@ -260,6 +260,14 @@ describe('mergeRstestConfig', () => {
       cacheDigest: ['rstest', undefined, 'node', 'node', 'dist/.rstest-temp'],
       buildDependencies: [],
     });
+    expect(
+      resolveProjectBuildCache({
+        context: rstest,
+        project: rstest.projects[1]!,
+      }),
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
+    });
   });
 
   it('should merge exclude correctly', () => {

@@ -198,8 +198,8 @@ export const resolveProjectBuildCache = ({
 }): false | RstestBuildCacheConfig =>
   normalizeBuildCache({
     buildCache: project.normalizedConfig.performance?.buildCache,
-    root: context.rootPath,
-    configFilePath: project.configFilePath || context.configFilePath,
+    root: project.normalizedConfig.root,
+    configFilePath: project.configFilePath ?? context.configFilePath,
     tsconfigPaths: project.normalizedConfig.source?.tsconfigPath
       ? [project.normalizedConfig.source.tsconfigPath]
       : [],
