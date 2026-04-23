@@ -1,3 +1,4 @@
+import { normalize } from 'node:path';
 import { defineConfig, type RsbuildConfig } from '@rsbuild/core';
 import { describe, expect, it } from '@rstest/core';
 import { toRstestConfig } from '../src';
@@ -138,8 +139,8 @@ describe('toRstestConfig', () => {
       cacheDirectory: '.cache/from-rsbuild',
       cacheDigest: ['rsbuild-digest'],
       buildDependencies: [
-        '/repo/configs/rsbuild-extra.ts',
-        '/repo/configs/rsbuild.config.ts',
+        normalize('/repo/configs/rsbuild-extra.ts'),
+        normalize('/repo/configs/rsbuild.config.ts'),
       ],
     });
   });
@@ -155,7 +156,7 @@ describe('toRstestConfig', () => {
     expect(config.performance?.buildCache).toEqual({
       cacheDirectory: '.cache/from-rsbuild',
       cacheDigest: ['rsbuild-digest'],
-      buildDependencies: ['/repo/project/rsbuild-extra.ts'],
+      buildDependencies: [normalize('/repo/project/rsbuild-extra.ts')],
     });
   });
 });

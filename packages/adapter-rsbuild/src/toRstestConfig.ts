@@ -1,8 +1,4 @@
-import { isAbsolute } from 'node:path';
-import {
-  dirname as posixDirname,
-  resolve as posixResolve,
-} from 'node:path/posix';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
 
@@ -27,21 +23,15 @@ const getCacheDependency = ({
   configPath?: string;
   root?: string;
 }): string => {
-  // Use posix paths for consistency across platforms
   if (isAbsolute(dependency)) {
-    return dependency.replaceAll('\\', '/');
+    return dependency;
   }
 
   if (configPath) {
-    return posixResolve(
-      posixDirname(configPath.replaceAll('\\', '/')),
-      dependency,
-    );
+    return resolve(dirname(configPath), dependency);
   }
 
-  return root
-    ? posixResolve(root.replaceAll('\\', '/'), dependency)
-    : dependency;
+  return root ? resolve(root, dependency) : dependency;
 };
 
 const updateCacheConfig = ({
