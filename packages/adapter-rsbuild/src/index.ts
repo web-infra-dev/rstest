@@ -1,4 +1,3 @@
-import { dirname, isAbsolute, resolve } from 'node:path';
 import { loadConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfigFn } from '@rstest/core';
 import { toRstestConfig } from './toRstestConfig';
@@ -26,41 +25,6 @@ export interface WithRsbuildConfigOptions {
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
 }
 
-const addRsbuildConfigDependency = (
-  config: RsbuildConfig,
-  filePath: string,
-): RsbuildConfig => {
-  const buildCache = config.performance?.buildCache;
-
-  if (!buildCache) {
-    return config;
-  }
-
-  const configDir = dirname(filePath);
-  const buildDependencies =
-    buildCache === true ? [] : buildCache.buildDependencies || [];
-
-  return {
-    ...config,
-    performance: {
-      ...config.performance,
-      buildCache: {
-        ...(buildCache === true ? {} : buildCache),
-        buildDependencies: Array.from(
-          new Set([
-            ...buildDependencies.map((dependency) =>
-              isAbsolute(dependency)
-                ? dependency
-                : resolve(configDir, dependency),
-            ),
-            filePath,
-          ]),
-        ),
-      },
-    },
-  };
-};
-
 export function withRsbuildConfig(
   options: WithRsbuildConfigOptions = {},
 ): ExtendConfigFn {
@@ -85,13 +49,8 @@ export function withRsbuildConfig(
     const rstestConfig = toRstestConfig({
       environmentName,
       rsbuildConfig,
-      modifyRsbuildConfig: (config) => {
-        const nextConfig = modifyRsbuildConfig
-          ? modifyRsbuildConfig(config)
-          : config;
-
-        return addRsbuildConfigDependency(nextConfig, filePath);
-      },
+      configPath: filePath,
+      modifyRsbuildConfig,
     });
 
     return rstestConfig;

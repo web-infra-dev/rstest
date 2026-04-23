@@ -1,14 +1,88 @@
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
+
+type BuildCacheConfig = NonNullable<
+  NonNullable<RsbuildConfig['performance']>['buildCache']
+>;
+type BuildCacheOutput =
+  | boolean
+  | {
+      cacheDirectory?: string;
+      cacheDigest?: Array<string | undefined>;
+      buildDependencies?: string[];
+    }
+  | undefined;
+
+const getCacheDependency = ({
+  dependency,
+  configPath,
+  root,
+}: {
+  dependency: string;
+  configPath?: string;
+  root?: string;
+}): string => {
+  if (isAbsolute(dependency)) {
+    return dependency;
+  }
+
+  if (configPath) {
+    return resolve(dirname(configPath), dependency);
+  }
+
+  return root ? resolve(root, dependency) : dependency;
+};
+
+const updateCacheConfig = ({
+  buildCache,
+  configPath,
+  root,
+}: {
+  buildCache?: BuildCacheConfig;
+  configPath?: string;
+  root?: string;
+}): BuildCacheOutput => {
+  if (buildCache === undefined) {
+    return undefined;
+  }
+
+  if (buildCache === false) {
+    return false;
+  }
+
+  if (buildCache === true) {
+    return configPath ? { buildDependencies: [configPath] } : true;
+  }
+
+  const buildDependencies = buildCache.buildDependencies?.map((dependency) =>
+    getCacheDependency({
+      dependency,
+      configPath,
+      root,
+    }),
+  );
+  const nextBuildDependencies = configPath
+    ? Array.from(new Set([...(buildDependencies || []), configPath]))
+    : buildDependencies;
+
+  return {
+    cacheDirectory: buildCache.cacheDirectory,
+    cacheDigest: buildCache.cacheDigest,
+    buildDependencies: nextBuildDependencies,
+  };
+};
 
 /**
  * Convert rsbuild config to rstest config
  */
 export function toRstestConfig({
+  configPath,
   environmentName,
   rsbuildConfig: rawRsbuildConfig,
   modifyRsbuildConfig,
 }: {
+  configPath?: string;
   environmentName?: string;
   rsbuildConfig: RsbuildConfig;
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
@@ -44,7 +118,7 @@ export function toRstestConfig({
     transformImport,
   } = finalBuildConfig.source || {};
 
-  return {
+  const rstestConfig = {
     root: finalBuildConfig.root,
     name: environmentName,
     plugins: [
@@ -72,18 +146,11 @@ export function toRstestConfig({
       module,
     },
     performance: {
-      buildCache:
-        buildCache === undefined
-          ? undefined
-          : buildCache === false
-            ? false
-            : buildCache === true
-              ? true
-              : {
-                  cacheDirectory: buildCache.cacheDirectory,
-                  cacheDigest: buildCache.cacheDigest,
-                  buildDependencies: buildCache.buildDependencies,
-                },
+      buildCache: updateCacheConfig({
+        buildCache,
+        configPath,
+        root: finalBuildConfig.root,
+      }),
     },
     tools: {
       rspack,
@@ -91,5 +158,7 @@ export function toRstestConfig({
       bundlerChain,
     } as ExtendConfig['tools'],
     testEnvironment: target === 'node' ? 'node' : 'happy-dom',
-  };
+  } as ExtendConfig;
+
+  return rstestConfig;
 }

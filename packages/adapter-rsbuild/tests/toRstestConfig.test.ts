@@ -127,4 +127,35 @@ describe('toRstestConfig', () => {
       'process.env.CUSTOM': '"custom-value"',
     });
   });
+
+  it('should add config file dependency and resolve relative build dependencies from configPath', () => {
+    const config = toRstestConfig({
+      rsbuildConfig,
+      configPath: '/repo/configs/rsbuild.config.ts',
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: [
+        '/repo/configs/rsbuild-extra.ts',
+        '/repo/configs/rsbuild.config.ts',
+      ],
+    });
+  });
+
+  it('should resolve relative build dependencies from root when configPath is not provided', () => {
+    const config = toRstestConfig({
+      rsbuildConfig: {
+        ...rsbuildConfig,
+        root: '/repo/project',
+      },
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: ['/repo/project/rsbuild-extra.ts'],
+    });
+  });
 });

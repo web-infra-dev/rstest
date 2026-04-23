@@ -42,7 +42,7 @@ import { withRslibConfig } from '@rstest/adapter-rslib';
 
 export default defineConfig({
   extends: withRslibConfig(),
-  // Additional rstest-specific configuration
+  // Additional Rstest-specific configuration
 });
 ```
 
@@ -51,6 +51,22 @@ This will automatically:
 - Load your `rslib.config.ts` file
 - Extract and map test-relevant Rslib options to Rstest configuration
 - Merge with any additional Rstest config you provide
+
+When `performance.buildCache` is enabled in your Rslib config, `withRslibConfig()` passes it through to Rstest and Rstest will still append its own cache defaults, such as runtime digest inputs and config-file-based invalidation.
+
+If your Rslib config does not enable `performance.buildCache`, Rstest keeps it disabled by default. Enable it explicitly in your Rstest config when you want persistent cache for test builds:
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  performance: {
+    buildCache: true,
+  },
+});
+```
 
 The adapter does not reuse the entire Rslib config as-is. It keeps the parts that matter for test execution, such as module resolution, transforms, CSS Modules, decorator-related settings, static asset handling, and `target`, and automatically drops unmapped fields like `dev`, `server`, and `html`, along with other options that only exist for dev server, page entry, or build output.
 

@@ -1,5 +1,5 @@
 ---
-description: 配置 rstest 在测试构建中使用的 Rsbuild performance 选项。
+description: 配置 Rstest 在测试构建中使用的 Rsbuild performance 选项。
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
@@ -25,7 +25,11 @@ type BuildCacheConfig =
 
 - **默认值：** `false`
 
-为 rstest 的测试构建开启 Rsbuild 持久化构建缓存。
+为 Rstest 的测试构建开启 Rsbuild 持久化构建缓存。
+
+:::tip
+Rspack 的持久化缓存仍处于实验阶段，未来版本中可能发生变化，因此 Rstest 默认不会开启 `performance.buildCache`。
+:::
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
