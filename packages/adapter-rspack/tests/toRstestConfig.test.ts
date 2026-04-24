@@ -1,3 +1,4 @@
+import { normalize } from 'node:path';
 import type { RspackOptions } from '@rspack/core';
 import { describe, expect, it } from '@rstest/core';
 import { toRstestConfig } from '../src';
@@ -61,6 +62,66 @@ describe('toRstestConfig', () => {
     });
 
     expect(config.name).toBe('custom');
+  });
+
+  it('should convert persistent cache config to build cache config', () => {
+    const config = toRstestConfig({
+      rspackConfig: {
+        ...baseConfig,
+        context: '/repo/project',
+        cache: {
+          type: 'persistent',
+          version: 'rspack-version',
+          storage: {
+            type: 'filesystem',
+            directory: '.cache/from-rspack',
+          },
+          buildDependencies: ['./rspack-extra.ts'],
+        },
+      },
+      configPath: '/repo/configs/rspack.config.ts',
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: normalize('/repo/project/.cache/from-rspack'),
+      cacheDigest: ['rspack-version'],
+      buildDependencies: [
+        normalize('/repo/project/rspack-extra.ts'),
+        normalize('/repo/configs/rspack.config.ts'),
+      ],
+    });
+  });
+
+  it('should keep rstest-generated persistent cache in tools.rspack', () => {
+    const config = toRstestConfig({
+      rspackConfig: {
+        ...baseConfig,
+        cache: {
+          type: 'persistent',
+          version: 'rspack-version',
+          buildDependencies: ['./rspack-extra.ts'],
+        },
+      },
+    });
+
+    const rspackFn = config.tools?.rspack as (
+      config: Record<string, any>,
+    ) => Record<string, any>;
+    const generatedCache = {
+      type: 'persistent',
+      version: 'rstest-version',
+      storage: {
+        type: 'filesystem',
+        directory: '/repo/project/.cache/rstest',
+      },
+      buildDependencies: ['/repo/project/rstest.config.ts'],
+    };
+
+    const result = rspackFn({
+      cache: generatedCache,
+      plugins: [],
+    });
+    expect(result.cache).toEqual(generatedCache);
   });
 
   it('should extract resolve config', () => {
