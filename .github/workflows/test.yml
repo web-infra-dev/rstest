@@ -214,6 +214,20 @@ jobs:
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
+  # ======== codspeed ========
+  codspeed:
+    needs: e2e
+    if: |
+      needs.e2e.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'pull_request')
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/codspeed.yml
+    with:
+      ref: ${{ github.sha }}
+
   # ======== gate ========
   test-gate:
     needs: [prepare, lint, ut, e2e]

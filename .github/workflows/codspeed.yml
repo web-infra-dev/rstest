@@ -1,21 +1,12 @@
 name: CodSpeed
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-    paths:
-      - 'packages/**'
-      - 'benchmarks/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/codspeed.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'packages/**'
-      - 'benchmarks/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/codspeed.yml'
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to benchmark.'
+        required: false
+        type: string
   schedule:
     # Run once a week on main to build a continuous baseline for CPU benchmark
     - cron: '0 0 * * 0'
@@ -28,10 +19,11 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: codspeed-${{ github.event.pull_request.number || inputs.ref || github.sha }}
   cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
