@@ -1,4 +1,4 @@
-import { normalize } from 'node:path';
+import { normalize, resolve } from 'node:path';
 import type { RspackOptions } from '@rspack/core';
 import { describe, expect, it } from '@rstest/core';
 import { toRstestConfig } from '../src';
@@ -83,10 +83,10 @@ describe('toRstestConfig', () => {
     });
 
     expect(config.performance?.buildCache).toEqual({
-      cacheDirectory: normalize('/repo/project/.cache/from-rspack'),
+      cacheDirectory: resolve('/repo/project/.cache/from-rspack'),
       cacheDigest: ['rspack-version'],
       buildDependencies: [
-        normalize('/repo/project/rspack-extra.ts'),
+        resolve('/repo/project/rspack-extra.ts'),
         normalize('/repo/configs/rspack.config.ts'),
       ],
     });
