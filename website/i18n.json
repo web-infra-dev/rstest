@@ -39,13 +39,13 @@
     "en": "Rspack-powered bundling keeps startup and reruns fast, even in larger projects.",
     "zh": "基于 Rspack 的构建与优化能力，在大型项目中也能保持快速启动和重新运行。"
   },
-  "unifiedRstackExperience": {
-    "en": "Built for the Rstack workflow",
-    "zh": "融入 Rstack 工作流"
+  "realBrowserTesting": {
+    "en": "Real browser testing",
+    "zh": "真实浏览器测试"
   },
-  "unifiedRstackExperienceDesc": {
-    "en": "Works naturally with Rsbuild, Rspack, and Rslib projects without duplicating tooling.",
-    "zh": "自然接入 Rsbuild、Rspack 和 Rslib 项目，减少重复工具链维护。"
+  "realBrowserTestingDesc": {
+    "en": "Run tests in Chromium, Firefox, or WebKit through Playwright when jsdom isn't enough.",
+    "zh": "基于 Playwright 在 Chromium、Firefox、WebKit 中运行测试，覆盖 jsdom 难以验证的场景。"
   },
   "modernByDefault": {
     "en": "Modern by default",

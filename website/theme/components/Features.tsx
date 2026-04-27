@@ -35,9 +35,9 @@ export function Features() {
       icon: '🧰',
     },
     {
-      title: t('unifiedRstackExperience'),
-      details: t('unifiedRstackExperienceDesc'),
-      icon: '🧩',
+      title: t('realBrowserTesting'),
+      details: t('realBrowserTestingDesc'),
+      icon: '🌐',
     },
   ];
 
