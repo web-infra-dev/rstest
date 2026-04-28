@@ -44,14 +44,14 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.0",
+    "@rslib/core": "0.21.3",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",
