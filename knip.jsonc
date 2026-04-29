@@ -1,5 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Treat exports referenced only in their declaring file as used.
+  // Types in `packages/*/src/types/*.ts` are organized by topic and consumed via
+  // `export type *` re-exports; flagging them as unused on every same-file
+  // reference is noise after the knip v5 → v6 bump.
+  "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
       "entry": ["cspell.config.cjs", "rslint.config.mts"],
