@@ -116,9 +116,7 @@ export async function runGlobalTeardown(): Promise<void> {
     } catch (error) {
       console.error(bgColor('bgRed', 'Error during global teardown'));
       if (error instanceof Error) {
-        error.stack
-          ? console.error(color.red(error.stack))
-          : console.error(color.red(error.message));
+        console.error(color.red(error.stack ?? error.message));
       } else {
         console.error(color.red(String(error)));
       }

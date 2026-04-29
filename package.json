@@ -20,9 +20,9 @@
     "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.11",
-    "@rsdoctor/rspack-plugin": "^1.5.7",
-    "@rslint/core": "^0.4.1",
+    "@biomejs/biome": "^2.4.13",
+    "@rsdoctor/rspack-plugin": "^1.5.9",
+    "@rslint/core": "^0.5.1",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.0.1",
@@ -30,13 +30,13 @@
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.0",
-    "knip": "^6.4.1",
-    "lefthook": "^1.11.13",
+    "knip": "^6.7.0",
+    "lefthook": "^1.13.6",
     "path-serializer": "0.6.0",
     "playwright": "^1.59.1",
-    "prettier": "^3.8.2",
+    "prettier": "^3.8.3",
     "prettier-plugin-packagejson": "^3.0.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@10.12.4",
   "engines": {

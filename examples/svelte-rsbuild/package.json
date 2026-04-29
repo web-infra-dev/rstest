@@ -10,12 +10,12 @@
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.0.0",
+    "@rsbuild/core": "^2.0.3",
     "@rsbuild/plugin-svelte": "^1.1.1",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@rstest/core": "workspace:*",
-    "happy-dom": "^20.8.9",
-    "svelte": "^5.55.3",
-    "typescript": "^6.0.2"
+    "happy-dom": "^20.9.0",
+    "svelte": "^5.55.5",
+    "typescript": "^6.0.3"
   }
 }

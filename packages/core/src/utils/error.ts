@@ -139,7 +139,7 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
     logger.stderr(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.stderr('');
+  if (stackFrames.length) logger.stderr('');
 }
 
 const stackIgnores: (RegExp | string)[] = [

@@ -105,10 +105,10 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "^2.0.0",
-    "@rslib/core": "0.21.0",
+    "@rsbuild/core": "^2.0.3",
+    "@rslib/core": "0.21.3",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.24",
+    "@swc/core": "^1.15.32",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
@@ -117,15 +117,15 @@
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "3.7.1",
+    "@vscode/vsce": "3.9.1",
     "birpc": "^4.0.0",
     "core-js-pure": "^3.49.0",
     "mocha": "^11.7.5",
-    "ovsx": "^0.10.10",
+    "ovsx": "^0.10.11",
     "picomatch": "^4.0.4",
     "semver": "^7.7.4",
     "tinyglobby": "^0.2.16",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "valibot": "^1.3.1"
   },
   "engines": {

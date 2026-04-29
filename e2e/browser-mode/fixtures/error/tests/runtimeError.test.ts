@@ -5,6 +5,6 @@ describe('runtime error', () => {
     // This will throw a runtime error
     const obj: Record<string, unknown> = {};
     // @ts-expect-error intentional error
-    obj.nonExistent.property;
+    void obj.nonExistent.property;
   });
 });

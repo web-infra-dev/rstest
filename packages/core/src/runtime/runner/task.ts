@@ -295,10 +295,10 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
 
     try {
       const result = await Promise.race([fn(...args), timeoutPromise]);
-      timeoutId && clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       return result;
     } catch (error) {
-      timeoutId && clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       throw error;
     }
   }) as T;
