@@ -2,8 +2,8 @@
 description: This chapter introduces how to help AI better understand Rstest's features, configuration, and best practices, so it can provide more accurate assistance during day-to-day development and troubleshooting.
 ---
 
+import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
-import { AgentPrompt } from '@components/AgentPrompt';
 
 # AI
 
@@ -24,13 +24,23 @@ If you are using a coding agent (such as Claude Code, Cursor, Copilot, etc.), co
 
 Use this prompt to add Rstest to a project that doesn't have a test runner configured yet:
 
-<AgentPrompt variant="install" />
+<Prompt
+  title="Set up Rstest"
+  description="Copy this prompt and send it to your coding agent."
+  prompt={`Set up Rstest in this project by following the instructions here:
+https://rstest.rs/guide/start/agent-install.md`}
+/>
 
 ### Migrate from Jest or Vitest
 
 Use this prompt to migrate an existing Jest or Vitest project to Rstest. For convenience, the linked instructions inline the full [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill so nothing needs to be installed; alternatively, you can [install the skill](#agent-skills) and use it directly:
 
-<AgentPrompt variant="migrate" />
+<Prompt
+  title="Migrate to Rstest"
+  description="Copy this prompt and send it to your coding agent."
+  prompt={`Migrate this project to Rstest by following the instructions here:
+https://rstest.rs/guide/start/agent-migrate.md`}
+/>
 
 ## Agent Skills
 
