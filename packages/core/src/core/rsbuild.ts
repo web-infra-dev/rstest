@@ -171,8 +171,7 @@ export const prepareRsbuild = async (
   });
 
   if (coverage?.enabled && command !== 'list') {
-    const [{ loadCoverageProvider }, { pluginCoverageCore }] =
-      await Promise.all([import('../coverage'), import('../coverage/plugin')]);
+    const { loadCoverageProvider } = await import('../coverage');
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
       context.rootPath,
@@ -184,10 +183,7 @@ export const prepareRsbuild = async (
       ),
     );
 
-    rsbuildInstance.addPlugins([
-      pluginCoverage(coverage),
-      pluginCoverageCore(coverage),
-    ]);
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 
   return rsbuildInstance;

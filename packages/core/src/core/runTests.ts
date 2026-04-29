@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import { createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
@@ -43,6 +44,18 @@ const getSignalExitCode = (signal: NodeJS.Signals): number => {
 };
 
 export async function runTests(context: Rstest): Promise<void> {
+  // Clean stale coverage reports at the start of the run rather than from an
+  // rsbuild compile hook — the build lifecycle and the test-run lifecycle do
+  // not always align (e.g. browser-only mode skips the node rsbuild instance,
+  // and `--passWithNoTests` with no matching files races the hook against
+  // generateCoverage). See https://github.com/web-infra-dev/rstest/issues/1212.
+  const { coverage: coverageConfig } = context.normalizedConfig;
+  if (coverageConfig.enabled && coverageConfig.clean) {
+    if (fs.existsSync(coverageConfig.reportsDirectory)) {
+      fs.rmSync(coverageConfig.reportsDirectory, { recursive: true });
+    }
+  }
+
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
