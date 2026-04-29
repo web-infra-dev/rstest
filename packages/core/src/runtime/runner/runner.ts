@@ -109,7 +109,7 @@ export class TestRunner {
       try {
         for (const fn of parentHooks.beforeEachListeners) {
           const cleanupFn = await fn(test.context);
-          cleanupFn && cleanups.push(cleanupFn);
+          if (cleanupFn) cleanups.push(cleanupFn);
         }
       } catch (error) {
         result = {
@@ -334,7 +334,7 @@ export class TestRunner {
               const cleanupFn = await fn({
                 filepath: testPath,
               });
-              cleanupFn && cleanups.push(cleanupFn);
+              if (cleanupFn) cleanups.push(cleanupFn);
             }
           } catch (error) {
             hasBeforeAllError = true;

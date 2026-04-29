@@ -634,7 +634,7 @@ export const createRsbuildServer = async ({
       }
       const content = await readFile(name);
 
-      enableAssetsCache && cachedAssetFiles.set(name, content);
+      if (enableAssetsCache) cachedAssetFiles.set(name, content);
 
       return content;
     };
@@ -659,7 +659,7 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      enableAssetsCache && content && cachedSourceMaps.set(name, content);
+      if (enableAssetsCache && content) cachedSourceMaps.set(name, content);
 
       return content;
     };

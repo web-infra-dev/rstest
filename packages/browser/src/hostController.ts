@@ -506,8 +506,9 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
   }
 
-  rspackConfig.output?.path &&
+  if (rspackConfig.output?.path) {
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
 };
 
 type LazyCompilationModule = {

@@ -286,7 +286,7 @@ export const loadModule = async ({
         })(specifier, importAttributes as ImportCallOptions);
       },
     });
-    distPath && esmCache.set(distPath, esm);
+    if (distPath) esmCache.set(distPath, esm);
   }
 
   if (esmMode === EsmMode.Unlinked) return esm;
@@ -312,9 +312,9 @@ export const loadModule = async ({
     });
   }
 
-  esm.status !== 'evaluated' &&
-    esm.status !== 'evaluating' &&
-    (await esm.evaluate());
+  if (esm.status !== 'evaluated' && esm.status !== 'evaluating') {
+    await esm.evaluate();
+  }
 
   const ns = esm.namespace as {
     default: unknown;
