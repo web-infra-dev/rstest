@@ -10,6 +10,7 @@ import type { Envelope, WorkerRequest } from '../protocol';
 import { wrapWorkerRequest } from '../protocol';
 
 const MAX_CAPTURED_STDERR_BYTES = 1024 * 1024; // 1 MB
+const STDERR_SETTLE_MAX_WAIT = 200; // ms
 
 const BENIGN_IPC_ERROR_CODES = new Set([
   'ERR_IPC_CHANNEL_CLOSED',
@@ -54,6 +55,7 @@ export class ForksPoolWorker implements PoolWorker {
   private childProcess: ChildProcess | undefined;
   private stderrBuffer = '';
   private stderrBytes = 0;
+  private stderrClosePromise: Promise<void> | undefined;
   private startPromise?: Promise<void>;
   private exited = false;
 
@@ -114,6 +116,11 @@ export class ForksPoolWorker implements PoolWorker {
         this.appendStderr(chunk.toString());
         process.stderr.write(chunk);
       });
+      if (child.stderr) {
+        this.stderrClosePromise = new Promise<void>((resolve) => {
+          child.stderr!.once('close', resolve);
+        });
+      }
 
       child.on('message', (message: unknown) => {
         this.emitter.emit('message', message);
@@ -190,6 +197,17 @@ export class ForksPoolWorker implements PoolWorker {
     listener: PoolWorkerEvents[E],
   ): void {
     this.emitter.off(event, listener as (...args: any[]) => void);
+  }
+
+  async waitForStderrSettle(): Promise<void> {
+    if (!this.stderrClosePromise) return;
+    await Promise.race([
+      this.stderrClosePromise,
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, STDERR_SETTLE_MAX_WAIT);
+        timer.unref();
+      }),
+    ]);
   }
 
   getCapturedStderr(): string {

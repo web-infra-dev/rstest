@@ -43,6 +43,11 @@ export interface PoolWorker {
    */
   resetCapturedStderr(): void;
   /**
+   * Wait for pending stderr data events to drain after the process has
+   * exited. Resolves when stderr emits `close` or a short timeout expires.
+   */
+  waitForStderrSettle(): Promise<void>;
+  /**
    * True when the worker still has a running child process that needs to be
    * terminated. Used by `PoolRunner.stop` to decide whether the STOPPING
    * path must wait for an `exit`/`close` event (and therefore whether it is

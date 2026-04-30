@@ -7,6 +7,8 @@
  *   - 'fatal'              → send `fatal_error` then exit(1)
  *   - 'exit-silent'        → exit(1) without any response
  *   - 'stderr-crash'       → write to stderr then exit(1)
+ *   - 'stderr-large'       → write >64KB of stderr then exit(1)
+ *   - 'stderr-late'        → write to stderr and exit(1) immediately
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
@@ -88,6 +90,22 @@ const handleRun = (request) => {
   if (mode === 'stderr-crash') {
     process.stderr.write('segfault at 0x0\n');
     setTimeout(() => process.exit(1), 10);
+    return;
+  }
+
+  if (mode === 'stderr-large') {
+    const chunk = 'x'.repeat(1024) + '\n';
+    for (let i = 0; i < 100; i++) {
+      process.stderr.write(chunk);
+    }
+    process.stderr.write('STDERR_TAIL_MARKER\n');
+    setTimeout(() => process.exit(1), 10);
+    return;
+  }
+
+  if (mode === 'stderr-late') {
+    process.stderr.write('late-stderr-marker\n');
+    process.exit(1);
     return;
   }
 

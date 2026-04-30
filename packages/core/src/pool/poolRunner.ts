@@ -13,6 +13,19 @@ import type { PoolTask } from './types';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
 const WORKER_STOP_TIMEOUT_MS = 60_000;
+const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
+
+function formatCapturedStderr(text: string): string {
+  const bytes = Buffer.byteLength(text);
+  if (bytes <= MAX_STDERR_MESSAGE_BYTES) {
+    return text;
+  }
+  const half = Math.floor(MAX_STDERR_MESSAGE_BYTES / 2);
+  const head = text.slice(0, half);
+  const tail = text.slice(-half);
+  const hiddenBytes = bytes - Buffer.byteLength(head) - Buffer.byteLength(tail);
+  return `${head}\n\n... [truncated ${hiddenBytes} bytes of stderr] ...\n\n${tail}`;
+}
 
 type RunnerState =
   | 'IDLE'
@@ -435,13 +448,21 @@ export class PoolRunner {
     const task = this.currentTask;
     if (!task) return;
     this.currentTask = undefined;
-    this.attachStderrToError(err);
-    task.reject(err);
+
+    // Defer rejection briefly so pending stderr `data` events drain before
+    // reading the buffer. The worker's `exit` event fires before stderr's
+    // `close`; without this wait, crash output written right before exit
+    // may be missed.
+    void this.worker.waitForStderrSettle().then(() => {
+      this.attachStderrToError(err);
+      task.reject(err);
+    });
   }
 
   private attachStderrToError(err: Error): void {
-    const stderr = this.worker.getCapturedStderr().trim();
-    if (stderr.length === 0) return;
+    const raw = this.worker.getCapturedStderr().trim();
+    if (raw.length === 0) return;
+    const stderr = formatCapturedStderr(raw);
     if (err.message.includes(stderr)) return;
     err.message = `${err.message}\n\nMaybe related stderr:\n${stderr}`;
   }
