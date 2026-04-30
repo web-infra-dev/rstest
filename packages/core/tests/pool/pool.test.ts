@@ -101,6 +101,39 @@ describe('Pool - fatal error', () => {
   });
 });
 
+// ── stderr handling ───────────────────────────────────────────────────────
+
+describe('Pool - stderr handling', () => {
+  it('should truncate large stderr in error messages', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const err: Error = await pool
+        .runTest(createTask('run', { __testMode: 'stderr-large' }))
+        .catch((e: Error) => e);
+      expect(err.message).toContain('[truncated');
+      expect(err.message).toContain('bytes of stderr]');
+      // Tail is preserved
+      expect(err.message).toContain('STDERR_TAIL_MARKER');
+      // Total message should be bounded
+      expect(Buffer.byteLength(err.message)).toBeLessThan(200 * 1024);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should capture stderr written immediately before exit', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const err: Error = await pool
+        .runTest(createTask('run', { __testMode: 'stderr-late' }))
+        .catch((e: Error) => e);
+      expect(err.message).toContain('late-stderr-marker');
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
 // ── isolate behavior ───────────────────────────────────────────────────────
 
 describe('Pool - isolate', () => {
