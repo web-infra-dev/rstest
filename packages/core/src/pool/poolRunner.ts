@@ -16,14 +16,14 @@ const WORKER_STOP_TIMEOUT_MS = 60_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
 
 function formatCapturedStderr(text: string): string {
-  const bytes = Buffer.byteLength(text);
-  if (bytes <= MAX_STDERR_MESSAGE_BYTES) {
+  const buf = Buffer.from(text);
+  if (buf.length <= MAX_STDERR_MESSAGE_BYTES) {
     return text;
   }
   const half = Math.floor(MAX_STDERR_MESSAGE_BYTES / 2);
-  const head = text.slice(0, half);
-  const tail = text.slice(-half);
-  const hiddenBytes = bytes - Buffer.byteLength(head) - Buffer.byteLength(tail);
+  const head = buf.subarray(0, half).toString('utf-8');
+  const tail = buf.subarray(-half).toString('utf-8');
+  const hiddenBytes = buf.length - half * 2;
   return `${head}\n\n... [truncated ${hiddenBytes} bytes of stderr] ...\n\n${tail}`;
 }
 
