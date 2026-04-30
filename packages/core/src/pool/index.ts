@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { basename, dirname, join } from 'pathe';
+import { basename, dirname, join, resolve } from 'pathe';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -25,7 +25,10 @@ import {
   needFlagExperimentalDetectModule,
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { createForksPool } from './forks';
+import { Pool } from './pool';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
@@ -108,19 +111,15 @@ const filterAssetsByEntry = async (
   setupAssets: string[],
 ) => {
   const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
-  const neededFilesPromise = getAssetFiles(assetNames);
-  const neededSourceMapsPromise = getSourceMaps(assetNames);
   const [neededFiles, neededSourceMaps] = await Promise.all([
-    neededFilesPromise,
-    neededSourceMapsPromise,
+    getAssetFiles(assetNames),
+    getSourceMaps(assetNames),
   ]);
 
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
 };
 
 const getNodeExecArgv = () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
   const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
 
   return [
@@ -132,6 +131,121 @@ const getNodeExecArgv = () => {
     '--require',
     suppressFile,
   ].filter(Boolean) as string[];
+};
+
+/** Shared parameter type for `runTests` and `collectTests`. */
+type PoolDispatchParams = {
+  entries: EntryInfo[];
+  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+  setupEntries: EntryInfo[];
+  updateSnapshot: SnapshotUpdateState;
+  project: ProjectContext;
+};
+
+/**
+ * Build a `PoolTask` for a single entry.  Shared by `runTests` and
+ * `collectTests` so the option-assembly logic lives in one place.
+ */
+const buildTask = async ({
+  type,
+  entryInfo,
+  index,
+  context,
+  project,
+  runtimeConfig,
+  setupEntries,
+  setupAssets,
+  updateSnapshot,
+  getAssetFiles,
+  getSourceMaps,
+  rpcMethods,
+}: {
+  type: 'run' | 'collect';
+  entryInfo: EntryInfo;
+  index: number;
+  context: RstestContext;
+  project: ProjectContext;
+  runtimeConfig: RuntimeConfig;
+  setupEntries: EntryInfo[];
+  setupAssets: string[];
+  updateSnapshot: SnapshotUpdateState;
+  getAssetFiles: PoolDispatchParams['getAssetFiles'];
+  getSourceMaps: PoolDispatchParams['getSourceMaps'];
+  rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+}) => {
+  const getAssets = () =>
+    filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+
+  return {
+    worker: 'forks' as const,
+    type,
+    options: {
+      entryInfo,
+      context: {
+        outputModule: project.outputModule,
+        taskId: index + 1,
+        project: project.name,
+        rootPath: context.rootPath,
+        projectRoot: project.rootPath,
+        runtimeConfig,
+      },
+      type,
+      setupEntries,
+      updateSnapshot,
+      /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
+      assets: isMemorySufficient() ? await getAssets() : undefined,
+    },
+    rpcMethods: {
+      ...rpcMethods,
+      // getAssetsByEntry is only used when memory is not sufficient since it may be slow
+      getAssetsByEntry: getAssets,
+    },
+  };
+};
+
+/**
+ * Convert a worker crash or pool error into a fail-status `TestFileResult`.
+ * Enriches the error with context about which test cases were running at the
+ * time of the crash (if any).
+ */
+const workerErrorToResult = (
+  err: unknown,
+  testPath: string,
+  projectName: string,
+  context: RstestContext,
+): TestFileResult => {
+  const error = err instanceof Error ? err : new Error(String(err));
+
+  (error as any).fullStack = true;
+  if (error.message.includes('Worker exited unexpectedly')) {
+    delete error.stack;
+  }
+
+  const runningModule = context.stateManager.runningModules.get(testPath);
+  const runningTests = runningModule?.runningTests;
+
+  if (runningTests?.length) {
+    const getCaseName = (test: TestCaseInfo) =>
+      `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
+
+    const hint =
+      runningTests.length === 1
+        ? `Maybe relevant test case: ${getCaseName(runningTests[0]!)} which is running when the error occurs.`
+        : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
+
+    error.message += `\n\n${color.white(hint)}`;
+  }
+
+  return {
+    testId: '0',
+    project: projectName,
+    testPath,
+    status: 'fail',
+    name: '',
+    results: runningModule?.results || [],
+    errors: [error],
+  };
 };
 
 export const createPool = async ({
@@ -154,14 +268,7 @@ export const createPool = async ({
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
-  collectTests: (params: {
-    entries: EntryInfo[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
-    setupEntries: EntryInfo[];
-    updateSnapshot: SnapshotUpdateState;
-    project: ProjectContext;
-  }) => Promise<
+  collectTests: (params: PoolDispatchParams) => Promise<
     {
       tests: TestInfo[];
       testPath: string;
@@ -220,8 +327,8 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
-  const pool = createForksPool({
-    ...poolOptions,
+  const pool = new Pool({
+    workerEntry: resolve(__dirname, './worker.js'),
     isolate,
     maxWorkers,
     minWorkers,
@@ -234,7 +341,7 @@ export const createPool = async ({
       NODE_ENV: 'test',
       ...getForceColorEnv(),
       ...process.env,
-    },
+    } as Record<string, string>,
   });
 
   const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
@@ -312,83 +419,30 @@ export const createPool = async ({
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const result = await pool
-            .runTest({
-              options: {
-                entryInfo,
-                context: {
-                  outputModule: project.outputModule,
-                  taskId: index + 1,
-                  project: projectName,
-                  rootPath: context.rootPath,
-                  projectRoot: project.rootPath,
-                  runtimeConfig,
-                },
-                type: 'run',
-                setupEntries,
-                updateSnapshot,
-                /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-                assets: isMemorySufficient()
-                  ? await filterAssetsByEntry(
-                      entryInfo,
-                      getAssetFiles,
-                      getSourceMaps,
-                      setupAssets,
-                    )
-                  : undefined,
-              },
-              rpcMethods: {
-                ...rpcMethods,
-                // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-                getAssetsByEntry: async () =>
-                  filterAssetsByEntry(
-                    entryInfo,
-                    getAssetFiles,
-                    getSourceMaps,
-                    setupAssets,
-                  ),
-              },
-            })
-            .catch((err: unknown) => {
-              (err as any).fullStack = true;
-              if (err instanceof Error) {
-                if (err.message.includes('Worker exited unexpectedly')) {
-                  delete err.stack;
-                }
-                const runningModule = context.stateManager.runningModules.get(
-                  entryInfo.testPath,
-                );
-                if (runningModule?.runningTests.length) {
-                  const getCaseName = (test: TestCaseInfo) =>
-                    `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
-                  if (runningModule?.runningTests.length === 1) {
-                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
-                  } else {
-                    err.message += `\n\n${color.white(`The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningModule.runningTests.map((t) => getCaseName(t)).join('\n  - ')}`)}`;
-                  }
-                }
+          const task = await buildTask({
+            type: 'run',
+            entryInfo,
+            index,
+            context,
+            project,
+            runtimeConfig,
+            setupEntries,
+            setupAssets,
+            updateSnapshot,
+            getAssetFiles,
+            getSourceMaps,
+            rpcMethods,
+          });
 
-                return {
-                  testId: '0',
-                  project: projectName,
-                  testPath: entryInfo.testPath,
-                  status: 'fail',
-                  name: '',
-                  results: runningModule?.results || [],
-                  errors: [err],
-                } as TestFileResult;
-              }
+          const result = await pool.runTest(task).catch((err: unknown) => {
+            return workerErrorToResult(
+              err,
+              entryInfo.testPath,
+              projectName,
+              context,
+            );
+          });
 
-              return {
-                testId: '0',
-                project: projectName,
-                testPath: entryInfo.testPath,
-                status: 'fail',
-                name: '',
-                results: [],
-                errors: [err],
-              } as TestFileResult;
-            });
           if (result.coverage) {
             onCoverageResult?.(result.coverage);
             delete result.coverage;
@@ -419,55 +473,34 @@ export const createPool = async ({
     }) => {
       const runtimeConfig = getRuntimeConfig(project);
       const projectName = project.normalizedConfig.name;
-
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
         entries.map(async (entryInfo, index) => {
-          return pool
-            .collectTests({
-              options: {
-                entryInfo,
-                context: {
-                  taskId: index + 1,
-                  project: projectName,
-                  outputModule: project.outputModule,
-                  rootPath: context.rootPath,
-                  projectRoot: project.rootPath,
-                  runtimeConfig,
-                },
-                type: 'collect',
-                setupEntries,
-                updateSnapshot,
-                assets: isMemorySufficient()
-                  ? await filterAssetsByEntry(
-                      entryInfo,
-                      getAssetFiles,
-                      getSourceMaps,
-                      setupAssets,
-                    )
-                  : undefined,
-              },
-              rpcMethods: {
-                ...rpcMethods,
-                getAssetsByEntry: async () =>
-                  filterAssetsByEntry(
-                    entryInfo,
-                    getAssetFiles,
-                    getSourceMaps,
-                    setupAssets,
-                  ),
-              },
-            })
-            .catch((err: FormattedError) => {
-              err.fullStack = true;
-              return {
-                project: projectName,
-                testPath: entryInfo.testPath,
-                tests: [],
-                errors: [err],
-              };
-            });
+          const task = await buildTask({
+            type: 'collect',
+            entryInfo,
+            index,
+            context,
+            project,
+            runtimeConfig,
+            setupEntries,
+            setupAssets,
+            updateSnapshot,
+            getAssetFiles,
+            getSourceMaps,
+            rpcMethods,
+          });
+
+          return pool.collectTests(task).catch((err: FormattedError) => {
+            err.fullStack = true;
+            return {
+              project: projectName,
+              testPath: entryInfo.testPath,
+              tests: [],
+              errors: [err],
+            };
+          });
         }),
       );
     },

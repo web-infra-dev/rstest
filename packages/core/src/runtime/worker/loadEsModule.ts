@@ -1,10 +1,15 @@
 import { builtinModules } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import vm, { type ModuleLinker, type SourceTextModule } from 'node:vm';
+import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { interopModule, shouldInterop } from './interop';
+import {
+  asModule,
+  clearSyntheticModuleCache,
+  interopModule,
+  shouldInterop,
+} from './interop';
 
 export enum EsmMode {
   Unknown = 0,
@@ -77,7 +82,9 @@ const defineRstestDynamicImport =
           const wasmModule = await WebAssembly.compile(wasmBuffer);
           const wasmInstance = await WebAssembly.instantiate(wasmModule);
           const exports = wasmInstance.exports as Record<string, any>;
-          return returnModule ? await asModule(exports) : exports;
+          return returnModule
+            ? await asModule(exports, joinedPath, exports)
+            : exports;
         }
         return await loadModule({
           codeContent: content,
@@ -104,8 +111,12 @@ const defineRstestDynamicImport =
         : // TODO: use module path instead of testPath
           import.meta.resolve(specifier, pathToFileURL(testPath));
 
+    // Use `.href` (full file:// URL) rather than `.pathname` so absolute
+    // Windows specifiers (`D:\a\foo.mjs`) remain valid import targets. With
+    // `.pathname` the URL object yielded `/D:/a/foo.mjs`, which Node later
+    // re-resolved as `D:\D:\a\foo.mjs` (double drive letter).
     const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.href;
 
     // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
     // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
@@ -119,7 +130,7 @@ const defineRstestDynamicImport =
       });
 
       return returnModule
-        ? asModule(importedModule.default)
+        ? asModule(importedModule.default, modulePath, importedModule.default)
         : {
             ...importedModule.default,
             default: importedModule.default,
@@ -137,7 +148,7 @@ const defineRstestDynamicImport =
     ) {
       const { mod, defaultExport } = interopModule(importedModule);
       if (returnModule) {
-        return asModule(mod);
+        return asModule(mod, modulePath, defaultExport);
       }
 
       return new Proxy(mod, {
@@ -174,41 +185,11 @@ const defineRstestDynamicImport =
       });
     }
 
+    if (returnModule) {
+      return asModule(importedModule, modulePath, importedModule.default);
+    }
     return importedModule;
   };
-
-export const asModule = async (
-  something: Record<string, any>,
-  context?: Record<string, any>,
-  unlinked?: boolean,
-): Promise<SourceTextModule> => {
-  const { Module, SyntheticModule } = await import('node:vm');
-
-  if (something instanceof Module) {
-    return something;
-  }
-
-  const exports = [...new Set(['default', ...Object.keys(something)])];
-
-  const syntheticModule = new SyntheticModule(
-    exports,
-    () => {
-      for (const name of exports) {
-        syntheticModule.setExport(
-          name,
-          name === 'default' ? (something[name] ?? something) : something[name],
-        );
-      }
-    },
-    { context },
-  );
-
-  if (unlinked) return syntheticModule;
-
-  await syntheticModule.link((() => undefined) as unknown as ModuleLinker);
-  await syntheticModule.evaluate();
-  return syntheticModule;
-};
 
 const esmCache = new Map<string, SourceTextModule>();
 
@@ -292,8 +273,8 @@ export const loadModule = async ({
   if (esmMode === EsmMode.Unlinked) return esm;
 
   if (esm.status === 'unlinked') {
-    await esm.link(async (specifier, referencingModule) => {
-      const result = await defineRstestDynamicImport({
+    await esm.link((specifier, referencingModule) =>
+      defineRstestDynamicImport({
         assetFiles,
         testPath,
         distPath: distPath || testPath,
@@ -301,15 +282,8 @@ export const loadModule = async ({
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
-      })(specifier, referencingModule as ImportCallOptions);
-
-      const linkedModule = await asModule(
-        result,
-        referencingModule.context,
-        true,
-      );
-      return linkedModule;
-    });
+      })(specifier, referencingModule as ImportCallOptions),
+    );
   }
 
   if (esm.status !== 'evaluated' && esm.status !== 'evaluating') {
@@ -323,4 +297,7 @@ export const loadModule = async ({
   return ns.default && ns.default instanceof Promise ? ns.default : ns;
 };
 
-export const clearModuleCache = (): void => esmCache.clear();
+export const clearModuleCache = (): void => {
+  esmCache.clear();
+  clearSyntheticModuleCache();
+};

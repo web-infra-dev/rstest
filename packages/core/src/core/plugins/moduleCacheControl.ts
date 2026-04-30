@@ -47,7 +47,8 @@ global.__rstest_clean_core_cache__ = __rstest_clean_core_cache__;
  *
  * This is used to ensure that the setup files and rstest core are re-executed in each test run
  *
- * By default, modules are isolated between different tests (powered by tinypool).
+ * By default, modules are isolated between different tests (each test runs in
+ * a fresh worker process spawned by rstest's pool).
  */
 export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
   setupFiles: string[],
