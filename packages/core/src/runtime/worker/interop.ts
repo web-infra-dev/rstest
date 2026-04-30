@@ -40,39 +40,64 @@ export function interopModule(mod: any): { mod: any; defaultExport: any } {
   return { mod, defaultExport };
 }
 
+// Caches vm.SyntheticModule by resolved module id to avoid nodejs/node#54735:
+// repeatedly wrapping the same exports in fresh SyntheticModule instances
+// races the V8 module-graph evaluation and segfaults the worker. One instance
+// per resolved id structurally eliminates the race (mirrors vitest#7741).
+const smCache = new Map<string, vm.SyntheticModule>();
+
+/**
+ * Wrap a plain exports object in a `vm.SyntheticModule` so it can participate
+ * in the `vm.Module` graph as a link() or importModuleDynamically result.
+ *
+ * Default-export semantics are driven by the caller:
+ * - Pass `defaultExport` when the source has an explicit default (CJS interop,
+ *   JSON, WASM, native ESM with `export default`).
+ * - Omit `defaultExport` for native ESM namespaces with only named exports —
+ *   no `default` key is synthesized, so the consumer namespace shape stays
+ *   identical to the original ESM namespace.
+ */
 export const asModule = async (
   something: Record<string, any>,
-  defaultExport: Record<string, any>,
-  context?: Record<string, any>,
-  unlinked?: boolean,
-): Promise<vm.SourceTextModule> => {
-  const { Module, SyntheticModule } = await import('node:vm');
+  resolvedId: string,
+  defaultExport?: unknown,
+): Promise<vm.SyntheticModule> => {
+  const { SyntheticModule } = await import('node:vm');
 
-  if (something instanceof Module) {
-    return something;
-  }
+  const cached = smCache.get(resolvedId);
+  if (cached) return cached;
 
-  const exports = [...new Set(['default', ...Object.keys(something)])];
+  const hasDefault = defaultExport !== undefined || 'default' in something;
+  const namedKeys = Object.keys(something).filter((k) => k !== 'default');
+  const exports = hasDefault ? ['default', ...namedKeys] : namedKeys;
+  const resolvedDefault = hasDefault
+    ? (defaultExport ?? something.default)
+    : undefined;
 
-  const m = new SyntheticModule(
+  const syntheticModule = new SyntheticModule(
     exports,
     () => {
       for (const name of exports) {
-        m.setExport(name, name === 'default' ? defaultExport : something[name]);
+        syntheticModule.setExport(
+          name,
+          name === 'default' ? resolvedDefault : something[name],
+        );
       }
     },
-    {
-      context,
-    },
+    { identifier: resolvedId },
   );
 
-  if (unlinked) return m;
+  smCache.set(resolvedId, syntheticModule);
 
-  await m.link((() => undefined) as unknown as vm.ModuleLinker);
+  await syntheticModule.link((() => undefined) as unknown as vm.ModuleLinker);
 
   // @ts-expect-error copy from webpack
-  if (m.instantiate) m.instantiate();
-  await m.evaluate();
+  if (syntheticModule.instantiate) syntheticModule.instantiate();
+  await syntheticModule.evaluate();
 
-  return m;
+  return syntheticModule;
+};
+
+export const clearSyntheticModuleCache = (): void => {
+  smCache.clear();
 };
