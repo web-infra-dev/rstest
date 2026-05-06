@@ -53,6 +53,7 @@ export async function resolveShardedEntries(
           rootPath,
           projectRoot: root,
           fileFilters: fileFilters || [],
+          fileFilterMode: context.fileFilterMode,
         });
         return Object.entries(entries).map(([alias, testPath]) => ({
           project: p.environmentName,

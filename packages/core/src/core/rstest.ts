@@ -12,6 +12,7 @@ import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  FileFilterMode,
   NormalizedConfig,
   NormalizedProjectConfig,
   Project,
@@ -38,6 +39,7 @@ type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
+  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
 };
@@ -46,6 +48,9 @@ export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
+  public fileFilterMode?: FileFilterMode;
+  public relatedFilters?: string[];
+  public relatedResolutionEmpty?: boolean;
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
@@ -81,6 +86,7 @@ export class Rstest implements RstestContext {
       cwd = process.cwd(),
       command,
       fileFilters,
+      fileFilterMode,
       configFilePath,
       projects,
     }: Options,
@@ -89,6 +95,7 @@ export class Rstest implements RstestContext {
     this.cwd = cwd;
     this.command = command;
     this.fileFilters = fileFilters;
+    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
 
     const rootPath = userConfig.root
