@@ -422,11 +422,11 @@ export const createPool = async ({
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      const shouldLog = runtimeConfig.disableConsoleIntercept
-        ? true
-        : projectConfig.onConsoleLog?.(log.content);
+      const shouldLog =
+        runtimeConfig.disableConsoleIntercept ||
+        projectConfig.onConsoleLog?.(log.content) !== false;
 
-      if (shouldLog === false || runtimeConfig.silent === true) {
+      if (!shouldLog || runtimeConfig.silent === true) {
         return;
       }
 

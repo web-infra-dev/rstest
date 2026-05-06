@@ -57,4 +57,6 @@ describe('math', () => {
 
 :::note
 当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`silent` 仍然会生效。Rstest 会为 `silent` 保留一条内部的 console interception 通道，但 [onConsoleLog](/config/test/on-console-log) 和 [printConsoleTrace](/config/test/print-console-trace) 仍然不会生效。
+
+在 browser mode 下，这条拦截链路仍然会调用原始的 `console.*`，以便日志继续出现在 DevTools 中。因此，`silent` 控制的是 Rstest / reporter 的输出，不一定会把浏览器原生控制台中的日志也一起隐藏。
 :::
