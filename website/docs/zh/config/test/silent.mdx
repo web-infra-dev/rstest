@@ -17,18 +17,19 @@ import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
-  ```bash
-  npx rstest --silent=passed-only
-  ```
+    ```bash
+    npx rstest --silent=passed-only
+    ```
   </Tab>
   <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
+    ```ts
+    import { defineConfig } from '@rstest/core';
 
-export default defineConfig({
-  silent: 'passed-only',
-});
-```
+    export default defineConfig({
+      silent: 'passed-only',
+    });
+    ```
+
   </Tab>
 </Tabs>
 

@@ -255,7 +255,7 @@ export const logUserConsoleLog = (
     if (filePath && filePath !== testPath) {
       titles.push(testPath);
     }
-    if (filePath && frame?.lineNumber && frame.column) {
+    if (filePath && frame?.lineNumber != null && frame.column != null) {
       titles.push(`${filePath}:${frame.lineNumber}:${frame.column}`);
     }
   }
