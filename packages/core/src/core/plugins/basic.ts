@@ -68,7 +68,9 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           resolve: {
             // Extend the default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
             conditionNames:
-              testEnvironment.name === 'node' ? undefined : ['browser', '...'],
+              testEnvironment.name === 'node' || resolve?.conditionNames
+                ? undefined
+                : ['browser', '...'],
           },
           output: {
             assetPrefix: '',
@@ -102,7 +104,10 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
-              if (!config.devtool || !config.devtool.includes('inline')) {
+              if (
+                typeof config.devtool !== 'string' ||
+                !config.devtool.includes('inline')
+              ) {
                 config.devtool = 'nosources-source-map';
               }
 

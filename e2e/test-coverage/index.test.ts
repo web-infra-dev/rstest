@@ -143,6 +143,37 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
   });
 
+  it('should keep coverage report when no test files match with --passWithNoTests (regression #1212)', async () => {
+    const reportsDir = join(__dirname, 'fixtures/test-temp-no-tests-coverage');
+    const staleFile = join(reportsDir, 'stale-from-previous-run.txt');
+
+    fs.ensureDirSync(reportsDir);
+    fs.writeFileSync(staleFile, 'stale');
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.noTests.config.ts',
+        '--passWithNoTests',
+        '--coverage',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(fs.existsSync(staleFile)).toBeFalsy();
+    expect(fs.existsSync(join(reportsDir, 'index.html'))).toBeTruthy();
+
+    fs.removeSync(reportsDir);
+  });
+
   it('should show 0% coverage when no source files match coverage include patterns', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

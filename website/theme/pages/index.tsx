@@ -1,5 +1,6 @@
 import { BackgroundImage } from '@rstack-dev/doc-ui/background-image';
 import { CopyRight } from '../components/Copyright';
+import { Features } from '../components/Features';
 import { Hero } from '../components/Hero';
 import { ToolStack } from '../components/ToolStack';
 
@@ -8,6 +9,7 @@ export function HomeLayout() {
     <div style={{ position: 'relative' }}>
       <BackgroundImage />
       <Hero />
+      <Features />
       <ToolStack />
       <CopyRight />
     </div>

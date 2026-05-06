@@ -1,15 +1,20 @@
-import WebpackLicensePlugin from 'webpack-license-plugin';
+type WebpackLicensePluginCtor =
+  typeof import('webpack-license-plugin')['default'];
 
 type PackageLicenseMeta =
   NonNullable<
-    ConstructorParameters<typeof WebpackLicensePlugin>[0]
+    ConstructorParameters<WebpackLicensePluginCtor>[0]
   > extends Partial<{
     additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
   }>
     ? Meta
     : never;
 
-export function licensePlugin() {
+export async function licensePlugin() {
+  const { default: WebpackLicensePlugin } = await import(
+    'webpack-license-plugin'
+  );
+
   const formatLicenseTitle = (packageMeta: PackageLicenseMeta) => {
     const licenseId = packageMeta.license ?? 'undefined';
     const repositoryUrl = packageMeta.repository;

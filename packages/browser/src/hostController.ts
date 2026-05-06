@@ -506,8 +506,9 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
   }
 
-  rspackConfig.output?.path &&
+  if (rspackConfig.output?.path) {
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
 };
 
 type LazyCompilationModule = {
@@ -799,7 +800,13 @@ const getRuntimeConfigFromProject = (
   } = project.normalizedConfig;
 
   return {
-    env,
+    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
+    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
+    // wins so explicit overrides still take effect.
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,

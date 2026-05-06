@@ -1,5 +1,5 @@
 import { constants as osConstants } from 'node:os';
-import { createCoverageProvider } from '../coverage';
+import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
 import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -134,6 +134,8 @@ const notifyReportersOnTestRunEnd = async ({
 };
 
 export async function runTests(context: Rstest): Promise<void> {
+  cleanCoverageReports(context.normalizedConfig.coverage);
+
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,

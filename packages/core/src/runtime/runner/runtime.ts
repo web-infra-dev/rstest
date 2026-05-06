@@ -26,7 +26,7 @@ import type {
   TestSuite,
 } from '../../types';
 import { ROOT_SUITE_NAME } from '../../utils/constants';
-import { castArray } from '../../utils/helper';
+import { castArray, generateFilePathHash } from '../../utils/helper';
 import {
   formatName,
   isTemplateStringsArray,
@@ -55,7 +55,7 @@ class RunnerRuntime {
   private currentCollectList: (() => MaybePromise<void>)[] = [];
   private readonly runtimeConfig;
   private readonly project: string;
-  private testId = 1;
+  private readonly fileHash: string;
 
   constructor({
     testPath,
@@ -68,6 +68,7 @@ class RunnerRuntime {
   }) {
     this.project = project;
     this.testPath = testPath;
+    this.fileHash = generateFilePathHash(project, testPath);
     this.runtimeConfig = runtimeConfig;
   }
 
@@ -223,9 +224,29 @@ class RunnerRuntime {
   addTest(
     testInfo: Omit<TestSuite, 'testId'> | Omit<TestCase, 'testId'>,
   ): void {
+    // Compute index-based testId: {fileHash}_{idx0}_{idx1}_...
+    // The internal ROOT_SUITE_NAME uses the fileHash directly so it doesn't
+    // add an extra level to child IDs.
+    const parent =
+      this._currentTest.length > 0
+        ? this._currentTest[this._currentTest.length - 1]
+        : undefined;
+
+    let testId: string;
+    if (testInfo.name === ROOT_SUITE_NAME) {
+      testId = this.fileHash;
+    } else {
+      const childIndex =
+        parent && parent.type === 'suite'
+          ? parent.tests.length
+          : this.tests.length;
+      const parentId = parent?.testId ?? this.fileHash;
+      testId = `${parentId}_${childIndex}`;
+    }
+
     const test = {
       ...testInfo,
-      testId: `${this.testId++}`,
+      testId,
     };
     if (this._currentTest.length === 0) {
       this.tests.push(test);

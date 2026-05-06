@@ -18,5 +18,10 @@
     "type": "dir",
     "name": "rstest",
     "label": "Rstest Utility"
+  },
+  {
+    "type": "file",
+    "name": "environment-variables",
+    "label": "Environment Variables"
   }
 ]

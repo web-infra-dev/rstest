@@ -14,5 +14,53 @@
   "slogan": {
     "en": "Provide first-class support for Rspack ecosystem",
     "zh": "为 Rspack 生态提供全面、一流的支持"
+  },
+  "reuseBuildConfig": {
+    "en": "Reuse your build setup",
+    "zh": "复用现有构建配置"
+  },
+  "reuseBuildConfigDesc": {
+    "en": "Use existing Rsbuild or Rspack config so aliases, transforms, and plugins stay consistent in tests.",
+    "zh": "直接使用 Rsbuild 或 Rspack 配置，让 alias、transform 和插件能力在测试中保持一致。"
+  },
+  "productionAccurateTesting": {
+    "en": "Test through the build pipeline",
+    "zh": "沿用构建链路测试"
+  },
+  "productionAccurateTestingDesc": {
+    "en": "Run tests through Rspack's bundling model to match production behavior more closely.",
+    "zh": "通过 Rspack 的 bundle 模型运行测试，让测试行为更贴近生产产物。"
+  },
+  "blazingFast": {
+    "en": "Fast by design",
+    "zh": "高效执行"
+  },
+  "blazingFastDesc": {
+    "en": "Rspack-powered bundling keeps startup and reruns fast, even in larger projects.",
+    "zh": "基于 Rspack 的构建与优化能力，在大型项目中也能保持快速启动和重新运行。"
+  },
+  "realBrowserTesting": {
+    "en": "Real browser testing",
+    "zh": "真实浏览器测试"
+  },
+  "realBrowserTestingDesc": {
+    "en": "Run tests in Chromium, Firefox, or WebKit through Playwright when jsdom isn't enough.",
+    "zh": "基于 Playwright 在 Chromium、Firefox、WebKit 中运行测试，覆盖 jsdom 难以验证的场景。"
+  },
+  "modernByDefault": {
+    "en": "Modern by default",
+    "zh": "现代能力默认可用"
+  },
+  "modernByDefaultDesc": {
+    "en": "TypeScript, ESM, CJS, CSS Modules, and modern JavaScript work out of the box.",
+    "zh": "TypeScript、ESM、CJS、CSS Modules 和现代 JavaScript 开箱即用。"
+  },
+  "testingReady": {
+    "en": "Testing essentials included",
+    "zh": "核心测试能力内置"
+  },
+  "testingReadyDesc": {
+    "en": "Assertions, snapshots, mocks, coverage, and lifecycle hooks are ready when you start.",
+    "zh": "断言、快照、Mock、覆盖率和生命周期钩子等能力开箱即用。"
   }
 }

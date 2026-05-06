@@ -69,7 +69,7 @@ export default async function globalSetup() {
 ```
 
 :::note
-globalSetup 文件在不同的全局上下文中运行，因此你的测试无法访问在此处定义的变量。
+globalSetup 文件在独立的上下文中运行：setup 文件里模块作用域的变量在测试中无法访问。对于 node 测试 worker，`globalSetup` 执行结束后 Rstest 会对 `process.env` 做一次快照并分发给每个 worker —— 所以通过在此处修改环境变量把值传给 node 测试是被支持的用法。此行为不适用于 browser 模式测试：只有静态的 `test.env` 配置会被转发到 browser worker。
 :::
 
 ## 多个全局设置文件

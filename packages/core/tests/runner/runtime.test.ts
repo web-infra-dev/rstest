@@ -1,5 +1,6 @@
 import { createRuntimeAPI } from '../../src/runtime/runner/runtime';
 import type { RuntimeConfig, TestSuite } from '../../src/types';
+import { generateFilePathHash } from '../../src/utils/helper';
 
 describe('RunnerRuntime', () => {
   it('should add test correctly', async () => {
@@ -32,18 +33,29 @@ describe('RunnerRuntime', () => {
       'test - 2',
     ]);
 
-    expect(tests.map((test) => test.testId)).toMatchInlineSnapshot(`
-      [
-        "1",
-        "5",
-        "6",
-      ]
-    `);
+    const fileHash = generateFilePathHash('rstest', __filename);
+    expect(tests.map((test) => test.testId)).toEqual([
+      `${fileHash}_0`,
+      `${fileHash}_1`,
+      `${fileHash}_2`,
+    ]);
 
     expect((tests[0] as TestSuite).tests.map((test) => test.name)).toEqual([
       'test - 0',
       'test - 1',
     ]);
+
+    // Verify nested testId format: fileHash_suiteIdx_childIdx
+    expect((tests[0] as TestSuite).tests.map((test) => test.testId)).toEqual([
+      `${fileHash}_0_0`,
+      `${fileHash}_0_1`,
+    ]);
+
+    expect(
+      ((tests[0] as TestSuite).tests[1] as TestSuite).tests.map(
+        (test) => test.testId,
+      ),
+    ).toEqual([`${fileHash}_0_1_0`]);
 
     expect(
       ((tests[0] as TestSuite).tests[1] as TestSuite).tests.map(
