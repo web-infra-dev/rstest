@@ -87,4 +87,23 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
   });
+
+  it('should ignore onConsoleLog when silent=passed-only and console intercept is disabled', async () => {
+    const { cli } = await runBrowserCli('silent', {
+      args: [
+        '--silent=passed-only',
+        '--disableConsoleIntercept',
+        '-c',
+        'rstest.onConsoleLogFalse.config.mts',
+      ],
+    });
+
+    await cli.exec;
+
+    expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
+  });
 });

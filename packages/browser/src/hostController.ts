@@ -2256,8 +2256,9 @@ export const runBrowserController = async (
       type: payload.type,
       trace: payload.trace,
     };
-    const shouldLog =
-      context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
+    const shouldLog = context.normalizedConfig.disableConsoleIntercept
+      ? true
+      : (context.normalizedConfig.onConsoleLog?.(log.content) ?? true);
     if (!shouldLog || context.normalizedConfig.silent === true) {
       return;
     }

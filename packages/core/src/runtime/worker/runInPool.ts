@@ -13,7 +13,7 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
-import { setFallbackCurrentTask } from './taskContext';
+import { initTaskContext, setFallbackCurrentTask } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -92,6 +92,7 @@ const preparePool = async ({
   });
   globalCleanups.length = 0;
 
+  await initTaskContext();
   setRealTimers();
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];

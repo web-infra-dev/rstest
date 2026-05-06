@@ -150,6 +150,56 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('passing case log');
   });
 
+  it('default - silent passed-only should ignore onConsoleLog when console intercept is disabled', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/silent.test.ts',
+        '--silent=passed-only',
+        '--disableConsoleIntercept',
+        '-c',
+        'fixtures/silentOnConsoleLogFalse.config.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('file level log');
+    expect(cli.stdout).toContain('failing suite log');
+    expect(cli.stdout).toContain('failing case log');
+  });
+
+  it('default - silent passed-only should keep concurrent task logs associated to the failing case', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/silentConcurrent.test.ts',
+        '--silent=passed-only',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('failing concurrent case log');
+    expect(cli.stdout).not.toContain('passing concurrent case log');
+  });
+
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
