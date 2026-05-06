@@ -800,7 +800,13 @@ const getRuntimeConfigFromProject = (
   } = project.normalizedConfig;
 
   return {
-    env,
+    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
+    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
+    // wins so explicit overrides still take effect.
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,

@@ -157,6 +157,24 @@ export default defineConfig({
 });
 ```
 
+## Environment variables
+
+Rstest mirrors Jest's two main injected variables under different names:
+
+| Jest             | Rstest             | Notes                                                                                                                                                                                                                          |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `JEST_WORKER_ID` | `RSTEST_WORKER_ID` | Same semantics — a stringified integer, unique among workers active at the same time. Use it to isolate per-worker DBs / ports / temp dirs. See [`RSTEST_WORKER_ID`](/api/runtime-api/environment-variables#rstest_worker_id). |
+| `NODE_ENV`       | `NODE_ENV`         | Both default to `'test'` when not set.                                                                                                                                                                                         |
+
+Replace any references in tests, fixtures, or `setupFiles`:
+
+```diff
+- const dbName = `myapp_test_${process.env.JEST_WORKER_ID}`;
++ const dbName = `myapp_test_${process.env.RSTEST_WORKER_ID}`;
+```
+
+See [Environment variables](/api/runtime-api/environment-variables) for the full list.
+
 ## Update test API
 
 ### Test API
