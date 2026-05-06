@@ -809,6 +809,7 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = project.normalizedConfig;
 
   return {
@@ -841,6 +842,7 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 

@@ -34,9 +34,11 @@ type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
   rpc,
+  testPath,
   printConsoleTrace,
 }: {
   rpc: WorkerRPC;
+  testPath: string;
   printConsoleTrace: boolean;
 }): Console {
   const getConsoleTrace = () => {
@@ -87,7 +89,7 @@ export function createCustomConsole({
         taskName: currentTask?.taskName,
         taskParentNames: currentTask?.taskParentNames,
         taskType: currentTask?.taskType,
-        testPath: currentTask?.testPath ?? '',
+        testPath,
         type,
         trace: printConsoleTrace ? getConsoleTrace() : undefined,
       });

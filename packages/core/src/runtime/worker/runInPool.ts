@@ -13,6 +13,7 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { RstestSnapshotEnvironment } from './snapshot';
+import { setFallbackCurrentTask } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -74,6 +75,10 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
       }
     });
   }
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
 };
 
 const preparePool = async ({
@@ -443,7 +448,16 @@ export const runInPool = async (
 
     cleanups.push(cleanup);
 
-    rpc.onTestFileStart?.({ testPath, tests: [] });
+    rpc.onTestFileStart?.({
+      testId: getFileTaskId(testPath),
+      testPath,
+      tests: [],
+    });
+    setFallbackCurrentTask({
+      taskId: getFileTaskId(testPath),
+      taskType: 'file',
+      testPath,
+    });
 
     await loadFiles({
       rstestContext,
@@ -507,7 +521,7 @@ export const runInPool = async (
     return results;
   } catch (err) {
     return {
-      testId: '0',
+      testId: getFileTaskId(testPath),
       project,
       testPath,
       status: 'fail',
@@ -516,6 +530,7 @@ export const runInPool = async (
       errors: await formatTestError(err),
     };
   } finally {
+    setFallbackCurrentTask(undefined);
     await teardown();
   }
 };

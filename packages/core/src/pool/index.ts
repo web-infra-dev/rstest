@@ -392,7 +392,13 @@ export const createPool = async ({
     } as Record<string, string>,
   });
 
-  const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
+  const createRpcMethods = ({
+    runtimeConfig,
+    projectConfig,
+  }: {
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Omit<RuntimeRPC, 'getAssetsByEntry'> => ({
     onTestCaseStart: async (test: TestCaseInfo) => {
       context.stateManager.onTestCaseStart(test);
       Promise.all(
@@ -416,7 +422,7 @@ export const createPool = async ({
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      const shouldLog = project.normalizedConfig.onConsoleLog?.(log.content);
+      const shouldLog = projectConfig.onConsoleLog?.(log.content);
 
       if (shouldLog === false || runtimeConfig.silent === true) {
         return;
@@ -460,7 +466,7 @@ export const createPool = async ({
     resolveSnapshotPath: (testPath: string): string => {
       const snapExtension = '.snap';
       const resolver =
-        context.normalizedConfig.resolveSnapshotPath ||
+        projectConfig.resolveSnapshotPath ||
         // test/index.ts -> test/__snapshots__/index.ts.snap
         (() =>
           join(
@@ -472,7 +478,7 @@ export const createPool = async ({
       const snapshotPath = resolver(testPath, snapExtension);
       return snapshotPath;
     },
-  };
+  });
 
   return {
     runTests: async ({
@@ -486,6 +492,10 @@ export const createPool = async ({
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       const results = await Promise.all(
@@ -550,6 +560,10 @@ export const createPool = async ({
     }) => {
       const runtimeConfig = getRuntimeConfig(project);
       const projectName = project.normalizedConfig.name;
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
