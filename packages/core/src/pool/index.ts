@@ -531,9 +531,10 @@ export const createPool = async ({
             delete result.coverage;
           }
           if (runtimeConfig.silent === 'passed-only') {
-            const bufferedTaskId = result.testId === '0'
-              ? `file:${entryInfo.testPath}`
-              : result.testId;
+            const bufferedTaskId =
+              result.testId === '0'
+                ? `file:${entryInfo.testPath}`
+                : result.testId;
             await flushBufferedLogsForTask({
               taskId: bufferedTaskId,
               status: result.status,
