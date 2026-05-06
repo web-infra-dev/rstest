@@ -28,4 +28,28 @@ describe('browser mode - related', () => {
       cli.stdout.split('\n').filter((line) => line.includes('.test.ts')),
     ).toEqual(['tests/index.test.ts']);
   });
+
+  it('should not run the full browser suite when related finds no tests', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--related', 'tests/src/missing.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'related'),
+          env: {
+            CI: '',
+            GITHUB_ACTIONS: '',
+          },
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+    expect(cli.log).toContain('related:');
+    expect(cli.log).toContain('tests/src/missing.ts');
+    expect(cli.log).not.toContain('index.test.ts');
+    expect(cli.log).not.toContain('other.test.ts');
+  });
 });

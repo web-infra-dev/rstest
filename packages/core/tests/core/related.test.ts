@@ -41,4 +41,19 @@ describe('filterFiles', () => {
       ),
     ).toEqual(['/repo/tests/index.test.ts']);
   });
+
+  it('keeps exact matching case-sensitive outside Windows', () => {
+    expect(
+      filterFiles(
+        ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
+        ['/repo/tests/Foo.test.ts'],
+        '/repo',
+        'exact',
+      ),
+    ).toEqual(
+      process.platform === 'win32'
+        ? ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']
+        : ['/repo/tests/Foo.test.ts'],
+    );
+  });
 });

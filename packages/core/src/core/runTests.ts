@@ -150,9 +150,32 @@ export async function runTests(context: Rstest): Promise<void> {
   // For non-watch mode with both browser and node tests, we need to unify reporter output
   const shouldUnifyReporter =
     !isWatchMode && hasBrowserProjects && hasNodeProjects;
+  const getEmptyRunDuration = () => ({
+    totalTime: 0,
+    buildTime: 0,
+    testTime: 0,
+  });
 
   // If only browser tests, run them and generate coverage
   if (hasBrowserProjects && !hasNodeProjects) {
+    if (context.relatedResolutionEmpty) {
+      if (isWatchMode) {
+        await runBrowserModeTests(context, browserProjects, {
+          skipOnTestRunEnd: false,
+          allowEmptyWatchRun: true,
+        });
+      } else {
+        reportNoTestFiles({ context });
+        await notifyReportersOnTestRunEnd({
+          context,
+          duration: getEmptyRunDuration(),
+          getSourcemap: async () => null,
+        });
+      }
+
+      return;
+    }
+
     const { coverage } = context.normalizedConfig;
 
     if (coverage.enabled) {

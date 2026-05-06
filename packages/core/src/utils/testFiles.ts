@@ -21,15 +21,22 @@ export const filterFiles = (
       : filters;
 
   if (mode === 'exact') {
+    const normalizeExactMatchPath = (filePath: string) => {
+      const normalizedPath = pathe.normalize(filePath);
+      return process.platform === 'win32'
+        ? normalizedPath.toLocaleLowerCase()
+        : normalizedPath;
+    };
+
     const exactFilters = new Set(
-      fileFilters.map((filter) => pathe.normalize(filter).toLocaleLowerCase()),
+      fileFilters.map((filter) => normalizeExactMatchPath(filter)),
     );
 
     return testFiles.filter((testFilePath) => {
-      const absolutePath = pathe.normalize(testFilePath).toLocaleLowerCase();
-      const relativePath = pathe
-        .normalize(pathe.relative(dir, testFilePath))
-        .toLocaleLowerCase();
+      const absolutePath = normalizeExactMatchPath(testFilePath);
+      const relativePath = normalizeExactMatchPath(
+        pathe.relative(dir, testFilePath),
+      );
 
       return exactFilters.has(absolutePath) || exactFilters.has(relativePath);
     });
