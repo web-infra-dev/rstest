@@ -26,6 +26,10 @@ export interface BrowserTestRunOptions {
    * Key is project environmentName.
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  /**
+   * Keep watch infrastructure alive even when the initial browser test set is empty.
+   */
+  allowEmptyWatchRun?: boolean;
 }
 
 /**
