@@ -20,7 +20,7 @@
     "@rstest/core": "workspace:*",
     "@vue/compiler-dom": "^3.5.33",
     "@vue/server-renderer": "^3.5.33",
-    "@vue/test-utils": "^2.4.9",
+    "@vue/test-utils": "^2.4.10",
     "happy-dom": "^20.9.0",
     "typescript": "^6.0.3"
   }
