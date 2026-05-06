@@ -650,16 +650,10 @@ export async function runTests(context: Rstest): Promise<void> {
       const browserHasFailure =
         shouldUnifyReporter && browserResult?.hasFailure;
 
-      if (results.length === 0 && !errors.length) {
+      const noTestsDiscovered = results.length === 0 && !errors.length;
+
+      if (noTestsDiscovered) {
         reportNoTestFiles({ context, mode });
-        await notifyReportersOnTestRunEnd({
-          context,
-          coverage: mergedCoverageMap,
-          duration,
-          getSourcemap,
-          unhandledErrors: errors,
-        });
-        return;
       }
 
       const isFailure = nodeHasFailure || browserHasFailure;
