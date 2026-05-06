@@ -24,6 +24,7 @@ import {
 import { prettyTime } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import type { WorkerRPC } from './rpc';
+import { getCurrentTask } from './taskContext';
 
 const RealDate = Date;
 
@@ -33,11 +34,9 @@ type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
   rpc,
-  testPath,
   printConsoleTrace,
 }: {
   rpc: WorkerRPC;
-  testPath: string;
   printConsoleTrace: boolean;
 }): Console {
   const getConsoleTrace = () => {
@@ -79,10 +78,16 @@ export function createCustomConsole({
       message: string,
       type: 'stderr' | 'stdout' = 'stdout',
     ) {
+      const currentTask = getCurrentTask();
+
       rpc.onConsoleLog({
         content: '  '.repeat(this._groupDepth) + message,
         name: this.getPrettyName(name),
-        testPath,
+        taskId: currentTask?.taskId,
+        taskName: currentTask?.taskName,
+        taskParentNames: currentTask?.taskParentNames,
+        taskType: currentTask?.taskType,
+        testPath: currentTask?.testPath ?? '',
         type,
         trace: printConsoleTrace ? getConsoleTrace() : undefined,
       });

@@ -30,6 +30,14 @@ import { Pool } from './pool';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
+};
+
 const getNumCpus = (): number => {
   return os.availableParallelism?.() ?? os.cpus().length;
 };
@@ -71,6 +79,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = context.normalizedConfig;
 
   return {
@@ -101,6 +110,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
@@ -278,6 +288,44 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    await Promise.all(
+      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+  }): Promise<void> => {
+    const logs = bufferedConsoleLogs.get(taskId);
+    if (!logs) {
+      return;
+    }
+
+    bufferedConsoleLogs.delete(taskId);
+
+    if (status !== 'fail') {
+      return;
+    }
+
+    for (const log of logs) {
+      await emitUserConsoleLog(log);
+    }
+  };
+
   // Propagate parent execArgv to workers, except flags known to cause issues
   // in child processes (--prof writes per-worker profiling logs, --title is
   // meaningless for workers). Safe for child_process.fork; the referenced
@@ -356,14 +404,30 @@ export const createPool = async ({
       await Promise.all(
         reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
       );
+
+      if (runtimeConfig.silent === 'passed-only') {
+        await flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+        });
+      }
     },
     getCountOfFailedTests: async (): Promise<number> => {
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-      );
+      const shouldLog = project.normalizedConfig.onConsoleLog?.(log.content);
+
+      if (shouldLog === false || runtimeConfig.silent === true) {
+        return;
+      }
+
+      if (runtimeConfig.silent === 'passed-only') {
+        bufferConsoleLog(log);
+        return;
+      }
+
+      await emitUserConsoleLog(log);
     },
     onTestFileStart: async (test: TestFileInfo) => {
       context.stateManager.onTestFileStart(test.testPath);
@@ -385,6 +449,13 @@ export const createPool = async ({
       await Promise.all(
         reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
       );
+
+      if (runtimeConfig.silent === 'passed-only') {
+        await flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+        });
+      }
     },
     resolveSnapshotPath: (testPath: string): string => {
       const snapExtension = '.snap';
@@ -446,6 +517,12 @@ export const createPool = async ({
           if (result.coverage) {
             onCoverageResult?.(result.coverage);
             delete result.coverage;
+          }
+          if (runtimeConfig.silent === 'passed-only') {
+            await flushBufferedLogsForTask({
+              taskId: result.testId,
+              status: result.status,
+            });
           }
           context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));

@@ -146,19 +146,20 @@ const formatArg = (arg: unknown): string => {
   }
 };
 
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+type CurrentTaskInfo = NonNullable<WorkerState['currentTask']>;
+
 /**
  * Intercept console methods and forward to host via send().
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
-  testPath: string,
+  getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
-  disableConsoleIntercept: boolean,
 ): (() => void) => {
-  if (disableConsoleIntercept) {
-    return () => {};
-  }
-
   const originalConsole = {
     log: console.log.bind(console),
     warn: console.warn.bind(console),
@@ -183,6 +184,7 @@ const interceptConsole = (
 
       // Format message
       const content = args.map(formatArg).join(' ');
+      const currentTask = getCurrentTask();
 
       // Send to host
       send({
@@ -190,7 +192,11 @@ const interceptConsole = (
         payload: {
           level,
           content,
-          testPath,
+          taskId: currentTask?.taskId,
+          taskName: currentTask?.taskName,
+          taskParentNames: currentTask?.taskParentNames,
+          taskType: currentTask?.taskType,
+          testPath: currentTask?.testPath ?? '',
           type: level === 'error' || level === 'warn' ? 'stderr' : 'stdout',
           trace: getConsoleTrace(),
         },
@@ -570,13 +576,28 @@ const run = async () => {
   // 2. Run tests for each file
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, currentProject.projectRoot);
+    const taskStack: CurrentTaskInfo[] = [
+      {
+        taskId: getFileTaskId(testPath),
+        taskType: 'file',
+        testPath,
+      },
+    ];
+
+    const shouldInterceptConsole =
+      !runtimeConfig.disableConsoleIntercept ||
+      runtimeConfig.silent === true ||
+      runtimeConfig.silent === 'passed-only';
 
     // Intercept console methods to forward logs to host
-    const restoreConsole = interceptConsole(
-      testPath,
-      runtimeConfig.printConsoleTrace ?? false,
-      runtimeConfig.disableConsoleIntercept ?? false,
-    );
+    const restoreConsole = shouldInterceptConsole
+      ? interceptConsole(
+          () => taskStack[taskStack.length - 1],
+          runtimeConfig.disableConsoleIntercept
+            ? false
+            : (runtimeConfig.printConsoleTrace ?? false),
+        )
+      : () => {};
 
     const workerState: WorkerState = {
       project: projectRuntime.name,
@@ -586,6 +607,7 @@ const run = async () => {
       taskId: 0,
       outputModule: false,
       environment: 'browser',
+      currentTask: taskStack[0],
       testPath,
       distPath: testPath,
       snapshotOptions: {
@@ -611,15 +633,39 @@ const run = async () => {
         dispatchRunnerLifecycle('file-ready', test);
       },
       onTestSuiteStart: async (test) => {
+        taskStack.push({
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'suite',
+          testPath: test.testPath,
+        });
+        workerState.currentTask = taskStack[taskStack.length - 1];
         dispatchRunnerLifecycle('suite-start', test);
       },
       onTestSuiteResult: async (result) => {
+        if (taskStack[taskStack.length - 1]?.taskId === result.testId) {
+          taskStack.pop();
+          workerState.currentTask = taskStack[taskStack.length - 1];
+        }
         dispatchRunnerLifecycle('suite-result', result);
       },
       onTestCaseStart: async (test) => {
+        taskStack.push({
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'case',
+          testPath: test.testPath,
+        });
+        workerState.currentTask = taskStack[taskStack.length - 1];
         dispatchRunnerLifecycle('case-start', test);
       },
       onTestCaseResult: async (result) => {
+        if (taskStack[taskStack.length - 1]?.taskId === result.testId) {
+          taskStack.pop();
+          workerState.currentTask = taskStack[taskStack.length - 1];
+        }
         if (result.status === 'fail') {
           failedTestsCount++;
         }

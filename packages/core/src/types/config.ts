@@ -66,6 +66,7 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
+  | 'silent'
   | 'bail'
   | 'shard'
   | 'output'
@@ -327,11 +328,22 @@ export interface RstestConfig {
   printConsoleTrace?: boolean;
 
   /**
-   * Disable console intercept. `onConsoleLog` & `printConsoleTrace` configuration will not take effect.
+   * Disable console intercept enhancements. `onConsoleLog` & `printConsoleTrace`
+   * configuration will not take effect. When `silent` is enabled, Rstest still
+   * uses an internal console interception path to control test log output.
    *
    * @default false
    */
   disableConsoleIntercept?: boolean;
+
+  /**
+   * Silence intercepted console output from tests.
+   * - `true`: hide all intercepted test console logs
+   * - `'passed-only'`: show intercepted logs only for failed tasks
+   *
+   * @default false
+   */
+  silent?: boolean | 'passed-only';
 
   /**
    * Update snapshot files. Will update all changed snapshots and delete obsolete ones.
@@ -499,6 +511,7 @@ type OptionalKeys =
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
+  | 'silent'
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'

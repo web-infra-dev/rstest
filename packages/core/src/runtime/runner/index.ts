@@ -11,6 +11,10 @@ import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
 
+export const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
 export function createRunner({ workerState }: { workerState: WorkerState }): {
   api: RunnerAPI;
   runner: {
@@ -54,6 +58,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
         const tests = await runtime.instance.getTests();
         traverseUpdateTest(tests, testNamePattern);
         hooks.onTestFileReady?.({
+          testId: getFileTaskId(testPath),
           testPath,
           tests: tests.map(toTestInfo),
         });

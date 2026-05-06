@@ -45,4 +45,46 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stderr).toMatch(/error.*\|.*tests\/console\.test\.ts/);
     expect(cli.stdout).toMatch(/debug.*\|.*tests\/console\.test\.ts/);
   });
+
+  it('should only replay failed task logs with silent=passed-only', async () => {
+    const { cli } = await runBrowserCli('silent', {
+      args: ['--silent=passed-only'],
+    });
+
+    await cli.exec;
+
+    expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
+  });
+
+  it('should not forward browser console logs when console intercept is disabled', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('console', {
+      args: ['--disableConsoleIntercept'],
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).not.toContain('CONSOLE_LOG_TEST_MESSAGE');
+    expect(cli.stdout).not.toContain('CONSOLE_INFO_TEST_MESSAGE');
+    expect(cli.stdout).not.toContain('CONSOLE_DEBUG_TEST_MESSAGE');
+    expect(cli.stderr).not.toContain('CONSOLE_WARN_TEST_MESSAGE');
+    expect(cli.stderr).not.toContain('CONSOLE_ERROR_TEST_MESSAGE');
+  });
+
+  it('should still replay failed task logs when silent=passed-only and console intercept is disabled', async () => {
+    const { cli } = await runBrowserCli('silent', {
+      args: ['--silent=passed-only', '--disableConsoleIntercept'],
+    });
+
+    await cli.exec;
+
+    expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
+    expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
+    expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
+  });
 });

@@ -2,7 +2,6 @@ import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
-  NormalizedConfig,
   NormalizedProjectConfig,
   Reporter,
   RstestTestState,
@@ -48,7 +47,6 @@ export class DotReporter implements Reporter {
     options = {},
   }: {
     rootPath: string;
-    config: NormalizedConfig;
     options: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
     testState: RstestTestState;
     projectConfigs?: Map<string, NormalizedProjectConfig>;

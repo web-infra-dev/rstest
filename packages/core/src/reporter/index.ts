@@ -78,6 +78,17 @@ export class DefaultReporter implements Reporter {
     }
   }
 
+  onUserConsoleLog(log: UserConsoleLog): void {
+    this.nonTTYProgressNotifier?.notifyOutput();
+    this.withSuspendedStatusRenderer(() => {
+      logUserConsoleLog(this.rootPath, log);
+    });
+  }
+
+  onTestCaseResult(_result: TestResult): void {
+    this.statusRenderer?.onTestCaseResult();
+  }
+
   onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
     this.nonTTYProgressNotifier?.notifyOutput();
@@ -96,7 +107,6 @@ export class DefaultReporter implements Reporter {
 
     const logResults = () => {
       logFileTitle(test, relativePath, false, this.options.showProjectName);
-      // Always display all test cases when running a single test file
       const showAllCases = this.testState.getTestFiles()?.length === 1;
 
       const hideSkippedTests =
@@ -118,23 +128,6 @@ export class DefaultReporter implements Reporter {
     };
 
     this.withSuspendedStatusRenderer(logResults);
-  }
-
-  onTestCaseResult(): void {
-    this.statusRenderer?.onTestCaseResult();
-  }
-
-  onUserConsoleLog(log: UserConsoleLog): void {
-    const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
-
-    if (!shouldLog) {
-      return;
-    }
-
-    this.nonTTYProgressNotifier?.notifyOutput();
-    this.withSuspendedStatusRenderer(() => {
-      logUserConsoleLog(this.rootPath, log);
-    });
   }
 
   onExit(): void {

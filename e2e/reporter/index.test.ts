@@ -78,6 +78,78 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('1 skipped');
   });
 
+  it('default - silent passed-only', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/silent.test.ts', '--silent=passed-only'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('file level log');
+    expect(cli.stdout).toContain('failing suite log');
+    expect(cli.stdout).toContain('failing case log');
+    expect(cli.stdout).not.toContain('passing suite log');
+    expect(cli.stdout).not.toContain('passing case log');
+  });
+
+  it('dot - silent passed-only', async ({ onTestFinished }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/silent.test.ts',
+        '--reporter=dot',
+        '--silent=passed-only',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('file level log');
+    expect(cli.stdout).toContain('failing suite log');
+    expect(cli.stdout).toContain('failing case log');
+    expect(cli.stdout).not.toContain('passing suite log');
+    expect(cli.stdout).not.toContain('passing case log');
+  });
+
+  it('default - silent passed-only should still work when console intercept is disabled', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/silent.test.ts',
+        '--silent=passed-only',
+        '--disableConsoleIntercept',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout).toContain('file level log');
+    expect(cli.stdout).toContain('failing suite log');
+    expect(cli.stdout).toContain('failing case log');
+    expect(cli.stdout).not.toContain('passing suite log');
+    expect(cli.stdout).not.toContain('passing case log');
+  });
+
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

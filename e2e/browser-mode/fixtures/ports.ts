@@ -28,6 +28,7 @@ export const BROWSER_PORTS = {
   reporter: 5220,
   'reporter-watch': 5222,
   'github-actions': 5224,
+  silent: 5230,
   'browser-coverage-multiproject': 5228,
 } as const;
 

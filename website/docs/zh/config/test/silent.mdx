@@ -1,0 +1,59 @@
+---
+description: 静默测试中拦截到的 console 输出，或只保留失败任务的日志。
+---
+
+# silent
+
+- **类型：** `boolean | 'passed-only'`
+- **默认值：** `false`
+- **CLI：** `--silent [value]`
+
+控制是否静默测试中拦截到的 console 输出。
+
+- 设为 `true` 时，隐藏所有被拦截的测试 console 日志。
+- 设为 `'passed-only'` 时，仅保留失败文件、套件和测试用例的被拦截日志。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --silent=passed-only
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+  </Tab>
+</Tabs>
+
+## 示例
+
+当 `silent` 设置为 `'passed-only'` 时，通过 console 打印的日志会先被缓存；通过的任务日志会被丢弃，失败任务的日志会在失败输出附近回放。
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+最终只会打印 `fail log`。
+
+:::note
+当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`silent` 仍然会生效。Rstest 会为 `silent` 保留一条内部的 console interception 通道，但 [onConsoleLog](/config/test/on-console-log) 和 [printConsoleTrace](/config/test/print-console-trace) 仍然不会生效。
+:::

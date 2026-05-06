@@ -1,0 +1,59 @@
+---
+description: Silence intercepted console output from tests, or only keep logs for failed tasks.
+---
+
+# silent
+
+- **Type:** `boolean | 'passed-only'`
+- **Default:** `false`
+- **CLI:** `--silent [value]`
+
+Silence intercepted console output from tests.
+
+- Set `true` to hide all intercepted console logs.
+- Set `'passed-only'` to keep intercepted logs only for failed files, suites, and test cases.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --silent=passed-only
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+  </Tab>
+</Tabs>
+
+## Example
+
+When `silent` is set to `'passed-only'`, console logs from passing tasks are buffered and discarded, while logs from failed tasks are replayed with the failure output.
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+Only `fail log` will be printed.
+
+:::note
+When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `silent` still takes effect. Rstest keeps an internal console interception path for `silent`, but [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) still do not take effect.
+:::

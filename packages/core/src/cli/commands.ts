@@ -50,6 +50,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Allows the test suite to pass when no files are found',
   ],
   [
+    '--silent [value]',
+    'Silence intercepted test console output (true | false | passed-only)',
+  ],
+  [
     '--printConsoleTrace',
     'Print console traces when calling any console method',
   ],

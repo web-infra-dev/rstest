@@ -154,6 +154,10 @@ type TestFileStartPayload = {
 type LogPayload = {
   level: 'log' | 'warn' | 'error' | 'info' | 'debug';
   content: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
   testPath: string;
   type: 'stdout' | 'stderr';
   trace?: string;
@@ -184,6 +188,14 @@ type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
 };
 
 const createDeferredPromise = <T>(): DeferredPromise<T> => {
@@ -2133,6 +2145,7 @@ export const runBrowserController = async (
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileStart?.({
+          testId: getFileTaskId(payload.testPath),
           testPath: payload.testPath,
           tests: [],
         }),
@@ -2168,6 +2181,13 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestSuiteResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+      });
+    }
   };
 
   const handleTestCaseStart = async (
@@ -2187,6 +2207,13 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestCaseResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+      });
+    }
   };
 
   const handleTestFileComplete = async (
@@ -2197,6 +2224,14 @@ export const runBrowserController = async (
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+      });
+    }
+
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileResult?.(payload),
@@ -2211,19 +2246,26 @@ export const runBrowserController = async (
     const log: UserConsoleLog = {
       content: payload.content,
       name: payload.level,
+      taskId: payload.taskId,
+      taskName: payload.taskName,
+      taskParentNames: payload.taskParentNames,
+      taskType: payload.taskType,
       testPath: payload.testPath,
       type: payload.type,
       trace: payload.trace,
     };
     const shouldLog =
       context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-    if (shouldLog) {
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onUserConsoleLog?.(log),
-        ),
-      );
+    if (!shouldLog || context.normalizedConfig.silent === true) {
+      return;
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      bufferConsoleLog(log);
+      return;
+    }
+
+    await emitUserConsoleLog(log);
   };
 
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
@@ -2231,6 +2273,46 @@ export const runBrowserController = async (
     error.stack = payload.stack;
     fatalError = error;
     ensureProcessExitCode(1);
+  };
+
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onUserConsoleLog?.(log),
+      ),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+  }): Promise<void> => {
+    const logs = bufferedConsoleLogs.get(taskId);
+    if (!logs) {
+      return;
+    }
+
+    bufferedConsoleLogs.delete(taskId);
+
+    if (status !== 'fail') {
+      return;
+    }
+
+    for (const log of logs) {
+      await emitUserConsoleLog(log);
+    }
   };
 
   const runSnapshotRpc = async (

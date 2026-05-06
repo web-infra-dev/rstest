@@ -237,16 +237,30 @@ export const logUserConsoleLog = (
 ): void => {
   const titles = [];
   const testPath = relative(rootPath, log.testPath);
+  const taskName = [
+    ...(log.taskParentNames || []),
+    ...(log.taskName ? [log.taskName] : []),
+  ]
+    .filter(Boolean)
+    .join(' > ');
+
+  if (taskName) {
+    titles.push(testPath ? `${testPath} > ${taskName}` : taskName);
+  }
 
   if (log.trace) {
     const [frame] = stackTraceParse(log.trace);
-    const filePath = relative(rootPath, frame!.file || '');
+    const filePath = relative(rootPath, frame?.file || '');
 
-    if (filePath !== testPath) {
+    if (filePath && filePath !== testPath) {
       titles.push(testPath);
     }
-    titles.push(`${filePath}:${frame!.lineNumber}:${frame!.column}`);
-  } else {
+    if (filePath && frame?.lineNumber && frame.column) {
+      titles.push(`${filePath}:${frame.lineNumber}:${frame.column}`);
+    }
+  }
+
+  if (titles.length === 0) {
     titles.push(testPath);
   }
 

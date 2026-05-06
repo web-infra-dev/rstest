@@ -108,6 +108,7 @@ const preparePool = async ({
       globals,
       printConsoleTrace,
       disableConsoleIntercept,
+      silent,
       testEnvironment,
       snapshotFormat,
       env,
@@ -116,13 +117,16 @@ const preparePool = async ({
 
   setupEnv(env);
 
-  if (!disableConsoleIntercept) {
+  const shouldInterceptConsole =
+    !disableConsoleIntercept || silent === true || silent === 'passed-only';
+
+  if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
 
     global.console = createCustomConsole({
       rpc,
       testPath,
-      printConsoleTrace,
+      printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
     });
   }
 
