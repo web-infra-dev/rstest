@@ -56,7 +56,7 @@ describe('math', () => {
 Only `fail log` will be printed.
 
 :::note
-When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `silent` still takes effect. Rstest keeps an internal console interception path for `silent`, but [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) still do not take effect.
+Rstest tries to attribute logs to specific tests, but in concurrent asynchronous test scenarios in browser mode, log attribution may not be perfectly accurate.
 
 In browser mode, this interception still calls the original `console.*` so logs can remain visible in DevTools. `silent` controls Rstest/reporter output, not necessarily the browser's native console view.
 :::
