@@ -157,6 +157,24 @@ export default defineConfig({
 });
 ```
 
+## 环境变量
+
+Rstest 提供了与 Jest 这两个主要环境变量对应的实现，只是变量名不同：
+
+| Jest             | Rstest             | 说明                                                                                                                                                                                                    |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JEST_WORKER_ID` | `RSTEST_WORKER_ID` | 语义一致 — 整数（以字符串形式表示），同时运行的 worker 之间互不相同。可用于按 worker 隔离数据库 / 端口 / 临时目录。详见 [`RSTEST_WORKER_ID`](/api/runtime-api/environment-variables#rstest_worker_id)。 |
+| `NODE_ENV`       | `NODE_ENV`         | 未设置时两者都默认为 `'test'`。                                                                                                                                                                         |
+
+替换测试、fixture 或 `setupFiles` 中的引用：
+
+```diff
+- const dbName = `myapp_test_${process.env.JEST_WORKER_ID}`;
++ const dbName = `myapp_test_${process.env.RSTEST_WORKER_ID}`;
+```
+
+完整列表参见 [环境变量](/api/runtime-api/environment-variables)。
+
 ## 更新测试 API
 
 ### 测试 API

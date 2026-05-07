@@ -84,6 +84,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     // Modify src/shared.ts (shared): both test files rerun
     cli.resetStd();
     fs.update(path.join(fixturesTargetPath, 'src/shared.ts'), () => {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: write literal source text with ${name}.
       return 'export const greet = (name: string) => `Hi, ${name}!`;';
     });
 

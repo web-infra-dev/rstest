@@ -168,7 +168,6 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       }
       const originalModule = requiredModule;
-      const isEsModule = originalModule.__esModule === true;
       const mockedModule =
         globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
           spy: isSpy,

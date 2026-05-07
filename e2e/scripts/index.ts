@@ -174,7 +174,7 @@ export async function runRstestCli({
   const cli = new Cli(exec, { stripAnsi });
 
   (onTestFinished || onRstestFinished)(() => {
-    !cli.exec.killed && cli.exec.kill();
+    if (!cli.exec.killed) cli.exec.kill();
   });
 
   (onTestFailed || onRstestFailed)?.(({ task }) => {

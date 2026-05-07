@@ -137,19 +137,21 @@ export class FakeTimers {
     }
   }
 
-  useFakeTimers(fakeTimersConfig: FakeTimerInstallOpts = {}): void {
+  useFakeTimers({
+    toNotFake = [],
+    ...restFakeTimersConfig
+  }: FakeTimerInstallOpts = {}): void {
     if (this._fakingTime) {
       this._clock.uninstall();
     }
 
+    const ignoreTimers = ['Intl', 'nextTick', 'queueMicrotask'].concat(
+      toNotFake,
+    );
+
     const toFake = Object.keys(this._fakeTimers.timers)
       // Do not mock timers internally used by node by default. It can still be mocked through userConfig.
-      .filter(
-        (timer): timer is FakeMethod =>
-          timer !== 'Intl' &&
-          timer !== 'nextTick' &&
-          timer !== 'queueMicrotask',
-      );
+      .filter((timer): timer is FakeMethod => !ignoreTimers.includes(timer));
 
     const isChildProcess = typeof process !== 'undefined' && !!process.send;
 
@@ -163,7 +165,7 @@ export class FakeTimers {
       now: Date.now(),
       toFake: [...toFake],
       ignoreMissingTimers: true,
-      ...fakeTimersConfig,
+      ...restFakeTimersConfig,
     });
 
     // temporary fix fake-timers 15.1.1 → 15.2.0 timerHeap.push error

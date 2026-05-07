@@ -108,11 +108,12 @@ export class DefaultReporter implements Reporter {
           result.status === 'fail' ||
           (result.duration ?? 0) > slowTestThreshold ||
           (result.retryCount ?? 0) > 0;
-        isDisplayed &&
+        if (isDisplayed) {
           logCase(result, {
             slowTestThreshold,
             hideSkippedTests,
           });
+        }
       }
     };
 

@@ -339,4 +339,66 @@ describe('traverseUpdateTest', () => {
       ]
     `);
   });
+
+  it('updateTestMode with string and global regex patterns', () => {
+    const createTests = (): [TestSuite, TestCase] => [
+      {
+        name: 'testA',
+        runMode: 'run',
+        type: 'suite',
+        tests: [
+          {
+            name: 'test-0',
+            type: 'case',
+            runMode: 'run',
+          },
+          {
+            name: 'test-1',
+            type: 'case',
+            runMode: 'run',
+          },
+          {
+            name: 'test-2',
+            type: 'suite',
+            runMode: 'run',
+            tests: [
+              {
+                name: 'test-2-1',
+                type: 'case',
+                runMode: 'run',
+              },
+              {
+                name: 'test-2-2',
+                type: 'case',
+                runMode: 'run',
+              },
+            ],
+          },
+        ],
+      } as TestSuite,
+      {
+        name: 'testB',
+        runMode: 'run',
+        type: 'case',
+      } as TestCase,
+    ];
+
+    const stringPatternTests = createTests();
+    traverseUpdateTest(stringPatternTests, '2-1');
+
+    expect(stringPatternTests[0].tests[0]?.runMode).toBe('skip');
+    expect(stringPatternTests[0].tests[1]?.runMode).toBe('skip');
+    expect(
+      (stringPatternTests[0].tests[2] as TestSuite).tests[0]?.runMode,
+    ).toBe('run');
+    expect(
+      (stringPatternTests[0].tests[2] as TestSuite).tests[1]?.runMode,
+    ).toBe('skip');
+    expect(stringPatternTests[1].runMode).toBe('skip');
+
+    const globalRegexTests = createTests();
+    traverseUpdateTest(globalRegexTests, /2-1/g);
+
+    expect(globalRegexTests).toEqual(stringPatternTests);
+  });
 });

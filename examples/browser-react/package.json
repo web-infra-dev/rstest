@@ -11,13 +11,13 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@rsbuild/plugin-react": "^1.4.6",
+    "@rsbuild/plugin-react": "^2.0.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "playwright": "^1.59.1",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   }
 }
