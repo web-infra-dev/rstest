@@ -14,6 +14,7 @@ export function createPoolWorker(
         filename: options.workerEntry,
         env: options.env,
         execArgv: options.execArgv,
+        forwardStdio: options.forwardStdio,
       });
     }
     default: {

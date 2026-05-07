@@ -37,6 +37,7 @@ type ForksPoolWorkerOptions = {
   filename: string;
   env?: NodeJS.ProcessEnv;
   execArgv?: string[];
+  forwardStdio?: boolean;
 };
 
 /**
@@ -52,6 +53,7 @@ export class ForksPoolWorker implements PoolWorker {
   private readonly filename: string;
   private readonly env?: NodeJS.ProcessEnv;
   private readonly execArgv?: string[];
+  private readonly forwardStdio: boolean;
   private childProcess: ChildProcess | undefined;
   private stderrBuffer = '';
   private stderrBytes = 0;
@@ -64,6 +66,7 @@ export class ForksPoolWorker implements PoolWorker {
     this.filename = options.filename;
     this.env = options.env;
     this.execArgv = options.execArgv;
+    this.forwardStdio = options.forwardStdio ?? true;
   }
 
   get pid(): number | undefined {
@@ -93,7 +96,10 @@ export class ForksPoolWorker implements PoolWorker {
       const forkOptions: ForkOptions = {
         env: this.env,
         execArgv: this.execArgv,
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+        // stderr stays piped so we can capture it for error enrichment even
+        // when host forwarding is off; stdout is unused for capture, so drop
+        // the pipe entirely when we're not forwarding.
+        stdio: ['ignore', this.forwardStdio ? 'pipe' : 'ignore', 'pipe', 'ipc'],
         serialization: getWorkerSerialization(),
       };
 
@@ -109,12 +115,14 @@ export class ForksPoolWorker implements PoolWorker {
 
       // Pipe child stdio to the host process so native crash logs / warnings
       // remain visible. Tinypool did this by default; preserve the behavior.
-      child.stdout?.on('data', (chunk: Buffer) => {
-        process.stdout.write(chunk);
-      });
+      if (this.forwardStdio) {
+        child.stdout?.on('data', (chunk: Buffer) => {
+          process.stdout.write(chunk);
+        });
+      }
       child.stderr?.on('data', (chunk: Buffer) => {
         this.appendStderr(chunk.toString());
-        process.stderr.write(chunk);
+        if (this.forwardStdio) process.stderr.write(chunk);
       });
       if (child.stderr) {
         this.stderrClosePromise = new Promise<void>((resolve) => {

@@ -16,4 +16,11 @@ export type PoolOptions = {
   isolate: boolean;
   env?: Record<string, string>;
   execArgv?: string[];
+  /**
+   * Whether to forward worker stdio to the host process. Defaults to `true`
+   * to preserve Tinypool parity (native crash logs / warnings stay visible).
+   * Set to `false` in tests that intentionally write crash-like output to
+   * stderr so the simulated noise doesn't leak into the host log.
+   */
+  forwardStdio?: boolean;
 };
