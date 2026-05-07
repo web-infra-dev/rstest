@@ -56,6 +56,7 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).toContain('BROWSER_CONCURRENT_FAILING_CASE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
   });
@@ -84,6 +85,7 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).toContain('BROWSER_CONCURRENT_FAILING_CASE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
   });
@@ -103,6 +105,7 @@ describe('browser mode - console forwarding', () => {
     expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
     expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
+    expect(cli.stdout).toContain('BROWSER_CONCURRENT_FAILING_CASE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
     expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
   });
