@@ -36,10 +36,12 @@ export function createCustomConsole({
   rpc,
   testPath,
   printConsoleTrace,
+  onFallback,
 }: {
   rpc: WorkerRPC;
   testPath: string;
   printConsoleTrace: boolean;
+  onFallback?: (payload: { content: string; type: 'stderr' | 'stdout' }) => void;
 }): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
@@ -92,6 +94,11 @@ export function createCustomConsole({
         testPath,
         type,
         trace: printConsoleTrace ? getConsoleTrace() : undefined,
+      });
+
+      onFallback?.({
+        content: `${'  '.repeat(this._groupDepth)}${message}\n`,
+        type,
       });
     }
 
