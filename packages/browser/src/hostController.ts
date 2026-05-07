@@ -2275,10 +2275,7 @@ export const runBrowserController = async (
       type: payload.type,
       trace: payload.trace,
     };
-    const shouldLog =
-      context.normalizedConfig.disableConsoleIntercept ||
-      context.normalizedConfig.onConsoleLog?.(log.content) !== false;
-    if (!shouldLog || context.normalizedConfig.silent === true) {
+    if (context.normalizedConfig.silent === true) {
       return;
     }
 
@@ -2299,7 +2296,19 @@ export const runBrowserController = async (
 
   const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
 
+  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
+    if (context.normalizedConfig.disableConsoleIntercept) {
+      return true;
+    }
+
+    return context.normalizedConfig.onConsoleLog?.(log.content) !== false;
+  };
+
   const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    if (!shouldEmitUserConsoleLog(log)) {
+      return;
+    }
+
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onUserConsoleLog?.(log),

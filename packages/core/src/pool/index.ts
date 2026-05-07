@@ -290,7 +290,35 @@ export const createPool = async ({
 }> => {
   const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
 
-  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+  const shouldEmitUserConsoleLog = ({
+    log,
+    runtimeConfig,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): boolean => {
+    if (runtimeConfig.disableConsoleIntercept) {
+      return true;
+    }
+
+    return projectConfig.onConsoleLog?.(log.content) !== false;
+  };
+
+  const emitUserConsoleLog = async ({
+    log,
+    runtimeConfig,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Promise<void> => {
+    if (!shouldEmitUserConsoleLog({ log, runtimeConfig, projectConfig })) {
+      return;
+    }
+
     await Promise.all(
       reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
     );
@@ -306,9 +334,13 @@ export const createPool = async ({
   const flushBufferedLogsForTask = async ({
     taskId,
     status,
+    runtimeConfig,
+    projectConfig,
   }: {
     taskId: string;
     status: TestResult['status'];
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
   }): Promise<void> => {
     const logs = bufferedConsoleLogs.get(taskId);
     if (!logs) {
@@ -322,7 +354,7 @@ export const createPool = async ({
     }
 
     for (const log of logs) {
-      await emitUserConsoleLog(log);
+      await emitUserConsoleLog({ log, runtimeConfig, projectConfig });
     }
   };
 
@@ -415,6 +447,8 @@ export const createPool = async ({
         await flushBufferedLogsForTask({
           taskId: result.testId,
           status: result.status,
+          runtimeConfig,
+          projectConfig,
         });
       }
     },
@@ -422,11 +456,7 @@ export const createPool = async ({
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      const shouldLog =
-        runtimeConfig.disableConsoleIntercept ||
-        projectConfig.onConsoleLog?.(log.content) !== false;
-
-      if (!shouldLog || runtimeConfig.silent === true) {
+      if (runtimeConfig.silent === true) {
         return;
       }
 
@@ -435,7 +465,7 @@ export const createPool = async ({
         return;
       }
 
-      await emitUserConsoleLog(log);
+      await emitUserConsoleLog({ log, runtimeConfig, projectConfig });
     },
     onTestFileStart: async (test: TestFileInfo) => {
       context.stateManager.onTestFileStart(test.testPath);
@@ -462,6 +492,8 @@ export const createPool = async ({
         await flushBufferedLogsForTask({
           taskId: result.testId,
           status: result.status,
+          runtimeConfig,
+          projectConfig,
         });
       }
     },
@@ -538,6 +570,8 @@ export const createPool = async ({
             await flushBufferedLogsForTask({
               taskId: bufferedTaskId,
               status: result.status,
+              runtimeConfig,
+              projectConfig: project.normalizedConfig,
             });
           }
           context.stateManager.onTestFileResult(result);
