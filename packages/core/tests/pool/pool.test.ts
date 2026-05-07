@@ -9,6 +9,11 @@ const createPoolOptions = (overrides?: Partial<PoolOptions>): PoolOptions => ({
   maxWorkers: 2,
   minWorkers: 0,
   isolate: true,
+  // The fixture worker intentionally writes crash-like output to stderr
+  // (e.g. `segfault at 0x0`, 100 KB of `x`) to exercise stderr capture and
+  // truncation. Suppress host forwarding so this simulated noise doesn't
+  // leak into the parent rstest log on CI.
+  forwardStdio: false,
   ...overrides,
 });
 
