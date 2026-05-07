@@ -21,8 +21,9 @@ export const initTaskContext = async (): Promise<void> => {
   taskStorageReady = true;
 
   try {
+    const asyncHooksSpecifier = 'node:async_hooks';
     const { AsyncLocalStorage } = (await import(
-      'node:async_hooks'
+      /* webpackIgnore: true */ asyncHooksSpecifier
     )) as AsyncHooksModule;
     taskStorage = AsyncLocalStorage ? new AsyncLocalStorage() : undefined;
   } catch {
