@@ -22,9 +22,9 @@ import {
   type InspectOptions,
   inspect,
 } from 'node:util';
+import type { UserConsoleLog } from '../../types';
 import { prettyTime } from '../../utils/helper';
 import { color } from '../../utils/logger';
-import type { WorkerRPC } from './rpc';
 import { getCurrentTask } from './taskContext';
 
 const RealDate = Date;
@@ -46,11 +46,11 @@ type LogCounters = Record<string, number>;
 type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
-  rpc,
+  onConsoleLog,
   testPath,
   printConsoleTrace,
 }: {
-  rpc: WorkerRPC;
+  onConsoleLog: (log: UserConsoleLog) => void;
   testPath: string;
   printConsoleTrace: boolean;
 }): Console {
@@ -95,7 +95,7 @@ export function createCustomConsole({
     ) {
       const currentTask = getCurrentTask();
 
-      rpc.onConsoleLog({
+      onConsoleLog({
         content: '  '.repeat(this._groupDepth) + message,
         name: this.getPrettyName(name),
         taskId: currentTask?.taskId,

@@ -6,7 +6,6 @@ import type {
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
-  UserConsoleLog,
   WorkerState,
 } from '../../types';
 import { globalApis } from '../../utils/constants';
@@ -107,10 +106,7 @@ const preparePool = async ({
   entryInfo: { distPath, testPath },
   updateSnapshot,
   context,
-  silentConsoleController,
-}: RunWorkerOptions['options'] & {
-  silentConsoleController: ReturnType<typeof createSilentConsoleController>;
-}) => {
+}: RunWorkerOptions['options']) => {
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
     fn();
@@ -151,18 +147,19 @@ const preparePool = async ({
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';
 
+  const silentConsoleController = createSilentConsoleController({
+    runtimeConfig: {
+      disableConsoleIntercept,
+      silent,
+    },
+    emitInterceptedLog: async (log) => {
+      await rpc.onConsoleLog(log);
+    },
+    writeOriginalLog: createOriginalLogWriter(),
+  });
+
   if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
-    const onConsoleLog = Object.assign(
-      async (log: UserConsoleLog) => {
-        silentConsoleController.onConsoleLog(log);
-      },
-      {
-        asEvent: async (log: UserConsoleLog) => {
-          silentConsoleController.onConsoleLog(log);
-        },
-      },
-    );
 
     // Keep a minimal internal interception path when `silent` is enabled.
     // In `disableConsoleIntercept + silent` mode, logs are buffered in the
@@ -170,9 +167,8 @@ const preparePool = async ({
     // to the silent policy, instead of being reported to the host.
 
     global.console = createCustomConsole({
-      rpc: {
-        ...rpc,
-        onConsoleLog,
+      onConsoleLog: (log) => {
+        silentConsoleController.onConsoleLog(log);
       },
       testPath,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
@@ -272,6 +268,7 @@ const preparePool = async ({
     rstestContext,
     runner,
     rpc,
+    silentConsoleController,
     api,
     unhandledErrors,
     cleanup: async () => {
@@ -406,15 +403,6 @@ export const runInPool = async (
 
   if (type === 'collect') {
     try {
-      const silentConsoleController = createSilentConsoleController({
-        runtimeConfig: {
-          disableConsoleIntercept:
-            options.context.runtimeConfig.disableConsoleIntercept,
-          silent: options.context.runtimeConfig.silent,
-        },
-        emitInterceptedLog: () => {},
-        writeOriginalLog: createOriginalLogWriter(),
-      });
       const {
         rstestContext,
         runner,
@@ -422,10 +410,7 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
-      } = await preparePool({
-        ...options,
-        silentConsoleController,
-      });
+      } = await preparePool(options);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
       sourceMaps = sourceMapsFromAssets;
@@ -463,32 +448,16 @@ export const runInPool = async (
   }
 
   try {
-    let rpcOnConsoleLog: ((log: UserConsoleLog) => Promise<void>) | undefined;
-    const silentConsoleController = createSilentConsoleController({
-      runtimeConfig: {
-        disableConsoleIntercept:
-          options.context.runtimeConfig.disableConsoleIntercept,
-        silent: options.context.runtimeConfig.silent,
-      },
-      emitInterceptedLog: async (log) => {
-        await rpcOnConsoleLog?.(log);
-      },
-      writeOriginalLog: createOriginalLogWriter(),
-    });
-
     const {
       rstestContext,
       runner,
       rpc,
+      silentConsoleController,
       api,
       cleanup,
       unhandledErrors,
       interopDefault,
-    } = await preparePool({
-      ...options,
-      silentConsoleController,
-    });
-    rpcOnConsoleLog = rpc.onConsoleLog;
+    } = await preparePool(options);
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
