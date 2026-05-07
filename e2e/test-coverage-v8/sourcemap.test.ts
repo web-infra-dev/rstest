@@ -64,22 +64,14 @@ describe('test coverage-v8 sourcemap', () => {
       .find((log) => log.includes('sourcemap.ts'))
       ?.replaceAll(' ', '');
 
-    // Node/V8 precise coverage can report different branch counts for the
-    // same class-field/initializer code across runtime versions, while the
-    // sourcemap remap result is still correct. Keep this assertion focused
-    // on the remapped source entry and allow the known runtime-dependent
-    // branch totals only.
-    expect(sourcemapLog).toMatch(
-      /^sourcemap\.ts\|88\.88\|(75|80)\|100\|88\.88\|16-17$/,
+    expect(sourcemapLog).toMatchInlineSnapshot(
+      `"sourcemap.ts|88.88|75|100|88.88|16-17"`,
     );
 
     const allFilesLog = logs
       .find((log) => log.includes('All files'))
       ?.replaceAll(' ', '');
 
-    // The final report should only include the remapped source file here.
-    // Internal temporary output such as dist/.rstest-temp must be filtered
-    // out before the global summary is calculated.
-    expect(allFilesLog).toMatch(/^Allfiles\|88\.88\|(75|80)\|100\|88\.88\|$/);
+    expect(allFilesLog).toMatchInlineSnapshot(`"Allfiles|88.88|75|100|88.88|"`);
   });
 });

@@ -1,5 +1,5 @@
 import type FS from 'node:fs';
-import { isAbsolute, normalize, relative } from 'pathe';
+import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
 import type { RstestContext, TestFileResult } from '../types';
 import type {
@@ -46,9 +46,6 @@ export const getIncludedFiles = async (
   return allFiles;
 };
 
-const isSameOrSubPath = (filePath: string, parentPath: string): boolean =>
-  filePath === parentPath || filePath.startsWith(`${parentPath}/`);
-
 export async function generateCoverage(
   context: RstestContext,
   results: TestFileResult[],
@@ -72,23 +69,9 @@ export async function generateCoverage(
     const distPathRoot = normalize(
       context.normalizedConfig.output?.distPath?.root || '',
     );
-    const normalizedRootPath = normalize(rootPath);
-    const absDistPathRoot = distPathRoot
-      ? normalize(
-          isAbsolute(distPathRoot)
-            ? distPathRoot
-            : `${normalizedRootPath}/${distPathRoot}`,
-        )
-      : '';
     finalCoverageMap.filter((filePath) => {
       const normalizedFile = normalize(filePath);
-      const fileRelativeToRoot = normalize(
-        relative(normalizedRootPath, normalizedFile),
-      );
-      if (
-        (distPathRoot && isSameOrSubPath(fileRelativeToRoot, distPathRoot)) ||
-        (absDistPathRoot && isSameOrSubPath(normalizedFile, absDistPathRoot))
-      ) {
+      if (distPathRoot && normalizedFile.startsWith(distPathRoot)) {
         return false;
       }
       if (
