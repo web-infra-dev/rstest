@@ -13,6 +13,8 @@ export { createRstestRuntime } from './runtime/api';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
+export { getCurrentTask } from './runtime/worker/taskContext';
+export { initTaskContext } from './runtime/worker/taskContext';
 // Types for browser runtime
 export type {
   CoverageMapData,

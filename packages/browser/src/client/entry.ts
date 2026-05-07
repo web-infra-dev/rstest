@@ -14,7 +14,9 @@ import type {
 } from '@rstest/core/browser-runtime';
 import {
   createRstestRuntime,
+  getCurrentTask,
   globalApis,
+  initTaskContext,
   setRealTimers,
 } from '@rstest/core/browser-runtime';
 import { normalize } from 'pathe';
@@ -157,7 +159,7 @@ type CurrentTaskInfo = NonNullable<WorkerState['currentTask']>;
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
-  getCurrentTask: () => CurrentTaskInfo | undefined,
+  getCurrentTaskFallback: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
 ): (() => void) => {
   const originalConsole = {
@@ -184,7 +186,7 @@ const interceptConsole = (
 
       // Format message
       const content = args.map(formatArg).join(' ');
-      const currentTask = getCurrentTask();
+      const currentTask = getCurrentTask() ?? getCurrentTaskFallback();
 
       // Send to host
       send({
@@ -419,6 +421,7 @@ const run = async () => {
   send({ type: 'ready' });
 
   setRealTimers();
+  await initTaskContext();
 
   // Preload runner.js sourcemap for inline snapshot support.
   // The snapshot code runs in runner.js, so we need its sourcemap
@@ -617,6 +620,19 @@ const run = async () => {
       },
     };
 
+    const syncCurrentTask = (): void => {
+      workerState.currentTask = taskStack[taskStack.length - 1];
+    };
+
+    const removeTaskFromStack = (taskId: string): void => {
+      const taskIndex = taskStack.findLastIndex((task) => task.taskId === taskId);
+      if (taskIndex < 0) {
+        return;
+      }
+      taskStack.splice(taskIndex, 1);
+      syncCurrentTask();
+    };
+
     const runtime = await createRstestRuntime(workerState);
 
     // Register global APIs if globals config is enabled
@@ -640,14 +656,11 @@ const run = async () => {
           taskType: 'suite',
           testPath: test.testPath,
         });
-        workerState.currentTask = taskStack[taskStack.length - 1];
+        syncCurrentTask();
         dispatchRunnerLifecycle('suite-start', test);
       },
       onTestSuiteResult: async (result) => {
-        if (taskStack[taskStack.length - 1]?.taskId === result.testId) {
-          taskStack.pop();
-          workerState.currentTask = taskStack[taskStack.length - 1];
-        }
+        removeTaskFromStack(result.testId);
         dispatchRunnerLifecycle('suite-result', result);
       },
       onTestCaseStart: async (test) => {
@@ -658,14 +671,11 @@ const run = async () => {
           taskType: 'case',
           testPath: test.testPath,
         });
-        workerState.currentTask = taskStack[taskStack.length - 1];
+        syncCurrentTask();
         dispatchRunnerLifecycle('case-start', test);
       },
       onTestCaseResult: async (result) => {
-        if (taskStack[taskStack.length - 1]?.taskId === result.testId) {
-          taskStack.pop();
-          workerState.currentTask = taskStack[taskStack.length - 1];
-        }
+        removeTaskFromStack(result.testId);
         if (result.status === 'fail') {
           failedTestsCount++;
         }
