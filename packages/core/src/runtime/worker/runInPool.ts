@@ -129,25 +129,10 @@ const preparePool = async ({
   if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
 
-    // Keep a minimal internal interception path when `silent` is enabled so we
-    // can buffer/drop/replay logs later. If users also set
-    // `disableConsoleIntercept: true`, we still write the original output back
-    // to the worker streams to preserve native console behavior.
-
     global.console = createCustomConsole({
       rpc,
       testPath,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
-      onFallback: disableConsoleIntercept
-        ? ({ content, type }) => {
-            if (type === 'stderr') {
-              process.stderr.write(content);
-              return;
-            }
-
-            process.stdout.write(content);
-          }
-        : undefined,
     });
   }
 
