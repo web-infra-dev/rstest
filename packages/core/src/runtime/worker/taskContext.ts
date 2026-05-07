@@ -39,14 +39,14 @@ export const runWithCurrentTask = async <T>(
   task: CurrentTaskInfo,
   fn: () => Promise<T> | T,
 ): Promise<T> => {
-  if (taskStorage) {
-    return await taskStorage.run(task, fn);
-  }
-
   const previousFallbackTask = fallbackTask;
   fallbackTask = task;
 
   try {
+    if (taskStorage) {
+      return await taskStorage.run(task, fn);
+    }
+
     return await fn();
   } finally {
     fallbackTask = previousFallbackTask;

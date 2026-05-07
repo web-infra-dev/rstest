@@ -15,6 +15,7 @@
  */
 import { AssertionError, strict as assert } from 'node:assert';
 import { Console } from 'node:console';
+import { Writable } from 'node:stream';
 import {
   format,
   formatWithOptions,
@@ -27,6 +28,18 @@ import type { WorkerRPC } from './rpc';
 import { getCurrentTask } from './taskContext';
 
 const RealDate = Date;
+
+class NullWritable extends Writable {
+  override _write(
+    _chunk: any,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    callback();
+  }
+}
+
+const nullWritable = new NullWritable();
 
 type LogCounters = Record<string, number>;
 
@@ -208,5 +221,5 @@ export function createCustomConsole({
     }
   }
 
-  return new CustomConsole(process.stdout, process.stderr);
+  return new CustomConsole(nullWritable, nullWritable);
 }

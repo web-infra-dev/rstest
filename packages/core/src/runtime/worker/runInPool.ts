@@ -6,6 +6,7 @@ import type {
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
+  UserConsoleLog,
   WorkerState,
 } from '../../types';
 import { globalApis } from '../../utils/constants';
@@ -82,11 +83,34 @@ const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
 
+const createOriginalLogWriter = () => {
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  return ({
+    content,
+    type,
+  }: {
+    content: string;
+    type: 'stderr' | 'stdout';
+  }) => {
+    if (type === 'stderr') {
+      stderrWrite(content);
+      return;
+    }
+
+    stdoutWrite(content);
+  };
+};
+
 const preparePool = async ({
   entryInfo: { distPath, testPath },
   updateSnapshot,
   context,
-}: RunWorkerOptions['options']) => {
+  silentConsoleController,
+}: RunWorkerOptions['options'] & {
+  silentConsoleController: ReturnType<typeof createSilentConsoleController>;
+}) => {
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
     fn();
@@ -127,26 +151,18 @@ const preparePool = async ({
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';
 
-  const silentConsoleController = createSilentConsoleController({
-    runtimeConfig: {
-      disableConsoleIntercept,
-      silent,
-    },
-    emitInterceptedLog: (log) => {
-      rpc.onConsoleLog(log);
-    },
-    writeOriginalLog: ({ content, type }) => {
-      if (type === 'stderr') {
-        process.stderr.write(content);
-        return;
-      }
-
-      process.stdout.write(content);
-    },
-  });
-
   if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
+    const onConsoleLog = Object.assign(
+      async (log: UserConsoleLog) => {
+        silentConsoleController.onConsoleLog(log);
+      },
+      {
+        asEvent: async (log: UserConsoleLog) => {
+          silentConsoleController.onConsoleLog(log);
+        },
+      },
+    );
 
     // Keep a minimal internal interception path when `silent` is enabled.
     // In `disableConsoleIntercept + silent` mode, logs are buffered in the
@@ -156,9 +172,7 @@ const preparePool = async ({
     global.console = createCustomConsole({
       rpc: {
         ...rpc,
-        onConsoleLog: (log) => {
-          silentConsoleController.onConsoleLog(log);
-        },
+        onConsoleLog,
       },
       testPath,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
@@ -392,6 +406,15 @@ export const runInPool = async (
 
   if (type === 'collect') {
     try {
+      const silentConsoleController = createSilentConsoleController({
+        runtimeConfig: {
+          disableConsoleIntercept:
+            options.context.runtimeConfig.disableConsoleIntercept,
+          silent: options.context.runtimeConfig.silent,
+        },
+        emitInterceptedLog: () => {},
+        writeOriginalLog: createOriginalLogWriter(),
+      });
       const {
         rstestContext,
         runner,
@@ -399,7 +422,10 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
-      } = await preparePool(options);
+      } = await preparePool({
+        ...options,
+        silentConsoleController,
+      });
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
       sourceMaps = sourceMapsFromAssets;
@@ -437,6 +463,19 @@ export const runInPool = async (
   }
 
   try {
+    let rpcOnConsoleLog: ((log: UserConsoleLog) => Promise<void>) | undefined;
+    const silentConsoleController = createSilentConsoleController({
+      runtimeConfig: {
+        disableConsoleIntercept:
+          options.context.runtimeConfig.disableConsoleIntercept,
+        silent: options.context.runtimeConfig.silent,
+      },
+      emitInterceptedLog: async (log) => {
+        await rpcOnConsoleLog?.(log);
+      },
+      writeOriginalLog: createOriginalLogWriter(),
+    });
+
     const {
       rstestContext,
       runner,
@@ -445,7 +484,11 @@ export const runInPool = async (
       cleanup,
       unhandledErrors,
       interopDefault,
-    } = await preparePool(options);
+    } = await preparePool({
+      ...options,
+      silentConsoleController,
+    });
+    rpcOnConsoleLog = rpc.onConsoleLog;
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
@@ -483,23 +526,32 @@ export const runInPool = async (
       testPath,
       tests: [],
     });
+
+    // Keep file-level context only while evaluating top-level module code.
+    // Once the runner starts, suite/case tasks should own subsequent logs so
+    // passed suite buffers are not replayed by the final file-level flush.
     setFallbackCurrentTask({
       taskId: getFileTaskId(testPath),
       taskType: 'file',
       testPath,
     });
 
-    await loadFiles({
-      rstestContext,
-      distPath,
-      runtimeDistPath,
-      testPath,
-      assetFiles,
-      setupEntries,
-      interopDefault,
-      isolate,
-      outputModule: options.context.outputModule,
-    });
+    try {
+      await loadFiles({
+        rstestContext,
+        distPath,
+        runtimeDistPath,
+        testPath,
+        assetFiles,
+        setupEntries,
+        interopDefault,
+        isolate,
+        outputModule: options.context.outputModule,
+      });
+    } finally {
+      setFallbackCurrentTask(undefined);
+    }
+
     const results = await runner.runTests(
       testPath,
       {

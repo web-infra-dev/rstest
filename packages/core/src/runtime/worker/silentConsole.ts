@@ -19,7 +19,7 @@ export const createSilentConsoleController = ({
   writeOriginalLog,
 }: {
   runtimeConfig: Pick<RuntimeConfig, 'disableConsoleIntercept' | 'silent'>;
-  emitInterceptedLog: (log: UserConsoleLog) => void;
+  emitInterceptedLog: (log: UserConsoleLog) => Promise<void> | void;
   writeOriginalLog: ConsoleWriter;
 }) => {
   const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
