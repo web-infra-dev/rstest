@@ -94,6 +94,12 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).toContain('file level log');
     expect(cli.stdout).toContain('failing suite log');
     expect(cli.stdout).toContain('failing case log');
+    expect(cli.stdout.indexOf('file level log')).toBeLessThan(
+      cli.stdout.indexOf('failing suite log'),
+    );
+    expect(cli.stdout.indexOf('failing suite log')).toBeLessThan(
+      cli.stdout.indexOf('failing case log'),
+    );
     expect(cli.stdout).not.toContain('passing suite log');
     expect(cli.stdout).not.toContain('passing case log');
   });

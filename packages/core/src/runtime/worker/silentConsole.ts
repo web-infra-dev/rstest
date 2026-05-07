@@ -21,6 +21,12 @@ const getSuiteChainKey = (names: string[]): string => {
   return names.join('\u0000');
 };
 
+const pushTaskId = (taskIds: string[], taskId: string): void => {
+  if (!taskIds.includes(taskId)) {
+    taskIds.push(taskId);
+  }
+};
+
 export const createSilentConsoleController = ({
   runtimeConfig,
   emitInterceptedLog,
@@ -90,10 +96,10 @@ export const createSilentConsoleController = ({
         return;
       }
 
-      const taskIdsToFlush = new Set<string>([taskId]);
+      const taskIdsToFlush: string[] = [];
 
       if (taskType === 'case') {
-        taskIdsToFlush.add(getFileTaskId(testPath));
+        pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
 
         const suiteNames = taskParentNames || [];
         for (let i = 0; i < suiteNames.length; i++) {
@@ -102,13 +108,20 @@ export const createSilentConsoleController = ({
           );
 
           if (suiteId) {
-            taskIdsToFlush.add(suiteId);
+            pushTaskId(taskIdsToFlush, suiteId);
           }
         }
+
+        pushTaskId(taskIdsToFlush, taskId);
       }
 
       if (taskType === 'suite') {
-        taskIdsToFlush.add(getFileTaskId(testPath));
+        pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+        pushTaskId(taskIdsToFlush, taskId);
+      }
+
+      if (taskType === 'file') {
+        pushTaskId(taskIdsToFlush, taskId);
       }
 
       for (const bufferedTaskId of taskIdsToFlush) {
