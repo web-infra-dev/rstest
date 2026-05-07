@@ -12,6 +12,7 @@ import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
+import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { initTaskContext, setFallbackCurrentTask } from './taskContext';
 
@@ -126,11 +127,39 @@ const preparePool = async ({
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';
 
+  const silentConsoleController = createSilentConsoleController({
+    runtimeConfig: {
+      disableConsoleIntercept,
+      silent,
+    },
+    emitInterceptedLog: (log) => {
+      rpc.onConsoleLog(log);
+    },
+    writeOriginalLog: ({ content, type }) => {
+      if (type === 'stderr') {
+        process.stderr.write(content);
+        return;
+      }
+
+      process.stdout.write(content);
+    },
+  });
+
   if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
 
+    // Keep a minimal internal interception path when `silent` is enabled.
+    // In `disableConsoleIntercept + silent` mode, logs are buffered in the
+    // worker first and later replayed to the original worker streams according
+    // to the silent policy, instead of being reported to the host.
+
     global.console = createCustomConsole({
-      rpc,
+      rpc: {
+        ...rpc,
+        onConsoleLog: (log) => {
+          silentConsoleController.onConsoleLog(log);
+        },
+      },
       testPath,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
     });
@@ -481,12 +510,20 @@ export const runInPool = async (
           await rpc.onTestSuiteStart(test);
         },
         onTestSuiteResult: async (result) => {
+          silentConsoleController.flushBufferedLogsForTask({
+            taskId: result.testId,
+            status: result.status,
+          });
           await rpc.onTestSuiteResult(result);
         },
         onTestCaseStart: async (test) => {
           await rpc.onTestCaseStart(test);
         },
         onTestCaseResult: async (result) => {
+          silentConsoleController.flushBufferedLogsForTask({
+            taskId: result.testId,
+            status: result.status,
+          });
           await rpc.onTestCaseResult(result);
         },
         getCountOfFailedTests: async () => {
@@ -502,6 +539,11 @@ export const runInPool = async (
         ...(await formatTestError(unhandledErrors)),
       );
     }
+
+    silentConsoleController.flushBufferedLogsForTask({
+      taskId: results.testId,
+      status: results.status,
+    });
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
