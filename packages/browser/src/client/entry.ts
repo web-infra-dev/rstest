@@ -625,7 +625,9 @@ const run = async () => {
     };
 
     const removeTaskFromStack = (taskId: string): void => {
-      const taskIndex = taskStack.findLastIndex((task) => task.taskId === taskId);
+      const taskIndex = taskStack.findLastIndex(
+        (task) => task.taskId === taskId,
+      );
       if (taskIndex < 0) {
         return;
       }
