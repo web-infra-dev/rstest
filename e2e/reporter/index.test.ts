@@ -200,6 +200,31 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('passing concurrent case log');
   });
 
+  it('default - silent passed-only should only print shared file and suite logs once across multiple failures', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/silentMultipleFailures.test.ts',
+        '--silent=passed-only',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.stdout.match(/shared file log/g)?.length).toBe(1);
+    expect(cli.stdout.match(/shared suite log/g)?.length).toBe(1);
+    expect(cli.stdout).toContain('first failing case log');
+    expect(cli.stdout).toContain('second failing case log');
+  });
+
   it('hideSkippedTests', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

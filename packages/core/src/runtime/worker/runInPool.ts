@@ -534,6 +534,9 @@ export const runInPool = async (
           silentConsoleController.flushBufferedLogsForTask({
             taskId: result.testId,
             status: result.status,
+            taskParentNames: result.parentNames,
+            taskType: 'suite',
+            testPath: result.testPath,
           });
           await rpc.onTestSuiteResult(result);
         },
@@ -544,6 +547,9 @@ export const runInPool = async (
           silentConsoleController.flushBufferedLogsForTask({
             taskId: result.testId,
             status: result.status,
+            taskParentNames: result.parentNames,
+            taskType: 'case',
+            testPath: result.testPath,
           });
           await rpc.onTestCaseResult(result);
         },
@@ -564,6 +570,9 @@ export const runInPool = async (
     silentConsoleController.flushBufferedLogsForTask({
       taskId: results.testId,
       status: results.status,
+      taskParentNames: results.parentNames,
+      taskType: 'file',
+      testPath: results.testPath,
     });
 
     // Collect coverage data after test file completes
