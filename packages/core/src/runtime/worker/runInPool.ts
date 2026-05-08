@@ -351,6 +351,11 @@ export const runInPool = async (
     isTeardown = true;
   };
 
+  // Initialize coverage collector if coverage is enabled
+  let coverageProvider: Awaited<
+    ReturnType<typeof import('../../coverage').createCoverageProvider>
+  > | null = null;
+
   if (type === 'collect') {
     try {
       const {
@@ -418,10 +423,7 @@ export const runInPool = async (
         results: [],
       };
     }
-    // Initialize coverage collector if coverage is enabled
-    let coverageProvider: Awaited<
-      ReturnType<typeof import('../../coverage').createCoverageProvider>
-    > | null = null;
+
     if (options.context.runtimeConfig.coverage?.enabled) {
       const { createCoverageProvider } = await import('../../coverage');
       coverageProvider = await createCoverageProvider(
@@ -486,7 +488,10 @@ export const runInPool = async (
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
-      const coverageMap = coverageProvider.collect();
+      const coverageMap = await coverageProvider.collect({
+        assetFiles,
+        sourceMaps,
+      });
       if (coverageMap) {
         // Attach coverage data to test result
         results.coverage = {};
@@ -496,8 +501,6 @@ export const runInPool = async (
           else results.coverage![key] = value;
         });
       }
-      // Cleanup
-      coverageProvider.cleanup();
     }
 
     return results;
@@ -512,6 +515,9 @@ export const runInPool = async (
       errors: await formatTestError(err),
     };
   } finally {
+    if (coverageProvider) {
+      coverageProvider.cleanup();
+    }
     await teardown();
   }
 };

@@ -18,10 +18,11 @@ describe('test coverage-v8 sourcemap', () => {
         '--target',
         'esnext',
         '--moduleResolution',
-        'node',
+        'bundler',
         '--outDir',
         'test-temp-sourcemap/dist',
         'src/sourcemap.ts',
+        '--ignoreCOnfig',
       ],
       {
         nodeOptions: {
