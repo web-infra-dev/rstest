@@ -12,7 +12,9 @@ import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
+import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
+import { initTaskContext, setFallbackCurrentTask } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -76,6 +78,30 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   }
 };
 
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const createOriginalLogWriter = () => {
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  return ({
+    content,
+    type,
+  }: {
+    content: string;
+    type: 'stderr' | 'stdout';
+  }) => {
+    if (type === 'stderr') {
+      stderrWrite(content);
+      return;
+    }
+
+    stdoutWrite(content);
+  };
+};
+
 const preparePool = async ({
   entryInfo: { distPath, testPath },
   updateSnapshot,
@@ -87,6 +113,7 @@ const preparePool = async ({
   });
   globalCleanups.length = 0;
 
+  await initTaskContext();
   setRealTimers();
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
@@ -108,6 +135,7 @@ const preparePool = async ({
       globals,
       printConsoleTrace,
       disableConsoleIntercept,
+      silent,
       testEnvironment,
       snapshotFormat,
       env,
@@ -116,13 +144,34 @@ const preparePool = async ({
 
   setupEnv(env);
 
-  if (!disableConsoleIntercept) {
+  const shouldInterceptConsole =
+    !disableConsoleIntercept || silent === true || silent === 'passed-only';
+
+  const silentConsoleController = createSilentConsoleController({
+    runtimeConfig: {
+      disableConsoleIntercept,
+      silent,
+    },
+    emitInterceptedLog: async (log) => {
+      await rpc.onConsoleLog(log);
+    },
+    writeOriginalLog: createOriginalLogWriter(),
+  });
+
+  if (shouldInterceptConsole) {
     const { createCustomConsole } = await import('./console');
 
+    // Keep a minimal internal interception path when `silent` is enabled.
+    // In `disableConsoleIntercept + silent` mode, logs are buffered in the
+    // worker first and later replayed to the original worker streams according
+    // to the silent policy, instead of being reported to the host.
+
     global.console = createCustomConsole({
-      rpc,
+      onConsoleLog: (log) => {
+        silentConsoleController.onConsoleLog(log);
+      },
       testPath,
-      printConsoleTrace,
+      printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
     });
   }
 
@@ -219,6 +268,7 @@ const preparePool = async ({
     rstestContext,
     runner,
     rpc,
+    silentConsoleController,
     api,
     unhandledErrors,
     cleanup: async () => {
@@ -407,6 +457,7 @@ export const runInPool = async (
       rstestContext,
       runner,
       rpc,
+      silentConsoleController,
       api,
       cleanup,
       unhandledErrors,
@@ -415,7 +466,7 @@ export const runInPool = async (
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
-        testId: '0',
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         status: 'skip',
@@ -432,7 +483,7 @@ export const runInPool = async (
       );
     }
     if (coverageProvider) {
-      coverageProvider.init();
+      await coverageProvider.init();
     }
 
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
@@ -441,19 +492,37 @@ export const runInPool = async (
 
     cleanups.push(cleanup);
 
-    rpc.onTestFileStart?.({ testPath, tests: [] });
-
-    await loadFiles({
-      rstestContext,
-      distPath,
-      runtimeDistPath,
+    rpc.onTestFileStart?.({
+      testId: getFileTaskId(testPath),
       testPath,
-      assetFiles,
-      setupEntries,
-      interopDefault,
-      isolate,
-      outputModule: options.context.outputModule,
+      tests: [],
     });
+
+    // Keep file-level context only while evaluating top-level module code.
+    // Once the runner starts, suite/case tasks should own subsequent logs so
+    // passed suite buffers are not replayed by the final file-level flush.
+    setFallbackCurrentTask({
+      taskId: getFileTaskId(testPath),
+      taskType: 'file',
+      testPath,
+    });
+
+    try {
+      await loadFiles({
+        rstestContext,
+        distPath,
+        runtimeDistPath,
+        testPath,
+        assetFiles,
+        setupEntries,
+        interopDefault,
+        isolate,
+        outputModule: options.context.outputModule,
+      });
+    } finally {
+      setFallbackCurrentTask(undefined);
+    }
+
     const results = await runner.runTests(
       testPath,
       {
@@ -464,12 +533,26 @@ export const runInPool = async (
           await rpc.onTestSuiteStart(test);
         },
         onTestSuiteResult: async (result) => {
+          silentConsoleController.flushBufferedLogsForTask({
+            taskId: result.testId,
+            status: result.status,
+            taskParentNames: result.parentNames,
+            taskType: 'suite',
+            testPath: result.testPath,
+          });
           await rpc.onTestSuiteResult(result);
         },
         onTestCaseStart: async (test) => {
           await rpc.onTestCaseStart(test);
         },
         onTestCaseResult: async (result) => {
+          silentConsoleController.flushBufferedLogsForTask({
+            taskId: result.testId,
+            status: result.status,
+            taskParentNames: result.parentNames,
+            taskType: 'case',
+            testPath: result.testPath,
+          });
           await rpc.onTestCaseResult(result);
         },
         getCountOfFailedTests: async () => {
@@ -485,6 +568,14 @@ export const runInPool = async (
         ...(await formatTestError(unhandledErrors)),
       );
     }
+
+    silentConsoleController.flushBufferedLogsForTask({
+      taskId: results.testId,
+      status: results.status,
+      taskParentNames: results.parentNames,
+      taskType: 'file',
+      testPath: results.testPath,
+    });
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
@@ -506,7 +597,7 @@ export const runInPool = async (
     return results;
   } catch (err) {
     return {
-      testId: '0',
+      testId: getFileTaskId(testPath),
       project,
       testPath,
       status: 'fail',
@@ -518,6 +609,7 @@ export const runInPool = async (
     if (coverageProvider) {
       coverageProvider.cleanup();
     }
+    setFallbackCurrentTask(undefined);
     await teardown();
   }
 };

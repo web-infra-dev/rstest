@@ -30,7 +30,7 @@
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.0",
     "knip": "^6.11.0",
-    "lefthook": "^1.13.6",
+    "lefthook": "^2.1.6",
     "path-serializer": "0.6.0",
     "playwright": "^1.59.1",
     "prettier": "^3.8.3",

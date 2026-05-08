@@ -31,4 +31,6 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-It should be noted that when you disable interception of console logs, the [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) configurations will not take effect.
+It should be noted that when you disable interception of console logs, the [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) configurations will not take effect. However, if [silent](/config/test/silent) is enabled, Rstest still keeps an internal interception path so `silent` can continue to control test log output.
+
+In browser mode, that internal path still calls the original `console.*` for DevTools.

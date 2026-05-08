@@ -87,6 +87,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "setupFiles": [
     "./setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "testEnvironment": {

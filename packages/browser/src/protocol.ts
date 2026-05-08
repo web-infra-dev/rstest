@@ -106,6 +106,10 @@ export type BrowserClientMessage =
       payload: {
         level: 'log' | 'warn' | 'error' | 'info' | 'debug';
         content: string;
+        taskId?: string;
+        taskName?: string;
+        taskParentNames?: string[];
+        taskType?: 'file' | 'suite' | 'case';
         testPath: string;
         type: 'stdout' | 'stderr';
         trace?: string;

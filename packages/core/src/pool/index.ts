@@ -2,6 +2,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
+import { getFileTaskId } from '../runtime/runner';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -71,6 +72,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = context.normalizedConfig;
 
   return {
@@ -101,6 +103,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
@@ -238,7 +241,7 @@ const workerErrorToResult = (
   }
 
   return {
-    testId: '0',
+    testId: getFileTaskId(testPath),
     project: projectName,
     testPath,
     status: 'fail',
@@ -278,6 +281,32 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
+  const shouldEmitUserConsoleLog = ({
+    log,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): boolean => {
+    return projectConfig.onConsoleLog?.(log.content) !== false;
+  };
+
+  const emitUserConsoleLog = async ({
+    log,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Promise<void> => {
+    if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
+      return;
+    }
+
+    await Promise.all(
+      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+    );
+  };
+
   // Propagate parent execArgv to workers, except flags known to cause issues
   // in child processes (--prof writes per-worker profiling logs, --title is
   // meaningless for workers). Safe for child_process.fork; the referenced
@@ -344,7 +373,13 @@ export const createPool = async ({
     } as Record<string, string>,
   });
 
-  const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
+  const createRpcMethods = ({
+    runtimeConfig,
+    projectConfig,
+  }: {
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Omit<RuntimeRPC, 'getAssetsByEntry'> => ({
     onTestCaseStart: async (test: TestCaseInfo) => {
       context.stateManager.onTestCaseStart(test);
       Promise.all(
@@ -361,9 +396,11 @@ export const createPool = async ({
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-      );
+      if (runtimeConfig.disableConsoleIntercept) {
+        return;
+      }
+
+      await emitUserConsoleLog({ log, projectConfig });
     },
     onTestFileStart: async (test: TestFileInfo) => {
       context.stateManager.onTestFileStart(test.testPath);
@@ -389,7 +426,7 @@ export const createPool = async ({
     resolveSnapshotPath: (testPath: string): string => {
       const snapExtension = '.snap';
       const resolver =
-        context.normalizedConfig.resolveSnapshotPath ||
+        projectConfig.resolveSnapshotPath ||
         // test/index.ts -> test/__snapshots__/index.ts.snap
         (() =>
           join(
@@ -401,7 +438,7 @@ export const createPool = async ({
       const snapshotPath = resolver(testPath, snapExtension);
       return snapshotPath;
     },
-  };
+  });
 
   return {
     runTests: async ({
@@ -415,6 +452,10 @@ export const createPool = async ({
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       const results = await Promise.all(
@@ -473,6 +514,10 @@ export const createPool = async ({
     }) => {
       const runtimeConfig = getRuntimeConfig(project);
       const projectName = project.normalizedConfig.name;
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(

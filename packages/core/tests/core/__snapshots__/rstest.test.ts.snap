@@ -82,6 +82,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "retry": 0,
   "root": "<ROOT>/packages/core",
   "setupFiles": [],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "testEnvironment": {
@@ -178,6 +179,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "setupFiles": [
     "<ROOT>/packages/core/test-project/scripts/rstest.setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
@@ -275,6 +277,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "setupFiles": [
     "<ROOT>/packages/core/test-project1/scripts/rstest.setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},

@@ -215,6 +215,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  silent: false,
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
