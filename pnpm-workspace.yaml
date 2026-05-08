@@ -1,4 +1,5 @@
 packages:
+  - 'benchmarks'
   - 'website'
   - 'scripts/**'
   - 'packages/**'

@@ -1,0 +1,59 @@
+---
+description: Environment variables that Rstest sets in the test process and worker processes.
+---
+
+# Environment variables
+
+Rstest sets a small set of environment variables you can read from tests, setup files, and source code.
+
+## `NODE_ENV`
+
+Set to `'test'` when the test runner starts (if not already defined). Existing values are preserved, so you can override it from your shell or `package.json` script.
+
+Available as both `process.env.NODE_ENV` and `import.meta.env.NODE_ENV` across all test environments, including [browser mode](/guide/browser-testing/). Prefer `import.meta.env.NODE_ENV` in ESM source code where `process` may not be available.
+
+```ts
+if (import.meta.env.NODE_ENV === 'test') {
+  // running under Rstest
+}
+```
+
+## `RSTEST`
+
+`process.env.RSTEST` is set to `'true'` whenever the test runner is active. Use it to gate test-only branches in source code.
+
+```ts
+if (process.env.RSTEST) {
+  // running under Rstest
+}
+```
+
+For production builds, define `process.env.RSTEST` as `false` so the bundler can eliminate the dead branch — see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
+
+For [in-source tests](/config/test/include-source), prefer `import.meta.rstest` — it exposes the Rstest test API directly and is `undefined` in production builds.
+
+## `RSTEST_WORKER_ID`
+
+A stringified integer that uniquely identifies the worker process running the current test file. The first worker is `'1'`. Equivalent to Jest's [`JEST_WORKER_ID`](https://jestjs.io/docs/environment-variables#jest_worker_id).
+
+Use it to isolate shared external resources across parallel workers — typically database schemas, ports, temp directories, or any resource that would collide if two workers used the same name.
+
+```ts title="db.test.ts"
+import { afterAll, beforeAll, test } from '@rstest/core';
+
+const dbName = `myapp_test_${process.env.RSTEST_WORKER_ID}`;
+
+beforeAll(async () => {
+  await createDatabase(dbName);
+});
+
+afterAll(async () => {
+  await dropDatabase(dbName);
+});
+
+test('inserts a row', async () => {
+  // ...
+});
+```
+
+Concurrent workers are always given different IDs, so the value is safe to use as part of a resource name during a worker's lifetime. The maximum number of concurrent workers is bounded by [`pool.maxWorkers`](/config/test/pool); IDs are assigned monotonically as workers spawn and are not recycled within a single Rstest run.

@@ -51,6 +51,21 @@ cd e2e && pnpm test <path>
 
 Forgetting this step means e2e runs against stale output — a common source of false passes/failures.
 
+When the change may affect multiple packages, prefer a full workspace package build first:
+
+```bash
+pnpm build
+cd e2e && pnpm test <path>
+```
+
+Important:
+
+- Do **not** start e2e while any package build is still running.
+- Do **not** overlap `pnpm build` and `pnpm e2e` in separate sessions.
+- Wait for the build command to exit successfully before starting e2e.
+- If e2e fails immediately with a missing built file such as `packages/core/dist/rstestSuppressWarnings.cjs`, treat that as an incomplete build and rebuild before retrying.
+- When unsure whether the build is fully finished, verify the expected artifact exists before running e2e.
+
 ## Browser E2E
 
 - Fixtures default to `headless: true` — no browser windows locally
@@ -70,3 +85,9 @@ Forgetting this step means e2e runs against stale output — a common source of 
 - For package/unit tests from repository root, use `-u` / `--update`: `pnpm rstest -u packages/core/tests/core/rsbuild.test.ts`
 - Do **not** use snapshot updates as a default way to silence test failures — investigate first
 - When updating, review the snapshot diff to confirm it matches expected changes
+
+## Validation before wrapping up
+
+- Do not stop at targeted tests only. Before finishing a code change, run the narrowest relevant tests first, then decide whether broader validation is needed.
+- `pnpm run check-unused` is part of the default validation pass for code changes in this repo. Run it before wrapping up, even when focused tests already pass.
+- Treat `check-unused` failures as real regressions unless you have confirmed the reported item is an intentional temporary state.

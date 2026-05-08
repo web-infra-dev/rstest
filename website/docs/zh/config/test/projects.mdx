@@ -20,7 +20,7 @@ type Projects = (string | ProjectConfig)[];
 定义多个测试项目，可以是一个目录、配置文件或 glob 模式，也可以是一个对象。 Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
 
 ```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
@@ -37,69 +37,21 @@ export default defineConfig({
     './projects/web/rstest.config.ts',
 
     // inline project configs
-    {
+    defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    },
-    {
+    }),
+    defineInlineProject({
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
       testEnvironment: 'jsdom',
-    },
+    }),
   ],
 });
 ```
 
+任何 `projects` 数组里的对象项，包括嵌套 `projects`，都建议搭配 `defineInlineProject()`。`defineProject()` 只用于项目配置文件的顶层导出。
+
+`defineProject()` 允许顶层导出的 project 省略 `name`，再由 Rstest 按 [name](/config/test/name) 配置项的规则自动推导。`defineInlineProject()` 则要求每个 inline project 都显式提供 `name`。
+
 更多关于项目配置的信息，请参考[多项目测试](/guide/basic/projects)。
-
-## Browser mode 中的 projects
-
-如果你在 Browser Mode 下使用 `projects`，每个项目都会按自己的构建配置独立编译与执行，这样可以在一个仓库里同时管理不同技术栈或不同构建配置。
-
-但在同一次 run 中，Browser 启动配置必须保持一致：
-
-- `provider`
-- `browser`
-- `headless`
-- `port`
-- `strictPort`
-
-也就是说，目前不支持在同一次 run 里混用多个 provider，或同时配置多个 browser 类型。
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
-});
-```
-
-```ts title="project-a/rstest.config.ts"
-import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  name: 'project-a',
-  plugins: [pluginReact()],
-  include: ['tests/**/*.test.tsx'],
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-  },
-});
-```
-
-```ts title="project-b/rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  name: 'project-b',
-  include: ['tests/**/*.test.ts'],
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-  },
-});
-```
-
-你也可以在同一个 `projects` 列表里混合 Browser Mode 与 `testEnvironment: 'node'`/`'jsdom'` 项目，最终会合并输出测试结果。

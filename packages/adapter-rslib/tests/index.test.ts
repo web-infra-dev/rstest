@@ -11,9 +11,17 @@ import { defineConfig } from '@rslib/core';
 export default defineConfig({
   lib: [{ format: 'esm', id: 'test-lib' }],
   source: {
+    assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"test"'
-    }
+    },
+    transformImport: [
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false
+      }
+    ]
   },
   resolve: {
     alias: {
@@ -41,9 +49,17 @@ export default defineConfig({
     })({});
 
     expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });
+    expect(config.source?.transformImport).toEqual([
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false,
+      },
+    ]);
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });

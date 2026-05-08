@@ -124,6 +124,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'source',
     items: [
       'source.decorators',
+      'source.transformImport',
+      'source.assetsInclude',
       'source.define',
       'source.exclude',
       'source.include',
@@ -137,6 +139,7 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'output.externals',
       'output.bundleDependencies',
       'output.cssModules',
+      'output.emitAssets',
       'output.cleanDistPath',
       'output.distPath',
     ],
@@ -148,6 +151,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'resolve.alias',
       'resolve.dedupe',
       'resolve.extensions',
+      'resolve.conditionNames',
+      'resolve.mainFields',
     ],
   },
   {

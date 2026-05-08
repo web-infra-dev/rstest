@@ -57,7 +57,7 @@ const restart = async ({
 }: {
   root: string;
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
@@ -75,7 +75,7 @@ export async function watchFilesForRestart({
   filters,
 }: {
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   rstest: RstestInstance;
   watchOptions?: ChokidarOptions;
 }): Promise<void> {

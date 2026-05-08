@@ -27,6 +27,8 @@ process.env.GITHUB_ACTIONS === 'true'
 
 配置用于测试结果输出的报告器。
 
+内置报告器名称包括 `default`、`dot`、`verbose`、`md`、`github-actions`、`junit`、`json` 和 `blob`。
+
 :::info AI agent 环境
 未显式配置 reporters（配置文件无 `reporters`，且 CLI 未传 `--reporter`）时，Rstest 会默认使用 `['md']`，将更适合 AI agent 的 markdown 输出到 stdout。
 :::

@@ -87,8 +87,15 @@ export function withRslibConfig(
 
     const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
     const { cssModules, target } = finalLibConfig.output || {};
-    const { decorators, define, include, exclude, tsconfigPath } =
-      finalLibConfig.source || {};
+    const {
+      assetsInclude,
+      decorators,
+      define,
+      include,
+      exclude,
+      tsconfigPath,
+      transformImport,
+    } = finalLibConfig.source || {};
 
     // Convert rslib config to rstest config
     const rstestConfig: ExtendConfig = {
@@ -97,6 +104,7 @@ export function withRslibConfig(
       name: libId,
       plugins: finalLibConfig.plugins,
       source: {
+        assetsInclude,
         decorators: {
           version: libDecoratorsVersion,
           ...decorators,
@@ -105,6 +113,7 @@ export function withRslibConfig(
         include,
         exclude,
         tsconfigPath,
+        transformImport,
       },
       resolve: finalLibConfig.resolve,
       output: {

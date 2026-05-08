@@ -134,7 +134,6 @@ function getTestMeta(test: TestCase) {
 export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
   workerState,
 ) => {
-  let _client: SnapshotClient;
   if (!workerState.snapshotClient) {
     workerState.snapshotClient = new SnapshotClient({
       isEqual: (received, expected) => {
@@ -143,10 +142,10 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
     });
   }
 
-  _client = workerState.snapshotClient;
+  const client = workerState.snapshotClient;
 
   function getSnapshotClient(): SnapshotClient {
-    return _client;
+    return client;
   }
 
   return (chai, utils) => {

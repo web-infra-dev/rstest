@@ -19,7 +19,7 @@ Define each sub-project in a monorepo as a project through the [projects](/confi
 Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-files) file (if present) in the subdirectory.
 
 ```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
@@ -46,7 +46,7 @@ The `projects` field supports the following configuration methods:
 - **Nested projects**: Define projects nested within the rstest config of sub-projects.
 
 ```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
@@ -63,15 +63,15 @@ export default defineConfig({
     './projects/web/rstest.config.ts',
 
     // inline project configs
-    {
+    defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    },
-    {
+    }),
+    defineInlineProject({
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
       testEnvironment: 'jsdom',
-    },
+    }),
   ],
 });
 ```
@@ -83,14 +83,14 @@ When the `projects` field exists in the root directory's rstest config file, Rst
 If you want to treat the root directory as a project as well, you can define the test configuration for the root directory in `projects`.
 
 ```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    {
+    defineInlineProject({
       name: 'root',
       include: ['<rootDir>/tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    },
+    }),
     'packages/*',
   ],
 });
@@ -112,6 +112,10 @@ The following configurations are global configurations and are invalid when conf
 #### Define project configuration
 
 Project configuration is a subset of the Rstest configuration object, supporting most configuration options but not [global configurations](#global-configuration) such as `reporters`.
+
+Use [defineInlineProject](/api/javascript-api/rstest-core#defineinlineproject) for object items inside any `projects` array, including nested `projects`. Use [defineProject](/api/javascript-api/rstest-core#defineproject) only for the top-level export of a project config file.
+
+The difference is mainly how `name` is handled. `defineProject` can omit `name` on the exported project, and Rstest will infer it using the same rules as the [name](/config/test/name) option. `defineInlineProject` requires `name` explicitly for every inline project item.
 
 You can define a project configuration using the [defineProject](/api/javascript-api/rstest-core#defineproject) helper function:
 
@@ -150,22 +154,74 @@ This is especially useful when your sub-projects need to support multiple test e
 For example, define Node.js and browser test environments for `packages/pkg-a`:
 
 ```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig } from '@rstest/core';
+import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    {
+    defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-    },
-    {
+    }),
+    defineInlineProject({
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
       testEnvironment: 'jsdom',
-    },
+    }),
   ],
 });
 ```
+
+### Projects in browser mode
+
+When you use `projects` with Browser Mode, each project compiles and executes with its own build config. This lets you keep different stacks or build setups in one repository while still running them in a single Rstest process.
+
+In the same run, browser launch options must stay consistent across browser projects:
+
+- `provider`
+- `browser`
+- `headless`
+- `port`
+- `strictPort`
+
+So mixing multiple providers, or multiple browser types, in one run is not supported yet.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+});
+```
+
+```ts title="project-a/rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-a',
+  plugins: [pluginReact()],
+  include: ['tests/**/*.test.tsx'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+```ts title="project-b/rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  name: 'project-b',
+  include: ['tests/**/*.test.ts'],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
+
+You can still mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects in one `projects` list, and results will be merged in the final report.
 
 ### Inspect configuration
 

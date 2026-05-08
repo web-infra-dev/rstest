@@ -5,11 +5,14 @@ import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
 import { BlobReporter } from '../reporter/blob';
+import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  FileFilterMode,
   NormalizedConfig,
   NormalizedProjectConfig,
   Project,
@@ -36,6 +39,7 @@ type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
+  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
 };
@@ -44,6 +48,9 @@ export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
+  public fileFilterMode?: FileFilterMode;
+  public relatedFilters?: string[];
+  public relatedResolutionEmpty?: boolean;
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
@@ -79,6 +86,7 @@ export class Rstest implements RstestContext {
       cwd = process.cwd(),
       command,
       fileFilters,
+      fileFilterMode,
       configFilePath,
       projects,
     }: Options,
@@ -87,6 +95,7 @@ export class Rstest implements RstestContext {
     this.cwd = cwd;
     this.command = command;
     this.fileFilters = fileFilters;
+    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
 
     const rootPath = userConfig.root
@@ -247,16 +256,20 @@ export class Rstest implements RstestContext {
 
 const reportersMap: {
   default: typeof DefaultReporter;
+  dot: typeof DotReporter;
   verbose: typeof VerboseReporter;
   'github-actions': typeof GithubActionsReporter;
   junit: typeof JUnitReporter;
+  json: typeof JsonReporter;
   md: typeof MdReporter;
   blob: typeof BlobReporter;
 } = {
   default: DefaultReporter,
+  dot: DotReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
+  json: JsonReporter,
   md: MdReporter,
   blob: BlobReporter,
 };

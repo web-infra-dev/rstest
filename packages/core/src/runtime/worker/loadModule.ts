@@ -4,7 +4,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { asModule, interopModule, shouldInterop } from './interop';
+import {
+  asModule,
+  clearSyntheticModuleCache,
+  interopModule,
+  shouldInterop,
+} from './interop';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
@@ -75,8 +80,11 @@ const defineRstestDynamicImport =
       ? pathToFileURL(specifier)
       : import.meta.resolve(specifier, pathToFileURL(testPath));
 
+    // Use `.href` rather than `.pathname` so Windows absolute specifiers
+    // round-trip through Node's ESM loader as valid `file:///D:/...` URLs
+    // instead of `/D:/...`, which Node re-resolves as `D:\D:\...`.
     const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.href;
 
     if (modulePath.endsWith('.wasm')) {
       const normalizedPath = path.normalize(
@@ -91,7 +99,7 @@ const defineRstestDynamicImport =
         const wasmModule = await WebAssembly.compile(wasmBuffer);
         const wasmInstance = await WebAssembly.instantiate(wasmModule);
         const exports = wasmInstance.exports as Record<string, any>;
-        return returnModule ? asModule(exports, exports) : exports;
+        return returnModule ? asModule(exports, modulePath, exports) : exports;
       }
     }
 
@@ -109,7 +117,7 @@ const defineRstestDynamicImport =
       });
 
       return returnModule
-        ? asModule(importedModule.default, importedModule.default)
+        ? asModule(importedModule.default, modulePath, importedModule.default)
         : {
             ...importedModule.default,
             default: importedModule.default,
@@ -128,7 +136,7 @@ const defineRstestDynamicImport =
       const { mod, defaultExport } = interopModule(importedModule);
 
       if (returnModule) {
-        return asModule(mod, defaultExport);
+        return asModule(mod, modulePath, defaultExport);
       }
 
       return new Proxy(mod, {
@@ -286,4 +294,7 @@ export const cacheableLoadModule = ({
   return mod;
 };
 
-export const clearModuleCache = (): void => moduleCache.clear();
+export const clearModuleCache = (): void => {
+  moduleCache.clear();
+  clearSyntheticModuleCache();
+};

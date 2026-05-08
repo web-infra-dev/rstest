@@ -31,4 +31,8 @@ describe('browser env injection', () => {
     expect(process.env.RSTEST_E2E_ENV_FOO).toBe(originalFoo);
     expect(process.env.RSTEST_E2E_ENV_DYNAMIC).toBeUndefined();
   });
+
+  it('should expose NODE_ENV via import.meta.env in browser mode', () => {
+    expect(import.meta.env.NODE_ENV).toBe('test');
+  });
 });

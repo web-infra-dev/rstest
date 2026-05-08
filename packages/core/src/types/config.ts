@@ -27,21 +27,28 @@ export type RstestPoolOptions = {
   execArgv?: string[];
 };
 
+export type BundleDependencyPattern = string | RegExp;
+
 export type RstestOutputConfig = Pick<
   NonNullable<RsbuildConfig['output']>,
-  'cssModules' | 'externals' | 'cleanDistPath' | 'module'
+  'cssModules' | 'emitAssets' | 'externals' | 'cleanDistPath' | 'module'
 > & {
   distPath?: string | { root?: string };
   /**
    * Whether to bundle third-party dependencies from node_modules.
    * - `true`: Always bundle all third-party dependencies.
    * - `false`: Always externalize third-party dependencies.
+   * - `['pkg']`: Bundle the package and all of its subpaths.
+   * - `['pkg/subpath']`: Bundle a specific package subpath.
+   * - `['pkg/*']`: Bundle package subpaths that match the pattern.
+   * - `[/^pkg\\/subpath/]`: Bundle package requests matched by a regular
+   *   expression.
    *
    * When unset, rstest bundles dependencies in browser-like test
    * environments (jsdom, happy-dom, etc.) and externalizes them in the node
    * environment. This option is not supported in browser mode.
    */
-  bundleDependencies?: boolean;
+  bundleDependencies?: boolean | BundleDependencyPattern[];
 };
 
 export type NormalizedOutputConfig = Partial<
@@ -179,7 +186,7 @@ type SnapshotFormat = Omit<
 /**
  * Inline project config must include a name.
  */
-type InlineProjectConfig = ProjectConfig & { name: string };
+export type InlineProjectConfig = ProjectConfig & { name: string };
 type TestProject = string | InlineProjectConfig;
 
 type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
@@ -462,7 +469,14 @@ export interface RstestConfig {
 
   source?: Pick<
     NonNullable<RsbuildConfig['source']>,
-    'define' | 'tsconfigPath' | 'decorators' | 'include' | 'exclude'
+    | 'assetsInclude'
+    | 'define'
+    | 'tsconfigPath'
+    | 'decorators'
+    | 'include'
+    | 'exclude'
+    | 'transformImport'
+    | 'assetsInclude'
   >;
 
   dev?: Pick<NonNullable<RsbuildConfig['dev']>, 'writeToDisk'>;

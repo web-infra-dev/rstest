@@ -8,7 +8,9 @@ import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
+  type CoverageMapData,
   color,
+  createCoverageProvider,
   type FormattedError,
   getSetupFiles,
   getTestEntries,
@@ -504,8 +506,9 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
   }
 
-  rspackConfig.output?.path &&
+  if (rspackConfig.output?.path) {
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
 };
 
 type LazyCompilationModule = {
@@ -516,6 +519,30 @@ type BrowserLazyCompilationConfig = {
   imports: true;
   entries: false;
   test?: (module: LazyCompilationModule) => boolean;
+};
+
+/**
+ * Resolve the actual port the dev server is listening on.
+ *
+ * Rsbuild's `devServer.listen()` may return `0` when configured with
+ * `server.port: 0` because its internal `getPort` never reads back the
+ * OS-assigned ephemeral port.  This helper falls back to
+ * `httpServer.address()` to obtain the real bound port.
+ */
+export const resolveListenPort = (
+  listenPort: number,
+  httpServer: {
+    address: () => ReturnType<import('node:net').Server['address']>;
+  } | null,
+): number => {
+  if (listenPort) {
+    return listenPort;
+  }
+  const addr = httpServer?.address();
+  if (addr && typeof addr === 'object') {
+    return addr.port;
+  }
+  return listenPort;
 };
 
 export const createBrowserLazyCompilationConfig = (
@@ -773,7 +800,13 @@ const getRuntimeConfigFromProject = (
   } = project.normalizedConfig;
 
   return {
-    env,
+    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
+    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
+    // wins so explicit overrides still take effect.
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -889,6 +922,7 @@ const collectProjectEntries = async (
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
       });
 
       const setup = getSetupFiles(setupFiles, project.rootPath);
@@ -1549,7 +1583,8 @@ const createBrowserRuntime = async ({
     },
   );
 
-  const { port } = await devServer.listen();
+  const { port: listenPort } = await devServer.listen();
+  const port = resolveListenPort(listenPort, devServer.httpServer);
 
   // Create WebSocket server on an available port
   // Using port: 0 lets the OS assign an available port, avoiding conflicts
@@ -1627,8 +1662,10 @@ export const runBrowserController = async (
   context: Rstest,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false } = options ?? {};
+  const { skipOnTestRunEnd = false, allowEmptyWatchRun = false } =
+    options ?? {};
   const buildStart = Date.now();
+  const isWatchMode = context.command === 'watch';
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
@@ -1756,6 +1793,13 @@ export const runBrowserController = async (
     }
   };
 
+  const coverageConfig = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
+  const coverageProvider = coverageConfig?.enabled
+    ? await createCoverageProvider(coverageConfig, context.rootPath)
+    : null;
+
   const notifyTestRunEnd = async ({
     duration,
     unhandledErrors,
@@ -1773,9 +1817,26 @@ export const runBrowserController = async (
       return;
     }
 
+    // Merge per-file coverage into a single CoverageMapData for reporters
+    let mergedCoverage: CoverageMapData | undefined;
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.createCoverageMap();
+      let hasCoverage = false;
+      for (const result of context.reporterResults.results) {
+        if (result.coverage) {
+          coverageMap.merge(result.coverage);
+          hasCoverage = true;
+        }
+      }
+      if (hasCoverage) {
+        mergedCoverage = coverageMap.toJSON();
+      }
+    }
+
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
+        coverage: mergedCoverage,
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
@@ -1821,27 +1882,43 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      const message = `No test files found, exiting with code ${code}.`;
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : `No test files found, exiting with code ${code}.`;
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
       }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
     }
 
-    if (code !== 0) {
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
       ensureProcessExitCode(code);
     }
-    return;
+    if (!shouldKeepWatchingWithEmptySet) {
+      return;
+    }
   }
 
   await notifyTestRunStart();
 
-  const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
@@ -2561,6 +2638,69 @@ export const runBrowserController = async (
       },
     });
 
+    if (allTestFiles.length === 0) {
+      const duration = {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      };
+      const result = {
+        results: reporterResults,
+        testResults: caseResults,
+        duration,
+        hasFailure: false,
+        getSourcemap: getBrowserSourcemap,
+        resolveSourcemap: resolveBrowserSourcemap,
+        close: skipOnTestRunEnd
+          ? async () => {
+              sessionRegistry.clear();
+              await destroyBrowserRuntime(runtime);
+            }
+          : undefined,
+      };
+
+      if (!skipOnTestRunEnd) {
+        await notifyTestRunEnd({ duration });
+      }
+
+      if (isWatchMode) {
+        triggerRerun = async () => {
+          const newProjectEntries = await collectProjectEntries(context);
+          const rerunPlan = planWatchRerun({
+            projectEntries: newProjectEntries,
+            previousTestFiles: watchContext.lastTestFiles,
+            affectedTestFiles: watchContext.affectedTestFiles,
+          });
+          watchContext.affectedTestFiles = [];
+
+          if (rerunPlan.filesChanged) {
+            watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+            if (rerunPlan.currentTestFiles.length === 0) {
+              logger.log(
+                color.cyan('No browser test files remain after update.\n'),
+              );
+              logBrowserWatchReadyMessage(enableCliShortcuts);
+              return;
+            }
+
+            logger.log(
+              color.cyan(
+                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+              ),
+            );
+            void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+            return;
+          }
+
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        };
+        watchContext.hooksEnabled = true;
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+
+      return result;
+    }
+
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
     const testTime = Date.now() - testStart;
@@ -2706,7 +2846,6 @@ export const runBrowserController = async (
     await new Promise<void>((resolve, reject) => {
       const waiters =
         runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const cleanup = () => {
         const currentWaiters = runnerFramesWaiters.get(signature);
@@ -2727,7 +2866,7 @@ export const runBrowserController = async (
         resolve();
       };
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         cleanup();
         reject(
           new Error(
@@ -3038,24 +3177,27 @@ export const runBrowserController = async (
     });
   };
 
-  const testStart = Date.now();
-  try {
-    await waitForRunnerFramesReady(
-      currentTestFiles.map((file) => file.testPath),
-    );
+  let testTime = 0;
+  if (currentTestFiles.length > 0) {
+    const testStart = Date.now();
+    try {
+      await waitForRunnerFramesReady(
+        currentTestFiles.map((file) => file.testPath),
+      );
 
-    for (const file of currentTestFiles) {
-      await enqueueHeadedReload(file);
-      if (fatalError) {
-        break;
+      for (const file of currentTestFiles) {
+        await enqueueHeadedReload(file);
+        if (fatalError) {
+          break;
+        }
       }
+    } catch (error) {
+      fatalError = fatalError ?? toError(error);
+      ensureProcessExitCode(1);
     }
-  } catch (error) {
-    fatalError = fatalError ?? toError(error);
-    ensureProcessExitCode(1);
-  }
 
-  const testTime = Date.now() - testStart;
+    testTime = Date.now() - testStart;
+  }
 
   // Define rerun logic for watch mode
   if (isWatchMode) {
@@ -3079,6 +3221,13 @@ export const runBrowserController = async (
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
         currentTestFiles = rerunPlan.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        if (currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
         await waitForRunnerFramesReady(
           currentTestFiles.map((file) => file.testPath),
         );

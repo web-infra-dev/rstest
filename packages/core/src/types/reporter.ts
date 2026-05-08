@@ -1,6 +1,7 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
+import type { CoverageMapData } from './coverage';
 import type {
   TestCaseInfo,
   TestFileInfo,
@@ -25,10 +26,12 @@ export type GetSourcemap = (
 
 export type BuiltInReporterNames =
   | 'default'
+  | 'dot'
   | 'verbose'
   | 'md'
   | 'github-actions'
   | 'junit'
+  | 'json'
   | 'blob';
 
 export type DefaultReporterOptions = {
@@ -141,6 +144,19 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
+type GithubActionsReporterOptions = {
+  /**
+   * Whether to output `::error` annotations for failed tests.
+   * @default true
+   */
+  annotations?: boolean;
+  /**
+   * Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+   * @default true
+   */
+  summary?: boolean;
+};
+
 export type BlobReporterOptions = {
   /**
    * Directory to store blob report files.
@@ -149,12 +165,21 @@ export type BlobReporterOptions = {
   outputDir?: string;
 };
 
+export type JsonReporterOptions = {
+  /**
+   * Write report JSON to a file instead of stdout.
+   */
+  outputPath?: string;
+};
+
 type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
+  dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
-  'github-actions': Record<string, unknown>;
+  'github-actions': GithubActionsReporterOptions;
   junit: Record<string, unknown>;
+  json: JsonReporterOptions;
   blob: BlobReporterOptions;
 };
 
@@ -204,6 +229,7 @@ export interface Reporter {
    */
   onTestRunEnd?: ({
     results,
+    coverage,
     testResults,
     duration,
     getSourcemap,
@@ -211,6 +237,7 @@ export interface Reporter {
     unhandledErrors,
   }: {
     results: TestFileResult[];
+    coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     getSourcemap: GetSourcemap;

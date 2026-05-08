@@ -63,6 +63,28 @@ $ npx rstest --watch
 
 `rstest run` will perform a single run, and the command is suitable for CI environments or scenarios where tests are not required to be performed while modifying.
 
+### Run related tests
+
+<ApiMeta addedVersion="0.10.0" />
+
+Use `--related` when you want Rstest to treat positional arguments as source files and only run the tests that depend on those files.
+
+```bash
+npx rstest run --related src/button.ts
+```
+
+Rstest resolves related tests from the build module graph, so the same filter works for Node mode and Browser Mode projects. You can also use the Jest-compatible alias:
+
+```bash
+npx rstest run --findRelatedTests src/button.ts
+```
+
+If you only want to inspect the affected test files, combine it with `rstest list`:
+
+```bash
+npx rstest list --related src/button.ts --filesOnly
+```
+
 ## rstest watch
 
 `rstest watch` will start listening mode and execute tests, and when the test or dependent file modifications, the associated test file will be re-execute.
@@ -134,6 +156,27 @@ a.test.ts:9:3 > test a-2
 b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
 ```
+
+You can use `--summary` to append a compact summary after the list output:
+
+```bash
+$ npx rstest list --summary
+
+# the output is shown below:
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+c.test.ts > test c it each 0
+c.test.ts > test c it for 0
+c.test.ts > test c it runIf
+c.test.ts > test c it skipIf
+
+ Test Files 3 matched
+      Tests 8 matched
+```
+
+When used with `--json`, `--summary` changes the JSON output shape from an array to an object with `items` and `summary` fields.
 
 ## rstest merge-reports
 
@@ -213,6 +256,8 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `-c, --config <config>`         | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                      |
 | `--config-loader <loader>`      | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
 | `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
+| `--related`                     | Treat positional arguments as source file paths and only run related tests                                                                                            |
+| `--findRelatedTests`            | Alias for `--related` for Jest compatibility                                                                                                                          |
 | `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
 | `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
 | `--reporter <reporter>`         | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                    |
@@ -264,6 +309,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--json [boolean/path]` | Print tests as JSON or write JSON to a file |
 | `--includeSuites`       | Include suites in the output                |
 | `--printLocation`       | Print test and suite locations              |
+| `--summary`             | Print a compact summary after the list      |
 
 ### rstest merge-reports
 

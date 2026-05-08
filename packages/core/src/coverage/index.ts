@@ -1,7 +1,12 @@
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type { CoverageOptions, CoverageProvider } from '../types/coverage';
+import type {
+  CoverageOptions,
+  CoverageProvider,
+  NormalizedCoverageOptions,
+} from '../types/coverage';
 import { color } from '../utils';
 export const CoverageProviderMap: Record<string, string> = {
   istanbul: '@rstest/coverage-istanbul',
@@ -41,6 +46,21 @@ export const loadCoverageProvider = async (
     throw error;
   }
 };
+
+/**
+ * Remove stale coverage reports from a previous run. Must run on the test-run
+ * lifecycle (not an rsbuild compile hook) — browser-only mode skips the node
+ * rsbuild instance, and `--passWithNoTests` with no matching files races the
+ * hook against generateCoverage. See https://github.com/web-infra-dev/rstest/issues/1212.
+ */
+export function cleanCoverageReports(options: NormalizedCoverageOptions): void {
+  if (!options.enabled || !options.clean) {
+    return;
+  }
+  if (fs.existsSync(options.reportsDirectory)) {
+    fs.rmSync(options.reportsDirectory, { recursive: true });
+  }
+}
 
 export async function createCoverageProvider(
   options: CoverageOptions,

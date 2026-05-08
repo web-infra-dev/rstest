@@ -1,0 +1,59 @@
+---
+description: Rstest 注入到测试进程和 worker 进程中的环境变量。
+---
+
+# 环境变量
+
+Rstest 在测试进程和 worker 进程中会设置一些环境变量，你可以在测试、setup 文件以及源码中读取它们。
+
+## `NODE_ENV`
+
+如果 `NODE_ENV` 还没被设置，Rstest 在执行测试时会把它设为 `'test'`。Rstest 不会覆盖已有的值，因此你可以通过 shell 或 `package.json` 脚本指定。
+
+`process.env.NODE_ENV` 和 `import.meta.env.NODE_ENV` 在所有测试环境（包括 [browser mode](/guide/browser-testing/)）下都可用。在 ESM 源码中（尤其是浏览器构建等没有 `process` 的场景），更推荐使用 `import.meta.env.NODE_ENV`。
+
+```ts
+if (import.meta.env.NODE_ENV === 'test') {
+  // 运行在 Rstest 中
+}
+```
+
+## `RSTEST`
+
+Rstest 在执行测试时会把 `process.env.RSTEST` 设为 `'true'`，可以用来在源码中标记仅在测试中执行的代码分支。
+
+```ts
+if (process.env.RSTEST) {
+  // 运行在 Rstest 中
+}
+```
+
+在生产构建中把 `process.env.RSTEST` 替换为 `false`，这样打包工具就能消除对应的死代码 — 详见 [检测 Rstest 环境](/guide/basic/configure-rstest#检测-rstest-环境)。
+
+如果想把测试代码直接写在源文件里，更推荐使用 [`import.meta.rstest`](/config/test/include-source) — 它直接暴露 Rstest 的测试 API，并且在生产构建中为 `undefined`。
+
+## `RSTEST_WORKER_ID`
+
+标识当前测试文件所在 worker 进程的整数（以字符串形式表示）。第一个 worker 为 `'1'`。等价于 Jest 的 [`JEST_WORKER_ID`](https://jestjs.io/zh-Hans/docs/environment-variables#jest_worker_id)。
+
+可以在并行 worker 之间隔离共享的外部资源 — 比如数据库 schema、端口、临时目录，以及其他可能因多 worker 同名而冲突的资源。
+
+```ts title="db.test.ts"
+import { afterAll, beforeAll, test } from '@rstest/core';
+
+const dbName = `myapp_test_${process.env.RSTEST_WORKER_ID}`;
+
+beforeAll(async () => {
+  await createDatabase(dbName);
+});
+
+afterAll(async () => {
+  await dropDatabase(dbName);
+});
+
+test('inserts a row', async () => {
+  // ...
+});
+```
+
+同时运行的 worker 之间 ID 一定不同，所以在 worker 生命周期内可以放心地把它用作资源名的一部分。并发 worker 的数量上限由 [`pool.maxWorkers`](/config/test/pool) 控制；ID 会按 worker 启动顺序递增，单次 Rstest 运行内不会回收复用。

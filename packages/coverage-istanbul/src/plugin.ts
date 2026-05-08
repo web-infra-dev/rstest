@@ -1,5 +1,9 @@
 import { createRequire } from 'node:module';
-import type { NormalizedCoverageOptions, RsbuildPlugin } from '@rstest/core';
+import type {
+  NormalizedCoverageOptions,
+  RsbuildPlugin,
+  Rspack,
+} from '@rstest/core';
 
 type TransformCoverageFn = (
   code: string,
@@ -42,8 +46,10 @@ export const pluginCoverage: (
         const {
           rspackExperiments: _rspackExperiments,
           collectTypeScriptInfo: _collectTypeScriptInfo,
+          detectSyntax: _detectSyntax,
           ...swcOptions
-        } = jsRule.use(CHAIN_ID.USE.SWC).get('options') || {};
+        } = (jsRule.use(CHAIN_ID.USE.SWC).get('options') ||
+          {}) as Rspack.SwcLoaderOptions;
 
         swcOptions.jsc ??= {};
         swcOptions.jsc.experimental ??= {};
@@ -63,6 +69,15 @@ export const pluginCoverage: (
         ) =>
           rspack.experiments.swc.transform(code, {
             ...swcOptions,
+            // the Builtin swc-loader options is not same with swc transform options
+            jsc: {
+              ...swcOptions.jsc,
+              parser: {
+                syntax: 'typescript',
+                tsx: Boolean(swcOptions.jsc?.transform?.react),
+                ...(swcOptions.jsc?.parser || {}),
+              },
+            },
             filename,
           });
       },

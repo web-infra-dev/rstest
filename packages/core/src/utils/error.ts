@@ -139,13 +139,12 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
     logger.stderr(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.stderr('');
+  if (stackFrames.length) logger.stderr('');
 }
 
 const stackIgnores: (RegExp | string)[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
-  /node_modules\/tinypool/,
   /node_modules\/chai/,
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,

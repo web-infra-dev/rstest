@@ -5,7 +5,7 @@ import vscode from 'vscode';
 import { delay, getTestItemByLabels, waitFor } from './helpers';
 
 suite('Test Progress Reporting', () => {
-  let { promise, resolve } = Promise.withResolvers();
+  let deferred = Promise.withResolvers<null>();
   let output = '';
   let failedMessages: vscode.TestMessage[] = [];
   let passedItems: vscode.TestItem[] = [];
@@ -15,7 +15,7 @@ suite('Test Progress Reporting', () => {
   const createMockRun = () => {
     createMockRunCalledTimes++;
 
-    ({ promise, resolve } = Promise.withResolvers());
+    deferred = Promise.withResolvers<null>();
     output = '';
     failedMessages = [];
     passedItems = [];
@@ -33,7 +33,7 @@ suite('Test Progress Reporting', () => {
         output += message;
       },
       end: () => {
-        resolve(null);
+        deferred.resolve(null);
       },
       enqueued: () => {
         // ignore
@@ -81,7 +81,7 @@ suite('Test Progress Reporting', () => {
       createMockRun,
     );
 
-    await promise;
+    await deferred.promise;
 
     assert.match(output, /3 failed/);
     assert.match(output, /1 passed/);
@@ -170,7 +170,7 @@ suite('Test Progress Reporting', () => {
       createMockRun,
     );
 
-    await promise;
+    await deferred.promise;
 
     assert.equal(failedMessages.length, 0);
     assert.equal(skippedItems.length, 0);
@@ -220,7 +220,7 @@ suite('Test Progress Reporting', () => {
       createMockRun,
     );
 
-    await promise;
+    await deferred.promise;
 
     assert.match(output, /3 failed/);
     assert.match(output, /1 passed/);
@@ -231,7 +231,7 @@ suite('Test Progress Reporting', () => {
     const waitForNextRun = async () => {
       const prev = createMockRunCalledTimes;
       await waitFor(() => assert.ok(createMockRunCalledTimes > prev));
-      await promise;
+      await deferred.promise;
     };
 
     const replaceContentInFile = async (

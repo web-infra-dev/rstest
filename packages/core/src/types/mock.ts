@@ -1,4 +1,4 @@
-import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
+import type { Config as FakeTimerInstallOpts } from '@sinonjs/fake-timers';
 import type { FunctionLike, MaybePromise } from './utils';
 import type { RuntimeConfig } from './worker';
 

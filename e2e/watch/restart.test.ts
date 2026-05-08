@@ -38,7 +38,7 @@ export default defineConfig({});
 
     // initial run
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
     // trigger restart by updating config file
     cli.resetStd();
@@ -46,7 +46,7 @@ export default defineConfig({});
 
     await cli.waitForStdout('restart');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
     // Ensure we kill the entire process tree (important on Windows where child
     // processes may survive and keep the test worker alive).

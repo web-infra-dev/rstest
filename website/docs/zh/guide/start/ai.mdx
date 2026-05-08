@@ -2,17 +2,45 @@
 description: 本章节介绍如何帮助 AI 更全面地了解 Rstest 的功能、配置与最佳实践，从而在日常开发和问题排查过程中提供更准确的帮助。
 ---
 
+import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # AI
 
 为了帮助 AI 更全面地了解 Rstest 的功能、配置与最佳实践，从而在日常开发和问题排查过程中提供更准确的帮助，Rstest 提供了以下能力：
 
+- [Agent prompt](#agent-prompt)
 - [Agent Skills](#agent-skills)
 - [llms.txt](#llmstxt)
 - [Markdown 文档](#markdown-文档)
 - [Markdown 报告器](#markdown-报告器)
 - [AGENTS.md](#agentsmd)
+
+## Agent prompt
+
+如果你正在使用 Coding Agent（如 Claude Code、Cursor、Copilot 等），请复制下面与你项目匹配的 prompt。Agent 会读取链接中的指令，并根据你的项目类型安装依赖、创建配置并编写测试。
+
+### 设置 Rstest
+
+如果当前项目还没有配置测试框架，使用这个 prompt：
+
+<Prompt
+  title="设置 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Set up Rstest in this project by following the instructions here:
+https://rstest.rs/guide/start/agent-install.md`}
+/>
+
+### 从 Jest 或 Vitest 迁移
+
+如果要将现有的 Jest 或 Vitest 项目迁移到 Rstest，使用这个 prompt。为方便使用，链接中的指令内联了完整的 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill，无需额外安装；你也可以[安装该 skill](#agent-skills) 后直接使用：
+
+<Prompt
+  title="迁移到 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Migrate this project to Rstest by following the instructions here:
+https://rstest.rs/guide/start/agent-migrate.md`}
+/>
 
 ## Agent Skills
 

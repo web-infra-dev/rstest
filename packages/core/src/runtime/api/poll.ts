@@ -82,7 +82,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           const promise = () =>
             new Promise<void>((resolve, reject) => {
               let intervalId: any;
-              let timeoutId: any;
               let lastError: any;
               // TODO: use timeout manager
               const check = async () => {
@@ -100,7 +99,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                   }
                 }
               };
-              timeoutId = getRealTimers().setTimeout!(() => {
+              const timeoutId = getRealTimers().setTimeout!(() => {
                 clearTimeout(intervalId);
                 util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {

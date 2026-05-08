@@ -148,15 +148,19 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.5" />
 
-- **类型：** `boolean`
+- **类型：** `boolean | (string | RegExp)[]`
 - **默认值：** 取决于 `testEnvironment`
 
 控制是否打包 `node_modules` 中的第三方依赖。
 
 - `true`：无论测试环境如何，始终打包所有第三方依赖。
 - `false`：无论测试环境如何，始终外部化第三方依赖。
+- `['pkg-name']`：仅打包列出的包，其余依赖保持外部化。
+- `['pkg-name/subpath']`：仅打包指定的包子路径。
+- `['pkg-name/*']`：按类似 glob 的模式匹配并打包包请求。
+- `[/^pkg-name\\/subpath/]`：按正则表达式匹配并打包包请求。
 
-当未设置该选项时，rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
+当未设置该选项时，Rstest 会在类浏览器测试环境（jsdom、happy-dom 等）中打包依赖，在 `node` 环境中将其外部化。
 
 :::warning
 此选项仅适用于非浏览器模式。在[浏览器模式](/guide/browser-testing)下，所有依赖始终会被打包，因此不支持 `output.bundleDependencies: false`。
@@ -188,6 +192,32 @@ export default defineConfig({
 });
 ```
 
+如果你只想打包少量依赖包，而把其他依赖继续外部化，可以直接传入包名列表：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi'],
+  },
+});
+```
+
+你也可以直接匹配子路径或模式：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    bundleDependencies: ['strip-ansi/lib/index.js', 'strip-ansi/*'],
+  },
+});
+```
+
+这些模式只会影响 rstest 在当前构建图里仍然能够处理到的依赖请求。如果某个包本身已经被 externalize 了，那么它内部继续引用的子依赖也会保持 external。也就是说，`bundleDependencies` 不会把仅通过某个已 externalize 父包间接到达的传递依赖重新打包回来。
+
 ### 与 output.externals 的关系
 
 `output.bundleDependencies` 控制所有 `node_modules` 依赖的整体打包策略，而 [`output.externals`](#outputexternals) 允许对单个包进行细粒度控制。当两者同时配置时，`output.externals` 的优先级更高：
@@ -195,9 +225,31 @@ export default defineConfig({
 - `bundleDependencies: true` + `externals: ['lodash']`：打包所有依赖，但外部化 `lodash`。
 - `bundleDependencies: false` + `externals` 无需配置，因为所有依赖已被外部化。
 
+实际使用时，这两个配置更适合相反的场景：
+
+- 当大部分依赖都应该保持 external，只有少量包或子路径需要被打包时，更适合使用 `bundleDependencies` pattern。
+- 当大部分依赖都应该保持打包，只有少量包需要被 externalize 时，更适合使用 `output.externals`。
+
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
 用于自定义 CSS Modules 的配置。
+
+## output.emitAssets <RsbuildDocBadge path="/config/output/emit-assets" text="output.emitAssets" />
+
+<ApiMeta addedVersion="0.9.7" />
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+控制在测试构建期间，是否将图片、字体、音频、视频等导入的静态资源作为构建产物输出。
+
+Rstest 会将该选项透传给底层的 Rsbuild 构建流程，因此它的行为与 Rsbuild 保持一致。当 `output.emitAssets` 为 `true` 时，导入的 asset module 会被输出到构建产物文件系统中；当它为 `false` 时，这些静态资源文件不会被输出。
+
+在 Rstest 中，只有当你开启 [dev.writeToDisk](/config/build/dev#devwritetodisk) 或启用 DEBUG 产物输出时，这些资源才会真正写入磁盘。否则它们会保留在测试构建使用的临时内存文件系统里。
+
+当你希望 Rstest 与现有的 Rsbuild 配置保持一致，或者在测试中不需要对静态资源进行验证时，这个选项会比较有用。
+
+如果你已经通过 [@rstest/adapter-rsbuild](/guide/integration/rsbuild) 复用 Rsbuild 配置，`output.emitAssets` 也会被自动继承。
 
 ## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
 

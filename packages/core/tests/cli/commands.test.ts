@@ -1,5 +1,5 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
-import { createCli } from '../../src/cli/commands';
+import { createCli, normalizeCliFilters } from '../../src/cli/commands';
 
 const renderHelp = (argv: string[]): string => {
   const logs: string[] = [];
@@ -18,6 +18,14 @@ const renderHelp = (argv: string[]): string => {
 };
 
 describe('CLI help output', () => {
+  it('shows list-specific options for list help', () => {
+    const help = renderHelp(['node', 'rstest', 'list', '--help']);
+
+    expect(help).toContain('--summary');
+    expect(help).toContain('--filesOnly');
+    expect(help).not.toContain('--cleanup');
+  });
+
   it('shows only init-specific options for init help', () => {
     const help = renderHelp(['node', 'rstest', 'init', '--help']);
 
@@ -45,5 +53,14 @@ describe('CLI help output', () => {
     expect(() =>
       cli.parse(['node', 'rstest', 'init', '--coverage'], { run: true }),
     ).toThrow('Unknown option `--coverage`');
+  });
+});
+
+describe('normalizeCliFilters', () => {
+  it('coerces numeric filters to strings before normalizing them', () => {
+    expect(normalizeCliFilters([1, 'tests\\foo.test.ts'])).toEqual([
+      '1',
+      'tests/foo.test.ts',
+    ]);
   });
 });

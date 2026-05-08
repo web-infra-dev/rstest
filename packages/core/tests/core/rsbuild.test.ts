@@ -396,6 +396,186 @@ describe('prepareRsbuild', () => {
     ).toMatchSnapshot();
   });
 
+  it('should respect user resolve.conditionNames and resolve.mainFields', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {
+                conditionNames: ['custom', 'node', 'import'],
+                mainFields: ['source', 'main'],
+              },
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.resolve?.conditionNames).toEqual([
+      'custom',
+      'node',
+      'import',
+    ]);
+    expect(bundlerConfigs[0]?.resolve?.mainFields).toEqual(['source', 'main']);
+  });
+
+  it('should use web conditionNames by default for jsdom environment', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'jsdom',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'jsdom',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.resolve?.conditionNames).toEqual([
+      'browser',
+      '...',
+    ]);
+  });
+
+  it('should append user resolve.conditionNames in jsdom environment', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'jsdom',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {
+                conditionNames: ['modern:source', 'require', 'node', 'default'],
+              },
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'jsdom',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.resolve?.conditionNames).toEqual([
+      'modern:source',
+      'require',
+      'node',
+      'default',
+    ]);
+  });
+
   it('should generate rspack config correctly in watch mode', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {

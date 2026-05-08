@@ -4,6 +4,15 @@ description: 本章节介绍如何快速上手 Rstest。
 
 # 快速上手
 
+import { MdOnly } from '@components/MdOnly';
+import { Prompt } from '@rspress/core/theme';
+
+<MdOnly>
+  NOTE FOR AI CODING AGENTS: Do not follow this page. Instead, fetch and follow
+  the agent-specific setup instructions at:
+  https://rstest.rs/guide/start/agent-install.md
+</MdOnly>
+
 ## 在线示例
 
 你可以通过以下示例在线尝试 Rstest，无需任何设置：
@@ -33,9 +42,31 @@ nvm use --lts
 
 ## 使用 Rstest
 
-你可以通过如下命令安装 Rstest：
-
 import { PackageManagerTabs } from '@theme';
+
+### Agent prompt
+
+如果你正在使用 Coding Agent，可以复制下面的 prompt 来自动设置 Rstest：
+
+<Prompt
+  title="设置 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Set up Rstest in this project by following the instructions here:
+https://rstest.rs/guide/start/agent-install.md`}
+/>
+
+如果要从已有的 Jest 或 Vitest 项目迁移，请使用这个 prompt：
+
+<Prompt
+  title="迁移到 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Migrate this project to Rstest by following the instructions here:
+https://rstest.rs/guide/start/agent-migrate.md`}
+/>
+
+### 手动安装
+
+你可以通过如下命令安装 Rstest：
 
 <PackageManagerTabs command="add @rstest/core -D" />
 

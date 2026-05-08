@@ -44,9 +44,11 @@ Rstest provides several built-in reporters:
 | Reporter         | Purpose                    | Use case                 |
 | ---------------- | -------------------------- | ------------------------ |
 | `default`        | Console output with colors | Local development        |
+| `dot`            | Compact per-test markers   | Fast local feedback      |
 | `verbose`        | Detailed test case output  | Debugging test failures  |
 | `github-actions` | CI error annotations       | GitHub Actions workflows |
 | `junit`          | JUnit XML format           | CI/CD integration        |
+| `json`           | Structured JSON report     | CI tooling and scripting |
 | `md`             | Markdown agent report      | Agent / LLM integrations |
 | `blob`           | Serialized JSON output     | Merging sharded reports  |
 
@@ -69,9 +71,40 @@ The default reporter displays test run status, results, and summary information 
 - `summary`: Whether to display summary information (default: `true`)
 - `logger`: Custom logger function for output (default: `process.stdout/process.stderr`)
 
+#### Progress reporting
+
+The default reporter provides progress feedback during test execution, adapting to your environment.
+
+**TTY environments (interactive terminal)**
+
+In interactive terminals, the default reporter displays real-time test progress at the bottom of the terminal. This includes currently running test files and individual test cases that have been running for more than 2 seconds.
+
+```bash
+ RUNS  src/database.test.ts
+   > should handle concurrent writes 5s
+
+ Test Files 12 passed | 1 running
+      Tests 45 passed
+   Duration 30s
+```
+
+This live status updates every second and is automatically cleared when tests complete.
+
+**Non-TTY environments (CI, piped output, AI agents)**
+
+In non-TTY environments, the default reporter automatically logs a progress summary when there is no console output for 30 seconds. This prevents CI "no output" timeouts (e.g., GitHub Actions kills processes after 10 minutes of silence) and provides visibility into test execution without cluttering actively-producing output.
+
+```bash
+[PROGRESS] test files: 20 done, 4 running | tests: 380 passed, 3 failed | 2m 30s
+            Running: src/heavy.test.ts > database > concurrent writes 45s
+            Running: src/other.test.ts
+```
+
+When a test case runs longer than 10 seconds, its name and elapsed time are shown. This helps identify stuck or slow tests. Progress reporting stops after 20 reports (~10 minutes of idle time) to avoid blocking CI timeout mechanisms when tests are truly stuck.
+
 ### Verbose reporter
 
-The verbose reporter outputs detailed information for all test cases, including successful ones. Use this when you need complete visibility into test execution.
+The verbose reporter extends the default reporter and outputs detailed information for all test cases, including successful ones. Features like progress reporting are also available. Use this when you need complete visibility into test execution.
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -101,6 +134,36 @@ export default defineConfig({
       Tests 2 passed
    Duration 112ms (build 19ms, tests 93ms)
 ```
+
+### Dot reporter
+
+<ApiMeta addedVersion="0.9.7" />
+
+The dot reporter emits a compact marker stream with one character per test case:
+
+- `·` for passed tests
+- `x` for failed tests
+- `-` for skipped tests
+- `*` for todo tests
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=dot
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: 'dot'
+});
+```
+  </Tab>
+</Tabs>
+
+It still prints the regular failing-test summary and duration footer after the marker line.
 
 ### GitHub Actions reporter
 
@@ -135,6 +198,15 @@ These outputs are parsed by GitHub Actions and generate comments at the correspo
 
 ![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
 
+When `GITHUB_STEP_SUMMARY` is available (GitHub Actions sets this automatically), Rstest also appends a Markdown summary that includes:
+
+- a test summary table (files/tests/duration)
+- a flaky test section for tests that passed after retries, with short summaries of the previous failure messages when available
+- failure sections with error message, diff, and stack trace
+- repro commands for each failed test
+- a status-marked report title (`✅` / `❌`)
+- a collapsible block for each test run; successful runs are collapsed by default
+
 #### Auto-enablement
 
 When no reporter is manually set, Rstest automatically enables this reporter when it detects a GitHub Actions environment (`process.env.GITHUB_ACTIONS` is `'true'`).
@@ -159,6 +231,21 @@ export default defineConfig({
 ```
   </Tab>
 </Tabs>
+
+#### Options
+
+| Option        | Type      | Default | Description                                                    |
+| :------------ | :-------- | :------ | :------------------------------------------------------------- |
+| `annotations` | `boolean` | `true`  | Whether to output `::error` annotations for failed tests.      |
+| `summary`     | `boolean` | `true`  | Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`. |
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['github-actions', { annotations: true, summary: false }]],
+});
+```
 
 ### JUnit reporter
 
@@ -210,6 +297,46 @@ The JUnit reporter maps test case execution status to JUnit test status:
 - `skip`: Test skipped, generates `<skipped>` tag
 - `todo`: Test todo, generates `<skipped>` tag
 
+### JSON reporter
+
+<ApiMeta addedVersion="0.9.6" />
+
+Generates a stable JSON document for CI tooling, custom dashboards, or post-processing scripts.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporter=json
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [['json', { outputPath: './reports/rstest.json' }]],
+});
+```
+  </Tab>
+</Tabs>
+
+**Configuration options:**
+
+- `outputPath`: Output file path (defaults to stdout)
+
+**Output shape:**
+
+- `status`: Overall run status (`pass` or `fail`)
+- `summary`: Counts for files and tests
+- `durationMs`: Total, build, and test durations in milliseconds
+- `snapshot`: Snapshot summary from the run
+- `files`: Test-file level results with nested test cases
+- `tests`: Flattened test-case results, each with `fullName`
+- `consoleLogs`: Captured user console output when available
+- `unhandledErrors`: Top-level unhandled errors when present
+
+The JSON reporter writes relative `testPath` values so the output remains stable across different machines and CI workspaces.
+
 ### Markdown reporter
 
 The markdown reporter outputs a single markdown document to stdout, designed for agent / LLM consumption.
@@ -222,6 +349,16 @@ The default preset is `normal`, which is tuned for agent workflows:
 - Stack output defaults to `top` (a stable anchor frame) instead of full stack frames.
 - Console output is enabled by default, but limited to keep the report size under control.
 - When the number of failures exceeds `failures.max`, the reporter prints a full failure list with minimal fields (repro / type / message / expected / actual), and only expands full details for the first `failures.max` failures.
+
+The available presets mainly differ in how much detail they keep in failure sections:
+
+| Preset    | Best for                                                   | Failure details                      | Console logs                                                       | Code frames                      |
+| --------- | ---------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | -------------------------------- |
+| `normal`  | Default agent workflows                                    | `stack: 'top'`, `failures.max: 50`   | Enabled, capped at 10 logs per test path and 500 chars per entry   | Enabled, 2 lines above and below |
+| `compact` | CI logs, repeated agent loops, token-sensitive runs        | `stack: 'top'`, `failures.max: 20`   | Disabled                                                           | Disabled                         |
+| `full`    | Deep debugging when you want maximum context in one report | `stack: 'full'`, `failures.max: 200` | Enabled, capped at 200 logs per test path and 5000 chars per entry | Enabled, 3 lines above and below |
+
+All presets still keep the same markdown structure. The main difference is how much failure context is expanded by default.
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -240,7 +377,81 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-You can further tune the output via reporter options:
+The default output always starts with a report title, then shows a summary section, test lists when needed, and a failures section.
+
+When all tests pass, an excerpt looks like this:
+
+````md
+## Summary
+
+```json
+{
+  "status": "pass",
+  "counts": {
+    "testFiles": 2,
+    "failedFiles": 0,
+    "tests": 14,
+    "failedTests": 0,
+    "passedTests": 13,
+    "skippedTests": 1,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+No test failures reported.
+
+Note: all tests passed. Lists omitted for brevity.
+````
+
+When there are failures, an excerpt looks like this:
+
+````md
+## Summary
+
+```json
+{
+  "status": "fail",
+  "counts": {
+    "testFiles": 1,
+    "failedFiles": 1,
+    "tests": 1,
+    "failedTests": 1,
+    "passedTests": 0,
+    "skippedTests": 0,
+    "todoTests": 0
+  }
+}
+```
+
+## Failures
+
+### [F01] fixtures/agent-md/index.test.ts :: agent-md > fails with diff
+
+details:
+
+```json
+{
+  "testPath": "fixtures/agent-md/index.test.ts",
+  "fullName": "agent-md > fails with diff",
+  "status": "fail"
+}
+```
+
+diff:
+
+```diff
+- Expected
++ Received
+
+- 3
++ 2
+```
+````
+
+If you want a smaller payload for CI logs or multi-step agent loops, switch to the `compact` preset and lower the failure cap:
 
 ```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
@@ -250,10 +461,9 @@ export default defineConfig({
     [
       'md',
       {
-        preset: 'normal',
-        failures: { max: 50 },
-        stack: 'top',
-        console: { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 },
+        preset: 'compact',
+        failures: { max: 20 },
+        reproduction: 'file+name',
       },
     ],
   ],

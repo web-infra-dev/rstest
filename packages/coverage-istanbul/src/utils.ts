@@ -2,6 +2,8 @@ import { runInNewContext } from 'node:vm';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import type { MapStore } from 'istanbul-lib-source-maps';
 
+const SOURCE_MAP_SCAN_CONCURRENCY = 8;
+
 // ATTENTION: when swc-plugin-coverage-instrument version changed, magic value should be updated too
 // https://github.com/kwonoj/swc-plugin-coverage-instrument/blob/63e9d5e16dbe61073c62af4b7dfed3c1779cbafa/spec/util/constants.ts#L1-L2
 const COVERAGE_MAGIC_KEY = '_coverageSchema';
@@ -108,26 +110,48 @@ export function registerSourceMapURL(
   sourcemapUrlCache.set(filename, url);
 }
 
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await mapper(items[currentIndex]!, currentIndex);
+    }
+  };
+
+  const workerCount = Math.min(Math.max(concurrency, 1), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  return results;
+}
+
 export async function transformCoverage(
   coverageMap: CoverageMap,
   sourcemapUrlCache: Map<string, string | undefined>,
 ): Promise<CoverageMap> {
-  await Promise.all(
+  await mapWithConcurrency(
     coverageMap
       .files()
       // process js/cjs/mjs file only
-      .filter((filename) => filename.endsWith('js'))
-      .map(async (filename) => {
-        let url = sourcemapUrlCache.get(filename);
-        if (!url) {
-          const { readFile } = await import('node:fs/promises');
-          url = await readFile(filename, 'utf8').then(
-            (content) => getSourceMappingURL(content),
-            () => undefined,
-          );
-        }
-        sourcemapUrlCache.set(filename, url);
-      }),
+      .filter((filename) => filename.endsWith('js')),
+    SOURCE_MAP_SCAN_CONCURRENCY,
+    async (filename) => {
+      let url = sourcemapUrlCache.get(filename);
+      if (!url) {
+        const { readFile } = await import('node:fs/promises');
+        url = await readFile(filename, 'utf8').then(
+          (content) => getSourceMappingURL(content),
+          () => undefined,
+        );
+      }
+      sourcemapUrlCache.set(filename, url);
+    },
   );
 
   // Call createSourceMapStore as needed

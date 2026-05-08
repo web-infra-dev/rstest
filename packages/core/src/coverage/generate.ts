@@ -1,7 +1,7 @@
 import type FS from 'node:fs';
 import { normalize } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext, TestFileResult } from '../types';
+import type { RstestContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -48,7 +48,7 @@ export const getIncludedFiles = async (
 
 export async function generateCoverage(
   context: RstestContext,
-  results: TestFileResult[],
+  coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
 ): Promise<void> {
   const {
@@ -57,14 +57,7 @@ export async function generateCoverage(
     projects,
   } = context;
   try {
-    const finalCoverageMap = coverageProvider.createCoverageMap();
-
-    // Merge coverage data from all test files
-    for (const result of results) {
-      if (result.coverage) {
-        finalCoverageMap.merge(result.coverage);
-      }
-    }
+    const finalCoverageMap = coverageMap;
 
     const distPathRoot = normalize(
       context.normalizedConfig.output?.distPath?.root || '',
@@ -96,28 +89,28 @@ export async function generateCoverage(
         logger.info('Generating coverage for untested files...');
       }, 1000);
 
-      const allFiles = (
-        await Promise.all(
-          projects.map(async (p) => {
-            const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+      // Process projects sequentially to limit peak memory — parallel
+      // instrumentation of untested files across many projects can multiply
+      // the resident set. Sequential processing lets each project's
+      // intermediate data be GC'd before the next one starts.
+      const allFiles: string[] = [];
+      for (const p of projects) {
+        const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+        allFiles.push(...includedFiles);
 
-            const uncoveredFiles = includedFiles.filter(
-              (file) => !coveredFilesSet.has(normalize(file)),
-            );
+        const uncoveredFiles = includedFiles.filter(
+          (file) => !coveredFilesSet.has(normalize(file)),
+        );
 
-            if (uncoveredFiles.length) {
-              await generateCoverageForUntestedFiles(
-                p.environmentName,
-                uncoveredFiles,
-                finalCoverageMap,
-                coverageProvider,
-              );
-            }
-
-            return includedFiles;
-          }),
-        )
-      ).flat();
+        if (uncoveredFiles.length) {
+          await generateCoverageForUntestedFiles(
+            p.environmentName,
+            uncoveredFiles,
+            finalCoverageMap,
+            coverageProvider,
+          );
+        }
+      }
 
       clearTimeout(timeoutId);
 
@@ -166,12 +159,22 @@ async function generateCoverageForUntestedFiles(
     return;
   }
 
-  const coverages = await coverageProvider.generateCoverageForUntestedFiles({
-    environmentName,
-    files: uncoveredFiles,
-  });
+  /**
+   * Process untested files in batches to bound peak memory — each batch is
+   * instrumented, merged into the coverage map, and then released before the
+   * next batch starts. 25 is an empirical sweet-spot that keeps memory
+   * reasonable without adding noticeable per-batch overhead.
+   */
+  const batchSize = 25;
 
-  coverages.forEach((coverageData) => {
-    coverageMap.addFileCoverage(coverageData);
-  });
+  for (let index = 0; index < uncoveredFiles.length; index += batchSize) {
+    const coverages = await coverageProvider.generateCoverageForUntestedFiles({
+      environmentName,
+      files: uncoveredFiles.slice(index, index + batchSize),
+    });
+
+    coverages.forEach((coverageData) => {
+      coverageMap.addFileCoverage(coverageData);
+    });
+  }
 }

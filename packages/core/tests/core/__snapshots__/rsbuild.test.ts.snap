@@ -49,6 +49,46 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "resolve": {
               "preferRelative": true,
             },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "sideEffects": true,
             "use": [
@@ -142,6 +182,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -159,11 +200,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -192,6 +231,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -209,11 +249,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -400,9 +438,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].mjs",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -588,6 +623,46 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "resolve": {
               "preferRelative": true,
             },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "sideEffects": true,
             "use": [
@@ -681,6 +756,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -698,11 +774,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -731,6 +805,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -748,11 +823,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -939,9 +1012,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].js",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -1027,6 +1097,10 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
     },
+    "conditionNames": [
+      "browser",
+      "...",
+    ],
     "extensionAlias": {
       ".js": [
         ".js",
@@ -1106,6 +1180,46 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "not": "url",
         },
         "oneOf": [
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -1203,6 +1317,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -1220,11 +1335,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -1253,6 +1366,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -1270,11 +1384,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -1461,9 +1573,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].js",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -1634,6 +1743,46 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "resolve": {
               "preferRelative": true,
             },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "sideEffects": true,
             "use": [
@@ -1727,6 +1876,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -1744,11 +1894,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -1777,6 +1925,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -1794,11 +1943,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -1985,9 +2132,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].js",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -2125,6 +2269,55 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
     },
     "oneOf": [
       {
+        "resourceQuery": /\\^\\\\\\?url\\$/,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+            "options": {
+              "filename": "static/css/[name].css",
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 2,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 20",
+              ],
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/less-loader/dist/cjs.js",
+            "options": {
+              "lessOptions": {
+                "javascriptEnabled": true,
+                "paths": [
+                  "<ROOT>/packages/core/node_modules",
+                ],
+              },
+              "sourceMap": false,
+            },
+          },
+        ],
+      },
+      {
         "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
         "sideEffects": true,
         "use": [
@@ -2228,6 +2421,64 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
       "not": "url",
     },
     "oneOf": [
+      {
+        "resourceQuery": /\\^\\\\\\?url\\$/,
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+            "options": {
+              "filename": "static/css/[name].css",
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+            "options": {
+              "exportType": "string",
+              "importLoaders": 3,
+              "modules": false,
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "builtin:lightningcss-loader",
+            "options": {
+              "errorRecovery": true,
+              "targets": [
+                "node >= 20",
+              ],
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/resolve-url-loader/index.js",
+            "options": {
+              "join": [Function],
+              "sourceMap": false,
+            },
+          },
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/plugin-sass/compiled/sass-loader/index.js",
+            "options": {
+              "api": "modern-compiler",
+              "implementation": "<PNPM_INNER>/sass-embedded/dist/lib/index.js",
+              "sassOptions": {
+                "quietDeps": true,
+                "silenceDeprecations": [
+                  "import",
+                ],
+              },
+              "sourceMap": true,
+            },
+          },
+        ],
+      },
       {
         "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
         "sideEffects": true,
@@ -2391,6 +2642,46 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "resolve": {
               "preferRelative": true,
             },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "sideEffects": true,
             "use": [
@@ -2484,6 +2775,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -2501,11 +2793,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -2534,6 +2824,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -2551,11 +2842,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -2742,9 +3031,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].js",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -2830,6 +3116,10 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
     },
+    "conditionNames": [
+      "browser",
+      "...",
+    ],
     "extensionAlias": {
       ".js": [
         ".js",
@@ -2909,6 +3199,46 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": "url",
         },
         "oneOf": [
+          {
+            "resolve": {
+              "preferRelative": true,
+            },
+            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
+                "options": {
+                  "filename": "static/css/[name].css",
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
+              },
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
+                "options": {
+                  "exportType": "string",
+                  "importLoaders": 1,
+                  "modules": false,
+                  "sourceMap": false,
+                },
+              },
+              {
+                "loader": "builtin:lightningcss-loader",
+                "options": {
+                  "errorRecovery": true,
+                  "targets": [
+                    "node >= 20",
+                  ],
+                },
+              },
+            ],
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -3006,6 +3336,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "exportedEnum": false,
                     "typeExports": true,
                   },
+                  "detectSyntax": "auto",
                   "env": {
                     "targets": [
                       "node >= 20",
@@ -3023,11 +3354,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     },
                     "parser": {
                       "decorators": true,
-                      "syntax": "typescript",
-                      "tsx": false,
                     },
                     "transform": {
-                      "decoratorVersion": "2022-03",
+                      "decoratorVersion": "2023-11",
                       "legacyDecorator": false,
                     },
                   },
@@ -3056,6 +3385,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -3073,11 +3403,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
-                  "decoratorVersion": "2022-03",
+                  "decoratorVersion": "2023-11",
                   "legacyDecorator": false,
                 },
               },
@@ -3264,9 +3592,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   },
   "output": {
     "assetModuleFilename": "static/assets/[name].[contenthash:10][ext]",
-    "bundlerInfo": {
-      "force": false,
-    },
     "chunkFilename": "[name].js",
     "chunkFormat": "module",
     "chunkLoading": "import",
@@ -3422,6 +3747,7 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
                 "exportedEnum": false,
                 "typeExports": true,
               },
+              "detectSyntax": "auto",
               "env": {
                 "targets": [
                   "node >= 20",
@@ -3439,8 +3765,6 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
                 },
                 "parser": {
                   "decorators": true,
-                  "syntax": "typescript",
-                  "tsx": false,
                 },
                 "transform": {
                   "decoratorMetadata": true,
