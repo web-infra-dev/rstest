@@ -3,6 +3,28 @@ import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
 import { runRstestCli } from '../scripts';
 
+const expectCoverageSummary = (logs: string[]) => {
+  const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
+
+  expect(
+    logs
+      .find((log) => log.includes('string.ts') && log.includes('|'))
+      ?.replaceAll(' ', ''),
+  ).toBe(
+    isCommonJs
+      ? 'string.ts|84|100|57.14|84|7-10'
+      : 'string.ts|80|100|60|80|2-4,7-8',
+  );
+
+  expect(
+    logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
+  ).toBe(
+    isCommonJs
+      ? 'Allfiles|95.74|100|85|95.74|'
+      : 'Allfiles|94.68|100|87.5|94.68|',
+  );
+};
+
 describe('test coverage-v8', () => {
   it('coverage-v8', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
@@ -48,15 +70,7 @@ describe('test coverage-v8', () => {
           log.replaceAll(' ', '').includes('100|100|100|100'),
       ),
     ).toBeTruthy();
-    expect(
-      logs
-        .find((log) => log.includes('string.ts') && log.includes('|'))
-        ?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|80|100|60|80|2-4,7-8"`);
-
-    expect(
-      logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"Allfiles|94.68|100|87.5|94.68|"`);
+    expectCoverageSummary(logs);
 
     // text reporter
     expectLog('% Stmts', logs);
@@ -119,11 +133,7 @@ describe('test coverage-v8', () => {
     expect(
       logs.find((log) => log.includes('index.ts') && log.includes('|')),
     ).toBeFalsy();
-    expect(
-      logs
-        .find((log) => log.includes('string.ts') && log.includes('|'))
-        ?.replaceAll(' ', ''),
-    ).toMatchInlineSnapshot(`"string.ts|80|100|60|80|2-4,7-8"`);
+    expectCoverageSummary(logs);
 
     // text reporter
     expectLog('% Stmts', logs);

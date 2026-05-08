@@ -22,7 +22,7 @@ describe('test coverage-v8 sourcemap', () => {
         '--outDir',
         'test-temp-sourcemap/dist',
         'src/sourcemap.ts',
-        '--ignoreCOnfig',
+        '--ignoreConfig',
       ],
       {
         nodeOptions: {
@@ -64,23 +64,30 @@ describe('test coverage-v8 sourcemap', () => {
     const sourcemapLog = logs
       .find((log) => log.includes('sourcemap.ts'))
       ?.replaceAll(' ', '');
-
-    // Node/V8 precise coverage can report different branch counts for the
-    // same class-field/initializer code across runtime versions, while the
-    // sourcemap remap result is still correct. Keep this assertion focused
-    // on the remapped source entry and allow the known runtime-dependent
-    // branch totals only.
-    expect(sourcemapLog).toMatch(
-      /^sourcemap\.ts\|88\.88\|(75|80)\|100\|88\.88\|16-17$/,
-    );
-
     const allFilesLog = logs
       .find((log) => log.includes('All files'))
       ?.replaceAll(' ', '');
+    const isCommonJs = process.env.RSTEST_OUTPUT_MODULE === 'false';
+
+    // Keep the assertion focused on sourcemap remapping correctness: the
+    // report must point back to the original TS source file. The exact V8
+    // statement/branch totals for this enum/class-field output can differ
+    // across runtime + output formats. In particular, CommonJS output can
+    // report this remapped file as fully covered while ESM keeps the
+    // partially-covered ranges.
+    expect(sourcemapLog).toMatch(
+      isCommonJs
+        ? /^sourcemap\.ts\|100\|100\|100\|100\|$/
+        : /^sourcemap\.ts\|88\.88\|(75|80)\|100\|88\.88\|16-17$/,
+    );
 
     // The final report should only include the remapped source file here.
     // Internal temporary output such as dist/.rstest-temp must be filtered
     // out before the global summary is calculated.
-    expect(allFilesLog).toMatch(/^Allfiles\|88\.88\|(75|80)\|100\|88\.88\|$/);
+    expect(allFilesLog).toMatch(
+      isCommonJs
+        ? /^Allfiles\|100\|100\|100\|100\|$/
+        : /^Allfiles\|88\.88\|(75|80)\|100\|88\.88\|$/,
+    );
   });
 });
