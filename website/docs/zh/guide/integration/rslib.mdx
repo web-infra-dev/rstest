@@ -42,7 +42,7 @@ import { withRslibConfig } from '@rstest/adapter-rslib';
 
 export default defineConfig({
   extends: withRslibConfig(),
-  // 额外的 rstest 特定配置
+  // 额外的 Rstest 特定配置
 });
 ```
 
@@ -51,6 +51,22 @@ export default defineConfig({
 - 加载你的 `rslib.config.ts` 文件
 - 提取并映射测试相关的 Rslib 选项到 Rstest 配置
 - 与你提供的其他 Rstest 配置合并
+
+如果你在 Rslib 配置里开启了 `performance.buildCache`，`withRslibConfig()` 会把这项配置传给 Rstest，Rstest 仍会继续补充自己的缓存默认值，例如运行时摘要项和基于配置文件的失效条件。
+
+如果你的 Rslib 配置没有开启 `performance.buildCache`，Rstest 默认也不会开启它。只有在你希望测试构建使用持久化缓存时，才需要在 Rstest 配置里显式设置 `performance.buildCache`：
+
+```ts
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+export default defineConfig({
+  extends: withRslibConfig(),
+  performance: {
+    buildCache: true,
+  },
+});
+```
 
 适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置、静态资源处理和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
 

@@ -159,9 +159,8 @@ export async function transformCoverage(
   for (const [filename, url] of sourcemapUrlCache) {
     if (url) {
       if (!store) {
-        const { createSourceMapStore } = await import(
-          'istanbul-lib-source-maps'
-        );
+        const { createSourceMapStore } =
+          await import('istanbul-lib-source-maps');
         store = createSourceMapStore();
       }
       store.registerURL(filename, url);

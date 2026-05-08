@@ -6,7 +6,6 @@ applescript
 Asus
 atrules
 autodocs
-biomejs
 Birpc
 brotli
 browserslistrc

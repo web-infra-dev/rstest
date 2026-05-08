@@ -1,5 +1,11 @@
-import { isAbsolute, join, normalize } from 'pathe';
-import type { Rstest, RstestConfig } from '../types';
+import { dirname, isAbsolute, join, normalize, resolve } from 'pathe';
+import type {
+  ProjectContext,
+  Rstest,
+  RstestBuildCacheConfig,
+  RstestConfig,
+  RstestContext,
+} from '../types';
 
 export const DEFAULT_CONFIG_NAME = 'rstest.config';
 
@@ -10,6 +16,10 @@ export const POINTER = '➜';
 export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
+const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
+const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
+  'defaultBuildCacheDirectory',
+);
 
 export const getOutputDistPathRoot = (
   distPath?: NonNullable<RstestConfig['output']>['distPath'],
@@ -41,6 +51,164 @@ export const getTempRstestOutputDirGlob = (distPathRoot: string): string => {
 
   return `**/${outputRoot.replace(/^\.?\//, '')}`;
 };
+
+type BuildCacheInput = {
+  buildCache?: boolean | RstestBuildCacheConfig;
+  root: string;
+  configFilePath?: string;
+  projectConfigFilePaths?: string[];
+  tsconfigPaths?: string[];
+  command?: string;
+  environmentName?: string;
+  browserEnabled?: boolean;
+  outputDistPathRoot?: string;
+  assumeNormalized?: boolean;
+};
+
+const getDefaultBuildCacheDir = (environmentName?: string): string =>
+  environmentName
+    ? `${DEFAULT_BUILD_CACHE_PREFIX}-${environmentName}`
+    : DEFAULT_BUILD_CACHE_PREFIX;
+
+type InternalBuildCacheConfig = RstestBuildCacheConfig & {
+  [DEFAULT_BUILD_CACHE_DIRECTORY_MARKER]?: true;
+};
+
+export const normalizeBuildCache = ({
+  buildCache,
+  root,
+  configFilePath,
+  projectConfigFilePaths = [],
+  tsconfigPaths = [],
+  command,
+  environmentName,
+  browserEnabled,
+  outputDistPathRoot,
+  assumeNormalized = false,
+}: BuildCacheInput): false | RstestBuildCacheConfig => {
+  if (!buildCache) {
+    return false;
+  }
+
+  const userConfig: InternalBuildCacheConfig =
+    buildCache === true ? {} : buildCache;
+  const buildDependencies = Array.from(
+    new Set(
+      [
+        configFilePath,
+        ...projectConfigFilePaths,
+        ...tsconfigPaths,
+        ...(userConfig.buildDependencies || []),
+      ]
+        .filter(Boolean)
+        .map((filePath) =>
+          isAbsolute(filePath as string)
+            ? normalize(filePath as string)
+            : resolve(root, filePath as string),
+        ),
+    ),
+  );
+
+  const userCacheDigest =
+    assumeNormalized && userConfig.cacheDigest?.[0] === 'rstest'
+      ? userConfig.cacheDigest.slice(5)
+      : userConfig.cacheDigest || [];
+  const cacheDigest = [
+    'rstest',
+    command,
+    environmentName,
+    browserEnabled ? 'browser' : 'node',
+    outputDistPathRoot,
+    ...userCacheDigest,
+  ];
+
+  const isDefaultCacheDirectory =
+    buildCache === true ||
+    !userConfig.cacheDirectory ||
+    userConfig[DEFAULT_BUILD_CACHE_DIRECTORY_MARKER];
+
+  const cacheDirectory = isDefaultCacheDirectory
+    ? getDefaultBuildCacheDir(environmentName)
+    : userConfig.cacheDirectory!;
+
+  const normalized = {
+    cacheDirectory: resolve(root, cacheDirectory),
+    cacheDigest,
+    buildDependencies,
+  };
+
+  if (isDefaultCacheDirectory) {
+    Object.defineProperty(normalized, DEFAULT_BUILD_CACHE_DIRECTORY_MARKER, {
+      value: true,
+    });
+  }
+
+  return normalized;
+};
+
+export const resolveBuildCacheDependencyPaths = <
+  T extends {
+    performance?: {
+      buildCache?: boolean | RstestBuildCacheConfig;
+    };
+  },
+>(
+  config: T,
+  configFilePath?: string,
+): T => {
+  const buildCache = config.performance?.buildCache;
+
+  if (
+    !configFilePath ||
+    !buildCache ||
+    buildCache === true ||
+    !buildCache.buildDependencies?.length
+  ) {
+    return config;
+  }
+
+  const configDir = dirname(configFilePath);
+
+  return {
+    ...config,
+    performance: {
+      ...config.performance,
+      buildCache: {
+        ...buildCache,
+        buildDependencies: buildCache.buildDependencies.map((filePath) =>
+          isAbsolute(filePath) ? filePath : resolve(configDir, filePath),
+        ),
+      },
+    },
+  };
+};
+
+export const resolveProjectBuildCache = ({
+  context,
+  project,
+}: {
+  context: Pick<
+    RstestContext,
+    'rootPath' | 'configFilePath' | 'command' | 'normalizedConfig' | 'projects'
+  >;
+  project: Pick<
+    ProjectContext,
+    'environmentName' | 'configFilePath' | 'normalizedConfig'
+  >;
+}): false | RstestBuildCacheConfig =>
+  normalizeBuildCache({
+    buildCache: project.normalizedConfig.performance?.buildCache,
+    root: project.normalizedConfig.root,
+    configFilePath: project.configFilePath ?? context.configFilePath,
+    tsconfigPaths: project.normalizedConfig.source?.tsconfigPath
+      ? [project.normalizedConfig.source.tsconfigPath]
+      : [],
+    command: context.command,
+    environmentName: project.environmentName,
+    browserEnabled: project.normalizedConfig.browser.enabled,
+    outputDistPathRoot: context.normalizedConfig.output.distPath.root,
+    assumeNormalized: true,
+  });
 
 export const DEFAULT_CONFIG_EXTENSIONS = [
   '.mts',

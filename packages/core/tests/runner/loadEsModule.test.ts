@@ -50,9 +50,8 @@ describe('loadEsModule', () => {
   });
 
   it('should append sourceURL for esm vm execution', () => {
-    expect(
-      appendSourceURL("throw new Error('x')", '/virtual/dist/entry.mjs'),
-    ).toMatchInlineSnapshot(`
+    expect(appendSourceURL("throw new Error('x')", '/virtual/dist/entry.mjs'))
+      .toMatchInlineSnapshot(`
       "throw new Error('x')
       //# sourceURL=/virtual/dist/entry.mjs"
     `);

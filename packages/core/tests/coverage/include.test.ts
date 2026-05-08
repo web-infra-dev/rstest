@@ -56,9 +56,8 @@ describe('getIncludedFiles', () => {
   };
 
   it('should include visible files by default', async () => {
-    expect(
-      await glob(['**/*.{js,ts}', '../packages/*.{js,ts}']),
-    ).toMatchInlineSnapshot(`
+    expect(await glob(['**/*.{js,ts}', '../packages/*.{js,ts}']))
+      .toMatchInlineSnapshot(`
       [
         "apps/a.ts",
         "apps/b.js",
@@ -110,9 +109,8 @@ describe('getIncludedFiles', () => {
     fs.writeFileSync('/root/apps/rstest.setup.ts', '');
     fs.writeFileSync('/root/apps/src/rstest.setup.ts', '');
 
-    expect(
-      await glob(['**/*.{js,ts}'], ['./rstest.setup.ts']),
-    ).toMatchInlineSnapshot(`
+    expect(await glob(['**/*.{js,ts}'], ['./rstest.setup.ts']))
+      .toMatchInlineSnapshot(`
         [
           "apps/a.ts",
           "apps/b.js",
@@ -121,9 +119,8 @@ describe('getIncludedFiles', () => {
         ]
       `);
 
-    expect(
-      await glob(['**/*.{js,ts}'], ['rstest.setup.ts']),
-    ).toMatchInlineSnapshot(`
+    expect(await glob(['**/*.{js,ts}'], ['rstest.setup.ts']))
+      .toMatchInlineSnapshot(`
         [
           "apps/a.ts",
           "apps/b.js",

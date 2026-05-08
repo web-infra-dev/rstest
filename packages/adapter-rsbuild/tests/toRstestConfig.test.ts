@@ -1,9 +1,17 @@
+import { normalize } from 'node:path';
 import { defineConfig, type RsbuildConfig } from '@rsbuild/core';
 import { describe, expect, it } from '@rstest/core';
 import { toRstestConfig } from '../src';
 
 describe('toRstestConfig', () => {
   const rsbuildConfig = defineConfig({
+    performance: {
+      buildCache: {
+        cacheDirectory: '.cache/from-rsbuild',
+        cacheDigest: ['rsbuild-digest'],
+        buildDependencies: ['./rsbuild-extra.ts'],
+      },
+    },
     source: {
       assetsInclude: /\.json5$/,
       define: {
@@ -63,6 +71,11 @@ describe('toRstestConfig', () => {
     expect(config.resolve?.conditionNames).toEqual(['custom', 'import']);
     expect(config.resolve?.mainFields).toEqual(['module', 'main']);
     expect(config.output?.emitAssets).toBeUndefined();
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: ['./rsbuild-extra.ts'],
+    });
     expect(config.testEnvironment).toBe('happy-dom');
   });
 
@@ -113,6 +126,37 @@ describe('toRstestConfig', () => {
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
       'process.env.CUSTOM': '"custom-value"',
+    });
+  });
+
+  it('should add config file dependency and resolve relative build dependencies from configPath', () => {
+    const config = toRstestConfig({
+      rsbuildConfig,
+      configPath: '/repo/configs/rsbuild.config.ts',
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: [
+        normalize('/repo/configs/rsbuild-extra.ts'),
+        normalize('/repo/configs/rsbuild.config.ts'),
+      ],
+    });
+  });
+
+  it('should resolve relative build dependencies from root when configPath is not provided', () => {
+    const config = toRstestConfig({
+      rsbuildConfig: {
+        ...rsbuildConfig,
+        root: '/repo/project',
+      },
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-rsbuild',
+      cacheDigest: ['rsbuild-digest'],
+      buildDependencies: [normalize('/repo/project/rsbuild-extra.ts')],
     });
   });
 });

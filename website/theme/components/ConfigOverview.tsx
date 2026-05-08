@@ -163,6 +163,10 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'dev',
     items: ['dev.writeToDisk'],
   },
+  {
+    name: 'performance',
+    items: ['performance.buildCache'],
+  },
 ];
 
 export function BuildOverview() {

@@ -10,6 +10,13 @@ import { defineConfig } from '@rslib/core';
 
 export default defineConfig({
   lib: [{ format: 'esm', id: 'test-lib' }],
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts']
+    }
+  },
   source: {
     assetsInclude: /\\.json5$/,
     define: {
@@ -63,7 +70,35 @@ export default defineConfig({
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
+    expect((config as any).performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
+    });
     expect(config.testEnvironment).toBe('node');
+  });
+
+  it('should add rslib config file as dependency for boolean build cache', async () => {
+    writeFileSync(
+      testConfigPath,
+      `
+import { defineConfig } from '@rslib/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true
+  }
+});
+  `,
+    );
+
+    const config = await withRslibConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect((config as any).performance?.buildCache).toEqual({
+      buildDependencies: [testConfigPath],
+    });
   });
 
   it('should allow modification of rslib config', async () => {
@@ -84,6 +119,11 @@ export default defineConfig({
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
       'process.env.CUSTOM': '"custom-value"',
+    });
+    expect((config as any).performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
     });
   });
 

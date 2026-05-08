@@ -25,9 +25,8 @@ afterAll(() => {
 
   const fileHash = [...fileHashes][0]!;
   expect(fileHash).toMatch(/^[0-9a-f]{10}$/);
-  expect(
-    runIds.map(([id, name]) => [id.slice(fileHash.length), name]),
-  ).toMatchInlineSnapshot(`
+  expect(runIds.map(([id, name]) => [id.slice(fileHash.length), name]))
+    .toMatchInlineSnapshot(`
     [
       [
         "_0_0_0",

@@ -13,4 +13,11 @@ export default defineConfig({
     enabled: true,
     include: ['src/**/*.ts'],
   },
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/browser-coverage',
+      cacheDigest: ['coverage-fixture'],
+      buildDependencies: ['./rstest.config.mts'],
+    },
+  },
 });

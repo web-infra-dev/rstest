@@ -29,6 +29,41 @@ export type RstestPoolOptions = {
 
 export type BundleDependencyPattern = string | RegExp;
 
+export type RstestBuildCacheConfig = {
+  /**
+   * Directory used to store Rsbuild persistent cache files.
+   *
+   * When omitted, rstest stores cache files under
+   * `node_modules/.cache/rstest-<project-name>`.
+   */
+  cacheDirectory?: string;
+  /**
+   * Additional values that should invalidate the persistent cache when changed.
+   *
+   * rstest appends its own runtime digest automatically.
+   */
+  cacheDigest?: Array<string | undefined>;
+  /**
+   * Additional files that should invalidate the persistent cache when changed.
+   *
+   * rstest automatically adds the active rstest config file, project config
+   * files, and discovered tsconfig paths when available.
+   */
+  buildDependencies?: string[];
+};
+
+export type RstestPerformanceConfig = {
+  /**
+   * Enable Rsbuild persistent build cache for test builds.
+   *
+   * When set to `true`, rstest uses a cache directory outside the temporary
+   * output folder and appends rstest-specific invalidation inputs.
+   *
+   * @default false
+   */
+  buildCache?: boolean | RstestBuildCacheConfig;
+};
+
 export type RstestOutputConfig = Pick<
   NonNullable<RsbuildConfig['output']>,
   'cssModules' | 'emitAssets' | 'externals' | 'cleanDistPath' | 'module'
@@ -454,6 +489,11 @@ export interface RstestConfig {
   coverage?: CoverageOptions;
 
   /**
+   * Performance-related Rsbuild options used by rstest.
+   */
+  performance?: RstestPerformanceConfig;
+
+  /**
    * chai configuration options
    */
   chaiConfig?: ChaiConfig;
@@ -494,6 +534,7 @@ export interface RstestConfig {
 type OptionalKeys =
   | 'testNamePattern'
   | 'plugins'
+  | 'performance'
   | 'source'
   | 'resolve'
   | 'tools'
