@@ -43,7 +43,7 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@rslib/core": ">=0.18.6",
+    "@rslib/core": "0.21.3",
     "@rstest/core": ">=0.7.7",
     "typescript": "^5 || ^6"
   },
