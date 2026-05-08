@@ -2,6 +2,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
+import { getFileTaskId } from '../runtime/runner';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -240,7 +241,7 @@ const workerErrorToResult = (
   }
 
   return {
-    testId: '0',
+    testId: getFileTaskId(testPath),
     project: projectName,
     testPath,
     status: 'fail',

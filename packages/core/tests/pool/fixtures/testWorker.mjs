@@ -31,8 +31,10 @@ const send = (response) => {
 
 let runCount = 0;
 
+const getFileTaskId = (testPath) => `file:${testPath}`;
+
 const makeRunResult = (request, extra) => ({
-  testId: '0',
+  testId: getFileTaskId(request.options?.entryInfo?.testPath ?? '/test.ts'),
   testPath: request.options?.entryInfo?.testPath ?? '/test.ts',
   project: 'default',
   status: 'pass',

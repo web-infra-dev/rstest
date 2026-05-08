@@ -461,7 +461,7 @@ export const runInPool = async (
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
-        testId: '0',
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         status: 'skip',
