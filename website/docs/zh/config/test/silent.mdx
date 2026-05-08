@@ -59,4 +59,6 @@ describe('math', () => {
 Rstest 会尽力将日志归属到具体测试上，但在 browser mode 下的并发异步测试场景中，日志归属可能不会完全准确。
 
 在 browser mode 下，这条拦截链路仍然会调用原始的 `console.*`，以便日志继续出现在 DevTools 中。因此，`silent` 控制的是 Rstest / reporter 的输出，不一定会把浏览器原生控制台中的日志也一起隐藏。
+
+当 `disableConsoleIntercept` 为 `true` 时，`silent` 仍然生效。此时日志不会走 reporter 的 console 拦截链路，因此 [onConsoleLog](/config/test/on-console-log) 和 [printConsoleTrace](/config/test/print-console-trace) 仍然不会生效；但在 `silent: 'passed-only'` 下，Rstest 仍会在内部缓存日志，并在失败任务结束后按原始 console 输出回放对应日志。
 :::

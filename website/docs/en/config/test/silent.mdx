@@ -59,4 +59,6 @@ Only `fail log` will be printed.
 Rstest tries to attribute logs to specific tests, but in concurrent asynchronous test scenarios in browser mode, log attribution may not be perfectly accurate.
 
 In browser mode, this interception still calls the original `console.*` so logs can remain visible in DevTools. `silent` controls Rstest/reporter output, not necessarily the browser's native console view.
+
+`silent` still works when `disableConsoleIntercept` is `true`. In that case, logs do not go through the reporter console interception pipeline, so [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) still do not apply. However, with `silent: 'passed-only'`, Rstest still buffers logs internally and replays the matching logs through the original console output after failed tasks finish.
 :::
