@@ -125,6 +125,7 @@ export type TestSuiteListeners = keyof Pick<
 export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
 
 export type TestFileInfo = {
+  testId: string;
   testPath: TestPath;
   tests: TestInfo[];
 };
@@ -166,6 +167,10 @@ export type TestFileResult = TestResult & {
 export interface UserConsoleLog {
   content: string;
   name: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
   trace?: string;
   testPath: TestPath;
   type: 'stdout' | 'stderr';

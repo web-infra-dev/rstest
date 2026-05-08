@@ -155,6 +155,10 @@ type TestFileStartPayload = {
 type LogPayload = {
   level: 'log' | 'warn' | 'error' | 'info' | 'debug';
   content: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
   testPath: string;
   type: 'stdout' | 'stderr';
   trace?: string;
@@ -185,6 +189,14 @@ type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
 };
 
 const createDeferredPromise = <T>(): DeferredPromise<T> => {
@@ -798,6 +810,7 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = project.normalizedConfig;
 
   return {
@@ -830,6 +843,7 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
@@ -2169,6 +2183,7 @@ export const runBrowserController = async (
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileStart?.({
+          testId: getFileTaskId(payload.testPath),
           testPath: payload.testPath,
           tests: [],
         }),
@@ -2204,6 +2219,16 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestSuiteResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'suite',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestCaseStart = async (
@@ -2223,6 +2248,16 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestCaseResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'case',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestFileComplete = async (
@@ -2233,6 +2268,17 @@ export const runBrowserController = async (
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'file',
+        testPath: payload.testPath,
+      });
+    }
+
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileResult?.(payload),
@@ -2247,19 +2293,28 @@ export const runBrowserController = async (
     const log: UserConsoleLog = {
       content: payload.content,
       name: payload.level,
+      taskId: payload.taskId,
+      taskName: payload.taskName,
+      taskParentNames: payload.taskParentNames,
+      taskType: payload.taskType,
       testPath: payload.testPath,
       type: payload.type,
       trace: payload.trace,
     };
-    const shouldLog =
-      context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-    if (shouldLog) {
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onUserConsoleLog?.(log),
-        ),
-      );
+    if (context.normalizedConfig.silent === true) {
+      return;
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      bufferConsoleLog(log);
+      return;
+    }
+
+    if (context.normalizedConfig.disableConsoleIntercept) {
+      return;
+    }
+
+    await emitUserConsoleLog(log);
   };
 
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
@@ -2267,6 +2322,113 @@ export const runBrowserController = async (
     error.stack = payload.stack;
     fatalError = error;
     ensureProcessExitCode(1);
+  };
+
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+  const suiteIdsByChain = new Map<string, string>();
+
+  const getSuiteChainKey = (names: string[]): string => {
+    return names.join('\u0000');
+  };
+
+  const pushTaskId = (taskIds: string[], taskId: string): void => {
+    if (!taskIds.includes(taskId)) {
+      taskIds.push(taskId);
+    }
+  };
+
+  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
+    return context.normalizedConfig.onConsoleLog?.(log.content) !== false;
+  };
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    if (!shouldEmitUserConsoleLog(log)) {
+      return;
+    }
+
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onUserConsoleLog?.(log),
+      ),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+
+    if (log.taskType === 'suite' && log.taskId) {
+      suiteIdsByChain.set(
+        getSuiteChainKey([...(log.taskParentNames || []), log.taskName || '']),
+        log.taskId,
+      );
+    }
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+    taskParentNames,
+    taskType,
+    testPath,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+    taskParentNames?: string[];
+    taskType?: 'file' | 'suite' | 'case';
+    testPath: string;
+  }): Promise<void> => {
+    if (status !== 'fail') {
+      bufferedConsoleLogs.delete(taskId);
+      return;
+    }
+
+    const taskIdsToFlush: string[] = [];
+
+    if (taskType === 'case') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+
+      const suiteNames = taskParentNames || [];
+      for (let i = 0; i < suiteNames.length; i++) {
+        const suiteId = suiteIdsByChain.get(
+          getSuiteChainKey(suiteNames.slice(0, i + 1)),
+        );
+
+        if (suiteId) {
+          pushTaskId(taskIdsToFlush, suiteId);
+        }
+      }
+
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'suite') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'file') {
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    for (const bufferedTaskId of taskIdsToFlush) {
+      const logs = bufferedConsoleLogs.get(bufferedTaskId);
+      if (!logs) {
+        continue;
+      }
+
+      bufferedConsoleLogs.delete(bufferedTaskId);
+
+      for (const log of logs) {
+        await Promise.all(
+          context.reporters.map((reporter) =>
+            (reporter as Reporter).onUserConsoleLog?.(log),
+          ),
+        );
+      }
+    }
   };
 
   const runSnapshotRpc = async (

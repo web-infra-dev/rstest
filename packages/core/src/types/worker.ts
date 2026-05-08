@@ -63,6 +63,12 @@ export type RuntimeConfig = Pick<
   | 'bail'
   | 'chaiConfig'
   | 'includeTaskLocation'
+  | 'silent'
+>;
+
+export type CurrentTaskInfo = Pick<
+  UserConsoleLog,
+  'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'
 >;
 
 export type WorkerContext = {
@@ -94,6 +100,7 @@ export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
   distPath: DistPath;
+  currentTask?: CurrentTaskInfo;
   snapshotClient?: SnapshotClient;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
