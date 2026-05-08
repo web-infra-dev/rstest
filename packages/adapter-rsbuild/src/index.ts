@@ -49,6 +49,7 @@ export function withRsbuildConfig(
     const rstestConfig = toRstestConfig({
       environmentName,
       rsbuildConfig,
+      configPath: filePath,
       modifyRsbuildConfig,
     });
 

@@ -6,17 +6,14 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
-    port: BROWSER_PORTS['browser-coverage'],
+    port: BROWSER_PORTS.config,
   },
-  include: ['tests/*.test.ts'],
-  coverage: {
-    enabled: true,
-    include: ['src/**/*.ts'],
-  },
+  include: ['./index.test.ts'],
+  globals: true,
   performance: {
     buildCache: {
-      cacheDirectory: '.cache/browser-coverage',
-      cacheDigest: ['coverage-fixture'],
+      cacheDirectory: '.cache/browser-build-cache',
+      cacheDigest: ['browser-fixture'],
       buildDependencies: ['./rstest.config.mts'],
     },
   },

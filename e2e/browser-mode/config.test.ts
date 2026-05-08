@@ -71,4 +71,29 @@ describe('browser mode - config options', () => {
     expect(fs.existsSync(rspackConfigPath)).toBe(true);
     expect(fs.existsSync(rstestConfigPath)).toBe(true);
   });
+
+  it('should support build cache in browser mode config', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/build-cache');
+    const cacheDir = join(fixtureDir, '.cache/browser-build-cache');
+    const inspectDir = join(fixtureDir, 'dist/.rstest-temp/.rsbuild');
+    const rsbuildConfigPath = join(inspectDir, 'rsbuild.config.mjs');
+
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    fs.rmSync(join(fixtureDir, 'dist'), { recursive: true, force: true });
+
+    const { expectExecSuccess, cli } = await runBrowserCli('build-cache', {
+      env: { DEBUG: 'rstest' },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('config inspection completed');
+    expect(fs.existsSync(cacheDir)).toBe(true);
+    expect(fs.existsSync(rsbuildConfigPath)).toBe(true);
+
+    const inspectedConfig = fs.readFileSync(rsbuildConfigPath, 'utf8');
+    expect(inspectedConfig).toContain('buildCache');
+    expect(inspectedConfig).toContain('.cache/browser-build-cache');
+    expect(inspectedConfig).toContain('browser-fixture');
+  });
 });
