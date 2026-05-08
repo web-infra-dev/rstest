@@ -1,5 +1,4 @@
 import { expect, test } from '@rstest/core';
-// biome-ignore lint/performance/noNamespaceImport: this test exercises the generated WASM module namespace.
 import * as wasm from './src/factorial.wasm';
 
 test('WASM factorial', async () => {

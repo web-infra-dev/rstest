@@ -19,7 +19,7 @@
     "build": "rslib build",
     "build:local": "cross-env SOURCEMAP=true rslib build",
     "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
-    "lint": "biome check . --diagnostic-level=warn",
+    "lint": "rslint .",
     "package:vsce": "npm run build && vsce package",
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",

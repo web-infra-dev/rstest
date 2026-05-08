@@ -5,3 +5,6 @@ doc_build
 
 # Symlinks (prettier does not handle symlinks)
 CLAUDE.md
+
+# ignore pnpm-lock
+pnpm-lock.yaml

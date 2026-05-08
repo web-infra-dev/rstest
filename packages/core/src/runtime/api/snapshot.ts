@@ -36,7 +36,6 @@ function recordAsyncExpect(
   // record promise for test, that resolves before test ends
   if (test && promise instanceof Promise) {
     // if promise is explicitly awaited, remove it from the list
-    // biome-ignore lint/style/noParameterAssign: reassigning
     promise = promise.finally(() => {
       if (!test.promises) {
         return;
@@ -73,7 +72,6 @@ function recordAsyncExpect(
     });
 
     return {
-      // biome-ignore lint/suspicious/noThenProperty: promise
       then(onFulfilled, onRejected) {
         resolved = true;
         return promise.then(onFulfilled, onRejected);
@@ -184,9 +182,7 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
             typeof properties === 'string' &&
             typeof message === 'undefined'
           ) {
-            // biome-ignore lint/style/noParameterAssign: reassigning
             message = properties;
-            // biome-ignore lint/style/noParameterAssign: reassigning
             properties = undefined;
           }
           const errorMessage = utils.flag(this, 'message');
@@ -255,15 +251,11 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
         const expected = utils.flag(this, 'object');
         const error = utils.flag(this, 'error');
         if (typeof properties === 'string') {
-          // biome-ignore lint/style/noParameterAssign: reassigning
           message = inlineSnapshot;
-          // biome-ignore lint/style/noParameterAssign: reassigning
           inlineSnapshot = properties;
-          // biome-ignore lint/style/noParameterAssign: reassigning
           properties = undefined;
         }
         if (inlineSnapshot) {
-          // biome-ignore lint/style/noParameterAssign: reassigning
           inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
         }
         const errorMessage = utils.flag(this, 'message');
@@ -331,7 +323,6 @@ export const SnapshotPlugin: (workerState: WorkerState) => ChaiPlugin = (
         const errorMessage = utils.flag(this, 'message');
 
         if (inlineSnapshot) {
-          // biome-ignore lint/style/noParameterAssign: reassigning
           inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
         }
 

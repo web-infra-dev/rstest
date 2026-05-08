@@ -1,5 +1,4 @@
 <script lang="ts">
-/* biome-ignore-all lint/correctness/noUnusedVariables: Svelte template references are consumed outside the script AST. */
 import { getDefaultStep } from '@/utils/step';
 
 export let initialValue = 0;

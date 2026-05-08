@@ -19,7 +19,6 @@ export type EntryInfo = {
 };
 
 /** Server to Runtime */
-// biome-ignore lint/complexity/noBannedTypes: TODO
 export type ServerRPC = {};
 
 /** Runtime to Server */

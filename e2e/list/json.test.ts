@@ -147,9 +147,8 @@ describe('test list command with --json', () => {
     await expectExecSuccess();
 
     expect(fs.existsSync(outputPath)).toBeTruthy();
-    expect(
-      JSON.parse(fs.readFileSync(outputPath, 'utf8')),
-    ).toMatchInlineSnapshot(`
+    expect(JSON.parse(fs.readFileSync(outputPath, 'utf8')))
+      .toMatchInlineSnapshot(`
       {
         "items": [
           {

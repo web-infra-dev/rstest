@@ -330,9 +330,8 @@ export const runRest = async ({
     process.on('unhandledRejection', unexpectedlyExitHandler);
 
     if (command === 'watch') {
-      const { watchFilesForRestart, onBeforeRestart } = await import(
-        '../core/restart'
-      );
+      const { watchFilesForRestart, onBeforeRestart } =
+        await import('../core/restart');
 
       onBeforeRestart(() => {
         process.off('uncaughtException', unexpectedlyExitHandler);
