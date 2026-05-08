@@ -26,7 +26,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     public root?: string,
   ) {
     if (this.root) {
-      this.root = this.root.replace(/\\/g, '/');
+      this.root = this.normalizeForMatching(this.root);
     }
 
     this.isIncluded = options.include?.length
@@ -50,6 +50,28 @@ export class CoverageProvider implements RstestCoverageProvider {
     };
   }
 
+  private normalizeForMatching(filePath: string): string {
+    return filePath.replace(/\\/g, '/').toLowerCase();
+  }
+
+  private toProjectRelativePath(filePath: string): string {
+    const normalizedFilePath = this.normalizeForMatching(filePath);
+
+    if (!this.root) {
+      return normalizedFilePath;
+    }
+
+    if (normalizedFilePath === this.root) {
+      return '';
+    }
+
+    if (normalizedFilePath.startsWith(`${this.root}/`)) {
+      return normalizedFilePath.slice(this.root.length + 1);
+    }
+
+    return normalizedFilePath;
+  }
+
   async init(): Promise<void> {
     this.session = new inspector.Session();
     this.session.connect();
@@ -60,7 +82,14 @@ export class CoverageProvider implements RstestCoverageProvider {
     });
   }
 
-  async collect(options?: {
+  collect(options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): Promise<CoverageMap | null> {
+    return this.collectImpl(options);
+  }
+
+  private async collectImpl(options?: {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
   }): Promise<CoverageMap | null> {
@@ -141,11 +170,10 @@ export class CoverageProvider implements RstestCoverageProvider {
           converter.destroy();
 
           for (const key of Object.keys(istanbulData)) {
-            // Apply include/exclude logic on the resolved original file path
-            const originalTestPath =
-              this.root && key.startsWith(this.root)
-                ? key.slice(this.root.length).replace(/^\/+/, '')
-                : key;
+            // Apply include/exclude rules to a normalized project-relative path
+            // so Windows drive letters and path separators don't prevent setup
+            // files such as `rstest.setup.ts` from being excluded.
+            const originalTestPath = this.toProjectRelativePath(key);
 
             if (
               this.isExcluded(originalTestPath) ||
@@ -168,6 +196,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   createCoverageMap(): CoverageMap {
     return istanbulLibCoverage.createCoverageMap({});
   }
+
   async generateCoverageForUntestedFiles({
     files,
   }: {
@@ -206,6 +235,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
     return results.filter((res): res is FileCoverageData => res !== null);
   }
+
   async generateReports(
     coverageMap: CoverageMap,
     options?: CoverageOptions,
@@ -230,6 +260,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
   }
+
   cleanup(): void {
     if (this.session) {
       this.session.disconnect();
