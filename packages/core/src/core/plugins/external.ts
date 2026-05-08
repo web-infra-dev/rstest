@@ -206,7 +206,6 @@ const autoExternalNodeModules: (
       );
 
       if (
-        // biome-ignore lint/complexity/useOptionalChain: type error
         normalizedResolvePath &&
         normalizedResolvePath.includes(NODE_MODULES_PATH_SEGMENT) &&
         !shouldBundleByResolvedPath &&

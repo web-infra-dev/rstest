@@ -1,5 +1,4 @@
 import { describe, expect, it, rstest } from '@rstest/core';
-// biome-ignore lint/performance/noNamespaceImport: this test verifies spyOn behavior against a module namespace.
 import * as utils from './fixtures/util';
 
 describe('test spyOn', () => {

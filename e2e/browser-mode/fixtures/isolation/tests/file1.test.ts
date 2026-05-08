@@ -18,7 +18,6 @@ describe('file1 isolation', () => {
   });
 
   it('should persist cookie state', () => {
-    // biome-ignore lint/suspicious/noDocumentCookie: test
     document.cookie = 'rstest_cookie=file1; path=/';
     expect(document.cookie).toContain('rstest_cookie=file1');
   });

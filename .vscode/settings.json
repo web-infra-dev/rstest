@@ -14,14 +14,7 @@
     "**/.DS_Store": true
   },
   "editor.codeActionsOnSave": {
-    "source.organizeImports": "never",
-    "source.organizeImports.biome": "explicit"
-  },
-  "[javascript]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-  "[javascriptreact]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "source.organizeImports": "never"
   },
   "[json5]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -38,12 +31,6 @@
   "[md]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "[typescript]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-  "[typescriptreact]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
   "[css]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -58,5 +45,6 @@
     "packages/**/*/rstest.config.ts",
     "examples/**/*/rstest.config.ts",
     "e2e/rstest.config.ts"
-  ]
+  ],
+  "editor.defaultFormatter": "esbenp.prettier-vscode"
 }

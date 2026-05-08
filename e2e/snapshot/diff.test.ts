@@ -13,7 +13,6 @@ const shouldExpectColor =
     (process.stdout.isTTY && process.env.TERM !== 'dumb') ||
     process.env.CI !== undefined);
 const vtControlSequenceRegex =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching VT control sequences
   /(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])/;
 
 it('should show snapshot diff details', async () => {

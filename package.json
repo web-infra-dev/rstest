@@ -10,8 +10,8 @@
     "check-spell": "pnpx cspell && heading-case",
     "check-unused": "knip",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
-    "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
-    "lint": "biome check . --error-on-warnings && pnpm run check-spell && pnpm lint:type",
+    "format": "prettier --write . && heading-case --write",
+    "lint": "prettier --check . && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
     "prepare": "lefthook install && pnpm run build",
     "test": "rstest",
@@ -20,7 +20,6 @@
     "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
     "@rsdoctor/rspack-plugin": "^1.5.9",
     "@rslint/core": "^0.5.1",
     "@rstest/core": "workspace:*",
@@ -45,7 +44,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "@biomejs/biome",
       "core-js",
       "lefthook"
     ],
@@ -57,9 +55,6 @@
           "vue": "^3.5.17"
         }
       }
-    },
-    "ignoredBuiltDependencies": [
-      "@biomejs/biome"
-    ]
+    }
   }
 }

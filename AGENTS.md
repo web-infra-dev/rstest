@@ -39,7 +39,7 @@ pnpm install                  # Install all workspace dependencies
 pnpm build                    # Build all packages (excludes examples)
 pnpm test                     # Run unit tests via rstest
 pnpm e2e                      # Run e2e tests
-pnpm lint                     # Biome check + spell check + type lint
+pnpm lint                     # Prettier check + spell check + type lint
 pnpm format                   # Prettier format
 pnpm typecheck                # Type check all packages
 
@@ -50,7 +50,6 @@ pnpm --filter @rstest/core test
 pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
 # File-scoped (faster feedback)
-pnpm biome check --write path/to/file.ts   # Lint + auto-fix
 pnpm prettier --write path/to/file.ts       # Format
 pnpm tsc --noEmit path/to/file.ts           # Type check
 ```

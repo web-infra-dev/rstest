@@ -8,7 +8,6 @@ const __dirname = dirname(__filename);
 
 const escapeChar = '\u001b';
 const vtControlSequenceRegex =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally matching VT control sequences
   /(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])/;
 
 describe('ansi', () => {
