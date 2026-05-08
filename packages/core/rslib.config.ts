@@ -18,8 +18,7 @@ export default defineConfig({
         advancedEsm: true,
       },
       dts: {
-        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
-        tsgo: !process.env.CI,
+        tsgo: true,
         bundle: process.env.SOURCEMAP
           ? false
           : {
@@ -138,8 +137,7 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2023',
       dts: {
-        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
-        tsgo: !process.env.CI,
+        tsgo: true,
         bundle: true,
       },
       source: {
