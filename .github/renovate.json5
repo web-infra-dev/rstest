@@ -63,8 +63,6 @@
   ignoreDeps: [
     // manually update some packages
     'pnpm',
-    '@rspack/core',
-    '@rspack/core-canary',
     // align Node.js version minimum requirements
     '@types/node',
     'node',
