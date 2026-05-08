@@ -7,6 +7,10 @@ it('should test json file correctly', async () => {
   // will bundle json file during build
   const jsonA = await import('./test.json');
 
+  // Compare fields, not the namespace wrapper — runtime and bundled paths
+  // produce different shells (runtime: plain `{ ...content, default }`;
+  // bundled: webpack's `__esModule`/`Symbol.toStringTag` namespace).
   expect(json.value).toBe(123);
-  expect(json).toEqual(jsonA);
+  expect(jsonA.value).toBe(123);
+  expect(json.default).toEqual(jsonA.default);
 });
