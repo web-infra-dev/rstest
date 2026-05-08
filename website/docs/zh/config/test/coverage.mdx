@@ -1,5 +1,5 @@
 ---
-description: 选择覆盖率收集方式。目前仅支持 istanbul。
+description: 选择覆盖率收集方式，支持 istanbul 和 v8。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -13,7 +13,7 @@ import { ApiMeta } from '@components/ApiMeta';
 ```ts
 type CoverageOptions = {
   enabled?: boolean;
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
   include?: string[];
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
@@ -73,10 +73,10 @@ export default defineConfig({
 
 ### provider
 
-- **类型：** `'istanbul'`
+- **类型：** `'istanbul' | 'v8'`
 - **默认值：** `'istanbul'`
 
-选择覆盖率收集方式。目前仅支持 [istanbul](https://istanbul.js.org/)。
+选择覆盖率收集方式。Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8`。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -84,7 +84,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   coverage: {
     enabled: true,
-    provider: 'istanbul',
+    provider: 'v8',
   },
 });
 ```
@@ -100,6 +100,16 @@ import { PackageManagerTabs } from '@theme';
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
 `@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
+
+#### V8 provider
+
+`v8` provider 基于 Node.js inspector precise coverage 收集数据，并通过 `v8-to-istanbul` 转换为 Istanbul 格式。
+
+要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。
+
+<PackageManagerTabs command="add @rstest/coverage-v8 -D" />
+
+由于底层覆盖率数据来自 Node.js / V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同 Node.js 或 V8 版本之间可能存在轻微差异。
 
 ### include
 
