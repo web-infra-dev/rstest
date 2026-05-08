@@ -38,8 +38,20 @@ export const getIncludedFiles = async (
         !item.startsWith(rootPath) &&
         !item.startsWith('./'),
     );
+
+    const matchesBareExclude = (file: string, exclude: string): boolean => {
+      const normalizedFile = normalize(file);
+      const normalizedExclude = normalize(exclude);
+
+      return (
+        normalizedFile === normalizedExclude ||
+        normalizedFile.endsWith(`/${normalizedExclude}`) ||
+        normalizedFile.includes(`/${normalizedExclude}/`)
+      );
+    };
+
     return allFiles.filter((file) => {
-      return !excludes.some((exclude) => file.includes(exclude));
+      return !excludes.some((exclude) => matchesBareExclude(file, exclude));
     });
   }
 
