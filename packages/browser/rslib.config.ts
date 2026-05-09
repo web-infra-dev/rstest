@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
 import { dirname, resolve } from 'pathe';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const require = createRequire(import.meta.url);
@@ -10,6 +11,7 @@ const browserUiRoot = dirname(
 const browserUiDist = resolve(browserUiRoot, 'dist');
 
 export default defineConfig({
+  plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest-browser',

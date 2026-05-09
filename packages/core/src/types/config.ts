@@ -86,6 +86,9 @@ export type RstestOutputConfig = Pick<
   bundleDependencies?: boolean | BundleDependencyPattern[];
 };
 
+/**
+ * @internal
+ */
 export type NormalizedOutputConfig = Partial<
   Omit<RstestOutputConfig, 'distPath'>
 > & {
@@ -559,6 +562,9 @@ type OptionalKeys =
   | 'extends'
   | 'shard';
 
+/**
+ * @internal
+ */
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
   provider: 'playwright';
@@ -570,6 +576,9 @@ export type NormalizedBrowserModeConfig = {
   providerOptions: Record<string, unknown>;
 };
 
+/**
+ * @internal
+ */
 export type NormalizedConfig = Required<
   Omit<
     RstestConfig,
@@ -599,6 +608,9 @@ export type NormalizedConfig = Required<
     output: NormalizedOutputConfig;
   };
 
+/**
+ * @internal
+ */
 export type NormalizedProjectConfig = Required<
   Omit<
     NormalizedConfig,

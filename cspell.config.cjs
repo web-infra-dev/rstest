@@ -19,6 +19,10 @@ module.exports = {
     'pnpm-lock.yaml',
     'LICENSE.md',
     'e2e/**',
+    // api-extractor generated reports — content mirrors the package's d.ts
+    '**/etc/*.api.md',
+    '**/etc/temp/**',
+    '**/etc/*.api.json',
   ],
   flagWords: banWords,
   dictionaries: ['dictionary'],

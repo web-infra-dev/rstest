@@ -1,0 +1,43 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+  "tagDefinitions": [
+    {
+      "tagName": "@default",
+      "syntaxKind": "block",
+      "allowMultiple": false
+    },
+    {
+      "tagName": "@cliDefault",
+      "syntaxKind": "block",
+      "allowMultiple": false
+    },
+    {
+      "tagName": "@cliFlag",
+      "syntaxKind": "block",
+      "allowMultiple": false
+    },
+    {
+      "tagName": "@since",
+      "syntaxKind": "block",
+      "allowMultiple": false
+    }
+  ],
+  "supportForTags": {
+    "@default": true,
+    "@cliDefault": true,
+    "@cliFlag": true,
+    "@since": true,
+    "@param": true,
+    "@returns": true,
+    "@example": true,
+    "@see": true,
+    "@deprecated": true,
+    "@remarks": true,
+    "@throws": true,
+    "@public": true,
+    "@internal": true,
+    "@beta": true,
+    "@alpha": true,
+    "@experimental": true
+  }
+}

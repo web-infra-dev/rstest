@@ -16,6 +16,11 @@ export * from './runtime/api/public';
 export type {
   CoverageOptions,
   CoverageProvider,
+  /**
+   * @internal — exposed for first-party coverage providers (e.g.
+   * `@rstest/coverage-istanbul`). Not part of the public surface; use
+   * {@link CoverageOptions} instead.
+   */
   NormalizedCoverageOptions,
   RsbuildPlugin,
   RstestConfig,

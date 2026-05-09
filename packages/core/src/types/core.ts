@@ -14,14 +14,23 @@ import type {
   TestResult,
 } from './testSuite';
 
+/**
+ * @internal
+ */
 export type ProjectEntries = {
   entries: Record<string, string>;
   fileFilters?: string[];
 };
 
 export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
+/**
+ * @internal
+ */
 export type FileFilterMode = 'fuzzy' | 'exact';
 
+/**
+ * @internal
+ */
 export type Project = { config: RstestConfig; configFilePath?: string };
 
 export type ProjectContext = {
@@ -44,6 +53,9 @@ type RunningModules = Map<
   }
 >;
 
+/**
+ * @internal
+ */
 export type RstestTestState = {
   getRunningModules: () => RunningModules;
   getTestModules: () => TestFileResult[];
@@ -51,6 +63,9 @@ export type RstestTestState = {
   getTestFiles: () => string[] | undefined;
 };
 
+/**
+ * @internal
+ */
 export type RstestContext = {
   /** The Rstest core version. */
   version: string;
@@ -96,6 +111,9 @@ export type RstestContext = {
   };
 };
 
+/**
+ * @internal
+ */
 export type ListCommandOptions = {
   filesOnly?: boolean;
   json?: boolean | string;
@@ -111,6 +129,9 @@ export type ListCommandResult = {
   errors?: FormattedError[];
 };
 
+/**
+ * @internal
+ */
 export type RstestInstance = {
   context: RstestContext;
   runTests: () => Promise<void>;

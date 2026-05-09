@@ -2,6 +2,8 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
+    "api:check": "node --experimental-strip-types scripts/checkApi.mts",
+    "api:update": "UPDATE_API=1 node --experimental-strip-types scripts/checkApi.mts",
     "bench:cpu": "pnpm --filter @rstest/benchmarks bench:cpu",
     "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
@@ -20,6 +22,8 @@
     "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
   "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.7",
+    "@microsoft/tsdoc-config": "^0.18.1",
     "@rsdoctor/rspack-plugin": "^1.5.9",
     "@rslint/core": "^0.5.1",
     "@rstest/core": "workspace:*",
@@ -35,6 +39,8 @@
     "playwright": "^1.59.1",
     "prettier": "^3.8.3",
     "prettier-plugin-packagejson": "^3.0.2",
+    "rsbuild-plugin-arethetypeswrong": "^0.3.1",
+    "rsbuild-plugin-publint": "^0.3.4",
     "typescript": "^6.0.3"
   },
   "packageManager": "pnpm@10.12.4",

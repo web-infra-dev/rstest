@@ -175,6 +175,9 @@ export type Fixtures<
     | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
 };
 
+/**
+ * @internal
+ */
 export type NormalizedFixture = {
   isFn: boolean;
   deps?: string[];
@@ -182,6 +185,9 @@ export type NormalizedFixture = {
   options?: FixtureOptions;
 };
 
+/**
+ * @internal
+ */
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
 export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {

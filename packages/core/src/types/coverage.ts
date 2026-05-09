@@ -142,6 +142,9 @@ export type CoverageOptions = {
   allowExternal?: boolean;
 };
 
+/**
+ * @internal
+ */
 export type NormalizedCoverageOptions = Required<
   Omit<CoverageOptions, 'thresholds' | 'include'>
 > & {

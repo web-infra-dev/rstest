@@ -52,3 +52,10 @@ lefthook-local.yml
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/
+
+# api-extractor scratch directory (the reportFolder etc/*.api.md/json files
+# are committed; only the temp/ working dir is ignored)
+packages/*/etc/temp/
+# api-extractor docModel output is generated; we commit only the *.api.md
+# review files and not the larger *.api.json artifact (consumed by tooling).
+packages/*/etc/*.api.json

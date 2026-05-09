@@ -71,6 +71,31 @@ _Note_: E2E tests and examples consume built package output — rebuild affected
 - Don't use namespace imports like `import * as foo from 'foo'` unless the module shape requires it
 - Don't make repo-wide rewrites unless explicitly asked
 
+## Public API conventions
+
+`pnpm api:check` (drift detection via `@microsoft/api-extractor`) is the audit trail for the v1 surface. `pnpm build` runs publint + attw via rslib plugins on every package.
+
+- **Default visibility is public.** Any symbol exported from a public entry (`packages/*/src/index.ts`, `packages/core/src/browser.ts`) is part of the v1 contract unless explicitly tagged.
+- **Mark internal types with `@internal`** in TSDoc. The symbol still ships in the rolled `.d.ts` for cross-package consumption but is hidden from the user-facing report.
+- **Every optional config field needs `@default <literal>`** — the value is the source of truth for documentation. Use `@default {expression}` form when the literal cannot be expressed simply.
+- **Custom TSDoc tags** (registered in `scripts/tsdoc.shared.json`):
+  - `@cliDefault <literal>` — when the CLI flag default differs from the config default (e.g. `bail`).
+  - `@cliFlag <name>` — when the CLI name cannot be derived from the field name via `camel→kebab`.
+  - `@since <x.y.z>` — version in which the symbol was introduced (mirrors JSDoc convention).
+
+### Workflow
+
+| When you change…               | Run                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------ |
+| A public type                  | `pnpm api:update` and commit the updated `packages/*/etc/*.api.md`                   |
+| A `package.json` `exports` map | `pnpm build` (publint + attw run as rslib plugins)                                   |
+| A public config option         | Sync `website/docs/{en,zh}/config/test/<kebab>.mdx` and add `<ApiMeta addedVersion>` |
+
+Env var escape hatches:
+
+- `UPDATE_API=1 pnpm api:check` — same as `pnpm api:update`; rewrites `etc/*.api.md` baselines instead of failing on drift.
+- `SKIP_PUBLISH_CHECK=1 pnpm build` — skips publint + attw plugins for fast local iteration. CI never sets this.
+
 ## Skills
 
 Available workflow skills in `.agents/skills/`:

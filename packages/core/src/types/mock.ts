@@ -89,6 +89,9 @@ export type MockContext<T extends FunctionLike = FunctionLike> = {
 
 type Procedure = (...args: any[]) => any;
 // pick a single function type from function overloads, unions, etc...
+/**
+ * @internal
+ */
 export type NormalizedProcedure<T extends Procedure> = (
   ...args: Parameters<T>
 ) => ReturnType<T>;
