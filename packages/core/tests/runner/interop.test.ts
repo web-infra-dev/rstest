@@ -117,6 +117,24 @@ describe('dynamic-import CJS interop pipeline', () => {
     });
   });
 
+  // Regression: `module.exports = <truthy primitive>` (e.g. a constant-export
+  // module). The `has` trap previously ran `prop in defaultExport` against the
+  // primitive and threw `TypeError: Cannot use 'in' operator to search for ...
+  // in 42`.
+  describe('primitive module.exports', () => {
+    const ns = interop({ default: 42 });
+
+    it('does not throw on `prop in ns` for non-default keys', () => {
+      expect(() => 'foo' in ns).not.toThrow();
+      expect('foo' in ns).toBe(false);
+    });
+
+    it('still resolves default via get and has', () => {
+      expect(ns.default).toBe(42);
+      expect('default' in ns).toBe(true);
+    });
+  });
+
   describe('plain CJS: no __esModule', () => {
     const cjsExports = { foo: 'foo', bar: 'bar' };
     const ns = interop(buildNamespace(cjsExports, ['foo', 'bar']));

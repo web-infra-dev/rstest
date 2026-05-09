@@ -70,7 +70,9 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
       if (prop === 'default') {
         return defaultExport !== undefined;
       }
-      return prop in mod || (defaultExport && prop in defaultExport);
+      return (
+        prop in mod || (!isPrimitive(defaultExport) && prop in defaultExport)
+      );
     },
     getOwnPropertyDescriptor(mod, prop): any {
       const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
