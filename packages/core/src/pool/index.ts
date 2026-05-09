@@ -24,10 +24,12 @@ import {
   getForceColorEnv,
   isDeno,
   needFlagExperimentalDetectModule,
+  toError,
 } from '../utils';
 import type { TraceEvent } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { Pool } from './pool';
+import type { PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -153,6 +155,7 @@ type PoolDispatchParams = {
  */
 const buildTask = async ({
   type,
+  workerKind,
   entryInfo,
   index,
   context,
@@ -166,6 +169,7 @@ const buildTask = async ({
   rpcMethods,
 }: {
   type: 'run' | 'collect';
+  workerKind: PoolWorkerKind;
   entryInfo: EntryInfo;
   index: number;
   context: RstestContext;
@@ -182,7 +186,7 @@ const buildTask = async ({
     filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
 
   return {
-    worker: 'forks' as const,
+    worker: workerKind,
     type,
     options: {
       entryInfo,
@@ -220,7 +224,7 @@ const workerErrorToResult = (
   projectName: string,
   context: RstestContext,
 ): TestFileResult => {
-  const error = err instanceof Error ? err : new Error(String(err));
+  const error = toError(err);
 
   (error as any).fullStack = true;
   if (error.message.includes('Worker exited unexpectedly')) {
@@ -334,6 +338,8 @@ export const createPool = async ({
     normalizedConfig: { pool: poolOptions, isolate },
     reporters,
   } = context;
+
+  const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
   const threadsCount =
     context.command === 'watch'
@@ -467,6 +473,7 @@ export const createPool = async ({
         entries.map(async (entryInfo, index) => {
           const task = await buildTask({
             type: 'run',
+            workerKind,
             entryInfo,
             index,
             context,
@@ -533,6 +540,7 @@ export const createPool = async ({
         entries.map(async (entryInfo, index) => {
           const task = await buildTask({
             type: 'collect',
+            workerKind,
             entryInfo,
             index,
             context,

@@ -84,6 +84,9 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
+export const toError = (err: unknown): Error =>
+  err instanceof Error ? err : new Error(String(err));
+
 export const prettyTime = (milliseconds: number): string => {
   if (milliseconds < 1000) {
     return `${Math.round(milliseconds)}ms`;

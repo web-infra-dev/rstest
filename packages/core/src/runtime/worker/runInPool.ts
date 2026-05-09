@@ -12,7 +12,7 @@ import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { PhaseTracker } from './phaseTracker';
-import { createForksRpcOptions, createRuntimeRpc } from './rpc';
+import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -125,7 +125,7 @@ const preparePool = async (
 
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
-    createForksRpcOptions({ dispose: disposeFns }),
+    createWorkerRpcOptions({ dispose: disposeFns }),
   );
 
   globalCleanups.push(() => {

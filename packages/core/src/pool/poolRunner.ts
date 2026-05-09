@@ -1,5 +1,6 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
+import { toError } from '../utils';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
@@ -59,9 +60,6 @@ const createDeferred = <T = void>(): Deferred<T> => {
   });
   return { promise, resolve, reject };
 };
-
-const toError = (err: unknown): Error =>
-  err instanceof Error ? err : new Error(String(err));
 
 let nextTaskSeq = 0;
 

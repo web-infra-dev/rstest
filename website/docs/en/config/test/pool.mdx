@@ -1,14 +1,16 @@
 ---
-description: Options of pool used to run tests in. Includes practical guidance, options, and examples for real projects.
+description: Options of pool used to run tests in.
 overviewHeaders: []
 ---
+
+import { ApiMeta } from '@components/ApiMeta';
 
 # pool
 
 - **Type:**
 
 ```ts
-export type RstestPoolType = 'forks';
+export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
@@ -38,42 +40,32 @@ const defaultPool = {
 
 Options of pool used to run tests in.
 
-## Example
+## Pool types
 
-### Shorthand
+Rstest supports two pool types. Both share the same scheduler, RPC, and result-aggregation logic — they differ only in how workers are spawned.
 
-You can use a string shorthand to set the pool type:
+### forks
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+Each test file runs in a separate Node.js child process spawned via `child_process.fork`. Every worker has its own V8 heap, so process-wide state (`process.chdir`, signal handlers, environment mutations, native module bindings) cannot leak between files.
 
-export default defineConfig({
-  pool: 'forks',
-});
-```
+### threads
 
-This is equivalent to:
+<ApiMeta addedVersion="0.10.0" />
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+Each test file runs in a Node.js worker thread spawned via `node:worker_threads`. Workers share the parent process's V8 heap and stdio.
 
-export default defineConfig({
-  pool: {
-    type: 'forks',
-  },
-});
-```
+## Choose a pool type
 
-Run all tests inside a single child process.
+`forks` is the default — most existing test code relies on per-file process isolation. If you're not sure, keep using `forks`.
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+Consider switching to `threads` when:
 
-export default defineConfig({
-  pool: {
-    type: 'forks',
-    maxWorkers: 1,
-    minWorkers: 1,
-  },
-});
-```
+- Your suite is dominated by small, fast test files and worker startup eats a noticeable share of total runtime — `worker_threads` spawns roughly 10× faster than `child_process.fork`, making watch-mode reruns feel instant.
+- Parallel runs are memory-bound on your machine, or you see OOM — threads share the parent V8 heap instead of each carrying their own instance.
+- Your tests don't mutate cwd / env vars / signal handlers and don't rely on per-file resets of process-level state.
+
+Stick with `forks` when:
+
+- Your tests mutate `process.chdir`, env vars, or signal handlers and rely on per-file isolation.
+- Your project depends on native modules that assume per-process initialization (e.g. `better-sqlite3`, `sharp`, `canvas`).
+- You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
