@@ -49,7 +49,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -265,7 +265,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -296,7 +296,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -327,7 +327,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -358,7 +358,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -503,6 +503,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
@@ -623,7 +624,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -839,7 +840,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -870,7 +871,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -901,7 +902,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -932,7 +933,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1077,6 +1078,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
@@ -1184,7 +1186,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -1400,7 +1402,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1431,7 +1433,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1462,7 +1464,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1493,7 +1495,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1637,6 +1639,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
@@ -1743,7 +1746,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -1959,7 +1962,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -1990,7 +1993,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2021,7 +2024,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2052,7 +2055,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2199,6 +2202,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
@@ -2269,7 +2273,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
     },
     "oneOf": [
       {
-        "resourceQuery": /\\^\\\\\\?url\\$/,
+        "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -2422,7 +2426,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
     },
     "oneOf": [
       {
-        "resourceQuery": /\\^\\\\\\?url\\$/,
+        "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -2642,7 +2646,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -2858,7 +2862,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2889,7 +2893,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2920,7 +2924,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -2951,7 +2955,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -3096,6 +3100,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
@@ -3203,7 +3208,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "resolve": {
               "preferRelative": true,
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/cssUrlLoader.mjs",
@@ -3419,7 +3424,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/image/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -3450,7 +3455,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/svg/[name].[contenthash:10].svg",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -3481,7 +3486,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/media/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -3512,7 +3517,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "generator": {
               "filename": "static/font/[name].[contenthash:10][ext]",
             },
-            "resourceQuery": /\\^\\\\\\?url\\$/,
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/resource",
           },
           {
@@ -3657,6 +3662,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         {
           "hoistMockModule": true,
           "importMetaPathName": true,
+          "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
