@@ -115,10 +115,7 @@ export default defineConfig({
 
 **2. 在范围缩小后查看更细的耗时分布**
 
-当已经知道慢点集中在哪些测试文件或测试用例上，但仍不清楚具体耗时来自哪一段运行时代码时，可以进一步使用下文的 [Samply](#使用-samply) 或 [Node.js profiling](#nodejs-profiling)。
-
-- `Samply` 适合查看 rstest 主进程与测试进程的详细耗时分布。
-- `Node.js profiling` 适合继续分析 Node.js 侧的 CPU 或内存开销。
+当已经知道慢点集中在哪些测试文件或测试用例上，但仍不清楚具体耗时来自哪一段运行时代码时，需要切换到 profiler。在 [Samply](#使用-samply) 和 [Node.js profiling](#nodejs-profiling) 之间如何选，参考下文 [Profiler](#profiler)。
 
 ## 使用 Rsdoctor
 
@@ -163,13 +160,35 @@ import { PackageManagerTabs } from '@theme';
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
+## Profiler
+
+根据需要分析的目标选择合适的 profiler：
+
+- **CPU 耗时分布**：推荐使用 [Samply](#使用-samply)，可同时分析 rstest 主进程和 worker fork 进程。
+- **内存分配**：使用 `--heap-prof`，参见 [Node.js profiling](#nodejs-profiling)。Samply 不采集内存数据。
+- **断点 / 单步调试**：使用 `--inspect`，参见 [Node.js profiling](#nodejs-profiling)。
+
 ## 使用 Samply
 
 > 注意：为了能在 macOS 中对 Node.js 侧代码进行 profiling 需要 22.16+ 版本。
 
-[Samply](https://github.com/mstange/samply) 支持同时对 Rstest 主进程和测试进程进行性能分析，可通过如下步骤进行完整的性能分析:
+[Samply](https://github.com/mstange/samply) 支持同时对 Rstest 主进程和测试进程进行性能分析。
 
-运行以下命令启动性能分析：
+### 使用 `--profile` 快速上手
+
+在 rstest 命令上加 `--profile`，rstest 会替你解析好 entry 路径并打印一条可直接执行的 samply 命令：
+
+```bash
+rstest --profile
+```
+
+如果已安装 samply，rstest 会直接打印命令供你复制运行；如果未安装，rstest 会输出安装指引（`cargo install samply`，macOS 也可以 `brew install samply`），并附带安装后可执行的命令。
+
+我们刻意不让 rstest 直接 spawn samply——只解析并打印命令，这样 signal、exit code、shell history 等都仍然由 samply 自己接管。
+
+### 手动执行
+
+也可以不通过 `--profile`，直接运行 samply：
 
 ```bash
 samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack {your_node_modules_folder}/@rstest/core/bin/rstest.js

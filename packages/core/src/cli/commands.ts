@@ -68,6 +68,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
   [
+    '--profile [mode]',
+    'Print a ready-to-run samply command to CPU-profile this rstest run (default mode: samply)',
+  ],
+  [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
   ],
