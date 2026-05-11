@@ -1266,7 +1266,7 @@ importers:
     devDependencies:
       '@rsbuild/core':
         specifier: ^2.0.3
-        version: 2.0.3
+        version: 2.0.5
       '@rslib/core':
         specifier: 0.21.3
         version: 0.21.3(@microsoft/api-extractor@7.58.7(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260505.1)(typescript@6.0.3)
