@@ -41,7 +41,7 @@
     "@rstest/tsconfig": "workspace:*"
   },
   "peerDependencies": {
-    "@rsbuild/core": "^2.0.3",
+    "@rsbuild/core": "^2.0.5",
     "@rstest/core": ">=0.7.7"
   },
   "publishConfig": {
