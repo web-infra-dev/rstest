@@ -14,7 +14,7 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.0.3",
+    "@rsbuild/core": "^2.0.5",
     "@rsbuild/plugin-react": "^2.0.0",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@testing-library/dom": "^10.4.1",

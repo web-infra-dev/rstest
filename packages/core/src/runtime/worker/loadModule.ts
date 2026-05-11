@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger';
 import {
   asModule,
   clearSyntheticModuleCache,
+  createInteropProxy,
   interopModule,
   shouldInterop,
 } from './interop';
@@ -75,10 +76,20 @@ const defineRstestDynamicImport =
     interopDefault: boolean;
     assetFiles: Record<string, string>;
   }) =>
-  async (specifier: string, importAttributes: ImportCallOptions) => {
+  async (
+    specifier: string,
+    importAttributes: ImportCallOptions,
+    origin?: string,
+  ) => {
+    // `origin` is the absolute path of the source module that produced the
+    // `import()` call, injected by rspack's `RstestPlugin` when
+    // `injectDynamicImportOrigin` is enabled. Falling back to `testPath`
+    // keeps the vm `importModuleDynamically` callback (which has no origin
+    // to pass) working as before.
+    const resolveBase = origin ?? testPath;
     const resolvedPath = isAbsolute(specifier)
       ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(testPath));
+      : import.meta.resolve(specifier, pathToFileURL(resolveBase));
 
     // Use `.href` rather than `.pathname` so Windows absolute specifiers
     // round-trip through Node's ESM loader as valid `file:///D:/...` URLs
@@ -139,38 +150,7 @@ const defineRstestDynamicImport =
         return asModule(mod, modulePath, defaultExport);
       }
 
-      return new Proxy(mod, {
-        get(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport;
-          }
-          /**
-           * interop invalid named exports. eg:
-           * exports: module.exports = { a: 1 }
-           * import: import { a } from 'mod';
-           */
-          return mod[prop] ?? defaultExport?.[prop];
-        },
-        has(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport !== undefined;
-          }
-          return prop in mod || (defaultExport && prop in defaultExport);
-        },
-        getOwnPropertyDescriptor(mod, prop): any {
-          const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
-          if (descriptor) {
-            return descriptor;
-          }
-          if (prop === 'default' && defaultExport !== undefined) {
-            return {
-              value: defaultExport,
-              enumerable: true,
-              configurable: true,
-            };
-          }
-        },
-      });
+      return createInteropProxy(mod, defaultExport);
     }
     return importedModule;
   };

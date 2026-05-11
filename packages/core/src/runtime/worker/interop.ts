@@ -40,6 +40,71 @@ export function interopModule(mod: any): { mod: any; defaultExport: any } {
   return { mod, defaultExport };
 }
 
+/**
+ * Wrap an interop'd module in a Proxy that exposes a synthetic `default`
+ * (the unwrapped value from `interopModule`) across property access, `in`,
+ * descriptor lookup, and enumeration. Without an `ownKeys` trap, spread /
+ * `Object.keys` / pretty-format silently drop the synthetic key and diverge
+ * from a real Module Namespace.
+ *
+ * When `mod` is non-extensible (e.g., `module.exports = Object.freeze({...})`),
+ * `ownKeys` / `getOwnPropertyDescriptor` skip synthesis — Proxy invariants
+ * forbid reporting keys absent from a non-extensible target. `get` / `has`
+ * still resolve `ns.default` and `'default' in ns`. Mirrors
+ * https://github.com/vitest-dev/vitest/issues/2596.
+ */
+export function createInteropProxy(mod: any, defaultExport: any): any {
+  return new Proxy(mod, {
+    get(mod, prop) {
+      if (prop === 'default') {
+        return defaultExport;
+      }
+      /**
+       * interop invalid named exports. eg:
+       * exports: module.exports = { a: 1 }
+       * import: import { a } from 'mod';
+       */
+      return mod[prop] ?? defaultExport?.[prop];
+    },
+    has(mod, prop) {
+      if (prop === 'default') {
+        return defaultExport !== undefined;
+      }
+      return (
+        prop in mod || (!isPrimitive(defaultExport) && prop in defaultExport)
+      );
+    },
+    getOwnPropertyDescriptor(mod, prop): any {
+      const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
+      if (descriptor) {
+        return descriptor;
+      }
+      if (
+        prop === 'default' &&
+        defaultExport !== undefined &&
+        Object.isExtensible(mod)
+      ) {
+        return {
+          value: defaultExport,
+          enumerable: true,
+          configurable: true,
+        };
+      }
+    },
+    ownKeys(mod) {
+      const keys = Reflect.ownKeys(mod);
+      if (
+        defaultExport !== undefined &&
+        !keys.includes('default') &&
+        Object.isExtensible(mod)
+      ) {
+        keys.push('default');
+      }
+      return keys;
+    },
+  });
+}
+
 // Caches vm.SyntheticModule by resolved module id to avoid nodejs/node#54735:
 // repeatedly wrapping the same exports in fresh SyntheticModule instances
 // races the V8 module-graph evaluation and segfaults the worker. One instance

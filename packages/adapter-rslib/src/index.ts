@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { loadConfig, type RslibConfig, rsbuild } from '@rslib/core';
+import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 
 export interface WithRslibConfigOptions {
@@ -127,10 +127,10 @@ export function withRslibConfig(
     };
 
     const rslibConfig = Array.isArray(lib)
-      ? rsbuild.mergeRsbuildConfig<RslibConfig>(
+      ? (mergeRslibConfig(
           rawLibConfig as RslibConfig,
           libTestConfig as RslibConfig,
-        )
+        ) as RslibConfig)
       : (rawLibConfig as RslibConfig);
 
     let libDecoratorsVersion = rslibConfig.source?.decorators?.version;
