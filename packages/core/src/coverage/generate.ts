@@ -1,5 +1,6 @@
 import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
+import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
 import type { RstestContext } from '../types';
 import type {
@@ -61,6 +62,50 @@ export const getIncludedFiles = async (
 const isSameOrSubPath = (filePath: string, parentPath: string): boolean =>
   filePath === parentPath || filePath.startsWith(`${parentPath}/`);
 
+const getSetupCoverageExcludes = (context: RstestContext): Set<string> => {
+  const setupFiles = context.projects.flatMap(({ normalizedConfig }) => {
+    if (!normalizedConfig) {
+      return [];
+    }
+
+    return [
+      ...(normalizedConfig.setupFiles || []),
+      ...(normalizedConfig.globalSetup || []),
+    ];
+  });
+
+  return new Set(setupFiles.map((filePath) => normalize(filePath)));
+};
+
+const shouldExcludeSetupCoverageFile = (
+  filePath: string,
+  rootPath: string,
+  setupCoverageExcludes: Set<string>,
+): boolean => {
+  if (!setupCoverageExcludes.size) {
+    return false;
+  }
+
+  const normalizedFilePath = normalize(filePath);
+
+  if (setupCoverageExcludes.has(normalizedFilePath)) {
+    return true;
+  }
+
+  const relativeFilePath = normalize(relative(rootPath, normalizedFilePath));
+  if (relativeFilePath.startsWith('../')) {
+    return false;
+  }
+
+  return Array.from(setupCoverageExcludes).some((setupFile) => {
+    const relativeSetupPath = normalize(relative(rootPath, setupFile));
+    if (relativeSetupPath.startsWith('../')) {
+      return false;
+    }
+    return picomatch.isMatch(relativeFilePath, relativeSetupPath);
+  });
+};
+
 export async function generateCoverage(
   context: RstestContext,
   coverageMap: CoverageMap,
@@ -78,6 +123,7 @@ export async function generateCoverage(
       context.normalizedConfig.output?.distPath?.root || '',
     );
     const normalizedRootPath = normalize(rootPath);
+    const setupCoverageExcludes = getSetupCoverageExcludes(context);
     const absDistPathRoot = distPathRoot
       ? normalize(
           isAbsolute(distPathRoot)
@@ -99,6 +145,18 @@ export async function generateCoverage(
       if (
         normalizedFile.includes('webpack/runtime') ||
         normalizedFile.includes('rstest runtime')
+      ) {
+        return false;
+      }
+      // Keep setupFiles/globalSetup out of the final report for every provider.
+      // Istanbul already excludes them before instrumentation; V8 needs this
+      // post-collection pruning so both providers converge on the same output.
+      if (
+        shouldExcludeSetupCoverageFile(
+          normalizedFile,
+          normalizedRootPath,
+          setupCoverageExcludes,
+        )
       ) {
         return false;
       }

@@ -92,4 +92,116 @@ describe('generateCoverage', () => {
       rmSync(rootPath, { recursive: true, force: true });
     }
   });
+
+  it('filters setupFiles and globalSetup from the final coverage map for all providers', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const setupFile = path.join(rootPath, 'scripts', 'rstest.setup.ts');
+    const globalSetupFile = path.join(rootPath, 'scripts', 'global-setup.ts');
+    const sourceFile = path.join(rootPath, 'src', 'index.ts');
+
+    mkdirSync(path.dirname(setupFile), { recursive: true });
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(setupFile, 'export {};\n');
+    writeFileSync(globalSetupFile, 'export {};\n');
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const coveredFiles = new Map<string, FileCoverageData>();
+    const reportedFiles: string[][] = [];
+
+    const createCoverageMap = (): CoverageMap =>
+      ({
+        addFileCoverage(coverage: { path: string }) {
+          coveredFiles.set(coverage.path, coverage as FileCoverageData);
+        },
+        files() {
+          return Array.from(coveredFiles.keys());
+        },
+        filter(predicate: (filePath: string) => boolean) {
+          for (const filePath of Array.from(coveredFiles.keys())) {
+            if (!predicate(filePath)) {
+              coveredFiles.delete(filePath);
+            }
+          }
+        },
+        merge() {},
+      }) as CoverageMap;
+
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateReports(coverageMap) {
+        reportedFiles.push(coverageMap.files());
+      },
+    } satisfies CoverageProvider;
+
+    const coverageMap = createCoverageMap();
+    coverageMap.addFileCoverage({
+      path: sourceFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+      all: false,
+      _coverageSchema: 'test',
+      hash: sourceFile,
+    });
+    coverageMap.addFileCoverage({
+      path: setupFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+      all: false,
+      _coverageSchema: 'test',
+      hash: setupFile,
+    });
+    coverageMap.addFileCoverage({
+      path: globalSetupFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+      all: false,
+      _coverageSchema: 'test',
+      hash: globalSetupFile,
+    });
+
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: defaultCoverage,
+        output: {
+          distPath: {
+            root: 'dist/.rstest-temp',
+          },
+        },
+      },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'node',
+          normalizedConfig: {
+            setupFiles: [setupFile],
+            globalSetup: [globalSetupFile],
+          },
+        },
+      ],
+    } as RstestContext;
+
+    try {
+      await generateCoverage(context, coverageMap, provider);
+      expect(reportedFiles).toEqual([[sourceFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
 });
