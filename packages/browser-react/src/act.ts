@@ -10,8 +10,9 @@ function updateActEnvironment(): void {
   setActEnvironment(activeActs > 0);
 }
 
-// React 18+ exports act, React 17 has unstable_act
-const _act = (React as Record<string, unknown>).act as
+// React 18.3+: React.act. React 18.0–18.2: React.unstable_act.
+const _act = ((React as Record<string, unknown>).act ??
+  (React as Record<string, unknown>).unstable_act) as
   | ((callback: () => unknown) => Promise<void>)
   | undefined;
 

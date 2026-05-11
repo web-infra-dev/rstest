@@ -7,6 +7,7 @@
 export const BROWSER_PORTS = {
   basic: 5180,
   'browser-react': 5202,
+  'browser-react-17': 5234,
   'locator-api': 5226,
   list: 5204,
   'no-tests': 5206,

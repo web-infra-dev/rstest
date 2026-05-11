@@ -1,0 +1,15 @@
+{
+  "name": "@rstest/test-browser-react-17",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@rsbuild/plugin-react": "^2.0.0",
+    "@rstest/browser": "workspace:*",
+    "@rstest/browser-react": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@types/react": "^17.0.83",
+    "@types/react-dom": "^17.0.26",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  }
+}

@@ -233,7 +233,7 @@ Wraps state updates in React's `act()` for proper batching. Automatically manage
 function act(callback: () => unknown): Promise<void>;
 ```
 
-> **Note:** For React 17 (which doesn't export `act`), this function falls back to simple async execution.
+> **Note:** This is the React 18+ `act`. React 17 users should import from `@rstest/browser-react/react17`, which uses `act` from `react-dom/test-utils`.
 
 ### `cleanup()`
 
@@ -263,6 +263,23 @@ interface RenderConfiguration {
 - React 17, 18, and 19
 - Rstest browser mode (experimental)
 - Node.js >= 20.19.0
+
+### React 17
+
+The default entry (`@rstest/browser-react`) targets React 18+ and statically imports `react-dom/client`, which does not exist under React 17. React 17 users should import from the dedicated entry instead:
+
+```ts
+import {
+  render,
+  renderHook,
+  cleanup,
+  act,
+} from '@rstest/browser-react/react17';
+// or, without auto-cleanup:
+import { render, cleanup } from '@rstest/browser-react/react17/pure';
+```
+
+The `/react17` entry uses `ReactDOM.render` / `unmountComponentAtNode` and pulls `act` from `react-dom/test-utils`. No bundler configuration is required.
 
 ## License
 

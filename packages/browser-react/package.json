@@ -28,6 +28,14 @@
       "types": "./dist/pure.d.ts",
       "default": "./dist/pure.js"
     },
+    "./react17": {
+      "types": "./dist/index.react17.d.ts",
+      "default": "./dist/index.react17.js"
+    },
+    "./react17/pure": {
+      "types": "./dist/pure.react17.d.ts",
+      "default": "./dist/pure.react17.js"
+    },
     "./package.json": {
       "default": "./package.json"
     }

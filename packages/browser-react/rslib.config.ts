@@ -15,6 +15,8 @@ export default defineConfig({
           react: 'react',
           'react-dom': 'react-dom',
           'react-dom/client': 'react-dom/client',
+          // React 17 entry uses legacy ReactDOMTestUtils.act.
+          'react-dom/test-utils': 'react-dom/test-utils',
           'react/jsx-runtime': 'react/jsx-runtime',
           'react/jsx-dev-runtime': 'react/jsx-dev-runtime',
           // Keep @rstest/core as external
@@ -27,6 +29,8 @@ export default defineConfig({
     entry: {
       index: './src/index.ts',
       pure: './src/pure.tsx',
+      'index.react17': './src/index.react17.ts',
+      'pure.react17': './src/pure.react17.tsx',
     },
   },
   tools: {

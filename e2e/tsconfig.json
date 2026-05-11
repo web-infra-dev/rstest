@@ -14,6 +14,7 @@
     "projects/fixtures/",
     "projects/fixtures-shard/",
     "globals/fixtures/",
-    "browser-mode/fixtures/react/"
+    "browser-mode/fixtures/react/",
+    "browser-mode/fixtures/browser-react-17/"
   ]
 }
