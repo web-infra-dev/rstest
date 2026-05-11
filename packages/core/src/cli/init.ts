@@ -62,6 +62,7 @@ export type CommonOptions = {
     | {
         enabled?: boolean;
         allowExternal?: boolean;
+        provider?: 'istanbul' | 'v8';
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
@@ -86,6 +87,23 @@ export type CommonOptions = {
   bail?: number | boolean;
   shard?: string;
 };
+
+function coerceCliBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+  }
+
+  return undefined;
+}
 
 function mergeWithCLIOptions(
   config: RstestConfig,
@@ -155,14 +173,26 @@ function mergeWithCLIOptions(
 
   if (options.coverage !== undefined) {
     config.coverage ??= {};
+    if (
+      typeof options.coverage === 'object' &&
+      options.coverage !== null &&
+      options.coverage.enabled === undefined
+    ) {
+      config.coverage.enabled = true;
+    }
+
     if (typeof options.coverage === 'boolean') {
       config.coverage.enabled = options.coverage;
     } else {
-      if (options.coverage.enabled !== undefined) {
-        config.coverage.enabled = options.coverage.enabled;
+      const coverageEnabled = coerceCliBoolean(options.coverage.enabled);
+      if (coverageEnabled !== undefined) {
+        config.coverage.enabled = coverageEnabled;
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+      }
+      if (options.coverage.provider !== undefined) {
+        config.coverage.provider = options.coverage.provider;
       }
     }
   }
@@ -181,8 +211,9 @@ function mergeWithCLIOptions(
     if (typeof options.browser === 'boolean') {
       config.browser.enabled = options.browser;
     } else {
-      if (options.browser.enabled !== undefined) {
-        config.browser.enabled = options.browser.enabled;
+      const browserEnabled = coerceCliBoolean(options.browser.enabled);
+      if (browserEnabled !== undefined) {
+        config.browser.enabled = browserEnabled;
       }
       if (options.browser.name !== undefined) {
         config.browser.browser = options.browser.name;
