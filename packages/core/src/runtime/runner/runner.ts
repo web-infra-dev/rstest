@@ -27,7 +27,12 @@ import {
   runWithCurrentTask,
   setFallbackCurrentTask,
 } from '../worker/taskContext';
-import { handleFixtures } from './fixtures';
+import {
+  createFileFixtureStore,
+  type FileFixtureStore,
+  flushFileFixtures,
+  handleFixtures,
+} from './fixtures';
 import { getFileTaskId } from './index';
 import {
   getTestStatus,
@@ -42,6 +47,8 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  /** Per-file fixture store; recreated on every `runTests()` call. */
+  private fileFixtureStore: FileFixtureStore = createFileFixtureStore();
 
   async runTests({
     tests,
@@ -60,6 +67,10 @@ export class TestRunner {
     coverageProvider?: CoverageProvider;
   }): Promise<TestFileResult> {
     this.workerState = state;
+    // Fresh file-fixture store for each test file. Cleanups left over from a
+    // previous file (e.g. when isolate: false reuses the runner) would leak
+    // across files otherwise.
+    this.fileFixtureStore = createFileFixtureStore();
     const {
       runtimeConfig: { passWithNoTests, retry, maxConcurrency, bail },
       project,
@@ -498,6 +509,13 @@ export class TestRunner {
       afterEachListeners: [],
     });
 
+    // Drain file-scoped fixture cleanups (LIFO). Errors are surfaced as
+    // file-level errors so a flaky teardown does not silently fail.
+    const fixtureCleanupErrors = await flushFileFixtures(this.fileFixtureStore);
+    for (const err of fixtureCleanupErrors) {
+      errors.push(...(await formatTestError(err)));
+    }
+
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);
 
@@ -673,7 +691,11 @@ export class TestRunner {
 
     const context = this.createTestContext(test);
 
-    const { cleanups } = await handleFixtures(test, context);
+    const { cleanups } = await handleFixtures(
+      test,
+      context,
+      this.fileFixtureStore,
+    );
 
     // create test context
     Object.defineProperty(test, 'context', {

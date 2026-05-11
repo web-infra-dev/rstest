@@ -140,11 +140,19 @@ export type DescribeAPI = DescribeFn & {
   sequential: DescribeAPI;
 };
 
-interface FixtureOptions {
+export type FixtureScope = 'test' | 'file';
+
+export interface FixtureOptions {
   /**
    * Whether to automatically set up current fixture, even though it's not being used in tests.
    */
   auto?: boolean;
+  /**
+   * Lifetime of the fixture instance.
+   * - `test` (default): set up before each test, torn down after.
+   * - `file`: set up once on first use within a test file, torn down after the file's tests finish.
+   */
+  scope?: FixtureScope;
 }
 
 type Use<T> = (value: T) => Promise<void>;
@@ -175,25 +183,68 @@ export type Fixtures<
     | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
 };
 
+/**
+ * Helpers passed as the second argument to a builder-style fixture
+ * (i.e. `extend(name, opts?, fn)`).
+ */
+export interface ScopedFixtureHelpers {
+  /**
+   * Register a cleanup handler that runs when the fixture is torn down.
+   * - test scope: runs after the current test finishes.
+   * - file scope: runs after all tests in the file finish.
+   * Multiple `onCleanup` calls are allowed; they run in LIFO order.
+   */
+  onCleanup: (handler: () => void | Promise<void>) => void;
+}
+
+/**
+ * Builder-style fixture body: returns the fixture value and registers
+ * cleanup via the `onCleanup` helper.
+ */
+export type ScopedFixtureFn<V, ExtraContext = object> = (
+  context: ExtraContext & TestContext,
+  helpers: ScopedFixtureHelpers,
+) => V | Promise<V>;
+
+export type NormalizedFixtureStyle = 'use-callback' | 'return';
+
 export type NormalizedFixture = {
   isFn: boolean;
   deps?: string[];
   value: FixtureFn<any, any, any> | any;
   options?: FixtureOptions;
+  scope: FixtureScope;
+  style: NormalizedFixtureStyle;
 };
 
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
-export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
-  extend: <T extends Record<string, any> = object>(
+export interface TestExtendAPI<ExtraContext = object> {
+  /** Register fixtures using the object syntax. */
+  <T extends Record<string, any> = object>(
     fixtures: Fixtures<T, ExtraContext>,
-  ) => TestAPIs<{
+  ): TestAPIs<{
     [K in keyof T | keyof ExtraContext]: K extends keyof T
       ? T[K]
       : K extends keyof ExtraContext
         ? ExtraContext[K]
         : never;
   }>;
+  /** Register a single fixture using the builder syntax. */
+  <Name extends string, V>(
+    name: Name,
+    fn: ScopedFixtureFn<V, ExtraContext>,
+  ): TestAPIs<ExtraContext & { [K in Name]: V }>;
+  /** Register a single scoped fixture using the builder syntax. */
+  <Name extends string, V>(
+    name: Name,
+    options: FixtureOptions,
+    fn: ScopedFixtureFn<V, ExtraContext>,
+  ): TestAPIs<ExtraContext & { [K in Name]: V }>;
+}
+
+export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
+  extend: TestExtendAPI<ExtraContext>;
 };
 
 export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;

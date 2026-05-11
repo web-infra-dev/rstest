@@ -9,7 +9,6 @@ import type {
   DescribeAPI,
   DescribeEachFn,
   DescribeForFn,
-  Fixtures,
   Location,
   MaybePromise,
   NormalizedFixtures,
@@ -33,7 +32,7 @@ import {
   parseTemplateTable,
   TestRegisterError,
 } from '../util';
-import { normalizeFixtures } from './fixtures';
+import { normalizeBuilderFixture, normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
@@ -596,21 +595,44 @@ export const createRuntimeAPI = ({
 
   const it = createTestAPI() as TestAPIs;
 
-  it.extend = ((fixtures: Fixtures): TestAPIs => {
-    const extend = (
-      fixtures: Fixtures,
-      extendFixtures?: NormalizedFixtures,
-    ) => {
-      const normalizedFixtures = normalizeFixtures(fixtures, extendFixtures);
-      const api = createTestAPI({ fixtures: normalizedFixtures }) as TestAPIs;
-      api.extend = ((subFixtures: Fixtures) => {
-        return extend(subFixtures, normalizedFixtures);
-      }) as TestAPIs['extend'];
+  const buildExtend = (
+    normalizedFixtures: NormalizedFixtures | undefined,
+  ): TestAPIs['extend'] => {
+    const extend = ((...args: any[]) => {
+      let nextFixtures: NormalizedFixtures;
+      if (typeof args[0] === 'string') {
+        // Builder syntax: extend(name, opts?, fn) or extend(name, fn)
+        const name = args[0] as string;
+        let options: any;
+        let fn: any;
+        if (args.length === 2) {
+          fn = args[1];
+        } else if (args.length === 3) {
+          options = args[1];
+          fn = args[2];
+        } else {
+          throw new Error(
+            `\`test.extend(name, ...)\` expects 2 or 3 arguments, got ${args.length}.`,
+          );
+        }
+        nextFixtures = normalizeBuilderFixture(
+          name,
+          options,
+          fn,
+          normalizedFixtures,
+        );
+      } else {
+        // Object syntax: extend({ key: fn | [fn, opts] })
+        nextFixtures = normalizeFixtures(args[0], normalizedFixtures);
+      }
+      const api = createTestAPI({ fixtures: nextFixtures }) as TestAPIs;
+      api.extend = buildExtend(nextFixtures);
       return api;
-    };
+    }) as TestAPIs['extend'];
+    return extend;
+  };
 
-    return extend(fixtures);
-  }) as TestAPIs['extend'];
+  it.extend = buildExtend(undefined);
 
   const createDescribeAPI = (
     options: {

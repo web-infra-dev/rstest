@@ -1,10 +1,51 @@
 import type {
+  FixtureOptions,
+  FixtureScope,
   Fixtures,
   NormalizedFixture,
   NormalizedFixtures,
+  ScopedFixtureFn,
   TestCase,
 } from '../../types';
 import { isObject } from '../../utils/helper';
+
+const SCOPE_ORDER: FixtureScope[] = ['test', 'file'];
+
+/**
+ * Per-file fixture state: caches resolved values for `scope: 'file'` fixtures
+ * and collects cleanup handlers to flush after all tests in the file complete.
+ */
+export interface FileFixtureStore {
+  /** Resolved file-scoped fixture values, keyed by fixture name. */
+  cache: Map<string, unknown>;
+  /** In-flight setup promises, used to dedupe concurrent first-time accesses. */
+  pending: Map<string, Promise<unknown>>;
+  /** Cleanup handlers, drained in LIFO order at file teardown. */
+  cleanups: Array<() => void | Promise<void>>;
+}
+
+export const createFileFixtureStore = (): FileFixtureStore => ({
+  cache: new Map(),
+  pending: new Map(),
+  cleanups: [],
+});
+
+const assertScope = (scope: unknown, fixtureName: string): FixtureScope => {
+  if (scope === undefined) {
+    return 'test';
+  }
+  if (scope === 'test' || scope === 'file') {
+    return scope;
+  }
+  if (scope === 'worker') {
+    throw new Error(
+      `Unsupported fixture scope "worker" on "${fixtureName}". rstest currently supports "test" (default) and "file".`,
+    );
+  }
+  throw new Error(
+    `Unsupported fixture scope "${String(scope)}" on "${fixtureName}". rstest only supports "test" and "file".`,
+  );
+};
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -12,7 +53,7 @@ export const normalizeFixtures = (
 ): NormalizedFixtures => {
   const result: NormalizedFixtures = {};
   for (const key in fixtures) {
-    const fixtureOptionKeys = ['auto'];
+    const fixtureOptionKeys = ['auto', 'scope'];
     // @ts-expect-error
     const value = fixtures[key]!;
     if (Array.isArray(value)) {
@@ -20,17 +61,22 @@ export const normalizeFixtures = (
         result[key] = {
           isFn: true,
           value: value[0],
+          scope: 'test',
+          style: 'use-callback',
         };
         continue;
       }
       if (
         isObject(value[1]) &&
-        Object.keys(value[1]).some((key) => fixtureOptionKeys.includes(key))
+        Object.keys(value[1]).some((k) => fixtureOptionKeys.includes(k))
       ) {
+        const options = value[1] as FixtureOptions;
         result[key] = {
           isFn: typeof value[0] === 'function',
           value: value[0],
-          options: value[1],
+          options,
+          scope: assertScope(options.scope, key),
+          style: 'use-callback',
         };
         continue;
       }
@@ -38,6 +84,8 @@ export const normalizeFixtures = (
     result[key] = {
       isFn: typeof value === 'function',
       value,
+      scope: 'test',
+      style: 'use-callback',
     };
   }
   const formattedResult = Object.fromEntries(
@@ -52,22 +100,84 @@ export const normalizeFixtures = (
     }),
   );
 
-  return {
+  const merged: NormalizedFixtures = {
     ...extendFixtures,
     ...formattedResult,
   };
+
+  validateFixtureScopes(merged);
+
+  return merged;
+};
+
+/**
+ * Normalize a builder-style fixture (`extend(name, opts?, fn)`) and merge it
+ * into the existing fixture map. Returns the merged map.
+ */
+export const normalizeBuilderFixture = (
+  name: string,
+  options: FixtureOptions | undefined,
+  fn: ScopedFixtureFn<unknown, any>,
+  extendFixtures: NormalizedFixtures = {},
+): NormalizedFixtures => {
+  if (typeof fn !== 'function') {
+    throw new Error(
+      `Fixture "${name}" must be a function when using the builder syntax \`extend(name, ...)\`.`,
+    );
+  }
+  const scope = assertScope(options?.scope, name);
+  const usedProps = getFixtureUsedProps(fn);
+  const entry: NormalizedFixture = {
+    isFn: true,
+    value: fn,
+    options,
+    scope,
+    style: 'return',
+    deps: usedProps.filter((p) => p === name || p in extendFixtures),
+  };
+  const merged: NormalizedFixtures = {
+    ...extendFixtures,
+    [name]: entry,
+  };
+  validateFixtureScopes(merged);
+  return merged;
+};
+
+/**
+ * Verify that no fixture depends on a fixture with a shorter (more frequently
+ * torn down) lifetime — e.g. a `file` fixture cannot consume a `test` fixture.
+ */
+export const validateFixtureScopes = (fixtures: NormalizedFixtures): void => {
+  for (const [name, fixture] of Object.entries(fixtures)) {
+    if (!fixture.deps?.length) continue;
+    for (const dep of fixture.deps) {
+      const depFixture = fixtures[dep];
+      if (!depFixture) continue;
+      if (
+        SCOPE_ORDER.indexOf(fixture.scope) >
+        SCOPE_ORDER.indexOf(depFixture.scope)
+      ) {
+        throw new Error(
+          `Fixture "${name}" (${fixture.scope} scope) cannot depend on "${dep}" (${depFixture.scope} scope). ` +
+            `A ${fixture.scope}-scoped fixture outlives its ${depFixture.scope}-scoped dependency, ` +
+            `so the dependency's value would be torn down while still in use.`,
+        );
+      }
+    }
+  }
 };
 
 export const handleFixtures = async (
   test: TestCase,
   context: Record<string, any>,
+  fileFixtureStore: FileFixtureStore,
 ): Promise<{
   cleanups: (() => Promise<void>)[];
 }> => {
-  const cleanups: (() => Promise<void>)[] = [];
+  const testCleanups: (() => Promise<void>)[] = [];
 
   if (!test.fixtures) {
-    return { cleanups };
+    return { cleanups: testCleanups };
   }
 
   const doneMap = new Set<string>();
@@ -79,8 +189,8 @@ export const handleFixtures = async (
 
   const useFixture = async (
     name: string,
-    NormalizedFixture: NormalizedFixture,
-  ) => {
+    fixture: NormalizedFixture,
+  ): Promise<void> => {
     if (doneMap.has(name)) {
       return;
     }
@@ -88,9 +198,27 @@ export const handleFixtures = async (
       throw new Error(`Circular fixture dependency: ${name}`);
     }
 
-    const { isFn, deps, value: fixtureValue } = NormalizedFixture;
+    // File scope: serve from cache if already resolved.
+    if (fixture.scope === 'file' && fileFixtureStore.cache.has(name)) {
+      context[name] = fileFixtureStore.cache.get(name);
+      doneMap.add(name);
+      return;
+    }
+
+    // File scope: piggyback on in-flight resolution by another concurrent test.
+    if (fixture.scope === 'file' && fileFixtureStore.pending.has(name)) {
+      const value = await fileFixtureStore.pending.get(name)!;
+      context[name] = value;
+      doneMap.add(name);
+      return;
+    }
+
+    const { isFn, deps, value: fixtureValue } = fixture;
     if (!isFn) {
       context[name] = fixtureValue;
+      if (fixture.scope === 'file') {
+        fileFixtureStore.cache.set(name, fixtureValue);
+      }
       doneMap.add(name);
       return;
     }
@@ -103,23 +231,104 @@ export const handleFixtures = async (
       }
     }
 
-    // This API behavior follows Vitest & Playwright
-    // but why not return cleanup function?
-    await new Promise<void>((fixtureResolve) => {
-      let useDone: (() => void) | undefined;
-      const block = fixtureValue(context, async (value: any) => {
-        context[name] = value;
-        fixtureResolve();
-        return new Promise<void>((useFnResolve) => {
-          useDone = useFnResolve;
-        });
+    let resolveSetup: ((value: unknown) => void) | undefined;
+    let rejectSetup: ((err: unknown) => void) | undefined;
+    if (fixture.scope === 'file') {
+      const setupPromise = new Promise<unknown>((resolve, reject) => {
+        resolveSetup = resolve;
+        rejectSetup = reject;
       });
+      fileFixtureStore.pending.set(name, setupPromise);
+      // Suppress unhandled-rejection noise; concurrent waiters attach later.
+      setupPromise.catch(() => {});
+    }
 
-      cleanups.unshift(() => {
-        useDone?.();
-        return block;
-      });
-    });
+    try {
+      if (fixture.style === 'return') {
+        const onCleanupHandlers: Array<() => void | Promise<void>> = [];
+        const helpers = {
+          onCleanup: (handler: () => void | Promise<void>) => {
+            onCleanupHandlers.push(handler);
+          },
+        };
+        const value = await fixtureValue(context, helpers);
+        context[name] = value;
+
+        // Test cleanups run in array order; file cleanups are reversed at
+        // flush time. unshift vs push selected so both paths end up LIFO.
+        if (fixture.scope === 'file') {
+          fileFixtureStore.cache.set(name, value);
+          fileFixtureStore.cleanups.push(...onCleanupHandlers);
+        } else {
+          for (const fn of onCleanupHandlers) {
+            testCleanups.unshift(async () => {
+              await fn();
+            });
+          }
+        }
+        resolveSetup?.(value);
+      } else {
+        // use-callback style: the fixture body suspends at `await use(value)`;
+        // the suspended block becomes the cleanup.
+        await new Promise<void>((fixtureResolve, fixtureReject) => {
+          let useDone: (() => void) | undefined;
+          let useStarted = false;
+          const block = fixtureValue(context, async (value: any) => {
+            useStarted = true;
+            context[name] = value;
+            if (fixture.scope === 'file') {
+              fileFixtureStore.cache.set(name, value);
+            }
+            fixtureResolve();
+            resolveSetup?.(value);
+            return new Promise<void>((useFnResolve) => {
+              useDone = useFnResolve;
+            });
+          });
+
+          const cleanupFn = async () => {
+            useDone?.();
+            await block;
+          };
+          if (fixture.scope === 'file') {
+            fileFixtureStore.cleanups.push(cleanupFn);
+          } else {
+            testCleanups.unshift(cleanupFn);
+          }
+
+          Promise.resolve(block).then(
+            () => {
+              if (!useStarted) {
+                fixtureReject(
+                  new Error(
+                    `Fixture "${name}" finished without calling \`use\`. ` +
+                      `A use-callback fixture must call \`await use(value)\` exactly once.`,
+                  ),
+                );
+              }
+            },
+            (err) => {
+              if (!useStarted) {
+                fixtureReject(err);
+              }
+              // After use has started, the error belongs to the cleanup phase
+              // and is surfaced when the cleanup awaits `block`.
+            },
+          );
+        });
+      }
+    } catch (err) {
+      // Propagate setup failure to concurrent waiters on the pending promise
+      // and to the outer caller (which will fail the originating test).
+      if (fixture.scope === 'file') {
+        rejectSetup?.(err);
+      }
+      throw err;
+    } finally {
+      if (fixture.scope === 'file') {
+        fileFixtureStore.pending.delete(name);
+      }
+    }
 
     doneMap.add(name);
     pendingMap.delete(name);
@@ -135,7 +344,29 @@ export const handleFixtures = async (
     await useFixture(name, params);
   }
 
-  return { cleanups };
+  return { cleanups: testCleanups };
+};
+
+/**
+ * Drain accumulated file-scoped cleanup handlers in LIFO order.
+ * Errors from individual handlers are collected and re-thrown together so
+ * one bad cleanup does not skip the others.
+ */
+export const flushFileFixtures = async (
+  store: FileFixtureStore,
+): Promise<Error[]> => {
+  const errors: Error[] = [];
+  const cleanups = store.cleanups.splice(0).reverse();
+  for (const fn of cleanups) {
+    try {
+      await fn();
+    } catch (err) {
+      errors.push(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+  store.cache.clear();
+  store.pending.clear();
+  return errors;
 };
 
 function splitByComma(s: string) {
