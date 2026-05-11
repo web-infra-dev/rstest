@@ -115,10 +115,7 @@ With [verbose reporter](/guide/basic/reporters#verbose-reporter) enabled, you ca
 
 **2. Inspect detailed time distribution after narrowing the scope**
 
-Once the slow tests have been identified but the actual runtime cost is still unclear, use [samply](#using-samply) or [Node.js profiling](#nodejs-profiling) below for deeper analysis.
-
-- `samply` is useful for inspecting detailed time distribution across both the rstest main process and test processes.
-- `Node.js profiling` is useful for further analyzing CPU or memory overhead on the Node.js side.
+Once the slow tests have been identified but the actual runtime cost is still unclear, drop down to a profiler. See [Profiler](#profiler) for picking between [samply](#using-samply) and [Node.js profiling](#nodejs-profiling).
 
 ## Using Rsdoctor
 
@@ -163,13 +160,21 @@ After running the above commands, Rstest will automatically register the Rsdocto
 
 ![rsdoctor-rstest-outputs](https://assets.rspack.rs/rstest/assets/rsdoctor-rstest-outputs.png)
 
+## Profiler
+
+Choose a profiler based on what you need to analyze:
+
+- **CPU time distribution**: use [samply](#using-samply) (recommended). It profiles the rstest main process and worker forks together.
+- **Memory allocation**: use `--heap-prof`. See [Node.js profiling](#nodejs-profiling). samply does not collect memory data.
+- **Step-through debugging**: use `--inspect`. See [Node.js profiling](#nodejs-profiling).
+
 ## Using samply
 
 > Note: In order to be able to profiling the Node.js side code in macOS, Node.js v22.16+ is required.
 
 [Samply](https://github.com/mstange/samply) supports performance analysis for both Rstest main process and test process simultaneously. You can perform a complete performance analysis through the following steps:
 
-Run the following command to start performance analysis:：
+Run the following command to start performance analysis:
 
 ```bash
 samply record -- node --perf-prof --perf-basic-prof --interpreted-frames-native-stack {your_node_modules_folder}/@rstest/core/bin/rstest.js
