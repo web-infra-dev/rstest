@@ -21,6 +21,7 @@ import {
   getOutputDistPathRoot,
   getTempRstestOutputDirGlob,
   logger,
+  normalizeBuildCache,
   TEMP_RSTEST_OUTPUT_DIR,
 } from './utils';
 
@@ -214,6 +215,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  silent: false,
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
@@ -266,6 +268,17 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.output.distPath = {
     root: formatRootStr(outputDistPathRoot, merged.root),
   };
+
+  if (merged.performance?.buildCache) {
+    merged.performance.buildCache = normalizeBuildCache({
+      buildCache: merged.performance.buildCache,
+      root: merged.root,
+      tsconfigPaths: merged.source?.tsconfigPath
+        ? [merged.source.tsconfigPath]
+        : [],
+      outputDistPathRoot: merged.output.distPath.root,
+    });
+  }
 
   merged.exclude.patterns.push(
     getTempRstestOutputDirGlob(merged.output?.distPath?.root),

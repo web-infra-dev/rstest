@@ -23,7 +23,12 @@ import type {
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError } from '../util';
+import {
+  runWithCurrentTask,
+  setFallbackCurrentTask,
+} from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
+import { getFileTaskId } from './index';
 import {
   getTestStatus,
   limitConcurrency,
@@ -109,7 +114,7 @@ export class TestRunner {
       try {
         for (const fn of parentHooks.beforeEachListeners) {
           const cleanupFn = await fn(test.context);
-          cleanupFn && cleanups.push(cleanupFn);
+          if (cleanupFn) cleanups.push(cleanupFn);
         }
       } catch (error) {
         result = {
@@ -292,132 +297,165 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        const start = RealDate.now();
+        result = await runWithCurrentTask(
+          {
+            taskId: test.testId,
+            taskName: test.name,
+            taskParentNames: test.parentNames,
+            taskType: 'suite',
+            testPath,
+          },
+          async () => {
+            const start = RealDate.now();
 
-        hooks.onTestSuiteStart?.({
-          parentNames: test.parentNames,
-          name: test.name,
-          testPath,
-          project: test.project,
-          testId: test.testId,
-          type: 'suite',
-          location: test.location,
-          runMode: test.runMode,
-        });
+            hooks.onTestSuiteStart?.({
+              parentNames: test.parentNames,
+              name: test.name,
+              testPath,
+              project: test.project,
+              testId: test.testId,
+              type: 'suite',
+              location: test.location,
+              runMode: test.runMode,
+            });
 
-        if (test.tests.length === 0) {
-          if (['todo', 'skip'].includes(test.runMode)) {
-            defaultStatus = 'skip';
-            hooks.onTestSuiteResult?.(result);
-            return result;
-          }
-          if (passWithNoTests) {
-            result.status = 'pass';
-            hooks.onTestSuiteResult?.(result);
-            return result;
-          }
-          const noTestError = {
-            message: `No test found in suite: ${test.name}`,
-            name: 'No tests',
-          };
+            if (test.tests.length === 0) {
+              if (['todo', 'skip'].includes(test.runMode)) {
+                defaultStatus = 'skip';
+                hooks.onTestSuiteResult?.(result);
+                return result;
+              }
+              if (passWithNoTests) {
+                result.status = 'pass';
+                hooks.onTestSuiteResult?.(result);
+                return result;
+              }
+              const noTestError = {
+                message: `No test found in suite: ${test.name}`,
+                name: 'No tests',
+              };
 
-          result.errors?.push(noTestError);
-        }
-
-        // execution order: beforeAll -> beforeEach -> run test case -> afterEach -> afterAll -> beforeAll cleanup
-        const cleanups: ((ctx: SuiteContext) => void)[] = [];
-        let hasBeforeAllError = false;
-
-        if (['run', 'only'].includes(test.runMode) && test.beforeAllListeners) {
-          try {
-            for (const fn of test.beforeAllListeners) {
-              const cleanupFn = await fn({
-                filepath: testPath,
-              });
-              cleanupFn && cleanups.push(cleanupFn);
+              result.errors?.push(noTestError);
             }
-          } catch (error) {
-            hasBeforeAllError = true;
 
-            result.errors?.push(...(await formatTestError(error)));
-          }
-        }
+            const cleanups: ((ctx: SuiteContext) => void)[] = [];
+            let hasBeforeAllError = false;
 
-        if (hasBeforeAllError) {
-          // when has beforeAll error, all test cases should skipped
-          markAllTestAsSkipped(test.tests);
-        }
-
-        const results = await runTests(test.tests, {
-          beforeEachListeners: parentHooks.beforeEachListeners.concat(
-            test.beforeEachListeners || [],
-          ),
-          afterEachListeners: parentHooks.afterEachListeners.concat(
-            test.afterEachListeners || [],
-          ),
-        });
-
-        const afterAllFns = [...(test.afterAllListeners || [])]
-          .reverse()
-          .concat(cleanups);
-
-        if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
-          try {
-            for (const fn of afterAllFns) {
-              await fn({
-                filepath: testPath,
-              });
+            if (
+              ['run', 'only'].includes(test.runMode) &&
+              test.beforeAllListeners
+            ) {
+              try {
+                for (const fn of test.beforeAllListeners) {
+                  const cleanupFn = await fn({
+                    filepath: testPath,
+                  });
+                  if (cleanupFn) cleanups.push(cleanupFn);
+                }
+              } catch (error) {
+                hasBeforeAllError = true;
+                result.errors?.push(...(await formatTestError(error)));
+              }
             }
-          } catch (error) {
-            // AfterAll failed does not affect test case results
-            result.errors?.push(...(await formatTestError(error)));
-          }
-        }
-        result.duration = RealDate.now() - start;
-        result.status = result.errors?.length
-          ? 'fail'
-          : getTestStatus(results, defaultStatus);
-        hooks.onTestSuiteResult?.(result);
+
+            if (hasBeforeAllError) {
+              markAllTestAsSkipped(test.tests);
+            }
+
+            const results = await runTests(test.tests, {
+              beforeEachListeners: parentHooks.beforeEachListeners.concat(
+                test.beforeEachListeners || [],
+              ),
+              afterEachListeners: parentHooks.afterEachListeners.concat(
+                test.afterEachListeners || [],
+              ),
+            });
+
+            const afterAllFns = [...(test.afterAllListeners || [])]
+              .reverse()
+              .concat(cleanups);
+
+            if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
+              try {
+                for (const fn of afterAllFns) {
+                  await fn({
+                    filepath: testPath,
+                  });
+                }
+              } catch (error) {
+                result.errors?.push(...(await formatTestError(error)));
+              }
+            }
+
+            result.duration = RealDate.now() - start;
+            result.status = result.errors?.length
+              ? 'fail'
+              : getTestStatus(results, defaultStatus);
+            hooks.onTestSuiteResult?.(result);
+
+            return result;
+          },
+        );
 
         errors.push(...(result.errors || []));
       } else {
-        const start = RealDate.now();
-        let retryCount = 0;
-        // Call onTestCaseStart hook before running the test
-        hooks.onTestCaseStart?.({
-          testId: test.testId,
-          startTime: start,
-          testPath: test.testPath,
-          name: test.name,
-          timeout: test.timeout,
-          parentNames: test.parentNames,
-          project: test.project,
-          type: 'case',
-          location: test.location,
-          runMode: test.runMode,
-        });
+        result = await runWithCurrentTask(
+          {
+            taskId: test.testId,
+            taskName: test.name,
+            taskParentNames: test.parentNames,
+            taskType: 'case',
+            testPath,
+          },
+          async () => {
+            const start = RealDate.now();
+            let retryCount = 0;
+            const retryErrors: FormattedError[] = [];
 
-        do {
-          const currentResult = await runTestsCase(test, parentHooks);
+            hooks.onTestCaseStart?.({
+              testId: test.testId,
+              startTime: start,
+              testPath: test.testPath,
+              name: test.name,
+              timeout: test.timeout,
+              parentNames: test.parentNames,
+              project: test.project,
+              type: 'case',
+              location: test.location,
+              runMode: test.runMode,
+            });
 
-          result = {
-            ...currentResult,
-            errors:
-              currentResult.status === 'fail' && result && result.errors
-                ? result.errors.concat(...(currentResult.errors || []))
-                : currentResult.errors,
-          };
+            do {
+              const currentResult = await runTestsCase(test, parentHooks);
 
-          retryCount++;
-        } while (retryCount <= retry && result.status === 'fail');
+              if (currentResult.status === 'fail') {
+                retryErrors.push(...(currentResult.errors || []));
+              }
 
-        result.duration = RealDate.now() - start;
-        result.retryCount = retryCount - 1;
-        result.heap = state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined;
-        hooks.onTestCaseResult?.(result);
-        results.push(result);
+              result = {
+                ...currentResult,
+                errors:
+                  currentResult.status === 'fail'
+                    ? [...retryErrors]
+                    : currentResult.errors,
+              };
+
+              retryCount++;
+            } while (retryCount <= retry && result.status === 'fail');
+
+            result.duration = RealDate.now() - start;
+            result.retryCount = retryCount - 1;
+            if (result.status === 'pass' && retryErrors.length > 0) {
+              result.retryErrors = retryErrors;
+            }
+            result.heap = state.runtimeConfig.logHeapUsage
+              ? process.memoryUsage().heapUsed
+              : undefined;
+            hooks.onTestCaseResult?.(result);
+            results.push(result);
+            return result;
+          },
+        );
       }
       return result;
     };
@@ -427,7 +465,7 @@ export class TestRunner {
     if (tests.length === 0) {
       if (passWithNoTests) {
         return {
-          testId: '0',
+          testId: getFileTaskId(testPath),
           project,
           testPath,
           name: '',
@@ -437,7 +475,7 @@ export class TestRunner {
       }
 
       return {
-        testId: '0',
+        testId: getFileTaskId(testPath),
         project,
         testPath,
         name: '',
@@ -463,20 +501,30 @@ export class TestRunner {
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);
 
-    return {
-      testId: '0',
-      project,
+    setFallbackCurrentTask({
+      taskId: getFileTaskId(testPath),
+      taskType: 'file',
       testPath,
-      name: '',
-      heap: state.runtimeConfig.logHeapUsage
-        ? process.memoryUsage().heapUsed
-        : undefined,
-      status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
-      results,
-      snapshotResult,
-      errors,
-      duration: RealDate.now() - start,
-    };
+    });
+
+    try {
+      return {
+        testId: getFileTaskId(testPath),
+        project,
+        testPath,
+        name: '',
+        heap: state.runtimeConfig.logHeapUsage
+          ? process.memoryUsage().heapUsed
+          : undefined,
+        status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
+        results,
+        snapshotResult,
+        errors,
+        duration: RealDate.now() - start,
+      };
+    } finally {
+      setFallbackCurrentTask(undefined);
+    }
   }
 
   private resetCurrentTest(): void {
@@ -530,7 +578,7 @@ export class TestRunner {
 
     const current = this._test;
 
-    context.task = { name: test.name };
+    context.task = { id: test.testId, name: test.name };
 
     Object.defineProperty(context, 'expect', {
       get: () => {

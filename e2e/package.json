@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-rc.2",
-    "@rsbuild/plugin-react": "^1.4.6",
-    "@rslib/core": "0.21.0",
+    "@rsbuild/core": "^2.0.5",
+    "@rsbuild/plugin-react": "^2.0.0",
+    "@rslib/core": "0.21.3",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
@@ -25,19 +25,19 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "axios": "^1.15.0",
+    "axios": "^1.16.0",
     "cross-env": "^10.1.0",
     "fs-extra": "^11.3.4",
     "is-url": "^1.2.4",
     "jest-image-snapshot": "^6.5.2",
-    "memfs": "^4.57.1",
+    "memfs": "^4.57.2",
     "pathe": "^2.0.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "redux": "^5.0.1",
     "strip-ansi": "^7.2.0",
-    "tinyexec": "^1.1.1",
+    "tinyexec": "^1.1.2",
     "tree-kill": "^1.2.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   }
 }

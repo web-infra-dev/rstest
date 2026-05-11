@@ -33,6 +33,33 @@ type TestEntryToChunkHashes = {
   chunks: Record<string, string>;
 }[];
 
+const getRuntimeChunkFiles = ({
+  chunks,
+  outputPath,
+  runtimeChunkName,
+}: {
+  chunks: Rspack.StatsChunk[] | undefined;
+  outputPath: string;
+  runtimeChunkName: string;
+}): Set<string> => {
+  const runtimeChunkFiles = new Set<string>();
+
+  for (const chunk of chunks || []) {
+    const isRuntimeChunk =
+      chunk.id === runtimeChunkName || chunk.names?.includes(runtimeChunkName);
+
+    if (!isRuntimeChunk) {
+      continue;
+    }
+
+    for (const file of chunk.files || []) {
+      runtimeChunkFiles.add(path.join(outputPath, String(file)));
+    }
+  }
+
+  return runtimeChunkFiles;
+};
+
 function parseInlineSourceMapStr(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
   const inlineSourceMapRegex =
@@ -67,19 +94,25 @@ export const prepareRsbuild = async (
   setupFiles: Record<string, Record<string, string>>,
   globalSetupFiles: Record<string, Record<string, string>>,
   /**
-   * Explicit list of node-mode projects to include in the Rsbuild instance.
-   * When provided, only these projects will be compiled.
+   * Explicit list of projects to include in the Rsbuild instance.
+   *
+   * Most callers still pass node-mode projects for execution, but related-test
+   * resolution also reuses this node-targeted build to collect a uniform module
+   * graph for browser projects. If browser graph collection ever needs a
+   * materially different build pipeline, split that behavior at the caller.
    */
-  targetNodeProjects?: ProjectContext[],
+  targetProjects?: ProjectContext[],
+  extraPlugins: RsbuildPlugin[] = [],
 ): Promise<RsbuildInstance> => {
   const {
     command,
     normalizedConfig: { isolate, dev = {}, coverage, pool },
   } = context;
 
-  // Filter out browser mode projects - this rsbuild is for node mode only
-  const projects = targetNodeProjects?.length
-    ? targetNodeProjects
+  // Default execution still excludes browser projects. Callers can opt in to a
+  // broader project set when they only need graph information.
+  const projects = targetProjects?.length
+    ? targetProjects
     : context.projects.filter(
         (project) => !project.normalizedConfig.browser.enabled,
       );
@@ -139,13 +172,13 @@ export const prepareRsbuild = async (
             )
           : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
+        ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
 
   if (coverage?.enabled && command !== 'list') {
-    const [{ loadCoverageProvider }, { pluginCoverageCore }] =
-      await Promise.all([import('../coverage'), import('../coverage/plugin')]);
+    const { loadCoverageProvider } = await import('../coverage');
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
       context.rootPath,
@@ -157,10 +190,7 @@ export const prepareRsbuild = async (
       ),
     );
 
-    rsbuildInstance.addPlugins([
-      pluginCoverage(coverage),
-      pluginCoverageCore(coverage),
-    ]);
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 
   return rsbuildInstance;
@@ -343,7 +373,7 @@ export const createRsbuildServer = async ({
 }: {
   isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
-  inspectedConfig: RstestContext['normalizedConfig'] & {
+  inspectedConfig?: RstestContext['normalizedConfig'] & {
     projects: NormalizedProjectConfig[];
   };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -399,7 +429,7 @@ export const createRsbuildServer = async ({
     getPortSilently: true,
   });
 
-  if (isDebug()) {
+  if (isDebug() && inspectedConfig) {
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
@@ -506,6 +536,11 @@ export const createRsbuildServer = async ({
     });
 
     const entryFiles = getEntryFiles(manifest, outputPath!);
+    const runtimeChunkFiles = getRuntimeChunkFiles({
+      chunks,
+      outputPath: outputPath!,
+      runtimeChunkName: `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+    });
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const globalSetupEntries: EntryInfo[] = [];
@@ -521,10 +556,14 @@ export const createRsbuildServer = async ({
         outputPath!,
         filteredAssets[filteredAssets.length - 1]!.name,
       );
+      const runtimeDistPath = entryFiles[entry]?.find((file) =>
+        runtimeChunkFiles.has(file),
+      );
 
       if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -538,6 +577,7 @@ export const createRsbuildServer = async ({
         }
         entries.push({
           distPath,
+          runtimeDistPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -545,6 +585,7 @@ export const createRsbuildServer = async ({
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -596,7 +637,7 @@ export const createRsbuildServer = async ({
       }
       const content = await readFile(name);
 
-      enableAssetsCache && cachedAssetFiles.set(name, content);
+      if (enableAssetsCache) cachedAssetFiles.set(name, content);
 
       return content;
     };
@@ -621,7 +662,7 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      enableAssetsCache && content && cachedSourceMaps.set(name, content);
+      if (enableAssetsCache && content) cachedSourceMaps.set(name, content);
 
       return content;
     };

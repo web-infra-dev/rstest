@@ -14,27 +14,28 @@ describe('test build config', () => {
     { name: 'plugin' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
-  ])('$name config should work correctly', async ({ name }, {
-    onTestFinished,
-  }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: [
-        'run',
-        `fixtures/${name}`,
-        '-c',
-        `fixtures/${name}/rstest.config.mts`,
-      ],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: __dirname,
+  ])(
+    '$name config should work correctly',
+    async ({ name }, { onTestFinished }) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          `fixtures/${name}`,
+          '-c',
+          `fixtures/${name}/rstest.config.mts`,
+        ],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: __dirname,
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-  });
+      await expectExecSuccess();
+    },
+  );
 
   it('should write output to customized distPath.root', async ({
     onTestFinished,
@@ -47,6 +48,7 @@ describe('test build config', () => {
       recursive: true,
       force: true,
     });
+    fs.rmSync(join(defaultOutputPath, 'rstest-manifest.json'), { force: true });
 
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

@@ -28,7 +28,7 @@ npm run watch                 # Watch mode
 npm run typecheck             # Type check
 npm run test:unit             # Unit tests via rstest
 npm run test:e2e              # E2E tests (downloads VS Code)
-npm run lint                  # Biome check
+npm run lint                  # Rslint check
 ```
 
 ## Do

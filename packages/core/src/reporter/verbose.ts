@@ -56,13 +56,22 @@ export class VerboseReporter extends DefaultReporter {
     const hideSkippedTests =
       projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
-    logFileTitle(test, relativePath, true, this.verboseOptions.showProjectName);
+    const logResults = () => {
+      logFileTitle(
+        test,
+        relativePath,
+        true,
+        this.verboseOptions.showProjectName,
+      );
 
-    for (const result of test.results) {
-      logCase(result, {
-        slowTestThreshold,
-        hideSkippedTests,
-      });
-    }
+      for (const result of test.results) {
+        logCase(result, {
+          slowTestThreshold,
+          hideSkippedTests,
+        });
+      }
+    };
+
+    this.withSuspendedStatusRenderer(logResults);
   }
 }

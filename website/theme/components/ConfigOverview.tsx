@@ -74,6 +74,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
+      'silent',
       'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
@@ -162,6 +163,10 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'dev',
     items: ['dev.writeToDisk'],
+  },
+  {
+    name: 'performance',
+    items: ['performance.buildCache'],
   },
 ];
 

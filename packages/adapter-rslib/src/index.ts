@@ -1,4 +1,5 @@
-import { loadConfig, type RslibConfig, rsbuild } from '@rslib/core';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 
 export interface WithRslibConfigOptions {
@@ -23,6 +24,77 @@ export interface WithRslibConfigOptions {
    */
   modifyLibConfig?: (libConfig: RslibConfig) => RslibConfig;
 }
+
+type BuildCacheConfig = NonNullable<
+  NonNullable<RslibConfig['performance']>['buildCache']
+>;
+type BuildCacheOutput =
+  | boolean
+  | {
+      cacheDirectory?: string;
+      cacheDigest?: Array<string | undefined>;
+      buildDependencies?: string[];
+    }
+  | undefined;
+
+const getCacheDependency = ({
+  dependency,
+  configPath,
+  root,
+}: {
+  dependency: string;
+  configPath?: string;
+  root?: string;
+}): string => {
+  if (isAbsolute(dependency)) {
+    return dependency;
+  }
+
+  if (configPath) {
+    return resolve(dirname(configPath), dependency);
+  }
+
+  return root ? resolve(root, dependency) : dependency;
+};
+
+const updateCacheConfig = ({
+  buildCache,
+  configPath,
+  root,
+}: {
+  buildCache?: BuildCacheConfig;
+  configPath?: string;
+  root?: string;
+}): BuildCacheOutput => {
+  if (buildCache === undefined) {
+    return undefined;
+  }
+
+  if (buildCache === false) {
+    return false;
+  }
+
+  if (buildCache === true) {
+    return configPath ? { buildDependencies: [configPath] } : true;
+  }
+
+  const buildDependencies = buildCache.buildDependencies?.map((dependency) =>
+    getCacheDependency({
+      dependency,
+      configPath,
+      root,
+    }),
+  );
+  const nextBuildDependencies = configPath
+    ? Array.from(new Set([...(buildDependencies || []), configPath]))
+    : buildDependencies;
+
+  return {
+    cacheDirectory: buildCache.cacheDirectory,
+    cacheDigest: buildCache.cacheDigest,
+    buildDependencies: nextBuildDependencies,
+  };
+};
 
 export function withRslibConfig(
   options: WithRslibConfigOptions = {},
@@ -55,10 +127,10 @@ export function withRslibConfig(
     };
 
     const rslibConfig = Array.isArray(lib)
-      ? rsbuild.mergeRsbuildConfig<RslibConfig>(
+      ? (mergeRslibConfig(
           rawLibConfig as RslibConfig,
           libTestConfig as RslibConfig,
-        )
+        ) as RslibConfig)
       : (rawLibConfig as RslibConfig);
 
     let libDecoratorsVersion = rslibConfig.source?.decorators?.version;
@@ -86,6 +158,7 @@ export function withRslibConfig(
       : rslibConfig;
 
     const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
+    const { buildCache } = finalLibConfig.performance || {};
     const { cssModules, target } = finalLibConfig.output || {};
     const {
       assetsInclude,
@@ -98,7 +171,7 @@ export function withRslibConfig(
     } = finalLibConfig.source || {};
 
     // Convert rslib config to rstest config
-    const rstestConfig: ExtendConfig = {
+    const rstestConfig = {
       // Copy over compatible configurations
       root: finalLibConfig.root,
       name: libId,
@@ -120,6 +193,13 @@ export function withRslibConfig(
         cssModules,
         module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
       },
+      performance: {
+        buildCache: updateCacheConfig({
+          buildCache,
+          configPath: filePath,
+          root: finalLibConfig.root,
+        }),
+      },
       tools: {
         rspack,
         swc,
@@ -127,7 +207,7 @@ export function withRslibConfig(
       } as ExtendConfig['tools'],
 
       testEnvironment: target === 'web' ? 'happy-dom' : 'node',
-    };
+    } as ExtendConfig;
 
     return rstestConfig;
   };

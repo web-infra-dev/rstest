@@ -199,6 +199,7 @@ export default defineConfig({
 当存在 `GITHUB_STEP_SUMMARY`（GitHub Actions 会自动注入）时，Rstest 还会追加一份 Markdown 摘要，包含：
 
 - 测试汇总表（files/tests/duration）
+- flaky tests 区块：展示重试后通过的用例，并在可用时附带之前失败信息的简短摘要
 - 失败用例详情（错误信息、diff、错误堆栈）
 - 每个失败用例的复现命令
 - 带状态标记的标题（`✅` / `❌`）

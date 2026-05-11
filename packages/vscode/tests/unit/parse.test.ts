@@ -67,7 +67,6 @@ describe('parseTestFile', () => {
 
     tests.sort((a, b) => a.name.localeCompare(b.name));
 
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: use $ here.
     expect(tests.map((t) => t.name)).toEqual(['inner test', 'outer ${...}']);
   });
 
@@ -178,7 +177,6 @@ describe('parseTestFile', () => {
     });
 
     expect(tests.map((t) => t.name)).toEqual([
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: use $ here.
       'prefix ${...} middle ${...} suffix',
     ]);
   });

@@ -3,6 +3,7 @@
 *.cpuprofile
 node_modules/
 
+.cache/
 dist/
 dist-*
 compiled/
@@ -47,6 +48,7 @@ packages/vscode/*.vsix
 packages/vscode/icon.png
 
 .rstest-temp/
+lefthook-local.yml
 
 # Generated memory benchmark fixture
 benchmarks/fixtures/memory/

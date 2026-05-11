@@ -22,6 +22,7 @@ import {
   type Reporter,
   type Rstest,
   type RuntimeConfig,
+  resolveProjectBuildCache,
   rsbuild,
   serializableConfig,
   type Test,
@@ -154,6 +155,10 @@ type TestFileStartPayload = {
 type LogPayload = {
   level: 'log' | 'warn' | 'error' | 'info' | 'debug';
   content: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
   testPath: string;
   type: 'stdout' | 'stderr';
   trace?: string;
@@ -184,6 +189,14 @@ type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
 };
 
 const createDeferredPromise = <T>(): DeferredPromise<T> => {
@@ -506,8 +519,9 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
   }
 
-  rspackConfig.output?.path &&
+  if (rspackConfig.output?.path) {
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
 };
 
 type LazyCompilationModule = {
@@ -796,10 +810,17 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = project.normalizedConfig;
 
   return {
-    env,
+    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
+    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
+    // wins so explicit overrides still take effect.
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -822,6 +843,7 @@ const getRuntimeConfigFromProject = (
     logHeapUsage,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
@@ -915,6 +937,7 @@ const collectProjectEntries = async (
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
       });
 
       const setup = getSetupFiles(setupFiles, project.rootPath);
@@ -1279,6 +1302,10 @@ const createBrowserRuntime = async ({
             }
 
             const userRsbuildConfig = project.normalizedConfig;
+            const buildCache = resolveProjectBuildCache({
+              context,
+              project,
+            });
             const setupFiles = Object.values(
               getSetupFiles(
                 project.normalizedConfig.setupFiles,
@@ -1286,53 +1313,65 @@ const createBrowserRuntime = async ({
               ),
             );
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
-            const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
-              resolve: {
-                alias: rstestInternalAliases,
+            const merged = mergeEnvironmentConfig(
+              config,
+              {
+                ...userRsbuildConfig,
+                performance: buildCache
+                  ? {
+                      ...userRsbuildConfig.performance,
+                      buildCache,
+                    }
+                  : userRsbuildConfig.performance,
               },
-              source: {
-                define: {
-                  'process.env': 'globalThis[Symbol.for("rstest.env")]',
-                  'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+              {
+                resolve: {
+                  alias: rstestInternalAliases,
+                },
+                source: {
+                  define: {
+                    'process.env': 'globalThis[Symbol.for("rstest.env")]',
+                    'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                  },
+                },
+                output: {
+                  target: 'web',
+                  // Enable source map for inline snapshot support
+                  sourceMap: {
+                    js: 'source-map',
+                  },
+                },
+                tools: {
+                  rspack: (rspackConfig) => {
+                    rspackConfig.mode = 'development';
+                    rspackConfig.lazyCompilation =
+                      createBrowserLazyCompilationConfig(setupFiles);
+                    rspackConfig.plugins = rspackConfig.plugins || [];
+                    rspackConfig.plugins.push(virtualManifestPlugin);
+
+                    applyDefaultWatchOptions(rspackConfig, isWatchMode);
+
+                    // Extract and merge sourcemaps from pre-built @rstest/core files
+                    // This preserves the sourcemap chain for inline snapshot support
+                    // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                    const browserRuntimeDir = dirname(browserRuntimePath);
+                    rspackConfig.module = rspackConfig.module || {};
+                    rspackConfig.module.rules = rspackConfig.module.rules || [];
+                    rspackConfig.module.rules.unshift({
+                      test: /\.js$/,
+                      include: browserRuntimeDir,
+                      extractSourceMap: true,
+                    });
+
+                    if (isDebug()) {
+                      logger.log(
+                        `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                      );
+                    }
+                  },
                 },
               },
-              output: {
-                target: 'web',
-                // Enable source map for inline snapshot support
-                sourceMap: {
-                  js: 'source-map',
-                },
-              },
-              tools: {
-                rspack: (rspackConfig) => {
-                  rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation =
-                    createBrowserLazyCompilationConfig(setupFiles);
-                  rspackConfig.plugins = rspackConfig.plugins || [];
-                  rspackConfig.plugins.push(virtualManifestPlugin);
-
-                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                  // Extract and merge sourcemaps from pre-built @rstest/core files
-                  // This preserves the sourcemap chain for inline snapshot support
-                  // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
-                  const browserRuntimeDir = dirname(browserRuntimePath);
-                  rspackConfig.module = rspackConfig.module || {};
-                  rspackConfig.module.rules = rspackConfig.module.rules || [];
-                  rspackConfig.module.rules.unshift({
-                    test: /\.js$/,
-                    include: browserRuntimeDir,
-                    extractSourceMap: true,
-                  });
-
-                  if (isDebug()) {
-                    logger.log(
-                      `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                    );
-                  }
-                },
-              },
-            });
+            );
 
             // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
             // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
@@ -1654,8 +1693,10 @@ export const runBrowserController = async (
   context: Rstest,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false } = options ?? {};
+  const { skipOnTestRunEnd = false, allowEmptyWatchRun = false } =
+    options ?? {};
   const buildStart = Date.now();
+  const isWatchMode = context.command === 'watch';
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
@@ -1872,27 +1913,43 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      const message = `No test files found, exiting with code ${code}.`;
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : `No test files found, exiting with code ${code}.`;
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
       }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
     }
 
-    if (code !== 0) {
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
       ensureProcessExitCode(code);
     }
-    return;
+    if (!shouldKeepWatchingWithEmptySet) {
+      return;
+    }
   }
 
   await notifyTestRunStart();
 
-  const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
@@ -2126,6 +2183,7 @@ export const runBrowserController = async (
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileStart?.({
+          testId: getFileTaskId(payload.testPath),
           testPath: payload.testPath,
           tests: [],
         }),
@@ -2161,6 +2219,16 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestSuiteResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'suite',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestCaseStart = async (
@@ -2180,6 +2248,16 @@ export const runBrowserController = async (
         (reporter as Reporter).onTestCaseResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'case',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestFileComplete = async (
@@ -2190,6 +2268,17 @@ export const runBrowserController = async (
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'file',
+        testPath: payload.testPath,
+      });
+    }
+
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileResult?.(payload),
@@ -2204,19 +2293,28 @@ export const runBrowserController = async (
     const log: UserConsoleLog = {
       content: payload.content,
       name: payload.level,
+      taskId: payload.taskId,
+      taskName: payload.taskName,
+      taskParentNames: payload.taskParentNames,
+      taskType: payload.taskType,
       testPath: payload.testPath,
       type: payload.type,
       trace: payload.trace,
     };
-    const shouldLog =
-      context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-    if (shouldLog) {
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onUserConsoleLog?.(log),
-        ),
-      );
+    if (context.normalizedConfig.silent === true) {
+      return;
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      bufferConsoleLog(log);
+      return;
+    }
+
+    if (context.normalizedConfig.disableConsoleIntercept) {
+      return;
+    }
+
+    await emitUserConsoleLog(log);
   };
 
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
@@ -2224,6 +2322,113 @@ export const runBrowserController = async (
     error.stack = payload.stack;
     fatalError = error;
     ensureProcessExitCode(1);
+  };
+
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+  const suiteIdsByChain = new Map<string, string>();
+
+  const getSuiteChainKey = (names: string[]): string => {
+    return names.join('\u0000');
+  };
+
+  const pushTaskId = (taskIds: string[], taskId: string): void => {
+    if (!taskIds.includes(taskId)) {
+      taskIds.push(taskId);
+    }
+  };
+
+  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
+    return context.normalizedConfig.onConsoleLog?.(log.content) !== false;
+  };
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    if (!shouldEmitUserConsoleLog(log)) {
+      return;
+    }
+
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onUserConsoleLog?.(log),
+      ),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+
+    if (log.taskType === 'suite' && log.taskId) {
+      suiteIdsByChain.set(
+        getSuiteChainKey([...(log.taskParentNames || []), log.taskName || '']),
+        log.taskId,
+      );
+    }
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+    taskParentNames,
+    taskType,
+    testPath,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+    taskParentNames?: string[];
+    taskType?: 'file' | 'suite' | 'case';
+    testPath: string;
+  }): Promise<void> => {
+    if (status !== 'fail') {
+      bufferedConsoleLogs.delete(taskId);
+      return;
+    }
+
+    const taskIdsToFlush: string[] = [];
+
+    if (taskType === 'case') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+
+      const suiteNames = taskParentNames || [];
+      for (let i = 0; i < suiteNames.length; i++) {
+        const suiteId = suiteIdsByChain.get(
+          getSuiteChainKey(suiteNames.slice(0, i + 1)),
+        );
+
+        if (suiteId) {
+          pushTaskId(taskIdsToFlush, suiteId);
+        }
+      }
+
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'suite') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'file') {
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    for (const bufferedTaskId of taskIdsToFlush) {
+      const logs = bufferedConsoleLogs.get(bufferedTaskId);
+      if (!logs) {
+        continue;
+      }
+
+      bufferedConsoleLogs.delete(bufferedTaskId);
+
+      for (const log of logs) {
+        await Promise.all(
+          context.reporters.map((reporter) =>
+            (reporter as Reporter).onUserConsoleLog?.(log),
+          ),
+        );
+      }
+    }
   };
 
   const runSnapshotRpc = async (
@@ -2611,6 +2816,69 @@ export const runBrowserController = async (
         );
       },
     });
+
+    if (allTestFiles.length === 0) {
+      const duration = {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      };
+      const result = {
+        results: reporterResults,
+        testResults: caseResults,
+        duration,
+        hasFailure: false,
+        getSourcemap: getBrowserSourcemap,
+        resolveSourcemap: resolveBrowserSourcemap,
+        close: skipOnTestRunEnd
+          ? async () => {
+              sessionRegistry.clear();
+              await destroyBrowserRuntime(runtime);
+            }
+          : undefined,
+      };
+
+      if (!skipOnTestRunEnd) {
+        await notifyTestRunEnd({ duration });
+      }
+
+      if (isWatchMode) {
+        triggerRerun = async () => {
+          const newProjectEntries = await collectProjectEntries(context);
+          const rerunPlan = planWatchRerun({
+            projectEntries: newProjectEntries,
+            previousTestFiles: watchContext.lastTestFiles,
+            affectedTestFiles: watchContext.affectedTestFiles,
+          });
+          watchContext.affectedTestFiles = [];
+
+          if (rerunPlan.filesChanged) {
+            watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+            if (rerunPlan.currentTestFiles.length === 0) {
+              logger.log(
+                color.cyan('No browser test files remain after update.\n'),
+              );
+              logBrowserWatchReadyMessage(enableCliShortcuts);
+              return;
+            }
+
+            logger.log(
+              color.cyan(
+                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+              ),
+            );
+            void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+            return;
+          }
+
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        };
+        watchContext.hooksEnabled = true;
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+
+      return result;
+    }
 
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
@@ -3088,24 +3356,27 @@ export const runBrowserController = async (
     });
   };
 
-  const testStart = Date.now();
-  try {
-    await waitForRunnerFramesReady(
-      currentTestFiles.map((file) => file.testPath),
-    );
+  let testTime = 0;
+  if (currentTestFiles.length > 0) {
+    const testStart = Date.now();
+    try {
+      await waitForRunnerFramesReady(
+        currentTestFiles.map((file) => file.testPath),
+      );
 
-    for (const file of currentTestFiles) {
-      await enqueueHeadedReload(file);
-      if (fatalError) {
-        break;
+      for (const file of currentTestFiles) {
+        await enqueueHeadedReload(file);
+        if (fatalError) {
+          break;
+        }
       }
+    } catch (error) {
+      fatalError = fatalError ?? toError(error);
+      ensureProcessExitCode(1);
     }
-  } catch (error) {
-    fatalError = fatalError ?? toError(error);
-    ensureProcessExitCode(1);
-  }
 
-  const testTime = Date.now() - testStart;
+    testTime = Date.now() - testStart;
+  }
 
   // Define rerun logic for watch mode
   if (isWatchMode) {
@@ -3129,6 +3400,13 @@ export const runBrowserController = async (
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
         currentTestFiles = rerunPlan.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        if (currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
         await waitForRunnerFramesReady(
           currentTestFiles.map((file) => file.testPath),
         );

@@ -42,6 +42,7 @@
   "chai-config",
   "resolve-snapshot-path",
   "print-console-trace",
+  "silent",
   "on-console-log",
   "disable-console-intercept"
 ]

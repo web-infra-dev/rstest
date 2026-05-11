@@ -1,75 +1,75 @@
 ---
-description: 在这里，你可以了解到 Rstest 支持的主要功能。
+description: 了解 Rstest 面向构建一体化测试提供的能力，包括 Rstack 配置复用、浏览器模式、测试分片和覆盖率。
 ---
 
 # 功能导航
 
-在这里，你可以了解到 Rstest 支持的主要功能。
+Rstest 将测试融入 Rsbuild 与 Rspack 构建链路。它会尽可能复用构建配置，通过基于 bundle 的执行模型运行测试，并提供本地开发和 CI 所需的核心测试能力。
 
-## 复用 Rstack 生态
+## 复用现有构建配置
 
-Rstest 可直接复用 Rsbuild、Rspack 等构建配置与插件生态。你可以使用同一套配置进行开发与测试，享受 Rstack 工具链带来的一致化体验。
+Rstest 可以复用 Rsbuild 与 Rspack 配置，包括模块解析、代码转换和插件行为。这样可以减少测试专用构建配置的重复维护，让测试环境与最终交付代码保持一致。
 
 了解更多关于 [配置 Rstest](/guide/basic/configure-rstest)。
 
 ### 基于 Rspack 构建
 
-Rstest 底层使用 Rspack 构建，能够在 Rstest 中享受 Rspack 带来的高性能构建和 Tree-shaking、[lazyBarrel](https://rspack.rs/zh/guide/optimization/lazy-barrel) 等优化。
+Rstest 基于 Rspack 的 bundling pipeline 运行测试，因此可以利用 Tree Shaking、[lazyBarrel](https://rspack.rs/zh/guide/optimization/lazy-barrel) 等构建期优化，同时让测试行为更贴近真实产物。
 
 ### 基于 SWC 转译
 
-Rstest 内置 SWC 转译器，提供开箱即用的 JavaScript/TypeScript 转译能力。你可以通过配置文件轻松定制 SWC 行为，以满足不同项目的需求。
+默认情况下，Rstest 使用 Rspack 内置的 SWC loader 转换 JavaScript 和 TypeScript。当项目需要不同的语法或转换行为时，你可以在配置文件中自定义 SWC 选项。
 
 了解更多关于 [配置 SWC](/guide/basic/configure-rstest#配置-swc)。
 
 ## 多项目测试
 
-Rstest 提供了多项目测试的能力，支持在单个 Rstest 进程中并行对多个项目进行测试。
+Rstest 可以在同一个进程中运行多个测试项目，每个项目都可以保留自己的配置和环境。这适合 monorepo、多应用工作区，以及需要分别覆盖 Node、DOM 或 Browser Mode 的项目。
 
 了解更多关于 [多项目测试](/guide/basic/projects)。
 
 ## 测试分片（Sharding）
 
-Rstest 支持将测试文件拆分为多个分片并行执行。你可以在 CI 中将同一套测试分发到多台机器，以缩短整体执行时间。配合 `blob` 报告器与 `rstest merge-reports`，还能在执行完成后合并测试结果与代码覆盖率。
+Rstest 可以将测试文件拆分为多个分片并行执行。你可以在 CI 中把同一套测试分发到多台机器以缩短总耗时，并在所有分片完成后通过 `blob` 报告器与 `rstest merge-reports` 合并测试结果和代码覆盖率。
 
 了解更多关于 [测试分片](/config/test/shard)。
 
 ## 源码内联测试
 
-Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)方式，可在源码文件内直接书写测试块。此方式适用于小型功能函数与工具方法，便于快速验证和调试。
+Rstest 支持类 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)风格，可以在源码文件中直接编写测试块。对于小型工具函数和 helper，将快速检查放在实现旁边会让开发更顺手。
 
 了解更多关于 [源码内联测试](/config/test/include-source)。
 
 ## Watch 模式
 
-当你修改测试文件或其依赖模块时，Rstest 会基于模块图分析，仅重新运行受影响的测试文件，从而显著提升本地测试效率。
+当你修改测试文件或其依赖模块时，Rstest 会基于模块图分析，仅重新运行受影响的测试文件。随着测试规模增长，这可以让本地反馈保持快速。
 
 ## DOM 测试
 
-Rstest 支持使用 jsdom 与 happy-dom 模拟 DOM 与浏览器 API，并对 React、Vue 等框架提供良好支持，兼容 Testing Library、CSS Modules 等。
+Rstest 可以通过 jsdom 或 happy-dom 模拟 DOM 与浏览器 API。它支持 React、Vue 等常见框架测试流程，并兼容 Testing Library 和 CSS Modules。
 
 了解更多关于 [DOM 测试](/config/test/test-environment#dom-测试)。
 
 ## 浏览器模式（Browser Mode）
 
-Rstest 提供 Browser Mode，允许你在真实浏览器中运行测试，而不是依赖 jsdom 或 happy-dom 这类模拟环境。这样可以直接验证真实浏览器 API 行为，减少测试环境与生产环境之间的差异。
+Rstest 提供 Browser Mode，适用于需要真实浏览器、而不是 jsdom 或 happy-dom 这类模拟环境的测试。它可以帮助你验证浏览器 API、渲染行为，以及 DOM 模拟器难以覆盖的交互。
 
-Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromium、Firefox、WebKit 中执行测试，适合需要跨浏览器验证或依赖真实渲染能力的场景。
+Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromium、Firefox 和 WebKit 中执行测试，适合跨浏览器验证。
 
 了解更多关于 [浏览器模式](/guide/browser-testing)。
 
 ## 代码覆盖率
 
-Rstest 支持使用 [istanbul](https://istanbul.js.org/) 收集代码覆盖率。你可以通过设置 `coverage.enabled` 为 `true` 来启用代码覆盖率收集。
+Rstest 可以使用 [istanbul](https://istanbul.js.org/) 收集代码覆盖率。你可以在 Rstest 配置文件中将 `coverage.enabled` 设置为 `true` 来启用覆盖率。
 
 了解更多关于 [代码覆盖率](/config/test/coverage)。
 
 ## 更多能力
 
-- 与 Jest 兼容的断言与快照测试
-- Mock / Spy 能力
+- 与 Jest 兼容的断言和快照
+- Mock 和 spy 工具
 - 文件级沙箱隔离
-- 多种生命周期钩子
-- 多种报告器与 CI 集成
-- 支持按文件夹 / 项目 / 测试名进行过滤
+- 用于 setup 和 teardown 的生命周期钩子
+- 内置报告器和 CI 输出
+- 支持按目录、项目、文件或测试名过滤
 - VS Code 插件

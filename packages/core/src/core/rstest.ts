@@ -12,6 +12,7 @@ import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  FileFilterMode,
   NormalizedConfig,
   NormalizedProjectConfig,
   Project,
@@ -24,7 +25,14 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath, logger, TS_CONFIG_FILE } from '../utils';
+import {
+  castArray,
+  getAbsolutePath,
+  logger,
+  normalizeBuildCache,
+  resolveBuildCacheDependencyPaths,
+  TS_CONFIG_FILE,
+} from '../utils';
 import { TestStateManager } from './stateManager';
 
 /**
@@ -38,6 +46,7 @@ type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
+  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
 };
@@ -46,6 +55,9 @@ export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
+  public fileFilterMode?: FileFilterMode;
+  public relatedFilters?: string[];
+  public relatedResolutionEmpty?: boolean;
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
@@ -81,6 +93,7 @@ export class Rstest implements RstestContext {
       cwd = process.cwd(),
       command,
       fileFilters,
+      fileFilterMode,
       configFilePath,
       projects,
     }: Options,
@@ -89,16 +102,22 @@ export class Rstest implements RstestContext {
     this.cwd = cwd;
     this.command = command;
     this.fileFilters = fileFilters;
+    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig({
-      ...userConfig,
-      root: rootPath,
-    });
+    const rstestConfig = withDefaultConfig(
+      resolveBuildCacheDependencyPaths(
+        {
+          ...userConfig,
+          root: rootPath,
+        },
+        configFilePath,
+      ),
+    );
 
     if (command === 'watch' && rstestConfig.shard) {
       logger.error('Test sharding is not supported in watch mode.');
@@ -135,7 +154,10 @@ export class Rstest implements RstestContext {
 
           // TODO: support extend projects config
           const config = withDefaultConfig(
-            project.config,
+            resolveBuildCacheDependencyPaths(
+              project.config,
+              project.configFilePath ?? configFilePath,
+            ),
           ) as NormalizedProjectConfig;
           // some configs are global only
           config.isolate = rstestConfig.isolate;
@@ -155,6 +177,22 @@ export class Rstest implements RstestContext {
               config.source.tsconfigPath,
             );
           }
+          const environmentName = formatEnvironmentName(config.name);
+
+          if (config.performance?.buildCache) {
+            config.performance.buildCache = normalizeBuildCache({
+              buildCache: config.performance.buildCache,
+              root: config.root,
+              tsconfigPaths: config.source?.tsconfigPath
+                ? [config.source.tsconfigPath]
+                : [],
+              outputDistPathRoot: rstestConfig.output.distPath.root,
+              environmentName,
+              browserEnabled: config.browser.enabled,
+              assumeNormalized: true,
+            });
+          }
+
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
@@ -163,7 +201,7 @@ export class Rstest implements RstestContext {
             outputModule:
               config.output?.module ??
               process.env.RSTEST_OUTPUT_MODULE !== 'false',
-            environmentName: formatEnvironmentName(config.name),
+            environmentName,
             normalizedConfig: config,
           };
         })

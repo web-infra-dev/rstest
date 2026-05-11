@@ -1,4 +1,3 @@
-/** biome-ignore-all lint/complexity/useArrowFunction: <follow webpack runtime code convention> */
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
 const originalWebpackRequire = __webpack_require__;
@@ -168,7 +167,6 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       }
       const originalModule = requiredModule;
-      const isEsModule = originalModule.__esModule === true;
       const mockedModule =
         globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
           spy: isSpy,

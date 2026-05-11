@@ -15,6 +15,8 @@ export type TestContext = {
    * Metadata of the current test
    */
   task: {
+    /** A stable, unique identifier for the test */
+    id: string;
     /** Test name provided by user */
     name: string;
     /** Result of the current test, undefined if the test is not run yet */

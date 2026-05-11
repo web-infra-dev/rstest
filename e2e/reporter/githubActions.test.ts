@@ -183,6 +183,63 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
 });
 
 it.skipIf(!process.env.CI)(
+  'github-actions summary includes flaky tests with previous failure summaries',
+  async () => {
+    const stepSummaryPath = join(
+      __dirname,
+      '.tmp',
+      'github-step-summary-flaky.md',
+    );
+    fs.rmSync(stepSummaryPath, { force: true });
+
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        './rstest.githubActions.flaky.config.mts',
+        '--reporter',
+        'github-actions',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+          env: {
+            GITHUB_WORKSPACE: githubWorkspace,
+            GITHUB_STEP_SUMMARY: stepSummaryPath,
+          },
+        },
+      },
+    });
+
+    await cli.exec;
+    await cli.waitForStreamsEnd();
+    expect(cli.exec.process?.exitCode).toBe(0);
+
+    const stepSummary = fs
+      .readFileSync(stepSummaryPath, 'utf-8')
+      .replaceAll(process.cwd(), '<ROOT>');
+
+    expect(stepSummary).toContain('<details open>');
+    expect(stepSummary).toContain('<summary>Rstest Test Reporter ⚠️</summary>');
+    expect(stepSummary).toContain('# Rstest Test Reporter ⚠️');
+    expectWorkspacePath(stepSummary);
+    expect(stepSummary).toContain('| **Flaky Tests** | 1 passed after retry |');
+    expect(stepSummary).toContain('## Flaky Tests');
+    expect(stepSummary).toContain(
+      '- `flaky-fixtures/githubActionsFlaky.test.ts > passes after retry` (passed after retry x1)',
+    );
+    expect(stepSummary).toContain(
+      'Previous failure: AssertionError: expected 1 to be 2 // Object.is equality',
+    );
+    expect(stepSummary).not.toContain('## Failures');
+
+    fs.rmSync(stepSummaryPath, { force: true });
+    fs.rmSync(join(__dirname, '.tmp'), { recursive: true, force: true });
+  },
+);
+
+it.skipIf(!process.env.CI)(
   'github-actions summary includes explicit project name in title',
   async () => {
     const stepSummaryPath = join(

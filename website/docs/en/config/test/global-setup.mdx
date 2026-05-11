@@ -69,7 +69,7 @@ export default async function globalSetup() {
 ```
 
 :::note
-Global setup is running in a different global context, so your tests don't have access to variables defined here.
+Global setup runs in a separate context: module-scope variables defined in the setup file are not accessible from tests. However, for node test workers, `process.env` mutations made in `globalSetup` are snapshotted after setup completes and propagated to each worker — setting environment variables here is a supported way to share values with node tests. This propagation does not apply to browser-mode tests; only the static `test.env` config is forwarded to browser workers.
 :::
 
 ## Multiple global setup files

@@ -29,6 +29,41 @@ export type RstestPoolOptions = {
 
 export type BundleDependencyPattern = string | RegExp;
 
+export type RstestBuildCacheConfig = {
+  /**
+   * Directory used to store Rsbuild persistent cache files.
+   *
+   * When omitted, rstest stores cache files under
+   * `node_modules/.cache/rstest-<project-name>`.
+   */
+  cacheDirectory?: string;
+  /**
+   * Additional values that should invalidate the persistent cache when changed.
+   *
+   * rstest appends its own runtime digest automatically.
+   */
+  cacheDigest?: Array<string | undefined>;
+  /**
+   * Additional files that should invalidate the persistent cache when changed.
+   *
+   * rstest automatically adds the active rstest config file, project config
+   * files, and discovered tsconfig paths when available.
+   */
+  buildDependencies?: string[];
+};
+
+export type RstestPerformanceConfig = {
+  /**
+   * Enable Rsbuild persistent build cache for test builds.
+   *
+   * When set to `true`, rstest uses a cache directory outside the temporary
+   * output folder and appends rstest-specific invalidation inputs.
+   *
+   * @default false
+   */
+  buildCache?: boolean | RstestBuildCacheConfig;
+};
+
 export type RstestOutputConfig = Pick<
   NonNullable<RsbuildConfig['output']>,
   'cssModules' | 'emitAssets' | 'externals' | 'cleanDistPath' | 'module'
@@ -66,6 +101,7 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
+  | 'silent'
   | 'bail'
   | 'shard'
   | 'output'
@@ -327,11 +363,22 @@ export interface RstestConfig {
   printConsoleTrace?: boolean;
 
   /**
-   * Disable console intercept. `onConsoleLog` & `printConsoleTrace` configuration will not take effect.
+   * Disable console intercept enhancements. `onConsoleLog` & `printConsoleTrace`
+   * configuration will not take effect. When `silent` is enabled, Rstest still
+   * uses an internal console interception path to control test log output.
    *
    * @default false
    */
   disableConsoleIntercept?: boolean;
+
+  /**
+   * Silence intercepted console output from tests.
+   * - `true`: hide all intercepted test console logs
+   * - `'passed-only'`: show intercepted logs only for failed tasks
+   *
+   * @default false
+   */
+  silent?: boolean | 'passed-only';
 
   /**
    * Update snapshot files. Will update all changed snapshots and delete obsolete ones.
@@ -454,6 +501,11 @@ export interface RstestConfig {
   coverage?: CoverageOptions;
 
   /**
+   * Performance-related Rsbuild options used by rstest.
+   */
+  performance?: RstestPerformanceConfig;
+
+  /**
    * chai configuration options
    */
   chaiConfig?: ChaiConfig;
@@ -494,11 +546,13 @@ export interface RstestConfig {
 type OptionalKeys =
   | 'testNamePattern'
   | 'plugins'
+  | 'performance'
   | 'source'
   | 'resolve'
   | 'tools'
   | 'dev'
   | 'onConsoleLog'
+  | 'silent'
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'

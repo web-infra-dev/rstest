@@ -50,7 +50,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
     const assertion = expect(null, message).withContext({
       poll: true,
     }) as Assertion;
-    // biome-ignore lint/style/noParameterAssign: reassigning
     fn = fn.bind(assertion);
     // TODO: flag rstest
     const test = util.flag(assertion, 'vitest-test') as TestCase | undefined;
@@ -137,7 +136,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           // only .then is enough to check awaited, but we type this as `Promise<void>` in global types
           // so let's follow it
           return {
-            // biome-ignore lint/suspicious/noThenProperty: promise-like
             then(onFulfilled, onRejected) {
               awaited = true;
               resultPromise ||= promise();

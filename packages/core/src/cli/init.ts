@@ -17,6 +17,8 @@ export type CommonOptions = {
   root?: string;
   config?: string;
   configLoader?: LoadConfigOptions['loader'];
+  related?: boolean;
+  findRelatedTests?: boolean;
   globals?: boolean;
   /**
    * Pool options.
@@ -62,6 +64,7 @@ export type CommonOptions = {
         allowExternal?: boolean;
       };
   passWithNoTests?: boolean;
+  silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
   disableConsoleIntercept?: boolean;
@@ -93,6 +96,7 @@ function mergeWithCLIOptions(
     'globals',
     'isolate',
     'passWithNoTests',
+    'silent',
     'update',
     'testNamePattern',
     'testTimeout',

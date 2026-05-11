@@ -37,6 +37,7 @@ function captureEnvChanges(): Record<string, string | undefined> {
 const runGlobalSetup = async (data: {
   entries: {
     distPath: string;
+    runtimeDistPath?: string;
     testPath: string;
   }[];
   assetFiles: Record<string, string>;
@@ -73,7 +74,7 @@ const runGlobalSetup = async (data: {
     trackEnvChanges();
 
     for (const entry of data.entries) {
-      const { distPath, testPath } = entry;
+      const { distPath, runtimeDistPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
@@ -82,6 +83,7 @@ const runGlobalSetup = async (data: {
       const module = await loadModule({
         codeContent: setupCodeContent,
         distPath,
+        runtimeDistPath,
         testPath,
         rstestContext: {
           global,
@@ -132,19 +134,53 @@ const runGlobalSetup = async (data: {
   }
 };
 
-// Entry point for tinypool worker
-export default async function runInPool(options: any): Promise<any> {
-  switch (options.type) {
-    case 'setup':
-      return runGlobalSetup(options);
+type GlobalSetupRequest =
+  | { __rstest_global_setup__: true; id: number; type: 'setup'; payload: any }
+  | { __rstest_global_setup__: true; id: number; type: 'teardown' };
 
-    case 'teardown':
-      return runGlobalTeardown();
+type GlobalSetupResponse = {
+  __rstest_global_setup__: true;
+  id: number;
+  result: unknown;
+};
 
-    default:
-      throw new Error(`Unknown worker type: ${options.type}`);
+const isGlobalSetupRequest = (value: unknown): value is GlobalSetupRequest => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { __rstest_global_setup__?: unknown }).__rstest_global_setup__ ===
+      true
+  );
+};
+
+const sendResponse = (id: number, result: unknown): void => {
+  const response: GlobalSetupResponse = {
+    __rstest_global_setup__: true,
+    id,
+    result,
+  };
+  process.send?.(response);
+};
+
+process.on('message', async (message: unknown) => {
+  if (!isGlobalSetupRequest(message)) {
+    return;
   }
-}
+  try {
+    if (message.type === 'setup') {
+      const result = await runGlobalSetup(message.payload);
+      sendResponse(message.id, result);
+    } else {
+      const result = await runGlobalTeardown();
+      sendResponse(message.id, result);
+    }
+  } catch (error) {
+    sendResponse(message.id, {
+      success: false,
+      errors: await formatTestError(error),
+    });
+  }
+});
 
 export const runGlobalTeardown = async (): Promise<{
   success: boolean;

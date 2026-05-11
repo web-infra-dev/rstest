@@ -515,6 +515,67 @@ describe('prepareRsbuild', () => {
     ]);
   });
 
+  it('should append user resolve.conditionNames in jsdom environment', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'jsdom',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              plugins: [],
+              resolve: {
+                conditionNames: ['modern:source', 'require', 'node', 'default'],
+              },
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'jsdom',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(bundlerConfigs[0]?.resolve?.conditionNames).toEqual([
+      'modern:source',
+      'require',
+      'node',
+      'default',
+    ]);
+  });
+
   it('should generate rspack config correctly in watch mode', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {
@@ -571,6 +632,98 @@ describe('prepareRsbuild', () => {
     } = await rsbuildInstance.inspectConfig();
 
     expect(bundlerConfigs[0]).toMatchSnapshot();
+  });
+
+  it('should pass normalized performance.buildCache to rsbuild config', async () => {
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'run',
+        configFilePath: join(rootPath, 'rstest.config.ts'),
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          plugins: [],
+          performance: {
+            buildCache: {
+              cacheDirectory: join(rootPath, 'node_modules/.cache/rstest-test'),
+              cacheDigest: ['root-digest'],
+              buildDependencies: [join(rootPath, 'rstest.config.ts')],
+            },
+          },
+          resolve: {},
+          source: {},
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            configFilePath: join(rootPath, 'projects/test/rstest.config.ts'),
+            normalizedConfig: {
+              plugins: [],
+              performance: {
+                buildCache: {
+                  cacheDirectory: join(
+                    rootPath,
+                    'node_modules/.cache/rstest-test',
+                  ),
+                  cacheDigest: ['root-digest'],
+                  buildDependencies: [join(rootPath, 'rstest.config.ts')],
+                },
+              },
+              resolve: {},
+              source: {
+                tsconfigPath: join(rootPath, 'tsconfig.json'),
+              },
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const { origin } = await rsbuildInstance.inspectConfig();
+
+    expect(origin).toBeDefined();
+    expect(
+      (origin as any).environmentConfigs?.test?.performance?.buildCache,
+    ).toEqual({
+      cacheDirectory: join(rootPath, 'node_modules/.cache/rstest-test'),
+      cacheDigest: [
+        'rstest',
+        'run',
+        'test',
+        'node',
+        TEMP_RSTEST_OUTPUT_DIR,
+        'root-digest',
+      ],
+      buildDependencies: [
+        join(rootPath, 'projects/test/rstest.config.ts'),
+        join(rootPath, 'tsconfig.json'),
+        join(rootPath, 'rstest.config.ts'),
+      ],
+    });
   });
 
   it('should generate rspack config correctly (esm output)', async () => {

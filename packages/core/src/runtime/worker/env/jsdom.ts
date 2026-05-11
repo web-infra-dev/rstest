@@ -12,9 +12,8 @@ export const environment: TestEnvironment<typeof globalThis> = {
   name: 'jsdom',
   setup: async (global, options) => {
     checkPkgInstalled('jsdom');
-    const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = await import(
-      'jsdom'
-    );
+    const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
+      await import('jsdom');
 
     const {
       html = '<!DOCTYPE html>',
