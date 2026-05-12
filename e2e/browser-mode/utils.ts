@@ -33,6 +33,35 @@ export const shouldRunHeadedBrowserTests =
   Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
 
 /**
+ * Framework-level warnings that the build pipeline must not emit. Browser-mode
+ * tests launch rstest as a subprocess, so any Rsbuild/Rspack build warning or
+ * Node deprecation notice lands in `cli.stdout`/`cli.stderr` and is otherwise
+ * swallowed by the parent test runner. Asserting against this pattern turns
+ * silent regressions (e.g. a dynamic import losing its `webpackIgnore` magic
+ * comment) into explicit test failures.
+ */
+const FRAMEWORK_WARNING_PATTERN =
+  /Build warning:|Critical dependency:|DeprecationWarning:|\[MODULE_TYPELESS_PACKAGE_JSON\]/;
+
+export const expectNoFrameworkWarnings = (cli: {
+  stdout: string;
+  stderr: string;
+}): void => {
+  if (
+    !FRAMEWORK_WARNING_PATTERN.test(cli.stdout) &&
+    !FRAMEWORK_WARNING_PATTERN.test(cli.stderr)
+  ) {
+    return;
+  }
+  const offending = `${cli.stdout}\n${cli.stderr}`
+    .split('\n')
+    .filter((line) => FRAMEWORK_WARNING_PATTERN.test(line));
+  throw new Error(
+    `Expected no framework warnings in CLI output, found:\n${offending.join('\n')}`,
+  );
+};
+
+/**
  * Run browser mode CLI with specified fixture
  */
 export const runBrowserCli = async (
@@ -44,7 +73,7 @@ export const runBrowserCli = async (
 ) => {
   const args = extra?.args || [];
 
-  return await runRstestCli({
+  const result = await runRstestCli({
     command: 'rstest',
     args: ['run', ...args],
     options: {
@@ -54,6 +83,13 @@ export const runBrowserCli = async (
       },
     },
   });
+  return {
+    ...result,
+    expectExecSuccess: async () => {
+      await result.expectExecSuccess();
+      expectNoFrameworkWarnings(result.cli);
+    },
+  };
 };
 
 /**
@@ -66,7 +102,7 @@ export const runBrowserWatchCli = async (
     env?: Record<string, string>;
   },
 ) => {
-  return await runRstestCli({
+  const result = await runRstestCli({
     command: 'rstest',
     args: ['watch', '--disableConsoleIntercept', ...(extra?.args || [])],
     options: {
@@ -76,6 +112,13 @@ export const runBrowserWatchCli = async (
       },
     },
   });
+  return {
+    ...result,
+    expectExecSuccess: async () => {
+      await result.expectExecSuccess();
+      expectNoFrameworkWarnings(result.cli);
+    },
+  };
 };
 
 /**
@@ -88,7 +131,7 @@ export const runBrowserCliWithCwd = async (
     env?: Record<string, string>;
   },
 ) => {
-  return await runRstestCli({
+  const result = await runRstestCli({
     command: 'rstest',
     args: ['run', ...(extra?.args || [])],
     options: {
@@ -98,4 +141,11 @@ export const runBrowserCliWithCwd = async (
       },
     },
   });
+  return {
+    ...result,
+    expectExecSuccess: async () => {
+      await result.expectExecSuccess();
+      expectNoFrameworkWarnings(result.cli);
+    },
+  };
 };
