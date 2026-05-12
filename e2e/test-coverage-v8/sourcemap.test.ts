@@ -72,13 +72,11 @@ describe('test coverage-v8 sourcemap', () => {
     // Keep the assertion focused on sourcemap remapping correctness: the
     // report must point back to the original TS source file. The exact V8
     // statement/branch totals for this enum/class-field output can differ
-    // across runtime + output formats. In particular, CommonJS output can
-    // report this remapped file as fully covered while ESM keeps the
-    // partially-covered ranges.
+    // across runtime + output formats.
     expect(sourcemapLog).toMatch(
       isCommonJs
-        ? /^sourcemap\.ts\|100\|100\|100\|100\|$/
-        : /^sourcemap\.ts\|88\.88\|(75|80)\|100\|88\.88\|16-17$/,
+        ? /^sourcemap\.ts\|100\|75\|100\|100\|13$/
+        : /^sourcemap\.ts\|87\.5\|75\|100\|87\.5\|16$/,
     );
 
     // The final report should only include the remapped source file here.
@@ -86,8 +84,8 @@ describe('test coverage-v8 sourcemap', () => {
     // out before the global summary is calculated.
     expect(allFilesLog).toMatch(
       isCommonJs
-        ? /^Allfiles\|100\|100\|100\|100\|$/
-        : /^Allfiles\|88\.88\|(75|80)\|100\|88\.88\|$/,
+        ? /^Allfiles\|100\|75\|100\|100\|$/
+        : /^Allfiles\|87\.5\|75\|100\|87\.5\|$/,
     );
   });
 });

@@ -12,16 +12,16 @@ const expectCoverageSummary = (logs: string[]) => {
       ?.replaceAll(' ', ''),
   ).toBe(
     isCommonJs
-      ? 'string.ts|84|100|57.14|84|7-10'
-      : 'string.ts|80|100|60|80|2-4,7-8',
+      ? 'string.ts|75|50|66.66|71.42|7-12'
+      : 'string.ts|75|50|66.66|78.57|2-3,7',
   );
 
   expect(
     logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
   ).toBe(
     isCommonJs
-      ? 'Allfiles|95.74|100|85|95.74|'
-      : 'Allfiles|94.68|100|87.5|94.68|',
+      ? 'Allfiles|93.44|76.92|88.88|92.85|'
+      : 'Allfiles|93.44|84.61|88.88|94.64|',
   );
 };
 

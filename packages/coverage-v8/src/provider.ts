@@ -108,10 +108,51 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private shouldIgnoreTransformedFile(filepath: string): boolean {
-    const normalizedFilepath = filepath.replace(/\\/g, '/');
+    const normalizedFilepath = this.normalizeForMatching(filepath);
     return (
       normalizedFilepath.includes('/node_modules/') ||
       normalizedFilepath.includes('@rstest/')
+    );
+  }
+
+  private shouldProcessEntry(filePath: string): boolean {
+    const normalizedFilePath = this.normalizeForMatching(filePath);
+
+    if (this.shouldIgnoreTransformedFile(normalizedFilePath)) {
+      return false;
+    }
+
+    if (
+      !this.options.allowExternal &&
+      this.root &&
+      normalizedFilePath !== this.root &&
+      !normalizedFilePath.startsWith(`${this.root}/`)
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private shouldIgnoreOriginalSource(source: string): boolean {
+    const normalizedSource = this.normalizeForMatching(source);
+
+    return (
+      normalizedSource === 'rstest runtime' ||
+      normalizedSource.startsWith('webpack/runtime/') ||
+      normalizedSource.startsWith('node_modules/') ||
+      normalizedSource.includes('/node_modules/') ||
+      normalizedSource.includes('@rstest/')
+    );
+  }
+
+  private shouldSkipSourceMapEntry(sourceMap?: SourceMapLike): boolean {
+    if (!sourceMap?.sources.length) {
+      return false;
+    }
+
+    return sourceMap.sources.every((source) =>
+      this.shouldIgnoreOriginalSource(source),
     );
   }
 
@@ -139,33 +180,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     };
   }
 
-  private parseAst(code: string) {
-    const parseOptions = {
-      ecmaVersion: 'latest' as const,
+  private parseAst(code: string, outputModule: boolean) {
+    return Parser.parse(code, {
+      ecmaVersion: 'latest',
       locations: true,
       ranges: true,
-    };
-
-    try {
-      return Parser.parse(code, {
-        ...parseOptions,
-        sourceType: 'module',
-      });
-    } catch {
-      return Parser.parse(code, {
-        ...parseOptions,
-        sourceType: 'script',
-      });
-    }
-  }
-
-  private getConversionMode(): 'ast' | 'fallback' | 'auto' {
-    const mode = process.env.RSTEST_V8_CONVERTER;
-    if (mode === 'ast' || mode === 'fallback') {
-      return mode;
-    }
-
-    return 'auto';
+      sourceType: outputModule ? 'module' : 'script',
+    });
   }
 
   private async convertWithAst(
@@ -174,13 +195,19 @@ export class CoverageProvider implements RstestCoverageProvider {
     options?: {
       assetFiles?: Record<string, string>;
       sourceMaps?: Record<string, string>;
+      outputModule?: boolean;
     },
   ): Promise<Record<string, FileCoverageData>> {
     const { code, sourceMap } = await this.getTransformedSource(
       filePath,
       options,
     );
-    const ast = this.parseAst(code);
+
+    if (this.shouldSkipSourceMapEntry(sourceMap)) {
+      return {};
+    }
+
+    const ast = this.parseAst(code, options?.outputModule ?? true);
 
     return (await astV8ToIstanbul({
       ast,
@@ -193,43 +220,19 @@ export class CoverageProvider implements RstestCoverageProvider {
     })) as Record<string, FileCoverageData>;
   }
 
-  private async convertWithFallback(
-    filePath: string,
-    entry: inspector.Profiler.ScriptCoverage,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
-  ): Promise<Record<string, FileCoverageData>> {
-    const { code, sourceMap } = await this.getTransformedSource(
-      filePath,
-      options,
-    );
-    const converterOptions = sourceMap
-      ? {
-          source: code,
-          sourceMap: { sourcemap: sourceMap },
-        }
-      : {
-          source: code,
-        };
-    const converter = v8ToIstanbul(filePath, 0, converterOptions, (filepath) =>
-      this.shouldIgnoreTransformedFile(filepath),
-    );
-
-    await converter.load();
-    converter.applyCoverage(entry.functions);
-    const istanbulData = converter.toIstanbul() as Record<
-      string,
-      FileCoverageData
-    >;
-    converter.destroy();
-    return istanbulData;
-  }
-
   private filterCoverageData(istanbulData: Record<string, FileCoverageData>) {
     for (const key of Object.keys(istanbulData)) {
-      const originalTestPath = this.toProjectRelativePath(key);
+      const normalizedKey = key.replace(/\\/g, '/');
+
+      // AST remapping can emit original-source entries that differ from the
+      // executed script URL. Re-apply the same internal-file guard here so
+      // remapped node_modules / @rstest files do not leak into the final map.
+      if (this.shouldIgnoreTransformedFile(normalizedKey)) {
+        delete istanbulData[key];
+        continue;
+      }
+
+      const originalTestPath = this.toProjectRelativePath(normalizedKey);
 
       if (
         this.isExcluded(originalTestPath) ||
@@ -253,6 +256,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   collect(options?: {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
+    outputModule?: boolean;
   }): Promise<CoverageMap | null> {
     return this.collectImpl(options);
   }
@@ -260,6 +264,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   private async collectImpl(options?: {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
+    outputModule?: boolean;
   }): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
@@ -285,33 +290,14 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         if (!this.isMatch(filePath)) return;
 
-        try {
-          let istanbulData: Record<string, FileCoverageData>;
-          const conversionMode = this.getConversionMode();
+        if (!this.shouldProcessEntry(filePath)) return;
 
-          if (conversionMode === 'ast') {
-            istanbulData = await this.convertWithAst(filePath, entry, options);
-          } else if (conversionMode === 'fallback') {
-            istanbulData = await this.convertWithFallback(
-              filePath,
-              entry,
-              options,
-            );
-          } else {
-            try {
-              istanbulData = await this.convertWithAst(
-                filePath,
-                entry,
-                options,
-              );
-            } catch {
-              istanbulData = await this.convertWithFallback(
-                filePath,
-                entry,
-                options,
-              );
-            }
-          }
+        try {
+          const istanbulData = await this.convertWithAst(
+            filePath,
+            entry,
+            options,
+          );
 
           this.filterCoverageData(istanbulData);
           coverageMap.merge(istanbulData);

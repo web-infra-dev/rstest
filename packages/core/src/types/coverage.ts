@@ -162,6 +162,7 @@ export declare class CoverageProvider {
   collect(options?: {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
+    outputModule?: boolean;
   }): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**

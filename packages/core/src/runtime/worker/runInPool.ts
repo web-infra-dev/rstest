@@ -582,6 +582,7 @@ export const runInPool = async (
       const coverageMap = await coverageProvider.collect({
         assetFiles,
         sourceMaps,
+        outputModule: options.context.outputModule,
       });
       if (coverageMap) {
         // Attach coverage data to test result
