@@ -67,6 +67,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ],
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
+  ['--trace', 'Dump a Perfetto-compatible performance trace JSON file'],
   [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
@@ -321,7 +322,7 @@ export const runRest = async ({
     });
 
     rstest = createRstest(
-      { config, configFilePath, projects },
+      { config, configFilePath, projects, trace: options.trace },
       command,
       effectiveFilters,
       fileFilterMode,

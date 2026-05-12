@@ -17,6 +17,10 @@ export { createRstestRuntime } from './runtime/api';
 // These are the test APIs that run in the browser (describe, it, expect, etc.)
 export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
+// Trace primitives — the browser host instantiates PhaseTracker per test file
+// and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
+export { PhaseTracker } from './runtime/worker/phaseTracker';
+export type { TraceEvent } from './utils/trace';
 // Types
 export type {
   BrowserTestRunOptions,

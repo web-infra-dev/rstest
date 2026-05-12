@@ -23,10 +23,7 @@ import type {
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError } from '../util';
-import {
-  runWithCurrentTask,
-  setFallbackCurrentTask,
-} from '../worker/taskContext';
+import type { TaskContext } from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
 import { getFileTaskId } from './index';
 import {
@@ -42,6 +39,8 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+
+  constructor(private readonly taskContext: TaskContext) {}
 
   async runTests({
     tests,
@@ -297,7 +296,7 @@ export class TestRunner {
       }
 
       if (test.type === 'suite') {
-        result = await runWithCurrentTask(
+        result = await this.taskContext.run(
           {
             taskId: test.testId,
             taskName: test.name,
@@ -399,7 +398,7 @@ export class TestRunner {
 
         errors.push(...(result.errors || []));
       } else {
-        result = await runWithCurrentTask(
+        result = await this.taskContext.run(
           {
             taskId: test.testId,
             taskName: test.name,
@@ -501,7 +500,7 @@ export class TestRunner {
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);
 
-    setFallbackCurrentTask({
+    this.taskContext.setFallback({
       taskId: getFileTaskId(testPath),
       taskType: 'file',
       testPath,
@@ -523,7 +522,7 @@ export class TestRunner {
         duration: RealDate.now() - start,
       };
     } finally {
-      setFallbackCurrentTask(undefined);
+      this.taskContext.setFallback(undefined);
     }
   }
 

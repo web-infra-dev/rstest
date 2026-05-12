@@ -49,6 +49,7 @@ type Options = {
   fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
+  trace?: boolean;
 };
 
 export class Rstest implements RstestContext {
@@ -61,6 +62,7 @@ export class Rstest implements RstestContext {
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
+  public trace: boolean;
   public version: string;
   public rootPath: string;
   public originalConfig: RstestConfig;
@@ -96,11 +98,13 @@ export class Rstest implements RstestContext {
       fileFilterMode,
       configFilePath,
       projects,
+      trace = false,
     }: Options,
     userConfig: RstestConfig,
   ) {
     this.cwd = cwd;
     this.command = command;
+    this.trace = trace;
     this.fileFilters = fileFilters;
     this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
@@ -189,6 +193,8 @@ export class Rstest implements RstestContext {
               outputDistPathRoot: rstestConfig.output.distPath.root,
               environmentName,
               browserEnabled: config.browser.enabled,
+              coverageEnabled: config.coverage?.enabled,
+              coverageProvider: config.coverage?.provider,
               assumeNormalized: true,
             });
           }

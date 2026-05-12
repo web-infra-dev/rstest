@@ -37,6 +37,7 @@ distpath
 docgen
 dogfooding
 dorny
+elifecycle
 endgroup
 envinfo
 estree
