@@ -161,10 +161,33 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: ${{ fromJson((github.event_name == 'schedule' || needs.prepare.outputs.is_release_pr == 'true') && '["20","22","24"]' || '["20","24"]') }}
-        test_script: ${{ fromJson(github.event_name == 'schedule' && '["test:commonjs","test:no-isolate"]' || (needs.prepare.outputs.is_release_pr == 'true' && '["test","test:commonjs","test:no-isolate"]' || '["test"]')) }}
-        # On release PRs the baseline `test` only covers Node 20/24 (matching the PR matrix), so exclude `test` × Node 22.
-        exclude: ${{ fromJson(needs.prepare.outputs.is_release_pr == 'true' && '[{"node_version":"22","test_script":"test"}]' || '[]') }}
+        # Trigger-dependent axes:
+        #
+        #   trigger      | node_version | test_script                  | exclude
+        #   -------------+--------------+------------------------------+-----------
+        #   PR / push    | [20, 24]     | [test]                       | -
+        #   schedule     | [20, 22, 24] | [commonjs, no-isolate]       | -
+        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
+        node_version: >-
+          ${{ fromJson(
+            (github.event_name == 'schedule' || needs.prepare.outputs.is_release_pr == 'true')
+            && '["20","22","24"]'
+            || '["20","24"]'
+          ) }}
+        test_script: >-
+          ${{ fromJson(
+            github.event_name == 'schedule'
+              && '["test:commonjs","test:no-isolate"]'
+            || needs.prepare.outputs.is_release_pr == 'true'
+              && '["test","test:commonjs","test:no-isolate"]'
+            || '["test"]'
+          ) }}
+        exclude: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_release_pr == 'true'
+              && '[{"node_version":"22","test_script":"test"}]'
+            || '[]'
+          ) }}
 
     steps:
       - name: Checkout
