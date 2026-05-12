@@ -160,8 +160,10 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
-        test_script: ${{ fromJson(github.event_name == 'schedule' && '["test:commonjs","test:no-isolate"]' || '["test"]') }}
+        node_version: ${{ fromJson((github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'release:')) && '["20","22","24"]' || '["20","24"]') }}
+        test_script: ${{ fromJson(github.event_name == 'schedule' && '["test:commonjs","test:no-isolate"]' || (startsWith(github.event.pull_request.title, 'release:') && '["test","test:commonjs","test:no-isolate"]' || '["test"]')) }}
+        # On release PRs the baseline `test` only covers Node 20/24 (matching the PR matrix), so exclude `test` × Node 22.
+        exclude: ${{ fromJson(startsWith(github.event.pull_request.title, 'release:') && '[{"node_version":"22","test_script":"test"}]' || '[]') }}
 
     steps:
       - name: Checkout
