@@ -8,11 +8,13 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
+import type { TaskContext } from '../worker/taskContext';
 import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = async (
   workerState: WorkerState,
+  { taskContext }: { taskContext: TaskContext },
 ): Promise<{
   runner: {
     runTests: (
@@ -26,7 +28,7 @@ export const createRstestRuntime = async (
   api: Rstest;
 }> => {
   const [{ runner, api: runnerAPI }, { SnapshotPlugin }] = await Promise.all([
-    Promise.resolve(createRunner({ workerState })),
+    Promise.resolve(createRunner({ workerState, taskContext })),
     import(/* webpackChunkName: "snapshot" */ './snapshot'),
   ]);
 

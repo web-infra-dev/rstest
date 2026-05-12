@@ -22,10 +22,9 @@ import {
   type InspectOptions,
   inspect,
 } from 'node:util';
-import type { UserConsoleLog } from '../../types';
+import type { CurrentTaskInfo, UserConsoleLog } from '../../types';
 import { prettyTime } from '../../utils/helper';
 import { color } from '../../utils/logger';
-import { getCurrentTask } from './taskContext';
 
 const RealDate = Date;
 
@@ -49,10 +48,12 @@ export function createCustomConsole({
   onConsoleLog,
   testPath,
   printConsoleTrace,
+  getCurrentTask,
 }: {
   onConsoleLog: (log: UserConsoleLog) => void;
   testPath: string;
   printConsoleTrace: boolean;
+  getCurrentTask: () => CurrentTaskInfo | undefined;
 }): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
