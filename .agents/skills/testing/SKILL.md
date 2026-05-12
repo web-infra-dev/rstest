@@ -79,6 +79,15 @@ Important:
 - Keep fixtures minimal and representative of the behavior under test
 - Don't create near-duplicate fixtures just to add one extra test case
 
+## Spawning rstest via `runRstestCli` in e2e tests
+
+Sibling test files run in parallel under the worker pool. The moment any of them triggers disk writes — `performance.buildCache`, `dev.writeToDisk: true`, `DEBUG=rstest`, coverage — they race on the shared default output path `<cwd>/dist/.rstest-temp/`. Plain in-memory runs don't race today, but a future config flip can turn any fixture into a writer.
+
+- **Set `cwd` to a dedicated fixture subdirectory**, not `__dirname` of the test file.
+- **Never share `cwd: __dirname`** across test files in the same directory.
+- **Drop `include` patterns that reference paths outside the fixture directory** (e.g. `'./fixtures/<name>/index.test.ts'`). Fixture-local globs like `'./*.test.ts'` are fine.
+- **Keep `dist/.rstest-temp/...` assertions inside an isolated fixture directory**, never a shared one.
+
 ## Snapshot policy
 
 - Only update snapshots when the behavioral change is **intentional**
