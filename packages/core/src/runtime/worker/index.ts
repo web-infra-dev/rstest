@@ -80,6 +80,10 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
+// Read once at worker bootstrap — toggling `RSTEST_MEMORY_AWARE` mid-run is
+// not supported (host samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED = process.env.RSTEST_MEMORY_AWARE !== '0';
+
 const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
@@ -92,6 +96,9 @@ const runTask = async (
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
+      memory: MEMORY_REPORTING_ENABLED
+        ? { rss: process.memoryUsage().rss }
+        : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into

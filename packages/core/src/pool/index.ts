@@ -26,6 +26,7 @@ import {
   needFlagExperimentalDetectModule,
 } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
+import { createDefaultMemoryGate } from './memoryGate';
 import { Pool } from './pool';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -371,6 +372,7 @@ export const createPool = async ({
       ...getForceColorEnv(),
       ...process.env,
     } as Record<string, string>,
+    memoryGate: createDefaultMemoryGate(),
   });
 
   const createRpcMethods = ({
