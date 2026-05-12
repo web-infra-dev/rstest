@@ -258,7 +258,7 @@ describe('related test filtering', () => {
 
     await runRstestCli({
       command: 'git',
-      args: ['init'],
+      args: ['-c', 'init.defaultBranch=main', 'init'],
       options: {
         nodeOptions: {
           cwd: fixturesTargetPath,
@@ -356,7 +356,7 @@ describe('related test filtering', () => {
       return cli.stdout.trim();
     };
 
-    await runGit(['init']);
+    await runGit(['-c', 'init.defaultBranch=main', 'init']);
     await runGit(['add', '.']);
     await runGit([
       '-c',
@@ -432,7 +432,7 @@ describe('related test filtering', () => {
       }).then(({ expectExecSuccess }) => expectExecSuccess());
     };
 
-    await runGit(['init']);
+    await runGit(['-c', 'init.defaultBranch=main', 'init']);
     await runGit(['add', '.']);
     await runGit([
       '-c',
