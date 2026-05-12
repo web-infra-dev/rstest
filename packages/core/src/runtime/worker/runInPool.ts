@@ -14,7 +14,8 @@ import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
-import { initTaskContext, setFallbackCurrentTask } from './taskContext';
+import { createNodeTaskContext } from './taskContext.node';
+import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -113,7 +114,7 @@ const preparePool = async ({
   });
   globalCleanups.length = 0;
 
-  await initTaskContext();
+  const taskContext = createNodeTaskContext();
   setRealTimers();
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
@@ -172,6 +173,7 @@ const preparePool = async ({
       },
       testPath,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
+      getCurrentTask: () => taskContext.getCurrent(),
     });
   }
 
@@ -223,7 +225,9 @@ const preparePool = async ({
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = await createRstestRuntime(workerState);
+  const { api, runner } = await createRstestRuntime(workerState, {
+    taskContext,
+  });
 
   switch (testEnvironment.name) {
     case 'node':
@@ -270,6 +274,7 @@ const preparePool = async ({
     rpc,
     silentConsoleController,
     api,
+    taskContext,
     unhandledErrors,
     cleanup: async () => {
       await Promise.all(cleanupFns.map((fn) => fn()));
@@ -447,6 +452,7 @@ export const runInPool = async (
     }
   }
 
+  let taskContext: TaskContext | undefined;
   try {
     const {
       rstestContext,
@@ -457,7 +463,9 @@ export const runInPool = async (
       cleanup,
       unhandledErrors,
       interopDefault,
+      taskContext: preparedTaskContext,
     } = await preparePool(options);
+    taskContext = preparedTaskContext;
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       return {
@@ -499,7 +507,7 @@ export const runInPool = async (
     // Keep file-level context only while evaluating top-level module code.
     // Once the runner starts, suite/case tasks should own subsequent logs so
     // passed suite buffers are not replayed by the final file-level flush.
-    setFallbackCurrentTask({
+    taskContext.setFallback({
       taskId: getFileTaskId(testPath),
       taskType: 'file',
       testPath,
@@ -518,7 +526,7 @@ export const runInPool = async (
         outputModule: options.context.outputModule,
       });
     } finally {
-      setFallbackCurrentTask(undefined);
+      taskContext.setFallback(undefined);
     }
 
     const results = await runner.runTests(
@@ -603,7 +611,7 @@ export const runInPool = async (
       errors: await formatTestError(err),
     };
   } finally {
-    setFallbackCurrentTask(undefined);
+    taskContext?.setFallback(undefined);
     await teardown();
   }
 };
