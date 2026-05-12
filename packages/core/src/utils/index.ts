@@ -5,3 +5,4 @@ export * from './logger';
 export * from './process';
 export * from './shard';
 export * from './testFiles';
+export * from './trace';

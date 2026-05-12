@@ -67,6 +67,7 @@ export type CommonOptions = {
   silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
+  trace?: boolean;
   disableConsoleIntercept?: boolean;
   update?: boolean;
   testNamePattern?: RegExp | string;
