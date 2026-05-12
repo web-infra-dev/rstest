@@ -168,6 +168,9 @@ jobs:
         #   PR / push    | [20, 24]     | [test]                       | -
         #   schedule     | [20, 22, 24] | [commonjs, no-isolate]       | -
         #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
+        #
+        # Note: Node 20 + test:no-isolate can hit upstream vm native crashes under worker
+        # reuse; tolerated on schedule / release PR runs in exchange for coverage.
         node_version: >-
           ${{ fromJson(
             (github.event_name == 'schedule' || needs.prepare.outputs.is_release_pr == 'true')
