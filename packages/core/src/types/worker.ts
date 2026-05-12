@@ -78,6 +78,8 @@ export type WorkerContext = {
   runtimeConfig: RuntimeConfig;
   taskId: number;
   outputModule: boolean;
+  /** When true, the worker emits Perfetto trace events alongside phase totals. */
+  trace?: boolean;
 };
 
 export type RunWorkerOptions = {

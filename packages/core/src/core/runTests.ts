@@ -1,14 +1,21 @@
 import { constants as osConstants } from 'node:os';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { createPool } from '../pool';
-import type { EntryInfo, ProjectEntries, SourceMapInput } from '../types';
+import type {
+  Duration,
+  EntryInfo,
+  ProjectEntries,
+  SourceMapInput,
+} from '../types';
 import type { CoverageMap } from '../types/coverage';
 import {
   clearScreen,
   color,
+  createTraceController,
   getTestEntries,
   logger,
   resolveShardedEntries,
+  type TraceEvent,
 } from '../utils';
 import {
   type BrowserTestRunOptions,
@@ -110,11 +117,7 @@ const notifyReportersOnTestRunEnd = async ({
 }: {
   context: Rstest;
   coverage?: CoverageMap;
-  duration: {
-    totalTime: number;
-    buildTime: number;
-    testTime: number;
-  };
+  duration: Duration;
   getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
   unhandledErrors?: Error[];
   filterRerunTestPaths?: string[];
@@ -158,6 +161,13 @@ export async function runTests(context: Rstest): Promise<void> {
     testTime: 0,
   });
 
+  // Constructed before the browser-only fast path so `--trace` is honored
+  // for pure-browser runs (browser host forwards events via `onTraceEvents`).
+  const traceController = createTraceController({
+    enabled: context.trace,
+    rootPath: context.rootPath,
+  });
+
   // If only browser tests, run them and generate coverage
   if (hasBrowserProjects && !hasNodeProjects) {
     if (context.relatedResolutionEmpty) {
@@ -175,6 +185,7 @@ export async function runTests(context: Rstest): Promise<void> {
         });
       }
 
+      await traceController.close();
       return;
     }
 
@@ -187,8 +198,11 @@ export async function runTests(context: Rstest): Promise<void> {
       );
     }
 
+    const traceRun = traceController.beginRun();
+
     const browserResult = await runBrowserModeTests(context, browserProjects, {
       skipOnTestRunEnd: false,
+      onTraceEvents: traceRun.onEvents,
     });
 
     // Generate coverage reports for browser-only tests when execution produced test results.
@@ -214,6 +228,7 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
+    await traceController.shutdown(traceRun);
     return;
   }
 
@@ -221,6 +236,17 @@ export async function runTests(context: Rstest): Promise<void> {
   // If both, run them in parallel
 
   let browserResultPromise: Promise<BrowserTestRunResult | void> | undefined;
+  // Late-binding handoff for mixed-mode browser+node runs: the browser host
+  // is launched once at the top of `runTests`, but each call to `run()`
+  // starts a fresh per-rerun trace buffer. Pre-allocate the first buffer
+  // here so events emitted before `run()` adopts it — or in scenarios where
+  // `run()` is never called (mixed mode with all node tests filtered out) —
+  // are not silently dropped. `beginRun` itself returns a no-op handle when
+  // tracing is disabled, so we can keep `activeTraceRun` non-optional.
+  let activeTraceRun = traceController.beginRun();
+  const forwardBrowserTraceEvents = context.trace
+    ? (events: TraceEvent[]) => activeTraceRun.onEvents?.(events)
+    : undefined;
 
   const allProjects = context.projects;
 
@@ -320,6 +346,7 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+      onTraceEvents: forwardBrowserTraceEvents,
     });
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
@@ -334,6 +361,11 @@ export async function runTests(context: Rstest): Promise<void> {
     }
     // If only browser tests were to run and they ran, we should return.
     if (hasBrowserTestsToRun) {
+      // `run()` was never invoked on this path, so no node-side finalize
+      // fires for the pre-allocated buffer. Flush any browser events the
+      // host emitted into it before exiting so `--trace` still produces a
+      // file for filtered mixed-mode runs.
+      await traceController.shutdown(activeTraceRun);
       return;
     }
     // If no node projects at all, and no browser tests to run,
@@ -460,6 +492,11 @@ export async function runTests(context: Rstest): Promise<void> {
       ? coverageProvider.createCoverageMap()
       : undefined;
 
+    // Adopt the pre-allocated buffer (set above `runTests` or at the end of
+    // the previous rerun's `finalize`) so browser events emitted before
+    // `run()` are captured.
+    const traceRun = activeTraceRun;
+
     const returns = await Promise.all(
       projects.map(async (p) => {
         const {
@@ -548,6 +585,7 @@ export async function runTests(context: Rstest): Promise<void> {
           project: p,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
+          onTraceEvents: traceRun.onEvents,
         });
 
         return {
@@ -599,7 +637,7 @@ export async function runTests(context: Rstest): Promise<void> {
       };
 
       // When unifying reporter output, combine browser and node durations
-      const duration =
+      const duration: Duration =
         shouldUnifyReporter && browserResult
           ? {
               totalTime:
@@ -680,6 +718,12 @@ export async function runTests(context: Rstest): Promise<void> {
         await generateCoverage(context, mergedCoverageMap!, coverageProvider);
       }
 
+      await traceRun.finalize();
+      // Pre-allocate the next watch-rerun buffer so browser events emitted
+      // between reruns (or before the next `run()` adopts a fresh buffer)
+      // are not lost.
+      activeTraceRun = traceController.beginRun();
+
       if (isFailure) {
         const bail = context.normalizedConfig.bail;
 
@@ -711,6 +755,13 @@ export async function runTests(context: Rstest): Promise<void> {
         await runGlobalTeardown();
         await pool.close();
         await closeServer();
+        // Flush any browser events the host pushed into the pre-allocated
+        // buffer since the last `run()` finalized — otherwise they get
+        // dropped when the controller closes. Inline (not `shutdown`)
+        // because cleanup may run from a SIGINT handler and `waitForExit`
+        // would block waiting for another signal.
+        await activeTraceRun.finalize();
+        await traceController.close();
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
       }
@@ -750,6 +801,8 @@ export async function runTests(context: Rstest): Promise<void> {
       await runGlobalTeardown();
       await pool.close();
       await closeServer();
+      await activeTraceRun.finalize();
+      await traceController.close();
     });
 
     let buildStart: number | undefined;
@@ -771,6 +824,8 @@ export async function runTests(context: Rstest): Promise<void> {
           closeServer: async () => {
             await pool.close();
             await closeServer();
+            await activeTraceRun.finalize();
+            await traceController.close();
           },
           runAll: async () => {
             clearScreen();
@@ -898,6 +953,8 @@ export async function runTests(context: Rstest): Promise<void> {
         await runGlobalTeardown();
         await pool.close();
         await closeServer();
+        await activeTraceRun.finalize();
+        await traceController.close();
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
       }
@@ -952,5 +1009,7 @@ export async function runTests(context: Rstest): Promise<void> {
       process.off('SIGTERM', handleSignal);
       process.off('SIGTSTP', handleSignal);
     }
+
+    await traceController.waitForExit();
   }
 }

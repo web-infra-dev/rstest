@@ -18,6 +18,7 @@ import {
   type ListCommandResult,
   loadCoverageProvider,
   logger,
+  PhaseTracker,
   type ProjectContext,
   type Reporter,
   type Rstest,
@@ -94,6 +95,18 @@ type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
+ * mode. Browser host runs every test file inside the same Node process, so
+ * without an override every file would emit events under the same `pid` and
+ * share a single track labelled `worker <hostPid>`. Giving each file its own
+ * synthetic `pid` makes the track title surface the file path instead,
+ * matching node mode's default `isolate: true` behavior. The 1_000_000_000
+ * base keeps each synthetic `pid` well clear of real OS `pid` values in
+ * mixed-mode traces.
+ */
+let nextBrowserFilePid = 1_000_000_000;
 
 /**
  * Serialize JSON for inline <script> injection.
@@ -1693,10 +1706,22 @@ export const runBrowserController = async (
   context: Rstest,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false, allowEmptyWatchRun = false } =
-    options ?? {};
+  const {
+    skipOnTestRunEnd = false,
+    allowEmptyWatchRun = false,
+    onTraceEvents,
+  } = options ?? {};
   const buildStart = Date.now();
   const isWatchMode = context.command === 'watch';
+
+  // Per-file PhaseTrackers, populated only when `--trace` is on (caller
+  // passes `onTraceEvents`). The browser host shares one Node process across
+  // every test file, so each tracker is assigned a synthetic per-file pid
+  // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
+  // process track with the file path as the title.
+  const phaseTrackers = onTraceEvents
+    ? new Map<string, PhaseTracker>()
+    : undefined;
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
@@ -2180,6 +2205,17 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    if (phaseTrackers) {
+      const tracker = new PhaseTracker({
+        trace: {
+          testPath: payload.testPath,
+          project: payload.projectName,
+        },
+        pid: nextBrowserFilePid++,
+      });
+      tracker.transition('prepare');
+      phaseTrackers.set(payload.testPath, tracker);
+    }
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileStart?.({
@@ -2194,6 +2230,7 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.transition('tests');
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileReady?.(payload),
@@ -2204,6 +2241,7 @@ export const runBrowserController = async (
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestSuiteStart?.(payload),
@@ -2214,6 +2252,7 @@ export const runBrowserController = async (
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestSuiteResult?.(payload),
@@ -2234,6 +2273,7 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestCaseStart?.(payload),
@@ -2243,6 +2283,7 @@ export const runBrowserController = async (
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
+    phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestCaseResult?.(payload),
@@ -2267,6 +2308,16 @@ export const runBrowserController = async (
     context.updateReporterResultState([payload], payload.results);
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
+    }
+
+    if (phaseTrackers) {
+      const tracker = phaseTrackers.get(payload.testPath);
+      if (tracker) {
+        tracker.end();
+        const events = tracker.getTraceEvents();
+        if (events) onTraceEvents?.(events);
+        phaseTrackers.delete(payload.testPath);
+      }
     }
 
     if (context.normalizedConfig.silent === 'passed-only') {
