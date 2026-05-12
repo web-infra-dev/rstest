@@ -79,14 +79,15 @@ Important:
 - Keep fixtures minimal and representative of the behavior under test
 - Don't create near-duplicate fixtures just to add one extra test case
 
-## Spawning rstest via `runRstestCli` in e2e tests
+## E2E rstest spawns that write to disk
 
-Sibling test files run in parallel under the worker pool. The moment any of them triggers disk writes — `performance.buildCache`, `dev.writeToDisk: true`, `DEBUG=rstest`, coverage — they race on the shared default output path `<cwd>/dist/.rstest-temp/`. Plain in-memory runs don't race today, but a future config flip can turn any fixture into a writer.
+A spawned rstest run only writes `<cwd>/dist/.rstest-temp/` when something forces it — `performance.buildCache`, `dev.writeToDisk: true`, `DEBUG=rstest`, coverage. Sibling test files run in parallel under the worker pool, so two such writers under the same `cwd` race on that path. Pure in-memory runs (just stdout/exit checks) don't race — sharing `cwd: __dirname` is fine and is how most e2e tests are written.
 
-- **Set `cwd` to a dedicated fixture subdirectory**, not `__dirname` of the test file.
-- **Never share `cwd: __dirname`** across test files in the same directory.
-- **Drop `include` patterns that reference paths outside the fixture directory** (e.g. `'./fixtures/<name>/index.test.ts'`). Fixture-local globs like `'./*.test.ts'` are fine.
-- **Keep `dist/.rstest-temp/...` assertions inside an isolated fixture directory**, never a shared one.
+When your test or its fixture config writes to disk:
+
+- Set `cwd` to the fixture subdirectory (`join(__dirname, 'fixtures', <name>)`), not `__dirname`.
+- In that fixture's config, drop any `include` referencing paths outside the fixture (e.g. `'./fixtures/<name>/index.test.ts'`). Fixture-local globs like `'./*.test.ts'` are fine.
+- Read `dist/.rstest-temp/...` assertions from that isolated fixture dir, not from a shared parent.
 
 ## Snapshot policy
 
