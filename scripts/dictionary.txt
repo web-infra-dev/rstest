@@ -1,4 +1,5 @@
 # Custom Dictionary Words
+ACMRTUXB
 antd
 apng
 apos
@@ -13,6 +14,7 @@ bundleless
 bytedance
 caniuse
 canyonjs
+cdup
 CEHQ
 chunkhash
 Chunktmp

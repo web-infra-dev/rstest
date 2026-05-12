@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
   createCli,
@@ -151,9 +152,9 @@ describe('related CLI options', () => {
     await runGit(cwd, ['add', 'staged.ts']);
 
     await expect(resolveChangedFiles(nestedDir)).resolves.toEqual([
-      join(cwd, 'base.ts'),
-      join(cwd, 'staged.ts'),
-      join(cwd, 'untracked.ts'),
+      normalize(join(cwd, 'base.ts')),
+      normalize(join(cwd, 'staged.ts')),
+      normalize(join(cwd, 'untracked.ts')),
     ]);
   });
 
@@ -177,9 +178,9 @@ describe('related CLI options', () => {
     await runGit(cwd, ['add', 'staged.ts']);
 
     await expect(resolveChangedFiles(cwd, baseCommit)).resolves.toEqual([
-      join(cwd, 'committed.ts'),
-      join(cwd, 'staged.ts'),
-      join(cwd, 'unstaged.ts'),
+      normalize(join(cwd, 'committed.ts')),
+      normalize(join(cwd, 'staged.ts')),
+      normalize(join(cwd, 'unstaged.ts')),
     ]);
   });
 });
