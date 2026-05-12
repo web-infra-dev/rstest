@@ -161,11 +161,7 @@ jobs:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
         node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
-        test_script: ${{ fromJson(github.event_name == 'schedule' && '["test","test:commonjs","test:no-isolate"]' || '["test"]') }}
-        exclude:
-          # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
-          - node_version: '20'
-            test_script: 'test:no-isolate'
+        test_script: ${{ fromJson(github.event_name == 'schedule' && '["test:commonjs","test:no-isolate"]' || '["test"]') }}
 
     steps:
       - name: Checkout
