@@ -6,7 +6,39 @@ packages:
   - 'examples/**'
   - 'e2e/**'
 
-strictPeerDependencies: false
+allowBuilds:
+  '@parcel/watcher': false
+  '@swc/core': false
+  '@vscode/vsce-sign': false
+  core-js-pure: false
+  keytar: false
+  lefthook: true
+  svelte-preprocess: false
+
 autoInstallPeers: false
+
 # for vsce
 hoistPattern: ['@secretlint/*']
+
+# Reduce the risk of installing compromised packages
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@rspack/*'
+  - '@rsbuild/*'
+  - '@rslib/*'
+  - '@rspress/*'
+  - '@rstest/*'
+  - '@rsdoctor/*'
+  - '@rslint/*'
+
+packageExtensions:
+  '@vue/test-utils':
+    peerDependencies:
+      '@vue/compiler-dom': 3.5.17
+      '@vue/server-renderer': 3.5.17
+      vue: ^3.5.17
+
+# Prevent un-reviewed build scripts
+strictDepBuilds: true
+
+strictPeerDependencies: false

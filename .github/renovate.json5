@@ -61,8 +61,6 @@
     },
   ],
   ignoreDeps: [
-    // manually update some packages
-    'pnpm',
     // align Node.js version minimum requirements
     '@types/node',
     'node',
