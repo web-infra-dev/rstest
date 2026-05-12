@@ -18,6 +18,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "acorn": "^8.15.0",
+    "ast-v8-to-istanbul": "^1.0.0",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",

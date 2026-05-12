@@ -6,6 +6,8 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
+import astV8ToIstanbul from 'ast-v8-to-istanbul';
+import { Parser } from 'acorn';
 import istanbulLibCoverage, {
   type CoverageMap,
   type FileCoverageData,
@@ -14,6 +16,16 @@ import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
+
+type SourceMapLike = {
+  version: number;
+  sources: string[];
+  names: string[];
+  mappings: string;
+  file?: string;
+  sourceRoot?: string;
+  sourcesContent?: (string | null)[];
+};
 
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
@@ -38,7 +50,6 @@ export class CoverageProvider implements RstestCoverageProvider {
       : () => false;
 
     this.isMatch = (filePath: string) => {
-      // Fast path for obviously ignored directories.
       if (
         filePath.includes('/node_modules/') ||
         filePath.includes('@rstest/')
@@ -70,6 +81,163 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     return normalizedFilePath;
+  }
+
+  private findInDict(
+    dict: Record<string, string> | undefined,
+    filePath: string,
+  ): string | undefined {
+    if (!dict) return undefined;
+    if (dict[filePath]) return dict[filePath];
+
+    for (const [key, value] of Object.entries(dict)) {
+      const normalizedKey = key.replace(/\\/g, '/');
+      if (normalizedKey === filePath) return value;
+      if (
+        filePath.startsWith('/private/') &&
+        normalizedKey === filePath.slice('/private'.length)
+      ) {
+        return value;
+      }
+      if (normalizedKey.toLowerCase() === filePath.toLowerCase()) {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  private shouldIgnoreTransformedFile(filepath: string): boolean {
+    const normalizedFilepath = filepath.replace(/\\/g, '/');
+    return (
+      normalizedFilepath.includes('/node_modules/') ||
+      normalizedFilepath.includes('@rstest/')
+    );
+  }
+
+  private async getTransformedSource(
+    filePath: string,
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+    },
+  ): Promise<{
+    code: string;
+    sourceMap?: SourceMapLike;
+  }> {
+    const assetSource = this.findInDict(options?.assetFiles, filePath);
+    const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+
+    return {
+      code: assetSource ?? (await fs.readFile(filePath, 'utf-8')),
+      sourceMap: sourceMapStr
+        ? ({
+            names: [],
+            ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+          } as SourceMapLike)
+        : undefined,
+    };
+  }
+
+  private parseAst(code: string) {
+    const parseOptions = {
+      ecmaVersion: 'latest' as const,
+      locations: true,
+      ranges: true,
+    };
+
+    try {
+      return Parser.parse(code, {
+        ...parseOptions,
+        sourceType: 'module',
+      });
+    } catch {
+      return Parser.parse(code, {
+        ...parseOptions,
+        sourceType: 'script',
+      });
+    }
+  }
+
+  private getConversionMode(): 'ast' | 'fallback' | 'auto' {
+    const mode = process.env.RSTEST_V8_CONVERTER;
+    if (mode === 'ast' || mode === 'fallback') {
+      return mode;
+    }
+
+    return 'auto';
+  }
+
+  private async convertWithAst(
+    filePath: string,
+    entry: inspector.Profiler.ScriptCoverage,
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+    },
+  ): Promise<Record<string, FileCoverageData>> {
+    const { code, sourceMap } = await this.getTransformedSource(
+      filePath,
+      options,
+    );
+    const ast = this.parseAst(code);
+
+    return (await astV8ToIstanbul({
+      ast,
+      code,
+      sourceMap,
+      coverage: {
+        url: entry.url,
+        functions: entry.functions,
+      },
+    })) as Record<string, FileCoverageData>;
+  }
+
+  private async convertWithFallback(
+    filePath: string,
+    entry: inspector.Profiler.ScriptCoverage,
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+    },
+  ): Promise<Record<string, FileCoverageData>> {
+    const { code, sourceMap } = await this.getTransformedSource(
+      filePath,
+      options,
+    );
+    const converterOptions = sourceMap
+      ? {
+          source: code,
+          sourceMap: { sourcemap: sourceMap },
+        }
+      : {
+          source: code,
+        };
+    const converter = v8ToIstanbul(filePath, 0, converterOptions, (filepath) =>
+      this.shouldIgnoreTransformedFile(filepath),
+    );
+
+    await converter.load();
+    converter.applyCoverage(entry.functions);
+    const istanbulData = converter.toIstanbul() as Record<
+      string,
+      FileCoverageData
+    >;
+    converter.destroy();
+    return istanbulData;
+  }
+
+  private filterCoverageData(istanbulData: Record<string, FileCoverageData>) {
+    for (const key of Object.keys(istanbulData)) {
+      const originalTestPath = this.toProjectRelativePath(key);
+
+      if (
+        this.isExcluded(originalTestPath) ||
+        !this.isIncluded(originalTestPath)
+      ) {
+        delete istanbulData[key];
+      }
+    }
   }
 
   async init(): Promise<void> {
@@ -109,29 +277,6 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const coverageMap = this.createCoverageMap();
 
-    const findInDict = (
-      dict: Record<string, string> | undefined,
-      filePath: string,
-    ): string | undefined => {
-      if (!dict) return undefined;
-      if (dict[filePath]) return dict[filePath];
-
-      for (const [key, value] of Object.entries(dict)) {
-        const normalizedKey = key.replace(/\\/g, '/');
-        if (normalizedKey === filePath) return value;
-        if (
-          filePath.startsWith('/private/') &&
-          normalizedKey === filePath.slice('/private'.length)
-        ) {
-          return value;
-        }
-        if (normalizedKey.toLowerCase() === filePath.toLowerCase()) {
-          return value;
-        }
-      }
-      return undefined;
-    };
-
     await Promise.all(
       coverage.result.map(async (entry) => {
         if (!entry.url.startsWith('file://')) return;
@@ -141,48 +286,34 @@ export class CoverageProvider implements RstestCoverageProvider {
         if (!this.isMatch(filePath)) return;
 
         try {
-          const assetSource = findInDict(options?.assetFiles, filePath);
-          const sourceMapStr = findInDict(options?.sourceMaps, filePath);
+          let istanbulData: Record<string, FileCoverageData>;
+          const conversionMode = this.getConversionMode();
 
-          const converter = v8ToIstanbul(
-            filePath,
-            0,
-            assetSource
-              ? {
-                  source: assetSource,
-                  sourceMap: sourceMapStr
-                    ? { sourcemap: JSON.parse(sourceMapStr) }
-                    : undefined,
-                }
-              : { source: await fs.readFile(filePath, 'utf-8') },
-            (filepath) => {
-              const normalizedFilepath = filepath.replace(/\\/g, '/');
-              return (
-                normalizedFilepath.includes('/node_modules/') ||
-                normalizedFilepath.includes('@rstest/')
+          if (conversionMode === 'ast') {
+            istanbulData = await this.convertWithAst(filePath, entry, options);
+          } else if (conversionMode === 'fallback') {
+            istanbulData = await this.convertWithFallback(
+              filePath,
+              entry,
+              options,
+            );
+          } else {
+            try {
+              istanbulData = await this.convertWithAst(
+                filePath,
+                entry,
+                options,
               );
-            },
-          );
-
-          await converter.load();
-          converter.applyCoverage(entry.functions);
-          const istanbulData = converter.toIstanbul();
-          converter.destroy();
-
-          for (const key of Object.keys(istanbulData)) {
-            // Apply include/exclude rules to a normalized project-relative path
-            // so Windows drive letters and path separators don't prevent setup
-            // files such as `rstest.setup.ts` from being excluded.
-            const originalTestPath = this.toProjectRelativePath(key);
-
-            if (
-              this.isExcluded(originalTestPath) ||
-              !this.isIncluded(originalTestPath)
-            ) {
-              delete istanbulData[key];
+            } catch {
+              istanbulData = await this.convertWithFallback(
+                filePath,
+                entry,
+                options,
+              );
             }
           }
 
+          this.filterCoverageData(istanbulData);
           coverageMap.merge(istanbulData);
         } catch (e) {
           console.warn(`Failed to process coverage for ${entry.url}:`, e);
@@ -218,7 +349,7 @@ export class CoverageProvider implements RstestCoverageProvider {
                 ranges: [{ startOffset: 0, endOffset: 0, count: 0 }],
                 isBlockCoverage: true,
               },
-            ]); // Empty coverage array workaround
+            ]);
             const istanbulData = converter.toIstanbul();
             converter.destroy();
             const keys = Object.keys(istanbulData);
@@ -262,9 +393,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   cleanup(): void {
-    if (this.session) {
-      this.session.disconnect();
-      this.session = null;
-    }
+    this.session?.disconnect();
+    this.session = null;
   }
 }
