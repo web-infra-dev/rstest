@@ -8,15 +8,15 @@ import {
 } from '@rstest/browser-manifest';
 import type {
   CoverageMapData,
+  CurrentTaskInfo,
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
 } from '@rstest/core/browser-runtime';
 import {
+  createBrowserTaskContext,
   createRstestRuntime,
-  getCurrentTask,
   globalApis,
-  initTaskContext,
   setRealTimers,
 } from '@rstest/core/browser-runtime';
 import { normalize } from 'pathe';
@@ -152,14 +152,12 @@ const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
 
-type CurrentTaskInfo = NonNullable<WorkerState['currentTask']>;
-
 /**
  * Intercept console methods and forward to host via send().
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
-  getCurrentTaskFallback: () => CurrentTaskInfo | undefined,
+  getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
 ): (() => void) => {
   const originalConsole = {
@@ -186,7 +184,7 @@ const interceptConsole = (
 
       // Format message
       const content = args.map(formatArg).join(' ');
-      const currentTask = getCurrentTask() ?? getCurrentTaskFallback();
+      const currentTask = getCurrentTask();
 
       // Send to host
       send({
@@ -421,7 +419,6 @@ const run = async () => {
   send({ type: 'ready' });
 
   setRealTimers();
-  await initTaskContext();
 
   // Preload runner.js sourcemap for inline snapshot support.
   // The snapshot code runs in runner.js, so we need its sourcemap
@@ -529,7 +526,9 @@ const run = async () => {
         },
       };
 
-      const runtime = await createRstestRuntime(workerState);
+      const runtime = await createRstestRuntime(workerState, {
+        taskContext: createBrowserTaskContext(),
+      });
 
       // Register global APIs if globals config is enabled
       if (runtimeConfig.globals) {
@@ -587,6 +586,10 @@ const run = async () => {
       },
     ];
 
+    // Per-file TaskContext; taskStack supplies the concurrent attribution
+    // that the single-slot fallback can't.
+    const taskContext = createBrowserTaskContext();
+
     const shouldInterceptConsole =
       !runtimeConfig.disableConsoleIntercept ||
       runtimeConfig.silent === true ||
@@ -595,7 +598,7 @@ const run = async () => {
     // Intercept console methods to forward logs to host
     const restoreConsole = shouldInterceptConsole
       ? interceptConsole(
-          () => taskStack[taskStack.length - 1],
+          () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
           runtimeConfig.disableConsoleIntercept
             ? false
             : (runtimeConfig.printConsoleTrace ?? false),
@@ -635,7 +638,7 @@ const run = async () => {
       syncCurrentTask();
     };
 
-    const runtime = await createRstestRuntime(workerState);
+    const runtime = await createRstestRuntime(workerState, { taskContext });
 
     // Register global APIs if globals config is enabled
     if (runtimeConfig.globals) {

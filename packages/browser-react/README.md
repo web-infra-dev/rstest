@@ -233,8 +233,6 @@ Wraps state updates in React's `act()` for proper batching. Automatically manage
 function act(callback: () => unknown): Promise<void>;
 ```
 
-> **Note:** For React 17 (which doesn't export `act`), this function falls back to simple async execution.
-
 ### `cleanup()`
 
 Unmounts all rendered components and removes their containers from the DOM.
@@ -260,7 +258,7 @@ interface RenderConfiguration {
 
 ## Compatibility
 
-- React 17, 18, and 19
+- React >= 18 (React 17 is not supported)
 - Rstest browser mode (experimental)
 - Node.js >= 20.19.0
 

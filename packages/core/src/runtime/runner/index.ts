@@ -7,6 +7,7 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
+import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
@@ -15,7 +16,13 @@ export const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
 
-export function createRunner({ workerState }: { workerState: WorkerState }): {
+export function createRunner({
+  workerState,
+  taskContext,
+}: {
+  workerState: WorkerState;
+  taskContext: TaskContext;
+}): {
   api: RunnerAPI;
   runner: {
     runTests: (
@@ -37,7 +44,7 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
-  const testRunner: TestRunner = new TestRunner();
+  const testRunner: TestRunner = new TestRunner(taskContext);
 
   return {
     api: {

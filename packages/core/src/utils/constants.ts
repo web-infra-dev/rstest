@@ -61,6 +61,8 @@ type BuildCacheInput = {
   command?: string;
   environmentName?: string;
   browserEnabled?: boolean;
+  coverageEnabled?: boolean;
+  coverageProvider?: string;
   outputDistPathRoot?: string;
   assumeNormalized?: boolean;
 };
@@ -83,6 +85,8 @@ export const normalizeBuildCache = ({
   command,
   environmentName,
   browserEnabled,
+  coverageEnabled,
+  coverageProvider,
   outputDistPathRoot,
   assumeNormalized = false,
 }: BuildCacheInput): false | RstestBuildCacheConfig => {
@@ -111,13 +115,17 @@ export const normalizeBuildCache = ({
 
   const userCacheDigest =
     assumeNormalized && userConfig.cacheDigest?.[0] === 'rstest'
-      ? userConfig.cacheDigest.slice(5)
+      ? userConfig.cacheDigest.slice(6)
       : userConfig.cacheDigest || [];
+  const coverageDigest = coverageEnabled
+    ? `coverage:${coverageProvider}`
+    : 'no-coverage';
   const cacheDigest = [
     'rstest',
     command,
     environmentName,
     browserEnabled ? 'browser' : 'node',
+    coverageDigest,
     outputDistPathRoot,
     ...userCacheDigest,
   ];
@@ -206,6 +214,8 @@ export const resolveProjectBuildCache = ({
     command: context.command,
     environmentName: project.environmentName,
     browserEnabled: project.normalizedConfig.browser.enabled,
+    coverageEnabled: project.normalizedConfig.coverage?.enabled,
+    coverageProvider: project.normalizedConfig.coverage?.provider,
     outputDistPathRoot: context.normalizedConfig.output.distPath.root,
     assumeNormalized: true,
   });
