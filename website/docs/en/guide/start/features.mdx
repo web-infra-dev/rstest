@@ -62,7 +62,7 @@ Learn more about [Browser mode](/guide/browser-testing).
 
 Rstest supports both [istanbul](https://istanbul.js.org/) and `v8` coverage providers. Enable coverage by setting `coverage.enabled` to `true`, then choose the provider that matches your workflow.
 
-Use `istanbul` when you want instrumentation-based coverage, or `v8` when you prefer Node.js inspector precise coverage remapped through `v8-to-istanbul`.
+Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. Browser Mode does not support `v8` coverage.
 
 Learn more about [Code coverage](/config/test/coverage).
 

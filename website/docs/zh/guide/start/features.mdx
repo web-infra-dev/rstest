@@ -62,7 +62,7 @@ Browser Mode 基于 [Playwright](https://playwright.dev/) 运行，可在 Chromi
 
 Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8` 两种覆盖率 provider。你可以在 Rstest 配置文件中将 `coverage.enabled` 设置为 `true` 来启用覆盖率，再根据项目需求选择对应的 provider。
 
-如果你需要基于插桩的覆盖率，可以使用 `istanbul`；如果你更希望使用 Node.js inspector precise coverage，并通过 `v8-to-istanbul` 重映射结果，则可以使用 `v8`。
+如果你需要基于 SWC 插桩且语义稳定的 Istanbul coverage，可以使用 `istanbul`；如果 coverage 的主要瓶颈是内存占用，可以使用 `v8`。Browser Mode 不支持使用 `v8` coverage。
 
 了解更多关于 [代码覆盖率](/config/test/coverage)。
 
