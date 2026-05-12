@@ -85,6 +85,17 @@ If you only want to inspect the affected test files, combine it with `rstest lis
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+### Run changed tests
+
+<ApiMeta addedVersion="0.10.0" />
+
+Use `--changed` to collect changed files from the current Git repository and run the tests related to those files. You can also pass a commit to run tests related to files changed since that commit:
+
+```bash
+npx rstest run --changed
+npx rstest run --changed=HEAD~1
+```
+
 ## rstest watch
 
 `rstest watch` will start listening mode and execute tests, and when the test or dependent file modifications, the associated test file will be re-execute.
@@ -258,6 +269,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
 | `--related`                     | Treat positional arguments as source file paths and only run related tests                                                                                            |
 | `--findRelatedTests`            | Alias for `--related` for Jest compatibility                                                                                                                          |
+| `--changed [commit]`            | Run tests related to changed files in the current Git repository, optionally since a commit                                                                           |
 | `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
 | `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
 | `--reporter <reporter>`         | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                    |

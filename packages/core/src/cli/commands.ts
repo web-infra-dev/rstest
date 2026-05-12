@@ -1,5 +1,5 @@
 import cac, { type CAC, type Command } from 'cac';
-import { normalize } from 'pathe';
+import { normalize, resolve } from 'pathe';
 import type {
   FileFilterMode,
   ListCommandOptions,
@@ -43,6 +43,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Treat positional arguments as source file paths and run only related tests',
   ],
   ['--findRelatedTests', 'Alias for --related for Jest compatibility'],
+  [
+    '--changed [commit]',
+    'Run tests related to changed files in the current Git repository, optionally since a commit',
+  ],
   ['--globals', 'Provide global APIs'],
   ['--isolate', 'Run tests in an isolated environment'],
   ['--include <include>', 'Match test files'],
@@ -236,8 +240,90 @@ export const normalizeCliFilters = (
   filters: ReadonlyArray<string | number>,
 ): string[] => filters.map((filter) => normalize(String(filter)));
 
-const isRelatedRun = (options: CommonOptions): boolean =>
-  options.related === true || options.findRelatedTests === true;
+export const isRelatedRun = (options: CommonOptions): boolean =>
+  options.related === true ||
+  options.findRelatedTests === true ||
+  options.changed !== undefined;
+
+export const validateRelatedCliOptions = (options: CommonOptions): void => {
+  const relatedOptionCount = [
+    options.related === true,
+    options.findRelatedTests === true,
+    options.changed !== undefined,
+  ].filter(Boolean).length;
+
+  if (relatedOptionCount > 1) {
+    throw new Error(
+      'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
+    );
+  }
+};
+
+export const resolveChangedFiles = async (
+  cwd: string,
+  since?: string,
+): Promise<string[]> => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileAsync = promisify(execFile);
+  const runGit = async (args: string[], gitCwd = cwd) => {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd: gitCwd,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    return stdout;
+  };
+  const resolveGitRoot = async () => {
+    const cdup = await runGit(['rev-parse', '--show-cdup']);
+
+    return normalize(resolve(cwd, cdup.trim()));
+  };
+  const git = async (args: string[], gitRoot: string) => {
+    const stdout = await runGit(args, gitRoot);
+
+    return stdout
+      .split('\n')
+      .map((file) => file.trim())
+      .filter(Boolean)
+      .map((file) => normalize(resolve(gitRoot, file)));
+  };
+
+  try {
+    const gitRoot = await resolveGitRoot();
+    const [committedFiles, stagedFiles, unstagedFiles] = await Promise.all([
+      since
+        ? git(
+            [
+              'diff',
+              '--name-only',
+              '--diff-filter=ACMRTUXB',
+              `${since}...HEAD`,
+            ],
+            gitRoot,
+          )
+        : [],
+      git(
+        ['diff', '--name-only', '--cached', '--diff-filter=ACMRTUXB'],
+        gitRoot,
+      ),
+      git(
+        ['ls-files', '--others', '--modified', '--exclude-standard'],
+        gitRoot,
+      ),
+    ]);
+
+    return Array.from(
+      new Set([...committedFiles, ...stagedFiles, ...unstagedFiles]),
+    ).sort();
+  } catch (error) {
+    throw new Error(
+      'Failed to resolve changed files for `--changed`. Make sure the current root is inside a Git repository.',
+      { cause: error },
+    );
+  }
+};
 
 const resolveEffectiveCliFilters = async ({
   options,
@@ -273,18 +359,35 @@ const resolveEffectiveCliFilters = async ({
     return { effectiveFilters: normalizedFilters, fileFilterMode: 'fuzzy' };
   }
 
+  validateRelatedCliOptions(options);
+
+  if (options.changed !== undefined && normalizedFilters.length > 0) {
+    throw new Error(
+      'The `--changed` option cannot be used with positional filters.',
+    );
+  }
+
   const { resolveRelatedTestFiles } = await import('../core/related');
   const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
 
-  const relatedFiles = await resolveRelatedTestFiles(
-    rstest.context,
-    normalizedFilters,
-  );
+  const sourceFilters =
+    options.changed !== undefined
+      ? await resolveChangedFiles(
+          rstest.context.rootPath,
+          typeof options.changed === 'string' ? options.changed : undefined,
+        )
+      : normalizedFilters;
+
+  const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
+    sourceFilters,
+    filterLabel: options.changed !== undefined ? '--changed' : '--related',
+    allowEmpty: options.changed !== undefined,
+  });
 
   return {
     effectiveFilters: relatedFiles,
     fileFilterMode: 'exact',
-    relatedFilters: normalizedFilters,
+    relatedFilters: sourceFilters,
     relatedResolutionEmpty: relatedFiles.length === 0,
   };
 };
@@ -326,6 +429,12 @@ export const runRest = async ({
       effectiveFilters,
       fileFilterMode,
     );
+    if (
+      options.changed !== undefined &&
+      options.passWithNoTests === undefined
+    ) {
+      rstest.context.normalizedConfig.passWithNoTests = true;
+    }
     rstest.context.relatedFilters = relatedFilters;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 
@@ -451,6 +560,12 @@ export function createCli(): CAC {
           effectiveFilters,
           fileFilterMode,
         );
+        if (
+          options.changed !== undefined &&
+          options.passWithNoTests === undefined
+        ) {
+          rstest.context.normalizedConfig.passWithNoTests = true;
+        }
         rstest.context.relatedFilters = relatedFilters;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 

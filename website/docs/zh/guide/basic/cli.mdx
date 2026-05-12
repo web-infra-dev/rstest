@@ -85,6 +85,17 @@ npx rstest run --findRelatedTests src/button.ts
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+### 运行变更相关测试
+
+<ApiMeta addedVersion="0.10.0" />
+
+使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。你也可以传入 commit，运行从该 commit 以来变更文件相关的测试：
+
+```bash
+npx rstest run --changed
+npx rstest run --changed=HEAD~1
+```
+
 ## rstest watch
 
 `rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
@@ -258,6 +269,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `-r, --root <root>`             | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
 | `--related`                     | 将位置参数视为源码文件路径，只运行相关测试                                                                                                           |
 | `--findRelatedTests`            | `--related` 的 Jest 兼容别名                                                                                                                         |
+| `--changed [commit]`            | 运行当前 Git 仓库中变更文件相关的测试，也可以指定从某个 commit 以来的变更                                                                            |
 | `--globals`                     | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                   |
 | `--isolate`                     | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                           |
 | `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |

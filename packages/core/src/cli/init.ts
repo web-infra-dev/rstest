@@ -19,6 +19,7 @@ export type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   related?: boolean;
   findRelatedTests?: boolean;
+  changed?: boolean | string;
   globals?: boolean;
   /**
    * Pool options.
@@ -120,6 +121,10 @@ function mergeWithCLIOptions(
     if (options[key] !== undefined) {
       (config[key] as any) = options[key];
     }
+  }
+
+  if (options.changed !== undefined && options.passWithNoTests === undefined) {
+    config.passWithNoTests ??= true;
   }
 
   if (options.reporter) {
