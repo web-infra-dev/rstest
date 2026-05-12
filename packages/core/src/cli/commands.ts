@@ -259,6 +259,25 @@ export const validateRelatedCliOptions = (options: CommonOptions): void => {
   }
 };
 
+const formatGitError = (error: unknown): string | undefined => {
+  if (error instanceof Error) {
+    if ('code' in error && error.code === 'ENOENT') {
+      return 'Git is not installed or not available on PATH.';
+    }
+
+    const stderr = 'stderr' in error ? error.stderr : undefined;
+    if (typeof stderr === 'string' && stderr.trim()) {
+      return stderr.trim().split('\n')[0];
+    }
+
+    if (error.message) {
+      return error.message;
+    }
+  }
+
+  return undefined;
+};
+
 export const resolveChangedFiles = async (
   cwd: string,
   since?: string,
@@ -266,6 +285,7 @@ export const resolveChangedFiles = async (
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
   const execFileAsync = promisify(execFile);
+  const normalizedCwd = normalize(cwd);
   const runGit = async (args: string[], gitCwd = cwd) => {
     const { stdout } = await execFileAsync('git', args, {
       cwd: gitCwd,
@@ -318,8 +338,10 @@ export const resolveChangedFiles = async (
       new Set([...committedFiles, ...stagedFiles, ...unstagedFiles]),
     ).sort();
   } catch (error) {
+    const reason = formatGitError(error);
+
     throw new Error(
-      'Failed to resolve changed files for `--changed`. Make sure the current root is inside a Git repository.',
+      `Failed to resolve changed files for \`--changed\` from ${normalizedCwd}. Make sure the current root is inside a Git repository.${reason ? ` Git error: ${reason}` : ''}`,
       { cause: error },
     );
   }
@@ -429,12 +451,6 @@ export const runRest = async ({
       effectiveFilters,
       fileFilterMode,
     );
-    if (
-      options.changed !== undefined &&
-      options.passWithNoTests === undefined
-    ) {
-      rstest.context.normalizedConfig.passWithNoTests = true;
-    }
     rstest.context.relatedFilters = relatedFilters;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 
@@ -560,12 +576,6 @@ export function createCli(): CAC {
           effectiveFilters,
           fileFilterMode,
         );
-        if (
-          options.changed !== undefined &&
-          options.passWithNoTests === undefined
-        ) {
-          rstest.context.normalizedConfig.passWithNoTests = true;
-        }
         rstest.context.relatedFilters = relatedFilters;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
 

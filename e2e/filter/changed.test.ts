@@ -37,15 +37,11 @@ const prepareChangedFixture = async (name: string) => {
 };
 
 const runGit = async (cwd: string, args: string[]) => {
-  await runRstestCli({
-    command: 'git',
-    args,
-    options: {
-      nodeOptions: {
-        cwd,
-      },
-    },
-  }).then(({ expectExecSuccess }) => expectExecSuccess());
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileAsync = promisify(execFile);
+
+  await execFileAsync('git', args, { cwd });
 };
 
 const initGitFixture = async (cwd: string) => {
@@ -119,8 +115,12 @@ describe('changed test filtering', () => {
     await expectExecFailed();
 
     expect(cli.stderr).toContain(
-      'Failed to resolve changed files for `--changed`. Make sure the current root is inside a Git repository.',
+      'Failed to resolve changed files for `--changed` from ',
     );
+    expect(cli.stderr).toContain(
+      '. Make sure the current root is inside a Git repository.',
+    );
+    expect(cli.stderr).toContain('Git error:');
   });
 
   it('should run tests related to changed files', async () => {
@@ -160,20 +160,14 @@ describe('changed test filtering', () => {
 
     await initGitFixture(fixturesTargetPath);
 
-    const { cli: headCli, expectExecSuccess: expectHeadSuccess } =
-      await runRstestCli({
-        command: 'git',
-        args: ['rev-parse', 'HEAD'],
-        options: {
-          nodeOptions: {
-            cwd: fixturesTargetPath,
-          },
-        },
-      });
-
-    await expectHeadSuccess();
-
-    const baseCommit = headCli.stdout.trim();
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
+      cwd: fixturesTargetPath,
+      encoding: 'utf8',
+    });
+    const baseCommit = stdout.trim();
 
     fs.update(join(fixturesTargetPath, 'src/other.ts'), (content) =>
       content.replace("greet('other')", "greet('other changed')"),

@@ -136,8 +136,14 @@ describe('related CLI options', () => {
   });
 
   it('wraps git errors when resolving changed files', async () => {
-    await expect(resolveChangedFiles('/')).rejects.toThrow(
-      'Failed to resolve changed files for `--changed`. Make sure the current root is inside a Git repository.',
+    const cwd = await mkdtemp(join(tmpdir(), 'rstest-changed-no-git-'));
+
+    onTestFinished(async () => {
+      await rm(cwd, { recursive: true, force: true });
+    });
+
+    await expect(resolveChangedFiles(cwd)).rejects.toThrow(
+      `Failed to resolve changed files for \`--changed\` from ${normalize(cwd)}. Make sure the current root is inside a Git repository.`,
     );
   });
 
