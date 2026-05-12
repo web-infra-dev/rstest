@@ -164,6 +164,21 @@ describe('related CLI options', () => {
     ]);
   });
 
+  it('preserves special changed file paths', async () => {
+    const cwd = await createGitFixture();
+    const files = [' leading-space.ts', 'unicode-你好.ts'];
+
+    await Promise.all(
+      files.map((file) =>
+        writeFile(join(cwd, file), 'export const value = 1;\n'),
+      ),
+    );
+
+    await expect(resolveChangedFiles(cwd)).resolves.toEqual(
+      expect.arrayContaining(files.map((file) => normalize(join(cwd, file)))),
+    );
+  });
+
   it('combines committed, staged, and unstaged files since a commit', async () => {
     const cwd = await createGitFixture();
     const baseCommit = await runGit(cwd, ['rev-parse', 'HEAD']);

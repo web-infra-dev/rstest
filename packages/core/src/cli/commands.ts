@@ -304,8 +304,7 @@ export const resolveChangedFiles = async (
     const stdout = await runGit(args, gitRoot);
 
     return stdout
-      .split('\n')
-      .map((file) => file.trim())
+      .split('\0')
       .filter(Boolean)
       .map((file) => normalize(resolve(gitRoot, file)));
   };
@@ -318,6 +317,7 @@ export const resolveChangedFiles = async (
             [
               'diff',
               '--name-only',
+              '-z',
               '--diff-filter=ACMRTUXB',
               `${since}...HEAD`,
             ],
@@ -325,11 +325,11 @@ export const resolveChangedFiles = async (
           )
         : [],
       git(
-        ['diff', '--name-only', '--cached', '--diff-filter=ACMRTUXB'],
+        ['diff', '--name-only', '-z', '--cached', '--diff-filter=ACMRTUXB'],
         gitRoot,
       ),
       git(
-        ['ls-files', '--others', '--modified', '--exclude-standard'],
+        ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
         gitRoot,
       ),
     ]);
