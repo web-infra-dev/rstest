@@ -189,6 +189,8 @@ export class Rstest implements RstestContext {
               outputDistPathRoot: rstestConfig.output.distPath.root,
               environmentName,
               browserEnabled: config.browser.enabled,
+              coverageEnabled: config.coverage?.enabled,
+              coverageProvider: config.coverage?.provider,
               assumeNormalized: true,
             });
           }

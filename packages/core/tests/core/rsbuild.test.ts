@@ -715,6 +715,7 @@ describe('prepareRsbuild', () => {
         'run',
         'test',
         'node',
+        'no-coverage',
         TEMP_RSTEST_OUTPUT_DIR,
         'root-digest',
       ],
