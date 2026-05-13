@@ -276,6 +276,8 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
       tsconfigPaths: merged.source?.tsconfigPath
         ? [merged.source.tsconfigPath]
         : [],
+      coverageEnabled: merged.coverage?.enabled,
+      coverageProvider: merged.coverage?.provider,
       outputDistPathRoot: merged.output.distPath.root,
     });
   }

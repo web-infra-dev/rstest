@@ -17,18 +17,16 @@ describe('test build config', () => {
   ])(
     '$name config should work correctly',
     async ({ name }, { onTestFinished }) => {
+      // Run each fixture inside its own directory so the default output path
+      // (dist/.rstest-temp) is scoped to that fixture and never collides with
+      // sibling test files that also spawn rstest under e2e/build/.
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: [
-          'run',
-          `fixtures/${name}`,
-          '-c',
-          `fixtures/${name}/rstest.config.mts`,
-        ],
+        args: ['run'],
         onTestFinished,
         options: {
           nodeOptions: {
-            cwd: __dirname,
+            cwd: join(__dirname, 'fixtures', name),
           },
         },
       });
@@ -40,28 +38,23 @@ describe('test build config', () => {
   it('should write output to customized distPath.root', async ({
     onTestFinished,
   }) => {
-    const defaultOutputPath = join(__dirname, 'dist/.rstest-temp');
-    const customOutputPath = join(__dirname, 'custom/.rstest-temp');
+    const fixtureDir = join(__dirname, 'fixtures/customOutput');
+    const defaultOutputPath = join(fixtureDir, 'dist/.rstest-temp');
+    const customOutputPath = join(fixtureDir, 'custom/.rstest-temp');
 
     fs.rmSync(defaultOutputPath, { recursive: true, force: true });
-    fs.rmSync(join(__dirname, 'custom'), {
+    fs.rmSync(join(fixtureDir, 'custom'), {
       recursive: true,
       force: true,
     });
-    fs.rmSync(join(defaultOutputPath, 'rstest-manifest.json'), { force: true });
 
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: [
-        'run',
-        'fixtures/customOutput',
-        '-c',
-        'fixtures/customOutput/rstest.config.mts',
-      ],
+      args: ['run'],
       onTestFinished,
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: fixtureDir,
         },
       },
     });

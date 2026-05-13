@@ -25,6 +25,7 @@ import {
   isDeno,
   needFlagExperimentalDetectModule,
 } from '../utils';
+import type { TraceEvent } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { Pool } from './pool';
 
@@ -192,6 +193,7 @@ const buildTask = async ({
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         runtimeConfig,
+        trace: context.trace,
       },
       type,
       setupEntries,
@@ -267,6 +269,8 @@ export const createPool = async ({
     project: ProjectContext;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
+    /** Perfetto trace events forwarded for caller-owned dumping. */
+    onTraceEvents?: (events: TraceEvent[]) => void;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -449,6 +453,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
       onCoverageResult,
+      onTraceEvents,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
@@ -487,6 +492,10 @@ export const createPool = async ({
           if (result.coverage) {
             onCoverageResult?.(result.coverage);
             delete result.coverage;
+          }
+          if (result.traceEvents) {
+            onTraceEvents?.(result.traceEvents);
+            delete result.traceEvents;
           }
           context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));

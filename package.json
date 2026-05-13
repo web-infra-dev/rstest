@@ -37,28 +37,9 @@
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@10.12.4",
+  "packageManager": "pnpm@10.33.4",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=10.12.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "core-js",
-      "lefthook"
-    ],
-    "overrides": {
-      "electron-to-chromium": "1.5.354",
-      "node-releases": "2.0.44"
-    },
-    "packageExtensions": {
-      "@vue/test-utils": {
-        "peerDependencies": {
-          "@vue/compiler-dom": "3.5.17",
-          "@vue/server-renderer": "3.5.17",
-          "vue": "^3.5.17"
-        }
-      }
-    }
   }
 }

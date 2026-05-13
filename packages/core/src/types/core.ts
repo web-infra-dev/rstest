@@ -87,6 +87,13 @@ export type RstestContext = {
    * - list: `rstest list`
    */
   command: RstestCommand;
+  /**
+   * Dump a Perfetto-compatible performance trace JSON file. CLI-only switch;
+   * not exposed via user config.
+   *
+   * @internal
+   */
+  trace: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;

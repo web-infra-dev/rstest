@@ -13,10 +13,13 @@ export function createRstest(
     config,
     projects,
     configFilePath,
+    trace,
   }: {
     config: RstestConfig;
     configFilePath?: string;
     projects: Project[];
+    /** CLI-only `--trace` switch; not exposed via user config. */
+    trace?: boolean;
   },
   command: RstestCommand,
   fileFilters: string[],
@@ -30,6 +33,7 @@ export function createRstest(
       fileFilterMode,
       configFilePath,
       projects,
+      trace,
     },
     config,
   );

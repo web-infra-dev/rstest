@@ -2,7 +2,7 @@ import { resolve } from 'pathe';
 import { mergeRstestConfig, withDefaultConfig } from '../src/config';
 import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
-import { resolveProjectBuildCache } from '../src/utils';
+import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -76,6 +76,7 @@ describe('mergeRstestConfig', () => {
         undefined,
         undefined,
         'node',
+        'no-coverage',
         'dist/.rstest-temp',
       ],
       buildDependencies: [resolve(__dirname, 'tsconfig.custom.json')],
@@ -104,10 +105,70 @@ describe('mergeRstestConfig', () => {
         undefined,
         undefined,
         'node',
+        'no-coverage',
         'custom/.rstest-temp',
         'user-digest',
       ],
       buildDependencies: [resolve(__dirname, 'a.config.ts')],
+    });
+  });
+
+  it('should include coverage state and provider in buildCache digest', () => {
+    const withoutCoverage = withDefaultConfig({
+      root: __dirname,
+      performance: {
+        buildCache: true,
+      },
+    });
+    const withCoverage = withDefaultConfig({
+      root: __dirname,
+      coverage: {
+        enabled: true,
+      },
+      performance: {
+        buildCache: true,
+      },
+    });
+
+    expect(withoutCoverage.performance?.buildCache).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+    });
+    expect(withCoverage.performance?.buildCache).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'coverage:istanbul',
+        'dist/.rstest-temp',
+      ],
+    });
+
+    const withCustomProvider = normalizeBuildCache({
+      buildCache: true,
+      root: __dirname,
+      browserEnabled: false,
+      coverageEnabled: true,
+      coverageProvider: 'custom',
+      outputDistPathRoot: 'dist/.rstest-temp',
+    });
+
+    expect(withCustomProvider).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'coverage:custom',
+        'dist/.rstest-temp',
+      ],
     });
   });
 
@@ -135,6 +196,7 @@ describe('mergeRstestConfig', () => {
         undefined,
         undefined,
         'node',
+        'no-coverage',
         'dist/.rstest-temp',
       ],
       buildDependencies: ['/repo/configs/cache-flags.ts'],
@@ -249,6 +311,7 @@ describe('mergeRstestConfig', () => {
         undefined,
         'browser',
         'node',
+        'no-coverage',
         'dist/.rstest-temp',
       ],
       buildDependencies: [],
@@ -257,7 +320,14 @@ describe('mergeRstestConfig', () => {
       rstest.projects[1]?.normalizedConfig.performance?.buildCache,
     ).toEqual({
       cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
-      cacheDigest: ['rstest', undefined, 'node', 'node', 'dist/.rstest-temp'],
+      cacheDigest: [
+        'rstest',
+        undefined,
+        'node',
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
       buildDependencies: [],
     });
     expect(
