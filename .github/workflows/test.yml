@@ -7,9 +7,6 @@ on:
   push:
     branches: [main]
 
-  schedule:
-    - cron: '0 16 * * *'
-
   workflow_dispatch:
 
 concurrency:
@@ -28,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
+      # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
+      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -47,7 +46,6 @@ jobs:
 
   # ======== lint ========
   lint:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -88,7 +86,7 @@ jobs:
   # ======== ut ========
   ut:
     needs: prepare
-    if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
+    if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -148,11 +146,7 @@ jobs:
   # ======== e2e ========
   e2e:
     needs: [prepare, lint, ut]
-    if: |
-      always() &&
-      (needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule') &&
-      needs.ut.result == 'success' &&
-      (github.event_name == 'schedule' || needs.lint.result == 'success')
+    if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -160,12 +154,34 @@ jobs:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-14, windows-latest]
-        node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
-        test_script: ['test', 'test:commonjs', 'test:no-isolate']
-        exclude:
-          # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
-          - node_version: '20'
-            test_script: 'test:no-isolate'
+        # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
+        #
+        #   trigger      | node_version | test_script                  | exclude
+        #   -------------+--------------+------------------------------+-----------
+        #   PR (regular) | [20, 24]     | [test]                       | -
+        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
+        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
+        #
+        # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
+        # reuse; tolerated on full runs in exchange for coverage.
+        node_version: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["20","22","24"]'
+            || '["20","24"]'
+          ) }}
+        test_script: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["test","test:commonjs","test:no-isolate"]'
+            || '["test"]'
+          ) }}
+        exclude: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '[{"node_version":"22","test_script":"test"}]'
+            || '[]'
+          ) }}
 
     steps:
       - name: Checkout
