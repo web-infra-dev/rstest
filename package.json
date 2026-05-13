@@ -47,6 +47,10 @@
       "core-js",
       "lefthook"
     ],
+    "overrides": {
+      "electron-to-chromium": "1.5.354",
+      "node-releases": "2.0.44"
+    },
     "packageExtensions": {
       "@vue/test-utils": {
         "peerDependencies": {
