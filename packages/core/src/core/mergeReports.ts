@@ -1,6 +1,9 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, relative } from 'pathe';
-import { createCoverageProvider } from '../coverage';
+import {
+  createCoverageProvider,
+  ensureCoverageProviderInstalled,
+} from '../coverage';
 import type { BlobData } from '../reporter/blob';
 import type {
   CoverageMapData,
@@ -119,6 +122,9 @@ export async function mergeReports(
 
   const blobs = loadBlobFiles(blobDir);
   const coverageOptions = context.normalizedConfig.coverage;
+  if (coverageOptions.enabled) {
+    await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
+  }
   const coverageProvider = coverageOptions.enabled
     ? await createCoverageProvider(coverageOptions, context.rootPath)
     : null;
