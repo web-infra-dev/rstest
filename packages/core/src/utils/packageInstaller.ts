@@ -1,16 +1,22 @@
-import { spawn as spawnProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { resolveCommand } from 'package-manager-detector/commands';
-import { detect as detectPackageManager } from 'package-manager-detector/detect';
+import { installPackage as installPackageWithPackageManager } from '@antfu/install-pkg';
 import { isTTY } from './helper';
 import { color, logger } from './logger';
 
+type PackageInstaller = (
+  packageName: string,
+  options: {
+    cwd: string;
+    dev: boolean;
+    silent: boolean;
+  },
+) => Promise<unknown>;
+
 export type InstallPackageOptions = {
   confirm?: typeof import('@clack/prompts').confirm;
-  detectPackageManager?: typeof detectPackageManager;
+  installPackage?: PackageInstaller;
   message?: string;
-  spawn?: typeof spawnProcess;
 };
 
 export function isPackageInstalled(packageName: string, root: string): boolean {
@@ -51,32 +57,13 @@ export const installPackage = async (
     return false;
   }
 
-  const detect = options.detectPackageManager ?? detectPackageManager;
-  const { agent = 'npm' } = (await detect({ cwd: root })) ?? {};
-  const resolved = resolveCommand(agent, 'add', ['-D', packageName]);
-  const command = resolved ?? {
-    command: 'npm',
-    args: ['install', '-D', packageName],
-  };
-
   logger.log(color.cyan(`Installing ${packageName}...`));
 
-  await new Promise<void>((resolve, reject) => {
-    const spawn = options.spawn ?? spawnProcess;
-    const child = spawn(command.command, command.args, {
-      cwd: root,
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-    });
-
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`${command.command} ${command.args.join(' ')} failed.`));
-    });
+  const installer = options.installPackage ?? installPackageWithPackageManager;
+  await installer(packageName, {
+    cwd: root,
+    dev: true,
+    silent: false,
   });
 
   return true;

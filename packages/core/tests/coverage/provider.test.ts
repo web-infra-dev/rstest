@@ -7,7 +7,6 @@ import {
   ensureCoverageProviderInstalled,
   installCoverageProvider,
 } from '../../src/coverage/install';
-import type { InstallPackageOptions } from '../../src/utils/packageInstaller';
 
 const originalStdinIsTTY = process.stdin.isTTY;
 const originalCI = process.env.CI;
@@ -63,27 +62,13 @@ describe('loadCoverageProvider', () => {
       const confirm = rs.fn<() => Promise<boolean>>(() =>
         Promise.resolve(true),
       );
-      const detectPackageManager = rs.fn(() =>
-        Promise.resolve({ agent: 'pnpm', name: 'pnpm' } as const),
-      );
-      const spawn: NonNullable<InstallPackageOptions['spawn']> = rs.fn(
-        (_command, _args, options) => {
-          mockProviderPackage(options?.cwd as string);
-          return {
-            on(event: string, listener: (code?: number) => void) {
-              if (event === 'exit') {
-                listener(0);
-              }
-              return this;
-            },
-          } as ReturnType<NonNullable<InstallPackageOptions['spawn']>>;
-        },
-      );
+      const packageInstaller = rs.fn(async (_packageName, options) => {
+        mockProviderPackage(options.cwd);
+      });
       const installer = (moduleName: string, cwd: string) =>
         installCoverageProvider(moduleName, cwd, {
           confirm,
-          detectPackageManager,
-          spawn,
+          installPackage: packageInstaller,
         });
 
       await ensureCoverageProviderInstalled({ enabled: true }, root, installer);
@@ -94,10 +79,13 @@ describe('loadCoverageProvider', () => {
           '@rstest/coverage-istanbul is required for coverage. Install it now?',
         initialValue: true,
       });
-      expect(spawn).toHaveBeenCalledWith(
-        'pnpm',
-        ['add', '-D', '@rstest/coverage-istanbul'],
-        expect.objectContaining({ cwd: root, stdio: 'inherit' }),
+      expect(packageInstaller).toHaveBeenCalledWith(
+        '@rstest/coverage-istanbul',
+        {
+          cwd: root,
+          dev: true,
+          silent: false,
+        },
       );
       expect(provider.CoverageProvider).toBeDefined();
       expect(provider.pluginCoverage({ enabled: true }).name).toBe(
