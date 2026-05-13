@@ -6,13 +6,6 @@ import { ensureTestEnvironmentDependencies } from '../../src/core/envDependencie
 
 const originalStdinIsTTY = process.stdin.isTTY;
 
-const setStdinIsTTY = (value: boolean) => {
-  Object.defineProperty(process.stdin, 'isTTY', {
-    configurable: true,
-    value,
-  });
-};
-
 const restoreStdinIsTTY = () => {
   Object.defineProperty(process.stdin, 'isTTY', {
     configurable: true,
