@@ -162,6 +162,12 @@ export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;
+  /**
+   * Perfetto-compatible trace events. Stripped at the pool boundary.
+   *
+   * @internal
+   */
+  traceEvents?: import('../utils/trace').TraceEvent[];
 };
 
 export interface UserConsoleLog {

@@ -1,6 +1,7 @@
 .DS_Store
 *.log*
 *.cpuprofile
+*.dump
 node_modules/
 
 .cache/
@@ -48,6 +49,7 @@ packages/vscode/*.vsix
 packages/vscode/icon.png
 
 .rstest-temp/
+.rstest/
 lefthook-local.yml
 
 # Generated memory benchmark fixture

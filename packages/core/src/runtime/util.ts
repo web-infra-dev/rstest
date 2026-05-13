@@ -28,6 +28,14 @@ export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
 
+/**
+ * Stable reference to `Date.now`, captured before `@sinonjs/fake-timers`
+ * can hijack the global. Phase boundaries straddling `tests` rely on this.
+ */
+const realNow = Date.now.bind(Date);
+
+export const getRealNow = (): number => realNow();
+
 export const formatTestError = async (
   err: any,
   test?: Test,

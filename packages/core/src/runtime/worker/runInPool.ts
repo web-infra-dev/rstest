@@ -11,6 +11,7 @@ import type {
 import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import { PhaseTracker } from './phaseTracker';
 import { createForksRpcOptions, createRuntimeRpc } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
@@ -103,11 +104,14 @@ const createOriginalLogWriter = () => {
   };
 };
 
-const preparePool = async ({
-  entryInfo: { distPath, testPath },
-  updateSnapshot,
-  context,
-}: RunWorkerOptions['options']) => {
+const preparePool = async (
+  {
+    entryInfo: { distPath, testPath },
+    updateSnapshot,
+    context,
+  }: RunWorkerOptions['options'],
+  tracker?: PhaseTracker,
+) => {
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
     fn();
@@ -229,6 +233,7 @@ const preparePool = async ({
     taskContext,
   });
 
+  tracker?.transition('envSetup');
   switch (testEnvironment.name) {
     case 'node':
       break;
@@ -253,6 +258,7 @@ const preparePool = async ({
     default:
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
   }
+  tracker?.transition('prepare');
 
   if (globals) {
     registerGlobalApi(api);
@@ -292,6 +298,7 @@ const loadFiles = async ({
   interopDefault,
   isolate,
   outputModule,
+  tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
   assetFiles: Record<string, string>;
@@ -302,6 +309,7 @@ const loadFiles = async ({
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
+  tracker?: PhaseTracker;
 }): Promise<void> => {
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
@@ -322,6 +330,7 @@ const loadFiles = async ({
   }
 
   // run setup files
+  tracker?.transition('setupFiles');
   for (const { distPath, testPath } of setupEntries) {
     const setupCodeContent = assetFiles[distPath]!;
 
@@ -336,6 +345,7 @@ const loadFiles = async ({
     });
   }
 
+  tracker?.transition('collect');
   await loadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
@@ -458,7 +468,20 @@ export const runInPool = async (
   }
 
   let taskContext: TaskContext | undefined;
+  const tracker = new PhaseTracker(
+    options.context.trace
+      ? {
+          trace: {
+            testPath,
+            project: options.context.project,
+          },
+        }
+      : undefined,
+  );
+  let runResult: TestFileResult | undefined;
+
   try {
+    tracker.transition('prepare');
     const {
       rstestContext,
       runner,
@@ -469,11 +492,11 @@ export const runInPool = async (
       unhandledErrors,
       interopDefault,
       taskContext: preparedTaskContext,
-    } = await preparePool(options);
+    } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
-      return {
+      runResult = {
         testId: getFileTaskId(testPath),
         project,
         testPath,
@@ -481,6 +504,7 @@ export const runInPool = async (
         name: '',
         results: [],
       };
+      return runResult;
     }
 
     if (options.context.runtimeConfig.coverage?.enabled) {
@@ -494,6 +518,7 @@ export const runInPool = async (
       await coverageProvider.init();
     }
 
+    tracker.transition('load');
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
       assets || (await rpc.getAssetsByEntry());
     sourceMaps = sourceMapsFromAssets;
@@ -526,11 +551,13 @@ export const runInPool = async (
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
+        tracker,
       });
     } finally {
       taskContext.setFallback(undefined);
     }
 
+    tracker.transition('tests');
     const results = await runner.runTests(
       testPath,
       {
@@ -538,9 +565,11 @@ export const runInPool = async (
           await rpc.onTestFileReady(test);
         },
         onTestSuiteStart: async (test) => {
+          tracker.recordSuiteStart(test);
           await rpc.onTestSuiteStart(test);
         },
         onTestSuiteResult: async (result) => {
+          tracker.recordSuiteResult(result);
           silentConsoleController.flushBufferedLogsForTask({
             taskId: result.testId,
             status: result.status,
@@ -551,9 +580,11 @@ export const runInPool = async (
           await rpc.onTestSuiteResult(result);
         },
         onTestCaseStart: async (test) => {
+          tracker.recordCaseStart(test);
           await rpc.onTestCaseStart(test);
         },
         onTestCaseResult: async (result) => {
+          tracker.recordCaseResult(result);
           silentConsoleController.flushBufferedLogsForTask({
             taskId: result.testId,
             status: result.status,
@@ -587,6 +618,7 @@ export const runInPool = async (
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
+      tracker.transition('coverage');
       const coverageMap = await coverageProvider.collect({
         assetFiles,
         sourceMaps,
@@ -603,9 +635,10 @@ export const runInPool = async (
       }
     }
 
-    return results;
+    runResult = results;
+    return runResult;
   } catch (err) {
-    return {
+    runResult = {
       testId: getFileTaskId(testPath),
       project,
       testPath,
@@ -614,12 +647,21 @@ export const runInPool = async (
       results: [],
       errors: await formatTestError(err),
     };
+    return runResult;
   } finally {
+    tracker.transition('teardown');
     if (coverageProvider) {
       coverageProvider.cleanup();
     }
 
     taskContext?.setFallback(undefined);
     await teardown();
+    tracker.end();
+    if (runResult) {
+      const traceEvents = tracker.getTraceEvents();
+      if (traceEvents) {
+        runResult.traceEvents = traceEvents;
+      }
+    }
   }
 };

@@ -11,9 +11,9 @@ describe('test build cache config', () => {
   it('should enable build cache with rstest-aware dependencies and keep warm runs measurable', async ({
     onTestFinished,
   }) => {
-    const fixtureName = 'buildCache';
-    const cacheDir = join(__dirname, '.cache/build-cache-fixture');
-    const outputDir = join(__dirname, 'dist/.rstest-temp');
+    const fixtureDir = join(__dirname, 'fixtures/buildCache');
+    const cacheDir = join(fixtureDir, '.cache/build-cache-fixture');
+    const outputDir = join(fixtureDir, 'dist/.rstest-temp');
     const inspectDir = join(outputDir, '.rsbuild');
 
     fs.rmSync(cacheDir, { recursive: true, force: true });
@@ -23,16 +23,11 @@ describe('test build cache config', () => {
       const start = Date.now();
       const result = await runRstestCli({
         command: 'rstest',
-        args: [
-          'run',
-          `fixtures/${fixtureName}`,
-          '-c',
-          `fixtures/${fixtureName}/rstest.config.mts`,
-        ],
+        args: ['run'],
         onTestFinished,
         options: {
           nodeOptions: {
-            cwd: __dirname,
+            cwd: fixtureDir,
             env: {
               DEBUG: 'rstest',
             },
@@ -75,8 +70,8 @@ describe('test build cache config', () => {
   it('should collect happy-dom build cache timing data on a non-trivial fixture', async ({
     onTestFinished,
   }) => {
-    const fixtureName = 'happyDomBuildCache';
-    const cacheDir = join(__dirname, '.cache/happy-dom-build-cache');
+    const fixtureDir = join(__dirname, 'fixtures/happyDomBuildCache');
+    const cacheDir = join(fixtureDir, '.cache/happy-dom-build-cache');
 
     fs.rmSync(cacheDir, { recursive: true, force: true });
 
@@ -84,16 +79,11 @@ describe('test build cache config', () => {
       const start = Date.now();
       const result = await runRstestCli({
         command: 'rstest',
-        args: [
-          'run',
-          `fixtures/${fixtureName}`,
-          '-c',
-          `fixtures/${fixtureName}/rstest.config.mts`,
-        ],
+        args: ['run'],
         onTestFinished,
         options: {
           nodeOptions: {
-            cwd: __dirname,
+            cwd: fixtureDir,
           },
         },
       });
@@ -118,24 +108,19 @@ describe('test build cache config', () => {
   it('should keep virtual module mocks stable across cold and warm build cache runs', async ({
     onTestFinished,
   }) => {
-    const fixtureName = 'mockBuildCache';
-    const cacheDir = join(__dirname, '.cache/mock-build-cache');
+    const fixtureDir = join(__dirname, 'fixtures/mockBuildCache');
+    const cacheDir = join(fixtureDir, '.cache/mock-build-cache');
 
     fs.rmSync(cacheDir, { recursive: true, force: true });
 
     const runFixture = async () => {
       const result = await runRstestCli({
         command: 'rstest',
-        args: [
-          'run',
-          `fixtures/${fixtureName}`,
-          '-c',
-          `fixtures/${fixtureName}/rstest.config.mts`,
-        ],
+        args: ['run'],
         onTestFinished,
         options: {
           nodeOptions: {
-            cwd: __dirname,
+            cwd: fixtureDir,
           },
         },
       });
