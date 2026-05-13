@@ -13,7 +13,7 @@ const changedFixturePath = join(__dirname, 'fixtures-changed');
 const collectRunTestFileLogs = (stdout: string) =>
   stdout
     .split('\n')
-    .filter((log) => log.includes('.test.ts'))
+    .filter((log) => log.includes('.test.ts') && !log.startsWith('::error'))
     .sort();
 
 const prepareChangedFixture = async (name: string) => {
