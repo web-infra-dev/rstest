@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
-      is_release_pr: ${{ startsWith(github.event.pull_request.title, 'release:') }}
+      # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
       is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') }}
     steps:
       - name: Checkout
