@@ -10,6 +10,7 @@ import {
 import type { InstallPackageOptions } from '../../src/utils/packageInstaller';
 
 const originalStdinIsTTY = process.stdin.isTTY;
+const originalCI = process.env.CI;
 
 const setStdinIsTTY = (value: boolean) => {
   Object.defineProperty(process.stdin, 'isTTY', {
@@ -18,11 +19,17 @@ const setStdinIsTTY = (value: boolean) => {
   });
 };
 
-const restoreStdinIsTTY = () => {
+const restoreEnvironment = () => {
   Object.defineProperty(process.stdin, 'isTTY', {
     configurable: true,
     value: originalStdinIsTTY,
   });
+
+  if (originalCI === undefined) {
+    delete process.env.CI;
+  } else {
+    process.env.CI = originalCI;
+  }
 };
 
 const mockProviderPackage = (root: string) => {
@@ -43,7 +50,7 @@ const mockProviderPackage = (root: string) => {
 
 describe('loadCoverageProvider', () => {
   afterEach(() => {
-    restoreStdinIsTTY();
+    restoreEnvironment();
     rs.resetAllMocks();
   });
 
@@ -52,6 +59,7 @@ describe('loadCoverageProvider', () => {
 
     try {
       setStdinIsTTY(true);
+      delete process.env.CI;
       const confirm = rs.fn<() => Promise<boolean>>(() =>
         Promise.resolve(true),
       );
