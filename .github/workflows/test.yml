@@ -78,7 +78,7 @@ jobs:
         run: pnpm run check-dependency-version
 
       - name: Check pnpm Dedupe
-        run: pnpm dedupe --check
+        run: pnpm dedupe --check --config.minimum-release-age=0
 
       - name: Check Unused Code
         run: pnpm run check-unused

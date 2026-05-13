@@ -12,8 +12,8 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.6",
