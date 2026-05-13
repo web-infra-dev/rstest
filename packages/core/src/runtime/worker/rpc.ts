@@ -1,26 +1,23 @@
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
 import { isRpcEnvelope, wrapRpc } from '../../pool/protocol';
 import type { RuntimeRPC, ServerRPC } from '../../types';
+import { channel } from './channels';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
-
-const processSend = process.send!.bind(process);
-const processOn = process.on.bind(process);
-const processOff = process.off.bind(process);
 
 type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
 >;
 
-export function createForksRpcOptions({
+export function createWorkerRpcOptions({
   dispose = [],
 }: {
   dispose?: (() => void)[];
 }): WorkerRpcOptions {
   return {
     post(v) {
-      processSend(wrapRpc(v));
+      channel.send(wrapRpc(v));
     },
     on(fn) {
       const handler = (message: any, ...extras: any) => {
@@ -29,8 +26,8 @@ export function createForksRpcOptions({
         }
         return fn(message.payload, ...extras);
       };
-      processOn('message', handler);
-      dispose.push(() => processOff('message', handler));
+      channel.on(handler);
+      dispose.push(() => channel.off(handler));
     },
   };
 }

@@ -156,11 +156,11 @@ jobs:
         os: [macos-14, windows-latest]
         # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
         #
-        #   trigger      | node_version | test_script                  | exclude
-        #   -------------+--------------+------------------------------+-----------
-        #   PR (regular) | [20, 24]     | [test]                       | -
-        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
-        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate] | test × 22
+        #   trigger      | node_version | test_script                           | exclude
+        #   -------------+--------------+---------------------------------------+-----------
+        #   PR (regular) | [20, 24]     | [test]                                | -
+        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
+        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
@@ -173,7 +173,7 @@ jobs:
         test_script: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["test","test:commonjs","test:no-isolate"]'
+              && '["test","test:commonjs","test:no-isolate","test:threads"]'
             || '["test"]'
           ) }}
         exclude: >-

@@ -14,7 +14,7 @@ export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
 >;
 
-export type RstestPoolType = 'forks';
+export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */

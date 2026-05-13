@@ -13,21 +13,51 @@
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
  *                             pool lifecycle.
+ *
+ * Auto-detects whether it's running under `child_process.fork` (forks pool)
+ * or `worker_threads.Worker` (threads pool) and routes messages over the
+ * matching channel. Mirrors the channel auto-detection in the real worker
+ * entry so a single fixture can drive both pool implementations.
  */
 
 import { spawn } from 'node:child_process';
+import { isMainThread, parentPort, threadId } from 'node:worker_threads';
 
 const REQ_TAG = '__rstest_worker_request__';
 const RES_TAG = '__rstest_worker_response__';
 
+const isThreadWorker = !isMainThread && parentPort !== null;
+
 const send = (response) => {
+  const envelope = { [RES_TAG]: true, response };
+  if (isThreadWorker) {
+    try {
+      parentPort.postMessage(envelope);
+    } catch {
+      // host may have terminated us already
+    }
+    return;
+  }
   if (typeof process.send !== 'function') return;
   try {
-    process.send({ [RES_TAG]: true, response });
+    process.send(envelope);
   } catch {
     // channel may be closed
   }
 };
+
+const onHostMessage = (handler) => {
+  if (isThreadWorker) {
+    parentPort.on('message', handler);
+  } else {
+    process.on('message', handler);
+  }
+};
+
+// Thread workers share the host `process.pid`, so use `threadId` (>=1, unique
+// per spawned worker) as the per-worker id in threads mode. Forks each have
+// their own pid.
+const workerIdentity = isThreadWorker ? threadId : process.pid;
 
 let runCount = 0;
 
@@ -40,8 +70,9 @@ const makeRunResult = (request, extra) => ({
   status: 'pass',
   name: '',
   results: [],
-  // Test-only fields so the test can verify pool behavior.
-  _workerPid: process.pid,
+  // Test-only fields so the test can verify pool behavior. Under threads
+  // mode this is `threadId`; under forks it is `process.pid`.
+  _workerIdentity: workerIdentity,
   _runCount: ++runCount,
   ...extra,
 });
@@ -80,6 +111,8 @@ const handleRun = (request) => {
         stack: 'Error: intentional crash\n    at test-worker.mjs',
       },
     });
+    // `process.exit()` inside a worker_threads Worker exits just the thread
+    // (not the parent process), matching the forks behavior.
     setTimeout(() => process.exit(1), 10);
     return;
   }
@@ -166,13 +199,13 @@ const requestGracefulStop = () => {
   finalizeStop();
 };
 
-process.on('message', (message) => {
+onHostMessage((message) => {
   if (!message || message[REQ_TAG] !== true) return;
   const request = message.request;
 
   switch (request.type) {
     case 'start':
-      send({ type: 'started', pid: process.pid });
+      send({ type: 'started', pid: workerIdentity });
       break;
     case 'run':
       handleRun(request);
@@ -186,4 +219,7 @@ process.on('message', (message) => {
   }
 });
 
+// SIGTERM is meaningful only under the forks pool. In threads mode signals
+// are delivered to the parent process, not the worker thread, so this
+// handler is a harmless no-op there.
 process.on('SIGTERM', requestGracefulStop);

@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { isMainThread, threadId } from 'node:worker_threads';
 import { install } from 'source-map-support';
 import type {
   MaybePromise,
@@ -12,13 +13,21 @@ import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { PhaseTracker } from './phaseTracker';
-import { createForksRpcOptions, createRuntimeRpc } from './rpc';
+import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
+
+// Threads-pool workers all share `process.pid` with the host, and each
+// worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
+// restarts at 1 inside every thread. Without a synthetic pid the merged
+// Perfetto trace would collapse multiple threads onto the same `(pid, tid)`
+// track and misattribute timing. Forks workers run as the main thread of a
+// child_process and keep the real `process.pid`.
+const tracePid = isMainThread ? undefined : process.pid * 1_000_000 + threadId;
 
 // provides source map support for stack traces
 install({
@@ -125,7 +134,7 @@ const preparePool = async (
 
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
-    createForksRpcOptions({ dispose: disposeFns }),
+    createWorkerRpcOptions({ dispose: disposeFns }),
   );
 
   globalCleanups.push(() => {
@@ -470,6 +479,7 @@ export const runInPool = async (
             testPath,
             project: options.context.project,
           },
+          pid: tracePid,
         }
       : undefined,
   );

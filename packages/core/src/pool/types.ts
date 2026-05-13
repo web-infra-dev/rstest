@@ -1,6 +1,6 @@
 import type { RuntimeRPC, RunWorkerOptions } from '../types';
 
-export type PoolWorkerKind = 'forks';
+export type PoolWorkerKind = 'forks' | 'threads';
 
 export type PoolTask = {
   worker: PoolWorkerKind;
