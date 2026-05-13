@@ -97,4 +97,4 @@ Repository maintainers can publish new versions of changed packages.
 3. Open a pull request with a title like `release: 0.7.10` or `release: @rstest/coverage-istanbul 0.1.7` and ensure CI passes.
 4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) to publish packages to npm.
 5. Merge the release pull request to `main`.
-6. Create a GitHub Release for the merged commit so GitHub generates release notes and creates the version tag.
+6. Use the `create-draft-release-notes` skill to create a draft [GitHub release note](https://github.com/web-infra-dev/rspack/releases). Review the draft release note, optionally add release highlights, and publish it.
