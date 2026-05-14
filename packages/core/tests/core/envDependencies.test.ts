@@ -14,6 +14,10 @@ const restoreStdinIsTTY = () => {
   });
 };
 
+const isMockPackageInstalled = (packageName: string, root: string) => {
+  return fs.existsSync(path.join(root, 'node_modules', packageName));
+};
+
 const mockPackage = (root: string, packageName: string) => {
   const packageDir = path.join(root, 'node_modules', packageName);
   fs.mkdirSync(packageDir, { recursive: true });
@@ -55,9 +59,33 @@ describe('ensureTestEnvironmentDependencies', () => {
         root,
         {},
         installer,
+        isMockPackageInstalled,
       );
 
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('skips install when the test environment dependency resolves from core', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-core-env-'));
+    const projectRoot = path.join(root, 'project');
+    fs.mkdirSync(projectRoot);
+
+    try {
+      const installer = rs.fn(async () => false);
+
+      await ensureTestEnvironmentDependencies(
+        [createProject(projectRoot, 'jsdom')],
+        root,
+        {},
+        installer,
+        (_packageName, resolutionRoot) =>
+          resolutionRoot !== root && resolutionRoot !== projectRoot,
+      );
+
+      expect(installer).not.toHaveBeenCalled();
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -111,6 +139,7 @@ describe('ensureTestEnvironmentDependencies', () => {
         root,
         {},
         installer,
+        isMockPackageInstalled,
       );
 
       expect(installer).toHaveBeenCalledWith(

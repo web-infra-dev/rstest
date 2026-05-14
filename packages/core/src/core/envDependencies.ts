@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'pathe';
 import {
   ensurePackageInstalled,
   isPackageInstalled,
@@ -10,6 +12,8 @@ const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
+
+const coreRoot = dirname(fileURLToPath(import.meta.url));
 
 type PackageInstaller = (
   packageName: string,
@@ -55,6 +59,15 @@ type ProjectWithTestEnvironment = {
   };
 };
 
+type EnvironmentDependency = {
+  environmentName: string;
+  roots: Set<string>;
+};
+
+const getPackageResolutionRoots = (projectRoot: string, root: string) => {
+  return Array.from(new Set([projectRoot, root, coreRoot]));
+};
+
 export const ensureTestEnvironmentDependencies = async (
   projects: ProjectWithTestEnvironment[],
   root: string,
@@ -62,7 +75,7 @@ export const ensureTestEnvironmentDependencies = async (
   installer: PackageInstaller = installTestEnvironmentDependency,
   isInstalled: PackageInstalledChecker = isPackageInstalled,
 ): Promise<void> => {
-  const packages = new Map<string, string>();
+  const packages = new Map<string, EnvironmentDependency>();
 
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
@@ -73,21 +86,40 @@ export const ensureTestEnvironmentDependencies = async (
       continue;
     }
 
+    const roots = getPackageResolutionRoots(project.rootPath, root);
+
     if (
-      isInstalled(packageName, project.rootPath) ||
-      (project.rootPath !== root && isInstalled(packageName, root))
+      roots.some((resolutionRoot) => isInstalled(packageName, resolutionRoot))
     ) {
       continue;
     }
 
-    packages.set(packageName, environmentName);
+    const dependency = packages.get(packageName);
+    if (dependency) {
+      for (const resolutionRoot of roots) {
+        dependency.roots.add(resolutionRoot);
+      }
+    } else {
+      packages.set(packageName, {
+        environmentName,
+        roots: new Set(roots),
+      });
+    }
   }
 
-  for (const [packageName, environmentName] of packages) {
-    await installer(packageName, root, environmentName, options);
+  for (const [packageName, dependency] of packages) {
+    await installer(packageName, root, dependency.environmentName, options);
 
-    if (!isInstalled(packageName, root)) {
-      throw createTestEnvironmentLoadError(packageName, root, environmentName);
+    if (
+      !Array.from(dependency.roots).some((resolutionRoot) =>
+        isInstalled(packageName, resolutionRoot),
+      )
+    ) {
+      throw createTestEnvironmentLoadError(
+        packageName,
+        root,
+        dependency.environmentName,
+      );
     }
   }
 };
