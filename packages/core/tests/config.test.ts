@@ -1,5 +1,9 @@
 import { resolve } from 'pathe';
-import { mergeRstestConfig, withDefaultConfig } from '../src/config';
+import {
+  mergeRstestConfig,
+  resolveExtends,
+  withDefaultConfig,
+} from '../src/config';
 import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
 import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
@@ -29,6 +33,47 @@ describe('mergeRstestConfig', () => {
     });
 
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
+  });
+
+  it('should override forceRerunTriggers', () => {
+    expect(
+      withDefaultConfig({
+        forceRerunTriggers: ['custom/**'],
+      }).forceRerunTriggers,
+    ).toEqual(['custom/**']);
+
+    expect(
+      withDefaultConfig({
+        forceRerunTriggers: [],
+      }).forceRerunTriggers,
+    ).toEqual([]);
+  });
+
+  it('should append adapter forceRerunTriggers unless user config overrides them', async () => {
+    await expect(
+      resolveExtends({
+        extends: {
+          forceRerunTriggers: ['/repo/rsbuild.config.ts'],
+        },
+      }),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: [
+        '**/package.json/**',
+        '**/rstest.config.*',
+        '/repo/rsbuild.config.ts',
+      ],
+    });
+
+    await expect(
+      resolveExtends({
+        extends: {
+          forceRerunTriggers: ['/repo/rsbuild.config.ts'],
+        },
+        forceRerunTriggers: ['custom/**'],
+      }),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: ['custom/**'],
+    });
   });
 
   it('should respect output.distPath.root when appending rstest temp exclude', () => {

@@ -372,6 +372,7 @@ export function toRstestConfig({
     ...(output ? { output } : {}),
     ...(source ? { source } : {}),
     ...(resolve ? { resolve } : {}),
+    forceRerunTriggers: configPath ? [path.normalize(configPath)] : undefined,
     performance: {
       buildCache,
     },

@@ -5,6 +5,7 @@ import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
   createCli,
+  hasForceRerunTrigger,
   normalizeCliFilters,
   resolveChangedFiles,
   validateRelatedCliOptions,
@@ -109,6 +110,36 @@ const createGitFixture = async () => {
 
   return cwd;
 };
+
+describe('hasForceRerunTrigger', () => {
+  it('matches changed files relative to the project root', () => {
+    const rootPath = normalize(join('workspace', 'project'));
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'packages/app/package.json'))],
+        triggers: ['**/package.json/**'],
+        rootPath,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'rstest.config.ts'))],
+        triggers: [normalize(join(rootPath, 'rstest.config.ts'))],
+        rootPath,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'src/index.ts'))],
+        triggers: ['package.json'],
+        rootPath,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('related CLI options', () => {
   it('rejects related aliases used together', () => {

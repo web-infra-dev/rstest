@@ -1,5 +1,6 @@
 import cac, { type CAC, type Command } from 'cac';
-import { normalize, resolve } from 'pathe';
+import { normalize, relative, resolve } from 'pathe';
+import picomatch from 'picomatch';
 import type {
   FileFilterMode,
   ListCommandOptions,
@@ -279,6 +280,27 @@ const formatGitError = (error: unknown): string | undefined => {
   return undefined;
 };
 
+export const hasForceRerunTrigger = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): boolean => {
+  if (!triggers.length || !changedFiles.length) {
+    return false;
+  }
+
+  const matcher = picomatch(triggers);
+
+  return changedFiles.some(
+    (file) =>
+      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
+  );
+};
+
 export const resolveChangedFiles = async (
   cwd: string,
   since?: string,
@@ -400,6 +422,22 @@ const resolveEffectiveCliFilters = async ({
           typeof options.changed === 'string' ? options.changed : undefined,
         )
       : normalizedFilters;
+
+  if (
+    options.changed !== undefined &&
+    hasForceRerunTrigger({
+      changedFiles: sourceFilters,
+      triggers: rstest.context.normalizedConfig.forceRerunTriggers,
+      rootPath: rstest.context.rootPath,
+    })
+  ) {
+    return {
+      effectiveFilters: [],
+      fileFilterMode: 'fuzzy',
+      relatedFilters: sourceFilters,
+      relatedResolutionEmpty: false,
+    };
+  }
 
   const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
     sourceFilters,

@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, normalize, resolve } from 'node:path';
 import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 
@@ -175,6 +175,7 @@ export function withRslibConfig(
       // Copy over compatible configurations
       root: finalLibConfig.root,
       name: libId,
+      forceRerunTriggers: filePath ? [normalize(filePath)] : undefined,
       plugins: finalLibConfig.plugins,
       source: {
         assetsInclude,

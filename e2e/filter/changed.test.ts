@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -204,6 +204,40 @@ describe('changed test filtering', () => {
       [
         " ✗ index.test.ts (1)",
         " ✗ other.test.ts (1)",
+      ]
+    `);
+  });
+
+  it('should run all tests when a force rerun trigger changes', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'changed-force-rerun',
+    );
+
+    await initGitFixture(fixturesTargetPath);
+
+    await writeFile(
+      join(fixturesTargetPath, 'package.json'),
+      `${JSON.stringify({ name: 'changed-force-rerun', version: '1.0.1' })}\n`,
+    );
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--changed'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = collectRunTestFileLogs(cli.stdout);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        " ✓ index.test.ts (1)",
+        " ✓ other.test.ts (1)",
       ]
     `);
   });

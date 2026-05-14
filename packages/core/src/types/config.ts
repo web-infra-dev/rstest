@@ -292,6 +292,13 @@ export interface RstestConfig {
    */
   includeSource?: string[];
   /**
+   * A list of glob patterns that trigger running the whole test suite when
+   * matched by changed files collected from `--changed`.
+   *
+   * @default ['**\/package.json/**', '**\/rstest.config.*']
+   */
+  forceRerunTriggers?: string[];
+  /**
    * Path to setup files. They will be run before each test file.
    */
   setupFiles?: string[] | string;

@@ -102,6 +102,8 @@ npx rstest run --changed=HEAD~1
 npx rstest run --changed=origin/main
 ```
 
+When a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite instead of only related tests.
+
 Use `rstest list` to preview which tests would run without executing them:
 
 ```bash

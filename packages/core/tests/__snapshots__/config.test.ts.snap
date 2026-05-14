@@ -51,6 +51,10 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [
     "./global-setup.ts",
   ],

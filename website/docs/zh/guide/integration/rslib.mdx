@@ -51,6 +51,7 @@ export default defineConfig({
 - 加载你的 `rslib.config.ts` 文件
 - 提取并映射测试相关的 Rslib 选项到 Rstest 配置
 - 与你提供的其他 Rstest 配置合并
+- 将加载到的 Rslib 配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此该配置变更时 `--changed` 会运行完整测试套件
 
 如果你在 Rslib 配置里开启了 `performance.buildCache`，`withRslibConfig()` 会把这项配置传给 Rstest，Rstest 仍会继续补充自己的缓存默认值，例如运行时摘要项和基于配置文件的失效条件。
 
