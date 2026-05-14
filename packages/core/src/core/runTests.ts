@@ -1,5 +1,6 @@
 import { constants as osConstants } from 'node:os';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
+import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
 import type {
   Duration,
@@ -191,6 +192,12 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const { coverage } = context.normalizedConfig;
 
+    await ensureRunDependencies({
+      projects: [],
+      rootPath: context.rootPath,
+      coverage,
+    });
+
     if (coverage.enabled) {
       logger.log(
         ` ${color.gray('Coverage enabled with')} %s\n`,
@@ -330,6 +337,14 @@ export async function runTests(context: Rstest): Promise<void> {
 
   const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
+
+  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+    await ensureRunDependencies({
+      projects: nodeProjectsToRun,
+      rootPath,
+      coverage,
+    });
+  }
 
   // If there are browser tests to run, start them.
   if (hasBrowserTestsToRun) {

@@ -7,10 +7,12 @@ import type {
   CoverageProvider,
   NormalizedCoverageOptions,
 } from '../types/coverage';
-import { color } from '../utils';
-export const CoverageProviderMap: Record<string, string> = {
-  istanbul: '@rstest/coverage-istanbul',
-};
+import {
+  CoverageProviderMap,
+  createCoverageProviderLoadError,
+  getCoverageProviderModuleName,
+} from './install';
+export { ensureCoverageProviderInstalled } from './install';
 
 export const loadCoverageProvider = async (
   options: CoverageOptions,
@@ -21,14 +23,11 @@ export const loadCoverageProvider = async (
 }> => {
   const rootPath = pathToFileURL(root).toString();
 
-  const moduleName = CoverageProviderMap[options.provider || 'istanbul'];
-  if (!moduleName) {
-    throw new Error(`Unknown coverage provider: ${options.provider}`);
-  }
-  try {
-    const require = createRequire(rootPath);
+  const moduleName = getCoverageProviderModuleName(options);
+  const require = createRequire(rootPath);
+  const loadProvider = async () => {
     const modulePath = require.resolve(moduleName, {
-      paths: [rootPath],
+      paths: [root],
     });
     const { pluginCoverage, CoverageProvider } = await import(
       pathToFileURL(modulePath).toString()
@@ -37,12 +36,12 @@ export const loadCoverageProvider = async (
       pluginCoverage,
       CoverageProvider,
     };
+  };
+
+  try {
+    return await loadProvider();
   } catch {
-    const error = new Error(
-      `Failed to load coverage provider module: ${color.cyan(moduleName)} in ${color.underline(root)}, please make sure it is installed.\n`,
-    );
-    error.stack = '';
-    throw error;
+    throw createCoverageProviderLoadError(moduleName, root);
   }
 };
 
