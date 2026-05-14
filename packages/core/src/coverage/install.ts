@@ -14,13 +14,16 @@ type CoverageProviderInstaller = (
   moduleName: string,
   root: string,
 ) => Promise<boolean>;
-
 export const installCoverageProvider = async (
   moduleName: string,
   root: string,
   options: InstallPackageOptions = {},
 ): Promise<boolean> => {
-  return installPackage(moduleName, root, {
+  const packageName = moduleName.startsWith('@rstest/')
+    ? `${moduleName}@${RSTEST_VERSION}`
+    : moduleName;
+
+  return installPackage(packageName, root, {
     ...options,
     message:
       options.message ??

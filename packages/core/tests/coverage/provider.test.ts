@@ -80,7 +80,7 @@ describe('loadCoverageProvider', () => {
         initialValue: true,
       });
       expect(packageInstaller).toHaveBeenCalledWith(
-        '@rstest/coverage-istanbul',
+        `@rstest/coverage-istanbul@${RSTEST_VERSION}`,
         {
           cwd: root,
           dev: true,
