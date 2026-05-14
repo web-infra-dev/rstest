@@ -89,12 +89,26 @@ npx rstest list --related src/button.ts --filesOnly
 
 <ApiMeta addedVersion="0.10.0" />
 
-使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。你也可以传入 commit，运行从该 commit 以来变更文件相关的测试：
+使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。默认会包含 unstaged、staged 和 untracked 文件，适合在本地提交前快速验证：
 
 ```bash
 npx rstest run --changed
-npx rstest run --changed=HEAD~1
 ```
+
+你也可以传入 commit 或 branch。Rstest 会包含该 ref 与 `HEAD` 之间的变更文件，以及本地 staged、unstaged 和 untracked 文件：
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+如果只想预览将要执行哪些测试，可以配合 `rstest list` 使用：
+
+```bash
+npx rstest list --changed --filesOnly
+```
+
+`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。开启 coverage 时，它也会将 coverage 报告限制在变更的源码文件范围内，除非显式配置了 [`coverage.changed`](/config/test/coverage#changed)。如果变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 默认会运行完整测试套件，并生成完整 coverage 报告。
 
 ## rstest watch
 
