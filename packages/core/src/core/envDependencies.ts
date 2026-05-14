@@ -4,6 +4,7 @@ import {
   type InstallPackageOptions,
 } from '../utils/packageInstaller';
 import type { EnvironmentName } from '../types';
+import { color } from '../utils';
 
 const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
   jsdom: 'jsdom',
@@ -18,6 +19,18 @@ type PackageInstaller = (
 ) => Promise<boolean>;
 
 type PackageInstalledChecker = (packageName: string, root: string) => boolean;
+
+export const createTestEnvironmentLoadError = (
+  packageName: string,
+  root: string,
+  environmentName: string,
+): Error => {
+  const error = new Error(
+    `Failed to load testEnvironment "${environmentName}" dependency: ${color.cyan(packageName)} in ${color.underline(root)}, please make sure it is installed.\n`,
+  );
+  error.stack = '';
+  return error;
+};
 
 export const installTestEnvironmentDependency = (
   packageName: string,
@@ -72,5 +85,9 @@ export const ensureTestEnvironmentDependencies = async (
 
   for (const [packageName, environmentName] of packages) {
     await installer(packageName, root, environmentName, options);
+
+    if (!isInstalled(packageName, root)) {
+      throw createTestEnvironmentLoadError(packageName, root, environmentName);
+    }
   }
 };

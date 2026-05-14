@@ -54,9 +54,33 @@ describe('ensureTestEnvironmentDependencies', () => {
         root,
         {},
         installer,
-        () => false,
       );
 
+      expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('throws early when installer does not install the test environment dependency', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-missing-env-'));
+    const projectRoot = path.join(root, 'project');
+    fs.mkdirSync(projectRoot);
+
+    try {
+      const installer = rs.fn(async () => false);
+
+      await expect(
+        ensureTestEnvironmentDependencies(
+          [createProject(projectRoot, 'jsdom')],
+          root,
+          {},
+          installer,
+          () => false,
+        ),
+      ).rejects.toThrow(
+        `Failed to load testEnvironment "jsdom" dependency: jsdom in ${root}, please make sure it is installed.`,
+      );
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
@@ -79,7 +103,6 @@ describe('ensureTestEnvironmentDependencies', () => {
         root,
         {},
         installer,
-        () => false,
       );
 
       expect(installer).toHaveBeenCalledWith(
