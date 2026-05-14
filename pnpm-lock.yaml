@@ -55,6 +55,12 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.8.3)
+      rsbuild-plugin-arethetypeswrong:
+        specifier: ^0.3.1
+        version: 0.3.1(@rsbuild/core@2.0.6)(typescript@6.0.3)
+      rsbuild-plugin-publint:
+        specifier: ^0.3.4
+        version: 0.3.4(@rsbuild/core@2.0.6)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2448,6 +2454,10 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@publint/pack@0.1.4':
+    resolution: {integrity: sha512-HDVTWq3H0uTXiU0eeSQntcVUTPP3GamzeXI41+x7uU9J65JgWQh3qWZHblR1i0npXfFtF+mxBiU2nJH8znxWnQ==}
+    engines: {node: '>=18'}
 
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
@@ -6178,6 +6188,10 @@ packages:
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     hasBin: true
 
+  mri@1.2.0:
+    resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
+    engines: {node: '>=4'}
+
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -6562,6 +6576,11 @@ packages:
   public-encrypt@4.0.3:
     resolution: {integrity: sha512-zVpa8oKZSz5bTMTFClc1fQOnyyEzpl5ozpi1B5YcvBrdohMjH2rfsBtyXcuNuwjsDIXmBYlF2N5FlJYhR29t8Q==}
 
+  publint@0.3.21:
+    resolution: {integrity: sha512-OqejcnMV6E9zel2oCrUOJEiiFkGiAAni0A6ibfQNh1k9Gu5z4F+Yso8lllam7AzmV6Do0vp7u3UpZNRBwuXaHQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   pump@3.0.3:
     resolution: {integrity: sha512-todwxLMY7/heScKmntwQG8CXVkWUOdYxIvY2s0VWAAMh/nd8SoYiRaKjlr7+iCs984f2P8zvrfWcDDYVb73NfA==}
 
@@ -6816,6 +6835,16 @@ packages:
     resolution: {integrity: sha512-5Di9UC0+8h1L6ZD2d7awM7E/T4uA1fJRlx6zk/NvdCCVEoAnFqvHmCuNeIKoCeIixBX/q8uM+6ycDvF8woqosA==}
     engines: {node: '>= 0.8'}
 
+  rsbuild-plugin-arethetypeswrong@0.3.1:
+    resolution: {integrity: sha512-083Kpz7qFWOPUrwnfAw7414VTSJnch+BKmrR/eu90IJOTe6c8lCW8be7BzI6Fs9synDWdvwLbTvxMHmR4nFVZw==}
+    engines: {node: '>=20.12.0'}
+    peerDependencies:
+      '@rsbuild/core': ^1.0.0 || ^2.0.0-0
+      typescript: '*'
+    peerDependenciesMeta:
+      '@rsbuild/core':
+        optional: true
+
   rsbuild-plugin-dts@0.21.4:
     resolution: {integrity: sha512-hqXzk3pQFcbviCZNECxIZsH8ygyf9F9n3UZWHpjcAZmYeH5wLPsGqa6CyXWh4+EDXkO++7iXTVuIuw2x2hGn/w==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -6842,6 +6871,14 @@ packages:
 
   rsbuild-plugin-open-graph@1.1.2:
     resolution: {integrity: sha512-CNVtaoiS+tcFP8ge7nlnlgnynnGnHdRnFujYBDMeYtw9hYB7mFTzF4Yr3K+q0LQjYHqeNIeeApmC0LCUXqIulg==}
+    peerDependencies:
+      '@rsbuild/core': ^1.0.0 || ^2.0.0-0
+    peerDependenciesMeta:
+      '@rsbuild/core':
+        optional: true
+
+  rsbuild-plugin-publint@0.3.4:
+    resolution: {integrity: sha512-0oIeQlTNRQoiyi2K5RT6C0+3q8J1HZEX66pkTtDAvmNNHiLf+YyBn2bx8S2w5T7MEVt323ULKoGV4rRROIOatQ==}
     peerDependencies:
       '@rsbuild/core': ^1.0.0 || ^2.0.0-0
     peerDependenciesMeta:
@@ -6886,6 +6923,10 @@ packages:
 
   rxjs@7.8.2:
     resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
+
+  sade@1.8.1:
+    resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
+    engines: {node: '>=6'}
 
   safe-buffer@5.1.2:
     resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
@@ -9045,6 +9086,8 @@ snapshots:
     optional: true
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@publint/pack@0.1.4': {}
 
   '@quansync/fs@1.0.0':
     dependencies:
@@ -13590,6 +13633,8 @@ snapshots:
       yargs-parser: 21.1.1
       yargs-unparser: 2.0.0
 
+  mri@1.2.0: {}
+
   mrmime@2.0.1: {}
 
   ms@2.1.3: {}
@@ -14033,6 +14078,13 @@ snapshots:
       randombytes: 2.1.0
       safe-buffer: 5.2.1
 
+  publint@0.3.21:
+    dependencies:
+      '@publint/pack': 0.1.4
+      package-manager-detector: 1.6.0
+      picocolors: 1.1.1
+      sade: 1.8.1
+
   pump@3.0.3:
     dependencies:
       end-of-stream: 1.4.4
@@ -14349,6 +14401,12 @@ snapshots:
       hash-base: 3.1.2
       inherits: 2.0.4
 
+  rsbuild-plugin-arethetypeswrong@0.3.1(@rsbuild/core@2.0.6)(typescript@6.0.3):
+    dependencies:
+      typescript: 6.0.3
+    optionalDependencies:
+      '@rsbuild/core': 2.0.6
+
   rsbuild-plugin-dts@0.21.4(@microsoft/api-extractor@7.58.7(@types/node@22.18.6))(@rsbuild/core@2.0.6)(@typescript/native-preview@7.0.0-dev.20260512.1)(typescript@6.0.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
@@ -14363,6 +14421,13 @@ snapshots:
       '@rsbuild/core': 2.0.6
 
   rsbuild-plugin-open-graph@1.1.2(@rsbuild/core@2.0.6):
+    optionalDependencies:
+      '@rsbuild/core': 2.0.6
+
+  rsbuild-plugin-publint@0.3.4(@rsbuild/core@2.0.6):
+    dependencies:
+      picocolors: 1.1.1
+      publint: 0.3.21
     optionalDependencies:
       '@rsbuild/core': 2.0.6
 
@@ -14393,6 +14458,10 @@ snapshots:
   rxjs@7.8.2:
     dependencies:
       tslib: 2.8.1
+
+  sade@1.8.1:
+    dependencies:
+      mri: 1.2.0
 
   safe-buffer@5.1.2: {}
 
