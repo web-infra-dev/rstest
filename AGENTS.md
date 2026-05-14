@@ -78,6 +78,6 @@ Available workflow skills in `.agents/skills/`:
 | Skill       | Description                                                                       |
 | ----------- | --------------------------------------------------------------------------------- |
 | development | Feature / bug-fix checklist for scope review and workflow routing                 |
-| pr          | Create a PR for the current branch                                                |
+| pr-creator  | Create a PR for the current branch (from rstackjs/agent-skills)                   |
 | testing     | Testing workflow for the rstest monorepo (run tests, write tests, debug failures) |
 | typescript  | TypeScript anti-slop guardrails for .ts, .tsx, and .mts files                     |
