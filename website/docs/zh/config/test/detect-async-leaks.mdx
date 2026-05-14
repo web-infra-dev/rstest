@@ -1,0 +1,63 @@
+---
+description: 检测测试文件结束后仍然存活的异步资源。
+---
+
+# detectAsyncLeaks
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `--detectAsyncLeaks`
+
+检测测试文件结束后仍然存活的异步资源，例如未清理的定时器。
+
+该选项基于 Node.js `async_hooks` 实现，可能会降低测试速度。建议只在排查泄漏问题时启用，不建议在常规测试中长期打开。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --detectAsyncLeaks
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  detectAsyncLeaks: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## 示例
+
+下面的测试泄漏了一个 interval：
+
+```ts
+import { expect, it } from '@rstest/core';
+
+it('leaks a timer', () => {
+  setInterval(() => {}, 1000);
+  expect(1).toBe(1);
+});
+```
+
+启用 `detectAsyncLeaks` 后，Rstest 会让该测试文件失败，并输出资源类型和创建堆栈：
+
+```bash
+AsyncLeakError: Detected async leak: Timeout was still active after leaks a timer finished.
+```
+
+在测试结束前清理异步资源即可避免该错误：
+
+```ts
+import { expect, it } from '@rstest/core';
+
+it('cleans up a timer', () => {
+  const timer = setInterval(() => {}, 1000);
+  clearInterval(timer);
+  expect(1).toBe(1);
+});
+```

@@ -35,6 +35,7 @@
   "reporters",
   "include-task-location",
   "log-heap-usage",
+  "detect-async-leaks",
   "hide-skipped-tests",
   "hide-skipped-test-files",
   "slow-test-threshold",

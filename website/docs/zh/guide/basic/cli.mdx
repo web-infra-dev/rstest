@@ -289,6 +289,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--unstubEnvs`                  | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                  |
 | `--include <include>`           | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                           |
 | `--logHeapUsage`                | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
+| `--detectAsyncLeaks`            | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                           |
 | `--hideSkippedTests`            | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                                       |
 | `--hideSkippedTestFiles`        | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                          |
 | `--pool <type>`                 | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                           |

@@ -39,6 +39,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
