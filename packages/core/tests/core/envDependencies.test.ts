@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
+import { stripVTControlCharacters } from 'node:util';
 import path from 'node:path';
 import { afterEach, describe, expect, it, rs } from '@rstest/core';
 import { ensureTestEnvironmentDependencies } from '../../src/core/envDependencies';
@@ -70,15 +71,22 @@ describe('ensureTestEnvironmentDependencies', () => {
     try {
       const installer = rs.fn(async () => false);
 
-      await expect(
-        ensureTestEnvironmentDependencies(
+      let error: unknown;
+      try {
+        await ensureTestEnvironmentDependencies(
           [createProject(projectRoot, 'jsdom')],
           root,
           {},
           installer,
           () => false,
-        ),
-      ).rejects.toThrow(
+        );
+      } catch (err) {
+        error = err;
+      }
+
+      expect(error).toBeInstanceOf(Error);
+      const message = error instanceof Error ? error.message : String(error);
+      expect(stripVTControlCharacters(message)).toContain(
         `Failed to load testEnvironment "jsdom" dependency: jsdom in ${root}, please make sure it is installed.`,
       );
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
