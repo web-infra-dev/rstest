@@ -139,6 +139,18 @@ describe('hasForceRerunTrigger', () => {
       }),
     ).toBe(false);
   });
+
+  it('matches Windows-style absolute triggers', () => {
+    const rootPath = 'C:\\repo';
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: ['C:\\repo\\rsbuild.config.ts'],
+        triggers: ['C:\\repo\\rsbuild.config.ts'],
+        rootPath,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('related CLI options', () => {

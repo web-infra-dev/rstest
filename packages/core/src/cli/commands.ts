@@ -293,7 +293,10 @@ export const hasForceRerunTrigger = ({
     return false;
   }
 
-  const matcher = picomatch(triggers);
+  const matcher = picomatch(
+    triggers.map((trigger) => normalize(trigger)),
+    { windows: true },
+  );
 
   return changedFiles.some(
     (file) =>
