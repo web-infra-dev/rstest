@@ -32,7 +32,7 @@
       "default": "./package.json"
     }
   },
-  "main": "./dist/index.js",
+  "main": "./dist/browser.js",
   "files": [
     "dist",
     "src",
