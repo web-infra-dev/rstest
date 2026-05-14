@@ -4,6 +4,7 @@ antd
 apng
 apos
 applescript
+artboard
 Asus
 atrules
 autodocs
@@ -54,6 +55,7 @@ fnames
 frontends
 fullhash
 gzipped
+Grotesk
 icss
 idents
 iife
@@ -116,7 +118,9 @@ publint
 pxtorem
 quasis
 quxx
+rasterizes
 rebranded
+resvg
 rolldown
 rootdir
 rsbuild

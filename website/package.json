@@ -9,9 +9,11 @@
     "build": "rspress build",
     "build:agent-install": "node scripts/buildAgentInstall.mjs",
     "dev": "rspress dev",
+    "gen:og": "node --experimental-strip-types scripts/og-image/cli.mts",
     "preview": "rspress preview"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@rsbuild/plugin-sass": "^1.5.2",
     "@rspress/core": "2.0.11",
     "@rspress/plugin-algolia": "2.0.11",
@@ -26,6 +28,9 @@
     "rsbuild-plugin-open-graph": "^1.1.2",
     "rspress-plugin-font-open-sans": "^1.0.3",
     "rspress-plugin-sitemap": "^1.2.1",
+    "satori": "^0.26.0",
+    "satori-html": "^0.3.2",
+    "sharp": "^0.34.5",
     "typescript": "^6.0.3"
   }
 }
