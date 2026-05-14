@@ -175,7 +175,7 @@ export function withRslibConfig(
       // Copy over compatible configurations
       root: finalLibConfig.root,
       name: libId,
-      forceRerunTriggers: filePath ? [normalize(filePath)] : undefined,
+      forceRerunTriggers: [normalize(filePath)],
       plugins: finalLibConfig.plugins,
       source: {
         assetsInclude,
