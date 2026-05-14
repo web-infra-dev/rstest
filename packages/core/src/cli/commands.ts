@@ -280,6 +280,22 @@ const formatGitError = (error: unknown): string | undefined => {
   return undefined;
 };
 
+export const getForceRerunTriggers = ({
+  rootTriggers,
+  projects,
+}: {
+  rootTriggers: string[];
+  projects: Array<{ normalizedConfig: { forceRerunTriggers: string[] } }>;
+}): string[] =>
+  Array.from(
+    new Set([
+      ...rootTriggers,
+      ...projects.flatMap(
+        (project) => project.normalizedConfig.forceRerunTriggers,
+      ),
+    ]),
+  );
+
 export const hasForceRerunTrigger = ({
   changedFiles,
   triggers,
@@ -430,7 +446,10 @@ const resolveEffectiveCliFilters = async ({
     options.changed !== undefined &&
     hasForceRerunTrigger({
       changedFiles: sourceFilters,
-      triggers: rstest.context.normalizedConfig.forceRerunTriggers,
+      triggers: getForceRerunTriggers({
+        rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
+        projects: rstest.context.projects,
+      }),
       rootPath: rstest.context.rootPath,
     })
   ) {

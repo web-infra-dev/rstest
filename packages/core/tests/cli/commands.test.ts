@@ -5,6 +5,7 @@ import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
   createCli,
+  getForceRerunTriggers,
   hasForceRerunTrigger,
   normalizeCliFilters,
   resolveChangedFiles,
@@ -110,6 +111,36 @@ const createGitFixture = async () => {
 
   return cwd;
 };
+
+describe('getForceRerunTriggers', () => {
+  it('includes project-level force rerun triggers', () => {
+    expect(
+      getForceRerunTriggers({
+        rootTriggers: ['**/package.json/**', 'shared/rstest.config.ts'],
+        projects: [
+          {
+            normalizedConfig: {
+              forceRerunTriggers: ['apps/a/rsbuild.config.ts'],
+            },
+          },
+          {
+            normalizedConfig: {
+              forceRerunTriggers: [
+                'apps/b/rspack.config.ts',
+                'shared/rstest.config.ts',
+              ],
+            },
+          },
+        ],
+      }),
+    ).toEqual([
+      '**/package.json/**',
+      'shared/rstest.config.ts',
+      'apps/a/rsbuild.config.ts',
+      'apps/b/rspack.config.ts',
+    ]);
+  });
+});
 
 describe('hasForceRerunTrigger', () => {
   it('matches changed files relative to the project root', () => {
