@@ -1,0 +1,113 @@
+---
+description: 'Rstest 0.10 makes test runs faster and more iterative: a new threads pool, persistent build cache, Git-aware --changed, and a --trace flag that dumps a Perfetto profile.'
+date: 2026-05-14 10:00:00
+sidebar: false
+---
+
+_May 14, 2026_
+
+# Announcing Rstest 0.10
+
+Rstest 0.10 is a release about iteration speed. The headline change is a new `threads` pool that swaps `child_process.fork` for `worker_threads`, but the rest of the release lines up behind the same goal: cut the time between editing a file and seeing the test result.
+
+- [A new threads pool](#threads-pool) — opt in to `worker_threads` for suites where `child_process.fork` startup dominates run time.
+- [Persistent build cache](#build-cache) — reuse the previous build for roughly 2× faster warm runs.
+- [Run only changed tests](#run-changed-tests) — `--changed` runs only the tests your local Git diff affects.
+- [Profile a run with --trace](#trace-profiling) — dump a Perfetto-compatible profile to see where the time went.
+
+## A new threads pool \{#threads-pool}
+
+Rstest has shipped only one pool so far: `forks`, which spawns each test file in a separate Node.js child process. For test suites dominated by small, fast files, `child_process.fork` startup ends up dominating run time — `worker_threads` spawns roughly 10× faster — and every worker carries its own V8 heap, which can OOM under high parallelism.
+
+0.10 adds an opt-in `threads` pool, backed by `node:worker_threads`. Workers share the parent process's V8 heap and stdio, which makes them much cheaper to spin up and much lighter on memory.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'threads',
+});
+```
+
+`forks` stays the default because most existing test code relies on per-file process isolation. Switch to `threads` when your suite is dominated by small files, when parallel runs are memory-bound, or when your tests don't mutate `process.chdir`, env vars, or signal handlers. See [pool](/config/test/pool) for the full trade-off list.
+
+This release also replaces the previous `tinypool` integration with a first-party worker pool ([#1171](https://github.com/web-infra-dev/rstest/pull/1171)), which is what made the `threads` implementation feasible.
+
+## Persistent build cache \{#build-cache}
+
+The other large fixed cost in a test run is the build step. Rstest now supports Rsbuild's [`performance.buildCache`](/config/build/performance) for test builds, so subsequent runs reuse the previous build instead of redoing the same work.
+
+On an antd + three.js example, enabling the cache roughly halves the build phase on warm runs:
+
+| Run  | Build   | Total  |
+| ---- | ------- | ------ |
+| Cold | ~385 ms | ~2.1 s |
+| Warm | ~182 ms | ~1.7 s |
+
+The cache is off by default — Rspack's persistent cache is still experimental — so you enable it explicitly:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+Rstest layers Rstest-aware defaults on top — cache directory, digest inputs, and build dependencies are pre-wired so most projects don't need extra config. If you also use [@rstest/adapter-rslib](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rslib), build cache settings from your Rslib config carry over automatically. See [performance.buildCache](/config/build/performance) for the override and extend semantics.
+
+## Run only changed tests \{#run-changed-tests}
+
+When you're iterating on a single file or feature, running the whole suite is wasteful. 0.10 adds a Git-aware `--changed` flag that runs only the tests affected by your local changes:
+
+```bash
+npx rstest run --changed
+```
+
+By default `--changed` includes unstaged, staged, and untracked files — the natural set for "what am I working on right now". You can also pass a commit or branch to widen the window:
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+Rstest resolves the affected test files through the build module graph, which is the same machinery introduced in [#1172](https://github.com/web-infra-dev/rstest/pull/1172) for the `--related` / `--findRelatedTests` flags. If you want to preview which tests would run without executing them, combine it with `rstest list`:
+
+```bash
+npx rstest list --changed --filesOnly
+```
+
+See [Run changed tests](/guide/basic/cli#run-changed-tests) for the full behavior, including the interaction with positional filters.
+
+## Profile a run with --trace \{#trace-profiling}
+
+When a test run still feels slow after the changes above, the `Duration` line at the bottom of the reporter isn't enough — it bundles worker startup, asset transfer, env setup, test evaluation, execution, coverage, and teardown into a single number.
+
+0.10 adds a `--trace` CLI flag that dumps a Perfetto-compatible profile of a run:
+
+```bash
+npx rstest run --trace
+```
+
+The flag is CLI-only and opt-in. Each run produces per-phase slices per file (`prepare` → `teardown`), per-suite and per-case slices annotated with status and retry count, and a heap counter sampled at each phase boundary.
+
+In a TTY, Rstest starts a local helper so the printed link opens the trace directly in the Perfetto UI. In CI, the trace is written to `<rootPath>/.rstest/trace-<ts>.json` so you can upload it as an artifact.
+
+For other profiling needs — CPU time distribution with samply, memory with `--heap-prof`, step-through debugging with `--inspect` — see the [Profiler](/guide/advanced/profiling#profiler) section.
+
+## More improvements
+
+- `feat(core):` add memory-aware worker spawn gate ([#1246](https://github.com/web-infra-dev/rstest/pull/1246))
+- `feat(core):` resolve dynamic imports against source module origin ([#1210](https://github.com/web-infra-dev/rstest/pull/1210))
+- `feat:` support silent logs ([#1224](https://github.com/web-infra-dev/rstest/pull/1224))
+- `feat:` support run related tests ([#1172](https://github.com/web-infra-dev/rstest/pull/1172))
+- `feat(pool):` replace tinypool with self-owned worker pool ([#1171](https://github.com/web-infra-dev/rstest/pull/1171))
+- `fix(core):` include coverage config in build cache digest ([#1245](https://github.com/web-infra-dev/rstest/pull/1245))
+- `fix(core):` split taskContext to remove node:async_hooks from browser bundle ([#1244](https://github.com/web-infra-dev/rstest/pull/1244))
+- `fix(browser-react):` drop React 17 from peer deps ([#1240](https://github.com/web-infra-dev/rstest/pull/1240))
+- `fix(adapter-rslib):` use `mergeRslibConfig` instead of `mergeRsbuildConfig` ([#1238](https://github.com/web-infra-dev/rstest/pull/1238))
+- `fix(core):` guard interop has trap against primitive default export ([#1234](https://github.com/web-infra-dev/rstest/pull/1234))
+- `fix:` handle `toNotFake` option in useFakeTimers properly ([#1219](https://github.com/web-infra-dev/rstest/pull/1219))
+- `fix(pool):` restore stderr truncation and settle wait lost in #1171 ([#1216](https://github.com/web-infra-dev/rstest/pull/1216))
