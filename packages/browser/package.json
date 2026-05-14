@@ -67,7 +67,7 @@
     "playwright": "^1.60.0"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:^",
+    "@rstest/core": "workspace:*",
     "playwright": "^1.49.1"
   },
   "peerDependenciesMeta": {
