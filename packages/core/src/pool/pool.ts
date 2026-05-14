@@ -50,12 +50,14 @@ export class Pool {
     }
 
     const runner = await this.acquireRunner(task);
+    const heapBaseline = this.options.memoryGate?.recordDispatch();
     try {
       if (op === 'run') {
         return await runner.runTest(task);
       }
       return await runner.collectTests(task);
     } finally {
+      this.options.memoryGate?.recordResolve(heapBaseline);
       this.releaseRunner(runner);
     }
   }
@@ -76,11 +78,20 @@ export class Pool {
         continue;
       }
 
-      const inFlight =
-        this.activeRunners.size +
-        this.idleRunners.length +
-        this.stoppingRunners.size;
+      const inFlight = this.inFlightCount;
       if (inFlight >= this.options.maxWorkers) {
+        await new Promise<void>((resolve) => {
+          this.slotWaiters.push(resolve);
+        });
+        if (this.isClosing || this.isClosed) {
+          throw new Error('[rstest-pool]: pool is closed');
+        }
+        continue;
+      }
+
+      const gate = this.options.memoryGate;
+      if (gate && !gate.canSpawnNewWorker(inFlight)) {
+        gate.attachPoll(this.tryWakeGateWaiter);
         await new Promise<void>((resolve) => {
           this.slotWaiters.push(resolve);
         });
@@ -94,6 +105,7 @@ export class Pool {
       // activeRunners up-front; on start failure we drop it and wake a waiter.
       const workerId = ++nextWorkerId;
       const worker = createPoolWorker(task, this.options, workerId);
+      gate?.attachWorker(worker);
       const runner = new PoolRunner(worker, { workerId });
       this.activeRunners.add(runner);
       try {
@@ -108,6 +120,29 @@ export class Pool {
       return runner;
     }
   }
+
+  private get inFlightCount(): number {
+    return (
+      this.activeRunners.size +
+      this.idleRunners.length +
+      this.stoppingRunners.size
+    );
+  }
+
+  /**
+   * Returned to MemoryGate's wake-loop. Returning `false` tells the gate
+   * to stop polling. Only shifts a waiter when the gate would actually let
+   * one through — preserves FIFO and avoids park/re-park churn.
+   */
+  private readonly tryWakeGateWaiter = (): boolean => {
+    if (this.slotWaiters.length === 0 || this.isClosing || this.isClosed) {
+      return false;
+    }
+    if (this.options.memoryGate?.canSpawnNewWorker(this.inFlightCount)) {
+      this.slotWaiters.shift()?.();
+    }
+    return true;
+  };
 
   private releaseRunner(runner: PoolRunner): void {
     this.activeRunners.delete(runner);
@@ -180,6 +215,7 @@ export class Pool {
   async close(): Promise<void> {
     if (this.isClosed) return;
     this.isClosing = true;
+    this.options.memoryGate?.dispose();
     // Wake waiters so any caller blocked on capacity throws on `isClosing`
     // before we await the stop promises below.
     while (this.slotWaiters.length > 0) {

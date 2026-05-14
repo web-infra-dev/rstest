@@ -1,4 +1,5 @@
 import type { RuntimeRPC, RunWorkerOptions } from '../types';
+import type { MemoryGate } from './memoryGate';
 
 export type PoolWorkerKind = 'forks' | 'threads';
 
@@ -23,4 +24,10 @@ export type PoolOptions = {
    * stderr so the simulated noise doesn't leak into the host log.
    */
   forwardStdio?: boolean;
+  /**
+   * Memory-aware spawn gate. Omit or pass `undefined` to disable (used by
+   * unit tests that need deterministic spawn timing). `createPool` injects
+   * a fresh `MemoryGate` by default.
+   */
+  memoryGate?: MemoryGate;
 };

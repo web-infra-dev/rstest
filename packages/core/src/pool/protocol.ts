@@ -30,17 +30,24 @@ export type CollectTaskResult = {
   errors?: FormattedError[];
 };
 
+export type WorkerMemoryReport = {
+  /** Resident set size (bytes) sampled just before the worker sent the response. */
+  rss: number;
+};
+
 export type WorkerResponse =
   | { type: 'started'; pid: number }
   | {
       type: 'runFinished';
       taskId: number;
       result: TestFileResult;
+      memory?: WorkerMemoryReport;
     }
   | {
       type: 'collectFinished';
       taskId: number;
       result: CollectTaskResult;
+      memory?: WorkerMemoryReport;
     }
   | { type: 'stopped' }
   | {
