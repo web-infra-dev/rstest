@@ -52,6 +52,6 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:*"
+    "@rstest/core": "workspace:^"
   }
 }

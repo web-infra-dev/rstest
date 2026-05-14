@@ -45,7 +45,7 @@
   "peerDependencies": {
     "@rspack/cli": ">=2.0.0-0",
     "@rspack/core": ">=2.0.0-0",
-    "@rstest/core": "workspace:*"
+    "@rstest/core": "workspace:^"
   },
   "publishConfig": {
     "access": "public"
