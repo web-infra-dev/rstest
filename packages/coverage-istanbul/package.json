@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.3.2",
+  "version": "0.9.10",
   "description": "Istanbul coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -41,7 +41,7 @@
     "swc-plugin-coverage-instrument": "0.0.32"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.3",
+    "@rslib/core": "0.21.4",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",
@@ -52,6 +52,6 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@rstest/core": "workspace:~"
+    "@rstest/core": "workspace:^"
   }
 }

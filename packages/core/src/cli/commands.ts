@@ -126,7 +126,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
 
 const poolOptionDefinitions: OptionDefinition[] = [
   ['--pool <type>', 'Shorthand for --pool.type'],
-  ['--pool.type <type>', 'Specify the test pool type (e.g. forks)'],
+  ['--pool.type <type>', 'Specify the test pool type (forks | threads)'],
   [
     '--pool.maxWorkers <value>',
     'Maximum number or percentage of workers (e.g. 4 or 50%)',

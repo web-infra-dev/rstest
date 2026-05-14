@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rspack",
-  "version": "0.2.0",
+  "version": "0.9.10",
   "description": "Rstest adapter for rspack configuration",
   "keywords": [
     "rstest",
@@ -36,16 +36,16 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/adapter-rspack/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.3",
-    "@rspack/cli": "2.0.2",
-    "@rspack/core": "2.0.2",
+    "@rslib/core": "0.21.4",
+    "@rspack/cli": "2.0.3",
+    "@rspack/core": "2.0.3",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },
   "peerDependencies": {
     "@rspack/cli": ">=2.0.0-0",
     "@rspack/core": ">=2.0.0-0",
-    "@rstest/core": ">=0.7.7"
+    "@rstest/core": "workspace:^"
   },
   "publishConfig": {
     "access": "public"
