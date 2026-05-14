@@ -50,14 +50,14 @@ export class Pool {
     }
 
     const runner = await this.acquireRunner(task);
-    this.options.memoryGate?.recordDispatch();
+    const heapBaseline = this.options.memoryGate?.recordDispatch();
     try {
       if (op === 'run') {
         return await runner.runTest(task);
       }
       return await runner.collectTests(task);
     } finally {
-      this.options.memoryGate?.recordResolve();
+      this.options.memoryGate?.recordResolve(heapBaseline);
       this.releaseRunner(runner);
     }
   }

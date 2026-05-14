@@ -59,7 +59,6 @@ export class MemoryGate {
   private readonly heapDeltaSamples: number[] = [];
   private readonly freememFn: () => number;
   private readonly readMeminfoFn: () => string | null;
-  private heapBeforeDispatch: number | undefined;
   private heapTrackingEnabled = false;
   private freememCache: Cached | undefined;
   private memInfoCache: Cached | undefined;
@@ -94,19 +93,16 @@ export class MemoryGate {
     this.rssP90Cache = undefined;
   }
 
-  recordDispatch(): void {
-    if (!this.heapTrackingEnabled) return;
-    this.heapBeforeDispatch = process.memoryUsage().heapUsed;
+  /** Token returned to the caller so concurrent dispatches don't clobber each other's baselines. */
+  recordDispatch(): number | undefined {
+    if (!this.heapTrackingEnabled) return undefined;
+    return process.memoryUsage().heapUsed;
   }
 
-  recordResolve(): void {
+  recordResolve(baseline: number | undefined): void {
     if (!this.heapTrackingEnabled) return;
-    if (this.heapBeforeDispatch === undefined) return;
-    const delta = Math.max(
-      0,
-      process.memoryUsage().heapUsed - this.heapBeforeDispatch,
-    );
-    this.heapBeforeDispatch = undefined;
+    if (baseline === undefined) return;
+    const delta = Math.max(0, process.memoryUsage().heapUsed - baseline);
     this.pushSample(this.heapDeltaSamples, delta);
     this.heapDeltaP90Cache = undefined;
   }

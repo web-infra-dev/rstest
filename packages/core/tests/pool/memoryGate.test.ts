@@ -1,3 +1,4 @@
+import v8 from 'node:v8';
 import { MemoryGate, createDefaultMemoryGate } from '../../src/pool/memoryGate';
 
 const MB = 1024 * 1024;
@@ -78,8 +79,9 @@ describe('MemoryGate - heap tracking lazily activates', () => {
 
     // Spy heapUsed reads: a no-op recordDispatch must not call memoryUsage.
     const memSpy = rs.spyOn(process, 'memoryUsage');
-    gate.recordDispatch();
-    gate.recordResolve();
+    const baseline = gate.recordDispatch();
+    gate.recordResolve(baseline);
+    expect(baseline).toBeUndefined();
     expect(memSpy).not.toHaveBeenCalled();
   });
 
@@ -106,9 +108,52 @@ describe('MemoryGate - heap tracking lazily activates', () => {
         arrayBuffers: 0,
       } as NodeJS.MemoryUsage);
 
-    gate.recordDispatch();
-    gate.recordResolve();
+    const baseline = gate.recordDispatch();
+    gate.recordResolve(baseline);
     expect(memSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should keep concurrent dispatch baselines independent', () => {
+    const gate = new MemoryGate({
+      freemem: () => 100 * MB,
+      // 1 GB MemAvailable: passes the slow-lane `available < estRss` guard so
+      // execution reaches the heap-headroom branch.
+      readMeminfo: () => 'MemTotal: 4096000 kB\nMemAvailable: 1024000 kB\n',
+    });
+    for (const v of [200, 200, 200]) gate.recordWorkerRss(v * MB);
+    // Flips heapTrackingEnabled. heapDeltaSamples still empty → returns true.
+    expect(gate.canSpawnNewWorker(4)).toBe(true);
+
+    const heapReadings = [100, 120, 180, 200];
+    let idx = 0;
+    rs.spyOn(process, 'memoryUsage').mockImplementation(
+      () =>
+        ({
+          rss: 0,
+          heapTotal: 0,
+          heapUsed: heapReadings[idx++]! * MB,
+          external: 0,
+          arrayBuffers: 0,
+        }) as NodeJS.MemoryUsage,
+    );
+
+    const baselineA = gate.recordDispatch();
+    const baselineB = gate.recordDispatch();
+    // Resolve order is reversed: under the prior shared-field bug, B's resolve
+    // would land its 60 MB delta, then A's resolve would see a cleared field
+    // and skip — only one sample would land. Per-dispatch tokens force both.
+    gate.recordResolve(baselineB);
+    gate.recordResolve(baselineA);
+
+    // Tighten heap headroom to 120 MB. With both samples [60, 100], p90 = 100
+    // → threshold 150 MB > 120 → return false. If only one sample landed
+    // (the old bug), p90 = 60 → threshold 90 MB ≤ 120 → would return true.
+    rs.spyOn(v8, 'getHeapStatistics').mockReturnValue({
+      heap_size_limit: 1000 * MB,
+      used_heap_size: 880 * MB,
+    } as v8.HeapInfo);
+
+    expect(gate.canSpawnNewWorker(4)).toBe(false);
   });
 });
 
