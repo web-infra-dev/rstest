@@ -108,7 +108,7 @@ Use `rstest list` to preview which tests would run without executing them:
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state. When coverage is enabled, it also limits coverage reports to changed source files unless [`coverage.changed`](/config/test/coverage#changed) is configured explicitly. If a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite and reports full coverage by default.
+`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state.
 
 ## rstest watch
 

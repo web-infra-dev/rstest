@@ -108,7 +108,7 @@ npx rstest run --changed=origin/main
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。开启 coverage 时，它也会将 coverage 报告限制在变更的源码文件范围内，除非显式配置了 [`coverage.changed`](/config/test/coverage#changed)。如果变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 默认会运行完整测试套件，并生成完整 coverage 报告。
+`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。
 
 ## rstest watch
 
