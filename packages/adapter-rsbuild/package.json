@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@rsbuild/core": "*",
-    "@rstest/core": "workspace:*"
+    "@rstest/core": "workspace:^"
   },
   "publishConfig": {
     "access": "public"
