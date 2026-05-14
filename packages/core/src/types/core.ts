@@ -64,9 +64,9 @@ export type RstestContext = {
   fileFilters?: string[];
   /** How file filters should match discovered test files. */
   fileFilterMode?: FileFilterMode;
-  /** Original source filters passed to `--related` / `--findRelatedTests`. */
+  /** Original source filters passed to `--related`, `--findRelatedTests`, or resolved from `--changed`. */
   relatedFilters?: string[];
-  /** `--related` resolved successfully but matched no test files. */
+  /** Related test resolution completed successfully but matched no test files. */
   relatedResolutionEmpty?: boolean;
   /** The config file path. */
   configFilePath?: string;

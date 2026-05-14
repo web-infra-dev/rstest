@@ -85,6 +85,31 @@ If you only want to inspect the affected test files, combine it with `rstest lis
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+### Run changed tests
+
+<ApiMeta addedVersion="0.10.0" />
+
+Use `--changed` to collect changed files from the current Git repository and run the tests related to those files. By default, it includes unstaged, staged, and untracked files, which is useful for local development before committing:
+
+```bash
+npx rstest run --changed
+```
+
+You can also pass a commit or branch. Rstest will include files changed between that ref and `HEAD`, plus local staged, unstaged, and untracked files:
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+Use `rstest list` to preview which tests would run without executing them:
+
+```bash
+npx rstest list --changed --filesOnly
+```
+
+`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state.
+
 ## rstest watch
 
 `rstest watch` will start listening mode and execute tests, and when the test or dependent file modifications, the associated test file will be re-execute.
@@ -258,6 +283,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
 | `--related`                     | Treat positional arguments as source file paths and only run related tests                                                                                            |
 | `--findRelatedTests`            | Alias for `--related` for Jest compatibility                                                                                                                          |
+| `--changed [commit]`            | Run tests related to changed files in the current Git repository, optionally since a commit                                                                           |
 | `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
 | `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
 | `--reporter <reporter>`         | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                    |

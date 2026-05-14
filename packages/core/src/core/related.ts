@@ -301,11 +301,25 @@ const collectDirectlyMatchedFiles = ({
 
 export async function resolveRelatedTestFiles(
   context: RstestContext,
-  sourceFilters: string[],
+  options: {
+    sourceFilters: string[];
+    filterLabel?: string;
+    allowEmpty?: boolean;
+  },
 ): Promise<string[]> {
+  const {
+    sourceFilters,
+    filterLabel = '--related',
+    allowEmpty = false,
+  } = options;
+
   if (sourceFilters.length === 0) {
+    if (allowEmpty) {
+      return [];
+    }
+
     throw new Error(
-      'The `--related` option requires at least one source file path.',
+      `The \`${filterLabel}\` option requires at least one source file path.`,
     );
   }
 
