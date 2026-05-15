@@ -1,20 +1,23 @@
 import { html } from 'satori-html';
 
-export const CANVAS_WIDTH = 1200;
-export const CANVAS_HEIGHT = 630;
-
 export interface TemplateOptions {
   version: string;
   description?: string;
   logoDataUrl: string;
-  backgroundDataUrl: string;
+  background: string;
 }
 
 /**
- * The background is a pre-rendered PNG (icons + vignette baked together)
- * placed as an absolutely-positioned `<img>` behind the content — satori's
- * `background-image: url(...)` shorthand stumbles on data URIs but handles
- * `<img src="data:image/png;...">` reliably.
+ * Layout: 1200x630.
+ *
+ * Centered column over a white + soft-gradient background:
+ *   - Header row: logo + "Rstest" wordmark side-by-side
+ *   - v{version} (display-sized hero)
+ *   - Description (free-form tagline)
+ *
+ * design-resources has no rstest "logo + wordmark" combo SVG yet, so the
+ * wordmark is rendered separately in Space Grotesk while the logo is fetched
+ * at runtime from the canonical CDN URL.
  *
  * satori quirk: every container needs an explicit `display: flex`, since
  * satori treats undeclared display as `none`.
@@ -23,7 +26,7 @@ export function buildTemplate({
   version,
   description,
   logoDataUrl,
-  backgroundDataUrl,
+  background,
 }: TemplateOptions) {
   return html`
     <div
@@ -33,24 +36,14 @@ export function buildTemplate({
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: ${CANVAS_WIDTH}px;
-        height: ${CANVAS_HEIGHT}px;
+        width: 1200px;
+        height: 630px;
         padding: 64px 80px;
-        background-color: #ffffff;
+        background: ${background};
         font-family: 'Space Grotesk';
         text-align: center;
       "
     >
-      <img
-        src="${backgroundDataUrl}"
-        style="
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: ${CANVAS_WIDTH}px;
-          height: ${CANVAS_HEIGHT}px;
-        "
-      />
       <div
         style="
           display: flex;
