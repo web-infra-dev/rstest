@@ -41,3 +41,7 @@ await mkdir(path.dirname(outPath), { recursive: true });
 await writeFile(outPath, png);
 
 console.log(`Wrote ${outPath} (${(png.length / 1024).toFixed(1)} KB)`);
+console.log(
+  'Tip: compress the PNG before committing — typically drops the file to ~1/4 the size with no visible loss.',
+);
+console.log('  https://tinypng.com (or Squoosh / ImageOptim)');

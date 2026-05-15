@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
-import sharp from 'sharp';
 import {
   buildTemplate,
   CANVAS_HEIGHT,
@@ -141,12 +140,5 @@ export async function renderOgImage(opts: RenderOptions): Promise<Buffer> {
 
   // 2x zoom for retina; 2400x1260 fits Twitter/Facebook's ~5MB / 8192px limits.
   const resvg = new Resvg(svg, { fitTo: { mode: 'zoom', value: 2 } });
-
-  // Re-encode as 8-bit palette PNG via libimagequant (TinyPNG-style lossy
-  // quantization). The resvg truecolor output is ~500 KB; palette mode drops
-  // it to ~140 KB with no visible loss on this design (vignette + stroked
-  // icons quantize cleanly into 256 colors).
-  return sharp(resvg.render().asPng())
-    .png({ palette: true, quality: 90, effort: 10, compressionLevel: 9 })
-    .toBuffer();
+  return resvg.render().asPng();
 }

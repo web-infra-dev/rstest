@@ -13,7 +13,6 @@ allowBuilds:
   core-js-pure: false
   keytar: false
   lefthook: true
-  sharp: true
   svelte-preprocess: false
 
 autoInstallPeers: false

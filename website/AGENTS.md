@@ -35,7 +35,7 @@ Per-release og images live in [rstackjs/rstack-design-resources](https://github.
 
 - Use Space Grotesk (committed under `scripts/og-image/assets/fonts/` with SIL OFL license)
 - Render at 2x via `Resvg({ fitTo: { mode: 'zoom', value: 2 } })` so the PNG stays crisp on retina displays
-- Re-encode the resvg output as an 8-bit palette PNG via `sharp({ palette: true, quality: 90, ... })` — drops the file from ~500 KB to ~140 KB with no visible loss
+- Before committing the PNG to design-resources, run it through [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~500 KB, palette quantization drops it to ~140 KB with no visible loss
 - Fetch the logo from the canonical CDN URL at generation time, not from a committed copy
 
 ### Don't
