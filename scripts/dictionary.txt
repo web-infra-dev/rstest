@@ -39,6 +39,7 @@ docgen
 dogfooding
 dorny
 ELDHISTOGRAM
+FILEHANDLE
 elifecycle
 endgroup
 envinfo

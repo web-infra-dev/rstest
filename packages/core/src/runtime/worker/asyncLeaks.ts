@@ -29,6 +29,9 @@ const IGNORED_ASYNC_RESOURCE_TYPES = new Set([
   'CustomGC',
   'DNSCHANNEL',
   'ELDHISTOGRAM',
+  // Node 20 may keep internal module-loading FileHandle resources alive
+  // beyond file evaluation, which reports false positives for clean tests.
+  'FILEHANDLE',
   'PerformanceObserver',
   'PIPEWRAP',
   'PROCESSWRAP',
