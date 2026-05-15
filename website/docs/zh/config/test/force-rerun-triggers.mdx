@@ -1,0 +1,34 @@
+---
+description: 配置哪些变更文件会强制 Rstest 运行完整测试套件。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# forceRerunTriggers
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **类型：** `string[]`
+- **默认值：** `['**/package.json/**', '**/rstest.config.*']`
+
+`forceRerunTriggers` 用于定义一组 glob pattern。当 `--changed` 收集到的变更文件命中这些 pattern 时，Rstest 会运行完整测试套件。
+
+这适用于可能影响大量测试、但不一定会出现在 module graph 中的文件，例如 package manifest、测试配置，或由子进程执行的生成文件。
+
+如果你通过 `withRsbuildConfig`、`withRslibConfig` 或 `withRspackConfig` 等 adapter 扩展配置，Rstest 也会把被加载的 Rsbuild、Rslib 或 Rspack 配置文件作为 force-rerun trigger。除非你在 Rstest 配置中显式设置 `forceRerunTriggers`，否则 adapter 提供的 trigger 会追加到默认值之后。
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  forceRerunTriggers: [
+    '**/package.json/**',
+    '**/rstest.config.*',
+    'scripts/cli-output/**',
+  ],
+});
+```
+
+例如，当 `scripts/cli-output/index.js` 发生变更并命中配置的 pattern 时，`npx rstest run --changed` 会运行所有匹配的测试文件，而不是只运行通过相关源码解析出的测试。
+
+`forceRerunTriggers` 使用替换语义：一旦设置，该数组就是完整的 trigger 列表。如果仍然需要默认 pattern，请在配置中一并写入；如果要禁用该行为，可以设置 `forceRerunTriggers: []`。

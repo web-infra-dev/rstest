@@ -143,6 +143,9 @@ describe('toRstestConfig', () => {
         normalize('/repo/configs/rsbuild.config.ts'),
       ],
     });
+    expect(config.forceRerunTriggers).toEqual([
+      normalize('/repo/configs/rsbuild.config.ts'),
+    ]);
   });
 
   it('should resolve relative build dependencies from root when configPath is not provided', () => {

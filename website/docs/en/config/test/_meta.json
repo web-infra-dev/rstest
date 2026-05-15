@@ -10,6 +10,7 @@
   "globals",
   "pass-with-no-tests",
   "include-source",
+  "force-rerun-triggers",
   "test-name-pattern",
   "extends",
 

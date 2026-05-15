@@ -102,6 +102,8 @@ npx rstest run --changed=HEAD~1
 npx rstest run --changed=origin/main
 ```
 
+当变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 时，Rstest 会运行完整测试套件，而不是只运行相关测试。
+
 如果只想预览将要执行哪些测试，可以配合 `rstest list` 使用：
 
 ```bash

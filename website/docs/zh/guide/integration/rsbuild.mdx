@@ -51,6 +51,7 @@ export default defineConfig({
 - 加载你的 `rsbuild.config.ts` 文件
 - 提取并映射测试相关的 Rsbuild 选项到 Rstest 配置
 - 与你提供的任何其他 Rstest 配置合并
+- 将加载到的 Rsbuild 配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此该配置变更时 `--changed` 会运行完整测试套件
 
 适配器不会原样复用整份 Rsbuild 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、静态资源处理和 `target`。像 `dev`、`server`、`html` 这类面向开发服务器、页面入口或产物输出的配置，会在转换时自动裁剪掉，避免把测试无关配置带入 Rstest。
 
