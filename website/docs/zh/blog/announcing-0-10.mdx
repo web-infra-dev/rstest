@@ -193,10 +193,4 @@ Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 cras
 ## 其他改进
 
 - 按源模块所在位置解析 dynamic imports（[#1210](https://github.com/web-infra-dev/rstest/pull/1210)）
-- 将 coverage config 纳入 build cache digest（[#1245](https://github.com/web-infra-dev/rstest/pull/1245)）
-- 拆分 `taskContext`，使浏览器产物不再引入 `node:async_hooks`（[#1244](https://github.com/web-infra-dev/rstest/pull/1244)）
-- 从 `@rstest/browser-react` 的 peer deps 中移除 React 17（[#1240](https://github.com/web-infra-dev/rstest/pull/1240)）
-- `@rstest/adapter-rslib` 改用 `mergeRslibConfig` 而非 `mergeRsbuildConfig`（[#1238](https://github.com/web-infra-dev/rstest/pull/1238)）
-- 修复 interop `has` trap 在原始类型 default export 下的处理（[#1234](https://github.com/web-infra-dev/rstest/pull/1234)）
-- 正确处理 `useFakeTimers` 的 `toNotFake` 选项（[#1219](https://github.com/web-infra-dev/rstest/pull/1219)）
-- 恢复 worker pool 重构中丢失的 stderr 截断与 settle 等待（[#1216](https://github.com/web-infra-dev/rstest/pull/1216)）
+- 统一 Rstest workspace 内各个 package 的版本（[#1254](https://github.com/web-infra-dev/rstest/pull/1254)）
