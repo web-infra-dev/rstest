@@ -3,6 +3,7 @@ export * from './constants';
 export * from './helper';
 export * from './logger';
 export * from './process';
+export * from './relatedRun';
 export * from './shard';
 export * from './testFiles';
 export * from './trace';

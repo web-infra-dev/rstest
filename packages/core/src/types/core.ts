@@ -66,8 +66,12 @@ export type RstestContext = {
   fileFilterMode?: FileFilterMode;
   /** Original source filters passed to `--related`, `--findRelatedTests`, or resolved from `--changed`. */
   relatedFilters?: string[];
+  /** CLI option that produced related source filters. */
+  relatedMode?: 'related' | 'changed';
   /** Related test resolution completed successfully but matched no test files. */
   relatedResolutionEmpty?: boolean;
+  /** Why a related run was expanded back to the full test suite. */
+  relatedRerunReason?: 'forceRerunTrigger';
   /** The config file path. */
   configFilePath?: string;
   /**

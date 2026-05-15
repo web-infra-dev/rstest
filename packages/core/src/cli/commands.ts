@@ -415,7 +415,9 @@ const resolveEffectiveCliFilters = async ({
   effectiveFilters: string[];
   fileFilterMode: FileFilterMode;
   relatedFilters?: string[];
+  relatedMode?: 'related' | 'changed';
   relatedResolutionEmpty?: boolean;
+  relatedRerunReason?: 'forceRerunTrigger';
 }> => {
   const normalizedFilters = normalizeCliFilters(filters);
 
@@ -457,7 +459,9 @@ const resolveEffectiveCliFilters = async ({
       effectiveFilters: [],
       fileFilterMode: 'fuzzy',
       relatedFilters: sourceFilters,
+      relatedMode: 'changed',
       relatedResolutionEmpty: false,
+      relatedRerunReason: 'forceRerunTrigger',
     };
   }
 
@@ -471,6 +475,7 @@ const resolveEffectiveCliFilters = async ({
     effectiveFilters: relatedFiles,
     fileFilterMode: 'exact',
     relatedFilters: sourceFilters,
+    relatedMode: options.changed !== undefined ? 'changed' : 'related',
     relatedResolutionEmpty: relatedFiles.length === 0,
   };
 };
@@ -496,7 +501,9 @@ export const runRest = async ({
       effectiveFilters,
       fileFilterMode,
       relatedFilters,
+      relatedMode,
       relatedResolutionEmpty,
+      relatedRerunReason,
     } = await resolveEffectiveCliFilters({
       options,
       filters,
@@ -513,7 +520,9 @@ export const runRest = async ({
       fileFilterMode,
     );
     rstest.context.relatedFilters = relatedFilters;
+    rstest.context.relatedMode = relatedMode;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+    rstest.context.relatedRerunReason = relatedRerunReason;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -621,7 +630,9 @@ export function createCli(): CAC {
           effectiveFilters,
           fileFilterMode,
           relatedFilters,
+          relatedMode,
           relatedResolutionEmpty,
+          relatedRerunReason,
         } = await resolveEffectiveCliFilters({
           options,
           filters,
@@ -638,7 +649,9 @@ export function createCli(): CAC {
           fileFilterMode,
         );
         rstest.context.relatedFilters = relatedFilters;
+        rstest.context.relatedMode = relatedMode;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+        rstest.context.relatedRerunReason = relatedRerunReason;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,

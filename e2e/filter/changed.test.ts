@@ -232,6 +232,10 @@ describe('changed test filtering', () => {
 
     await expectExecSuccess();
 
+    expect(cli.stdout).toContain(
+      'Changed files matched forceRerunTriggers, running all test files.',
+    );
+
     const logs = collectRunTestFileLogs(cli.stdout);
 
     expect(logs).toMatchInlineSnapshot(`
@@ -259,6 +263,8 @@ describe('changed test filtering', () => {
 
     await expectExecSuccess();
 
-    expect(cli.stdout).toContain('No test files found, exiting with code 0.');
+    expect(cli.stdout).toContain(
+      'No changed files found, exiting with code 0.',
+    );
   });
 });
