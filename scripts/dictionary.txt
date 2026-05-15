@@ -34,9 +34,11 @@ datauri
 dedupe
 deepmerge
 distpath
+DNSCHANNEL
 docgen
 dogfooding
 dorny
+ELDHISTOGRAM
 elifecycle
 endgroup
 envinfo
@@ -100,6 +102,7 @@ pathinfo
 pcss
 perfetto
 picocolors
+PIPEWRAP
 pjpeg
 pluggable
 pmmmwh
@@ -110,10 +113,12 @@ prebundle
 preflights
 prefresh
 preprocessors
+PROCESSWRAP
 publint
 pxtorem
 quasis
 quxx
+RANDOMBYTESREQUEST
 rebranded
 rolldown
 rootdir
@@ -131,6 +136,7 @@ rstest
 Samply
 selfsign
 selfsigned
+SIGNREQUEST
 sirv
 sokra
 speedscope
@@ -148,6 +154,8 @@ systemjs
 tailwindcss
 taze
 templating
+Threadsafe
+threadsafe
 tinyexec
 tinyglobby
 tinyrainbow
