@@ -59,6 +59,7 @@ export class Rstest implements RstestContext {
   public fileFilterMode?: FileFilterMode;
   public relatedFilters?: string[];
   public relatedResolutionEmpty?: boolean;
+  public changedCoverageFilters?: string[];
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;

@@ -271,6 +271,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
       '**/*.{test,spec}.[cm][jt]sx',
     ],
     enabled: false,
+    changed: undefined,
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',

@@ -15,6 +15,7 @@ type CoverageOptions = {
   enabled?: boolean;
   provider?: 'istanbul';
   include?: string[];
+  changed?: boolean | string;
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
   reportsDirectory?: string;
@@ -121,6 +122,32 @@ export default defineConfig({
     include: ['src/**/*.{js,jsx,ts,tsx}'],
   },
 });
+```
+
+### changed
+
+- **Type:** `boolean | string`
+- **Default:** `undefined`
+- **CLI:** `--coverage.changed`, `--coverage.changed=<commit>`
+
+Collect coverage only for files changed in the current Git repository. Pass a commit or branch to collect coverage for files changed since that ref.
+
+`coverage.changed` only controls the coverage report scope. It does not change which tests are executed. When `--changed` is used and `coverage.changed` is not configured, coverage reports inherit the changed files collected by `--changed`.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    changed: 'HEAD~1',
+  },
+});
+```
+
+```bash
+npx rstest run --coverage.changed
+npx rstest run --coverage.changed=HEAD~1
 ```
 
 ### exclude

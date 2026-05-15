@@ -1,5 +1,5 @@
 import type FS from 'node:fs';
-import { normalize } from 'pathe';
+import { normalize, relative } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
 import type { RstestContext } from '../types';
 import type {
@@ -46,6 +46,30 @@ export const getIncludedFiles = async (
   return allFiles;
 };
 
+export const filterChangedFiles = (
+  files: string[],
+  changedCoverageFilters: string[] | undefined,
+  rootPath: string,
+): string[] => {
+  if (!changedCoverageFilters?.length) {
+    return files;
+  }
+
+  const changedFilesSet = new Set<string>();
+  for (const file of changedCoverageFilters) {
+    changedFilesSet.add(normalize(file));
+    changedFilesSet.add(normalize(relative(rootPath, file)));
+  }
+
+  return files.filter((file) => {
+    const normalizedFile = normalize(file);
+    return (
+      changedFilesSet.has(normalizedFile) ||
+      changedFilesSet.has(normalize(relative(rootPath, file)))
+    );
+  });
+};
+
 export async function generateCoverage(
   context: RstestContext,
   coverageMap: CoverageMap,
@@ -82,7 +106,11 @@ export async function generateCoverage(
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
       for (const p of projects) {
-        const includedFiles = await getIncludedFiles(coverage, p.rootPath);
+        const includedFiles = filterChangedFiles(
+          await getIncludedFiles(coverage, p.rootPath),
+          context.changedCoverageFilters,
+          p.rootPath,
+        );
         allFiles.push(...includedFiles);
 
         const uncoveredFiles = includedFiles.filter(
@@ -108,6 +136,12 @@ export async function generateCoverage(
       // should be better to filter files before swc coverage is processed
       const allFilesSet = new Set(allFiles.map(normalize));
       finalCoverageMap.filter((file) => allFilesSet.has(normalize(file)));
+    } else if (context.changedCoverageFilters?.length) {
+      finalCoverageMap.filter(
+        (file) =>
+          filterChangedFiles([file], context.changedCoverageFilters, rootPath)
+            .length > 0,
+      );
     }
 
     // Generate coverage reports

@@ -61,8 +61,9 @@ export type CommonOptions = {
   coverage?:
     | boolean
     | {
-        enabled?: boolean;
+        enabled?: boolean | string;
         allowExternal?: boolean;
+        changed?: boolean | string;
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
@@ -87,6 +88,20 @@ export type CommonOptions = {
   hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
   shard?: string;
+};
+
+const normalizeBooleanLikeCliValue = (
+  value: boolean | string,
+): boolean | string => {
+  if (value === 'false') {
+    return false;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  return value;
 };
 
 function mergeWithCLIOptions(
@@ -165,10 +180,20 @@ function mergeWithCLIOptions(
       config.coverage.enabled = options.coverage;
     } else {
       if (options.coverage.enabled !== undefined) {
-        config.coverage.enabled = options.coverage.enabled;
+        config.coverage.enabled = Boolean(
+          normalizeBooleanLikeCliValue(options.coverage.enabled),
+        );
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+      }
+      if (options.coverage.changed !== undefined) {
+        const changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        config.coverage.changed = changed;
+
+        if (options.coverage.enabled === undefined && changed !== false) {
+          config.coverage.enabled = true;
+        }
       }
     }
   }

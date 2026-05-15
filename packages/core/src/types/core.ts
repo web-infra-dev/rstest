@@ -68,6 +68,8 @@ export type RstestContext = {
   relatedFilters?: string[];
   /** Related test resolution completed successfully but matched no test files. */
   relatedResolutionEmpty?: boolean;
+  /** Changed source files used to limit coverage reports for `--changed`. */
+  changedCoverageFilters?: string[];
   /** The config file path. */
   configFilePath?: string;
   /**

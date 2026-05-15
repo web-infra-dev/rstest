@@ -104,6 +104,8 @@ npx rstest run --changed=origin/main
 
 When a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite instead of only related tests.
 
+When coverage is enabled and [`coverage.changed`](/config/test/coverage#changed) is not configured, `--changed` also limits coverage reports to changed source files. If a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite and reports full coverage unless `coverage.changed` is explicitly enabled.
+
 Use `rstest list` to preview which tests would run without executing them:
 
 ```bash
@@ -292,6 +294,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--exclude <exclude>`           | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                          |
 | `-u, --update`                  | Update snapshot files, see [update](/config/test/update)                                                                                                              |
 | `--coverage`                    | Enable code coverage collection, see [coverage](/config/test/coverage)                                                                                                |
+| `--coverage.changed [commit]`   | Collect coverage only for changed files in the current Git repository, optionally since a commit                                                                      |
 | `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/pass-with-no-tests)                                                         |
 | `--silent [value]`              | Silence intercepted test console output, or keep logs only for failed tasks with `passed-only`, see [silent](/config/test/silent)                                     |
 | `--printConsoleTrace`           | Print console traces when calling any console method, see [printConsoleTrace](/config/test/print-console-trace)                                                       |
