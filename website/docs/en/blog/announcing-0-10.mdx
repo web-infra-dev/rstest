@@ -17,6 +17,7 @@ Notable changes:
 - [Persistent build cache support](#build-cache)
 - [Memory-aware worker spawn gate](#memory-gate)
 - [Profile a run with `--trace`](#trace-profiling)
+- [Support silent passed test consoles, even in concurrent runs](#silent-logs)
 - [Clearer worker output attribution](#worker-pool)
 
 ## A new threads pool \{#threads-pool}
@@ -123,6 +124,50 @@ In a TTY, Rstest starts a local helper so that the printed link opens the trace 
 
 For other profiling needs, such as CPU time distribution with samply, memory with `--heap-prof`, or step-through debugging with `--inspect`, please refer to the [Profiler](/guide/advanced/profiling#profiler) section.
 
+## Support silent passed test consoles \{#silent-logs}
+
+Rstest 0.10 adds an opt-in `silent` option for intercepted test console output. It is useful when passing tests print noisy debug logs but you still want to keep the logs that explain a failure.
+
+Use `silent: 'passed-only'` to buffer `console.*` output while a task is running. If the file, suite, or test case passes, Rstest discards its buffered logs; if it fails, Rstest replays the matching logs with the failure output:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+
+You can use the same behavior from the CLI:
+
+```bash
+npx rstest --silent=passed-only
+```
+
+For example, with this test file:
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+Only `fail log` will be printed.
+
+This also works for concurrent tests. Rstest tracks the active file, suite, or test case before buffering a log, so a passing concurrent test can stay quiet without hiding logs from a sibling that fails.
+
+If you need a completely quiet run, set `silent` to `true` instead. Please refer to [silent](/config/test/silent) to learn more.
+
 ## Clearer worker output attribution \{#worker-pool}
 
 Rstest 0.10 reworks the worker pool internals so that worker output and crashes show up in the reporter with proper attribution. When a worker writes to stderr or fails, you now see:
@@ -135,7 +180,6 @@ The reworked pool also creates workers on demand, so unused worker slots don't p
 ## More improvements
 
 - Resolve dynamic imports against source module origin ([#1210](https://github.com/web-infra-dev/rstest/pull/1210))
-- Support silent logs ([#1224](https://github.com/web-infra-dev/rstest/pull/1224))
 - Include coverage config in the build cache digest ([#1245](https://github.com/web-infra-dev/rstest/pull/1245))
 - Split `taskContext` to remove `node:async_hooks` from the browser bundle ([#1244](https://github.com/web-infra-dev/rstest/pull/1244))
 - Drop React 17 from `@rstest/browser-react` peer deps ([#1240](https://github.com/web-infra-dev/rstest/pull/1240))

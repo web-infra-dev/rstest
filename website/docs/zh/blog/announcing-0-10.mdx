@@ -17,6 +17,7 @@ Rstest 0.10 已经发布！
 - [支持持久化 build cache](#build-cache)
 - [基于内存的 worker spawn gate](#memory-gate)
 - [通过 `--trace` 分析测试运行](#trace-profiling)
+- [支持静默通过测试的 console 输出](#silent-logs)
 - [更清晰的 worker 输出归属](#worker-pool)
 
 ## 全新的 threads pool \{#threads-pool}
@@ -123,6 +124,50 @@ npx rstest run --trace
 
 对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/advanced/profiling#profiler) 一节。
 
+## 支持静默通过测试的 console 输出 \{#silent-logs}
+
+Rstest 0.10 新增了可选的 `silent` 配置，用于控制测试中的 console 输出。当通过测试打印了大量调试日志，而你又希望保留失败日志用于排查时，这个配置会很有用。
+
+使用 `silent: 'passed-only'` 后，Rstest 会先缓存 `console.*` 输出。如果文件、suite 或测试用例最终通过，对应日志会被丢弃；如果任务失败，相关日志会随失败信息一起打印出来：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+
+你也可以直接通过 CLI 启用：
+
+```bash
+npx rstest --silent=passed-only
+```
+
+例如下面这个测试文件：
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+运行后只会看到 `fail log`，`pass log` 不会出现在终端里。
+
+这个能力同样适用于并发测试。Rstest 会在记录日志时追踪当前活跃的文件、suite 或测试用例，因此通过的并发用例可以保持安静，而失败用例的日志仍然会被保留下来。
+
+如果你希望连失败任务的日志也不输出，可以改用 `silent: true`。请参考 [silent](/config/test/silent) 了解更多。
+
 ## 更清晰的 worker 输出归属 \{#worker-pool}
 
 Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 crash 在 reporter 里有更清晰的归属。当 worker 写 stderr 或失败时：
@@ -135,7 +180,6 @@ Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 cras
 ## 其他改进
 
 - 按源模块所在位置解析 dynamic imports（[#1210](https://github.com/web-infra-dev/rstest/pull/1210)）
-- 支持 silent logs（[#1224](https://github.com/web-infra-dev/rstest/pull/1224)）
 - 将 coverage config 纳入 build cache digest（[#1245](https://github.com/web-infra-dev/rstest/pull/1245)）
 - 拆分 `taskContext`，使浏览器产物不再引入 `node:async_hooks`（[#1244](https://github.com/web-infra-dev/rstest/pull/1244)）
 - 从 `@rstest/browser-react` 的 peer deps 中移除 React 17（[#1240](https://github.com/web-infra-dev/rstest/pull/1240)）
