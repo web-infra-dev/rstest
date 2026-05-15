@@ -16,6 +16,7 @@ _2026 年 5 月 14 日_
     aspectRatio: '2400 / 840',
     objectFit: 'cover',
     objectPosition: 'center',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
   }}
 />
 
@@ -190,7 +191,4 @@ Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 cras
 
 重构后的 pool 也改为 spawn-on-demand：未使用的 worker 槽不会产生启动开销和内存占用。这也是 [基于内存的 spawn gate](#memory-gate) 得以实现的前提，同时也是新 [`threads` pool](#threads-pool) 实现的一部分。
 
-## 其他改进
-
-- 按源模块所在位置解析 dynamic imports（[#1210](https://github.com/web-infra-dev/rstest/pull/1210)）
-- 统一 Rstest workspace 内各个 package 的版本（[#1254](https://github.com/web-infra-dev/rstest/pull/1254)）
+完整变更请参考 [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0)。

@@ -16,6 +16,7 @@ _May 14, 2026_
     aspectRatio: '2400 / 840',
     objectFit: 'cover',
     objectPosition: 'center',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
   }}
 />
 
@@ -190,7 +191,4 @@ Rstest 0.10 reworks the worker pool internals so that worker output and crashes 
 
 The reworked pool also creates workers on demand, so unused worker slots incur no startup or memory cost. This is what makes [memory-aware spawn gating](#memory-gate) possible, and it is part of how the new [`threads` pool](#threads-pool) is built.
 
-## More improvements
-
-- Resolve dynamic imports against source module origin ([#1210](https://github.com/web-infra-dev/rstest/pull/1210))
-- Align package versions across the Rstest workspace ([#1254](https://github.com/web-infra-dev/rstest/pull/1254))
+For a full list of changes, see the [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0).

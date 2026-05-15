@@ -11,7 +11,7 @@ metadata:
 
 Draft a bilingual release blog post under `website/docs/{en,zh}/blog/` for a given version
 range. The post is an **article**, not a changelog: an opening overview, a few in-depth
-highlight sections, then a compact list of minor `feat`/`fix`/`perf` entries.
+highlight sections, then a single closing sentence linking to the GitHub release page.
 
 The user will polish the draft manually. Aim for a strong starting point — readable prose,
 real code samples pulled from the actual PRs — not a finished post. The **Style guidance**
@@ -208,11 +208,7 @@ and trade-offs. Stay factual, no narrative bridges.>
 
 ...
 
-## More improvements
-
-- <Brief descriptive statement> ([#PR](https://github.com/web-infra-dev/rstest/pull/PR))
-- <Brief descriptive statement> ([#PR](...))
-- <Brief descriptive statement> ([#PR](...))
+For a full list of changes, see the [vX.Y.Z release notes](https://github.com/web-infra-dev/rstest/releases/tag/vX.Y.Z).
 ```
 
 Rules for the title and date line:
@@ -236,27 +232,18 @@ Rules for the intro:
 - Do **not** write a separate narrative paragraph explaining the release theme. The
   bullets _are_ the overview; the section bodies do the explaining.
 
-Rules for the trailing "More improvements" list:
+Rules for the closing release-notes link:
 
-- Single **flat** bullet list — no `### New features` / `### Bug fixes` / `### Performance`
-  subheadings.
-- Include only `feat` (not selected as highlight), `fix`, and `perf`. Skip `refactor`, `docs`,
-  `chore`, `test`, `ci`, and the `other` bucket.
-- Order: all `feat` bullets first, then `fix`, then `perf` (preserving the within-bucket order
-  from `collect-commits.mjs`).
-- **Rewrite each bullet as a brief, descriptive statement in natural language.** Drop the
-  `feat(scope):` / `fix(scope):` conventional-commit prefix and reshape the subject so it
-  reads as a sentence fragment, not a commit line. Capitalize the first word. Wrap module
-  / package / API identifiers in backticks. Keep the PR link at the end.
-  - Example: `feat(pool): replace tinypool with self-owned worker pool` →
-    ``Replace `tinypool` with a self-owned worker pool``.
-  - Example: `fix(browser-react): drop React 17 from peer deps` →
-    ``Drop React 17 from `@rstest/browser-react` peer deps``.
-- Omit the entire section if all three buckets are empty.
+- Close the post with a **single sentence** linking to the GitHub release page for this
+  version. No `## More improvements` heading, no per-PR bullet list — the release page
+  already enumerates everything.
+- Template: `For a full list of changes, see the [vX.Y.Z release notes](https://github.com/web-infra-dev/rstest/releases/tag/vX.Y.Z).`
+  The URL must use the `v`-prefixed tag (`v0.10.0`, not `0.10.0`).
+- Place it as the **last** paragraph of the post, immediately after the last highlight
+  section. Do **not** wrap it in a heading.
 
-**Do not add an Acknowledgements / "Thanks to contributors" section.** The post ends after
-"More improvements". A changelog link belongs in a highlight or trailing bullet, not its own
-section.
+**Do not add an Acknowledgements / "Thanks to contributors" section.** The post ends with
+the release-notes link. Contributors are surfaced on the release page itself.
 
 ### 7. Write the ZH post
 
@@ -265,14 +252,14 @@ Path: `website/docs/zh/blog/announcing-<major>-<minor>.mdx`. Mirror the EN struc
 - Translate **every** heading and prose paragraph. Headings that must be translated include:
   - `# Announcing Rstest X.Y` → `# Rstest X.Y 发布`
   - Each `##` highlight section heading.
-  - `## More improvements` → `## 其他改进` (do not leave it in English).
 - **Translate the date line** above the title: `_May 14, 2026_` → `_2026 年 5 月 14 日_`.
 - **Translate the intro greeting and bullet preamble**: `Rstest X.Y has been released.` →
   `Rstest X.Y 已经发布。` (full-width period, no exclamation). `Notable changes:` →
   `主要变更：`.
-- **Translate the "More improvements" bullets too.** After the EN rewrite step they are
-  natural-language statements (not commit subjects), so they should be translated rather
-  than left in English. Keep PR links identical to EN.
+- **Translate the closing release-notes sentence** but keep the URL identical:
+  `For a full list of changes, see the [vX.Y.Z release notes](URL).` →
+  `完整变更请参考 [vX.Y.Z release notes](URL)。`. Keep the link text in English (it
+  reads as a proper noun referring to the GitHub page).
 - **Keep technical terms in English** (Rspack, ESM, TypeScript, threads pool, snapshot,
   worker, pool, cache, build, CLI, CI, TTY, artifact, etc.), per the website's `CLAUDE.md`.
   Do **not** translate them to 工作进程 / 池 / 缓存 / 构建 / 制品 / 命令行 / 持续集成 / 终端 / 快照.
