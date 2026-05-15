@@ -120,7 +120,9 @@ describe('related test filtering', () => {
 
     await expectExecFailed();
 
-    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+    expect(cli.stderr).toContain(
+      'No test files found for related source files, exiting with code 1.',
+    );
     expect(cli.log).toContain('related:');
     expect(cli.log).toContain('404.ts');
     expect(cli.log).not.toContain('__rstest_related_no_match__');
@@ -139,7 +141,9 @@ describe('related test filtering', () => {
 
     await expectExecFailed();
 
-    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+    expect(cli.stderr).toContain(
+      'No test files found for related source files, exiting with code 1.',
+    );
     expect(cli.log).toContain('related:');
     expect(cli.log).toContain('src/fallback.ts');
     expect(cli.log).not.toContain('src/fallback.ts.test.ts');

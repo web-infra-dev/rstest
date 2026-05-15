@@ -40,7 +40,13 @@ export type {
   WorkerState,
 } from './types';
 // Utils needed by browser package
-export { color, isDebug, logger, serializableConfig } from './utils';
+export {
+  color,
+  getNoTestFilesMessage,
+  isDebug,
+  logger,
+  serializableConfig,
+} from './utils';
 // Constants
 export {
   globalApis,

@@ -12,6 +12,7 @@ import {
   color,
   createCoverageProvider,
   type FormattedError,
+  getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
   isDebug,
@@ -1945,7 +1946,11 @@ export const runBrowserController = async (
     if (!skipOnTestRunEnd) {
       const message = shouldKeepWatchingWithEmptySet
         ? 'No test files found.'
-        : `No test files found, exiting with code ${code}.`;
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {

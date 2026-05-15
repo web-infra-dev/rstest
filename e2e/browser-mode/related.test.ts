@@ -46,7 +46,9 @@ describe('browser mode - related', () => {
 
     await expectExecFailed();
 
-    expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+    expect(cli.stderr).toContain(
+      'No test files found for related source files, exiting with code 1.',
+    );
     expect(cli.log).toContain('related:');
     expect(cli.log).toContain('tests/src/missing.ts');
     expect(cli.log).not.toContain('index.test.ts');
