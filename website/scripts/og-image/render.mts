@@ -64,7 +64,7 @@ function pick<T>(arr: T[]): T {
  * `transparent == rgba(0,0,0,0)`) and produce a grey halo around the
  * bright center.
  */
-function randomBackground(): string {
+function blobBackground(): string {
   const base = pick(HUE_PALETTE);
 
   const schemeRoll = Math.random();
@@ -123,6 +123,79 @@ function randomBackground(): string {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * OpenAI / Stripe / Vercel-style aurora gradient: one oversize saturated
+ * blob anchored to an outer quadrant, optionally paired with a smaller
+ * off-hue halo in the diagonally opposite corner. Reads as "single dominant
+ * color family with a corner-anchored color leak."
+ *
+ * Two extents on purpose: primary fills 85%–115% so it dominates the frame
+ * while keeping directional gradient structure (anything past ~120% reads
+ * as a flat color block); accent stays at 45%–65% so the color-leak stays
+ * localized to its corner instead of overlapping with the primary across
+ * the whole canvas and muddying both into a uniform patch.
+ *
+ * Anchors stay in [[QUAD_CENTERS]] (well off the central text column), so
+ * even at the higher alpha the v-number and wordmark remain readable —
+ * inverse-square falloff drops the mid-canvas alpha to ~0.05–0.15.
+ */
+function auroraBackground(): string {
+  const base = pick(HUE_PALETTE);
+
+  // 70/30: usually a single dominant blob; sometimes pair it with an off-hue
+  // accent in the diagonally opposite corner for the color-leak effect.
+  const blobCount = Math.random() < 0.7 ? 1 : 2;
+  const quads = pickQuadrants(blobCount);
+
+  const blobs = quads.map((quad, i) => {
+    const isPrimary = i === 0;
+
+    // Primary stays near the seed hue; the accent shifts 90°–150° so it
+    // reads as a complementary halo rather than a second blob of the same
+    // family.
+    const hueShift = isPrimary
+      ? Math.round((Math.random() - 0.5) * 25)
+      : 90 + Math.round(Math.random() * 60);
+    const h = (base.h + hueShift + 360) % 360;
+    const s = clamp(base.s + 5 + Math.round(Math.random() * 10), 70, 92);
+    const l = clamp(base.l + Math.round((Math.random() - 0.5) * 10), 55, 70);
+
+    const center = QUAD_CENTERS[quad];
+    const x = Math.round(center.x + (Math.random() - 0.5) * 20);
+    const y = Math.round(center.y + (Math.random() - 0.5) * 20);
+
+    const w = isPrimary
+      ? Math.round(85 + Math.random() * 30) // 85% – 115%
+      : Math.round(45 + Math.random() * 20); // 45% – 65%
+    const h2 = isPrimary
+      ? Math.round(85 + Math.random() * 30)
+      : Math.round(45 + Math.random() * 20);
+
+    const alpha = isPrimary
+      ? (0.55 + Math.random() * 0.2).toFixed(2) // 0.55 – 0.75
+      : (0.45 + Math.random() * 0.17).toFixed(2); // 0.45 – 0.62
+
+    // Primary's softer falloff (68%–82%) lets it cover most of the canvas;
+    // accent's tighter falloff (55%–72%) keeps the color-leak localized to
+    // its quadrant, so adjacent blobs don't blend into a uniform patch.
+    const endStop = isPrimary
+      ? Math.round(68 + Math.random() * 14)
+      : Math.round(55 + Math.random() * 17);
+
+    const start = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
+    const end = `hsla(${h}, ${s}%, ${l}%, 0)`;
+    return `radial-gradient(ellipse ${w}% ${h2}% at ${x}% ${y}%, ${start}, ${end} ${endStop}%)`;
+  });
+  return `${blobs.join(', ')}, #ffffff`;
+}
+
+function randomBackground(): string {
+  // 35/65 — mix in OpenAI-style aurora gradients alongside the original
+  // multi-blob spread. Aurora reads as a single dominant color family with
+  // a corner color leak; blob keeps the airy multi-spot diffuse feel.
+  return Math.random() < 0.35 ? auroraBackground() : blobBackground();
 }
 
 async function fetchLogoAsPng(): Promise<Buffer> {
