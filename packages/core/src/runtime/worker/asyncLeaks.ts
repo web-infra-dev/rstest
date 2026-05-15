@@ -7,13 +7,17 @@ type AsyncLeak = {
   type: string;
   stack?: string;
   task?: CurrentTaskInfo;
-  resource?: unknown;
+  resourceRef?: WeakRef<HasRefResource>;
 };
 
 type AsyncLeakDetector = {
   enable: () => void;
   collectErrors: () => Promise<FormattedError[]>;
   disable: () => void;
+};
+
+type HasRefResource = {
+  hasRef: () => boolean;
 };
 
 const MAX_LEAKS_TO_REPORT = 20;
@@ -25,9 +29,6 @@ const IGNORED_ASYNC_RESOURCE_TYPES = new Set([
   'CustomGC',
   'DNSCHANNEL',
   'ELDHISTOGRAM',
-  // Node 20 may keep internal module-loading FileHandle resources alive
-  // beyond file evaluation, which reports false positives for clean tests.
-  'FILEHANDLE',
   'PerformanceObserver',
   'PIPEWRAP',
   'PROCESSWRAP',
@@ -58,16 +59,16 @@ const formatLeakTaskName = (task?: CurrentTaskInfo): string => {
   });
 };
 
-const isIgnorableActiveResource = (leak: AsyncLeak): boolean => {
-  const resource = leak.resource;
+const isHasRefResource = (resource: unknown): resource is HasRefResource =>
+  typeof resource === 'object' &&
+  resource !== null &&
+  'hasRef' in resource &&
+  typeof resource.hasRef === 'function';
 
-  return (
-    typeof resource === 'object' &&
-    resource !== null &&
-    'hasRef' in resource &&
-    typeof resource.hasRef === 'function' &&
-    resource.hasRef() === false
-  );
+const isIgnorableActiveResource = (leak: AsyncLeak): boolean => {
+  const resource = leak.resourceRef?.deref();
+
+  return leak.resourceRef !== undefined && resource?.hasRef() !== true;
 };
 
 const getCreationStack = (): string | undefined => {
@@ -106,7 +107,9 @@ export const createAsyncLeakDetector = (
         type,
         task: { ...task },
         stack: getCreationStack(),
-        resource,
+        resourceRef: isHasRefResource(resource)
+          ? new WeakRef(resource)
+          : undefined,
       });
     },
     destroy(asyncId) {
