@@ -53,7 +53,7 @@ export default defineConfig({
 
 ## Run changed or related tests \{#run-changed-tests}
 
-Rstest 0.10 adds two flags that run only the tests affected by your source changes, so the inner loop on a large suite stays fast.
+Rstest 0.10 adds two flags that run only the tests affected by your source changes, shortening the inner-loop feedback time on a large suite.
 
 `--related` treats positional arguments as source files and runs only the tests that depend on them. The dependency information comes from the build module graph, so the same filter works for Node mode and Browser Mode. `--findRelatedTests` is a Jest-compatible alias:
 
@@ -62,7 +62,7 @@ npx rstest run --related src/button.ts
 npx rstest run --findRelatedTests src/button.ts
 ```
 
-`--changed` takes the same idea but auto-detects the source files from your Git working tree. By default it includes unstaged, staged, and untracked files — what you are working on right now:
+`--changed` applies the same approach but auto-detects the source files from your Git working tree. By default it includes unstaged, staged, and untracked files — your current uncommitted edits:
 
 ```bash
 npx rstest run --changed
@@ -113,9 +113,9 @@ Rstest applies a set of Rstest-aware defaults on top of Rsbuild's, so most proje
 
 Rstest 0.10 now defers worker spawns when system memory or main-process heap headroom cannot safely host another worker, so high parallelism no longer pushes low-memory machines into OOM.
 
-The gate matters most on CI containers and smaller dev machines, where the previous CPU-only scaling could exhaust system memory once worker RSS piled up, or trip a V8 heap-limit crash in the host process. With the gate, Rstest checks memory state before each new spawn and waits when the next worker is not safe to launch.
+The gate matters most on CI containers and smaller dev machines, where the previous CPU-only scaling could exhaust system memory once worker RSS accumulated, or trip a V8 heap-limit crash in the host process. With the gate enabled, Rstest checks memory state before each new spawn and defers the next worker when launching it is not safe.
 
-There is no public API or default-behavior change when memory is plentiful — the gate is invisible on machines that aren't pressed. If you need to disable it (for benchmarking, debugging, or hard-isolated environments), set the environment variable:
+There is no public API or default-behavior change when memory is plentiful — the gate is invisible on machines that are not under memory pressure. If you need to disable it (for benchmarking, debugging, or hard-isolated environments), set the environment variable:
 
 ```bash
 RSTEST_MEMORY_AWARE=0 npx rstest run
@@ -123,7 +123,7 @@ RSTEST_MEMORY_AWARE=0 npx rstest run
 
 ## Profile a run with --trace \{#trace-profiling}
 
-Rstest 0.10 adds a `--trace` CLI flag that breaks a run into per-phase, per-suite, and per-case slices and writes a Perfetto-compatible profile. This is useful when the reporter's single `Duration` number isn't enough to tell you where the time is going:
+Rstest 0.10 adds a `--trace` CLI flag that breaks a run into per-phase, per-suite, and per-case slices and writes a Perfetto-compatible profile. Use it when the reporter's single `Duration` number is not enough to identify where the time is being spent:
 
 ```bash
 npx rstest run --trace
@@ -131,7 +131,7 @@ npx rstest run --trace
 
 The flag is CLI-only and opt-in. Each run produces per-phase slices per file (`prepare` → `teardown`), per-suite and per-case slices annotated with status and retry count, and a heap counter sampled at each phase boundary.
 
-![Perfetto UI showing per-file, per-suite, and per-case slices from an Rstest --trace run](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
+![Perfetto UI showing the trace produced by running npx rstest --trace inside the rstest repository](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
 
 In a TTY, Rstest starts a local helper so that the printed link opens the trace directly in the Perfetto UI. In CI, the trace is written to `<rootPath>/.rstest/trace-<ts>.json`, which you can upload as an artifact.
 
@@ -139,7 +139,7 @@ For other profiling needs, such as CPU time distribution with samply, memory wit
 
 ## Support silent passed test consoles \{#silent-logs}
 
-Rstest 0.10 adds an opt-in `silent` option for intercepted test console output. It is useful when passing tests print noisy debug logs but you still want to keep the logs that explain a failure.
+Rstest 0.10 adds an opt-in `silent` option for intercepted test console output. Enable it when passing tests produce noisy debug logs while you still need to retain the logs that explain a failure.
 
 Use `silent: 'passed-only'` to buffer `console.*` output while a task is running. If the file, suite, or test case passes, Rstest discards its buffered logs; if it fails, Rstest replays the matching logs with the failure output:
 
@@ -177,7 +177,7 @@ describe('math', () => {
 
 Only `fail log` will be printed.
 
-This also works for concurrent tests. Rstest tracks the active file, suite, or test case before buffering a log, so a passing concurrent test can stay quiet without hiding logs from a sibling that fails.
+This also works for concurrent tests. Rstest tracks the active file, suite, or test case before buffering a log, so a passing concurrent test can be silenced without hiding logs from a sibling that fails.
 
 If you need a completely quiet run, set `silent` to `true` instead. Please refer to [silent](/config/test/silent) to learn more.
 
@@ -188,7 +188,7 @@ Rstest 0.10 reworks the worker pool internals so that worker output and crashes 
 - **Per-task attribution.** Output is routed through the reporter with the task identity that produced it, rather than arriving as untagged text mixed into the terminal.
 - **Structured crash signals.** Worker crashes surface as a typed event carrying the failing task, rather than being inferred from raw stderr.
 
-The reworked pool also creates workers on demand, so unused worker slots don't pay startup or memory cost. This is what makes [memory-aware spawn gating](#memory-gate) possible, and it's part of how the new [`threads` pool](#threads-pool) is built.
+The reworked pool also creates workers on demand, so unused worker slots incur no startup or memory cost. This is what makes [memory-aware spawn gating](#memory-gate) possible, and it is part of how the new [`threads` pool](#threads-pool) is built.
 
 ## More improvements
 
