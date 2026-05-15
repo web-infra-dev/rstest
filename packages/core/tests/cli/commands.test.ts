@@ -36,6 +36,7 @@ describe('CLI help output', () => {
     expect(help).toContain('--summary');
     expect(help).toContain('--filesOnly');
     expect(help).toContain('--changed');
+    expect(help).toContain('--coverage.changed');
     expect(help).not.toContain('--cleanup');
   });
 
@@ -66,6 +67,18 @@ describe('CLI help output', () => {
     expect(() =>
       cli.parse(['node', 'rstest', 'init', '--coverage'], { run: true }),
     ).toThrow('Unknown option `--coverage`');
+  });
+
+  it('allows --coverage to be mixed with nested coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', '--coverage.changed=HEAD'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+      changed: 'HEAD',
+    });
   });
 });
 

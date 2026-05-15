@@ -15,6 +15,7 @@ type CoverageOptions = {
   enabled?: boolean;
   provider?: 'istanbul';
   include?: string[];
+  changed?: boolean | string;
   exclude?: string[];
   reporters?: (keyof ReportOptions | ReportWithOptions)[];
   reportsDirectory?: string;
@@ -122,6 +123,76 @@ export default defineConfig({
   },
 });
 ```
+
+### changed
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **Type:** `boolean | string`
+- **Default:** `undefined`
+- **CLI:** `--coverage.changed`, `--coverage.changed=<commit>`
+
+Collect coverage only for files changed in the current Git repository. Pass a commit or branch to collect coverage for files changed since that ref.
+
+This option is available in both config and CLI:
+
+- Use `coverage.changed` in `rstest.config.ts` when you want a persistent default, for example in CI.
+- Use `--coverage.changed` for one-off local or CI runs.
+
+`coverage.changed` only limits the coverage report scope. It does not change which tests are executed.
+
+That means these two commands do different things:
+
+```bash
+npx rstest run --changed
+npx rstest run --coverage.changed
+```
+
+- `--changed` changes the test selection and runs tests related to changed files.
+- `--coverage.changed` keeps the normal test selection, but only reports coverage for changed source files.
+
+#### Interaction with `--changed`
+
+- When [`--changed`](/guide/basic/cli#run-changed-tests) is used and `coverage.changed` is not configured, coverage reports inherit the changed files collected by `--changed`.
+- If `--changed` hits [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest reruns the full test suite. Coverage stays full in that case unless `coverage.changed` is explicitly enabled.
+- If you want to use `--changed` for test selection but still keep full coverage reports, set `coverage.changed` to `false` in config.
+
+Common setups:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    changed: 'origin/main',
+  },
+});
+```
+
+The example above still runs the normal test suite, but the coverage report only includes files changed since `origin/main`.
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    changed: 'HEAD~1',
+  },
+});
+```
+
+```bash
+npx rstest run --changed --coverage
+npx rstest run --coverage.changed
+npx rstest run --coverage.changed=HEAD~1
+npx rstest run --coverage.changed=origin/main
+```
+
+- `npx rstest run --changed --coverage` runs changed-related tests and, by default, also limits coverage to the same changed file set.
+- `npx rstest run --coverage.changed=HEAD~1` runs the normal test suite but only reports coverage for files changed since `HEAD~1`.
+- `npx rstest run --coverage.changed=origin/main` is useful when your branch is based on `main`: it still runs the normal test suite, but the coverage report only includes files changed compared with `origin/main`.
 
 ### exclude
 

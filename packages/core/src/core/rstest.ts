@@ -60,6 +60,7 @@ export class Rstest implements RstestContext {
   public relatedFilters?: string[];
   public relatedMode?: 'related' | 'changed';
   public relatedResolutionEmpty?: boolean;
+  public changedCoverageFilters?: string[];
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;

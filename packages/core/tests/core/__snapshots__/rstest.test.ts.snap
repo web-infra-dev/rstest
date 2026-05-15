@@ -16,6 +16,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -115,6 +116,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -217,6 +219,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [

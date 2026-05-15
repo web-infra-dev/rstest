@@ -70,6 +70,8 @@ export type RstestContext = {
   relatedMode?: 'related' | 'changed';
   /** Related test resolution completed successfully but matched no test files. */
   relatedResolutionEmpty?: boolean;
+  /** Changed source files used to limit coverage reports for `--changed`. */
+  changedCoverageFilters?: string[];
   /** Why a related run was expanded back to the full test suite. */
   relatedRerunReason?: 'forceRerunTrigger';
   /** Changed files that caused a related run to expand back to the full test suite. */

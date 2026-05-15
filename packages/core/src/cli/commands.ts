@@ -55,6 +55,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
   [
+    '--coverage.changed [commit]',
+    'Collect coverage only for changed files, optionally since a commit',
+  ],
+  [
     '--project <name>',
     'Run only projects that match the name, can be a full name or wildcards pattern',
   ],
@@ -189,6 +193,40 @@ const applyOptions = (
 const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, runtimeOptionDefinitions);
   applyOptions(command, poolOptionDefinitions);
+};
+
+const normalizeCoverageCliArgs = (argv: string[]): string[] => {
+  const hasCoverageNestedOption = argv.some((arg) =>
+    arg.startsWith('--coverage.'),
+  );
+
+  if (!hasCoverageNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--coverage') {
+      return '--coverage.enabled';
+    }
+    if (arg.startsWith('--coverage=')) {
+      return `--coverage.enabled=${arg.slice('--coverage='.length)}`;
+    }
+    if (arg === '--no-coverage') {
+      return '--coverage.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const allowMixedCoverageCliOptions = (cli: CAC): void => {
+  const originalParse = cli.parse.bind(cli);
+
+  cli.parse = ((argv, options) =>
+    originalParse(
+      normalizeCoverageCliArgs(argv ?? process.argv),
+      options,
+    )) as CAC['parse'];
 };
 
 const filterHelpOptions = (
@@ -400,6 +438,14 @@ export const resolveChangedFiles = async (
   }
 };
 
+const getCoverageChangedOption = (options: CommonOptions) => {
+  if (options.coverage === undefined || typeof options.coverage === 'boolean') {
+    return undefined;
+  }
+
+  return options.coverage.changed;
+};
+
 const resolveEffectiveCliFilters = async ({
   options,
   filters,
@@ -428,6 +474,7 @@ const resolveEffectiveCliFilters = async ({
   relatedFilters?: string[];
   relatedMode?: 'related' | 'changed';
   relatedResolutionEmpty?: boolean;
+  changedCoverageFilters?: string[];
   relatedRerunReason?: 'forceRerunTrigger';
   relatedRerunFiles?: string[];
 }> => {
@@ -487,6 +534,7 @@ const resolveEffectiveCliFilters = async ({
     filterLabel: options.changed !== undefined ? '--changed' : '--related',
     allowEmpty: options.changed !== undefined,
   });
+  const coverageChanged = getCoverageChangedOption(options);
 
   return {
     effectiveFilters: relatedFiles,
@@ -494,7 +542,37 @@ const resolveEffectiveCliFilters = async ({
     relatedFilters: sourceFilters,
     relatedMode: options.changed !== undefined ? 'changed' : 'related',
     relatedResolutionEmpty: relatedFiles.length === 0,
+    changedCoverageFilters:
+      options.changed !== undefined && coverageChanged === undefined
+        ? sourceFilters
+        : undefined,
   };
+};
+
+const resolveCoverageChangedFilters = async (
+  rstest: RstestInstance,
+): Promise<string[] | undefined> => {
+  const { changed } = rstest.context.normalizedConfig.coverage;
+
+  if (changed === undefined) {
+    return rstest.context.changedCoverageFilters;
+  }
+  if (changed === false) {
+    return undefined;
+  }
+
+  try {
+    return await resolveChangedFiles(
+      rstest.context.rootPath,
+      typeof changed === 'string' ? changed : undefined,
+    );
+  } catch (error) {
+    const reason = formatGitError(error);
+    logger.warn(
+      `Failed to resolve changed files for \`coverage.changed\`, falling back to full coverage.${reason ? ` Git error: ${reason}` : ''}`,
+    );
+    return undefined;
+  }
 };
 
 export const runRest = async ({
@@ -520,6 +598,7 @@ export const runRest = async ({
       relatedFilters,
       relatedMode,
       relatedResolutionEmpty,
+      changedCoverageFilters,
       relatedRerunReason,
       relatedRerunFiles,
     } = await resolveEffectiveCliFilters({
@@ -540,6 +619,11 @@ export const runRest = async ({
     rstest.context.relatedFilters = relatedFilters;
     rstest.context.relatedMode = relatedMode;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+    rstest.context.changedCoverageFilters = changedCoverageFilters;
+    rstest.context.changedCoverageFilters =
+      await resolveCoverageChangedFilters(rstest);
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
     rstest.context.relatedRerunReason = relatedRerunReason;
     rstest.context.relatedRerunFiles = relatedRerunFiles;
 
@@ -651,6 +735,7 @@ export function createCli(): CAC {
           relatedFilters,
           relatedMode,
           relatedResolutionEmpty,
+          changedCoverageFilters,
           relatedRerunReason,
           relatedRerunFiles,
         } = await resolveEffectiveCliFilters({
@@ -671,6 +756,11 @@ export function createCli(): CAC {
         rstest.context.relatedFilters = relatedFilters;
         rstest.context.relatedMode = relatedMode;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+        rstest.context.changedCoverageFilters = changedCoverageFilters;
+        rstest.context.changedCoverageFilters =
+          await resolveCoverageChangedFilters(rstest);
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
         rstest.context.relatedRerunReason = relatedRerunReason;
         rstest.context.relatedRerunFiles = relatedRerunFiles;
 
@@ -769,6 +859,8 @@ export function createCli(): CAC {
         process.exit(1);
       }
     });
+
+  allowMixedCoverageCliOptions(cli);
 
   return cli;
 }

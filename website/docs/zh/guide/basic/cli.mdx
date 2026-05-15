@@ -104,6 +104,8 @@ npx rstest run --changed=origin/main
 
 当变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 时，Rstest 会运行完整测试套件，而不是只运行相关测试。
 
+开启覆盖率且未配置 [`coverage.changed`](/config/test/coverage#changed) 时，`--changed` 也会将覆盖率报告限制在变更的源文件范围内。如果变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 会运行完整测试套件，并生成完整覆盖率报告，除非显式启用了 `coverage.changed`。
+
 如果只想预览将要执行哪些测试，可以配合 `rstest list` 使用：
 
 ```bash
@@ -291,6 +293,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--exclude <exclude>`           | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |
 | `-u, --update`                  | 更新快照文件，详见 [update](/config/test/update)                                                                                                     |
 | `--coverage`                    | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                           |
+| `--coverage.changed [commit]`   | 只收集当前 Git 仓库中变更文件的覆盖率，也可以指定从某个 commit 以来的变更                                                                            |
 | `--passWithNoTests`             | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                              |
 | `--silent [value]`              | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                             |
 | `--printConsoleTrace`           | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                            |
