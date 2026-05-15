@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rspack",
-  "version": "0.9.10",
+  "version": "0.10.0",
   "description": "Rstest adapter for rspack configuration",
   "keywords": [
     "rstest",
