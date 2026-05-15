@@ -64,7 +64,7 @@ function pick<T>(arr: T[]): T {
  * `transparent == rgba(0,0,0,0)`) and produce a grey halo around the
  * bright center.
  */
-function blobBackground(): string {
+function randomBackground(): string {
   const base = pick(HUE_PALETTE);
 
   const schemeRoll = Math.random();
@@ -102,17 +102,33 @@ function blobBackground(): string {
     const l = clamp(base.l + Math.round((Math.random() - 0.5) * 12), 55, 78);
 
     const center = QUAD_CENTERS[quad];
-    const x = Math.round(center.x + (Math.random() - 0.5) * 30); // anchor ±15%
-    const y = Math.round(center.y + (Math.random() - 0.5) * 25); // anchor ±12.5%
+    let x = Math.round(center.x + (Math.random() - 0.5) * 30); // anchor ±15%
+    let y = Math.round(center.y + (Math.random() - 0.5) * 25); // anchor ±12.5%
 
     const w = Math.round(minSize + Math.random() * (85 - minSize));
-    const h2 = Math.round(minSize + Math.random() * (85 - minSize));
+    // Cap blob aspect ratio at ~1.4:1 so blobs read as soft ovals rather than
+    // long bars. Independent w/h sampling can otherwise produce ~2.8:1.
+    const MAX_RATIO = 1.4;
+    const hLo = Math.max(minSize, w / MAX_RATIO);
+    const hHi = Math.min(85, w * MAX_RATIO);
+    const h2 = Math.round(hLo + Math.random() * (hHi - hLo));
 
     const alpha = (minAlpha + Math.random() * (maxAlpha - minAlpha)).toFixed(2);
     // Tighter end-stop keeps the alpha falloff crisp. Long tails (>=80%)
     // produce a "dingy beige/grey" halo for warm hues because pale tinted
     // pixels read as muddy when they cover a wide area over white.
     const endStop = Math.round(55 + Math.random() * 20); // 55% – 75%
+
+    // Even within the 1.4:1 cap, an elongated blob whose long edges both sit
+    // inside the canvas reads as a "bar" floating mid-frame. Hide one long
+    // edge by pulling the blob's short-axis center toward the nearer canvas
+    // edge — the result is a soft wash spilling in from that edge.
+    const ASYM = 1.15;
+    if (w / h2 > ASYM) {
+      y = edgeHugCenter((h2 * endStop) / 100, center.y);
+    } else if (h2 / w > ASYM) {
+      x = edgeHugCenter((w * endStop) / 100, center.x);
+    }
 
     const start = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
     const end = `hsla(${h}, ${s}%, ${l}%, 0)`;
@@ -126,76 +142,19 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /**
- * OpenAI / Stripe / Vercel-style aurora gradient: one oversize saturated
- * blob anchored to an outer quadrant, optionally paired with a smaller
- * off-hue halo in the diagonally opposite corner. Reads as "single dominant
- * color family with a corner-anchored color leak."
+ * Place a blob's short-axis center near the nearer canvas edge (top vs bottom,
+ * or left vs right, depending on `anchor`) so one long edge of an elongated
+ * blob clips off-canvas instead of leaving both long edges visible mid-frame.
  *
- * Two extents on purpose: primary fills 85%–115% so it dominates the frame
- * while keeping directional gradient structure (anything past ~120% reads
- * as a flat color block); accent stays at 45%–65% so the color-leak stays
- * localized to its corner instead of overlapping with the primary across
- * the whole canvas and muddying both into a uniform patch.
- *
- * Anchors stay in [[QUAD_CENTERS]] (well off the central text column), so
- * even at the higher alpha the v-number and wordmark remain readable —
- * inverse-square falloff drops the mid-canvas alpha to ~0.05–0.15.
+ * `visibleSemi` is the visible semi-axis along the short axis
+ * (`shortDim * endStop / 100`). The -8 keeps the gradient core slightly inside
+ * the canvas so the wash still reads after the edge clip.
  */
-function auroraBackground(): string {
-  const base = pick(HUE_PALETTE);
-
-  // 70/30: usually a single dominant blob; sometimes pair it with an off-hue
-  // accent in the diagonally opposite corner for the color-leak effect.
-  const blobCount = Math.random() < 0.7 ? 1 : 2;
-  const quads = pickQuadrants(blobCount);
-
-  const blobs = quads.map((quad, i) => {
-    const isPrimary = i === 0;
-
-    // Primary stays near the seed hue; the accent shifts 90°–150° so it
-    // reads as a complementary halo rather than a second blob of the same
-    // family.
-    const hueShift = isPrimary
-      ? Math.round((Math.random() - 0.5) * 25)
-      : 90 + Math.round(Math.random() * 60);
-    const h = (base.h + hueShift + 360) % 360;
-    const s = clamp(base.s + 5 + Math.round(Math.random() * 10), 70, 92);
-    const l = clamp(base.l + Math.round((Math.random() - 0.5) * 10), 55, 70);
-
-    const center = QUAD_CENTERS[quad];
-    const x = Math.round(center.x + (Math.random() - 0.5) * 20);
-    const y = Math.round(center.y + (Math.random() - 0.5) * 20);
-
-    const w = isPrimary
-      ? Math.round(85 + Math.random() * 30) // 85% – 115%
-      : Math.round(45 + Math.random() * 20); // 45% – 65%
-    const h2 = isPrimary
-      ? Math.round(85 + Math.random() * 30)
-      : Math.round(45 + Math.random() * 20);
-
-    const alpha = isPrimary
-      ? (0.55 + Math.random() * 0.2).toFixed(2) // 0.55 – 0.75
-      : (0.45 + Math.random() * 0.17).toFixed(2); // 0.45 – 0.62
-
-    // Primary's softer falloff (68%–82%) lets it cover most of the canvas;
-    // accent's tighter falloff (55%–72%) keeps the color-leak localized to
-    // its quadrant, so adjacent blobs don't blend into a uniform patch.
-    const endStop = isPrimary
-      ? Math.round(68 + Math.random() * 14)
-      : Math.round(55 + Math.random() * 17);
-
-    const start = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
-    const end = `hsla(${h}, ${s}%, ${l}%, 0)`;
-    return `radial-gradient(ellipse ${w}% ${h2}% at ${x}% ${y}%, ${start}, ${end} ${endStop}%)`;
-  });
-  return `${blobs.join(', ')}, #ffffff`;
-}
-
-function randomBackground(): string {
-  // 35/65 — mix in OpenAI-style aurora gradients alongside the original
-  // multi-blob spread. Aurora reads as a single dominant color family with
-  // a corner color leak; blob keeps the airy multi-spot diffuse feel.
-  return Math.random() < 0.35 ? auroraBackground() : blobBackground();
+function edgeHugCenter(visibleSemi: number, anchor: number): number {
+  const maxOffset = Math.max(0, visibleSemi - 8);
+  return anchor < 50
+    ? Math.round(Math.random() * maxOffset)
+    : Math.round(100 - Math.random() * maxOffset);
 }
 
 async function fetchLogoAsPng(): Promise<Buffer> {
