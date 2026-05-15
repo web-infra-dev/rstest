@@ -29,7 +29,7 @@ Per-release og images live in [rstackjs/rstack-design-resources](https://github.
 
 1. Run `pnpm gen:og --version <ver> --description "<tagline>"` from `website/`. Use `--out` to write directly into a local clone of the design-resources repo at `rstest/assets/rstest-og-image-v{version-with-hyphens}.png` (e.g. `v0-5.png`).
 2. Commit the PNG in the design-resources repo and open a PR — that repo is the only place release PNGs are stored.
-3. After CDN deploy, the per-blog-post URL becomes available at `assets.rspack.rs/rstest/assets/rstest-og-image-v0-5.png`. The `head` function hook in `rspress.config.ts` routes each blog `routePath` to its matching URL.
+3. After CDN deploy, the PNG is reachable at `assets.rspack.rs/rstest/assets/rstest-og-image-v0-5.png`. Wiring it up per blog `routePath` in `rspress.config.ts` is a separate follow-up — the site currently sets a single static `og:image` via `pluginOpenGraph`.
 
 ### Do
 
