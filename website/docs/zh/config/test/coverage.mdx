@@ -134,7 +134,7 @@ export default defineConfig({
 
 只收集当前 Git 仓库中变更文件的覆盖率。你也可以传入 commit 或 branch，收集从该 ref 以来变更文件的覆盖率。
 
-`coverage.changed` 只控制覆盖率报告范围，不会改变要运行的测试。当使用 `--changed` 且没有配置 `coverage.changed` 时，覆盖率报告会继承 `--changed` 收集到的变更文件。
+`coverage.changed` 只控制覆盖率报告范围，不会改变要运行的测试。当使用 [`--changed`](/guide/basic/cli#运行变更相关测试) 且没有配置 `coverage.changed` 时，覆盖率报告会继承 `--changed` 收集到的变更文件。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
