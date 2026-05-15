@@ -90,8 +90,8 @@ node .agents/skills/create-release-blog/scripts/collect-commits.mjs <previous_ta
 ```
 
 It prints JSON with `breaking`, `feat`, `fix`, `perf`, `refactor`, `docs`, `other`. Each entry
-has `sha`, `type`, `scope`, `subject`, `prNumber`, `raw`. Save the output to a temp file so
-later steps can re-read it.
+has `sha`, `type`, `scope`, `subject`, `prNumber`, `raw`. Step 3 reads the `breaking` and
+`feat` buckets; the other buckets are produced for completeness but unused by this flow.
 
 ### 3. Order highlight candidates
 
@@ -113,11 +113,8 @@ the user in the next step.
 
 ### 4. Summarize every candidate and ask the user to pick
 
-The person running this skill may not have written each PR. They need a plain-language summary
-to choose well. **Read each candidate PR before listing them** — do not paste raw commit
-subjects.
-
-For every candidate, fetch the PR:
+**Read each candidate PR before listing them** — do not paste raw commit subjects. For every
+candidate, fetch the PR:
 
 ```bash
 gh pr view <PR> --json title,body,files,labels
@@ -125,9 +122,6 @@ gh pr view <PR> --json title,body,files,labels
 
 Then write **one sentence** of user-side value per candidate:
 
-- Plain language for a Rstest user, not a Rstest contributor. They know the test framework's
-  surface — `describe`, `expect`, `--watch` — not the internals — `pool`, `dispatchRouter`,
-  `WorkerState`.
 - **Lead with the user-visible benefit, not the implementation.** Good: "Run only the tests
   affected by your uncommitted changes for faster local iteration." Bad: "Add a `--changed`
   flag wired through the module graph resolver."
@@ -180,11 +174,22 @@ Path: `website/docs/en/blog/announcing-<major>-<minor>.mdx`. Structure:
 description: 'One-line summary used on the blog list and as OG description.'
 date: YYYY-MM-DD HH:mm:ss
 sidebar: false
+authors:
+  - name: <github-handle>
+    avatar: 'https://github.com/<github-handle>.png'
 ---
 
 _Month Day, Year_
 
 # Announcing Rstest X.Y
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-vX-Y.png"
+  alt="Rstest X.Y"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
 
 Rstest X.Y has been released.
 
@@ -208,29 +213,55 @@ and trade-offs. Stay factual, no narrative bridges.>
 
 ...
 
+---
+
 For a full list of changes, see the [vX.Y.Z release notes](https://github.com/web-infra-dev/rstest/releases/tag/vX.Y.Z).
 ```
 
-Rules for the title and date line:
+Rules for frontmatter `authors`:
 
-- The italic `_Month Day, Year_` line comes **before** the `# Announcing Rstest X.Y` heading.
-  Do not put the title above the date.
+- List the people who drafted **this specific post**, not the maintainer set. Without
+  `authors`, the blog list shows the generic `Rstest Team`.
+- Ask the user who should be credited and in what order; do **not** infer from `git log`
+  or PR authorship.
+- Each entry takes `name` (GitHub handle) and `avatar` (`https://github.com/<handle>.png`).
+  Keep the order identical between EN and ZH frontmatter.
+
+Rules for the banner image:
+
+- Insert the banner **between** the H1 and the greeting. Use `<img>` JSX (not markdown
+  `![alt](url)`) so it can carry an inline `boxShadow` — the shadow separates the lower
+  edge from a white page background in light mode.
+- Do **not** set `width` / `aspectRatio` / `objectFit`. The banner is designed at its
+  intended on-page size; extra constraints crop or shrink the artwork.
+- Asset URL: `https://assets.rspack.rs/rstest/rstest-banner-v<major>-<minor>.png` (no
+  patch segment; blog posts are per-minor). Banners ship via PR against
+  [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources).
+- Inline style: `{{ boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)' }}`. No border, no
+  border-radius.
+
+Rules for the OG image:
+
+- The OG card is a **separate** asset from the banner: `rstest-og-image-v<major>-<minor>.png`
+  (2400×1260, 1.91:1 social-share aspect). Do not point `og:image` at the banner — a wide
+  strip renders poorly as a Twitter/Slack card.
+- Per-post override lives in `website/rspress.config.ts` via the top-level `head` function
+  (route-aware). Frontmatter `head` does **not** override the site-wide default reliably:
+  rspress doesn't dedupe `og:image`, so two tags end up in the HTML and scrapers pick the
+  first.
+- Confirm the OG asset resolves before publish (`curl -I`).
 
 Rules for the intro:
 
-- Open with a one-line greeting: `Rstest X.Y has been released.` — end with a period, not
-  an exclamation mark; the tone is factual, not celebratory. No narrative buildup, no
-  marketing tone, no "We're excited to announce", no through-line sentence summarizing the
-  release theme.
+- Open with a one-line greeting: `Rstest X.Y has been released.` — period, not exclamation;
+  factual, not celebratory. (See Style guidance for the broader tone rules.)
 - Follow with `Notable changes:` and a bullet list of the chosen highlights. Each bullet
-  is a short noun- or verb-phrase naming the feature, wrapped as a markdown link pointing
-  to that highlight section's anchor (e.g. `(#threads-pool)`). The entire bullet text is
-  the link text — do not link only a fragment.
-- Do **not** include PR links, code fences, or extra explanation in the bullets. The only
-  link allowed is the in-page anchor — these bullets are a glance-level, clickable table
-  of contents, not the article itself.
-- Do **not** write a separate narrative paragraph explaining the release theme. The
-  bullets _are_ the overview; the section bodies do the explaining.
+  is a short noun- or verb-phrase naming the feature, wrapped as a markdown link to that
+  section's `\{#kebab-case}` anchor. The entire bullet is the link text — do not link only
+  a fragment.
+- Bullets carry **no** PR links, code fences, or extra prose, and **no** narrative
+  paragraph follows them. The bullets _are_ the overview; the section bodies do the
+  explaining.
 
 Rules for the closing release-notes link:
 
@@ -241,6 +272,8 @@ Rules for the closing release-notes link:
   The URL must use the `v`-prefixed tag (`v0.10.0`, not `0.10.0`).
 - Place it as the **last** paragraph of the post, immediately after the last highlight
   section. Do **not** wrap it in a heading.
+- Separate it from the preceding section with a markdown horizontal rule (`---` on its
+  own line, blank lines above and below) — it's a meta-pointer, not a continuation.
 
 **Do not add an Acknowledgements / "Thanks to contributors" section.** The post ends with
 the release-notes link. Contributors are surfaced on the release page itself.
@@ -286,8 +319,6 @@ Report:
 - Where each code sample came from (PR or docs path) so the user can verify shape.
 - A reminder that overview tone, example quality, and link accuracy still need manual polish.
 
-If `/schedule` is appropriate, offer it only when the user has named a concrete release date.
-
 ## Style guidance
 
 ### Voice and framing
@@ -301,13 +332,13 @@ file...`), the abstract benefit (`Test runs have a fixed cost...`), or a narrati
   banner phrases. A factual greeting + bullets is the entire intro.
 - **Link, don't restate.** When docs exist for the feature, link to them rather than
   copying explanations into the blog.
-- **Show real code.** A small, runnable snippet beats a paragraph describing it. Pull every
-  snippet from the PR, tests, or existing docs — never invent API shapes.
+- **Show real code.** A small, runnable snippet beats a paragraph describing it. (See
+  step 5 for sourcing — never invent API shapes.)
 
 ### Wording and expression (EN)
 
-- **Subject is the product.** `Rstest now supports X.` / `Rstest has changed X to Y.` Use
-  `You can ...` sparingly for user-action sentences; never use `We added ...`.
+- **Subject is the product, not the team.** Never use `We added ...`. Use `You can ...`
+  sparingly for user-action sentences.
 - **Plain, declarative sentences.** Break up em-dash chains; prefer two short sentences over
   one sentence with three parenthetical clauses. If a sentence has more than one em-dash,
   it's almost always rewritable.
@@ -355,11 +386,6 @@ Pool`), per the website's `CLAUDE.md`. Run `npx heading-case` to check.
 - **Frontmatter date**: use the release date if the user supplies one; otherwise leave a
   clear `TODO: release date` so it isn't silently wrong. Do **not** set it to the current
   timestamp.
-
-## Don'ts
-
-- Don't dump commit subjects into highlight sections — those sections are prose.
-- Don't describe features that aren't actually in the commit range.
 
 ## Resources
 

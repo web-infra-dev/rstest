@@ -82,7 +82,7 @@ export default defineConfig({
       const getOgImage = () => {
         const match = routePath.match(/blog\/announcing-(\d+-\d+)$/);
         if (match) {
-          return `rstest-banner-v${match[1]}-0.png`;
+          return `rstest-og-image-v${match[1]}.png`;
         }
         return 'rstest-og-image.png';
       };

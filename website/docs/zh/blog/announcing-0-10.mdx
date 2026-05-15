@@ -2,6 +2,11 @@
 description: 'Rstest 0.10 让测试运行更快、更可靠：新增 threads pool、--changed / --related 测试过滤、持久化 build cache、基于内存的 worker spawn gate、--trace profiling，以及更清晰的 worker 输出归属。'
 date: 2026-05-14 10:00:00
 sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
 ---
 
 _2026 年 5 月 14 日_
@@ -9,13 +14,9 @@ _2026 年 5 月 14 日_
 # Rstest 0.10 发布
 
 <img
-  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10-0.png"
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10.png"
   alt="Rstest 0.10"
-  width="540"
   style={{
-    aspectRatio: '2400 / 840',
-    objectFit: 'cover',
-    objectPosition: 'center',
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
   }}
 />
@@ -190,5 +191,7 @@ Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 cras
 - **结构化 crash 信号**：worker crash 现在是带 task 身份的类型化事件，无需再从原始 stderr 推断。
 
 重构后的 pool 也改为 spawn-on-demand：未使用的 worker 槽不会产生启动开销和内存占用。这也是 [基于内存的 spawn gate](#memory-gate) 得以实现的前提，同时也是新 [`threads` pool](#threads-pool) 实现的一部分。
+
+---
 
 完整变更请参考 [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0)。

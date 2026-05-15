@@ -2,6 +2,11 @@
 description: 'Rstest 0.10 makes test runs faster and more reliable: a new threads pool, --changed / --related test filters, persistent build cache, memory-aware worker spawn, --trace profiling, and cleaner worker output.'
 date: 2026-05-14 10:00:00
 sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
 ---
 
 _May 14, 2026_
@@ -9,13 +14,9 @@ _May 14, 2026_
 # Announcing Rstest 0.10
 
 <img
-  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10-0.png"
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10.png"
   alt="Rstest 0.10"
-  width="540"
   style={{
-    aspectRatio: '2400 / 840',
-    objectFit: 'cover',
-    objectPosition: 'center',
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
   }}
 />
@@ -190,5 +191,7 @@ Rstest 0.10 reworks the worker pool internals so that worker output and crashes 
 - **Structured crash signals.** Worker crashes surface as a typed event carrying the failing task, rather than being inferred from raw stderr.
 
 The reworked pool also creates workers on demand, so unused worker slots incur no startup or memory cost. This is what makes [memory-aware spawn gating](#memory-gate) possible, and it is part of how the new [`threads` pool](#threads-pool) is built.
+
+---
 
 For a full list of changes, see the [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0).
