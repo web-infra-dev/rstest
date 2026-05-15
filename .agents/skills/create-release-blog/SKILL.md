@@ -182,11 +182,11 @@ date: YYYY-MM-DD HH:mm:ss
 sidebar: false
 ---
 
-# Announcing Rstest X.Y
-
 _Month Day, Year_
 
-Rstest X.Y has been released!
+# Announcing Rstest X.Y
+
+Rstest X.Y has been released.
 
 Notable changes:
 
@@ -217,12 +217,13 @@ and trade-offs. Stay factual, no narrative bridges.>
 
 Rules for the title and date line:
 
-- The `# Announcing Rstest X.Y` heading comes **before** the italic `_Month Day, Year_` line.
-  Do not put the date above the title.
+- The italic `_Month Day, Year_` line comes **before** the `# Announcing Rstest X.Y` heading.
+  Do not put the title above the date.
 
 Rules for the intro:
 
-- Open with a one-line greeting: `Rstest X.Y has been released!`. No narrative buildup, no
+- Open with a one-line greeting: `Rstest X.Y has been released.` — end with a period, not
+  an exclamation mark; the tone is factual, not celebratory. No narrative buildup, no
   marketing tone, no "We're excited to announce", no through-line sentence summarizing the
   release theme.
 - Follow with `Notable changes:` and a bullet list of the chosen highlights. Each bullet
@@ -265,9 +266,10 @@ Path: `website/docs/zh/blog/announcing-<major>-<minor>.mdx`. Mirror the EN struc
   - `# Announcing Rstest X.Y` → `# Rstest X.Y 发布`
   - Each `##` highlight section heading.
   - `## More improvements` → `## 其他改进` (do not leave it in English).
-- **Translate the date line** below the title: `_May 14, 2026_` → `_2026 年 5 月 14 日_`.
-- **Translate the intro greeting and bullet preamble**: `Rstest X.Y has been released!` →
-  `Rstest X.Y 已经发布！`. `Notable changes:` → `主要变更：`.
+- **Translate the date line** above the title: `_May 14, 2026_` → `_2026 年 5 月 14 日_`.
+- **Translate the intro greeting and bullet preamble**: `Rstest X.Y has been released.` →
+  `Rstest X.Y 已经发布。` (full-width period, no exclamation). `Notable changes:` →
+  `主要变更：`.
 - **Translate the "More improvements" bullets too.** After the EN rewrite step they are
   natural-language statements (not commit subjects), so they should be translated rather
   than left in English. Keep PR links identical to EN.

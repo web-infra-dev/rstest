@@ -4,11 +4,22 @@ date: 2026-05-14 10:00:00
 sidebar: false
 ---
 
-# Announcing Rstest 0.10
-
 _May 14, 2026_
 
-Rstest 0.10 has been released!
+# Announcing Rstest 0.10
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10-0.png"
+  alt="Rstest 0.10"
+  width="540"
+  style={{
+    aspectRatio: '2400 / 840',
+    objectFit: 'cover',
+    objectPosition: 'center',
+  }}
+/>
+
+Rstest 0.10 has been released.
 
 Notable changes:
 
@@ -119,6 +130,8 @@ npx rstest run --trace
 ```
 
 The flag is CLI-only and opt-in. Each run produces per-phase slices per file (`prepare` → `teardown`), per-suite and per-case slices annotated with status and retry count, and a heap counter sampled at each phase boundary.
+
+![Perfetto UI showing per-file, per-suite, and per-case slices from an Rstest --trace run](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
 
 In a TTY, Rstest starts a local helper so that the printed link opens the trace directly in the Perfetto UI. In CI, the trace is written to `<rootPath>/.rstest/trace-<ts>.json`, which you can upload as an artifact.
 

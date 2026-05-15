@@ -4,11 +4,22 @@ date: 2026-05-14 10:00:00
 sidebar: false
 ---
 
-# Rstest 0.10 发布
-
 _2026 年 5 月 14 日_
 
-Rstest 0.10 已经发布！
+# Rstest 0.10 发布
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10-0.png"
+  alt="Rstest 0.10"
+  width="540"
+  style={{
+    aspectRatio: '2400 / 840',
+    objectFit: 'cover',
+    objectPosition: 'center',
+  }}
+/>
+
+Rstest 0.10 已经发布。
 
 主要变更：
 
@@ -119,6 +130,8 @@ npx rstest run --trace
 ```
 
 `--trace` 是 CLI-only 的可选开关。开启后每次运行会为每个文件生成 per-phase slices（`prepare` → `teardown`）、带 status 和 retry count 标注的 per-suite / per-case slices，并在每个 phase 边界采样一次 heap 计数。
+
+![Perfetto UI 中展示来自 Rstest --trace 的 per-file、per-suite、per-case slices](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
 
 在 TTY 下，Rstest 会启动一个本地 helper，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下，trace 会写入 `<rootPath>/.rstest/trace-<ts>.json`，方便作为 artifact 上传。
 
