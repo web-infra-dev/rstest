@@ -61,6 +61,7 @@ export class Rstest implements RstestContext {
   public relatedMode?: 'related' | 'changed';
   public relatedResolutionEmpty?: boolean;
   public relatedRerunReason?: 'forceRerunTrigger';
+  public relatedRerunFiles?: string[];
   public configFilePath?: string;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;

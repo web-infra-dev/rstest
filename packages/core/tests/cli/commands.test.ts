@@ -5,6 +5,7 @@ import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
   createCli,
+  getForceRerunTriggerFiles,
   getForceRerunTriggers,
   hasForceRerunTrigger,
   normalizeCliFilters,
@@ -181,6 +182,26 @@ describe('hasForceRerunTrigger', () => {
         rootPath,
       }),
     ).toBe(true);
+  });
+});
+
+describe('getForceRerunTriggerFiles', () => {
+  it('returns only changed files that match force rerun triggers', () => {
+    const rootPath = normalize(join('workspace', 'project'));
+    const packageJson = normalize(join(rootPath, 'package.json'));
+    const configFile = normalize(join(rootPath, 'rstest.config.ts'));
+
+    expect(
+      getForceRerunTriggerFiles({
+        changedFiles: [
+          packageJson,
+          normalize(join(rootPath, 'src/index.ts')),
+          configFile,
+        ],
+        triggers: ['package.json', configFile],
+        rootPath,
+      }),
+    ).toEqual([packageJson, configFile]);
   });
 });
 

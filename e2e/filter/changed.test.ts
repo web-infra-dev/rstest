@@ -233,7 +233,7 @@ describe('changed test filtering', () => {
     await expectExecSuccess();
 
     expect(cli.stdout).toContain(
-      'Changed files matched forceRerunTriggers, running all test files.',
+      'Changed file(package.json) matched forceRerunTriggers, running all test files.',
     );
 
     const logs = collectRunTestFileLogs(cli.stdout);
@@ -242,6 +242,57 @@ describe('changed test filtering', () => {
       [
         " ✓ index.test.ts (1)",
         " ✓ other.test.ts (1)",
+      ]
+    `);
+  });
+
+  it('should list extra changed files when multiple force rerun triggers change', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'changed-force-rerun-multiple',
+    );
+
+    await initGitFixture(fixturesTargetPath);
+
+    await writeFile(
+      join(fixturesTargetPath, 'package.json'),
+      `${JSON.stringify({ name: 'changed-force-rerun', version: '1.0.1' })}\n`,
+    );
+    await writeFile(
+      join(fixturesTargetPath, 'rstest.config.ts'),
+      [
+        'export default {',
+        "  forceRerunTriggers: ['package.json', 'rstest.config.ts', 'src/shared.ts'],",
+        '};',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(
+      join(fixturesTargetPath, 'src/shared.ts'),
+      'export const greet = (name: string) => `Hi, ${name}!`;\n',
+    );
+
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--changed'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+
+    expect(cli.stdout).toContain(
+      'Changed files(package.json and 2 files) matched forceRerunTriggers, running all test files.',
+    );
+
+    const logs = collectRunTestFileLogs(cli.stdout);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        " ✗ index.test.ts (1)",
+        " ✗ other.test.ts (1)",
       ]
     `);
   });

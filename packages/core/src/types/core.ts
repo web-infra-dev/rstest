@@ -72,6 +72,8 @@ export type RstestContext = {
   relatedResolutionEmpty?: boolean;
   /** Why a related run was expanded back to the full test suite. */
   relatedRerunReason?: 'forceRerunTrigger';
+  /** Changed files that caused a related run to expand back to the full test suite. */
+  relatedRerunFiles?: string[];
   /** The config file path. */
   configFilePath?: string;
   /**
