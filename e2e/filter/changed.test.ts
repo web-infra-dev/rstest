@@ -273,6 +273,57 @@ export default defineConfig({
     );
   });
 
+  it('should report full coverage when coverage.changed is false with changed test filtering', async () => {
+    const { fixturesTargetPath, fs } = await prepareChangedFixture(
+      'changed-coverage-disabled',
+    );
+
+    await writeFile(
+      join(fixturesTargetPath, 'rstest.config.ts'),
+      `import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    changed: false,
+    include: ['src/**/*.ts'],
+    reporters: ['json'],
+  },
+});
+`,
+    );
+    await initGitFixture(fixturesTargetPath);
+
+    fs.update(
+      join(fixturesTargetPath, 'src/index.ts'),
+      (content) => `${content}\nexport const changed = true;\n`,
+    );
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--changed'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const coverageFiles = await readCoverageFiles(fixturesTargetPath);
+
+    expect(coverageFiles.some((file) => file.endsWith('/src/index.ts'))).toBe(
+      true,
+    );
+    expect(coverageFiles.some((file) => file.endsWith('/src/other.ts'))).toBe(
+      true,
+    );
+    expect(coverageFiles.some((file) => file.endsWith('/src/shared.ts'))).toBe(
+      true,
+    );
+  });
+
   it('should only report coverage for files from coverage.changed without filtering tests', async () => {
     const { fixturesTargetPath, fs } =
       await prepareChangedFixture('coverage-changed');

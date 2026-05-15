@@ -532,8 +532,11 @@ const resolveCoverageChangedFilters = async (
 ): Promise<string[] | undefined> => {
   const { changed } = rstest.context.normalizedConfig.coverage;
 
-  if (changed === undefined || changed === false) {
+  if (changed === undefined) {
     return rstest.context.changedCoverageFilters;
+  }
+  if (changed === false) {
+    return undefined;
   }
 
   try {
