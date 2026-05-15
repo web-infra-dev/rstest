@@ -96,6 +96,7 @@ onclosetag
 onopentag
 ontext
 opencode
+Optim
 osascript
 outbase
 outro
@@ -107,6 +108,7 @@ picocolors
 pjpeg
 pluggable
 pmmmwh
+pngquant
 pnpx
 postcssrc
 preact
@@ -140,6 +142,7 @@ selfsigned
 sirv
 sokra
 speedscope
+Squoosh
 srcset
 stacktracey
 styl
