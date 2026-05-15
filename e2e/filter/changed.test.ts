@@ -235,6 +235,9 @@ describe('changed test filtering', () => {
     expect(cli.stdout).toContain(
       'Changed file(package.json) matched forceRerunTriggers, running all test files.',
     );
+    expect(cli.stdout).toContain(
+      'Changed file(package.json) matched forceRerunTriggers, running all test files.\n\n',
+    );
 
     const logs = collectRunTestFileLogs(cli.stdout);
 
@@ -285,6 +288,9 @@ describe('changed test filtering', () => {
 
     expect(cli.stdout).toContain(
       'Changed files(package.json and 2 files) matched forceRerunTriggers, running all test files.',
+    );
+    expect(cli.stdout).toContain(
+      'Changed files(package.json and 2 files) matched forceRerunTriggers, running all test files.\n\n',
     );
 
     const logs = collectRunTestFileLogs(cli.stdout);

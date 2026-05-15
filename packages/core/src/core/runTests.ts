@@ -147,7 +147,7 @@ export async function runTests(context: Rstest): Promise<void> {
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
-    logger.log(color.yellow(getForceRerunTriggerMessage(context)));
+    logger.log(`${color.yellow(getForceRerunTriggerMessage(context))}\n`);
   }
 
   // Separate browser mode and node mode projects
