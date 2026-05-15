@@ -187,10 +187,12 @@ export default defineConfig({
 npx rstest run --changed --coverage
 npx rstest run --coverage.changed
 npx rstest run --coverage.changed=HEAD~1
+npx rstest run --coverage.changed=origin/main
 ```
 
 - `npx rstest run --changed --coverage` 会运行变更相关测试，并且默认把覆盖率也限制到同一批变更文件。
 - `npx rstest run --coverage.changed=HEAD~1` 会执行正常测试集，但只报告相对 `HEAD~1` 以来变更文件的覆盖率。
+- `npx rstest run --coverage.changed=origin/main` 适合在功能分支上使用：它仍然会执行正常测试集，但覆盖率报告只包含相对 `origin/main` 变更过的文件。
 
 ### exclude
 

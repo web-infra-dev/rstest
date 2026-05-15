@@ -187,10 +187,12 @@ export default defineConfig({
 npx rstest run --changed --coverage
 npx rstest run --coverage.changed
 npx rstest run --coverage.changed=HEAD~1
+npx rstest run --coverage.changed=origin/main
 ```
 
 - `npx rstest run --changed --coverage` runs changed-related tests and, by default, also limits coverage to the same changed file set.
 - `npx rstest run --coverage.changed=HEAD~1` runs the normal test suite but only reports coverage for files changed since `HEAD~1`.
+- `npx rstest run --coverage.changed=origin/main` is useful when your branch is based on `main`: it still runs the normal test suite, but the coverage report only includes files changed compared with `origin/main`.
 
 ### exclude
 
