@@ -14,6 +14,8 @@ import {
   color,
   createTraceController,
   getTestEntries,
+  getForceRerunTriggerMessage,
+  getNoTestFilesMessage,
   logger,
   resolveShardedEntries,
   type TraceEvent,
@@ -65,7 +67,11 @@ const reportNoTestFiles = ({
     }
   } else {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    const message = `No test files found, exiting with code ${code}.`;
+    const message = getNoTestFilesMessage({
+      context,
+      code,
+      defaultMessage: `No test files found, exiting with code ${code}.`,
+    });
 
     if (code === 0) {
       logger.log(color.yellow(message));
@@ -139,6 +145,10 @@ const notifyReportersOnTestRunEnd = async ({
 
 export async function runTests(context: Rstest): Promise<void> {
   cleanCoverageReports(context.normalizedConfig.coverage);
+
+  if (context.relatedRerunReason === 'forceRerunTrigger') {
+    logger.log(`${color.yellow(getForceRerunTriggerMessage(context))}\n`);
+  }
 
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(

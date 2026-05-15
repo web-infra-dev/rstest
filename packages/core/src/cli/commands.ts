@@ -334,6 +334,30 @@ export const getForceRerunTriggers = ({
     ]),
   );
 
+export const getForceRerunTriggerFiles = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): string[] => {
+  if (!triggers.length || !changedFiles.length) {
+    return [];
+  }
+
+  const matcher = picomatch(
+    triggers.map((trigger) => normalize(trigger)),
+    { windows: true },
+  );
+
+  return changedFiles.filter(
+    (file) =>
+      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
+  );
+};
+
 export const hasForceRerunTrigger = ({
   changedFiles,
   triggers,
@@ -342,21 +366,8 @@ export const hasForceRerunTrigger = ({
   changedFiles: string[];
   triggers: string[];
   rootPath: string;
-}): boolean => {
-  if (!triggers.length || !changedFiles.length) {
-    return false;
-  }
-
-  const matcher = picomatch(
-    triggers.map((trigger) => normalize(trigger)),
-    { windows: true },
-  );
-
-  return changedFiles.some(
-    (file) =>
-      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
-  );
-};
+}): boolean =>
+  getForceRerunTriggerFiles({ changedFiles, triggers, rootPath }).length > 0;
 
 export const resolveChangedFiles = async (
   cwd: string,
@@ -461,8 +472,11 @@ const resolveEffectiveCliFilters = async ({
   effectiveFilters: string[];
   fileFilterMode: FileFilterMode;
   relatedFilters?: string[];
+  relatedMode?: 'related' | 'changed';
   relatedResolutionEmpty?: boolean;
   changedCoverageFilters?: string[];
+  relatedRerunReason?: 'forceRerunTrigger';
+  relatedRerunFiles?: string[];
 }> => {
   const normalizedFilters = normalizeCliFilters(filters);
 
@@ -489,22 +503,29 @@ const resolveEffectiveCliFilters = async ({
         )
       : normalizedFilters;
 
-  if (
-    options.changed !== undefined &&
-    hasForceRerunTrigger({
-      changedFiles: sourceFilters,
-      triggers: getForceRerunTriggers({
-        rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
-        projects: rstest.context.projects,
-      }),
-      rootPath: rstest.context.rootPath,
-    })
-  ) {
+  const forceRerunTriggerFiles =
+    options.changed !== undefined
+      ? getForceRerunTriggerFiles({
+          changedFiles: sourceFilters,
+          triggers: getForceRerunTriggers({
+            rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
+            projects: rstest.context.projects,
+          }),
+          rootPath: rstest.context.rootPath,
+        })
+      : [];
+
+  if (forceRerunTriggerFiles.length) {
     return {
       effectiveFilters: [],
       fileFilterMode: 'fuzzy',
       relatedFilters: sourceFilters,
+      relatedMode: 'changed',
       relatedResolutionEmpty: false,
+      relatedRerunReason: 'forceRerunTrigger',
+      relatedRerunFiles: forceRerunTriggerFiles.map((file) =>
+        normalize(relative(rstest.context.rootPath, file)),
+      ),
     };
   }
 
@@ -519,6 +540,7 @@ const resolveEffectiveCliFilters = async ({
     effectiveFilters: relatedFiles,
     fileFilterMode: 'exact',
     relatedFilters: sourceFilters,
+    relatedMode: options.changed !== undefined ? 'changed' : 'related',
     relatedResolutionEmpty: relatedFiles.length === 0,
     changedCoverageFilters:
       options.changed !== undefined && coverageChanged === undefined
@@ -574,8 +596,11 @@ export const runRest = async ({
       effectiveFilters,
       fileFilterMode,
       relatedFilters,
+      relatedMode,
       relatedResolutionEmpty,
       changedCoverageFilters,
+      relatedRerunReason,
+      relatedRerunFiles,
     } = await resolveEffectiveCliFilters({
       options,
       filters,
@@ -592,10 +617,15 @@ export const runRest = async ({
       fileFilterMode,
     );
     rstest.context.relatedFilters = relatedFilters;
+    rstest.context.relatedMode = relatedMode;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
     rstest.context.changedCoverageFilters = changedCoverageFilters;
     rstest.context.changedCoverageFilters =
       await resolveCoverageChangedFilters(rstest);
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -703,8 +733,11 @@ export function createCli(): CAC {
           effectiveFilters,
           fileFilterMode,
           relatedFilters,
+          relatedMode,
           relatedResolutionEmpty,
           changedCoverageFilters,
+          relatedRerunReason,
+          relatedRerunFiles,
         } = await resolveEffectiveCliFilters({
           options,
           filters,
@@ -721,10 +754,15 @@ export function createCli(): CAC {
           fileFilterMode,
         );
         rstest.context.relatedFilters = relatedFilters;
+        rstest.context.relatedMode = relatedMode;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
         rstest.context.changedCoverageFilters = changedCoverageFilters;
         rstest.context.changedCoverageFilters =
           await resolveCoverageChangedFilters(rstest);
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
