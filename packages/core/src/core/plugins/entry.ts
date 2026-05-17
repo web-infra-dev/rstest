@@ -43,6 +43,31 @@ export const pluginEntryWatch: (params: {
   name: 'rstest:entry-watch',
   setup: (api) => {
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
+    if (isWatch) {
+      api.onAfterCreateCompiler(({ compiler }) => {
+        const list = (compiler as { compilers?: unknown[] }).compilers
+          ? ((compiler as { compilers: unknown[] }).compilers as Array<{
+              name?: string;
+              options?: { watchOptions?: unknown; experiments?: unknown };
+            }>)
+          : [
+              compiler as unknown as {
+                name?: string;
+                options?: { watchOptions?: unknown; experiments?: unknown };
+              },
+            ];
+        for (const c of list) {
+          process.stdout.write(
+            `__RCA_DEBUG__ name=${c.name ?? '<unnamed>'} watchOptions=${JSON.stringify(
+              c.options?.watchOptions,
+            )} nativeWatcher=${JSON.stringify(
+              (c.options?.experiments as { nativeWatcher?: unknown })
+                ?.nativeWatcher,
+            )}\n`,
+          );
+        }
+      });
+    }
     api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
