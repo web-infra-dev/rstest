@@ -7,7 +7,7 @@ export default defineConfig({
   tools: {
     rspack: {
       watchOptions: {
-        aggregateTimeout: 500,
+        aggregateTimeout: 3000,
       },
     },
   },
