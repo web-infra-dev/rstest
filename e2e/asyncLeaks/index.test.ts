@@ -62,4 +62,19 @@ describe('detect async leaks', () => {
 
     await expectExecSuccess();
   });
+
+  it('passes when fake timers are still active', async ({ onTestFinished }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fakeTimers.test', '--detectAsyncLeaks'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
 });

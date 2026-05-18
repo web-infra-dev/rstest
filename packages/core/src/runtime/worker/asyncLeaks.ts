@@ -1,6 +1,7 @@
 import { createHook } from 'node:async_hooks';
 import type { CurrentTaskInfo, FormattedError } from '../../types';
 import { getTaskNameWithPrefix } from '../../utils/helper';
+import { getRealTimers } from '../util';
 import type { TaskContext } from './taskContext';
 
 type AsyncLeak = {
@@ -129,8 +130,15 @@ export const createAsyncLeakDetector = (
       hook.enable();
     },
     async collectErrors(): Promise<FormattedError[]> {
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const { setImmediate: realSetImmediate, setTimeout: realSetTimeout } =
+        getRealTimers();
+
+      await new Promise<void>((resolve) =>
+        (realSetImmediate ?? globalThis.setImmediate)(resolve),
+      );
+      await new Promise<void>((resolve) =>
+        (realSetTimeout ?? globalThis.setTimeout)(resolve, 0),
+      );
       hook.disable();
 
       return Array.from(activeResources.values())

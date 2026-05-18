@@ -616,6 +616,9 @@ export const runInPool = async (
     );
 
     if (asyncLeakDetector) {
+      if (api.rstest.isFakeTimers()) {
+        api.rstest.useRealTimers();
+      }
       const asyncLeakErrors = await asyncLeakDetector.collectErrors();
       if (asyncLeakErrors.length > 0) {
         results.status = 'fail';

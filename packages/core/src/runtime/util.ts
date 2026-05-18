@@ -16,12 +16,14 @@ const loadDiffModules = async () => {
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
   clearTimeout?: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
   REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
+  REAL_TIMERS.setImmediate ??= globalThis.setImmediate.bind(globalThis);
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
