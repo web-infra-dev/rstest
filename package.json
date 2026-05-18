@@ -43,5 +43,15 @@
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=10.33.4"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowAny": [
+        "@rspack/*"
+      ]
+    },
+    "overrides": {
+      "@rspack/core": "npm:@rspack-canary/core@2.0.4-canary-efffb233-20260518052901"
+    }
   }
 }

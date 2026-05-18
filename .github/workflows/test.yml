@@ -223,20 +223,38 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium webkit
 
+      # RCA debug: confirm the e2e workspace actually resolves the canary
+      # binding (root pnpm overrides should propagate, but verify before
+      # blaming binding behaviour).
+      - name: Debug — show resolved @rspack/* versions in e2e
+        if: matrix.os == 'macos-14'
+        run: |
+          echo '----- root resolved versions -----'
+          pnpm why @rspack/core -r --depth 0 || true
+          echo '----- e2e workspace lock entry -----'
+          pnpm --filter @rstest/tests why @rspack/core --depth 0 || true
+          pnpm --filter @rstest/tests why @rspack/binding-darwin-arm64 --depth 0 || true
+          echo '----- actual .node binary path/size -----'
+          find e2e/node_modules /Users/runner/work/rstest/rstest/node_modules \
+               -name 'rspack.darwin-arm64.node' 2>/dev/null | xargs -I{} ls -lh {} || true
+
       - name: E2E Test (${{ matrix.test_script }})
         run: cd e2e && pnpm ${{ matrix.test_script }}
 
-      # RCA debug: SSH into the macos-14 + node 24 runner on e2e failure
-      # so we can inspect why the watch test sees stale dist content
-      # (mode B "No test files need re-run") that we cannot reproduce
-      # locally on the same Node version. Limited to the one matrix slot
-      # that consistently fails, so other failures are not impacted.
-      - name: Setup tmate session (RCA debug)
-        if: failure() && matrix.os == 'macos-14' && matrix.node_version == '24'
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 30
-        with:
-          limit-access-to-actor: true
+      # RCA debug: a canary rspack build with file-level trace writes to
+      # /tmp/rca-binding-trace.log inside the runner. Dump it on failure
+      # so the actual aggregateTimeout / changedFiles / undelayed event
+      # paths seen by the binding land in the CI job log.
+      - name: Dump rspack binding RCA trace
+        if: failure() && matrix.os == 'macos-14'
+        run: |
+          echo '===== /tmp/rca-binding-trace.log ====='
+          if [ -f /tmp/rca-binding-trace.log ]; then
+            cat /tmp/rca-binding-trace.log
+          else
+            echo "(file not present)"
+          fi
+          echo '===== END trace ====='
 
       - name: VS Code Extension Test
         if: matrix.test_script == 'test'
