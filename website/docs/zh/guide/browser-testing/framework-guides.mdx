@@ -25,13 +25,32 @@ import { PackageManagerTabs } from '@theme';
 
 ### 安装依赖
 
-<PackageManagerTabs command="add @rstest/browser-react -D" />
+<PackageManagerTabs command="add @rstest/browser-react @rsbuild/plugin-react -D" />
 
 [@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) 是 Rstest 浏览器模式下测试 React 的官方工具包，它提供：
 
 - `render`：将 React 组件渲染到真实浏览器的 DOM 中，返回容器元素供你查询和断言
 - `renderHook`：在不创建包装组件的情况下测试自定义 Hook
 - 自动清理：每个测试前自动卸载上一个测试渲染的组件，避免测试间相互影响
+
+当浏览器测试使用 JSX 时，还需要 [@rsbuild/plugin-react](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugins/plugin-react)，或等价的 React JSX 转换插件 / 配置。它会为 Browser Mode 转换 JSX，避免 JSX 测试运行时出现 `React is not defined` 错误。
+
+### 配置 React JSX 转换
+
+在 Rstest 配置中添加 React JSX 转换插件或等价配置：
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
 
 ### 组件测试
 

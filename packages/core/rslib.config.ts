@@ -1,5 +1,6 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 import { peerDependencies } from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
@@ -9,6 +10,7 @@ const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
 
 export default defineConfig({
+  plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest',

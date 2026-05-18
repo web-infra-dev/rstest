@@ -92,9 +92,9 @@ cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts
 
 Repository maintainers can publish new versions of changed packages.
 
-1. Run the local release command `pnpm bump` to bump the target package group.
-2. The command will prompt for a package group and then a bump type. It creates a local commit only (no tag, no push).
-3. Open a pull request with a title like `release: 0.7.10` or `release: @rstest/coverage-istanbul 0.1.7` and ensure CI passes.
+1. Run the local release command `pnpm bump` to bump all Rstest packages together.
+2. The command will prompt for a bump type. It creates a local commit only (no tag, no push).
+3. Open a pull request with a title like `release: 0.7.10` and ensure CI passes.
 4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) to publish packages to npm.
 5. Merge the release pull request to `main`.
 6. Use the `create-draft-release-notes` skill to create a draft [GitHub release note](https://github.com/web-infra-dev/rstest/releases). Review the draft release note, optionally add release highlights, and publish it.

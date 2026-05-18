@@ -1,4 +1,5 @@
 import { resolve } from 'pathe';
+import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
@@ -14,6 +15,9 @@ const createPoolOptions = (overrides?: Partial<PoolOptions>): PoolOptions => ({
   // truncation. Suppress host forwarding so this simulated noise doesn't
   // leak into the parent rstest log on CI.
   forwardStdio: false,
+  // Leave `memoryGate` unset so existing assertions around spawn
+  // timing/order stay deterministic — the integration case below opts in
+  // with its own fake.
   ...overrides,
 });
 
@@ -147,8 +151,8 @@ describe('Pool - isolate', () => {
     try {
       const r1 = await pool.runTest(createTask());
       const r2 = await pool.runTest(createTask());
-      const pid1 = (r1 as any)._workerPid;
-      const pid2 = (r2 as any)._workerPid;
+      const pid1 = (r1 as any)._workerIdentity;
+      const pid2 = (r2 as any)._workerIdentity;
       expect(pid1).toBeTypeOf('number');
       expect(pid2).toBeTypeOf('number');
       expect(pid1).not.toBe(pid2);
@@ -163,8 +167,8 @@ describe('Pool - isolate', () => {
       const r1 = await pool.runTest(createTask());
       const r2 = await pool.runTest(createTask());
       // Same PID proves process reuse.
-      expect((r1 as any)._workerPid).toBeTypeOf('number');
-      expect((r1 as any)._workerPid).toBe((r2 as any)._workerPid);
+      expect((r1 as any)._workerIdentity).toBeTypeOf('number');
+      expect((r1 as any)._workerIdentity).toBe((r2 as any)._workerIdentity);
       // Incrementing run count proves the same process instance handled
       // both tasks — not just a recycled PID.
       expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
@@ -187,6 +191,43 @@ describe('Pool - isolate', () => {
       // runner, this would hang or throw an IPC error.
       const result = await pool.runTest(createTask());
       expect(result.status).toBe('pass');
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
+// ── memory gate integration ────────────────────────────────────────────────
+
+describe('Pool - memory gate', () => {
+  it('should park spawns when the gate blocks and resume when it unblocks', async () => {
+    let allowSpawn = false;
+    const gate = new MemoryGate();
+    // Fake: first worker always allowed (deadlock guard); subsequent
+    // fresh spawns only when `allowSpawn` flips true.
+    const spy = rs
+      .spyOn(gate, 'canSpawnNewWorker')
+      .mockImplementation((active: number) =>
+        active === 0 ? true : allowSpawn,
+      );
+
+    const pool = new Pool(
+      createPoolOptions({ maxWorkers: 4, isolate: true, memoryGate: gate }),
+    );
+
+    try {
+      const r1 = pool.runTest(createTask());
+      const r2 = pool.runTest(createTask());
+
+      // Wait until the gate has rejected at least once (proves r2 parked).
+      while (!spy.mock.calls.some(([n]) => (n as number) > 0)) {
+        await new Promise((r) => setImmediate(r));
+      }
+      allowSpawn = true;
+
+      const [res1, res2] = await Promise.all([r1, r2]);
+      expect(res1.status).toBe('pass');
+      expect(res2.status).toBe('pass');
     } finally {
       await pool.close();
     }

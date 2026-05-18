@@ -6,15 +6,11 @@ import {
   type WorkerResponse,
   wrapWorkerResponse,
 } from '../../pool/protocol';
+import { channel } from './channels';
 import { runInPool } from './runInPool';
 
 const send = (response: WorkerResponse): void => {
-  if (typeof process.send !== 'function') return;
-  try {
-    process.send(wrapWorkerResponse(response));
-  } catch {
-    // Channel may already be closed during shutdown — ignore.
-  }
+  channel.send(wrapWorkerResponse(response));
 };
 
 let currentTaskId: number | undefined;
@@ -80,6 +76,10 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
+// Read once at worker bootstrap — toggling `RSTEST_MEMORY_AWARE` mid-run is
+// not supported (host samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED = process.env.RSTEST_MEMORY_AWARE !== '0';
+
 const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
@@ -92,6 +92,9 @@ const runTask = async (
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
       result: result as any,
+      memory: MEMORY_REPORTING_ENABLED
+        ? { rss: process.memoryUsage().rss }
+        : undefined,
     });
   } catch (err) {
     // runInPool's own uncaughtException handler funnels per-test errors into
@@ -123,18 +126,19 @@ const requestGracefulStop = (): void => {
   finalizeStop();
 };
 
-// SIGTERM shares the same shutdown path. `PoolRunner.stop` sends SIGTERM
-// alongside the `stop` envelope; without this handler Node's default SIGTERM
-// behavior would terminate the process immediately and skip teardown. Note
-// that `setup.ts` may install a profiling-specific SIGTERM handler
-// (`--cpu-prof` et al.) that runs first and preempts ours, preserving
-// existing profiling semantics.
+// SIGTERM shares the same shutdown path under the forks pool. `PoolRunner.stop`
+// sends SIGTERM alongside the `stop` envelope; without this handler Node's
+// default SIGTERM behavior would terminate the process immediately and skip
+// teardown. Under the threads pool the host uses `worker.terminate()` instead
+// of signals, so this handler is a no-op there. `setup.ts` may install a
+// profiling-specific SIGTERM handler (`--cpu-prof` et al.) that runs first and
+// preempts ours, preserving existing profiling semantics.
 process.on('SIGTERM', requestGracefulStop);
 
-process.on('message', (message: unknown) => {
+channel.on((message: unknown) => {
   if (!isWorkerRequestEnvelope(message)) {
     // Not a lifecycle envelope — leave it for the rpc handler installed by
-    // createForksRpcOptions to pick up via its own listener.
+    // createWorkerRpcOptions to pick up via its own listener.
     return;
   }
   const request = message.request;

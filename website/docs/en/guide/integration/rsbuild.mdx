@@ -51,6 +51,7 @@ This will automatically:
 - Load your `rsbuild.config.ts` file
 - Extract and map test-relevant Rsbuild options to Rstest configuration
 - Merge with any additional Rstest config you provide
+- Add the loaded Rsbuild config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes
 
 The adapter does not reuse the entire Rsbuild config as-is. It keeps the parts that matter for test execution, such as module resolution, transforms, CSS Modules, static asset handling, and `target`, and automatically drops options like `dev`, `server`, and `html` that are specific to the dev server, page entry, or production output.
 

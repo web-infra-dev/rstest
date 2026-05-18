@@ -35,6 +35,7 @@ This will automatically:
 - Load your `rspack.config.ts` file
 - Map compatible Rspack options to Rstest configuration
 - Merge with any additional Rstest config you provide
+- Add the loaded Rspack config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes
 
 By default, the adapter uses `process.cwd()` to resolve the Rspack config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
 

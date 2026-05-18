@@ -1,6 +1,7 @@
 import type { PoolWorker } from '../poolWorker';
 import type { PoolOptions, PoolTask } from '../types';
 import { ForksPoolWorker } from './forksPoolWorker';
+import { ThreadsPoolWorker } from './threadsPoolWorker';
 
 export function createPoolWorker(
   task: PoolTask,
@@ -11,6 +12,15 @@ export function createPoolWorker(
     case 'forks': {
       return new ForksPoolWorker({
         name: `forks-${workerId}`,
+        filename: options.workerEntry,
+        env: options.env,
+        execArgv: options.execArgv,
+        forwardStdio: options.forwardStdio,
+      });
+    }
+    case 'threads': {
+      return new ThreadsPoolWorker({
+        name: `threads-${workerId}`,
         filename: options.workerEntry,
         env: options.env,
         execArgv: options.execArgv,

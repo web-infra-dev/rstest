@@ -90,6 +90,9 @@ describe('toRstestConfig', () => {
         normalize('/repo/configs/rspack.config.ts'),
       ],
     });
+    expect(config.forceRerunTriggers).toEqual([
+      normalize('/repo/configs/rspack.config.ts'),
+    ]);
   });
 
   it('should keep rstest-generated persistent cache in tools.rspack', () => {

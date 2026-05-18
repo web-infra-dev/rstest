@@ -16,6 +16,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -50,6 +51,10 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
       "**/dist/.rstest-temp",
     ],
   },
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,
@@ -111,6 +116,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -145,6 +151,10 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/dist/.rstest-temp",
     ],
   },
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,
@@ -209,6 +219,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -243,6 +254,10 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/dist/.rstest-temp",
     ],
   },
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,

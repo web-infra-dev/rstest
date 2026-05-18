@@ -3,12 +3,14 @@ description: 用于运行测试的线程池的选项。
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # pool
 
 - **类型：**
 
 ```ts
-export type RstestPoolType = 'forks';
+export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
@@ -38,42 +40,32 @@ const defaultPool = {
 
 用于运行测试的线程池的选项。
 
-## 示例
+## Pool 类型
 
-### Shorthand
+Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异仅在于 worker 的创建方式。
 
-你可以使用 string shorthand 来设置 pool type：
+### forks
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+每个测试文件运行在通过 `child_process.fork` 启动的独立 Node.js 子进程中。每个 worker 拥有独立的 V8 heap，因此进程级状态（`process.chdir`、signal handler、env 修改、native module 绑定）不会在文件之间泄漏。
 
-export default defineConfig({
-  pool: 'forks',
-});
-```
+### threads
 
-等价于：
+<ApiMeta addedVersion="0.10.0" />
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。Worker 与主进程共享 V8 heap 和 stdio。
 
-export default defineConfig({
-  pool: {
-    type: 'forks',
-  },
-});
-```
+## 如何选择 pool 类型
 
-在单个子进程中运行所有测试。
+`forks` 是默认值，多数现有测试代码都依赖按文件维度的进程隔离。如果不确定要不要切换，建议先继续使用 `forks`。
 
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+下列情况可以考虑切换到 `threads`：
 
-export default defineConfig({
-  pool: {
-    type: 'forks',
-    maxWorkers: 1,
-    minWorkers: 1,
-  },
-});
-```
+- 测试以小型用例为主、单文件耗时短，worker 启动开销在总时间中占比明显 — `worker_threads` 启动比 `child_process.fork` 快约 10×，watch 模式 rerun 体感几乎秒回。
+- 并行运行时机器内存吃紧或观察到 OOM — threads 共享主进程的 V8 heap，多个 worker 不会各占一份 V8 实例。
+- 测试代码本身不修改 cwd / 环境变量 / signal handler，也不依赖按文件重置的进程级状态。
+
+下列情况建议继续使用 `forks`：
+
+- 测试里会修改 `process.chdir`、环境变量、signal handler 等进程级状态，并依赖按文件之间互相隔离。
+- 项目依赖按进程初始化的 native module（如 `better-sqlite3`、`sharp`、`canvas` 等）。
+- 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。

@@ -1,0 +1,197 @@
+---
+description: 'Rstest 0.10 makes test runs faster and more reliable: a new threads pool, --changed / --related test filters, persistent build cache, memory-aware worker spawn, --trace profiling, and cleaner worker output.'
+date: 2026-05-14 10:00:00
+sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
+---
+
+_May 14, 2026_
+
+# Announcing Rstest 0.10
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10.png"
+  alt="Rstest 0.10"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
+
+Rstest 0.10 has been released.
+
+Notable changes:
+
+- [New `threads` pool based on `worker_threads`](#threads-pool)
+- [Run changed or related tests with `--changed` / `--related`](#run-changed-tests)
+- [Persistent build cache support](#build-cache)
+- [Memory-aware worker spawn gate](#memory-gate)
+- [Support silent passed test consoles, even in concurrent runs](#silent-logs)
+- [Profile a run with `--trace`](#trace-profiling)
+- [Clearer worker output attribution](#worker-pool)
+
+## A new threads pool \{#threads-pool}
+
+Rstest 0.10 now supports running tests in worker threads, which cuts cold-start time on suites with many small files.
+
+Until this release, every test file ran in its own Node.js child process — the `forks` pool. `child_process.fork` is comparatively slow to start (`worker_threads` is roughly 10× faster), and each fork carries its own V8 heap, which can OOM under high parallelism.
+
+The new `threads` pool is backed by `node:worker_threads`. Workers share the parent process's V8 heap and stdio, so spinning up many of them is both cheaper in wall time and lighter on memory.
+
+To opt in, set `pool` to `threads`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'threads',
+});
+```
+
+`forks` remains the default. Most existing test code relies on per-file process isolation, which threads do not provide. Switch to `threads` when your tests do not mutate `process.chdir`, environment variables, or signal handlers. Please refer to [pool](/config/test/pool) to learn more.
+
+## Run changed or related tests \{#run-changed-tests}
+
+Rstest 0.10 adds two flags that run only the tests affected by your source changes, shortening the inner-loop feedback time on a large suite.
+
+`--related` treats positional arguments as source files and runs only the tests that depend on them. The dependency information comes from the build module graph, so the same filter works for Node mode and Browser Mode. `--findRelatedTests` is a Jest-compatible alias:
+
+```bash
+npx rstest run --related src/button.ts
+npx rstest run --findRelatedTests src/button.ts
+```
+
+`--changed` applies the same approach but auto-detects the source files from your Git working tree. By default it includes unstaged, staged, and untracked files — your current uncommitted edits:
+
+```bash
+npx rstest run --changed
+```
+
+You can also pass a commit or branch to widen the range:
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+To preview which tests would run without executing them, combine either flag with `rstest list`:
+
+```bash
+npx rstest list --changed --filesOnly
+npx rstest list --related src/button.ts --filesOnly
+```
+
+Please refer to [Run related tests](/guide/basic/cli#run-related-tests) and [Run changed tests](/guide/basic/cli#run-changed-tests) to learn more.
+
+## Persistent build cache \{#build-cache}
+
+Rstest 0.10 supports persistent build caching for test runs, so repeated runs of the same project skip work that hasn't changed.
+
+In an antd + three.js example project, enabling build cache approximately halves the build phase on warm runs:
+
+| Run  | Build   | Total  |
+| ---- | ------- | ------ |
+| Cold | ~385 ms | ~2.1 s |
+| Warm | ~182 ms | ~1.7 s |
+
+Rspack's persistent cache is still experimental, so the cache is disabled by default. You can enable it explicitly:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+Rstest applies a set of Rstest-aware defaults on top of Rsbuild's, so most projects do not need additional configuration. If you also use [@rstest/adapter-rslib](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rslib), the build cache settings from your Rslib config are passed through automatically. Please refer to [performance.buildCache](/config/build/performance) to learn more.
+
+## Memory-aware worker spawn gate \{#memory-gate}
+
+Rstest 0.10 now defers worker spawns when system memory or main-process heap headroom cannot safely host another worker, so high parallelism no longer pushes low-memory machines into OOM.
+
+The gate matters most on CI containers and smaller dev machines, where the previous CPU-only scaling could exhaust system memory once worker RSS accumulated, or trip a V8 heap-limit crash in the host process. With the gate enabled, Rstest checks memory state before each new spawn and defers the next worker when launching it is not safe.
+
+There is no public API or default-behavior change when memory is plentiful — the gate is invisible on machines that are not under memory pressure. If you need to disable it (for benchmarking, debugging, or hard-isolated environments), set the environment variable:
+
+```bash
+RSTEST_MEMORY_AWARE=0 npx rstest run
+```
+
+## Support silent passed test consoles \{#silent-logs}
+
+Rstest 0.10 adds an opt-in `silent` option for intercepted test console output. Enable it when passing tests produce noisy debug logs while you still need to retain the logs that explain a failure.
+
+Use `silent: 'passed-only'` to buffer `console.*` output while a task is running. If the file, suite, or test case passes, Rstest discards its buffered logs; if it fails, Rstest replays the matching logs with the failure output:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+
+You can use the same behavior from the CLI:
+
+```bash
+npx rstest --silent=passed-only
+```
+
+For example, with this test file:
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+Only `fail log` will be printed.
+
+This also works for concurrent tests. Rstest tracks the active file, suite, or test case before buffering a log, so a passing concurrent test can be silenced without hiding logs from a sibling that fails.
+
+If you need a completely quiet run, set `silent` to `true` instead. Please refer to [silent](/config/test/silent) to learn more.
+
+## Profile a run with --trace \{#trace-profiling}
+
+Rstest 0.10 adds a `--trace` CLI flag that breaks a run into per-phase, per-suite, and per-case slices and writes a Perfetto-compatible profile. Use it when the reporter's single `Duration` number is not enough to identify where the time is being spent:
+
+```bash
+npx rstest run --trace
+```
+
+The flag is CLI-only and opt-in. Each run produces per-phase slices per file (`prepare` → `teardown`), per-suite and per-case slices annotated with status and retry count, and a heap counter sampled at each phase boundary.
+
+![Perfetto UI showing the trace produced by running npx rstest --trace inside the rstest repository](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
+
+In a TTY, Rstest starts a local helper so that the printed link opens the trace directly in the Perfetto UI. In CI, the trace is written to `<rootPath>/.rstest/trace-<ts>.json`, which you can upload as an artifact.
+
+For other profiling needs, such as CPU time distribution with samply, memory with `--heap-prof`, or step-through debugging with `--inspect`, please refer to the [Profiler](/guide/advanced/profiling#profiler) section.
+
+## Clearer worker output attribution \{#worker-pool}
+
+Rstest 0.10 reworks the worker pool internals so that worker output and crashes show up in the reporter with proper attribution. When a worker writes to stderr or fails, you now see:
+
+- **Per-task attribution.** Output is routed through the reporter with the task identity that produced it, rather than arriving as untagged text mixed into the terminal.
+- **Structured crash signals.** Worker crashes surface as a typed event carrying the failing task, rather than being inferred from raw stderr.
+
+The reworked pool also creates workers on demand, so unused worker slots incur no startup or memory cost. This is what makes [memory-aware spawn gating](#memory-gate) possible, and it is part of how the new [`threads` pool](#threads-pool) is built.
+
+---
+
+For a full list of changes, see the [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0).

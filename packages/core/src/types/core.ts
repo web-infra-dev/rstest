@@ -64,10 +64,18 @@ export type RstestContext = {
   fileFilters?: string[];
   /** How file filters should match discovered test files. */
   fileFilterMode?: FileFilterMode;
-  /** Original source filters passed to `--related` / `--findRelatedTests`. */
+  /** Original source filters passed to `--related`, `--findRelatedTests`, or resolved from `--changed`. */
   relatedFilters?: string[];
-  /** `--related` resolved successfully but matched no test files. */
+  /** CLI option that produced related source filters. */
+  relatedMode?: 'related' | 'changed';
+  /** Related test resolution completed successfully but matched no test files. */
   relatedResolutionEmpty?: boolean;
+  /** Changed source files used to limit coverage reports for `--changed`. */
+  changedCoverageFilters?: string[];
+  /** Why a related run was expanded back to the full test suite. */
+  relatedRerunReason?: 'forceRerunTrigger';
+  /** Changed files that caused a related run to expand back to the full test suite. */
+  relatedRerunFiles?: string[];
   /** The config file path. */
   configFilePath?: string;
   /**

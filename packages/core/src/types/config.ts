@@ -14,7 +14,7 @@ export type ChaiConfig = Partial<
   Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
 >;
 
-export type RstestPoolType = 'forks';
+export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
@@ -291,6 +291,13 @@ export interface RstestConfig {
    * @default []
    */
   includeSource?: string[];
+  /**
+   * A list of glob patterns that trigger running the whole test suite when
+   * matched by changed files collected from `--changed`.
+   *
+   * @default ['**\/package.json/**', '**\/rstest.config.*']
+   */
+  forceRerunTriggers?: string[];
   /**
    * Path to setup files. They will be run before each test file.
    */

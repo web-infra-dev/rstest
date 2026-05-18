@@ -12,4 +12,4 @@ pre-commit:
       run: pnpm run check-dependency-version && pnpm prettier --write {staged_files}
     pnpm-dedupe:
       glob: 'pnpm-lock.yaml'
-      run: pnpm dedupe --check
+      run: pnpm dedupe --check --config.minimum-release-age=0

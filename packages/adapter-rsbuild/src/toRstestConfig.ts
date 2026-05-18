@@ -121,6 +121,7 @@ export function toRstestConfig({
   const rstestConfig = {
     root: finalBuildConfig.root,
     name: environmentName,
+    forceRerunTriggers: configPath ? [normalize(configPath)] : undefined,
     plugins: [
       ...(finalBuildConfig.plugins || []),
       // remove some plugins that are not needed or not compatible in test environment

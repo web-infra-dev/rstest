@@ -19,6 +19,7 @@ export type CommonOptions = {
   configLoader?: LoadConfigOptions['loader'];
   related?: boolean;
   findRelatedTests?: boolean;
+  changed?: boolean | string;
   globals?: boolean;
   /**
    * Pool options.
@@ -60,9 +61,10 @@ export type CommonOptions = {
   coverage?:
     | boolean
     | {
-        enabled?: boolean;
+        enabled?: boolean | string;
         allowExternal?: boolean;
         provider?: 'istanbul' | 'v8';
+        changed?: boolean | string;
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
@@ -106,6 +108,20 @@ function coerceCliBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
+const normalizeBooleanLikeCliValue = (
+  value: boolean | string,
+): boolean | string => {
+  if (value === 'false') {
+    return false;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  return value;
+};
+
 function mergeWithCLIOptions(
   config: RstestConfig,
   options: CommonOptions,
@@ -139,6 +155,10 @@ function mergeWithCLIOptions(
     if (options[key] !== undefined) {
       (config[key] as any) = options[key];
     }
+  }
+
+  if (options.changed !== undefined && options.passWithNoTests === undefined) {
+    config.passWithNoTests ??= true;
   }
 
   if (options.reporter) {
@@ -194,6 +214,14 @@ function mergeWithCLIOptions(
       }
       if (options.coverage.provider !== undefined) {
         config.coverage.provider = options.coverage.provider;
+      }
+      if (options.coverage.changed !== undefined) {
+        const changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        config.coverage.changed = changed;
+
+        if (options.coverage.enabled === undefined && changed !== false) {
+          config.coverage.enabled = true;
+        }
       }
     }
   }

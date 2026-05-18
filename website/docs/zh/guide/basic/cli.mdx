@@ -85,6 +85,35 @@ npx rstest run --findRelatedTests src/button.ts
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+### 运行变更相关测试
+
+<ApiMeta addedVersion="0.10.0" />
+
+使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。默认会包含 unstaged、staged 和 untracked 文件，适合在本地提交前快速验证：
+
+```bash
+npx rstest run --changed
+```
+
+你也可以传入 commit 或 branch。Rstest 会包含该 ref 与 `HEAD` 之间的变更文件，以及本地 staged、unstaged 和 untracked 文件：
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+当变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 时，Rstest 会运行完整测试套件，而不是只运行相关测试。
+
+开启覆盖率且未配置 [`coverage.changed`](/config/test/coverage#changed) 时，`--changed` 也会将覆盖率报告限制在变更的源文件范围内。如果变更文件命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 会运行完整测试套件，并生成完整覆盖率报告，除非显式启用了 `coverage.changed`。
+
+如果只想预览将要执行哪些测试，可以配合 `rstest list` 使用：
+
+```bash
+npx rstest list --changed --filesOnly
+```
+
+`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。
+
 ## rstest watch
 
 `rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
@@ -258,12 +287,14 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `-r, --root <root>`              | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
 | `--related`                      | 将位置参数视为源码文件路径，只运行相关测试                                                                                                           |
 | `--findRelatedTests`             | `--related` 的 Jest 兼容别名                                                                                                                         |
+| `--changed [commit]`             | 运行当前 Git 仓库中变更文件相关的测试，也可以指定从某个 commit 以来的变更                                                                            |
 | `--globals`                      | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                   |
 | `--isolate`                      | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                           |
 | `--exclude <exclude>`            | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |
 | `-u, --update`                   | 更新快照文件，详见 [update](/config/test/update)                                                                                                     |
 | `--coverage`                     | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                           |
 | `--coverage.provider <provider>` | 选择覆盖率 provider（`istanbul` \| `v8`），详见 [coverage.provider](/config/test/coverage#provider)                                                  |
+| `--coverage.changed [commit]`    | 只收集当前 Git 仓库中变更文件的覆盖率，也可以指定从某个 commit 以来的变更                                                                            |
 | `--passWithNoTests`              | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                              |
 | `--silent [value]`               | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                             |
 | `--printConsoleTrace`            | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                            |

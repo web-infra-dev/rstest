@@ -9,9 +9,9 @@
   "dependencies": {
     "@codspeed/tinybench-plugin": "^5.4.0",
     "@rstest/core": "workspace:*",
-    "antd": "^6.3.7",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "antd": "^6.4.2",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "three": "^0.184.0",
     "tinybench": "^5.1.0"
   }

@@ -10,8 +10,8 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@rspack/cli": "2.0.3",
@@ -24,7 +24,7 @@
     "@rstest/core": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "playwright": "^1.59.1",
+    "playwright": "^1.60.0",
     "typescript": "^6.0.3"
   }
 }
