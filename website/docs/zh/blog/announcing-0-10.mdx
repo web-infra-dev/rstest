@@ -1,5 +1,5 @@
 ---
-description: 'Rstest 0.10 让测试运行更快、更可靠：新增 threads pool、--changed / --related 测试过滤、持久化 build cache、基于内存的 worker spawn gate、--trace profiling，以及更清晰的 worker 输出归属。'
+description: 'Rstest 0.10 让测试运行更快、更可靠：新增 threads pool、--changed / --related 测试过滤、持久化构建缓存、基于内存的 worker spawn gate、--trace profiling，以及更清晰的 worker 输出归属。'
 date: 2026-05-14 10:00:00
 sidebar: false
 authors:
@@ -27,7 +27,7 @@ Rstest 0.10 已经发布。
 
 - [新增 `threads` pool，基于 `worker_threads`](#threads-pool)
 - [通过 `--changed` / `--related` 运行变更或相关的测试](#run-changed-tests)
-- [支持持久化 build cache](#build-cache)
+- [支持持久化构建缓存](#build-cache)
 - [基于内存的 worker spawn gate](#memory-gate)
 - [通过 `--trace` 分析测试运行](#trace-profiling)
 - [支持静默通过测试的 console 输出](#silent-logs)
@@ -86,9 +86,9 @@ npx rstest list --related src/button.ts --filesOnly
 
 请参考 [Run related tests](/guide/basic/cli#run-related-tests) 与 [Run changed tests](/guide/basic/cli#run-changed-tests) 了解更多。
 
-## 持久化 build cache \{#build-cache}
+## 持久化构建缓存 \{#build-cache}
 
-Rstest 0.10 现已支持测试构建的持久化 build cache，让同一项目的重复测试跳过未变化的构建工作。
+Rstest 0.10 现已支持测试构建的持久化构建缓存，让同一项目的重复测试跳过未变化的构建工作。
 
 在 antd + three.js 示例项目中，开启 build cache 后 warm run 的 build 阶段大约缩短到原来的一半：
 
