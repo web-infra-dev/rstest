@@ -45,6 +45,7 @@ envinfo
 estree
 facti
 fastpaths
+fi3ework
 filenaming
 flac
 flamegraph
