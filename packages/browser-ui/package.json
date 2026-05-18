@@ -27,9 +27,9 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-ui/tsconfig.json"
   },
   "dependencies": {
-    "antd": "^6.3.7",
+    "antd": "^6.4.2",
     "birpc": "^4.0.0",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^1.16.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
