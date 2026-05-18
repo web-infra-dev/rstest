@@ -312,27 +312,6 @@ export async function prepareFixtures({
     await fs.promises.symlink(distPath, exposedPath, 'dir');
   }
 
-  // RCA debug: dump rstest.config.mts content (if any) from the freshly
-  // copied fixture so CI logs show whether tools.rspack.aggregateTimeout
-  // actually reached the child rstest process. Will be reverted.
-  try {
-    const cfg = path.resolve(distPath, 'rstest.config.mts');
-    if (fs.existsSync(cfg)) {
-      const content = fs.readFileSync(cfg, 'utf-8');
-      process.stdout.write(
-        `__RCA_FIXTURE__ ${distPath}\n${content}__RCA_FIXTURE_END__\n`,
-      );
-    } else {
-      process.stdout.write(
-        `__RCA_FIXTURE__ ${distPath} (no rstest.config.mts)\n`,
-      );
-    }
-  } catch (e) {
-    process.stdout.write(
-      `__RCA_FIXTURE__ ${distPath} ERROR ${(e as Error).message}\n`,
-    );
-  }
-
   const update = (
     relativePath: string,
     content: string | ((raw: string) => string),
