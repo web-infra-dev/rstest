@@ -77,6 +77,18 @@ export default defineConfig({
       domain: siteUrl,
     }),
   ],
+  head: [
+    ({ routePath }) => {
+      const getOgImage = () => {
+        const match = routePath.match(/blog\/announcing-(\d+-\d+)$/);
+        if (match) {
+          return `rstest-og-image-v${match[1]}.png`;
+        }
+        return 'rstest-og-image.png';
+      };
+      return `<meta property="og:image" content="https://assets.rspack.rs/rstest/${getOgImage()}">`;
+    },
+  ],
   builderConfig: {
     plugins: [
       pluginSass(),
@@ -88,7 +100,6 @@ export default defineConfig({
         title: 'Rstest',
         type: 'website',
         url: siteUrl,
-        image: 'https://assets.rspack.rs/rstest/rstest-og-image.png',
         description,
         twitter: {
           site: '@rspack_dev',
