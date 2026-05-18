@@ -112,6 +112,30 @@ describe('test coverage-v8', () => {
     fs.removeSync(join(__dirname, 'fixtures/coverage'));
   });
 
+  it('keeps user source files under scoped @rstest folders', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'scoped-source'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expect(
+      logs
+        .find((log) => log.includes('index.ts') && log.includes('|'))
+        ?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"index.ts|100|100|100|100|"`);
+
+    fs.removeSync(join(__dirname, 'scoped-source/coverage'));
+  });
+
   it('coverage-v8 with custom options', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

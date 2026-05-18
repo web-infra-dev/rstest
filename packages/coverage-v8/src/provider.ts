@@ -49,16 +49,8 @@ export class CoverageProvider implements RstestCoverageProvider {
       ? picomatch(options.exclude)
       : () => false;
 
-    this.isMatch = (filePath: string) => {
-      if (
-        filePath.includes('/node_modules/') ||
-        filePath.includes('@rstest/')
-      ) {
-        return false;
-      }
-
-      return true;
-    };
+    this.isMatch = (filePath: string) =>
+      !this.shouldIgnoreTransformedFile(filePath);
   }
 
   private normalizeForMatching(filePath: string): string {
@@ -107,11 +99,25 @@ export class CoverageProvider implements RstestCoverageProvider {
     return undefined;
   }
 
+  private isNodeModulesPath(filePath: string): boolean {
+    return (
+      filePath.startsWith('node_modules/') ||
+      filePath.includes('/node_modules/')
+    );
+  }
+
+  private isRstestInternalModulePath(filePath: string): boolean {
+    return (
+      filePath.startsWith('node_modules/@rstest/') ||
+      filePath.includes('/node_modules/@rstest/')
+    );
+  }
+
   private shouldIgnoreTransformedFile(filepath: string): boolean {
     const normalizedFilepath = this.normalizeForMatching(filepath);
     return (
-      normalizedFilepath.includes('/node_modules/') ||
-      normalizedFilepath.includes('@rstest/')
+      this.isNodeModulesPath(normalizedFilepath) ||
+      this.isRstestInternalModulePath(normalizedFilepath)
     );
   }
 
@@ -140,9 +146,8 @@ export class CoverageProvider implements RstestCoverageProvider {
     return (
       normalizedSource === 'rstest runtime' ||
       normalizedSource.startsWith('webpack/runtime/') ||
-      normalizedSource.startsWith('node_modules/') ||
-      normalizedSource.includes('/node_modules/') ||
-      normalizedSource.includes('@rstest/')
+      this.isNodeModulesPath(normalizedSource) ||
+      this.isRstestInternalModulePath(normalizedSource)
     );
   }
 
@@ -226,7 +231,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
       // AST remapping can emit original-source entries that differ from the
       // executed script URL. Re-apply the same internal-file guard here so
-      // remapped node_modules / @rstest files do not leak into the final map.
+      // remapped dependency files do not leak into the final map.
       if (this.shouldIgnoreTransformedFile(normalizedKey)) {
         delete istanbulData[key];
         continue;
