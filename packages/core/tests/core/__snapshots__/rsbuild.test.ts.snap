@@ -2256,7 +2256,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   },
   "target": "node",
   "watchOptions": {
-    "aggregateTimeout": 5,
+    "aggregateTimeout": 100,
     "ignored": [
       "**/.git",
       "**/node_modules",
