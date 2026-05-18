@@ -23,7 +23,9 @@ const REAL_TIMERS: {
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
   REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
-  REAL_TIMERS.setImmediate ??= globalThis.setImmediate.bind(globalThis);
+  if (typeof globalThis.setImmediate === 'function') {
+    REAL_TIMERS.setImmediate ??= globalThis.setImmediate.bind(globalThis);
+  }
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
