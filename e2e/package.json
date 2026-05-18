@@ -12,7 +12,7 @@
   "devDependencies": {
     "@rsbuild/core": "^2.0.6",
     "@rsbuild/plugin-react": "^2.0.0",
-    "@rslib/core": "0.21.4",
+    "@rslib/core": "0.21.5",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
@@ -26,7 +26,7 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "axios": "^1.16.0",
+    "axios": "^1.16.1",
     "cross-env": "^10.1.0",
     "fs-extra": "^11.3.5",
     "is-url": "^1.2.4",
