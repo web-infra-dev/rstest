@@ -25,13 +25,32 @@ import { PackageManagerTabs } from '@theme';
 
 ### Install dependencies
 
-<PackageManagerTabs command="add @rstest/browser-react -D" />
+<PackageManagerTabs command="add @rstest/browser-react @rsbuild/plugin-react -D" />
 
 [@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react) is the official toolkit for testing React in Rstest Browser Mode. It provides:
 
 - `render`: Renders React components to the real browser DOM and returns a container element for querying and assertions
 - `renderHook`: Tests custom Hooks without creating wrapper components
 - Automatic cleanup: Automatically unmounts components from previous tests before each new test, preventing test interference
+
+[@rsbuild/plugin-react](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugins/plugin-react), or an equivalent React JSX transform plugin/configuration, is also required when your browser tests use JSX. It transforms JSX for Browser Mode, so JSX-based tests can run without `React is not defined` runtime errors.
+
+### Configure React JSX transform
+
+Add the React JSX transform plugin or equivalent configuration to your Rstest config:
+
+```ts title="rstest.config.ts"
+import { pluginReact } from '@rsbuild/plugin-react';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginReact()],
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+  },
+});
+```
 
 ### Component testing
 
