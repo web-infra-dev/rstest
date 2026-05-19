@@ -58,6 +58,7 @@ const onHostMessage = (handler) => {
 // per spawned worker) as the per-worker id in threads mode. Forks each have
 // their own pid.
 const workerIdentity = isThreadWorker ? threadId : process.pid;
+let assignedWorkerId = null;
 
 let runCount = 0;
 
@@ -73,6 +74,7 @@ const makeRunResult = (request, extra) => ({
   // Test-only fields so the test can verify pool behavior. Under threads
   // mode this is `threadId`; under forks it is `process.pid`.
   _workerIdentity: workerIdentity,
+  _workerId: assignedWorkerId,
   _runCount: ++runCount,
   ...extra,
 });
@@ -205,6 +207,7 @@ onHostMessage((message) => {
 
   switch (request.type) {
     case 'start':
+      assignedWorkerId = request.workerId;
       send({ type: 'started', pid: workerIdentity });
       break;
     case 'run':

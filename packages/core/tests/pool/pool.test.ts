@@ -397,3 +397,84 @@ describe('Pool - capacity', () => {
     await pool.close();
   });
 });
+
+// ── worker-id slot semantics (rstest#1273) ──────────────────────────────────
+
+describe('Pool - worker-id slot', () => {
+  it('should keep RSTEST_WORKER_ID bounded by maxWorkers under isolate=true', async () => {
+    const maxWorkers = 2;
+    const taskCount = 6;
+    const pool = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+
+    try {
+      const ids: number[] = [];
+      for (let i = 0; i < taskCount; i++) {
+        const result = await pool.runTest(createTask());
+        ids.push((result as any)._workerId as number);
+      }
+
+      expect(ids).toHaveLength(taskCount);
+      for (const id of ids) {
+        expect(id).toBeGreaterThanOrEqual(1);
+        expect(id).toBeLessThanOrEqual(maxWorkers);
+      }
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should assign distinct ids to concurrent workers within [1, maxWorkers]', async () => {
+    const maxWorkers = 3;
+    const pool = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+
+    try {
+      const results = await Promise.all(
+        Array.from({ length: maxWorkers }, () =>
+          pool.runTest(
+            createTask('run', { __testMode: 'slow', __delayMs: 100 }),
+          ),
+        ),
+      );
+      const ids = results.map((r) => (r as any)._workerId as number);
+      // All concurrent workers alive at the same time must have distinct ids.
+      expect(new Set(ids).size).toBe(maxWorkers);
+      // And those ids exactly fill [1, maxWorkers].
+      expect([...ids].sort()).toEqual([1, 2, 3]);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should keep RSTEST_WORKER_ID stable across reuses under isolate=false', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      const r1 = await pool.runTest(createTask());
+      const r2 = await pool.runTest(createTask());
+      const r3 = await pool.runTest(createTask());
+      // Same process → same workerId across all reuses.
+      expect((r1 as any)._workerIdentity).toBe((r2 as any)._workerIdentity);
+      expect((r1 as any)._workerId).toBe((r2 as any)._workerId);
+      expect((r1 as any)._workerId).toBe((r3 as any)._workerId);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should reset worker-id allocator per Pool instance', async () => {
+    const maxWorkers = 2;
+    const poolA = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+    const r1 = await poolA.runTest(createTask());
+    await poolA.close();
+
+    const poolB = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+    try {
+      const r2 = await poolB.runTest(createTask());
+      // A fresh Pool restarts the allocator at 1 — there is no cross-pool
+      // module-level counter (rstest#1273 regression).
+      expect((r1 as any)._workerId).toBe(1);
+      expect((r2 as any)._workerId).toBe(1);
+    } finally {
+      await poolB.close();
+    }
+  });
+});

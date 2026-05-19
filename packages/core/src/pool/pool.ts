@@ -4,8 +4,6 @@ import type { CollectTaskResult } from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
 
-let nextWorkerId = 0;
-
 /**
  * Deliberately minimal scheduler — matches the prior tinypool behavior:
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
@@ -26,6 +24,15 @@ export class Pool {
   private readonly stoppingRunners = new Set<PoolRunner>();
   private readonly stoppingPromises = new Set<Promise<void>>();
   private readonly slotWaiters: Array<() => void> = [];
+  /**
+   * Set of currently-assigned worker ids. Mirrors Jest's `JEST_WORKER_ID`
+   * and rstest 0.9.x's tinypool-backed semantics: ids are bounded by
+   * `[1, maxWorkers]` and reused after the previous worker fully exits, so
+   * consumers can use `RSTEST_WORKER_ID` to partition finite resources
+   * (e.g. database names). See rstest#1273 for the regression that
+   * motivated restoring this.
+   */
+  private readonly slotInUse = new Set<number>();
   private isClosing = false;
   private isClosed = false;
 
@@ -103,7 +110,7 @@ export class Pool {
 
       // Spawn a fresh runner. We claim the slot by inserting the runner into
       // activeRunners up-front; on start failure we drop it and wake a waiter.
-      const workerId = ++nextWorkerId;
+      const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
       const runner = new PoolRunner(worker, { workerId });
@@ -143,6 +150,26 @@ export class Pool {
     }
     return true;
   };
+
+  /**
+   * Allocates the lowest free id in `[1, maxWorkers]`. Capacity is
+   * guaranteed by the `slotWaiters` gate (callers park until
+   * `inFlightCount < maxWorkers`), so the loop always finds a slot —
+   * the throw guards against a future regression in slot accounting.
+   */
+  private acquireWorkerId(): number {
+    for (let i = 1; i <= this.options.maxWorkers; i++) {
+      if (!this.slotInUse.has(i)) {
+        this.slotInUse.add(i);
+        return i;
+      }
+    }
+    throw new Error('[rstest-pool]: no free worker id');
+  }
+
+  private releaseWorkerId(id: number): void {
+    this.slotInUse.delete(id);
+  }
 
   private releaseRunner(runner: PoolRunner): void {
     this.activeRunners.delete(runner);
@@ -203,6 +230,7 @@ export class Pool {
       .finally(() => {
         this.stoppingRunners.delete(runner);
         this.stoppingPromises.delete(stopPromise);
+        this.releaseWorkerId(runner.workerId);
         // Slot is now truly free — wake one waiter (unless we're closing,
         // in which case waiters were already drained).
         if (!this.isClosed) {
