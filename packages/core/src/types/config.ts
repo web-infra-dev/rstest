@@ -326,11 +326,25 @@ export interface RstestConfig {
    */
   pool?: RstestPoolType | RstestPoolOptions;
   /**
-   * Run tests in an isolated environment
+   * Isolation strategy between test files.
+   *
+   * - `true` (default): each test file runs in a fresh worker process. Strongest
+   *   isolation but pays the cost of process fork + bundle load + env setup
+   *   on every file.
+   * - `'soft'`: workers persist across files. Between files, rstest clears the
+   *   module cache (so test code re-evaluates fresh) and resets the test
+   *   environment (DOM wiped for `jsdom`/`happy-dom`). Globals installed by
+   *   setupFiles persist; `clearMocks: true` is recommended. Trades a small
+   *   amount of isolation strictness for a large drop in per-file overhead
+   *   (~300-1000 ms saved per file on libs that import jsdom or large
+   *   transitive deps).
+   * - `false`: workers persist across files with no isolation between them —
+   *   even module state leaks. Fast but use only when tests are designed for
+   *   it.
    *
    * @default true
    */
-  isolate?: boolean;
+  isolate?: boolean | 'soft';
   /**
    * Provide global APIs
    *

@@ -153,6 +153,7 @@ const preparePool = async (
       testEnvironment,
       snapshotFormat,
       env,
+      isolate,
     },
   } = context;
 
@@ -243,25 +244,40 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
+  // For `isolate: 'soft'`, run the env's `reset()` between files (cheap DOM
+  // wipe) instead of `teardown()` (full close + reinstall). The env module
+  // caches the underlying JSDOM/HappyDOM instance so subsequent `setup()`
+  // calls in the same worker return the cached return object without
+  // creating a new window.
+  const useSoftReset =
+    (isolate as unknown as 'soft' | boolean | undefined) === 'soft';
   switch (testEnvironment.name) {
     case 'node':
       break;
     case 'jsdom': {
       const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(
+      const envReturn = await environment.setup(
         global,
         testEnvironment.options || {},
       );
-      cleanupFns.push(() => teardown(global));
+      if (useSoftReset && envReturn.reset) {
+        cleanupFns.push(() => envReturn.reset!(global));
+      } else {
+        cleanupFns.push(() => envReturn.teardown(global));
+      }
       break;
     }
     case 'happy-dom': {
       const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(
+      const envReturn = await environment.setup(
         global,
         testEnvironment.options || {},
       );
-      cleanupFns.push(async () => teardown(global));
+      if (useSoftReset && envReturn.reset) {
+        cleanupFns.push(async () => envReturn.reset!(global));
+      } else {
+        cleanupFns.push(async () => envReturn.teardown(global));
+      }
       break;
     }
     default:
@@ -316,7 +332,7 @@ const loadFiles = async ({
   runtimeDistPath?: string;
   testPath: string;
   interopDefault: boolean;
-  isolate: boolean;
+  isolate: boolean | 'soft';
   outputModule: boolean;
   tracker?: PhaseTracker;
 }): Promise<void> => {
@@ -324,8 +340,10 @@ const loadFiles = async ({
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
-  // clean rstest core cache manually
-  if (!isolate) {
+  // For non-strict-isolate modes (`false` or `'soft'`), the rstest core module
+  // is kept alive across files in the same worker. Clear its internal caches
+  // so each file starts with fresh per-test state.
+  if (isolate !== true) {
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -415,7 +433,10 @@ export const runInPool = async (
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
 
-    if (!isolate) {
+    // For non-strict-isolate modes (`false` or `'soft'`), the same worker
+    // process will handle the next test file. Wipe rstest's module cache
+    // so each file evaluates its imports fresh.
+    if (isolate !== true) {
       const { clearModuleCache } = options.context.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');

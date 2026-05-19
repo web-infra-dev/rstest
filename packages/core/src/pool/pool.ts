@@ -11,7 +11,8 @@ let nextWorkerId = 0;
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background
- *   - isolate=false: idle runners reused, lazy-spawned on demand
+ *   - isolate='soft': idle runners reused, worker resets DOM + module cache between tasks
+ *   - isolate=false: idle runners reused, no inter-task reset
  */
 export class Pool {
   private readonly options: PoolOptions;
@@ -148,12 +149,11 @@ export class Pool {
     this.activeRunners.delete(runner);
 
     // `isolate: true`, closing, or unusable — never reuse.
-    if (
-      this.options.isolate !== false ||
-      this.isClosing ||
-      this.isClosed ||
-      !runner.isUsable()
-    ) {
+    // `isolate: false` and `isolate: 'soft'` both reuse runners; only the
+    // worker-side reset semantics differ (see runInPool teardown for 'soft').
+    const reuse =
+      this.options.isolate === false || this.options.isolate === 'soft';
+    if (!reuse || this.isClosing || this.isClosed || !runner.isUsable()) {
       // Background dispose. The slot stays accounted for in `stoppingRunners`
       // until the child actually exits, so `isolate: true` cannot transiently
       // exceed `maxWorkers` and `close()` can drain in-flight stops.
@@ -161,7 +161,7 @@ export class Pool {
       return;
     }
 
-    // `isolate: false` reuse path.
+    // Reuse path (isolate: false or 'soft').
     //
     // `minWorkers` is a *floor for retained idle runners after demand drops*,
     // not a cap on reuse. Two cases keep this runner alive:

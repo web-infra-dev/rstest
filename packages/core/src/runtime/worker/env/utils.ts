@@ -27,6 +27,20 @@ function isClassLike(name: string) {
   return name[0] && name.startsWith(name[0].toUpperCase());
 }
 
+export interface InstallGlobalHandle {
+  /** Uninstall: deletes the installed properties and restores originals. */
+  cleanup: () => void;
+  /**
+   * Reset all `global[key] = ...` overrides made since install (or last
+   * reset) back to the underlying window-backed defaults. The getter/setter
+   * descriptors themselves stay in place, so `global.window` etc. remain
+   * accessible. Used by `isolate: 'soft'` to discard per-file mutations
+   * without uninstalling globals (which would briefly leave the worker
+   * without `window` between test files).
+   */
+  resetOverrides: () => void;
+}
+
 export function installGlobal(
   global: any,
   win: any,
@@ -37,7 +51,7 @@ export function installGlobal(
     bindFunctions?: boolean;
     additionalKeys?: string[];
   } = {},
-): () => void {
+): InstallGlobalHandle {
   const { bindFunctions = true } = options || {};
   const keys = getWindowKeys(global, win, options.additionalKeys);
 
@@ -94,13 +108,18 @@ export function installGlobal(
     keys.add(k);
   }
 
-  return () => {
-    for (const key of keys) {
-      Reflect.deleteProperty(global, key);
-    }
-    originals.forEach((v, k) => {
-      global[k] = v;
-    });
+  return {
+    cleanup: () => {
+      for (const key of keys) {
+        Reflect.deleteProperty(global, key);
+      }
+      originals.forEach((v, k) => {
+        global[k] = v;
+      });
+    },
+    resetOverrides: () => {
+      overrides.clear();
+    },
   };
 }
 
