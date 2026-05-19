@@ -58,6 +58,41 @@ const registerGlobalApi = (api: Rstest) => {
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 
+/**
+ * Worker-scope test-environment cache. In `isolate: 'soft' | false` the
+ * worker is reused across files, so paying the jsdom/happyDom setup cost
+ * per file is wasteful — and tearing the env down between files races with
+ * any async work the previous file scheduled (e.g. React commit phase
+ * accessing `window` after `dom.window.close()` already ran).
+ *
+ * The cached entry is reset between files via `softResetEnv` (clear DOM,
+ * reset URL) so leaked DOM state from file N doesn't contaminate file N+1.
+ */
+let cachedEnv:
+  | {
+      name: string;
+      teardown: (global: any) => MaybePromise<void>;
+    }
+  | undefined;
+
+const softResetEnv = (envName: string): void => {
+  if (envName !== 'jsdom' && envName !== 'happy-dom') return;
+  const g = global as unknown as {
+    document?: { body?: { innerHTML: string }; head?: { innerHTML: string } };
+    window?: { history?: { replaceState?: Function }; scrollTo?: Function };
+    location?: { href?: string };
+  };
+  try {
+    if (g.document?.body) g.document.body.innerHTML = '';
+    if (g.document?.head) g.document.head.innerHTML = '';
+    g.window?.history?.replaceState?.(null, '', '/');
+    g.window?.scrollTo?.(0, 0);
+  } catch {
+    // best-effort — env may be in a weird state, the next preparePool
+    // call will surface a real error if it's actually broken.
+  }
+};
+
 const setErrorName = (error: Error, type: string): Error => {
   try {
     error.name = type;
@@ -168,7 +203,13 @@ const preparePool = async (
       silent,
     },
     emitInterceptedLog: async (log) => {
-      await rpc.onConsoleLog(log);
+      try {
+        await rpc.onConsoleLog(log);
+      } catch {
+        // RPC may already be closed if a pending async log (e.g. React
+        // commit or microtask) fires after teardown. Drop it; the log is
+        // best-effort and we don't want to spam unhandled rejections.
+      }
     },
     writeOriginalLog: createOriginalLogWriter(),
   });
@@ -244,30 +285,63 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
-  switch (testEnvironment.name) {
-    case 'node':
-      break;
-    case 'jsdom': {
-      const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(() => teardown(global));
-      break;
+  const isolateMode = context.runtimeConfig.isolate;
+  const canReuseEnv =
+    isolateMode !== true &&
+    cachedEnv !== undefined &&
+    cachedEnv.name === testEnvironment.name;
+
+  if (canReuseEnv) {
+    // Worker is being reused for another file; soft-reset the env in place
+    // instead of paying the full setup cost again.
+    softResetEnv(cachedEnv!.name);
+  } else {
+    // Tear down any prior env of the wrong type before installing a fresh one.
+    if (cachedEnv) {
+      try {
+        await cachedEnv.teardown(global);
+      } catch {
+        // ignore — installing the new env will overwrite globals anyway.
+      }
+      cachedEnv = undefined;
     }
-    case 'happy-dom': {
-      const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(async () => teardown(global));
-      break;
+    switch (testEnvironment.name) {
+      case 'node':
+        break;
+      case 'jsdom': {
+        const { environment } = await import('./env/jsdom');
+        const { teardown } = await environment.setup(
+          global,
+          testEnvironment.options || {},
+        );
+        cachedEnv = { name: 'jsdom', teardown };
+        break;
+      }
+      case 'happy-dom': {
+        const { environment } = await import('./env/happyDom');
+        const { teardown } = await environment.setup(
+          global,
+          testEnvironment.options || {},
+        );
+        cachedEnv = { name: 'happy-dom', teardown };
+        break;
+      }
+      default:
+        throw new Error(`Unknown test environment: ${testEnvironment.name}`);
     }
-    default:
-      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
   }
+
+  // In strict isolation, the env is torn down after the file via `cleanupFns`.
+  // In soft mode, the cached env persists; teardown only fires when the
+  // worker exits (handled by the pool, not this function).
+  if (isolateMode === true && cachedEnv) {
+    const env = cachedEnv;
+    cleanupFns.push(async () => {
+      await env.teardown(global);
+      cachedEnv = undefined;
+    });
+  }
+
   tracker?.transition('prepare');
 
   if (globals) {
@@ -413,8 +487,45 @@ export const runInPool = async (
     process.exit = exit;
   });
 
+  // Captured by preparePool — used by teardown to perform per-file resets
+  // when the worker is reused (`isolate !== true`).
+  let perFileApi: Rstest | undefined;
+
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
+
+    // Soft/non-strict isolate: process is reused for the next file, so we
+    // must reset per-file global state that would otherwise leak.
+    //
+    // Per-api rstest.restoreAllMocks() only reaches spies registered to the
+    // CURRENT file's `mocks` Set — spies from prior files are orphaned when
+    // their api is GC'd, leaving the property descriptors patched. Use
+    // tinyspy's worker-scope `restoreAll()` instead: it walks the same
+    // module-level `spies` Set that `internalSpyOn` registers into, so it
+    // restores every spy in the worker regardless of which api created it.
+    //
+    // The fake-timers reset is also critical: sinon's `install()` rejects a
+    // second install on the same global, so the next file's
+    // `useFakeTimers()` would throw "Can't install fake timers twice on the
+    // same global object" without this.
+    if (isolate !== true) {
+      if (perFileApi) {
+        try {
+          if (perFileApi.rstest.isFakeTimers()) {
+            perFileApi.rstest.useRealTimers();
+          }
+        } catch {
+          // api may already be in a torn-down state; the next file's
+          // preparePool will create a fresh one.
+        }
+      }
+      try {
+        const { restoreAll } = await import('tinyspy');
+        restoreAll();
+      } catch {
+        // tinyspy not available or registry already empty — nothing to do.
+      }
+    }
 
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
@@ -438,7 +549,9 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
+        api,
       } = await preparePool(options);
+      perFileApi = api;
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
       sourceMaps = sourceMapsFromAssets;
@@ -503,6 +616,7 @@ export const runInPool = async (
       interopDefault,
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
+    perFileApi = api;
     taskContext = preparedTaskContext;
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
