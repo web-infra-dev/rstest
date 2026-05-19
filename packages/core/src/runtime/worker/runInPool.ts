@@ -343,11 +343,23 @@ const loadFiles = async ({
   // For non-strict-isolate modes (`false` or `'soft'`), the rstest core module
   // is kept alive across files in the same worker. Clear its internal caches
   // so each file starts with fresh per-test state.
+  //
+  // `isolate: 'soft'` additionally wipes the entire webpack module cache via
+  // `__rstest_clean_all_modules__()`. Without this, module-mock proxies from
+  // the prior file (e.g., `rstest.mock(...)` factories) stay attached to
+  // cached module instances, and the next file's tests trip on stale state
+  // (typically as `Proxy.set` failures on previously-mocked exports).
   if (isolate !== true) {
-    await loadModule({
-      codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
+    const cleanCmd =
+      isolate === 'soft'
+        ? `if (global && typeof global.__rstest_clean_all_modules__ === 'function') {
+  global.__rstest_clean_all_modules__();
+}`
+        : `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
-  }`,
+}`;
+    await loadModule({
+      codeContent: cleanCmd,
       distPath: '',
       testPath,
       rstestContext,

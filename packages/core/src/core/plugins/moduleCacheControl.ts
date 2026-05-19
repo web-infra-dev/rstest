@@ -23,7 +23,27 @@ function __rstest_clean_core_cache__() {
   });
 }
 
+/**
+ * Aggressive cache wipe for \`isolate: 'soft'\`. Removes every entry from the
+ * webpack module cache so the next file re-evaluates ALL modules — including
+ * user source, test code, and any module-mock proxies installed by the prior
+ * file (which otherwise leak across files because their state lives in the
+ * cached module instance).
+ *
+ * Vendors (\`node_modules/...\`) are also dropped here; in practice rspack
+ * caches their compilation, so re-evaluation is fast.
+ */
+function __rstest_clean_all_modules__() {
+  if (typeof __webpack_require__ === 'undefined') {
+    return;
+  }
+  for (const id of Object.keys(__webpack_module_cache__)) {
+    delete __webpack_module_cache__[id];
+  }
+}
+
 global.__rstest_clean_core_cache__ = __rstest_clean_core_cache__;
+global.__rstest_clean_all_modules__ = __rstest_clean_all_modules__;
 `;
       }
     }
