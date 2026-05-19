@@ -9,7 +9,8 @@ import { createPoolWorker } from './workers';
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background
- *   - isolate=false: idle runners reused, lazy-spawned on demand
+ *   - isolate='soft': idle runners reused; worker resets test env per task
+ *   - isolate=false: idle runners reused, no per-task reset
  */
 export class Pool {
   private readonly options: PoolOptions;
@@ -175,12 +176,11 @@ export class Pool {
     this.activeRunners.delete(runner);
 
     // `isolate: true`, closing, or unusable — never reuse.
-    if (
-      this.options.isolate !== false ||
-      this.isClosing ||
-      this.isClosed ||
-      !runner.isUsable()
-    ) {
+    // `isolate: false` and `isolate: 'soft'` both reuse runners; only the
+    // worker-side per-file reset semantics differ.
+    const canReuse =
+      this.options.isolate === false || this.options.isolate === 'soft';
+    if (!canReuse || this.isClosing || this.isClosed || !runner.isUsable()) {
       // Background dispose. The slot stays accounted for in `stoppingRunners`
       // until the child actually exits, so `isolate: true` cannot transiently
       // exceed `maxWorkers` and `close()` can drain in-flight stops.

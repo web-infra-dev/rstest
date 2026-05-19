@@ -317,7 +317,7 @@ const loadFiles = async ({
   runtimeDistPath?: string;
   testPath: string;
   interopDefault: boolean;
-  isolate: boolean;
+  isolate: boolean | 'soft';
   outputModule: boolean;
   tracker?: PhaseTracker;
 }): Promise<void> => {
@@ -326,7 +326,10 @@ const loadFiles = async ({
     : await import('./loadModule');
 
   // clean rstest core cache manually
-  if (!isolate) {
+  // Runs for any non-strict isolate (`false` or `'soft'`): the worker
+  // process is reused across files, so rstest's internal state needs to
+  // start clean for each new file.
+  if (isolate !== true) {
     await loadModule({
       codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
   global.__rstest_clean_core_cache__();
@@ -416,7 +419,7 @@ export const runInPool = async (
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
 
-    if (!isolate) {
+    if (isolate !== true) {
       const { clearModuleCache } = options.context.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');

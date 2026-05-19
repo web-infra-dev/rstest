@@ -10,11 +10,19 @@ export type PoolTask = {
   rpcMethods: RuntimeRPC;
 };
 
+/**
+ * Isolation strategy for the pool. See `RstestConfig.isolate` for full docs.
+ *   - `true`: fresh runner per task (process-per-file isolation)
+ *   - `'soft'`: reuse runner across tasks; worker resets test env per task
+ *   - `false`: reuse runner across tasks with no per-task reset
+ */
+export type IsolateMode = boolean | 'soft';
+
 export type PoolOptions = {
   workerEntry: string;
   maxWorkers: number;
   minWorkers: number;
-  isolate: boolean;
+  isolate: IsolateMode;
   env?: Record<string, string>;
   execArgv?: string[];
   /**
