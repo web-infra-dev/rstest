@@ -16,6 +16,7 @@ import {
   getTestEntries,
   getForceRerunTriggerMessage,
   getNoTestFilesMessage,
+  isDebug,
   logger,
   resolveShardedEntries,
   type TraceEvent,
@@ -143,6 +144,29 @@ const notifyReportersOnTestRunEnd = async ({
   }
 };
 
+const isLifecycleDebugEnabled = isDebug();
+
+const runLifecycleStep = async <T>(
+  label: string,
+  fn: () => Promise<T>,
+): Promise<T> => {
+  if (!isLifecycleDebugEnabled) {
+    return fn();
+  }
+
+  const startTime = Date.now();
+  logger.debug(`lifecycle: start ${label}`);
+
+  try {
+    const result = await fn();
+    logger.debug(`lifecycle: finish ${label} (${Date.now() - startTime}ms)`);
+    return result;
+  } catch (error) {
+    logger.debug(`lifecycle: fail ${label} (${Date.now() - startTime}ms)`);
+    throw error;
+  }
+};
+
 export async function runTests(context: Rstest): Promise<void> {
   cleanCoverageReports(context.normalizedConfig.coverage);
 
@@ -196,7 +220,9 @@ export async function runTests(context: Rstest): Promise<void> {
         });
       }
 
-      await traceController.close();
+      await runLifecycleStep('trace controller cleanup', () =>
+        traceController.close(),
+      );
       return;
     }
 
@@ -245,7 +271,9 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
 
-    await traceController.shutdown(traceRun);
+    await runLifecycleStep('trace shutdown', () =>
+      traceController.shutdown(traceRun),
+    );
     return;
   }
 
@@ -390,7 +418,9 @@ export async function runTests(context: Rstest): Promise<void> {
       // fires for the pre-allocated buffer. Flush any browser events the
       // host emitted into it before exiting so `--trace` still produces a
       // file for filtered mixed-mode runs.
-      await traceController.shutdown(activeTraceRun);
+      await runLifecycleStep('trace shutdown', () =>
+        traceController.shutdown(activeTraceRun),
+      );
       return;
     }
     // If no node projects at all, and no browser tests to run,
@@ -725,25 +755,29 @@ export async function runTests(context: Rstest): Promise<void> {
         process.exitCode = 1;
       }
 
-      await notifyReportersOnTestRunEnd({
-        context,
-        coverage: mergedCoverageMap,
-        duration,
-        getSourcemap,
-        unhandledErrors: errors,
-        filterRerunTestPaths: currentEntries.length
-          ? currentEntries.map((e) => e.testPath)
-          : undefined,
-      });
+      await runLifecycleStep('reporter onTestRunEnd', () =>
+        notifyReportersOnTestRunEnd({
+          context,
+          coverage: mergedCoverageMap,
+          duration,
+          getSourcemap,
+          unhandledErrors: errors,
+          filterRerunTestPaths: currentEntries.length
+            ? currentEntries.map((e) => e.testPath)
+            : undefined,
+        }),
+      );
 
       // Generate coverage reports after all tests complete
       if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
         const { generateCoverage } = await import('../coverage/generate');
 
-        await generateCoverage(context, mergedCoverageMap!, coverageProvider);
+        await runLifecycleStep('coverage report generation', () =>
+          generateCoverage(context, mergedCoverageMap!, coverageProvider),
+        );
       }
 
-      await traceRun.finalize();
+      await runLifecycleStep('trace run finalize', () => traceRun.finalize());
       // Pre-allocate the next watch-rerun buffer so browser events emitted
       // between reruns (or before the next `run()` adopts a fresh buffer)
       // are not lost.
@@ -761,7 +795,9 @@ export async function runTests(context: Rstest): Promise<void> {
         }
       }
     } finally {
-      await browserClose?.();
+      if (browserClose) {
+        await runLifecycleStep('browser result cleanup', () => browserClose());
+      }
     }
   };
 
@@ -777,16 +813,20 @@ export async function runTests(context: Rstest): Promise<void> {
       isCleaningUp = true;
 
       try {
-        await runGlobalTeardown();
-        await pool.close();
-        await closeServer();
+        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('worker pool cleanup', () => pool.close());
+        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
         // Flush any browser events the host pushed into the pre-allocated
         // buffer since the last `run()` finalized — otherwise they get
         // dropped when the controller closes. Inline (not `shutdown`)
         // because cleanup may run from a SIGINT handler and `waitForExit`
         // would block waiting for another signal.
-        await activeTraceRun.finalize();
-        await traceController.close();
+        await runLifecycleStep('trace run finalize', () =>
+          activeTraceRun.finalize(),
+        );
+        await runLifecycleStep('trace controller cleanup', () =>
+          traceController.close(),
+        );
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
       }
@@ -823,11 +863,15 @@ export async function runTests(context: Rstest): Promise<void> {
     const { onBeforeRestart } = await import('./restart');
 
     onBeforeRestart(async () => {
-      await runGlobalTeardown();
-      await pool.close();
-      await closeServer();
-      await activeTraceRun.finalize();
-      await traceController.close();
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      await runLifecycleStep('worker pool cleanup', () => pool.close());
+      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+      await runLifecycleStep('trace run finalize', () =>
+        activeTraceRun.finalize(),
+      );
+      await runLifecycleStep('trace controller cleanup', () =>
+        traceController.close(),
+      );
     });
 
     let buildStart: number | undefined;
@@ -847,10 +891,16 @@ export async function runTests(context: Rstest): Promise<void> {
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
           closeServer: async () => {
-            await pool.close();
-            await closeServer();
-            await activeTraceRun.finalize();
-            await traceController.close();
+            await runLifecycleStep('worker pool cleanup', () => pool.close());
+            await runLifecycleStep('rsbuild server cleanup', () =>
+              closeServer(),
+            );
+            await runLifecycleStep('trace run finalize', () =>
+              activeTraceRun.finalize(),
+            );
+            await runLifecycleStep('trace controller cleanup', () =>
+              traceController.close(),
+            );
           },
           runAll: async () => {
             clearScreen();
@@ -975,11 +1025,15 @@ export async function runTests(context: Rstest): Promise<void> {
       isCleaningUp = true;
 
       try {
-        await runGlobalTeardown();
-        await pool.close();
-        await closeServer();
-        await activeTraceRun.finalize();
-        await traceController.close();
+        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('worker pool cleanup', () => pool.close());
+        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+        await runLifecycleStep('trace run finalize', () =>
+          activeTraceRun.finalize(),
+        );
+        await runLifecycleStep('trace controller cleanup', () =>
+          traceController.close(),
+        );
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
       }
@@ -1023,11 +1077,11 @@ export async function runTests(context: Rstest): Promise<void> {
     try {
       await run();
       isTeardown = true;
-      await pool.close();
-      await closeServer();
+      await runLifecycleStep('worker pool cleanup', () => pool.close());
+      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
 
       // Run global teardown after all tests are done
-      await runGlobalTeardown();
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
     } finally {
       process.off('exit', unExpectedExit);
       process.off('SIGINT', handleSignal);
@@ -1035,6 +1089,8 @@ export async function runTests(context: Rstest): Promise<void> {
       process.off('SIGTSTP', handleSignal);
     }
 
-    await traceController.waitForExit();
+    await runLifecycleStep('trace wait for exit', () =>
+      traceController.waitForExit(),
+    );
   }
 }
