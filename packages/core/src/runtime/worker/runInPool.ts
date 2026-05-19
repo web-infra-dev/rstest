@@ -12,6 +12,7 @@ import type {
 import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import { createAsyncLeakDetector } from './asyncLeaks';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
@@ -383,7 +384,7 @@ export const runInPool = async (
     type,
     context: {
       project,
-      runtimeConfig: { isolate, bail },
+      runtimeConfig: { isolate, bail, detectAsyncLeaks },
     },
   } = options;
 
@@ -484,6 +485,7 @@ export const runInPool = async (
       : undefined,
   );
   let runResult: TestFileResult | undefined;
+  let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
 
   try {
     tracker.transition('prepare');
@@ -499,6 +501,10 @@ export const runInPool = async (
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
+    if (detectAsyncLeaks) {
+      asyncLeakDetector = createAsyncLeakDetector(taskContext);
+      asyncLeakDetector.enable();
+    }
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       runResult = {
@@ -609,6 +615,17 @@ export const runInPool = async (
       api,
     );
 
+    if (asyncLeakDetector) {
+      if (api.rstest.isFakeTimers()) {
+        api.rstest.useRealTimers();
+      }
+      const asyncLeakErrors = await asyncLeakDetector.collectErrors();
+      if (asyncLeakErrors.length > 0) {
+        results.status = 'fail';
+        results.errors = (results.errors || []).concat(asyncLeakErrors);
+      }
+    }
+
     if (unhandledErrors.length > 0) {
       results.status = 'fail';
       results.errors = (results.errors || []).concat(
@@ -657,6 +674,7 @@ export const runInPool = async (
   } finally {
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);
+    asyncLeakDetector?.disable();
     await teardown();
     tracker.end();
     if (runResult) {

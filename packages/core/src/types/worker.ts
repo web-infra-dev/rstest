@@ -60,6 +60,7 @@ export type RuntimeConfig = Pick<
   | 'snapshotFormat'
   | 'env'
   | 'logHeapUsage'
+  | 'detectAsyncLeaks'
   | 'bail'
   | 'chaiConfig'
   | 'includeTaskLocation'

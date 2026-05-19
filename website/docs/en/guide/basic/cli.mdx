@@ -320,6 +320,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                               |
 | `--include <include>`           | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
 | `--logHeapUsage`                | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
+| `--detectAsyncLeaks`            | Detect async resources that leak after tests finish, see [detectAsyncLeaks](/config/test/detect-async-leaks)                                                          |
 | `--hideSkippedTests`            | Do not display skipped test logs, see [hideSkippedTests](/config/test/hide-skipped-tests)                                                                             |
 | `--hideSkippedTestFiles`        | Do not display skipped test file logs, see [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                               |
 | `--pool <type>`                 | Shorthand for `--pool.type`, see [pool](/config/test/pool)                                                                                                            |
