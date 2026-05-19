@@ -1,0 +1,156 @@
+---
+title: Rstest types
+description: 从 @rstest/core 导入公开的 TypeScript 类型，用于配置、运行时 API、Reporter 和 mock 工具。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Rstest types
+
+Rstest 会从 `@rstest/core` 导出公开的 TypeScript 类型。请使用 `import type`，这样这些导入会在运行时代码中被擦除。
+
+```ts
+import type { Mock, Mocked, RstestConfig } from '@rstest/core';
+```
+
+## 配置类型
+
+当你需要在 `defineConfig` 外部为配置对象、配置工厂或共享配置工具标注类型时，可以使用这些类型。
+
+```ts
+import type {
+  ProjectConfig,
+  RstestConfig,
+  RstestConfigAsyncFn,
+  RstestConfigExport,
+  RstestConfigSyncFn,
+} from '@rstest/core';
+```
+
+- `RstestConfig`：顶层 Rstest 配置类型。
+- `RstestConfigSyncFn`：返回 `RstestConfig` 的同步函数。
+- `RstestConfigAsyncFn`：返回 `RstestConfig` 的异步函数。
+- `RstestConfigExport`：Rstest 配置文件可接受的导出类型联合。
+- `ProjectConfig`：独立 [Rstest Project](/guide/basic/projects) 配置的类型。
+
+对于大多数配置文件，建议优先使用 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)、[`defineProject`](/api/javascript-api/rstest-core#defineproject) 和 [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject)，它们可以提供自动补全，而不需要显式类型标注。
+
+## Test API 类型
+
+当你扩展 Test API、定义可复用 helper 或为自定义 fixture 标注类型时，可以使用这些类型。
+
+```ts
+import type {
+  Describe,
+  Expect,
+  ExpectStatic,
+  Rstest,
+  RstestUtilities,
+  TestContext,
+} from '@rstest/core';
+```
+
+- `Rstest`：完整的运行时 API 形状，包括 `test`、`describe`、`expect`、hooks 和 `rstest` 工具。
+- `RstestUtilities`：`rstest` 和 `rs` 工具对象的类型。
+- `TestContext`：传递给测试回调和生命周期 hooks 的 context 对象。
+- `Describe`：`describe` API 的类型。
+- `Expect`：`expect(value)` 返回的 assertion 类型。
+- `ExpectStatic`：可调用的 `expect` API 类型。
+
+## Mock 类型
+
+当 helper 接收 mock function、spy 或 mocked module 时，可以使用 mock 类型。
+
+```ts
+import type { Mock, Mocked, MockInstance } from '@rstest/core';
+```
+
+### Mock
+
+`Mock<T>` 表示由 [`rstest.fn`](/api/runtime-api/rstest/mock-functions#rstestfn) 创建的可调用 mock function。它会保留 `T` 的参数和返回值类型，同时增加 mock 控制 API。
+
+```ts
+import { rstest } from '@rstest/core';
+import type { Mock } from '@rstest/core';
+
+type LoadUser = (id: string) => Promise<{ name: string }>;
+
+const loadUser: Mock<LoadUser> = rstest.fn<LoadUser>();
+loadUser.mockResolvedValue({ name: 'Jack' });
+```
+
+### MockInstance
+
+<ApiMeta addedVersion="0.10.1" />
+
+`MockInstance<T>` 表示 `rstest.fn()` mock 和 `rstest.spyOn()` spy 共享的 mock 控制 API。当一个 helper 只需要 `mockClear`、`mockReset` 或 `mockRestore` 等 mock 方法，而不需要直接调用 mock function 时，可以使用它。
+
+```ts
+import type { MockInstance } from '@rstest/core';
+
+function resetTrackedMock(mock: MockInstance) {
+  mock.mockReset();
+}
+```
+
+当你直接创建 mock 或 spy 时，通常不需要手动标注类型，TypeScript 可以自动推导。
+
+```ts
+const spy = rstest.spyOn(service, 'loadUser');
+spy.mockResolvedValue({ name: 'Jack' });
+```
+
+### Mocked
+
+`Mocked<T>` 会包装对象或模块类型，使其中的方法按 mock 类型处理。它适合配合 [`rstest.mock`](/api/runtime-api/rstest/mock-modules#rsmock)、[`rstest.mockObject`](/api/runtime-api/rstest/mock-functions#rstestmockobject) 或 [`rstest.mocked`](/api/runtime-api/rstest/mock-functions#rstestmocked) 使用。
+
+```ts
+import { rstest } from '@rstest/core';
+import type { Mocked } from '@rstest/core';
+import * as userApi from './userApi';
+
+rstest.mock('./userApi');
+
+const mockedUserApi: Mocked<typeof userApi> = rstest.mocked(userApi);
+mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
+```
+
+## Reporter 和结果类型
+
+当你创建自定义 Reporter，或编写消费 Rstest 结果的外部工具时，可以使用这些类型。
+
+```ts
+import type {
+  Reporter,
+  TestCaseInfo,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  TestSuiteInfo,
+} from '@rstest/core';
+```
+
+Reporter 实现细节见 [Reporter](/api/javascript-api/reporter)。
+
+## Assertion 类型
+
+当你为自定义 assertion helper 标注类型时，可以使用 `Assertion` 或 `ExpectStatic`。
+
+```ts
+import type { Assertion, ExpectStatic } from '@rstest/core';
+
+function expectVisible(
+  expect: ExpectStatic,
+  value: HTMLElement,
+): Assertion<HTMLElement> {
+  return expect(value);
+}
+```
+
+## Rsbuild 类型
+
+Rstest 会从 `@rsbuild/core` 重新导出 `Rspack`，用于需要标注 Rsbuild 或 Rspack hooks 的集成场景，同时保持与 Rstest 相同的依赖图。
+
+```ts
+import type { Rspack } from '@rstest/core';
+```
