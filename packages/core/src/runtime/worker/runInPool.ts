@@ -67,19 +67,119 @@ let isTeardown = false;
  *
  * The cached entry is reset between files via `softResetEnv` (clear DOM,
  * reset URL) so leaked DOM state from file N doesn't contaminate file N+1.
+ *
+ * `protoSnapshot` captures the original property descriptors of well-known
+ * DOM prototypes so we can revert in-place mutations vendor packages make
+ * during a file run (e.g. `@testing-library/user-event`'s `patchFocus`
+ * which replaces `HTMLElement.prototype.focus` with a getter-only
+ * descriptor; the next file's bundle re-evaluation does
+ * `prototype.focus = newFn` and dies on "has only a getter").
  */
 let cachedEnv:
   | {
       name: string;
       teardown: (global: any) => MaybePromise<void>;
+      protoSnapshot: Array<{
+        proto: any;
+        descriptors: Record<string, PropertyDescriptor>;
+      }>;
     }
   | undefined;
 
-const softResetEnv = (envName: string): void => {
+/**
+ * Set of property names whose descriptors we capture for restore. Limited
+ * to the keys vendor packages are known to mutate (user-event patches
+ * focus/blur; react-aria patches focus; testing libraries occasionally
+ * patch click, scrollIntoView, getBoundingClientRect). Snapshotting every
+ * property would be both slow and surprising — most properties don't need
+ * restoration.
+ */
+const TRACKED_PROTO_KEYS = [
+  'focus',
+  'blur',
+  'click',
+  'scrollIntoView',
+  'getBoundingClientRect',
+] as const;
+
+const captureProtoSnapshot = (
+  win: any,
+): Array<{ proto: any; descriptors: Record<string, PropertyDescriptor> }> => {
+  const snapshot: Array<{
+    proto: any;
+    descriptors: Record<string, PropertyDescriptor>;
+  }> = [];
+  const protos = [
+    win.HTMLElement?.prototype,
+    win.Element?.prototype,
+    win.Node?.prototype,
+  ].filter(Boolean);
+  for (const proto of protos) {
+    const descriptors: Record<string, PropertyDescriptor> = {};
+    for (const key of TRACKED_PROTO_KEYS) {
+      const d = Object.getOwnPropertyDescriptor(proto, key);
+      if (d) descriptors[key] = d;
+    }
+    if (Object.keys(descriptors).length > 0) {
+      snapshot.push({ proto, descriptors });
+    }
+  }
+  return snapshot;
+};
+
+const restoreProtoSnapshot = (
+  snapshot: Array<{
+    proto: any;
+    descriptors: Record<string, PropertyDescriptor>;
+  }>,
+): void => {
+  for (const { proto, descriptors } of snapshot) {
+    for (const key of Object.keys(descriptors)) {
+      const current = Object.getOwnPropertyDescriptor(proto, key);
+      const original = descriptors[key]!;
+      // Skip if unchanged — avoid wasted defineProperty calls.
+      if (
+        current &&
+        current.value === original.value &&
+        current.get === original.get &&
+        current.set === original.set &&
+        current.writable === original.writable &&
+        current.enumerable === original.enumerable &&
+        current.configurable === original.configurable
+      ) {
+        continue;
+      }
+      try {
+        Object.defineProperty(proto, key, original);
+      } catch {
+        // best-effort — if the property is locked or original was a non-
+        // configurable accessor we may not be able to revert.
+      }
+    }
+  }
+};
+
+const softResetEnv = (
+  envName: string,
+  protoSnapshot?: Array<{
+    proto: any;
+    descriptors: Record<string, PropertyDescriptor>;
+  }>,
+): void => {
   if (envName !== 'jsdom' && envName !== 'happy-dom') return;
   const g = global as unknown as {
-    document?: { body?: { innerHTML: string }; head?: { innerHTML: string } };
-    window?: { history?: { replaceState?: Function }; scrollTo?: Function };
+    document?: {
+      body?: { innerHTML: string };
+      head?: { innerHTML: string };
+      cookie?: string;
+    };
+    window?: {
+      history?: { replaceState?: Function };
+      scrollTo?: Function;
+      localStorage?: { clear?: () => void };
+      sessionStorage?: { clear?: () => void };
+      _resetActiveElement?: () => void;
+    };
     location?: { href?: string };
   };
   try {
@@ -87,9 +187,30 @@ const softResetEnv = (envName: string): void => {
     if (g.document?.head) g.document.head.innerHTML = '';
     g.window?.history?.replaceState?.(null, '', '/');
     g.window?.scrollTo?.(0, 0);
+    g.window?.localStorage?.clear?.();
+    g.window?.sessionStorage?.clear?.();
+    // Also clear via globalThis in case test code references the global
+    // shortcut rather than `window.localStorage`.
+    (globalThis as any).localStorage?.clear?.();
+    (globalThis as any).sessionStorage?.clear?.();
+    // Clear all cookies for the current document. Setting `cookie` to an
+    // expired version of each existing pair drops it. This is best-effort;
+    // jsdom respects max-age=0 / past expires dates.
+    if (g.document && typeof g.document.cookie === 'string') {
+      const cookies = g.document.cookie.split(';');
+      for (const c of cookies) {
+        const eqIx = c.indexOf('=');
+        const name = (eqIx > -1 ? c.slice(0, eqIx) : c).trim();
+        if (name)
+          g.document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      }
+    }
   } catch {
     // best-effort — env may be in a weird state, the next preparePool
     // call will surface a real error if it's actually broken.
+  }
+  if (protoSnapshot) {
+    restoreProtoSnapshot(protoSnapshot);
   }
 };
 
@@ -293,8 +414,9 @@ const preparePool = async (
 
   if (canReuseEnv) {
     // Worker is being reused for another file; soft-reset the env in place
-    // instead of paying the full setup cost again.
-    softResetEnv(cachedEnv!.name);
+    // (clear DOM + restore mutated DOM prototype descriptors) instead of
+    // paying the full setup cost again.
+    softResetEnv(cachedEnv!.name, cachedEnv!.protoSnapshot);
   } else {
     // Tear down any prior env of the wrong type before installing a fresh one.
     if (cachedEnv) {
@@ -314,7 +436,11 @@ const preparePool = async (
           global,
           testEnvironment.options || {},
         );
-        cachedEnv = { name: 'jsdom', teardown };
+        cachedEnv = {
+          name: 'jsdom',
+          teardown,
+          protoSnapshot: captureProtoSnapshot(global as any),
+        };
         break;
       }
       case 'happy-dom': {
@@ -323,7 +449,11 @@ const preparePool = async (
           global,
           testEnvironment.options || {},
         );
-        cachedEnv = { name: 'happy-dom', teardown };
+        cachedEnv = {
+          name: 'happy-dom',
+          teardown,
+          protoSnapshot: captureProtoSnapshot(global as any),
+        };
         break;
       }
       default:
