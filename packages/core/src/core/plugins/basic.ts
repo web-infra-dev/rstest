@@ -50,15 +50,21 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         multipleProjects: context.projects.length > 1,
       });
 
+      // Mirrors the pattern in packages/browser/src/hostController.ts:
+      // only write `performance.buildCache` when the user has opted in.
+      // Writing `performance.buildCache: false` explicitly causes Rsbuild
+      // to set Rspack's `cache: false`, which disables Rspack's default
+      // in-memory module cache and makes every build start cold from disk
+      // (~4x slowdown on non-trivial test builds).
+      const buildCache = resolveProjectBuildCache({
+        context,
+        project,
+      });
+
       return mergeEnvironmentConfig(
         config,
         {
-          performance: {
-            buildCache: resolveProjectBuildCache({
-              context,
-              project,
-            }),
-          },
+          performance: buildCache ? { buildCache } : undefined,
           tools,
           resolve,
           source,
