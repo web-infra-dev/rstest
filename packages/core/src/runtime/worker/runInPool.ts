@@ -18,6 +18,7 @@ import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
+import { loadTestEnvironment } from './testEnvironment';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
@@ -244,30 +245,15 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
-  switch (testEnvironment.name) {
-    case 'node':
-      break;
-    case 'jsdom': {
-      const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(() => teardown(global));
-      break;
-    }
-    case 'happy-dom': {
-      const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(async () => teardown(global));
-      break;
-    }
-    default:
-      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
-  }
+  const environment = await loadTestEnvironment(testEnvironment.name, [
+    context.projectRoot,
+    context.rootPath,
+  ]);
+  const { teardown } = await environment.setup(
+    global,
+    testEnvironment.options || {},
+  );
+  cleanupFns.push(async () => teardown());
   tracker?.transition('prepare');
 
   if (globals) {
