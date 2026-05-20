@@ -6,6 +6,7 @@ export default defineConfig({
     provider: 'v8',
     reporters: ['text'],
     clean: false,
+    include: ['src/**/*.ts', '../external-module/**/*.ts'],
     allowExternal: false,
   },
 });

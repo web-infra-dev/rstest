@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
+import { isAbsolute, relative } from 'node:path/posix';
 import { fileURLToPath } from 'node:url';
 import type {
   CoverageOptions,
@@ -60,7 +61,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   private toProjectRelativePath(filePath: string): string {
     const normalizedFilePath = this.normalizeForMatching(filePath);
 
-    if (!this.root) {
+    if (!this.root || !isAbsolute(normalizedFilePath)) {
       return normalizedFilePath;
     }
 
@@ -68,11 +69,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       return '';
     }
 
-    if (normalizedFilePath.startsWith(`${this.root}/`)) {
-      return normalizedFilePath.slice(this.root.length + 1);
-    }
-
-    return normalizedFilePath;
+    return relative(this.root, normalizedFilePath);
   }
 
   private findInDict(
@@ -244,6 +241,12 @@ export class CoverageProvider implements RstestCoverageProvider {
         !this.isIncluded(originalTestPath)
       ) {
         delete istanbulData[key];
+        continue;
+      }
+
+      const fileCoverage = istanbulData[key];
+      if (fileCoverage) {
+        fileCoverage.path = originalTestPath;
       }
     }
   }

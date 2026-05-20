@@ -658,30 +658,6 @@ export const runRest = async ({
   }
 };
 
-const normalizeCoverageArgv = (argv: string[]): string[] => {
-  const normalized: string[] = [];
-
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index];
-
-    if (!arg) continue;
-
-    if (arg === '--coverage') {
-      normalized.push('--coverage.enabled');
-      continue;
-    }
-
-    if (arg === '--no-coverage') {
-      normalized.push('--coverage.enabled=false');
-      continue;
-    }
-
-    normalized.push(arg);
-  }
-
-  return normalized;
-};
-
 export function createCli(): CAC {
   const cli = cac('rstest');
 
@@ -896,7 +872,5 @@ export function createCli(): CAC {
 
 export function setupCommands(): void {
   const cli = createCli();
-  const normalizedArgv = normalizeCoverageArgv(process.argv);
-
-  cli.parse(normalizedArgv);
+  cli.parse(process.argv);
 }

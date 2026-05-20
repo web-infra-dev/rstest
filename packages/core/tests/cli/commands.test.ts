@@ -80,6 +80,15 @@ describe('CLI help output', () => {
       changed: 'HEAD',
     });
   });
+
+  it('keeps --coverage intact for merge-reports command', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'merge-reports', '--coverage'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toBe(true);
+  });
 });
 
 describe('normalizeCliFilters', () => {
