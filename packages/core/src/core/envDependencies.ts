@@ -8,7 +8,9 @@ import {
 import type { BuiltinEnvironmentName } from '../types';
 import { color } from '../utils';
 
-const EnvironmentDependencyMap: Partial<Record<BuiltinEnvironmentName, string>> = {
+const EnvironmentDependencyMap: Partial<
+  Record<BuiltinEnvironmentName, string>
+> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };

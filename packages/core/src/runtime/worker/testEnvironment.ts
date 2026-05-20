@@ -1,21 +1,21 @@
-import { createRequire } from 'node:module';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironment } from '../../types';
 import { builtinEnvironments } from '../environments';
 
-const createRootRequire = (root: string) => {
-  return createRequire(pathToFileURL(join(root, 'package.json')).href);
-};
+// `import.meta.resolve()` needs a parent module URL. We synthesize one under
+// each root so package resolution follows that root's node_modules without
+// requiring a real file to exist on disk.
+const environmentResolveBaseName = '__rstest_environment_resolve__.mjs';
 
 const isTestEnvironment = (value: unknown): value is TestEnvironment => {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      'name' in value &&
-      typeof value.name === 'string' &&
-      'setup' in value &&
-      typeof value.setup === 'function',
+    typeof value === 'object' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'setup' in value &&
+    typeof value.setup === 'function',
   );
 };
 
@@ -62,11 +62,15 @@ const resolveEnvironmentPath = (name: string, roots: string[]) => {
       : [name, `rstest-environment-${name}`];
 
   for (const root of roots) {
-    const rootRequire = createRootRequire(root);
+    const resolveBase = pathToFileURL(
+      join(root, environmentResolveBaseName),
+    ).href;
 
     for (const candidate of candidates) {
       try {
-        return rootRequire.resolve(candidate);
+        return isAbsolute(candidate)
+          ? pathToFileURL(candidate).href
+          : import.meta.resolve(candidate, resolveBase);
       } catch {
         continue;
       }
@@ -92,7 +96,7 @@ export const loadTestEnvironment = async (
     );
   }
 
-  const environmentModule = await import(pathToFileURL(resolvedPath).href);
+  const environmentModule = await import(resolvedPath);
   const environment = resolveEnvironmentExport(environmentModule);
 
   if (!environment) {

@@ -99,15 +99,16 @@ export default defineConfig({
 Rstest 也支持通过 `testEnvironment.name` 加载自定义 environment。
 
 - 可以传包名。
-- 可以传相对或绝对 JavaScript 文件路径。
+- 可以传相对或绝对 JavaScript 文件路径，例如 `.js` 或 `.mjs`。
 - 对于包名，`testEnvironment: 'foo'` 也会继续尝试解析 `rstest-environment-foo`。
 
 自定义 environment 需要默认导出一个 environment 对象，或导出一个具名 `environment` 对象。
 
-```ts title="my-environment.mjs"
-import { builtinEnvironments, type TestEnvironment } from '@rstest/core';
+```js title="my-environment.mjs"
+import { builtinEnvironments } from '@rstest/core';
 
-const environment: TestEnvironment<typeof globalThis, { marker: string }> = {
+/** @type {import('@rstest/core').TestEnvironment<typeof globalThis, { marker: string }>} */
+const environment = {
   name: 'custom-jsdom',
   async setup(global, options) {
     const base = await builtinEnvironments.jsdom.setup(global, {
@@ -142,6 +143,8 @@ export default defineConfig({
 ```
 
 `@rstest/core` 导出了 `builtinEnvironments`，这样你可以基于 `node`、`jsdom` 或 `happy-dom` 做扩展，而不是从零实现。
+
+Rstest 当前会按 JavaScript module 加载自定义 environment 文件，因此暂不支持直接传 `.ts` custom environment 文件路径。如果你需要类型检查，可以先用 TypeScript 编写，再编译成 `.mjs` 或 `.js`，或者在 JavaScript 文件里使用 JSDoc 标注类型。
 
 Rstest 暂不支持文件级 `@vitest-environment` 或 `@jest-environment` 注释。如果你需要按文件切换环境，当前建议用不同的 project 或不同的配置文件来拆分。
 

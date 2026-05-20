@@ -99,15 +99,16 @@ The `options` object is passed directly to the environment's constructor.
 Rstest also supports custom environments through `testEnvironment.name`.
 
 - Use a package name.
-- Use a relative or absolute JavaScript file path.
+- Use a relative or absolute JavaScript file path such as `.js` or `.mjs`.
 - For package names, `testEnvironment: 'foo'` also tries to resolve `rstest-environment-foo`.
 
 Custom environments should export an environment object as the default export or as a named `environment` export.
 
-```ts title="my-environment.mjs"
-import { builtinEnvironments, type TestEnvironment } from '@rstest/core';
+```js title="my-environment.mjs"
+import { builtinEnvironments } from '@rstest/core';
 
-const environment: TestEnvironment<typeof globalThis, { marker: string }> = {
+/** @type {import('@rstest/core').TestEnvironment<typeof globalThis, { marker: string }>} */
+const environment = {
   name: 'custom-jsdom',
   async setup(global, options) {
     const base = await builtinEnvironments.jsdom.setup(global, {
@@ -142,6 +143,8 @@ export default defineConfig({
 ```
 
 `@rstest/core` exports `builtinEnvironments` so you can extend `node`, `jsdom`, or `happy-dom` instead of rebuilding them from scratch.
+
+Rstest currently loads custom environment files as JavaScript modules. Direct `.ts` custom environment file paths are not supported yet. If you want type checking, write the environment in TypeScript and compile it to `.mjs` or `.js`, or use JSDoc types in a JavaScript file.
 
 Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
 
