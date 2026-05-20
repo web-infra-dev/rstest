@@ -755,8 +755,12 @@ export async function runTests(context: Rstest): Promise<void> {
         : undefined;
 
       const runReport = buildRunReport({
-        results: context.reporterResults.results,
-        testResults: context.reporterResults.testResults,
+        // `context.reporterResults` dedupes by `testPath`, so in multi-project
+        // runs the same test file in a second project would overwrite the
+        // first project's status. Use the local per-run arrays so the run
+        // outcome reflects every project's result.
+        results,
+        testResults,
         unhandledErrors: errors,
         snapshotSummary: context.snapshotManager.summary,
         duration,

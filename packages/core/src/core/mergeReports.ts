@@ -161,9 +161,19 @@ export async function mergeReports(
 
     if (blob.unhandledErrors) {
       for (const e of blob.unhandledErrors) {
-        const error = new Error(e.message);
-        error.name = e.name || 'Error';
-        error.stack = e.stack;
+        // Preserve the extra `FormattedError` fields (diff/expected/actual/
+        // fullStack) that `BlobReporter` serializes, otherwise the merged run
+        // loses assertion-failure detail. Wrapped in `new Error` because the
+        // public `Reporter.onTestRunEnd` contract types `unhandledErrors` as
+        // `Error[]`.
+        const error = Object.assign(new Error(e.message), {
+          name: e.name || 'Error',
+          stack: e.stack,
+          diff: e.diff,
+          expected: e.expected,
+          actual: e.actual,
+          fullStack: e.fullStack,
+        });
         allUnhandledErrors.push(error);
       }
     }
