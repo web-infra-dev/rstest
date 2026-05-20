@@ -27,8 +27,9 @@ if (typeof Element !== 'undefined') {
 
 // Vendor-style monkey-patch on HTMLElement.prototype.focus — mirrors what
 // `@testing-library/user-event`'s `patchFocus` does (replaces the value
-// descriptor with a getter-only one). Without soft mode's prototype
-// snapshot+restore, file N+1's plain `prototype.focus = fn` would throw.
+// descriptor with a getter-only one via `Object.defineProperty`). Without
+// soft mode's prototype snapshot+restore, file N+1's vendor code that
+// re-assigns via `prototype.focus = fn` would throw "has only a getter".
 //
 // Before re-patching, capture the current descriptor's *shape* so tests
 // can assert that soft mode reset it back to the original `value+writable`

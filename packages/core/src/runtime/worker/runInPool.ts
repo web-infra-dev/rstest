@@ -176,11 +176,13 @@ const descriptorEquals = (
 
 const restoreProtoSnapshot = (snapshot: ProtoEntry[]): void => {
   for (const { proto, descriptors } of snapshot) {
-    const keys: PropertyKey[] = [
+    const snapshotKeys: PropertyKey[] = [
       ...Object.getOwnPropertyNames(descriptors),
       ...Object.getOwnPropertySymbols(descriptors),
     ];
-    for (const key of keys) {
+
+    // Step 1: restore mutated descriptors to their original shape.
+    for (const key of snapshotKeys) {
       const original = (descriptors as any)[key] as PropertyDescriptor;
       const current = Object.getOwnPropertyDescriptor(proto, key);
       if (current && descriptorEquals(current, original)) continue;
@@ -190,6 +192,27 @@ const restoreProtoSnapshot = (snapshot: ProtoEntry[]): void => {
         // Property is non-configurable (some Web IDL bindings) and was
         // mutated in-place — we can't undo. Falls through; the caller
         // accepts that some leaks may persist.
+      }
+    }
+
+    // Step 2: drop own-keys that didn't exist at snapshot time. A prior
+    // file could have added a brand-new method to the prototype (e.g.
+    // `HTMLElement.prototype.myCustomHelper = fn`); without symmetric
+    // removal it would persist into the next file. Symbols are included
+    // — vendor packages occasionally stash markers behind Symbols (e.g.
+    // user-event's `Symbol('patched...')` marker) that we want to clear.
+    const snapshotKeySet = new Set<PropertyKey>(snapshotKeys);
+    const currentKeys: PropertyKey[] = [
+      ...Object.getOwnPropertyNames(proto),
+      ...Object.getOwnPropertySymbols(proto),
+    ];
+    for (const key of currentKeys) {
+      if (SKIP_PROTO_KEYS.has(key)) continue;
+      if (snapshotKeySet.has(key)) continue;
+      try {
+        delete (proto as any)[key];
+      } catch {
+        // Same reason as above — non-configurable. Best-effort.
       }
     }
   }
@@ -523,13 +546,18 @@ const preparePool = async (
   const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
   const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
 
-  process.on('uncaughtException', uncaughtException);
-  process.on('unhandledRejection', unhandledRejection);
-
+  // Register the cleanup BEFORE the listener install. Without this order
+  // an early throw between `process.on(...)` and the matching
+  // `globalCleanups.push(...)` would leak the listener — across many such
+  // throws in soft mode the worker accumulates duplicate handlers and any
+  // `unhandledRejection` fires N times, attributing the same error to N
+  // earlier file slots.
   globalCleanups.push(() => {
     process.off('uncaughtException', uncaughtException);
     process.off('unhandledRejection', unhandledRejection);
   });
+  process.on('uncaughtException', uncaughtException);
+  process.on('unhandledRejection', unhandledRejection);
 
   const { api, runner } = await createRstestRuntime(workerState, {
     taskContext,

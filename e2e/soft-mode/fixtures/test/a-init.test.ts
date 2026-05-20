@@ -37,8 +37,9 @@ describe('soft mode — file A (state setter)', () => {
     rstest.setSystemTime(new Date('2020-01-01T00:00:00Z'));
     expect(new Date().toISOString()).toBe('2020-01-01T00:00:00.000Z');
     // Deliberately DO NOT call useRealTimers() — soft mode must restore
-    // real timers between files, otherwise file-b's useFakeTimers() throws
-    // "Can't install fake timers twice on the same global object".
+    // real timers between files, otherwise a downstream file's
+    // useFakeTimers() throws "Can't install fake timers twice on the
+    // same global object".
   });
 
   it('exercises HTMLElement.prototype.focus patch', () => {
