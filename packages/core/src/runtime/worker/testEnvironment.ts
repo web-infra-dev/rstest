@@ -84,7 +84,7 @@ export const loadTestEnvironment = async (
   name: string,
   roots: string[],
 ): Promise<TestEnvironment> => {
-  if (name in builtinEnvironments) {
+  if (Object.hasOwn(builtinEnvironments, name)) {
     return builtinEnvironments[name as keyof typeof builtinEnvironments];
   }
 

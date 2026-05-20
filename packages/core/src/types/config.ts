@@ -240,9 +240,19 @@ export type BuiltinEnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 
 export type EnvironmentName = BuiltinEnvironmentName | TestEnvironment['name'];
 
+export type TestEnvironmentTransformMode = 'node' | 'browser';
+
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
   options?: Record<string, any>;
+  /**
+   * Controls whether rstest should keep Node.js resolution defaults or resolve
+   * browser entrypoints for browser-like environments.
+   *
+   * Built-in environments infer this automatically. Custom environments default
+   * to `node` unless explicitly set.
+   */
+  transformMode?: TestEnvironmentTransformMode;
 };
 
 export interface RstestConfig {

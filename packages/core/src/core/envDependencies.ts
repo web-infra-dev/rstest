@@ -81,8 +81,9 @@ export const ensureTestEnvironmentDependencies = async (
 
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
-    const packageName =
-      EnvironmentDependencyMap[environmentName as BuiltinEnvironmentName];
+    const packageName = Object.hasOwn(EnvironmentDependencyMap, environmentName)
+      ? EnvironmentDependencyMap[environmentName as BuiltinEnvironmentName]
+      : undefined;
 
     if (!packageName) {
       continue;
