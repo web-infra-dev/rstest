@@ -331,21 +331,54 @@ export interface RstestConfig {
    * - `true` (default): each test file runs in a fresh worker process. Strongest
    *   isolation but pays the cost of process fork + bundle load + env setup
    *   on every file.
-   * - `'soft'`: workers persist across files. Each file still gets a fresh
-   *   test environment (`new JSDOM()`, fresh setupFiles, fresh test module
-   *   cache), but the worker process — and Node's module cache for vendor
-   *   deps like `jsdom` — stays warm. This skips the ~300-1000 ms cold load
-   *   of `jsdom` and its transitives on every file.
-   *
-   *   Trade-off: works for tests whose setup is idempotent. Doesn't work for
-   *   suites that rely on `rstest.mock(...)` module factories needing to be
-   *   re-applied per file — those still need `isolate: true`.
    * - `false`: workers persist with no per-file env reset. Fastest but
    *   leaks every kind of state between files.
    *
+   * For an in-between option that reuses workers but resets per-file env
+   * state (DOM, timers, spies, storage, prototype mutations), opt into
+   * the experimental `experiments.softMode` flag instead — most tests are
+   * idempotent enough to benefit without the per-file fork cost.
+   *
    * @default true
    */
-  isolate?: boolean | 'soft';
+  isolate?: boolean;
+  /**
+   * Experimental features. Shape may change before stabilising; opt in
+   * deliberately and pin your `@rstest/core` version if you depend on
+   * the exact semantics.
+   */
+  experiments?: {
+    /**
+     * Reuse worker processes across test files while still resetting
+     * per-file env state between them.
+     *
+     * What's reset between files:
+     * - DOM contents (`document.body/head` innerHTML, URL, scroll)
+     * - Web storage (`localStorage`, `sessionStorage`, document cookies)
+     * - DOM prototype descriptors mutated by vendor packages (e.g.
+     *   `HTMLElement.prototype.focus` patched by
+     *   `@testing-library/user-event`)
+     * - Sinon fake timers (`useRealTimers()` on the prior file's api)
+     * - Tinyspy spies via the worker-scope `restoreAll()`
+     *
+     * What survives across files (this is the speedup):
+     * - The worker process itself (no fork cost)
+     * - Node's module cache for vendor deps (no `import('jsdom')` cold load)
+     * - JSDOM window instance (no `new JSDOM()` per file)
+     *
+     * Trade-offs vs `isolate: true`:
+     * - Tests that depend on per-file `rstest.mock(...)` module factory
+     *   re-application may need to stay on `isolate: true`. The module
+     *   mock registry is per-bundle (one bundle per file in rstest), but
+     *   tests that interact with module-level singletons inside vendors
+     *   (final-form's `keysCache`, msw's interceptor state) can leak.
+     * - Has precedence over `isolate`: if both are set, soft semantics win.
+     *
+     * @default false
+     * @experimental
+     */
+    softMode?: boolean;
+  };
   /**
    * Provide global APIs
    *
@@ -586,7 +619,8 @@ type OptionalKeys =
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
   | 'extends'
-  | 'shard';
+  | 'shard'
+  | 'experiments';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
@@ -612,6 +646,7 @@ export type NormalizedConfig = Required<
     | 'testEnvironment'
     | 'browser'
     | 'output'
+    | 'isolate'
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
@@ -626,6 +661,13 @@ export type NormalizedConfig = Required<
       override?: boolean;
     };
     output: NormalizedOutputConfig;
+    /**
+     * Internal three-way isolation mode. The public `RstestConfig.isolate`
+     * is `boolean`; `'soft'` is set internally when
+     * `experiments.softMode === true`. Pool/worker code switches on this
+     * to encode strict / reuse / reuse-with-reset behavior.
+     */
+    isolate: boolean | 'soft';
   };
 
 export type NormalizedProjectConfig = Required<

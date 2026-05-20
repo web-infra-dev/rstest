@@ -284,12 +284,27 @@ const createDefaultConfig = (): NormalizedConfig => ({
 
 export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   const merged = mergeRstestConfig(
-    createDefaultConfig(),
+    // `createDefaultConfig()` returns `NormalizedConfig`, whose internal
+    // `isolate` is wider (`boolean | 'soft'`) than the public
+    // `RstestConfig.isolate`. The cast narrows it for the merge step;
+    // the `as NormalizedConfig` below re-widens to internal.
+    createDefaultConfig() as unknown as RstestConfig,
     config,
   ) as NormalizedConfig;
 
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);
+
+  // Normalize `experiments.softMode` to the internal `isolate: 'soft'`
+  // representation. The internal `IsolateMode` (`pool/types.ts`) keeps the
+  // three-way distinction (`true | false | 'soft'`) so the pool and worker
+  // can encode strict / reuse / reuse-with-reset without adding a fourth
+  // axis. The public surface stays `boolean | undefined` for `isolate` and
+  // gates soft on the experiments flag so the contract is clear: this
+  // mode is experimental and may change shape before stabilising.
+  if (merged.experiments?.softMode === true) {
+    (merged as unknown as { isolate: 'soft' }).isolate = 'soft';
+  }
 
   const outputDistPathRoot = getOutputDistPathRoot(merged.output?.distPath);
   merged.output.distPath = {

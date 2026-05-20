@@ -79,93 +79,146 @@ let cachedEnv:
   | {
       name: string;
       teardown: (global: any) => MaybePromise<void>;
-      protoSnapshot: Array<{
-        proto: any;
-        descriptors: Record<string, PropertyDescriptor>;
-      }>;
+      protoSnapshot: ProtoEntry[];
     }
   | undefined;
 
-/**
- * Set of property names whose descriptors we capture for restore. Limited
- * to the keys vendor packages are known to mutate (user-event patches
- * focus/blur; react-aria patches focus; testing libraries occasionally
- * patch click, scrollIntoView, getBoundingClientRect). Snapshotting every
- * property would be both slow and surprising — most properties don't need
- * restoration.
- */
-const TRACKED_PROTO_KEYS = [
-  'focus',
-  'blur',
-  'click',
-  'scrollIntoView',
-  'getBoundingClientRect',
-] as const;
+// In soft mode the per-file `cleanupFns` does NOT include the env teardown
+// (the env persists across files). Without this hook, a worker that exits
+// cleanly (no fatal error, pool drained) leaks the JSDOM window — virtual
+// console handlers, scheduled timers, the cookie jar, the global Proxy.
+// On `beforeExit` we still have a chance to flush; on `exit` (synchronous)
+// we just attempt the call and ignore.
+//
+// `process.exit` short-circuits `beforeExit`, but rstest's pool sends
+// graceful shutdown messages and the worker returns from the message loop,
+// so beforeExit fires in the common case.
+const teardownCachedEnvOnExit = (): void => {
+  if (!cachedEnv) return;
+  try {
+    // Fire-and-forget; the event loop is already winding down so awaiting
+    // a promise here is best-effort. JSDOM's teardown is synchronous as of
+    // jsdom 26.x — this stays meaningful even without await.
+    void cachedEnv.teardown(global);
+  } catch {
+    // best-effort
+  } finally {
+    cachedEnv = undefined;
+  }
+};
+process.on('beforeExit', teardownCachedEnvOnExit);
+process.on('exit', teardownCachedEnvOnExit);
 
-const captureProtoSnapshot = (
-  win: any,
-): Array<{ proto: any; descriptors: Record<string, PropertyDescriptor> }> => {
-  const snapshot: Array<{
-    proto: any;
-    descriptors: Record<string, PropertyDescriptor>;
-  }> = [];
+/**
+ * Snapshot every own-property descriptor on the well-known DOM prototypes
+ * the worker exposes via globals. This is the "all-keys" form: we capture
+ * each descriptor at env-setup time and re-apply it between files when its
+ * shape has drifted (e.g. `@testing-library/user-event`'s `patchFocus`
+ * replaces `HTMLElement.prototype.focus` with a getter-only descriptor on
+ * the first `userEvent.click()`; without restore, file N+1's vendor code
+ * that re-assigns via `prototype.focus = fn` throws "has only a getter").
+ *
+ * Why "all keys" and not a curated allow-list: vendor monkey-patching
+ * targets are open-ended (focus, blur, addEventListener, dispatchEvent,
+ * scrollIntoView, getBoundingClientRect, animate, matches, closest, …).
+ * A curated list misses one and you get confusing failures only on
+ * specific libs. The cost is small — ~3 prototypes × ~50-100 own keys
+ * each, descriptor lookups are O(1).
+ *
+ * `constructor` is excluded: rewriting it can break `instanceof` checks
+ * in any code that has a stale constructor reference.
+ */
+type ProtoEntry = {
+  proto: object;
+  descriptors: Record<PropertyKey, PropertyDescriptor>;
+};
+
+const SKIP_PROTO_KEYS = new Set<PropertyKey>(['constructor']);
+
+const captureProtoDescriptors = (
+  proto: object,
+): Record<PropertyKey, PropertyDescriptor> => {
+  const descriptors: Record<PropertyKey, PropertyDescriptor> = {};
+  const keys: PropertyKey[] = [
+    ...Object.getOwnPropertyNames(proto),
+    ...Object.getOwnPropertySymbols(proto),
+  ];
+  for (const key of keys) {
+    if (SKIP_PROTO_KEYS.has(key)) continue;
+    const d = Object.getOwnPropertyDescriptor(proto, key);
+    if (d) descriptors[key as string] = d;
+  }
+  return descriptors;
+};
+
+const captureProtoSnapshot = (win: any): ProtoEntry[] => {
   const protos = [
     win.HTMLElement?.prototype,
     win.Element?.prototype,
     win.Node?.prototype,
-  ].filter(Boolean);
-  for (const proto of protos) {
-    const descriptors: Record<string, PropertyDescriptor> = {};
-    for (const key of TRACKED_PROTO_KEYS) {
-      const d = Object.getOwnPropertyDescriptor(proto, key);
-      if (d) descriptors[key] = d;
-    }
-    if (Object.keys(descriptors).length > 0) {
-      snapshot.push({ proto, descriptors });
-    }
-  }
-  return snapshot;
+  ].filter(Boolean) as object[];
+  return protos.map((proto) => ({
+    proto,
+    descriptors: captureProtoDescriptors(proto),
+  }));
 };
 
-const restoreProtoSnapshot = (
-  snapshot: Array<{
-    proto: any;
-    descriptors: Record<string, PropertyDescriptor>;
-  }>,
-): void => {
+const descriptorEquals = (
+  a: PropertyDescriptor,
+  b: PropertyDescriptor,
+): boolean =>
+  a.value === b.value &&
+  a.get === b.get &&
+  a.set === b.set &&
+  a.writable === b.writable &&
+  a.enumerable === b.enumerable &&
+  a.configurable === b.configurable;
+
+const restoreProtoSnapshot = (snapshot: ProtoEntry[]): void => {
   for (const { proto, descriptors } of snapshot) {
-    for (const key of Object.keys(descriptors)) {
+    const keys: PropertyKey[] = [
+      ...Object.getOwnPropertyNames(descriptors),
+      ...Object.getOwnPropertySymbols(descriptors),
+    ];
+    for (const key of keys) {
+      const original = (descriptors as any)[key] as PropertyDescriptor;
       const current = Object.getOwnPropertyDescriptor(proto, key);
-      const original = descriptors[key]!;
-      // Skip if unchanged — avoid wasted defineProperty calls.
-      if (
-        current &&
-        current.value === original.value &&
-        current.get === original.get &&
-        current.set === original.set &&
-        current.writable === original.writable &&
-        current.enumerable === original.enumerable &&
-        current.configurable === original.configurable
-      ) {
-        continue;
-      }
+      if (current && descriptorEquals(current, original)) continue;
       try {
         Object.defineProperty(proto, key, original);
       } catch {
-        // best-effort — if the property is locked or original was a non-
-        // configurable accessor we may not be able to revert.
+        // Property is non-configurable (some Web IDL bindings) and was
+        // mutated in-place — we can't undo. Falls through; the caller
+        // accepts that some leaks may persist.
       }
     }
   }
 };
 
-const softResetEnv = (
-  envName: string,
-  protoSnapshot?: Array<{
-    proto: any;
-    descriptors: Record<string, PropertyDescriptor>;
-  }>,
-): void => {
+/**
+ * Per-step reset wrapper. Each step is independent — if one throws the
+ * others should still run. We log to stderr in `DEBUG=rstest:soft-mode`
+ * so silent failures can surface without forcing every consumer to opt
+ * into noisy logs.
+ *
+ * Returning `void` keeps the call sites readable; the caller doesn't
+ * need to know which step failed, just that the env wound up as clean
+ * as best-effort can make it.
+ */
+const softResetStep = (label: string, fn: () => void): void => {
+  try {
+    fn();
+  } catch (e) {
+    if (process.env.DEBUG?.includes('rstest:soft-mode')) {
+      const msg = e instanceof Error ? e.message : String(e);
+      process.stderr.write(
+        `[rstest:soft-mode] reset step "${label}" failed: ${msg}\n`,
+      );
+    }
+  }
+};
+
+const softResetEnv = (envName: string, protoSnapshot?: ProtoEntry[]): void => {
   if (envName !== 'jsdom' && envName !== 'happy-dom') return;
   const g = global as unknown as {
     document?: {
@@ -178,39 +231,50 @@ const softResetEnv = (
       scrollTo?: Function;
       localStorage?: { clear?: () => void };
       sessionStorage?: { clear?: () => void };
-      _resetActiveElement?: () => void;
     };
-    location?: { href?: string };
   };
-  try {
+
+  softResetStep('body.innerHTML', () => {
     if (g.document?.body) g.document.body.innerHTML = '';
+  });
+  softResetStep('head.innerHTML', () => {
     if (g.document?.head) g.document.head.innerHTML = '';
+  });
+  softResetStep('history.replaceState', () => {
     g.window?.history?.replaceState?.(null, '', '/');
+  });
+  softResetStep('scrollTo', () => {
     g.window?.scrollTo?.(0, 0);
+  });
+  softResetStep('localStorage.clear', () => {
     g.window?.localStorage?.clear?.();
-    g.window?.sessionStorage?.clear?.();
     // Also clear via globalThis in case test code references the global
-    // shortcut rather than `window.localStorage`.
+    // shortcut rather than `window.localStorage` (some helpers do).
     (globalThis as any).localStorage?.clear?.();
+  });
+  softResetStep('sessionStorage.clear', () => {
+    g.window?.sessionStorage?.clear?.();
     (globalThis as any).sessionStorage?.clear?.();
-    // Clear all cookies for the current document. Setting `cookie` to an
-    // expired version of each existing pair drops it. This is best-effort;
-    // jsdom respects max-age=0 / past expires dates.
+  });
+  softResetStep('cookies', () => {
+    // Setting `cookie` to an expired version of each existing pair drops
+    // it. Note: cookies set with a non-root `path` won't be wiped by this
+    // — tests that set such cookies need to clear them in afterEach.
     if (g.document && typeof g.document.cookie === 'string') {
       const cookies = g.document.cookie.split(';');
       for (const c of cookies) {
         const eqIx = c.indexOf('=');
         const name = (eqIx > -1 ? c.slice(0, eqIx) : c).trim();
-        if (name)
+        if (name) {
           g.document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        }
       }
     }
-  } catch {
-    // best-effort — env may be in a weird state, the next preparePool
-    // call will surface a real error if it's actually broken.
-  }
+  });
   if (protoSnapshot) {
-    restoreProtoSnapshot(protoSnapshot);
+    softResetStep('protoSnapshot.restore', () => {
+      restoreProtoSnapshot(protoSnapshot);
+    });
   }
 };
 
