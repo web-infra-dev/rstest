@@ -79,19 +79,8 @@ const makeRunResult = (request, extra) => ({
   ...extra,
 });
 
-// Mirrors the real worker: track whether a task is in-flight and defer
-// stop until the task completes.
-let taskInFlight = false;
-let exitOnTaskIdle = false;
-
-// Mirrors the real worker — see worker/index.ts for rationale.
-const finalizeStop = () => {
-  send({ type: 'stopped' });
-};
-
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
-  taskInFlight = true;
 
   const finish = (extra) => {
     send({
@@ -99,12 +88,9 @@ const handleRun = (request) => {
       taskId: request.taskId,
       result: makeRunResult(request, extra),
     });
-    taskInFlight = false;
-    if (exitOnTaskIdle) finalizeStop();
   };
 
   if (mode === 'fatal') {
-    taskInFlight = false;
     send({
       type: 'fatal_error',
       error: {
@@ -189,18 +175,6 @@ const handleCollect = (request) => {
   });
 };
 
-let stopRequested = false;
-const requestGracefulStop = () => {
-  if (stopRequested) return;
-  stopRequested = true;
-  if (taskInFlight) {
-    // Defer until the in-flight task finishes, just like the real worker.
-    exitOnTaskIdle = true;
-    return;
-  }
-  finalizeStop();
-};
-
 onHostMessage((message) => {
   if (!message || message[REQ_TAG] !== true) return;
   const request = message.request;
@@ -215,9 +189,6 @@ onHostMessage((message) => {
       break;
     case 'collect':
       handleCollect(request);
-      break;
-    case 'stop':
-      requestGracefulStop();
       break;
   }
 });

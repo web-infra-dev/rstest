@@ -1,6 +1,6 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
-import { logger, toError } from '../utils';
+import { toError } from '../utils';
 import type { PoolWorker } from './poolWorker';
 import {
   type CollectTaskResult,
@@ -13,7 +13,6 @@ import {
 import type { PoolTask } from './types';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
-const WORKER_STOP_TIMEOUT_MS = 60_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
 
 function formatCapturedStderr(text: string): string {
@@ -89,7 +88,6 @@ export class PoolRunner {
     | undefined;
   private startDeferred: Deferred | undefined;
   private stopDeferred: Deferred | undefined;
-  private stoppedAckDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
   private lastFatalError: Error | undefined;
   /**
@@ -180,17 +178,12 @@ export class PoolRunner {
   }
 
   /**
-   * Stop the worker. The host owns termination via SIGTERM — relying on the
-   * worker's own `process.exit()` was the rstest#1275 hang. Idle workers
-   * skip the IPC handshake and SIGTERM directly; in-flight workers get
-   * WORKER_STOP_TIMEOUT_MS to ack `stopped`, with overrun surfaced as a
-   * `detectAsyncLeaks` hint.
-   *
-   * The idle path is intentionally silent. Native dependencies (rspack
-   * tokio runtime, etc.) keep worker event loops ref'd by design, so a
-   * "didn't exit naturally" warning here would fire on every healthy run.
-   * The in-flight warning is meaningful because a >60s task is a real
-   * anomaly worth surfacing.
+   * Stop the worker by SIGTERM (or SIGKILL if `force`). The host owns
+   * termination — there is no IPC `stop` handshake. Per-task teardown
+   * already runs inside `runInPool`'s own `finally` before the worker
+   * sends `runFinished`, so by the time `stop()` is called there is
+   * nothing process-level to drain. Relying on the worker's own
+   * `process.exit()` was the rstest#1275 hang.
    */
   stop(options?: { force?: boolean }): Promise<void> {
     return this.runOperation(async () => {
@@ -199,7 +192,6 @@ export class PoolRunner {
         case 'IDLE':
           return;
         case 'STOPPING': {
-          // Wait for the in-flight stop, then optionally force.
           if (this.stopDeferred) {
             await this.stopDeferred.promise;
           }
@@ -228,48 +220,8 @@ export class PoolRunner {
       this.state = 'STOPPING';
       this.stopDeferred = createDeferred();
 
-      if (options?.force) {
-        await this.worker.stop({ force: true });
-        await this.stopDeferred.promise;
-        return;
-      }
-
-      // Default to acked so the idle path (no in-flight task, no IPC) skips
-      // the warning. Only the in-flight branch can flip this to false.
-      let acked = true;
-
-      if (this.currentTask !== undefined) {
-        this.stoppedAckDeferred = createDeferred();
-        try {
-          this.worker.send({ type: 'stop' });
-        } catch {
-          // worker may already be down; fall through to SIGTERM
-        }
-
-        let ackTimer: NodeJS.Timeout | undefined;
-        acked = await Promise.race([
-          this.stoppedAckDeferred.promise.then(() => true),
-          new Promise<boolean>((resolve) => {
-            ackTimer = setTimeout(() => resolve(false), WORKER_STOP_TIMEOUT_MS);
-            ackTimer.unref();
-          }),
-        ]);
-        if (ackTimer) clearTimeout(ackTimer);
-      }
-
-      await this.worker.stop({ force: false });
+      await this.worker.stop({ force: options?.force ?? false });
       await this.stopDeferred.promise;
-
-      if (!acked) {
-        logger.warn(
-          `A worker process did not finish teardown within ${
-            WORKER_STOP_TIMEOUT_MS / 1000
-          }s of graceful stop and was force-killed. This usually means a ` +
-            'test left open handles — timers, sockets, file watchers, or ' +
-            'native module threads. Try setting `detectAsyncLeaks: true` ' +
-            'in your config to investigate.',
-        );
-      }
     });
   }
 
@@ -376,14 +328,6 @@ export class PoolRunner {
       case 'collectFinished':
         this.resolveTask('collect', response.taskId, response.result);
         return;
-      case 'stopped':
-        // Worker acknowledged graceful shutdown — teardown is drained.
-        // The host now sends SIGTERM via `worker.stop()` to terminate the
-        // process. The actual STOPPED state transition happens in
-        // `handleExit` when the child's `exit` event fires.
-        this.stoppedAckDeferred?.resolve();
-        this.stoppedAckDeferred = undefined;
-        return;
       case 'fatal_error': {
         const error = deserializeError(response.error);
         // Mark as crashed BEFORE rejecting. The host's dispatch unwinds via
@@ -429,13 +373,6 @@ export class PoolRunner {
     if (this.stopDeferred) {
       this.stopDeferred.resolve();
       this.stopDeferred = undefined;
-    }
-    // If the worker died before sending `stopped` (crash, host-driven
-    // SIGTERM after timeout), unblock any `Promise.race` waiting on the
-    // ack so `stop()` can proceed to its final SIGTERM/exit path.
-    if (this.stoppedAckDeferred) {
-      this.stoppedAckDeferred.resolve();
-      this.stoppedAckDeferred = undefined;
     }
 
     // Reject any in-flight task regardless of whether the exit was planned.

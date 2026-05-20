@@ -1,6 +1,5 @@
 # Custom Dictionary Words
 ACMRTUXB
-acked
 antd
 apng
 apos
