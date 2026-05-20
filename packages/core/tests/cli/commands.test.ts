@@ -80,6 +80,18 @@ describe('CLI help output', () => {
       changed: 'HEAD',
     });
   });
+
+  it('allows --pool shorthand to be mixed with nested pool options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool', 'forks', '--pool.maxWorkers', '1'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 1,
+    });
+  });
 });
 
 describe('normalizeCliFilters', () => {

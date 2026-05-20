@@ -70,6 +70,30 @@ describe.concurrent('test exit code', () => {
     await expectExecSuccess();
   });
 
+  it('should support --pool shorthand with nested pool options', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'success.test.ts',
+        '--pool',
+        'forks',
+        '--pool.maxWorkers',
+        '1',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {
