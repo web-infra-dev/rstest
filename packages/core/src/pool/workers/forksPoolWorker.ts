@@ -11,6 +11,12 @@ const BENIGN_IPC_ERROR_CODES = new Set([
 ]);
 
 /**
+ * SIGKILL escalation budget after SIGTERM. Defensive guard for native
+ * modules that mask SIGTERM.
+ */
+const SIGKILL_FALLBACK_MS = 500;
+
+/**
  * IPC errors that surface during shutdown but reflect the channel already
  * going away, not a genuine failure. Windows additionally surfaces
  * `write UNKNOWN` when `child.send` races teardown — see rstest#1142.
@@ -93,8 +99,7 @@ export class ForksPoolWorker extends BasePoolWorker {
       // Use `exit`, not `close`. `close` waits for all processes holding
       // the stdio pipes to release them — if a test spawns a subprocess
       // that inherits the worker's stdout/stderr, `close` blocks until
-      // that grandchild exits too, stalling slot reclaim and potentially
-      // hanging the pool until WORKER_STOP_TIMEOUT_MS force-kills.
+      // that grandchild exits too, stalling slot reclaim.
       child.on('exit', (code, signal) => {
         this.exited = true;
         this.emitter.emit('exit', code, signal);
@@ -113,10 +118,11 @@ export class ForksPoolWorker extends BasePoolWorker {
 
   async stop(options?: { force?: boolean }): Promise<void> {
     if (!this.hasLiveChild()) return;
-    await killAndWait(
-      this.childProcess!,
-      options?.force ? 'SIGKILL' : 'SIGTERM',
-    );
+    if (options?.force) {
+      await killAndWait(this.childProcess!, 'SIGKILL');
+      return;
+    }
+    await killAndWait(this.childProcess!, 'SIGTERM', SIGKILL_FALLBACK_MS);
   }
 
   sendRaw(envelope: Envelope): void {
