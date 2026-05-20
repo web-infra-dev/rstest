@@ -1,5 +1,6 @@
 import type {
   Duration,
+  FormattedError,
   RunReport,
   SnapshotSummary,
   TestFileResult,
@@ -10,7 +11,13 @@ import { collectFailures } from './utils';
 export type BuildRunReportInput = {
   results: TestFileResult[];
   testResults: TestResult[];
-  unhandledErrors?: Error[];
+  /**
+   * Run-level errors not attached to any test. `FormattedError` is a
+   * structural super-type of `Error`, so callers can pass either
+   * already-formatted assertion failures (with `diff`/`expected`/etc.)
+   * or plain `Error` instances from fast-fail paths.
+   */
+  unhandledErrors?: FormattedError[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
   /**
@@ -82,8 +89,12 @@ export function buildRunReport(input: BuildRunReportInput): RunReport {
     failures: collectFailures({ results, testResults }),
     unhandledErrors: unhandledErrors.map((e) => ({
       message: e.message,
-      stack: e.stack,
       name: e.name,
+      stack: e.stack,
+      diff: e.diff,
+      expected: e.expected,
+      actual: e.actual,
+      fullStack: e.fullStack,
     })),
   };
 }

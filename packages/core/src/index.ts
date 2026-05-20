@@ -103,6 +103,7 @@ export type {
   ExtendConfigFn,
   ProjectConfig,
   FailureItem,
+  FormattedError,
   Reporter,
   Rstest,
   RstestCommand,

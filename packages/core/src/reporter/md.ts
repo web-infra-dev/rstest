@@ -102,6 +102,7 @@ import {
   buildPackageManagerReproCommand,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
+  filterFailuresByPaths,
   formatFullTestName,
   getErrorType,
   pushFencedBlock,
@@ -887,14 +888,20 @@ export class MdReporter implements Reporter {
     testResults,
     getSourcemap,
     runReport,
+    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     getSourcemap: GetSourcemap;
     runReport: RunReport;
+    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
-    const { counts, duration, status, failures, snapshot } = runReport;
+    const { counts, duration, status, snapshot } = runReport;
+    const failures = filterFailuresByPaths(
+      runReport.failures,
+      filterRerunTestPaths,
+    );
 
     const packageManagerAgent = this.options.reproduction
       ? await detectPackageManagerAgent(rootPath)

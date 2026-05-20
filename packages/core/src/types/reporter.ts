@@ -3,6 +3,7 @@ import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
 import type {
+  FormattedError,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -43,7 +44,7 @@ export type RunReport = {
   duration: Duration;
   snapshot: SnapshotSummary;
   failures: FailureItem[];
-  unhandledErrors: { message: string; stack?: string; name?: string }[];
+  unhandledErrors: FormattedError[];
 };
 
 export type BuiltInReporterNames =
