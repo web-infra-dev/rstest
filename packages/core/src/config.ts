@@ -303,6 +303,19 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   // gates soft on the experiments flag so the contract is clear: this
   // mode is experimental and may change shape before stabilising.
   if (merged.experiments?.softMode === true) {
+    // Surface the conflict when a user has BOTH `isolate: false` (explicit
+    // reuse-without-reset) and `experiments.softMode: true` (reuse-WITH-
+    // reset). softMode wins because it's the strictly-stronger semantic,
+    // but silent override is surprising; one warning per config-load is
+    // cheap and self-documenting.
+    if (merged.isolate === false) {
+      logger.warn(
+        '[rstest] `experiments.softMode: true` overrides `isolate: false`. ' +
+          'Soft mode reuses workers AND resets per-file env state; ' +
+          '`isolate: false` is reuse without reset. Remove one to silence ' +
+          'this warning.',
+      );
+    }
     (merged as unknown as { isolate: 'soft' }).isolate = 'soft';
   }
 
