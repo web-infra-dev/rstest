@@ -9,6 +9,8 @@ import * as rsbuild from '@rsbuild/core';
 
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
+// Run-level summary builder for browser-mode reporter dispatch
+export { buildRunReport } from './reporter/runReport';
 // Coverage support for browser mode
 export { createCoverageProvider, loadCoverageProvider } from './coverage';
 // Runtime API

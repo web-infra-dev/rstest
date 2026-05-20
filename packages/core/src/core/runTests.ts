@@ -760,8 +760,8 @@ export async function runTests(context: Rstest): Promise<void> {
         unhandledErrors: errors,
         snapshotSummary: context.snapshotManager.summary,
         duration,
-        passWithNoTests: context.normalizedConfig.passWithNoTests,
-        filterRerunTestPaths,
+        passWithNoTests:
+          isWatchMode || context.normalizedConfig.passWithNoTests,
       });
 
       const browserHasFailure =

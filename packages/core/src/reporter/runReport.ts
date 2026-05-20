@@ -13,8 +13,13 @@ export type BuildRunReportInput = {
   unhandledErrors?: Error[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
+  /**
+   * When `true`, a run that discovered no tests is treated as `pass`.
+   * Watch mode never sets a failing exit code for empty reruns (see
+   * core `reportNoTestFiles`), so watch callers should pass `true`
+   * regardless of the user's `passWithNoTests` config.
+   */
   passWithNoTests: boolean;
-  filterRerunTestPaths?: string[];
 };
 
 /**
@@ -33,7 +38,6 @@ export function buildRunReport(input: BuildRunReportInput): RunReport {
     snapshotSummary,
     duration,
     passWithNoTests,
-    filterRerunTestPaths,
   } = input;
 
   let failedTests = 0;
@@ -75,7 +79,7 @@ export function buildRunReport(input: BuildRunReportInput): RunReport {
     },
     duration,
     snapshot: snapshotSummary,
-    failures: collectFailures({ results, testResults, filterRerunTestPaths }),
+    failures: collectFailures({ results, testResults }),
     unhandledErrors: unhandledErrors.map((e) => ({
       message: e.message,
       stack: e.stack,

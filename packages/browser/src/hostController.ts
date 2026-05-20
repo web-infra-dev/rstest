@@ -8,6 +8,7 @@ import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
+  buildRunReport,
   type CoverageMapData,
   color,
   createCoverageProvider,
@@ -1794,6 +1795,14 @@ export const runBrowserController = async (
     };
 
     if (!skipOnTestRunEnd) {
+      const runReport = buildRunReport({
+        results: [],
+        testResults: [],
+        unhandledErrors: errorResult.unhandledErrors,
+        snapshotSummary: context.snapshotManager.summary,
+        duration: errorResult.duration,
+        passWithNoTests: true,
+      });
       for (const reporter of context.reporters) {
         await (reporter as Reporter).onTestRunEnd?.({
           results: [],
@@ -1802,6 +1811,7 @@ export const runBrowserController = async (
           snapshotSummary: context.snapshotManager.summary,
           getSourcemap: getBrowserSourcemap,
           unhandledErrors: errorResult.unhandledErrors,
+          runReport,
         });
       }
     }
@@ -1892,6 +1902,15 @@ export const runBrowserController = async (
       }
     }
 
+    const runReport = buildRunReport({
+      results: context.reporterResults.results,
+      testResults: context.reporterResults.testResults,
+      unhandledErrors,
+      snapshotSummary: context.snapshotManager.summary,
+      duration,
+      passWithNoTests: isWatchMode || context.normalizedConfig.passWithNoTests,
+    });
+
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
@@ -1902,6 +1921,7 @@ export const runBrowserController = async (
         getSourcemap: getBrowserSourcemap,
         unhandledErrors,
         filterRerunTestPaths,
+        runReport,
       });
     }
   };

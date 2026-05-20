@@ -23,6 +23,7 @@ import type {
   TestFileResult,
   TestResult,
 } from '../types';
+import { filterFailuresByPaths } from './utils';
 import {
   bgColor,
   color,
@@ -193,13 +194,16 @@ export const printSummaryErrorLogs = async ({
   unhandledErrors,
   rootPath,
   getSourcemap,
+  filterRerunTestPaths,
 }: {
   failures: FailureItem[];
   unhandledErrors: RunReport['unhandledErrors'];
   rootPath: string;
   getSourcemap: GetSourcemap;
+  filterRerunTestPaths?: string[];
 }): Promise<void> => {
-  if (failures.length === 0 && unhandledErrors.length === 0) {
+  const filtered = filterFailuresByPaths(failures, filterRerunTestPaths);
+  if (filtered.length === 0 && unhandledErrors.length === 0) {
     return;
   }
 
@@ -213,7 +217,7 @@ export const printSummaryErrorLogs = async ({
     await printError(error, getSourcemap, rootPath);
   }
 
-  for (const { test, errors } of failures) {
+  for (const { test, errors } of filtered) {
     const relativePath = path.relative(rootPath, test.testPath);
     const nameStr = getTaskNameWithPrefix(test);
 

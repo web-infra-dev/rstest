@@ -108,23 +108,14 @@ export const getErrorType = (
 export const collectFailures = ({
   results,
   testResults,
-  filterRerunTestPaths,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
-  filterRerunTestPaths?: string[];
 }): FailureItem[] => {
-  const shouldIncludePath = (testPath: string) =>
-    filterRerunTestPaths ? filterRerunTestPaths.includes(testPath) : true;
-
   const failures: FailureItem[] = [];
 
   for (const result of results) {
-    if (
-      result.status === 'fail' &&
-      result.errors?.length &&
-      shouldIncludePath(result.testPath)
-    ) {
+    if (result.status === 'fail' && result.errors?.length) {
       failures.push({
         test: result,
         errors: result.errors,
@@ -133,7 +124,7 @@ export const collectFailures = ({
   }
 
   for (const result of testResults) {
-    if (result.status === 'fail' && shouldIncludePath(result.testPath)) {
+    if (result.status === 'fail') {
       failures.push({
         test: result,
         errors: result.errors || [],
@@ -142,6 +133,15 @@ export const collectFailures = ({
   }
 
   return failures;
+};
+
+export const filterFailuresByPaths = (
+  failures: FailureItem[],
+  filterRerunTestPaths: string[] | undefined,
+): FailureItem[] => {
+  if (!filterRerunTestPaths) return failures;
+  const set = new Set(filterRerunTestPaths);
+  return failures.filter((f) => set.has(f.test.testPath));
 };
 
 const quoteShellArg = (value: string, alwaysQuote = false): string => {

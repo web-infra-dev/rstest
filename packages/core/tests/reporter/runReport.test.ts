@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import { buildRunReport } from '../../src/reporter/runReport';
+import { filterFailuresByPaths } from '../../src/reporter/utils';
 import type { TestFileResult, TestResult } from '../../src/types';
 import { emptyDuration, emptySnapshotSummary } from './_fixtures';
 
@@ -163,7 +164,7 @@ describe('buildRunReport / counts', () => {
 });
 
 describe('buildRunReport / failures and unhandledErrors', () => {
-  it('extracts failures via collectFailures and respects filterRerunTestPaths', () => {
+  it('collects every failed test regardless of source (no filtering)', () => {
     const report = buildRunReport({
       results: [],
       testResults: [
@@ -173,11 +174,46 @@ describe('buildRunReport / failures and unhandledErrors', () => {
       snapshotSummary: emptySnapshotSummary,
       duration: emptyDuration,
       passWithNoTests: false,
-      filterRerunTestPaths: ['/repo/a.test.ts'],
     });
 
-    expect(report.failures).toHaveLength(1);
-    expect(report.failures[0]?.test.testPath).toBe('/repo/a.test.ts');
+    expect(report.failures).toHaveLength(2);
+    expect(report.failures.map((f) => f.test.testPath)).toEqual([
+      '/repo/a.test.ts',
+      '/repo/b.test.ts',
+    ]);
+  });
+
+  it('filterFailuresByPaths narrows failures to the given paths', () => {
+    const report = buildRunReport({
+      results: [],
+      testResults: [
+        makeTest('fail', '/repo/a.test.ts', [{ message: 'a-fail' }]),
+        makeTest('fail', '/repo/b.test.ts', [{ message: 'b-fail' }]),
+      ],
+      snapshotSummary: emptySnapshotSummary,
+      duration: emptyDuration,
+      passWithNoTests: false,
+    });
+
+    const filtered = filterFailuresByPaths(report.failures, [
+      '/repo/a.test.ts',
+    ]);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.test.testPath).toBe('/repo/a.test.ts');
+  });
+
+  it('filterFailuresByPaths returns the input when paths are undefined', () => {
+    const report = buildRunReport({
+      results: [],
+      testResults: [makeTest('fail', '/repo/a.test.ts', [{ message: 'x' }])],
+      snapshotSummary: emptySnapshotSummary,
+      duration: emptyDuration,
+      passWithNoTests: false,
+    });
+
+    expect(filterFailuresByPaths(report.failures, undefined)).toBe(
+      report.failures,
+    );
   });
 
   it('flattens unhandledErrors to message/stack/name', () => {
