@@ -23,6 +23,13 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: IsolateMode;
+  /**
+   * Cap on tasks dispatched to a single runner before it is disposed and
+   * a fresh one spawns. Only consulted when `isolate === 'soft'` (or
+   * `false`, where reuse also accrues heap). `0` or omitted means
+   * unbounded reuse.
+   */
+  softModeMaxFilesPerWorker?: number;
   env?: Record<string, string>;
   execArgv?: string[];
   /**

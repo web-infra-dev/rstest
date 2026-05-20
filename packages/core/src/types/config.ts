@@ -242,6 +242,26 @@ export type EnvironmentWithOptions = {
   options?: Record<string, any>;
 };
 
+/**
+ * Tuning knobs for `experiments.softMode`. Reserved for soft-mode-specific
+ * concerns; keep general pool options on `RstestPoolOptions`.
+ */
+export interface SoftModeOptions {
+  /**
+   * Cap on the number of test files a single worker handles before it is
+   * disposed and a fresh one spawns. Bounds the heap growth that accumulates
+   * from per-file module state (vendor caches, React fiber trees, JSDOM
+   * nodes) across a reused worker.
+   *
+   * Set higher for libs with light tests, lower for heavy React/JSDOM
+   * workloads where heap pressure dominates wall time. Has no effect when
+   * `softMode` is disabled.
+   *
+   * @default 20
+   */
+  maxFilesPerWorker?: number;
+}
+
 export interface RstestConfig {
   /**
    * Extend configuration from adapters
@@ -372,12 +392,21 @@ export interface RstestConfig {
      *   mock registry is per-bundle (one bundle per file in rstest), but
      *   tests that interact with module-level singletons inside vendors
      *   (final-form's `keysCache`, msw's interceptor state) can leak.
+     * - Heap grows monotonically across files in a reused worker; the
+     *   `maxFilesPerWorker` cap (default 20) recycles workers
+     *   periodically to prevent GC pressure. Tune higher for libs with
+     *   light tests, lower for jsdom-heavy React workloads.
      * - Has precedence over `isolate`: if both are set, soft semantics win.
+     *
+     * Pass `true` to enable with defaults, or an object to customise:
+     * ```ts
+     * experiments: { softMode: { maxFilesPerWorker: 10 } }
+     * ```
      *
      * @default false
      * @experimental
      */
-    softMode?: boolean;
+    softMode?: boolean | SoftModeOptions;
   };
   /**
    * Provide global APIs

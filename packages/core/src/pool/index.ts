@@ -338,9 +338,16 @@ export const createPool = async ({
   const numCpus = getNumCpus();
 
   const {
-    normalizedConfig: { pool: poolOptions, isolate },
+    normalizedConfig: { pool: poolOptions, isolate, experiments },
     reporters,
   } = context;
+
+  // `softMode` accepts `true` or `{ maxFilesPerWorker }`. The truthy check
+  // is mirrored in `withDefaultConfig` where the public flag is collapsed
+  // into the internal `isolate: 'soft'`; here we only need the tuning value.
+  const softModeOptions =
+    typeof experiments?.softMode === 'object' ? experiments.softMode : null;
+  const softModeMaxFilesPerWorker = softModeOptions?.maxFilesPerWorker;
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
@@ -374,6 +381,7 @@ export const createPool = async ({
     isolate,
     maxWorkers,
     minWorkers,
+    softModeMaxFilesPerWorker,
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,

@@ -19,6 +19,8 @@ import { createPoolWorker } from './workers';
  * worker; recycling at 20 keeps the peak heap under ~1GB and prevents the
  * 2-3× per-test slowdown that GC pressure inflicted at the top of that
  * range. Strict isolate runners are single-use so this doesn't apply.
+ *
+ * Override via `experiments.softMode.maxFilesPerWorker`.
  */
 const DEFAULT_SOFT_MODE_MAX_TASKS = 20;
 
@@ -138,7 +140,10 @@ export class Pool {
         // single-use anyway. `isolate: false` (reuse without reset) also
         // benefits because the same heap pressure applies.
         maxTasks:
-          this.options.isolate === true ? 0 : DEFAULT_SOFT_MODE_MAX_TASKS,
+          this.options.isolate === true
+            ? 0
+            : (this.options.softModeMaxFilesPerWorker ??
+              DEFAULT_SOFT_MODE_MAX_TASKS),
       });
       this.activeRunners.add(runner);
       try {
