@@ -125,7 +125,9 @@ Use these types when creating custom reporters or external tools that consume Rs
 
 ```ts
 import type {
+  FailureItem,
   Reporter,
+  RunReport,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -133,6 +135,13 @@ import type {
   TestSuiteInfo,
 } from '@rstest/core';
 ```
+
+<ApiMeta addedVersion="0.10.2" />
+
+`RunReport` and `FailureItem` are available as public type exports starting in Rstest 0.10.2.
+
+- `RunReport`: The run-level summary passed to `Reporter.onTestRunEnd`, including the precomputed `status`, `counts`, `failures`, and `unhandledErrors`.
+- `FailureItem`: A single failed case or file paired with its errors.
 
 For reporter implementation details, see [Reporter](/api/javascript-api/reporter).
 

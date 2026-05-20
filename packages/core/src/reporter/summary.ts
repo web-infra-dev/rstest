@@ -17,7 +17,9 @@ import type { SnapshotSummary } from '@vitest/snapshot';
 import path from 'pathe';
 import type {
   Duration,
+  FailureItem,
   GetSourcemap,
+  RunReport,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -187,39 +189,17 @@ export const printSummaryLog = ({
 };
 
 export const printSummaryErrorLogs = async ({
-  testResults,
-  results,
-  rootPath,
+  failures,
   unhandledErrors,
+  rootPath,
   getSourcemap,
-  filterRerunTestPaths,
 }: {
+  failures: FailureItem[];
+  unhandledErrors: RunReport['unhandledErrors'];
   rootPath: string;
-  results: TestFileResult[];
-  testResults: TestResult[];
   getSourcemap: GetSourcemap;
-  filterRerunTestPaths?: string[];
-  unhandledErrors?: Error[];
 }): Promise<void> => {
-  const failedTests: TestResult[] = [
-    ...results.filter(
-      (i) =>
-        i.status === 'fail' &&
-        i.errors?.length &&
-        (filterRerunTestPaths
-          ? filterRerunTestPaths.includes(i.testPath)
-          : true),
-    ),
-    ...testResults.filter(
-      (i) =>
-        i.status === 'fail' &&
-        (filterRerunTestPaths
-          ? filterRerunTestPaths.includes(i.testPath)
-          : true),
-    ),
-  ];
-
-  if (failedTests.length === 0 && !unhandledErrors?.length) {
+  if (failures.length === 0 && unhandledErrors.length === 0) {
     return;
   }
 
@@ -228,12 +208,12 @@ export const printSummaryErrorLogs = async ({
   logger.stderr('');
 
   const { printError } = await import('../utils/error');
-  for (const error of unhandledErrors || []) {
+  for (const error of unhandledErrors) {
     logger.stderr(bgColor('bgRed', ' Unhandled Error '));
     await printError(error, getSourcemap, rootPath);
   }
 
-  for (const test of failedTests) {
+  for (const { test, errors } of failures) {
     const relativePath = path.relative(rootPath, test.testPath);
     const nameStr = getTaskNameWithPrefix(test);
 
@@ -242,11 +222,8 @@ export const printSummaryErrorLogs = async ({
       `${bgColor('bgRed', ' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 
-    if (test.errors) {
-      const { printError } = await import('../utils/error');
-      for (const error of test.errors) {
-        await printError(error, getSourcemap, rootPath);
-      }
+    for (const error of errors) {
+      await printError(error, getSourcemap, rootPath);
     }
   }
 };

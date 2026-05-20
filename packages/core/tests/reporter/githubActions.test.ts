@@ -6,30 +6,12 @@ import {
   GithubActionsReporter,
   getStepSummaryDisplayPath,
 } from '../../src/reporter/githubActions';
-import type { Duration, SnapshotSummary } from '../../src/types';
-
-const emptySnapshotSummary: SnapshotSummary = {
-  added: 0,
-  didUpdate: false,
-  failure: false,
-  filesAdded: 0,
-  filesRemoved: 0,
-  filesRemovedList: [],
-  filesUnmatched: 0,
-  filesUpdated: 0,
-  matched: 0,
-  total: 0,
-  unchecked: 0,
-  uncheckedKeysByFile: [],
-  unmatched: 0,
-  updated: 0,
-};
-
-const emptyDuration: Duration = {
-  totalTime: 0,
-  buildTime: 0,
-  testTime: 0,
-};
+import type { TestFileResult, TestResult } from '../../src/types';
+import {
+  emptyDuration,
+  emptySnapshotSummary,
+  makeRunReport,
+} from './_fixtures';
 
 describe('getStepSummaryDisplayPath', () => {
   it('uses a placeholder for the workspace root', () => {
@@ -98,29 +80,32 @@ describe('GithubActionsReporter step summary', () => {
         },
       });
 
+      const results: TestFileResult[] = [
+        {
+          testId: 'file-a',
+          status: 'pass',
+          name: 'file-a',
+          testPath: path.join(tempDir, 'packages/a/a.test.ts'),
+          project: 'pkg-a',
+          results: [],
+        },
+        {
+          testId: 'file-b',
+          status: 'pass',
+          name: 'file-b',
+          testPath: path.join(tempDir, 'packages/b/b.test.ts'),
+          project: 'pkg-b',
+          results: [],
+        },
+      ];
+
       await reporter.onTestRunEnd({
-        results: [
-          {
-            testId: 'file-a',
-            status: 'pass',
-            name: 'file-a',
-            testPath: path.join(tempDir, 'packages/a/a.test.ts'),
-            project: 'pkg-a',
-            results: [],
-          },
-          {
-            testId: 'file-b',
-            status: 'pass',
-            name: 'file-b',
-            testPath: path.join(tempDir, 'packages/b/b.test.ts'),
-            project: 'pkg-b',
-            results: [],
-          },
-        ],
+        results,
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
         getSourcemap: () => null,
+        runReport: makeRunReport({ results, testResults: [] }),
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -168,6 +153,7 @@ describe('GithubActionsReporter step summary', () => {
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
         getSourcemap: () => null,
+        runReport: makeRunReport({ results: [], testResults: [] }),
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -207,13 +193,20 @@ describe('GithubActionsReporter step summary', () => {
         },
       });
 
+      const unhandledErrors = [new Error('global setup failed')];
+
       await reporter.onTestRunEnd({
         results: [],
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
         getSourcemap: () => null,
-        unhandledErrors: [new Error('global setup failed')],
+        unhandledErrors,
+        runReport: makeRunReport({
+          results: [],
+          testResults: [],
+          unhandledErrors,
+        }),
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -256,37 +249,41 @@ describe('GithubActionsReporter step summary', () => {
         },
       });
 
+      const results: TestFileResult[] = [
+        {
+          testId: 'file-1',
+          status: 'pass',
+          name: 'flaky.test.ts',
+          testPath,
+          project: 'rstest',
+          results: [],
+        },
+      ];
+      const testResults: TestResult[] = [
+        {
+          testId: 'test-1',
+          status: 'pass',
+          name: 'retries then passes',
+          parentNames: ['describe flaky'],
+          testPath,
+          project: 'rstest',
+          retryCount: 2,
+          errors: [
+            {
+              name: 'AssertionError',
+              message: 'expected 1 to be 2\n\nExpected: 2\nReceived: 1',
+            },
+          ],
+        },
+      ];
+
       await reporter.onTestRunEnd({
-        results: [
-          {
-            testId: 'file-1',
-            status: 'pass',
-            name: 'flaky.test.ts',
-            testPath,
-            project: 'rstest',
-            results: [],
-          },
-        ],
-        testResults: [
-          {
-            testId: 'test-1',
-            status: 'pass',
-            name: 'retries then passes',
-            parentNames: ['describe flaky'],
-            testPath,
-            project: 'rstest',
-            retryCount: 2,
-            errors: [
-              {
-                name: 'AssertionError',
-                message: 'expected 1 to be 2\n\nExpected: 2\nReceived: 1',
-              },
-            ],
-          },
-        ],
+        results,
+        testResults,
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
         getSourcemap: () => null,
+        runReport: makeRunReport({ results, testResults }),
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');

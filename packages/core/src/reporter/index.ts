@@ -7,6 +7,7 @@ import type {
   NormalizedProjectConfig,
   Reporter,
   RstestTestState,
+  RunReport,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -141,16 +142,14 @@ export class DefaultReporter implements Reporter {
     duration,
     getSourcemap,
     snapshotSummary,
-    filterRerunTestPaths,
-    unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
+    runReport: RunReport;
   }): Promise<void> {
     this.statusRenderer?.clear();
     this.nonTTYProgressNotifier?.stop();
@@ -160,12 +159,10 @@ export class DefaultReporter implements Reporter {
     }
 
     await printSummaryErrorLogs({
-      testResults,
-      results,
-      unhandledErrors,
+      failures: runReport.failures,
+      unhandledErrors: runReport.unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
-      filterRerunTestPaths,
     });
 
     printSummaryLog({

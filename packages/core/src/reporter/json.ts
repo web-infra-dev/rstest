@@ -2,10 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { relative } from 'pathe';
 import type {
-  Duration,
   JsonReporterOptions,
-  NormalizedConfig,
   Reporter,
+  RunReport,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -55,21 +54,17 @@ type JsonReport = {
 };
 
 export class JsonReporter implements Reporter {
-  private readonly config: NormalizedConfig;
   private readonly rootPath: string;
   private readonly outputPath?: string;
   private readonly consoleLogs: UserConsoleLog[] = [];
 
   constructor({
-    config,
     rootPath,
     options,
   }: {
-    config: NormalizedConfig;
     rootPath: string;
     options?: JsonReporterOptions;
   }) {
-    this.config = config;
     this.rootPath = rootPath;
     this.outputPath = options?.outputPath;
   }
@@ -89,53 +84,25 @@ export class JsonReporter implements Reporter {
   private createReport({
     results,
     testResults,
-    duration,
-    snapshotSummary,
-    unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
+    runReport: RunReport;
   }): JsonReport {
-    const failedTests = testResults.filter(
-      (result) => result.status === 'fail',
-    );
-    const passedTests = testResults.filter(
-      (result) => result.status === 'pass',
-    );
-    const skippedTests = testResults.filter(
-      (result) => result.status === 'skip',
-    );
-    const todoTests = testResults.filter((result) => result.status === 'todo');
-    const failedFiles = results.filter((result) => result.status === 'fail');
-    const noTestsDiscovered = results.length === 0 && testResults.length === 0;
-    const hasFailedStatus =
-      failedTests.length > 0 ||
-      failedFiles.length > 0 ||
-      (unhandledErrors?.length ?? 0) > 0 ||
-      (noTestsDiscovered && !this.config.passWithNoTests);
+    const { counts, duration, snapshot, status, unhandledErrors } = runReport;
 
     return {
       tool: 'rstest',
       version: RSTEST_VERSION,
-      status: hasFailedStatus ? 'fail' : 'pass',
-      summary: {
-        testFiles: results.length,
-        failedFiles: failedFiles.length,
-        tests: testResults.length,
-        failedTests: failedTests.length,
-        passedTests: passedTests.length,
-        skippedTests: skippedTests.length,
-        todoTests: todoTests.length,
-      },
+      status,
+      summary: { ...counts },
       durationMs: {
         total: duration.totalTime,
         build: duration.buildTime,
         tests: duration.testTime,
       },
-      snapshot: snapshotSummary,
+      snapshot,
       files: results.map((fileResult) => ({
         ...fileResult,
         testPath: relative(this.rootPath, fileResult.testPath),
@@ -150,11 +117,7 @@ export class JsonReporter implements Reporter {
               testPath: relative(this.rootPath, log.testPath),
             }))
           : undefined,
-      unhandledErrors: unhandledErrors?.map((error) => ({
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      })),
+      unhandledErrors: unhandledErrors.length > 0 ? unhandledErrors : undefined,
     };
   }
 
@@ -180,22 +143,16 @@ export class JsonReporter implements Reporter {
   async onTestRunEnd({
     results,
     testResults,
-    duration,
-    snapshotSummary,
-    unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
-    duration: Duration;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
+    runReport: RunReport;
   }): Promise<void> {
     const report = this.createReport({
       results,
       testResults,
-      duration,
-      snapshotSummary,
-      unhandledErrors,
+      runReport,
     });
 
     await this.writeReport(`${JSON.stringify(report, null, 2)}\n`);

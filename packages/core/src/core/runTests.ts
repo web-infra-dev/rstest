@@ -2,10 +2,12 @@ import { constants as osConstants } from 'node:os';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
+import { buildRunReport } from '../reporter/runReport';
 import type {
   Duration,
   EntryInfo,
   ProjectEntries,
+  RunReport,
   SourceMapInput,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -122,6 +124,7 @@ const notifyReportersOnTestRunEnd = async ({
   getSourcemap,
   unhandledErrors,
   filterRerunTestPaths,
+  runReport,
 }: {
   context: Rstest;
   coverage?: CoverageMap;
@@ -129,6 +132,7 @@ const notifyReportersOnTestRunEnd = async ({
   getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
   unhandledErrors?: Error[];
   filterRerunTestPaths?: string[];
+  runReport: RunReport;
 }) => {
   for (const reporter of context.reporters) {
     await reporter.onTestRunEnd?.({
@@ -140,6 +144,7 @@ const notifyReportersOnTestRunEnd = async ({
       duration,
       getSourcemap,
       filterRerunTestPaths,
+      runReport,
     });
   }
 };
@@ -213,10 +218,18 @@ export async function runTests(context: Rstest): Promise<void> {
         });
       } else {
         reportNoTestFiles({ context });
+        const emptyDuration = getEmptyRunDuration();
         await notifyReportersOnTestRunEnd({
           context,
-          duration: getEmptyRunDuration(),
+          duration: emptyDuration,
           getSourcemap: async () => null,
+          runReport: buildRunReport({
+            results: [],
+            testResults: [],
+            snapshotSummary: context.snapshotManager.summary,
+            duration: emptyDuration,
+            passWithNoTests: context.normalizedConfig.passWithNoTests,
+          }),
         });
       }
 
@@ -737,9 +750,20 @@ export async function runTests(context: Rstest): Promise<void> {
         currentDeletedEntries,
       );
 
-      // Check for failures including browser results when unified
-      const nodeHasFailure =
-        results.some((r) => r.status === 'fail') || errors.length;
+      const filterRerunTestPaths = currentEntries.length
+        ? currentEntries.map((e) => e.testPath)
+        : undefined;
+
+      const runReport = buildRunReport({
+        results: context.reporterResults.results,
+        testResults: context.reporterResults.testResults,
+        unhandledErrors: errors,
+        snapshotSummary: context.snapshotManager.summary,
+        duration,
+        passWithNoTests: context.normalizedConfig.passWithNoTests,
+        filterRerunTestPaths,
+      });
+
       const browserHasFailure =
         shouldUnifyReporter && browserResult?.hasFailure;
 
@@ -749,7 +773,7 @@ export async function runTests(context: Rstest): Promise<void> {
         reportNoTestFiles({ context, mode });
       }
 
-      const isFailure = nodeHasFailure || browserHasFailure;
+      const isFailure = runReport.status === 'fail' || browserHasFailure;
 
       if (isFailure) {
         process.exitCode = 1;
@@ -762,9 +786,8 @@ export async function runTests(context: Rstest): Promise<void> {
           duration,
           getSourcemap,
           unhandledErrors: errors,
-          filterRerunTestPaths: currentEntries.length
-            ? currentEntries.map((e) => e.testPath)
-            : undefined,
+          filterRerunTestPaths,
+          runReport,
         }),
       );
 

@@ -86,12 +86,13 @@ import { relative, resolve } from 'pathe';
 import { parse as parseStackTrace } from 'stacktrace-parser';
 import stripAnsi from 'strip-ansi';
 import type {
-  Duration,
+  FailureItem,
   GetSourcemap,
   MdReporterOptions,
   NormalizedConfig,
   Reporter,
   RstestTestState,
+  RunReport,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -99,10 +100,8 @@ import type {
 } from '../types';
 import {
   buildPackageManagerReproCommand,
-  collectFailures,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
-  type FailureItem,
   formatFullTestName,
   getErrorType,
   pushFencedBlock,
@@ -860,8 +859,11 @@ export class MdReporter implements Reporter {
     }
   }
 
-  private renderUnhandledErrors(lines: string[], errors?: Error[]): void {
-    if (!this.options.errors.unhandled || !errors?.length) return;
+  private renderUnhandledErrors(
+    lines: string[],
+    errors: RunReport['unhandledErrors'],
+  ): void {
+    if (!this.options.errors.unhandled || !errors.length) return;
 
     pushHeading(lines, 2, 'Unhandled Errors');
     for (let index = 0; index < errors.length; index += 1) {
@@ -882,62 +884,31 @@ export class MdReporter implements Reporter {
   }
 
   async onTestRunEnd({
-    results,
     testResults,
-    duration,
     getSourcemap,
-    snapshotSummary,
-    unhandledErrors,
-    filterRerunTestPaths,
+    runReport,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
-    duration: Duration;
     getSourcemap: GetSourcemap;
-    snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
+    runReport: RunReport;
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
-    const failures = collectFailures({
-      results,
-      testResults,
-      filterRerunTestPaths,
-    });
+    const { counts, duration, status, failures, snapshot } = runReport;
 
     const packageManagerAgent = this.options.reproduction
       ? await detectPackageManagerAgent(rootPath)
       : 'npm';
 
-    const failedTests = testResults.filter(
-      (result) => result.status === 'fail',
-    );
-    const passedTests = testResults.filter(
-      (result) => result.status === 'pass',
-    );
-    const skippedTests = testResults.filter(
-      (result) => result.status === 'skip',
-    );
-    const todoTests = testResults.filter((result) => result.status === 'todo');
-    const failedFiles = results.filter((result) => result.status === 'fail');
-    const status =
-      failedTests.length || failedFiles.length || unhandledErrors?.length
-        ? 'fail'
-        : 'pass';
+    const passedTests = testResults.filter((r) => r.status === 'pass');
+    const skippedTests = testResults.filter((r) => r.status === 'skip');
+    const todoTests = testResults.filter((r) => r.status === 'todo');
 
     const focusedRun = this.isFocusedRun({ testResults });
 
     const summaryPayload: Record<string, unknown> = {
       status,
-      counts: {
-        testFiles: results.length,
-        failedFiles: failedFiles.length,
-        tests: testResults.length,
-        failedTests: failedTests.length,
-        passedTests: passedTests.length,
-        skippedTests: skippedTests.length,
-        todoTests: todoTests.length,
-      },
+      counts: { ...counts },
       durationMs: {
         total: duration.totalTime,
         build: duration.buildTime,
@@ -945,7 +916,7 @@ export class MdReporter implements Reporter {
       },
     };
 
-    summaryPayload.snapshot = pickSnapshotSummary(snapshotSummary);
+    summaryPayload.snapshot = pickSnapshotSummary(snapshot);
 
     const lines: string[] = [];
     this.renderFrontMatter(lines);
@@ -1204,7 +1175,7 @@ export class MdReporter implements Reporter {
       }
     }
 
-    this.renderUnhandledErrors(lines, unhandledErrors);
+    this.renderUnhandledErrors(lines, runReport.unhandledErrors);
 
     const output = lines.join('\n');
     process.stdout.write(`${output}\n`);

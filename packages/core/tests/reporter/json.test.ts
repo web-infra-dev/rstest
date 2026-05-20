@@ -1,38 +1,11 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { JsonReporter } from '../../src/reporter/json';
-import type {
-  Duration,
-  NormalizedConfig,
-  SnapshotSummary,
-  TestFileResult,
-  TestResult,
-} from '../../src/types';
-
-const baseConfig = {
-  passWithNoTests: false,
-} as NormalizedConfig;
-
-const emptySnapshotSummary: SnapshotSummary = {
-  added: 0,
-  didUpdate: false,
-  failure: false,
-  filesAdded: 0,
-  filesRemoved: 0,
-  filesRemovedList: [],
-  filesUnmatched: 0,
-  filesUpdated: 0,
-  matched: 0,
-  total: 0,
-  unchecked: 0,
-  uncheckedKeysByFile: [],
-  unmatched: 0,
-  updated: 0,
-};
+import type { Duration, TestFileResult, TestResult } from '../../src/types';
+import { emptySnapshotSummary, makeRunReport } from './_fixtures';
 
 describe('JsonReporter', () => {
   it('should create JSON report correctly', async () => {
     const reporter = new JsonReporter({
-      config: baseConfig,
       rootPath: '/test/root',
       options: {},
     });
@@ -104,6 +77,11 @@ describe('JsonReporter', () => {
       testResults: mockTestResults,
       duration: mockDuration,
       snapshotSummary: emptySnapshotSummary,
+      runReport: makeRunReport({
+        results: mockFileResults,
+        testResults: mockTestResults,
+        duration: mockDuration,
+      }),
     });
 
     const report = JSON.parse(logs.join('\n'));
@@ -126,7 +104,6 @@ describe('JsonReporter', () => {
 
   it('should mark zero-test runs as failed when passWithNoTests is false', async () => {
     const reporter = new JsonReporter({
-      config: baseConfig,
       rootPath: '/test/root',
       options: {},
     });
@@ -141,15 +118,22 @@ describe('JsonReporter', () => {
       rs.resetAllMocks();
     });
 
+    const zeroDuration: Duration = {
+      totalTime: 0,
+      buildTime: 0,
+      testTime: 0,
+    };
+
     await reporter.onTestRunEnd({
       results: [],
       testResults: [],
-      duration: {
-        totalTime: 0,
-        buildTime: 0,
-        testTime: 0,
-      },
+      duration: zeroDuration,
       snapshotSummary: emptySnapshotSummary,
+      runReport: makeRunReport({
+        results: [],
+        testResults: [],
+        duration: zeroDuration,
+      }),
     });
 
     const report = JSON.parse(logs.join('\n'));

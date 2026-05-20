@@ -3,6 +3,8 @@ title: Reporter
 description: The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporter API
 
 The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
@@ -25,8 +27,8 @@ const customReporter: Reporter = {
     console.log(`Finished: ${result.testPath}`);
   },
 
-  onTestRunEnd({ results, duration }) {
-    console.log(`All tests completed in ${duration.totalTime}ms`);
+  onTestRunEnd({ runReport }) {
+    console.log(`Run ${runReport.status} in ${runReport.duration.totalTime}ms`);
   },
 };
 ```
@@ -72,6 +74,36 @@ interface Reporter {
 }
 ```
 
+## Run-level summary
+
+<ApiMeta addedVersion="0.10.2" />
+
+`onTestRunEnd` receives a `runReport: RunReport` field that aggregates the run-level outcome. Read from `runReport` instead of recomputing it from `results` or `testResults` — the same data drives Rstest's built-in reporters and the process exit code, so consuming it keeps custom reporters consistent with the rest of the framework.
+
+```ts
+type RunReport = {
+  status: 'pass' | 'fail';
+  counts: {
+    testFiles: number;
+    failedFiles: number;
+    tests: number;
+    failedTests: number;
+    passedTests: number;
+    skippedTests: number;
+    todoTests: number;
+  };
+  duration: Duration;
+  snapshot: SnapshotSummary;
+  failures: FailureItem[];
+  unhandledErrors: { message: string; stack?: string; name?: string }[];
+};
+```
+
+- `status` is the single source of truth for whether the run passed or failed. It already accounts for failed tests, unhandled errors, snapshot inconsistencies, and the `passWithNoTests` setting when no tests are discovered.
+- `counts` is precomputed in a single pass — there is no need to filter `testResults` again.
+- `failures` flattens all failed cases (and file-level errors) into a single list, each with its associated errors.
+- `unhandledErrors` is the serialized form of run-level errors that were not attached to any test.
+
 ## Examples
 
 ### Simple custom reporter
@@ -89,10 +121,9 @@ const simpleReporter: Reporter = {
     console.log(`${status} ${result.name}`);
   },
 
-  onTestRunEnd({ results }) {
-    const passed = results.filter((r) => r.status === 'pass').length;
-    const failed = results.filter((r) => r.status === 'fail').length;
-    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+  onTestRunEnd({ runReport }) {
+    const { passedTests, failedTests } = runReport.counts;
+    console.log(`\n📊 ${passedTests} passed, ${failedTests} failed`);
   },
 };
 ```
@@ -104,9 +135,11 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
-  onTestRunEnd({ results }) {
+  onTestRunEnd({ results, runReport }) {
     const report = {
       timestamp: new Date().toISOString(),
+      status: runReport.status,
+      counts: runReport.counts,
       results: results.map((r) => ({
         path: r.testPath,
         status: r.status,

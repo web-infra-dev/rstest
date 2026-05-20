@@ -5,6 +5,7 @@ import type {
   Duration,
   NormalizedConfig,
   Reporter,
+  RunReport,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -20,7 +21,7 @@ export type BlobData = {
   testResults: TestResult[];
   duration: Duration;
   snapshotSummary: SnapshotSummary;
-  unhandledErrors?: { message: string; stack?: string; name?: string }[];
+  unhandledErrors?: RunReport['unhandledErrors'];
   consoleLogs?: UserConsoleLog[];
 };
 
@@ -56,14 +57,14 @@ export class BlobReporter implements Reporter {
     testResults,
     duration,
     snapshotSummary,
-    unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
-    unhandledErrors?: Error[];
+    runReport: RunReport;
   }): Promise<void> {
     const shard = this.config.shard;
     const fileName = shard
@@ -78,11 +79,9 @@ export class BlobReporter implements Reporter {
       testResults,
       duration,
       snapshotSummary,
-      unhandledErrors: unhandledErrors?.map((e) => ({
-        message: e.message,
-        stack: e.stack,
-        name: e.name,
-      })),
+      unhandledErrors: runReport.unhandledErrors.length
+        ? runReport.unhandledErrors
+        : undefined,
       consoleLogs: this.consoleLogs.length > 0 ? this.consoleLogs : undefined,
     };
 

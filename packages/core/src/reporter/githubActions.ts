@@ -4,8 +4,9 @@ import { normalize, relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
   Duration,
+  FailureItem,
   GetSourcemap,
-  SnapshotSummary,
+  RunReport,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -19,10 +20,8 @@ import { formatStack } from '../utils/error';
 import { getPlainSummaryStatusString } from './summary';
 import {
   buildPackageManagerReproCommand,
-  collectFailures,
   detectPackageManagerAgent,
   escapeMarkdownTableCell,
-  type FailureItem,
   formatFullTestName,
   getErrorType,
   pushFencedBlock,
@@ -85,20 +84,15 @@ export class GithubActionsReporter {
     testResults,
     duration,
     getSourcemap,
-    unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
-    snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
+    runReport: RunReport;
   }): Promise<void> {
-    const failures = collectFailures({
-      results,
-      testResults,
-    });
+    const { failures, unhandledErrors } = runReport;
 
     if (failures.length > 0 && this.enableAnnotations) {
       const { parseErrorStacktrace } = await import('../utils/error');
@@ -278,12 +272,12 @@ async function renderStepSummary({
   reportName?: string;
   failures: FailureItem[];
   getSourcemap: GetSourcemap;
-  unhandledErrors?: Error[];
+  unhandledErrors: RunReport['unhandledErrors'];
 }): Promise<string> {
   const { parseErrorStacktrace } = await import('../utils/error');
   const packageManagerAgent = await detectPackageManagerAgent(rootPath);
   const displayPath = getStepSummaryDisplayPath(rootPath);
-  const hasUnhandledErrors = (unhandledErrors?.length ?? 0) > 0;
+  const hasUnhandledErrors = unhandledErrors.length > 0;
   const flakyTests = collectFlakyTests(testResults);
   const hasFlakyTests = flakyTests.length > 0;
   const isSuccess = failures.length === 0 && !hasUnhandledErrors;
@@ -355,8 +349,8 @@ async function renderStepSummary({
   if (!isSuccess) {
     pushHeading(lines, 2, 'Failures');
 
-    for (let index = 0; index < (unhandledErrors?.length ?? 0); index += 1) {
-      const error = unhandledErrors?.[index];
+    for (let index = 0; index < unhandledErrors.length; index += 1) {
+      const error = unhandledErrors[index];
       if (!error) continue;
 
       pushHeading(lines, 3, `❌ FAIL Unhandled Error ${index + 1}`);

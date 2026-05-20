@@ -3,9 +3,9 @@ import path from 'node:path';
 import { relative } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import type {
-  Duration,
   GetSourcemap,
   Reporter,
+  RunReport,
   TestFileResult,
   TestResult,
 } from '../types';
@@ -220,14 +220,12 @@ export class JUnitReporter implements Reporter {
 
   async onTestRunEnd({
     results,
-    testResults,
-    duration,
     getSourcemap,
+    runReport,
   }: {
     getSourcemap: GetSourcemap;
     results: TestFileResult[];
-    testResults: TestResult[];
-    duration: Duration;
+    runReport: RunReport;
   }): Promise<void> {
     const testSuites = await Promise.all(
       results.map(async (fileResult) =>
@@ -235,21 +233,17 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const totalTests = testResults.length;
-    const totalFailures = testResults.filter(
-      (test) => test.status === 'fail',
-    ).length;
+    const { counts, duration } = runReport;
+    // JUnit collapses skipped + todo into a single "skipped" total.
+    const totalSkipped = counts.skippedTests + counts.todoTests;
     const totalErrors = 0; // This framework does not distinguish between failures and errors, so errors are always reported as zero.
-    const totalSkipped = testResults.filter(
-      (test) => test.status === 'skip' || test.status === 'todo',
-    ).length;
     const totalTime = duration.testTime / 1000; // Convert to seconds
 
     const report: JUnitReport = {
       testsuites: {
         name: 'rstest tests',
-        tests: totalTests,
-        failures: totalFailures,
+        tests: counts.tests,
+        failures: counts.failedTests,
         errors: totalErrors,
         skipped: totalSkipped,
         time: totalTime,

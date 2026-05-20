@@ -4,6 +4,7 @@ import { detect as detectPackageManager } from 'package-manager-detector/detect'
 import { relative } from 'pathe';
 import { parse as stackTraceParse } from 'stacktrace-parser';
 import type {
+  FailureItem,
   FormattedError,
   TestFileResult,
   TestResult,
@@ -22,11 +23,6 @@ const statusStr = {
   pass: '✓',
   todo: '-',
   skip: '-',
-};
-
-export type FailureItem = {
-  test: TestResult;
-  errors: NonNullable<TestResult['errors']>;
 };
 
 const statusColor: Record<keyof typeof statusStr, (str: string) => string> = {

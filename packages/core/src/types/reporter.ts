@@ -24,6 +24,28 @@ export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
 
+export type FailureItem = {
+  test: TestResult;
+  errors: NonNullable<TestResult['errors']>;
+};
+
+export type RunReport = {
+  status: 'pass' | 'fail';
+  counts: {
+    testFiles: number;
+    failedFiles: number;
+    tests: number;
+    failedTests: number;
+    passedTests: number;
+    skippedTests: number;
+    todoTests: number;
+  };
+  duration: Duration;
+  snapshot: SnapshotSummary;
+  failures: FailureItem[];
+  unhandledErrors: { message: string; stack?: string; name?: string }[];
+};
+
 export type BuiltInReporterNames =
   | 'default'
   | 'dot'
@@ -235,6 +257,7 @@ export interface Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
+    runReport,
   }: {
     results: TestFileResult[];
     coverage?: CoverageMapData;
@@ -244,6 +267,7 @@ export interface Reporter {
     unhandledErrors?: Error[];
     snapshotSummary: SnapshotSummary;
     filterRerunTestPaths?: string[];
+    runReport: RunReport;
   }) => MaybePromise<void>;
 
   /**

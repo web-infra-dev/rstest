@@ -125,7 +125,9 @@ mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 
 ```ts
 import type {
+  FailureItem,
   Reporter,
+  RunReport,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
@@ -133,6 +135,13 @@ import type {
   TestSuiteInfo,
 } from '@rstest/core';
 ```
+
+<ApiMeta addedVersion="0.10.2" />
+
+`RunReport` 和 `FailureItem` 自 Rstest 0.10.2 起作为公共类型导出。
+
+- `RunReport`：传递给 `Reporter.onTestRunEnd` 的运行级汇总，包含预先计算的 `status`、`counts`、`failures` 与 `unhandledErrors`。
+- `FailureItem`：单个失败用例或文件与其错误的配对。
 
 Reporter 实现细节见 [Reporter](/api/javascript-api/reporter)。
 

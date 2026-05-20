@@ -3,6 +3,8 @@ title: Reporter
 description: Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporter API
 
 Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
@@ -25,8 +27,8 @@ const customReporter: Reporter = {
     console.log(`Finished: ${result.testPath}`);
   },
 
-  onTestRunEnd({ results, duration }) {
-    console.log(`All tests completed in ${duration.totalTime}ms`);
+  onTestRunEnd({ runReport }) {
+    console.log(`Run ${runReport.status} in ${runReport.duration.totalTime}ms`);
   },
 };
 ```
@@ -72,6 +74,36 @@ interface Reporter {
 }
 ```
 
+## 运行级汇总
+
+<ApiMeta addedVersion="0.10.2" />
+
+`onTestRunEnd` 接收一个 `runReport: RunReport` 字段，用于聚合本次运行的整体结果。请直接读取 `runReport`，而不是从 `results` 或 `testResults` 重新计算 —— Rstest 内置 reporter 和进程退出码消费的就是同一份数据，自定义 reporter 复用它能与框架保持一致。
+
+```ts
+type RunReport = {
+  status: 'pass' | 'fail';
+  counts: {
+    testFiles: number;
+    failedFiles: number;
+    tests: number;
+    failedTests: number;
+    passedTests: number;
+    skippedTests: number;
+    todoTests: number;
+  };
+  duration: Duration;
+  snapshot: SnapshotSummary;
+  failures: FailureItem[];
+  unhandledErrors: { message: string; stack?: string; name?: string }[];
+};
+```
+
+- `status` 是本次运行 pass / fail 的唯一事实来源，已经将失败用例、未处理错误、snapshot 不一致以及未发现测试时的 `passWithNoTests` 设置一并考虑进去。
+- `counts` 一次遍历预先聚合，无需再次 filter `testResults`。
+- `failures` 将所有失败用例（含文件级错误）汇总为一个列表，每项附带其关联错误。
+- `unhandledErrors` 是未挂载到任何测试上的运行级错误的序列化形式。
+
 ## 示例
 
 ### 简单自定义报告器
@@ -89,10 +121,9 @@ const simpleReporter: Reporter = {
     console.log(`${status} ${result.name}`);
   },
 
-  onTestRunEnd({ results }) {
-    const passed = results.filter((r) => r.status === 'pass').length;
-    const failed = results.filter((r) => r.status === 'fail').length;
-    console.log(`\n📊 ${passed} passed, ${failed} failed`);
+  onTestRunEnd({ runReport }) {
+    const { passedTests, failedTests } = runReport.counts;
+    console.log(`\n📊 ${passedTests} passed, ${failedTests} failed`);
   },
 };
 ```
@@ -104,9 +135,11 @@ import { writeFileSync } from 'node:fs';
 import type { Reporter } from '@rstest/core';
 
 const jsonReporter: Reporter = {
-  onTestRunEnd({ results }) {
+  onTestRunEnd({ results, runReport }) {
     const report = {
       timestamp: new Date().toISOString(),
+      status: runReport.status,
+      counts: runReport.counts,
       results: results.map((r) => ({
         path: r.testPath,
         status: r.status,

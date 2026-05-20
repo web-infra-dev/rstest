@@ -5,6 +5,7 @@ import {
   ensureCoverageProviderInstalled,
 } from '../coverage';
 import type { BlobData } from '../reporter/blob';
+import { buildRunReport } from '../reporter/runReport';
 import type {
   CoverageMapData,
   Duration,
@@ -181,9 +182,16 @@ export async function mergeReports(
   const mergedCoverage: CoverageMapData | undefined =
     hasCoverage && mergedCoverageMap ? mergedCoverageMap.toJSON() : undefined;
 
-  const hasFailure =
-    allResults.some((r) => r.status === 'fail') ||
-    allUnhandledErrors.length > 0;
+  const mergedRunReport = buildRunReport({
+    results: allResults,
+    testResults: allTestResults,
+    unhandledErrors: allUnhandledErrors,
+    snapshotSummary: mergedSnapshotSummary,
+    duration: mergedDuration,
+    passWithNoTests: context.normalizedConfig.passWithNoTests,
+  });
+
+  const hasFailure = mergedRunReport.status === 'fail';
 
   if (hasFailure) {
     process.exitCode = 1;
@@ -222,6 +230,7 @@ export async function mergeReports(
         ? allUnhandledErrors
         : undefined,
       getSourcemap: async () => null,
+      runReport: mergedRunReport,
     });
   }
 
