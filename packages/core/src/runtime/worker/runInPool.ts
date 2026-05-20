@@ -218,6 +218,62 @@ const softResetStep = (label: string, fn: () => void): void => {
   }
 };
 
+/**
+ * Drain pending microtasks and a few macrotask cycles, absorbing any
+ * `unhandledRejection` / `uncaughtException` that fires during the drain.
+ *
+ * Why: under `experiments.softMode` (or `isolate: false`), a worker
+ * survives across files. If the previous file's tests started an XHR
+ * (e.g. via a `useEffect` that wasn't awaited in the test body), the
+ * XHR is still in flight when the file ends. Once the previous file's
+ * mock-server handlers have been reset and the file slot has closed, the
+ * XHR resolves — its `onUnhandledRequest` error bubbles up as an
+ * unhandled rejection and lands in the NEXT file's slot, wrongly
+ * attributing the failure.
+ *
+ * In `isolate: true`, the worker process dies between files, so the
+ * pending XHR dies with it. In Jest, the per-file `vm.Context` is torn
+ * down — same effect. Worker-reuse modes don't get that for free, so
+ * we recreate the moral equivalent: give pending async ~5 macrotask
+ * cycles to finish and absorb any errors that surface during the drain.
+ *
+ * Errors absorbed here are NOT attributable to the next file in any
+ * useful way — they originate in the previous file and only manifest
+ * now. Surfacing them as the next file's failure is worse than dropping
+ * them (the previous file already passed its assertions; if it had a
+ * latent leak, that's a test-code hygiene issue users should address
+ * separately). Set `DEBUG=rstest:soft-mode` to log the absorbed count.
+ */
+const drainPendingAsyncFromPriorFile = async (): Promise<void> => {
+  const absorbed: unknown[] = [];
+  const swallow = (e: unknown) => {
+    absorbed.push(e);
+  };
+  process.on('unhandledRejection', swallow);
+  process.on('uncaughtException', swallow);
+  try {
+    // Each iteration awaits one `setImmediate` cycle: that drains all
+    // currently-queued microtasks (Promise jobs run before the next macro)
+    // plus one macrotask batch. 5 cycles is enough to settle typical
+    // fetch → response → React commit chains; more is wasted budget.
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((resolve) =>
+        getRealTimers().setImmediate
+          ? getRealTimers().setImmediate!(resolve)
+          : getRealTimers().setTimeout!(resolve, 0),
+      );
+    }
+  } finally {
+    process.removeListener('unhandledRejection', swallow);
+    process.removeListener('uncaughtException', swallow);
+  }
+  if (absorbed.length > 0 && process.env.DEBUG?.includes('rstest:soft-mode')) {
+    process.stderr.write(
+      `[rstest:soft-mode] absorbed ${absorbed.length} async error(s) from prior file\n`,
+    );
+  }
+};
+
 const softResetEnv = (envName: string, protoSnapshot?: ProtoEntry[]): void => {
   if (envName !== 'jsdom' && envName !== 'happy-dom') return;
   const g = global as unknown as {
@@ -347,6 +403,16 @@ const preparePool = async (
     fn();
   });
   globalCleanups.length = 0;
+
+  // If a cachedEnv exists, the worker is being reused for another file.
+  // Drain any pending async work scheduled by the previous file BEFORE we
+  // install this file's `unhandledRejection` listener — otherwise leftover
+  // XHRs / promise chains from the previous file would resolve into this
+  // file's slot and surface as misattributed errors. This is the moral
+  // equivalent of the per-file vm.Context teardown Jest gets for free.
+  if (cachedEnv && context.runtimeConfig.isolate !== true) {
+    await drainPendingAsyncFromPriorFile();
+  }
 
   const taskContext = createNodeTaskContext();
   setRealTimers();
@@ -479,7 +545,8 @@ const preparePool = async (
   if (canReuseEnv) {
     // Worker is being reused for another file; soft-reset the env in place
     // (clear DOM + restore mutated DOM prototype descriptors) instead of
-    // paying the full setup cost again.
+    // paying the full setup cost again. Pending-async drain already ran
+    // at the top of preparePool (before per-file listeners installed).
     softResetEnv(cachedEnv!.name, cachedEnv!.protoSnapshot);
   } else {
     // Tear down any prior env of the wrong type before installing a fresh one.
