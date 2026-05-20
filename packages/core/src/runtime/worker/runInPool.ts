@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { install } from 'source-map-support';
@@ -435,6 +436,28 @@ const preparePool = async (
   // equivalent of the per-file vm.Context teardown Jest gets for free.
   if (cachedEnv && context.runtimeConfig.isolate !== true) {
     await drainPendingAsyncFromPriorFile();
+  }
+
+  // DIAGNOSTIC: heap usage at file boundary, gated on env var so it doesn't
+  // pollute normal runs. Tracks across the worker's file sequence so we can
+  // see heap growth + GC behaviour.
+  // Optional diagnostic: heap usage at file boundary. Set
+  // `RSTEST_HEAP_TRACE=1` and read the per-pid log files under /private/tmp
+  // to observe heap growth across a worker's file sequence — useful when
+  // tuning soft-mode worker recycle cap.
+  if (process.env.RSTEST_HEAP_TRACE === '1') {
+    try {
+      const m = process.memoryUsage();
+      const g = globalThis as { __rstest_file_seq__?: number };
+      g.__rstest_file_seq__ = (g.__rstest_file_seq__ ?? 0) + 1;
+      const seq = g.__rstest_file_seq__;
+      appendFileSync(
+        `/private/tmp/rstest-heap-${process.pid}.log`,
+        `${seq}\t${context.runtimeConfig.isolate}\t${(m.heapUsed / 1024 / 1024).toFixed(1)}\t${(m.heapTotal / 1024 / 1024).toFixed(1)}\t${(m.rss / 1024 / 1024).toFixed(1)}\t${(m.external / 1024 / 1024).toFixed(1)}\t${testPath.split('/').slice(-2).join('/')}\n`,
+      );
+    } catch {
+      // best-effort diagnostic; don't fail the file
+    }
   }
 
   const taskContext = createNodeTaskContext();

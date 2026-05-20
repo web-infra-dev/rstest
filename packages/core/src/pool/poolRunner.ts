@@ -64,6 +64,20 @@ let nextTaskSeq = 0;
 
 type PoolRunnerOptions = {
   workerId: number;
+  /**
+   * For `experiments.softMode` (or `isolate: false`) where the worker is
+   * reused across tasks, this caps how many tasks a single worker handles
+   * before `isUsable()` reports false and the pool disposes it for a
+   * fresh one. Unbounded reuse leaks heap (vendor modules, React fiber
+   * trees, JSDOM nodes, accumulated closures) — by file 50+ on a
+   * jsdom-heavy lib we observed 4GB+ heap and 2-3× per-test slowdown
+   * from GC pressure.
+   *
+   * Default `0` = unbounded (legacy behavior). Recommended for soft
+   * mode: 20-30. Strict isolate (`isolate: true`) never reuses runners
+   * so this cap is irrelevant there.
+   */
+  maxTasks?: number;
 };
 
 /**
@@ -99,8 +113,18 @@ export class PoolRunner {
    */
   private crashed = false;
 
+  /**
+   * Tasks completed on this runner. When `maxTasks > 0`, `isUsable()`
+   * starts returning false once the count reaches the cap, prompting the
+   * pool to dispose this runner and spawn a fresh one. See
+   * `PoolRunnerOptions.maxTasks` for rationale.
+   */
+  private tasksRun = 0;
+  private readonly maxTasks: number;
+
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
+    this.maxTasks = Math.max(0, options.maxTasks ?? 0);
     this.worker = worker;
 
     this.handleMessage = this.handleMessage.bind(this);
@@ -113,7 +137,19 @@ export class PoolRunner {
   }
 
   isUsable(): boolean {
-    return this.state === 'STARTED' && !this.crashed;
+    if (this.state !== 'STARTED' || this.crashed) return false;
+    if (this.maxTasks > 0 && this.tasksRun >= this.maxTasks) return false;
+    return true;
+  }
+
+  /**
+   * Called by the pool after each completed task. Drives the soft-mode
+   * heap-pressure relief: once `tasksRun >= maxTasks`, `isUsable()` flips
+   * to false and the pool's `releaseRunner` path disposes us instead of
+   * returning us to the idle pool.
+   */
+  recordTaskCompleted(): void {
+    this.tasksRun++;
   }
 
   start(): Promise<void> {

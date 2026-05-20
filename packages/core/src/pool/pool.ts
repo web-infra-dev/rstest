@@ -12,6 +12,16 @@ import { createPoolWorker } from './workers';
  *   - isolate='soft': idle runners reused; worker resets test env per task
  *   - isolate=false: idle runners reused, no per-task reset
  */
+/**
+ * Default cap for tasks handled by a single worker in `experiments.softMode`
+ * (or `isolate: false`). Empirically chosen from a 74-file jsdom-heavy lib
+ * where heap grew from 71MB at file 1 to 4GB at file 65 in a single
+ * worker; recycling at 20 keeps the peak heap under ~1GB and prevents the
+ * 2-3× per-test slowdown that GC pressure inflicted at the top of that
+ * range. Strict isolate runners are single-use so this doesn't apply.
+ */
+const DEFAULT_SOFT_MODE_MAX_TASKS = 20;
+
 export class Pool {
   private readonly options: PoolOptions;
   private readonly idleRunners: PoolRunner[] = [];
@@ -66,6 +76,10 @@ export class Pool {
       return await runner.collectTests(task);
     } finally {
       this.options.memoryGate?.recordResolve(heapBaseline);
+      // Increment the runner's task counter BEFORE release so `isUsable()`
+      // can flip false when the cap is reached. `releaseRunner` then
+      // disposes instead of returning to the idle pool.
+      runner.recordTaskCompleted();
       this.releaseRunner(runner);
     }
   }
@@ -114,7 +128,18 @@ export class Pool {
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
-      const runner = new PoolRunner(worker, { workerId });
+      const runner = new PoolRunner(worker, {
+        workerId,
+        // Cap soft-mode reuse — heap accumulates monotonically across
+        // file evaluations (vendor modules + React fiber trees + JSDOM
+        // nodes), and by ~50 files on a jsdom-heavy lib the worker is
+        // GC-thrashing at multi-GB heap, slowing each test 2-3×. Default
+        // applies only to soft mode; strict-isolate runners are
+        // single-use anyway. `isolate: false` (reuse without reset) also
+        // benefits because the same heap pressure applies.
+        maxTasks:
+          this.options.isolate === true ? 0 : DEFAULT_SOFT_MODE_MAX_TASKS,
+      });
       this.activeRunners.add(runner);
       try {
         await runner.start();
