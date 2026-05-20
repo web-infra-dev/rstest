@@ -84,9 +84,9 @@ const makeRunResult = (request, extra) => ({
 let taskInFlight = false;
 let exitOnTaskIdle = false;
 
+// Mirrors the real worker — see worker/index.ts for rationale.
 const finalizeStop = () => {
   send({ type: 'stopped' });
-  setTimeout(() => process.exit(0), 10);
 };
 
 const handleRun = (request) => {
@@ -222,7 +222,4 @@ onHostMessage((message) => {
   }
 });
 
-// SIGTERM is meaningful only under the forks pool. In threads mode signals
-// are delivered to the parent process, not the worker thread, so this
-// handler is a harmless no-op there.
-process.on('SIGTERM', requestGracefulStop);
+// No SIGTERM handler — mirrors worker/index.ts.

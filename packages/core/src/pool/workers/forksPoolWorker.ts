@@ -11,6 +11,12 @@ const BENIGN_IPC_ERROR_CODES = new Set([
 ]);
 
 /**
+ * SIGKILL escalation budget after SIGTERM. Defensive guard for native
+ * modules that mask SIGTERM. Matches Vitest and Jest.
+ */
+const SIGKILL_FALLBACK_MS = 500;
+
+/**
  * IPC errors that surface during shutdown but reflect the channel already
  * going away, not a genuine failure. Windows additionally surfaces
  * `write UNKNOWN` when `child.send` races teardown — see rstest#1142.
@@ -113,10 +119,11 @@ export class ForksPoolWorker extends BasePoolWorker {
 
   async stop(options?: { force?: boolean }): Promise<void> {
     if (!this.hasLiveChild()) return;
-    await killAndWait(
-      this.childProcess!,
-      options?.force ? 'SIGKILL' : 'SIGTERM',
-    );
+    if (options?.force) {
+      await killAndWait(this.childProcess!, 'SIGKILL');
+      return;
+    }
+    await killAndWait(this.childProcess!, 'SIGTERM', SIGKILL_FALLBACK_MS);
   }
 
   sendRaw(envelope: Envelope): void {

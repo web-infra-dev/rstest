@@ -339,6 +339,26 @@ describe('Pool - close()', () => {
     await pool.close();
     await expect(pool.runTest(createTask())).rejects.toThrow(/closed/);
   });
+
+  // Regression: rstest#1275. The worker no longer self-exits on `stop`; the
+  // host owns SIGTERM. If `close()` is called when all workers are idle (the
+  // common end-of-run case), the host must skip the IPC ack handshake and
+  // SIGTERM directly. Previously the host waited the full 60s graceful
+  // budget plus a 5s SIGKILL escalation, producing the 60–65s hang reported
+  // in the issue. This test asserts close completes in well under that
+  // budget.
+  it('should close promptly when workers are idle (rstest#1275)', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    await pool.runTest(createTask()); // warm up: worker is now alive and idle
+
+    const start = Date.now();
+    await pool.close();
+    const elapsed = Date.now() - start;
+
+    // Idle close should be SIGTERM-fast (sub-second). Allow generous CI
+    // headroom but require it to be well below the 60s graceful budget.
+    expect(elapsed).toBeLessThan(5000);
+  });
 });
 
 // ── maxWorkers capacity ─────────────────────────────────────────────────────

@@ -36,9 +36,13 @@ const sendFatalError = (err: unknown): void => {
   });
 };
 
+/**
+ * Ack the graceful-stop request. Host owns termination via SIGTERM after the
+ * ack — we don't `process.exit()` because a wedged event loop can swallow
+ * `setImmediate`, which was the rstest#1275 hang.
+ */
 const finalizeStop = (): void => {
   send({ type: 'stopped' });
-  setImmediate(() => process.exit(0));
 };
 
 /**
@@ -117,23 +121,19 @@ const requestGracefulStop = (): void => {
   if (stopRequested) return;
   stopRequested = true;
   if (currentTaskId !== undefined) {
-    // Defer the ack + exit until the task's `finally { await teardown(); }`
-    // runs. PoolRunner's WORKER_STOP_TIMEOUT_MS escalates to SIGKILL if
-    // teardown truly hangs, so this deferral is bounded.
+    // Defer the ack until the task's `finally { await teardown(); }` runs.
+    // PoolRunner's WORKER_STOP_TIMEOUT_MS escalates to SIGTERM (then SIGKILL)
+    // if teardown truly hangs, so this deferral is bounded.
     exitOnTaskIdle = true;
     return;
   }
   finalizeStop();
 };
 
-// SIGTERM shares the same shutdown path under the forks pool. `PoolRunner.stop`
-// sends SIGTERM alongside the `stop` envelope; without this handler Node's
-// default SIGTERM behavior would terminate the process immediately and skip
-// teardown. Under the threads pool the host uses `worker.terminate()` instead
-// of signals, so this handler is a no-op there. `setup.ts` may install a
-// profiling-specific SIGTERM handler (`--cpu-prof` et al.) that runs first and
-// preempts ours, preserving existing profiling semantics.
-process.on('SIGTERM', requestGracefulStop);
+// No SIGTERM handler — host-driven SIGTERM must terminate even after
+// `stopRequested` is set; otherwise the listener would swallow the escalation
+// (rstest#1275). `setup.ts` may install a profiling-specific handler that
+// calls `process.exit()`, which is compatible with this contract.
 
 channel.on((message: unknown) => {
   if (!isWorkerRequestEnvelope(message)) {
