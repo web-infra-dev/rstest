@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironment } from '../../types';
@@ -56,10 +57,19 @@ const resolveEnvironmentExport = (environmentModule: unknown) => {
 };
 
 const resolveEnvironmentPath = (name: string, roots: string[]) => {
-  const candidates =
-    name.startsWith('.') || isAbsolute(name)
-      ? [name]
-      : [name, `rstest-environment-${name}`];
+  if (name.startsWith('.') || isAbsolute(name)) {
+    for (const root of roots) {
+      const candidatePath = isAbsolute(name) ? name : join(root, name);
+
+      if (existsSync(candidatePath)) {
+        return pathToFileURL(candidatePath).href;
+      }
+    }
+
+    return undefined;
+  }
+
+  const candidates = [name, `rstest-environment-${name}`];
 
   for (const root of roots) {
     const resolveBase = pathToFileURL(
@@ -68,9 +78,7 @@ const resolveEnvironmentPath = (name: string, roots: string[]) => {
 
     for (const candidate of candidates) {
       try {
-        return isAbsolute(candidate)
-          ? pathToFileURL(candidate).href
-          : import.meta.resolve(candidate, resolveBase);
+        return import.meta.resolve(candidate, resolveBase);
       } catch {
         continue;
       }

@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "rstest-environment-package-marker": "workspace:*"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.6",
