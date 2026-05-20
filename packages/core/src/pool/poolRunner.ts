@@ -178,11 +178,9 @@ export class PoolRunner {
   }
 
   /**
-   * Stop the worker by SIGTERM (or SIGKILL if `force`). The host owns
-   * termination — there is no IPC `stop` handshake. Per-task teardown
-   * already runs inside `runInPool`'s own `finally` before the worker
-   * sends `runFinished`, so by the time `stop()` is called there is
-   * nothing process-level to drain. Relying on the worker's own
+   * Host owns termination — no IPC handshake. Per-task teardown runs in
+   * `runInPool`'s own `finally` before `runFinished`, so by `stop()` there
+   * is nothing process-level to drain. Relying on the worker's own
    * `process.exit()` was the rstest#1275 hang.
    */
   stop(options?: { force?: boolean }): Promise<void> {
@@ -192,6 +190,10 @@ export class PoolRunner {
         case 'IDLE':
           return;
         case 'STOPPING': {
+          // Wait for the in-flight stop to settle. If the caller asks for
+          // `force` and the prior stop was graceful, escalate to SIGKILL —
+          // the prior `await` may have resolved without actually killing
+          // the child (e.g. SIGTERM masked).
           if (this.stopDeferred) {
             await this.stopDeferred.promise;
           }

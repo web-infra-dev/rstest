@@ -244,7 +244,7 @@ describe('Pool - exit-based lifecycle (not close)', () => {
       // Task 1: worker spawns a 30s grandchild that inherits stdout/stderr,
       // then sends its result and exits. With a `close`-based lifecycle this
       // would block slot reclaim until the grandchild exits (30s), causing
-      // task 2 to hang until WORKER_STOP_TIMEOUT_MS.
+      // task 2 to hang.
       const start = Date.now();
       const r1 = await pool.runTest(
         createTask('run', { __testMode: 'spawn-orphan' }),
