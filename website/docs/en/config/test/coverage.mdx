@@ -105,6 +105,8 @@ import { PackageManagerTabs } from '@theme';
 
 #### V8 provider
 
+<ApiMeta addedVersion="0.10.2" />
+
 The `v8` provider collects precise coverage from the Node.js inspector, then remaps it to Istanbul format. Compared with Istanbul instrumentation, V8 coverage usually has lower runtime memory usage because executed modules do not need extra coverage counters. It is a better fit for large non-browser test suites where coverage memory pressure is the bottleneck.
 
 To enable V8 coverage, install [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8) first.

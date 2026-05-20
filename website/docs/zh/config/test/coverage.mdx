@@ -105,6 +105,8 @@ import { PackageManagerTabs } from '@theme';
 
 #### V8 provider
 
+<ApiMeta addedVersion="0.10.2" />
+
 `v8` provider 基于 Node.js inspector precise coverage 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合大型非 Browser Mode 测试套件中 coverage 内存压力明显的场景。
 
 要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。

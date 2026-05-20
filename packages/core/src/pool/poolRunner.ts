@@ -13,7 +13,6 @@ import {
 import type { PoolTask } from './types';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
-const WORKER_STOP_TIMEOUT_MS = 60_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
 
 function formatCapturedStderr(text: string): string {
@@ -90,8 +89,6 @@ export class PoolRunner {
   private startDeferred: Deferred | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
-  private stopTimer: NodeJS.Timeout | undefined;
-  private forceKillTimer: NodeJS.Timeout | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -180,6 +177,12 @@ export class PoolRunner {
     return this.runTaskInternal('collect', task) as Promise<CollectTaskResult>;
   }
 
+  /**
+   * Host owns termination — no IPC handshake. Per-task teardown runs in
+   * `runInPool`'s own `finally` before `runFinished`, so by `stop()` there
+   * is nothing process-level to drain. Relying on the worker's own
+   * `process.exit()` was the rstest#1275 hang.
+   */
   stop(options?: { force?: boolean }): Promise<void> {
     return this.runOperation(async () => {
       switch (this.state) {
@@ -187,7 +190,10 @@ export class PoolRunner {
         case 'IDLE':
           return;
         case 'STOPPING': {
-          // Wait for the in-flight stop, then optionally force.
+          // Wait for the in-flight stop to settle. If the caller asks for
+          // `force` and the prior stop was graceful, escalate to SIGKILL —
+          // the prior `await` may have resolved without actually killing
+          // the child (e.g. SIGTERM masked).
           if (this.stopDeferred) {
             await this.stopDeferred.promise;
           }
@@ -216,34 +222,7 @@ export class PoolRunner {
       this.state = 'STOPPING';
       this.stopDeferred = createDeferred();
 
-      // Best-effort graceful stop. The worker defers its own exit until
-      // after any in-flight task completes teardown.
-      try {
-        this.worker.send({ type: 'stop' });
-      } catch {
-        // ignore: worker may already be down
-      }
-
-      // Escalate to SIGTERM after the budget expires, then SIGKILL shortly
-      // after. On Windows, SIGTERM is unconditionally fatal (the process
-      // cannot trap it), so sending it immediately would kill workers with
-      // in-flight tasks. Instead, rely on the IPC `stop` message for
-      // graceful shutdown and only signal when the worker fails to exit in
-      // time.
-      this.stopTimer = setTimeout(() => {
-        void this.worker.stop().catch(() => undefined);
-      }, WORKER_STOP_TIMEOUT_MS);
-      this.stopTimer.unref();
-      // Arm a hard SIGKILL fallback independently so it fires even if
-      // SIGTERM is trapped/ignored and `worker.stop()` never resolves.
-      this.forceKillTimer = setTimeout(() => {
-        void this.worker.stop({ force: true }).catch(() => undefined);
-      }, WORKER_STOP_TIMEOUT_MS + 5_000);
-      this.forceKillTimer.unref();
-
-      if (options?.force) {
-        await this.worker.stop({ force: true });
-      }
+      await this.worker.stop({ force: options?.force ?? false });
       await this.stopDeferred.promise;
     });
   }
@@ -351,10 +330,6 @@ export class PoolRunner {
       case 'collectFinished':
         this.resolveTask('collect', response.taskId, response.result);
         return;
-      case 'stopped':
-        // Worker acknowledged graceful shutdown — actual transition happens
-        // in `handleExit`.
-        return;
       case 'fatal_error': {
         const error = deserializeError(response.error);
         // Mark as crashed BEFORE rejecting. The host's dispatch unwinds via
@@ -384,7 +359,6 @@ export class PoolRunner {
   }
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
-    this.clearStopTimer();
     this.clearStartTimer();
 
     const wasStopping = this.state === 'STOPPING';
@@ -469,16 +443,5 @@ export class PoolRunner {
     if (!this.startTimer) return;
     clearTimeout(this.startTimer);
     this.startTimer = undefined;
-  }
-
-  private clearStopTimer(): void {
-    if (this.stopTimer) {
-      clearTimeout(this.stopTimer);
-      this.stopTimer = undefined;
-    }
-    if (this.forceKillTimer) {
-      clearTimeout(this.forceKillTimer);
-      this.forceKillTimer = undefined;
-    }
   }
 }

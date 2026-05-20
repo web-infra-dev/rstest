@@ -223,32 +223,34 @@ describe('ThreadsPool - capacity', () => {
     const taskCount = 4;
     const pool = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
 
-    const results = await Promise.all(
-      Array.from({ length: taskCount }, () =>
-        pool.runTest(
-          createTask('run', { __testMode: 'slow', __delayMs: delayMs }),
+    try {
+      const results = await Promise.all(
+        Array.from({ length: taskCount }, () =>
+          pool.runTest(
+            createTask('run', { __testMode: 'slow', __delayMs: delayMs }),
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(results).toHaveLength(taskCount);
-    for (const r of results) {
-      expect(r.status).toBe('pass');
+      expect(results).toHaveLength(taskCount);
+      for (const r of results) {
+        expect(r.status).toBe('pass');
+      }
+
+      const intervals = results.map((r) => ({
+        start: (r as any)._startedAt as number,
+        end: (r as any)._finishedAt as number,
+      }));
+
+      // Upper bound: at no point were more than maxWorkers tasks running.
+      for (const point of intervals) {
+        const concurrent = intervals.filter(
+          (iv) => iv.start < point.end && iv.end > point.start,
+        ).length;
+        expect(concurrent).toBeLessThanOrEqual(maxWorkers);
+      }
+    } finally {
+      await pool.close();
     }
-
-    const intervals = results.map((r) => ({
-      start: (r as any)._startedAt as number,
-      end: (r as any)._finishedAt as number,
-    }));
-
-    // Upper bound: at no point were more than maxWorkers tasks running.
-    for (const point of intervals) {
-      const concurrent = intervals.filter(
-        (iv) => iv.start < point.end && iv.end > point.start,
-      ).length;
-      expect(concurrent).toBeLessThanOrEqual(maxWorkers);
-    }
-
-    await pool.close();
   });
 });

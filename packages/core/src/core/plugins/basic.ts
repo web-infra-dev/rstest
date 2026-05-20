@@ -50,15 +50,19 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         multipleProjects: context.projects.length > 1,
       });
 
+      // Mirrors the pattern in packages/browser/src/hostController.ts:
+      // only write `performance.buildCache` when the user has opted in.
+      // Leaving it undefined keeps the generated Rsbuild config aligned with
+      // the user's original intent instead of materializing the default value.
+      const buildCache = resolveProjectBuildCache({
+        context,
+        project,
+      });
+
       return mergeEnvironmentConfig(
         config,
         {
-          performance: {
-            buildCache: resolveProjectBuildCache({
-              context,
-              project,
-            }),
-          },
+          performance: buildCache ? { buildCache } : undefined,
           tools,
           resolve,
           source,

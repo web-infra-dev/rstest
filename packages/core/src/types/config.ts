@@ -457,6 +457,13 @@ export interface RstestConfig {
   slowTestThreshold?: number;
 
   /**
+   * Detect async resources that are still active after a test file finishes.
+   * This may slow down tests and should be used for debugging leaks.
+   * @default false
+   */
+  detectAsyncLeaks?: boolean;
+
+  /**
    * Restores all global variables that were changed with `rstest.stubGlobal` before every test.
    * @default false
    */
