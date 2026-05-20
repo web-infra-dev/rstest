@@ -69,6 +69,7 @@ export type CommonOptions = {
   silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
+  heapProfile?: boolean | string;
   detectAsyncLeaks?: boolean;
   trace?: boolean;
   disableConsoleIntercept?: boolean;
@@ -133,6 +134,7 @@ function mergeWithCLIOptions(
     'hideSkippedTests',
     'hideSkippedTestFiles',
     'logHeapUsage',
+    'heapProfile',
     'detectAsyncLeaks',
   ];
   for (const key of keys) {

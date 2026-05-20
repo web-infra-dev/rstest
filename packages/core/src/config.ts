@@ -246,6 +246,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hideSkippedTests: false,
   hideSkippedTestFiles: false,
   logHeapUsage: false,
+  heapProfile: false,
   detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,

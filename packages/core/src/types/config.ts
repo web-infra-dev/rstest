@@ -487,6 +487,31 @@ export interface RstestConfig {
   logHeapUsage?: boolean;
 
   /**
+   * Append one NDJSON record per test file to a profile file, capturing
+   * the worker's `process.memoryUsage()` at file boundary. Useful for
+   * spotting monotonic heap growth across a long suite under
+   * `isolate: false`, where a single worker carries state across files.
+   *
+   * Each line is a self-describing JSON object — multiple workers
+   * appending to the same file is safe because each `appendFileSync`
+   * write is below `PIPE_BUF`. Plot with `jq` / pandas to see heap
+   * vs file sequence.
+   *
+   * @example
+   * ```jsonc
+   * { "pid": 12345, "seq": 1, "test": "src/foo.test.ts", "heapUsed": 71000000, "heapTotal": 136000000, "rss": 254000000, "external": 133000000, "ts": 1714563210123 }
+   * ```
+   *
+   * - `true` — write to `./rstest-heap-profile.jsonl` relative to the
+   *   project root
+   * - `string` — absolute or project-root-relative path
+   * - `false` / `undefined` — disabled (default)
+   *
+   * @default false
+   */
+  heapProfile?: boolean | string;
+
+  /**
    * Custom handler for console log in tests
    */
   onConsoleLog?: (content: string) => boolean | void;

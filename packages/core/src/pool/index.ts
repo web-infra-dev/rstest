@@ -73,6 +73,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     snapshotFormat,
     env,
     logHeapUsage,
+    heapProfile,
     detectAsyncLeaks,
     bail,
     chaiConfig,
@@ -105,6 +106,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
+    heapProfile,
     detectAsyncLeaks,
     bail,
     chaiConfig,

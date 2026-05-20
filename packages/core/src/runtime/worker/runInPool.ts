@@ -1,5 +1,7 @@
-import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { appendFileSync } from 'node:fs';
+import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { isMainThread, threadId } from 'node:worker_threads';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { install } from 'source-map-support';
 import type {
   MaybePromise,
@@ -57,6 +59,55 @@ const registerGlobalApi = (api: Rstest) => {
 
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
+
+/**
+ * Per-file NDJSON heap snapshot. Triggered at the top of `preparePool`
+ * (i.e. before the per-file rspack compile + setup-file evaluation),
+ * so consecutive lines for the same worker pid form a clean heap
+ * trajectory across the file sequence.
+ *
+ * Schema (single JSON object per line):
+ * ```
+ * { pid, seq, test, heapUsed, heapTotal, rss, external, ts }
+ * ```
+ *
+ * Multiple workers may append to the same file. Each line is < PIPE_BUF
+ * (4 KiB on Linux, 512 B on macOS — comfortably above our payload of
+ * ~150 bytes), so `appendFileSync` is atomic per write. Lines from
+ * different workers will interleave but each is self-describing.
+ *
+ * Errors are swallowed — a profile failure must never break test runs.
+ */
+let heapProfileSeq = 0;
+const writeHeapProfileLine = (
+  testPath: string,
+  heapProfile: boolean | string | undefined,
+): void => {
+  if (!heapProfile) return;
+  const path =
+    typeof heapProfile === 'string' && heapProfile.length > 0
+      ? isAbsolute(heapProfile)
+        ? heapProfile
+        : resolvePath(process.cwd(), heapProfile)
+      : resolvePath(process.cwd(), 'rstest-heap-profile.jsonl');
+  try {
+    heapProfileSeq += 1;
+    const mem = process.memoryUsage();
+    const record = {
+      pid: process.pid,
+      seq: heapProfileSeq,
+      test: testPath,
+      heapUsed: mem.heapUsed,
+      heapTotal: mem.heapTotal,
+      rss: mem.rss,
+      external: mem.external,
+      ts: Date.now(),
+    };
+    appendFileSync(path, `${JSON.stringify(record)}\n`);
+  } catch {
+    // Best-effort: a profiler failure must never break tests.
+  }
+};
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -127,6 +178,8 @@ const preparePool = async (
     fn();
   });
   globalCleanups.length = 0;
+
+  writeHeapProfileLine(testPath, context.runtimeConfig.heapProfile);
 
   const taskContext = createNodeTaskContext();
   setRealTimers();

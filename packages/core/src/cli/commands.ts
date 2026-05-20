@@ -76,6 +76,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ],
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
+  [
+    '--heapProfile [path]',
+    'Append per-file heap stats as NDJSON to the given path (default: ./rstest-heap-profile.jsonl)',
+  ],
   ['--detectAsyncLeaks', 'Detect async resources that leak after tests finish'],
   ['--trace', 'Dump a Perfetto-compatible performance trace JSON file'],
   [
