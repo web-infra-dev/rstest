@@ -9,7 +9,8 @@ export const getTestEnvironmentTransformMode = (
     return testEnvironment.transformMode;
   }
 
-  return testEnvironment.name === 'jsdom' || testEnvironment.name === 'happy-dom'
+  return testEnvironment.name === 'jsdom' ||
+    testEnvironment.name === 'happy-dom'
     ? 'browser'
     : 'node';
 };

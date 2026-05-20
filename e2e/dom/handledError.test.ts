@@ -25,9 +25,7 @@ describe('custom-environment', () => {
     );
     await expectExecFailed();
 
-    expectStderrLog(
-      /Failed to resolve testEnvironment "custom-environment"/,
-    );
+    expectStderrLog(/Failed to resolve testEnvironment "custom-environment"/);
   });
 });
 
