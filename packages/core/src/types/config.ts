@@ -596,7 +596,8 @@ type OptionalKeys =
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
   | 'extends'
-  | 'shard';
+  | 'shard'
+  | 'heapProfile';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
