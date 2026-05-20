@@ -15,7 +15,7 @@
     "@rsbuild/plugin-sass": "^1.5.2",
     "@rspress/core": "2.0.11",
     "@rspress/plugin-algolia": "2.0.11",
-    "@rstack-dev/doc-ui": "1.13.3",
+    "@rstack-dev/doc-ui": "1.14.0",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.14",
