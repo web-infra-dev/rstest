@@ -113,7 +113,17 @@ export class Pool {
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
-      const runner = new PoolRunner(worker, { workerId });
+      // `memoryLimitBytes` only matters when runners are reused
+      // (`isolate: false`). For `isolate: true` the runner is single-use
+      // so the cap is irrelevant and we omit it to keep `isUsable()`
+      // hot-path free of the (cheap) comparison.
+      const runner = new PoolRunner(worker, {
+        workerId,
+        memoryLimitBytes:
+          this.options.isolate === false
+            ? this.options.memoryLimitBytes
+            : undefined,
+      });
       this.activeRunners.add(runner);
       try {
         await runner.start();

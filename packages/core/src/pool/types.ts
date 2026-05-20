@@ -15,6 +15,12 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: boolean;
+  /**
+   * Recycle a reused runner once its last-reported RSS exceeds this
+   * many bytes. Disabled when omitted or `0`. See
+   * `RstestPoolOptions.memoryLimit` for the user-facing knob.
+   */
+  memoryLimitBytes?: number;
   env?: Record<string, string>;
   execArgv?: string[];
   /**
