@@ -328,7 +328,8 @@ export class CoverageProvider implements RstestCoverageProvider {
           this.filterCoverageData(istanbulData);
           coverageMap.merge(istanbulData);
         } catch (e) {
-          console.warn(`Failed to process coverage for ${entry.url}:`, e);
+          console.error(`Failed to process coverage for ${entry.url}:`, e);
+          process.exitCode = 1;
         }
       }),
     );
