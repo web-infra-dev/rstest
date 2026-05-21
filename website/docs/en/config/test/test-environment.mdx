@@ -14,6 +14,11 @@ The environment that will be used for testing.
 
 The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
 
+:::tip Browser Mode
+If you enable [browser mode](/config/test/browser), tests run directly in a real browser (Chromium/Firefox/WebKit). In this case, the `testEnvironment` option is ignored because the real browser itself is the host environment.
+:::
+
+
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
