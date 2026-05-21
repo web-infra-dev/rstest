@@ -106,7 +106,7 @@ Rstest 也支持通过 `testEnvironment.name` 加载自定义 environment。
 - 可以传相对或绝对 JavaScript 文件路径，例如 `.js` 或 `.mjs`。
 - 对于包名，`testEnvironment: 'foo'` 也会继续尝试解析 `rstest-environment-foo`。
 
-自定义 environment 需要默认导出一个 environment 对象，或导出一个具名 `environment` 对象。
+自定义 environment 需要默认导出一个 environment 对象。
 
 ```js title="my-environment.mjs"
 import { builtinEnvironments } from '@rstest/core';

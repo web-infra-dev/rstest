@@ -18,7 +18,6 @@ The default environment in Rstest is a `Node.js` environment. If you are buildin
 If you enable [browser mode](/config/test/browser), tests run directly in a real browser (Chromium/Firefox/WebKit). In this case, the `testEnvironment` option is ignored because the real browser itself is the host environment.
 :::
 
-
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
@@ -107,7 +106,7 @@ Rstest also supports custom environments through `testEnvironment.name`.
 - Use a relative or absolute JavaScript file path such as `.js` or `.mjs`.
 - For package names, `testEnvironment: 'foo'` also tries to resolve `rstest-environment-foo`.
 
-Custom environments should export an environment object as the default export or as a named `environment` export.
+Custom environments should export an environment object as the default export.
 
 ```js title="my-environment.mjs"
 import { builtinEnvironments } from '@rstest/core';

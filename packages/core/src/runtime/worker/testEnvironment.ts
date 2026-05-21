@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { TestEnvironment } from '../../types';
@@ -36,56 +37,54 @@ const resolveEnvironmentExport = (environmentModule: unknown) => {
     return environmentModule.default;
   }
 
-  if (
-    'environment' in environmentModule &&
-    isTestEnvironment(environmentModule.environment)
-  ) {
-    return environmentModule.environment;
-  }
-
-  if (
-    'default' in environmentModule &&
-    environmentModule.default &&
-    typeof environmentModule.default === 'object' &&
-    'environment' in environmentModule.default &&
-    isTestEnvironment(environmentModule.default.environment)
-  ) {
-    return environmentModule.default.environment;
-  }
-
   return undefined;
 };
 
-const resolveEnvironmentPath = (name: string, roots: string[]) => {
+const resolveEnvironmentPaths = (name: string, roots: string[]) => {
   if (name.startsWith('.') || isAbsolute(name)) {
     for (const root of roots) {
       const candidatePath = isAbsolute(name) ? name : join(root, name);
 
       if (existsSync(candidatePath)) {
-        return pathToFileURL(candidatePath).href;
+        return [pathToFileURL(candidatePath).href];
       }
     }
 
-    return undefined;
+    return [];
   }
 
   const candidates = [name, `rstest-environment-${name}`];
+  const resolvedPaths: string[] = [];
+  const seenPaths = new Set<string>();
 
   for (const root of roots) {
     const resolveBase = pathToFileURL(
       join(root, environmentResolveBaseName),
     ).href;
+    const require = createRequire(resolveBase);
 
     for (const candidate of candidates) {
       try {
-        return import.meta.resolve(candidate, resolveBase);
+        const resolvedPath = import.meta.resolve(candidate, resolveBase);
+        if (!seenPaths.has(resolvedPath)) {
+          seenPaths.add(resolvedPath);
+          resolvedPaths.push(resolvedPath);
+        }
       } catch {
-        continue;
+        try {
+          const resolvedPath = pathToFileURL(require.resolve(candidate)).href;
+          if (!seenPaths.has(resolvedPath)) {
+            seenPaths.add(resolvedPath);
+            resolvedPaths.push(resolvedPath);
+          }
+        } catch {
+          continue;
+        }
       }
     }
   }
 
-  return undefined;
+  return resolvedPaths;
 };
 
 export const loadTestEnvironment = async (
@@ -96,22 +95,24 @@ export const loadTestEnvironment = async (
     return builtinEnvironments[name as keyof typeof builtinEnvironments];
   }
 
-  const resolvedPath = resolveEnvironmentPath(name, roots);
+  const resolvedPaths = resolveEnvironmentPaths(name, roots);
 
-  if (!resolvedPath) {
+  if (resolvedPaths.length === 0) {
     throw new Error(
       `Failed to resolve testEnvironment "${name}". Use a built-in environment name, an installed package, or a relative/absolute JavaScript file path.`,
     );
   }
 
-  const environmentModule = await import(resolvedPath);
-  const environment = resolveEnvironmentExport(environmentModule);
+  for (const resolvedPath of resolvedPaths) {
+    const environmentModule = await import(resolvedPath);
+    const environment = resolveEnvironmentExport(environmentModule);
 
-  if (!environment) {
-    throw new Error(
-      `Invalid testEnvironment module "${name}". It must export a test environment object as the default export or as a named \`environment\` export.`,
-    );
+    if (environment) {
+      return environment;
+    }
   }
 
-  return environment;
+  throw new Error(
+    `Invalid testEnvironment module "${name}". It must export a test environment object as the default export.`,
+  );
 };
