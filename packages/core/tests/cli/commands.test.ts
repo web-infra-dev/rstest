@@ -214,6 +214,25 @@ describe('CLI help output', () => {
       name: 'chromium',
     });
   });
+
+  it('accepts --reporters and populates options.reporters', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--reporters', 'verbose'],
+      { run: false },
+    );
+
+    expect(parsed.options.reporters).toBe('verbose');
+  });
+
+  it('rewrites deprecated --reporter to --reporters', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--reporter', 'verbose', '--reporter=junit'],
+      { run: false },
+    );
+
+    expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
+    expect(parsed.options.reporter).toBeUndefined();
+  });
 });
 
 describe('normalizeCliFilters', () => {

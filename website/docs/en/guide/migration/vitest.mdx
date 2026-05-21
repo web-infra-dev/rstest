@@ -52,7 +52,7 @@ Some Vitest CLI flags map directly to Rstest, while others change shape. Use thi
 | `vitest` / `vitest watch` / `vitest --watch` | `rstest --watch` or `rstest watch`          | Rstest does not auto-enable watch mode — pass `--watch` explicitly.                         |
 | `vitest --coverage`                          | `rstest --coverage`                         | Also install the provider package that matches your config (see the `coverage` config row). |
 | `vitest --environment=jsdom`                 | `rstest --testEnvironment jsdom`            |                                                                                             |
-| `vitest --reporter=verbose`                  | `rstest --reporter verbose`                 |                                                                                             |
+| `vitest --reporter=verbose`                  | `rstest --reporters verbose`                |                                                                                             |
 | `vitest --globals`                           | `rstest --globals`                          |                                                                                             |
 | `vitest -t <pattern>` / `--testNamePattern`  | `rstest -t <pattern>` / `--testNamePattern` |                                                                                             |
 | `vitest -u` / `--update`                     | `rstest -u` / `--update`                    |                                                                                             |

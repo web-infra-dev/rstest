@@ -17,7 +17,7 @@ Rstest 中的报告器控制测试结果的显示和处理方式。
 
 你可以通过以下方式配置报告器：
 
-1. **CLI**: `--reporter=<name>` (可多次使用)
+1. **CLI**: `--reporters=<name>` (可多次使用)
 2. **配置文件**: 在 `rstest.config.ts` 中添加 [reporters](/config/test/reporters)
 
 ```ts
@@ -109,7 +109,7 @@ Rstest 提供了多种内置报告器：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=verbose
+npx rstest --reporters=verbose
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -149,7 +149,7 @@ Dot 报告器会为每个测试用例输出一个紧凑字符：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=dot
+npx rstest --reporters=dot
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -172,7 +172,7 @@ GitHub Actions 报告器将在测试失败时以 [GitHub Actions 工作流命令
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=github-actions
+npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -216,7 +216,7 @@ export default defineConfig({
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=github-actions
+npx rstest --reporters=github-actions
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -252,7 +252,7 @@ export default defineConfig({
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=junit
+npx rstest --reporters=junit
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -304,7 +304,7 @@ JUnit 报告器将测试用例执行状态映射到 JUnit 测试状态：
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=json
+npx rstest --reporters=json
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -361,7 +361,7 @@ Markdown 报告器会将结果以一份完整的 markdown 文档输出到 stdout
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
 ```bash
-npx rstest --reporter=md
+npx rstest --reporters=md
 ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -477,7 +477,7 @@ Blob 报告器将测试结果序列化为 JSON 文件，以便后续合并。它
 <Tabs defaultValue='CLI'>
   <Tab label="CLI">
 ```bash
-npx rstest run --shard 1/3 --reporter=blob
+npx rstest run --shard 1/3 --reporters=blob
 ```
   </Tab>
   <Tab label="rstest.config.ts">

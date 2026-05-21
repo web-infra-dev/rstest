@@ -9,7 +9,7 @@ import type {
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { color, determineAgent, formatError, logger } from '../utils';
+import { bgColor, color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -86,7 +86,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
   ],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters <name>', 'Specify the reporter(s) to use'],
   [
     '-t, --testNamePattern <value>',
     'Run only tests with a name that matches the regex',
@@ -170,7 +170,7 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   ['--coverage', 'Enable code coverage collection'],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters <name>', 'Specify the reporter(s) to use'],
   ['--cleanup', 'Remove blob reports directory after merging'],
 ];
 
@@ -225,7 +225,7 @@ const valueTakingOptions = new Set([
   '--pool.minWorkers',
   '--pool.type',
   '--project',
-  '--reporter',
+  '--reporters',
   '--retry',
   '--root',
   '--shard',
@@ -269,6 +269,39 @@ const getCliCommand = (argv: string[]): string | undefined => {
   }
 
   return;
+};
+
+const hasLegacyReporterFlag = (argv: string[]): boolean =>
+  argv.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='));
+
+const normalizeReporterCliArgs = (argv: string[]): string[] => {
+  if (!hasLegacyReporterFlag(argv)) {
+    return argv;
+  }
+  return argv.map((arg) => {
+    if (arg === '--reporter') {
+      return '--reporters';
+    }
+    if (arg.startsWith('--reporter=')) {
+      return `--reporters=${arg.slice('--reporter='.length)}`;
+    }
+    return arg;
+  });
+};
+
+let reporterDeprecationScheduled = false;
+
+const scheduleReporterDeprecationWarning = (): void => {
+  if (reporterDeprecationScheduled) {
+    return;
+  }
+  reporterDeprecationScheduled = true;
+  process.on('exit', () => {
+    const badge = bgColor('bgYellow', ' DEPRECATED ');
+    logger.warn(
+      `${badge} ${color.yellow('--reporter')} is deprecated and will be removed in ${color.bold('1.0.0')}. Use ${color.green('--reporters')} instead.`,
+    );
+  });
 };
 
 const normalizeCoverageCliArgs = (argv: string[]): string[] => {
@@ -336,16 +369,22 @@ const normalizeBrowserCliArgs = (argv: string[]): string[] => {
 };
 
 const normalizeCliArgs = (argv: string[]): string[] =>
-  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
+  normalizePoolCliArgs(
+    normalizeBrowserCliArgs(
+      normalizeCoverageCliArgs(normalizeReporterCliArgs(argv)),
+    ),
+  );
 
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
-  cli.parse = ((argv, options) =>
-    originalParse(
-      normalizeCliArgs(argv ?? process.argv),
-      options,
-    )) as CAC['parse'];
+  cli.parse = ((argv, options) => {
+    const rawArgv = argv ?? process.argv;
+    if (options?.run !== false && hasLegacyReporterFlag(rawArgv)) {
+      scheduleReporterDeprecationWarning();
+    }
+    return originalParse(normalizeCliArgs(rawArgv), options);
+  }) as CAC['parse'];
 };
 
 const filterHelpOptions = (

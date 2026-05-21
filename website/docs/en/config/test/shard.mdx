@@ -56,13 +56,13 @@ Configure each shard to output results using the `blob` reporter:
 
 ```bash
 # Shard 1
-npx rstest run --shard 1/3 --reporter=blob --coverage
+npx rstest run --shard 1/3 --reporters=blob --coverage
 
 # Shard 2
-npx rstest run --shard 2/3 --reporter=blob --coverage
+npx rstest run --shard 2/3 --reporters=blob --coverage
 
 # Shard 3
-npx rstest run --shard 3/3 --reporter=blob --coverage
+npx rstest run --shard 3/3 --reporters=blob --coverage
 ```
 
 Each shard writes its results to `.rstest-reports/blob-{index}-{count}.json`.

@@ -51,7 +51,7 @@ export type CommonOptions = {
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
-  reporter?: string[];
+  reporters?: string | string[];
   project?: string[];
   /**
    * Coverage options.
@@ -163,8 +163,8 @@ function mergeWithCLIOptions(
     config.passWithNoTests ??= true;
   }
 
-  if (options.reporter) {
-    config.reporters = castArray(options.reporter) as typeof config.reporters;
+  if (options.reporters) {
+    config.reporters = castArray(options.reporters) as typeof config.reporters;
   }
 
   if (options.shard) {
@@ -528,10 +528,10 @@ export async function initCli(options: CommonOptions): Promise<{
   });
 
   // In agent environments, default to markdown output when the user didn't
-  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+  // explicitly set reporters (no `reporters` in config and no `--reporters`).
   if (
     determineAgent().isAgent &&
-    !options.reporter &&
+    !options.reporters &&
     config.reporters == null
   ) {
     config.reporters = ['md'];
