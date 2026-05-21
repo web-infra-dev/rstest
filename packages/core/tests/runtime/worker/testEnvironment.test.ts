@@ -39,10 +39,10 @@ describe('loadTestEnvironment', () => {
       'utf8',
     );
 
-    const environment = await loadTestEnvironment('./fixtures/custom-environment.mjs', [
-      firstRoot,
-      secondRoot,
-    ]);
+    const environment = await loadTestEnvironment(
+      './fixtures/custom-environment.mjs',
+      [firstRoot, secondRoot],
+    );
 
     expect(environment.name).toBe('fallback-environment');
   });
