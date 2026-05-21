@@ -64,6 +64,17 @@ let nextTaskSeq = 0;
 
 type PoolRunnerOptions = {
   workerId: number;
+  /**
+   * Recycle this runner after it reports an RSS above this many bytes.
+   * Disabled when `0` or omitted. Only meaningful when the pool reuses
+   * runners (`isolate: false`); `isolate: true` workers are single-use.
+   *
+   * The worker reports its `process.memoryUsage().rss` at the end of
+   * each task. If a value exceeds the limit, `isUsable()` flips false
+   * and the pool's existing dispose path spawns a fresh runner instead
+   * of returning this one to the idle pool.
+   */
+  memoryLimitBytes?: number;
 };
 
 /**
@@ -99,8 +110,19 @@ export class PoolRunner {
    */
   private crashed = false;
 
+  /**
+   * Last RSS (bytes) reported by the worker. Updated on each
+   * `runFinished` / `collectFinished` response carrying a `memory`
+   * field. Compared against `memoryLimitBytes` in `isUsable()` so a
+   * bloated worker is recycled on next dispatch attempt instead of
+   * returning to the idle pool.
+   */
+  private lastReportedRssBytes = 0;
+  private readonly memoryLimitBytes: number;
+
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
+    this.memoryLimitBytes = Math.max(0, options.memoryLimitBytes ?? 0);
     this.worker = worker;
 
     this.handleMessage = this.handleMessage.bind(this);
@@ -113,7 +135,14 @@ export class PoolRunner {
   }
 
   isUsable(): boolean {
-    return this.state === 'STARTED' && !this.crashed;
+    if (this.state !== 'STARTED' || this.crashed) return false;
+    if (
+      this.memoryLimitBytes > 0 &&
+      this.lastReportedRssBytes > this.memoryLimitBytes
+    ) {
+      return false;
+    }
+    return true;
   }
 
   start(): Promise<void> {
@@ -325,9 +354,11 @@ export class PoolRunner {
         this.startDeferred = undefined;
         return;
       case 'runFinished':
+        if (response.memory) this.lastReportedRssBytes = response.memory.rss;
         this.resolveTask('run', response.taskId, response.result);
         return;
       case 'collectFinished':
+        if (response.memory) this.lastReportedRssBytes = response.memory.rss;
         this.resolveTask('collect', response.taskId, response.result);
         return;
       case 'fatal_error': {

@@ -29,6 +29,7 @@ import {
 import type { TraceEvent } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { createDefaultMemoryGate } from './memoryGate';
+import { parseMemoryLimit } from './parseMemoryLimit';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
@@ -369,11 +370,18 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
+  // `memoryLimit` only matters when runners are reused (`isolate: false`);
+  // otherwise workers are single-use, so the recycle check would be dead
+  // code. Parse to bytes here so the pool stores a single int.
+  const memoryLimitBytes =
+    isolate === false ? parseMemoryLimit(poolOptions.memoryLimit) : undefined;
+
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
     isolate,
     maxWorkers,
     minWorkers,
+    memoryLimitBytes,
     execArgv: [
       ...(poolOptions?.execArgv ?? []),
       ...execArgv,

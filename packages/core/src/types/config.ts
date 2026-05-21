@@ -25,6 +25,28 @@ export type RstestPoolOptions = {
   minWorkers?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
+  /**
+   * Recycle a reused worker once its RSS exceeds this threshold. Only
+   * meaningful when `isolate: false` (workers are reused across files);
+   * a no-op under the default `isolate: true` since workers are
+   * single-use anyway.
+   *
+   * Accepts:
+   * - `number` >= 1 — bytes (e.g. `1_500_000_000` for 1.5 GB)
+   * - `number` in `(0, 1]` — fraction of total system memory
+   * - `string` with a unit suffix — `"512MB"`, `"1.5GB"`, `"20%"`,
+   *   `"1GiB"`, … (`%` is fraction of total system memory)
+   *
+   * After each test file the worker reports `process.memoryUsage().rss`
+   * to the host. When that exceeds the parsed limit, the pool disposes
+   * the worker and spawns a fresh one. Heap accumulated from prior
+   * files (vendor modules, JSDOM nodes, React fiber trees) is
+   * reclaimed by process exit.
+   *
+   * Useful for long suites under `isolate: false` where a single
+   * worker's heap can grow into GC-thrash territory.
+   */
+  memoryLimit?: number | string;
 };
 
 export type BundleDependencyPattern = string | RegExp;
