@@ -5,9 +5,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from '@rstest/core';
+import { resolveTestEnvironmentPath } from '../../../src/core/resolveTestEnvironment';
 import { loadTestEnvironment } from '../../../src/runtime/worker/testEnvironment';
 
 const environmentModule = (name: string) =>
@@ -22,7 +24,7 @@ const environmentModule = (name: string) =>
     '};',
   ].join('\n');
 
-describe('loadTestEnvironment', () => {
+describe('testEnvironment', () => {
   let tempDir: string | undefined;
 
   afterEach(() => {
@@ -44,11 +46,16 @@ describe('loadTestEnvironment', () => {
     mkdirSync(environmentDir, { recursive: true });
     writeFileSync(environmentPath, environmentModule('fallback-environment'));
 
-    const environment = await loadTestEnvironment(
+    const resolvedPath = await resolveTestEnvironmentPath(
       './fixtures/custom-environment.mjs',
       [firstRoot, secondRoot],
     );
+    const environment = await loadTestEnvironment(
+      './fixtures/custom-environment.mjs',
+      resolvedPath,
+    );
 
+    expect(resolvedPath).toBe(pathToFileURL(environmentPath).href);
     expect(environment.name).toBe('fallback-environment');
   });
 
@@ -91,14 +98,28 @@ describe('loadTestEnvironment', () => {
       environmentModule('fallback-package-environment'),
     );
 
-    const environment = await loadTestEnvironment('package-marker', [
+    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPath,
+    );
 
+    expect(resolvedPath).toBe(
+      pathToFileURL(
+        join(
+          realpathSync(tempDir),
+          'node_modules',
+          'rstest-environment-package-marker',
+          'index.mjs',
+        ),
+      ).href,
+    );
     expect(environment.name).toBe('fallback-package-environment');
   });
 
-  it('should reject named environment exports', async () => {
+  it('should reject named environment exports before worker loading', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 
     const environmentPath = join(tempDir, 'named-environment.mjs');
@@ -112,7 +133,9 @@ describe('loadTestEnvironment', () => {
     );
 
     await expect(
-      loadTestEnvironment('./named-environment.mjs', [realpathSync(tempDir)]),
+      resolveTestEnvironmentPath('./named-environment.mjs', [
+        realpathSync(tempDir),
+      ]),
     ).rejects.toThrow(
       'must export a test environment object as the default export',
     );

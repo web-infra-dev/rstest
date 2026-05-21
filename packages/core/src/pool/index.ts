@@ -2,6 +2,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
+import { resolveTestEnvironmentPath } from '../core/resolveTestEnvironment';
 import { getFileTaskId } from '../runtime/runner';
 import type {
   CoverageMapData,
@@ -51,7 +52,10 @@ const parseWorkers = (maxWorkers: string | number): number => {
   return parsed > 0 ? parsed : 1;
 };
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
+const getRuntimeConfig = async (
+  context: RstestContext,
+  project: ProjectContext,
+): Promise<RuntimeConfig> => {
   const {
     testNamePattern,
     testTimeout,
@@ -78,7 +82,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     chaiConfig,
     includeTaskLocation,
     silent,
-  } = context.normalizedConfig;
+  } = project.normalizedConfig;
 
   return {
     env: {
@@ -110,6 +114,10 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     chaiConfig,
     includeTaskLocation,
     silent,
+    resolvedTestEnvironmentPath: await resolveTestEnvironmentPath(
+      testEnvironment.name,
+      [project.rootPath, context.rootPath],
+    ),
   };
 };
 
@@ -466,7 +474,7 @@ export const createPool = async ({
       onTraceEvents,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = await getRuntimeConfig(context, project);
       const rpcMethods = createRpcMethods({
         runtimeConfig,
         projectConfig: project.normalizedConfig,
@@ -532,7 +540,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = await getRuntimeConfig(context, project);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = createRpcMethods({
         runtimeConfig,
