@@ -352,8 +352,9 @@ export class CoverageProvider implements RstestCoverageProvider {
       const chunk = files.slice(i, i + CHUNK_SIZE);
       const chunkResults = await Promise.all(
         chunk.map(async (file) => {
+          let converter: ReturnType<typeof v8ToIstanbul> | undefined;
           try {
-            const converter = v8ToIstanbul(file, 0, undefined, () => false);
+            converter = v8ToIstanbul(file, 0, undefined, () => false);
             await converter.load();
             converter.applyCoverage([
               {
@@ -363,13 +364,17 @@ export class CoverageProvider implements RstestCoverageProvider {
               },
             ]);
             const istanbulData = converter.toIstanbul();
-            converter.destroy();
             const keys = Object.keys(istanbulData);
             if (keys.length > 0) {
               return istanbulData[keys[0] as string] as FileCoverageData;
             }
-          } catch {
-            // Silently ignore failures (e.g. file deleted between test and coverage generation)
+          } catch (e) {
+            console.error(
+              `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
+            );
+            process.exitCode = 1;
+          } finally {
+            converter?.destroy();
           }
           return null;
         }),

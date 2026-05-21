@@ -264,6 +264,61 @@ describe('generateCoverage', () => {
     }
   });
 
+  it('only filters exact runtime sentinel coverage paths', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const sourceFile = path.join(
+      rootPath,
+      'src',
+      'webpack',
+      'runtime',
+      'index.ts',
+    );
+
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const reportedFiles: string[][] = [];
+
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateReports(coverageMap) {
+        reportedFiles.push(coverageMap.files());
+      },
+    } satisfies CoverageProvider;
+
+    const coverageMap = createCoverageMap();
+    coverageMap.addFileCoverage(createFileCoverage(sourceFile));
+    coverageMap.addFileCoverage(createFileCoverage('webpack/runtime/module'));
+    coverageMap.addFileCoverage(createFileCoverage('rstest runtime'));
+
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: {
+          ...defaultCoverage,
+          allowExternal: true,
+        },
+      },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'node',
+        },
+      ],
+    } as RstestContext;
+
+    try {
+      await generateCoverage(context, coverageMap, provider);
+      expect(reportedFiles).toEqual([[sourceFile]]);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
   it('limits included coverage files to changed coverage filters', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const srcDir = path.join(rootPath, 'src');

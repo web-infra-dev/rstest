@@ -146,6 +146,11 @@ const shouldExcludeSetupCoverageFile = (
   });
 };
 
+const isRuntimeSentinelCoverageFile = (filePath: string): boolean =>
+  filePath === 'rstest runtime' ||
+  filePath === 'webpack/runtime' ||
+  filePath.startsWith('webpack/runtime/');
+
 export const filterChangedFiles = (
   files: string[],
   changedCoverageFilters: string[] | undefined,
@@ -205,10 +210,7 @@ export async function generateCoverage(
       ) {
         return false;
       }
-      if (
-        normalizedFile.includes('webpack/runtime') ||
-        normalizedFile.includes('rstest runtime')
-      ) {
+      if (isRuntimeSentinelCoverageFile(normalizedFile)) {
         return false;
       }
       // Keep setupFiles/globalSetup out of the final report for every provider.
