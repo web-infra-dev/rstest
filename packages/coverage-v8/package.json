@@ -15,6 +15,7 @@
   ],
   "scripts": {
     "build": "rslib build",
+    "test": "rstest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
