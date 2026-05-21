@@ -196,34 +196,35 @@ function mergeWithCLIOptions(
 
   if (options.coverage !== undefined) {
     config.coverage ??= {};
-    if (
-      typeof options.coverage === 'object' &&
-      options.coverage !== null &&
-      options.coverage.enabled === undefined
-    ) {
-      config.coverage.enabled = true;
-    }
-
     if (typeof options.coverage === 'boolean') {
       config.coverage.enabled = options.coverage;
     } else {
+      let changed: boolean | string | undefined;
+      let shouldEnableCoverage = false;
       const coverageEnabled = coerceCliBoolean(options.coverage.enabled);
       if (coverageEnabled !== undefined) {
         config.coverage.enabled = coverageEnabled;
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+        shouldEnableCoverage = true;
       }
       if (options.coverage.provider !== undefined) {
         config.coverage.provider = options.coverage.provider;
+        shouldEnableCoverage = true;
       }
       if (options.coverage.changed !== undefined) {
-        const changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        changed = normalizeBooleanLikeCliValue(options.coverage.changed);
         config.coverage.changed = changed;
+        shouldEnableCoverage ||= changed !== false;
+      }
 
-        if (options.coverage.enabled === undefined && changed !== false) {
-          config.coverage.enabled = true;
-        }
+      if (
+        coverageEnabled === undefined &&
+        options.coverage.enabled === undefined &&
+        shouldEnableCoverage
+      ) {
+        config.coverage.enabled = true;
       }
     }
   }

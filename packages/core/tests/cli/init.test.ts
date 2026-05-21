@@ -500,6 +500,52 @@ describe('resolveProjects', () => {
         changed: true,
       });
     });
+
+    it('should not enable coverage when coverage.changed is disabled from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            changed: 'false',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        changed: false,
+      });
+      expect(projects[0]!.config.coverage.enabled).toBeUndefined();
+    });
+
+    it('should enable coverage when coverage provider is set from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            provider: 'v8',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        provider: 'v8',
+      });
+    });
   });
 
   describe('pool CLI options', () => {
