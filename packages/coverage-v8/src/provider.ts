@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
-import { isAbsolute, relative } from 'node:path/posix';
+import { posix, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   CoverageOptions,
@@ -39,7 +39,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     public root?: string,
   ) {
     if (this.root) {
-      this.root = this.normalizeForMatching(this.root);
+      this.root = this.normalizeSlashes(this.root);
     }
 
     this.isIncluded = options.include?.length
@@ -55,21 +55,36 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private normalizeForMatching(filePath: string): string {
-    return filePath.replace(/\\/g, '/').toLowerCase();
+    return this.normalizeSlashes(filePath).toLowerCase();
+  }
+
+  private normalizeSlashes(filePath: string): string {
+    return filePath.replace(/\\/g, '/');
+  }
+
+  private isAbsolutePath(filePath: string): boolean {
+    return posix.isAbsolute(filePath) || win32.isAbsolute(filePath);
   }
 
   private toProjectRelativePath(filePath: string): string {
-    const normalizedFilePath = this.normalizeForMatching(filePath);
+    const normalizedFilePath = this.normalizeSlashes(filePath);
 
-    if (!this.root || !isAbsolute(normalizedFilePath)) {
+    if (!this.root || !this.isAbsolutePath(normalizedFilePath)) {
       return normalizedFilePath;
     }
 
-    if (normalizedFilePath === this.root) {
+    if (
+      this.normalizeForMatching(normalizedFilePath) ===
+      this.normalizeForMatching(this.root)
+    ) {
       return '';
     }
 
-    return relative(this.root, normalizedFilePath);
+    if (win32.isAbsolute(normalizedFilePath) || win32.isAbsolute(this.root)) {
+      return win32.relative(this.root, normalizedFilePath).replace(/\\/g, '/');
+    }
+
+    return posix.relative(this.root, normalizedFilePath);
   }
 
   private findInDict(
@@ -120,6 +135,9 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private shouldProcessEntry(filePath: string): boolean {
     const normalizedFilePath = this.normalizeForMatching(filePath);
+    const normalizedRoot = this.root
+      ? this.normalizeForMatching(this.root)
+      : undefined;
 
     if (this.shouldIgnoreTransformedFile(normalizedFilePath)) {
       return false;
@@ -127,9 +145,9 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     if (
       !this.options.allowExternal &&
-      this.root &&
-      normalizedFilePath !== this.root &&
-      !normalizedFilePath.startsWith(`${this.root}/`)
+      normalizedRoot &&
+      normalizedFilePath !== normalizedRoot &&
+      !normalizedFilePath.startsWith(`${normalizedRoot}/`)
     ) {
       return false;
     }
@@ -242,11 +260,6 @@ export class CoverageProvider implements RstestCoverageProvider {
       ) {
         delete istanbulData[key];
         continue;
-      }
-
-      const fileCoverage = istanbulData[key];
-      if (fileCoverage) {
-        fileCoverage.path = originalTestPath;
       }
     }
   }
