@@ -136,6 +136,30 @@ describe('test coverage-v8', () => {
     fs.removeSync(join(__dirname, 'scoped-source/coverage'));
   });
 
+  it('matches project-relative coverage include in nested projects', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'multi-project'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expect(
+      logs
+        .find((log) => log.includes('counter.ts') && log.includes('|'))
+        ?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"counter.ts|100|100|100|100|"`);
+
+    fs.removeSync(join(__dirname, 'multi-project/coverage'));
+  });
+
   it('coverage-v8 with custom options', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

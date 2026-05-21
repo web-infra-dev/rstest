@@ -527,7 +527,7 @@ export const runInPool = async (
       const { createCoverageProvider } = await import('../../coverage');
       coverageProvider = await createCoverageProvider(
         options.context.runtimeConfig.coverage,
-        options.context.rootPath,
+        options.context.projectRoot,
       );
     }
     if (coverageProvider) {

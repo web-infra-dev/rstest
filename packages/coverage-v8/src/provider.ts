@@ -312,7 +312,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         if (!this.isMatch(filePath)) return;
 
-        if (!this.shouldProcessEntry(filePath)) return;
+        const hasSourceMap = Boolean(
+          this.findInDict(options?.sourceMaps, filePath),
+        );
+
+        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) return;
 
         try {
           const istanbulData = await this.convertWithAst(
