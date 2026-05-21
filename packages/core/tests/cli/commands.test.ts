@@ -81,6 +81,18 @@ describe('CLI help output', () => {
     });
   });
 
+  it('normalizes --coverage before value-taking coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', '--config', 'rstest.config.ts'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+    });
+    expect(parsed.options.config).toBe('rstest.config.ts');
+  });
+
   it('keeps --coverage intact for merge-reports command', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'merge-reports', '--coverage'],

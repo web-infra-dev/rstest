@@ -201,11 +201,8 @@ const applyRuntimeCommandOptions = (command: Command): void => {
 };
 
 const normalizeCoverageCliArgs = (argv: string[]): string[] => {
-  const hasCoverageNestedOption = argv.some((arg) =>
-    arg.startsWith('--coverage.'),
-  );
-
-  if (!hasCoverageNestedOption) {
+  const command = argv[2];
+  if (command === 'init' || command === 'merge-reports') {
     return argv;
   }
 
