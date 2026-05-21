@@ -13,9 +13,12 @@ const teardownFile = join(
 /** @type {import('@rstest/core').TestEnvironment<typeof globalThis, { marker: string }>} */
 const environment = {
   name: 'package-marker',
-  async setup(_global, options) {
+  async setup(global, options) {
+    global.__PACKAGE_ENV_MARKER__ = options.marker;
+
     return {
       async teardown() {
+        delete global.__PACKAGE_ENV_MARKER__;
         await writeFile(teardownFile, options.marker, 'utf8');
       },
     };
