@@ -220,11 +220,13 @@ export class JUnitReporter implements Reporter {
 
   async onTestRunEnd({
     results,
+    testResults,
     getSourcemap,
     runReport,
   }: {
     getSourcemap: GetSourcemap;
     results: TestFileResult[];
+    testResults: TestResult[];
     runReport: RunReport;
   }): Promise<void> {
     const testSuites = await Promise.all(
@@ -233,17 +235,25 @@ export class JUnitReporter implements Reporter {
       ),
     );
 
-    const { counts, duration } = runReport;
+    // Derive root counters from the same `testResults` array used to emit the
+    // `<testcase>` blocks so root <testsuites tests/failures/skipped> always
+    // matches the body. `runReport.counts` is computed from the current run's
+    // per-rerun data, which can diverge from the accumulated reporter state
+    // emitted as body in watch reruns or multi-project same-path runs.
+    const totalTests = testResults.length;
+    const totalFailures = testResults.filter((r) => r.status === 'fail').length;
     // JUnit collapses skipped + todo into a single "skipped" total.
-    const totalSkipped = counts.skippedTests + counts.todoTests;
+    const totalSkipped = testResults.filter(
+      (r) => r.status === 'skip' || r.status === 'todo',
+    ).length;
     const totalErrors = 0; // This framework does not distinguish between failures and errors, so errors are always reported as zero.
-    const totalTime = duration.testTime / 1000; // Convert to seconds
+    const totalTime = runReport.duration.testTime / 1000; // Convert to seconds
 
     const report: JUnitReport = {
       testsuites: {
         name: 'rstest tests',
-        tests: counts.tests,
-        failures: counts.failedTests,
+        tests: totalTests,
+        failures: totalFailures,
         errors: totalErrors,
         skipped: totalSkipped,
         time: totalTime,
