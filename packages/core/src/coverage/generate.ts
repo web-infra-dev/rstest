@@ -59,20 +59,60 @@ export const getIncludedFiles = async (
   return allFiles;
 };
 
-const isSameOrSubPath = (filePath: string, parentPath: string): boolean =>
-  filePath === parentPath || filePath.startsWith(`${parentPath}/`);
+const normalizePathForSubPath = (filePath: string): string => {
+  const normalized = normalize(filePath);
+
+  if (normalized === '/' || /^[A-Za-z]:\/$/.test(normalized)) {
+    return normalized;
+  }
+
+  return normalized.replace(/\/+$/, '');
+};
+
+const isSameOrSubPath = (filePath: string, parentPath: string): boolean => {
+  const normalizedFilePath = normalizePathForSubPath(filePath);
+  const normalizedParentPath = normalizePathForSubPath(parentPath);
+
+  if (normalizedFilePath === normalizedParentPath) {
+    return true;
+  }
+
+  if (normalizedParentPath.endsWith('/')) {
+    return normalizedFilePath.startsWith(normalizedParentPath);
+  }
+
+  return normalizedFilePath.startsWith(`${normalizedParentPath}/`);
+};
+
+const filterExternalFiles = (
+  files: string[],
+  rootPath: string,
+  allowExternal: boolean,
+): string[] => {
+  if (allowExternal) {
+    return files;
+  }
+
+  return files.filter((file) => isSameOrSubPath(file, rootPath));
+};
 
 const getSetupCoverageExcludes = (context: RstestContext): Set<string> => {
-  const setupFiles = context.projects.flatMap(({ normalizedConfig }) => {
-    if (!normalizedConfig) {
-      return [];
-    }
+  const setupFiles = context.projects.flatMap(
+    ({ rootPath, normalizedConfig }) => {
+      if (!normalizedConfig) {
+        return [];
+      }
 
-    return [
-      ...(normalizedConfig.setupFiles || []),
-      ...(normalizedConfig.globalSetup || []),
-    ];
-  });
+      const files = [
+        ...(normalizedConfig.setupFiles || []),
+        ...(normalizedConfig.globalSetup || []),
+      ];
+
+      return files.map((filePath) =>
+        isAbsolute(filePath) ? filePath : `${rootPath}/${filePath}`,
+      );
+    },
+  );
 
   return new Set(setupFiles.map((filePath) => normalize(filePath)));
 };
@@ -143,9 +183,8 @@ export async function generateCoverage(
   try {
     const finalCoverageMap = coverageMap;
 
-    const distPathRoot = normalize(
-      context.normalizedConfig.output?.distPath?.root || '',
-    );
+    const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
+    const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
     const normalizedRootPath = normalize(rootPath);
     const setupCoverageExcludes = getSetupCoverageExcludes(context);
     const absDistPathRoot = distPathRoot
@@ -185,7 +224,7 @@ export async function generateCoverage(
         return false;
       }
       if (!coverage.allowExternal) {
-        return normalizedFile.startsWith(normalize(rootPath));
+        return isSameOrSubPath(normalizedFile, normalize(rootPath));
       }
       return true;
     });
@@ -207,7 +246,11 @@ export async function generateCoverage(
       const allFiles: string[] = [];
       for (const p of projects) {
         const includedFiles = filterChangedFiles(
-          await getIncludedFiles(coverage, p.rootPath),
+          filterExternalFiles(
+            await getIncludedFiles(coverage, p.rootPath),
+            p.rootPath,
+            coverage.allowExternal,
+          ),
           context.changedCoverageFilters,
           p.rootPath,
         );

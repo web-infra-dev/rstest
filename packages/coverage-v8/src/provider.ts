@@ -143,13 +143,14 @@ export class CoverageProvider implements RstestCoverageProvider {
       return false;
     }
 
-    if (
-      !this.options.allowExternal &&
-      normalizedRoot &&
-      normalizedFilePath !== normalizedRoot &&
-      !normalizedFilePath.startsWith(`${normalizedRoot}/`)
-    ) {
-      return false;
+    if (!this.options.allowExternal && normalizedRoot) {
+      const relativeFilePath = this.toProjectRelativePath(normalizedFilePath);
+      if (
+        this.isAbsolutePath(relativeFilePath) ||
+        relativeFilePath.startsWith('../')
+      ) {
+        return false;
+      }
     }
 
     return true;
