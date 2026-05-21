@@ -8,7 +8,9 @@ import type {
   CoverageOptions,
   CoverageProvider,
 } from '../types/coverage';
-import { logger } from '../utils';
+import { logger, type TraceSpan } from '../utils';
+
+const traceNoop: TraceSpan = async (_name, _cat, fn) => fn();
 
 export const getIncludedFiles = async (
   coverage: CoverageOptions,
@@ -179,6 +181,7 @@ export async function generateCoverage(
   context: RstestContext,
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
+  traceSpan: TraceSpan = traceNoop,
 ): Promise<void> {
   const {
     rootPath,
@@ -188,51 +191,64 @@ export async function generateCoverage(
   try {
     const finalCoverageMap = coverageMap;
 
-    const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
-    const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
-    const normalizedRootPath = normalize(rootPath);
-    const setupCoverageExcludes = getSetupCoverageExcludes(context);
-    const absDistPathRoot = distPathRoot
-      ? normalize(
-          isAbsolute(distPathRoot)
-            ? distPathRoot
-            : `${normalizedRootPath}/${distPathRoot}`,
-        )
-      : '';
-    finalCoverageMap.filter((filePath) => {
-      const normalizedFile = normalize(filePath);
-      const fileRelativeToRoot = normalize(
-        relative(normalizedRootPath, normalizedFile),
-      );
-      if (
-        (distPathRoot && isSameOrSubPath(fileRelativeToRoot, distPathRoot)) ||
-        (absDistPathRoot && isSameOrSubPath(normalizedFile, absDistPathRoot))
-      ) {
-        return false;
-      }
-      if (isRuntimeSentinelCoverageFile(normalizedFile)) {
-        return false;
-      }
-      // Keep setupFiles/globalSetup out of the final report for every provider.
-      // Istanbul already excludes them before instrumentation; V8 needs this
-      // post-collection pruning so both providers converge on the same output.
-      if (
-        shouldExcludeSetupCoverageFile(
-          normalizedFile,
-          normalizedRootPath,
-          setupCoverageExcludes,
-        )
-      ) {
-        return false;
-      }
-      if (!coverage.allowExternal) {
-        return isSameOrSubPath(normalizedFile, normalize(rootPath));
-      }
-      return true;
-    });
+    await traceSpan(
+      'coverage:filter-files',
+      'coverage',
+      () => {
+        const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
+        const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
+        const normalizedRootPath = normalize(rootPath);
+        const setupCoverageExcludes = getSetupCoverageExcludes(context);
+        const absDistPathRoot = distPathRoot
+          ? normalize(
+              isAbsolute(distPathRoot)
+                ? distPathRoot
+                : `${normalizedRootPath}/${distPathRoot}`,
+            )
+          : '';
+        finalCoverageMap.filter((filePath) => {
+          const normalizedFile = normalize(filePath);
+          const fileRelativeToRoot = normalize(
+            relative(normalizedRootPath, normalizedFile),
+          );
+          if (
+            (distPathRoot &&
+              isSameOrSubPath(fileRelativeToRoot, distPathRoot)) ||
+            (absDistPathRoot &&
+              isSameOrSubPath(normalizedFile, absDistPathRoot))
+          ) {
+            return false;
+          }
+          if (isRuntimeSentinelCoverageFile(normalizedFile)) {
+            return false;
+          }
+          // Keep setupFiles/globalSetup out of the final report for every provider.
+          // Istanbul already excludes them before instrumentation; V8 needs this
+          // post-collection pruning so both providers converge on the same output.
+          if (
+            shouldExcludeSetupCoverageFile(
+              normalizedFile,
+              normalizedRootPath,
+              setupCoverageExcludes,
+            )
+          ) {
+            return false;
+          }
+          if (!coverage.allowExternal) {
+            return isSameOrSubPath(normalizedFile, normalizedRootPath);
+          }
+          return true;
+        });
+      },
+      { allowExternal: coverage.allowExternal },
+    );
 
     if (coverage.include?.length) {
-      const coveredFilesSet = new Set(finalCoverageMap.files().map(normalize));
+      const coveredFilesSet = await traceSpan(
+        'coverage:collect-covered-files',
+        'coverage',
+        () => new Set(finalCoverageMap.files().map(normalize)),
+      );
 
       let isTimeout = false;
 
@@ -247,14 +263,23 @@ export async function generateCoverage(
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
       for (const p of projects) {
-        const includedFiles = filterChangedFiles(
-          filterExternalFiles(
-            await getIncludedFiles(coverage, p.rootPath),
-            p.rootPath,
-            coverage.allowExternal,
-          ),
-          context.changedCoverageFilters,
-          p.rootPath,
+        const includedFiles = await traceSpan(
+          'coverage:collect-included-files',
+          'coverage',
+          async () =>
+            filterChangedFiles(
+              filterExternalFiles(
+                await getIncludedFiles(coverage, p.rootPath),
+                p.rootPath,
+                coverage.allowExternal,
+              ),
+              context.changedCoverageFilters,
+              p.rootPath,
+            ),
+          {
+            project: p.environmentName,
+            changedOnly: Boolean(context.changedCoverageFilters?.length),
+          },
         );
         allFiles.push(...includedFiles);
 
@@ -263,11 +288,21 @@ export async function generateCoverage(
         );
 
         if (uncoveredFiles.length) {
-          await generateCoverageForUntestedFiles(
-            p.environmentName,
-            uncoveredFiles,
-            finalCoverageMap,
-            coverageProvider,
+          await traceSpan(
+            'coverage:generate-untested-files',
+            'coverage',
+            () =>
+              generateCoverageForUntestedFiles(
+                p.environmentName,
+                uncoveredFiles,
+                finalCoverageMap,
+                coverageProvider,
+                traceSpan,
+              ),
+            {
+              project: p.environmentName,
+              fileCount: uncoveredFiles.length,
+            },
           );
         }
       }
@@ -280,26 +315,53 @@ export async function generateCoverage(
 
       // should be better to filter files before swc coverage is processed
       const allFilesSet = new Set(allFiles.map(normalize));
-      finalCoverageMap.filter((file) => allFilesSet.has(normalize(file)));
+      await traceSpan(
+        'coverage:filter-included-files',
+        'coverage',
+        () => {
+          finalCoverageMap.filter((file) => allFilesSet.has(normalize(file)));
+        },
+        { fileCount: allFilesSet.size },
+      );
     } else if (context.changedCoverageFilters?.length) {
-      finalCoverageMap.filter(
-        (file) =>
-          filterChangedFiles([file], context.changedCoverageFilters, rootPath)
-            .length > 0,
+      await traceSpan(
+        'coverage:filter-changed-files',
+        'coverage',
+        () => {
+          finalCoverageMap.filter(
+            (file) =>
+              filterChangedFiles(
+                [file],
+                context.changedCoverageFilters,
+                rootPath,
+              ).length > 0,
+          );
+        },
+        { filterCount: context.changedCoverageFilters.length },
       );
     }
 
     // Generate coverage reports
-    await coverageProvider.generateReports(finalCoverageMap, coverage);
+    await traceSpan('coverage:generate-reports', 'coverage', () =>
+      coverageProvider.generateReports(finalCoverageMap, coverage),
+    );
 
     if (coverage.thresholds) {
-      const { checkThresholds } = await import('../coverage/checkThresholds');
-      const thresholdResult = checkThresholds({
-        coverageMap: finalCoverageMap,
-        coverageProvider,
-        rootPath,
-        thresholds: coverage.thresholds,
-      });
+      const { thresholds } = coverage;
+      const thresholdResult = await traceSpan(
+        'coverage:check-thresholds',
+        'coverage',
+        async () => {
+          const { checkThresholds } =
+            await import('../coverage/checkThresholds');
+          return checkThresholds({
+            coverageMap: finalCoverageMap,
+            coverageProvider,
+            rootPath,
+            thresholds,
+          });
+        },
+      );
       if (!thresholdResult.success) {
         logger.log('');
         logger.stderr(thresholdResult.message);
@@ -317,6 +379,7 @@ async function generateCoverageForUntestedFiles(
   uncoveredFiles: string[],
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
+  traceSpan: TraceSpan = traceNoop,
 ): Promise<void> {
   if (!coverageProvider.generateCoverageForUntestedFiles) {
     logger.warn(
@@ -334,10 +397,21 @@ async function generateCoverageForUntestedFiles(
   const batchSize = 25;
 
   for (let index = 0; index < uncoveredFiles.length; index += batchSize) {
-    const coverages = await coverageProvider.generateCoverageForUntestedFiles({
-      environmentName,
-      files: uncoveredFiles.slice(index, index + batchSize),
-    });
+    const files = uncoveredFiles.slice(index, index + batchSize);
+    const coverages = await traceSpan(
+      'coverage:generate-untested-files-batch',
+      'coverage',
+      () =>
+        coverageProvider.generateCoverageForUntestedFiles!({
+          environmentName,
+          files,
+        }),
+      {
+        environmentName,
+        batchIndex: Math.floor(index / batchSize),
+        fileCount: files.length,
+      },
+    );
 
     coverages.forEach((coverageData) => {
       coverageMap.addFileCoverage(coverageData);

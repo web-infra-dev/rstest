@@ -267,7 +267,12 @@ export async function runTests(context: Rstest): Promise<void> {
           }
         }
         const { generateCoverage } = await import('../coverage/generate');
-        await generateCoverage(context, browserCoverageMap, coverageProvider);
+        await generateCoverage(
+          context,
+          browserCoverageMap,
+          coverageProvider,
+          traceRun.span,
+        );
       }
     }
 
@@ -773,7 +778,12 @@ export async function runTests(context: Rstest): Promise<void> {
         const { generateCoverage } = await import('../coverage/generate');
 
         await runLifecycleStep('coverage report generation', () =>
-          generateCoverage(context, mergedCoverageMap!, coverageProvider),
+          generateCoverage(
+            context,
+            mergedCoverageMap!,
+            coverageProvider,
+            traceRun.span,
+          ),
         );
       }
 
