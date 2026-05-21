@@ -119,6 +119,19 @@ const mockedUserApi: Mocked<typeof userApi> = rstest.mocked(userApi);
 mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 ```
 
+## Test environment types
+
+Use these types when writing custom environments to ensure they satisfy the Rstest interface.
+
+```ts
+import type { TestEnvironment, TestEnvironmentReturn } from '@rstest/core';
+```
+
+- `TestEnvironment<Global, Options>`: The type for a custom test environment object.
+- `TestEnvironmentReturn`: The return type of the `setup` method, containing `teardown` logic.
+
+For details, see [Custom environments](/config/test/test-environment#custom-environments).
+
 ## Reporter and result types
 
 Use these types when creating custom reporters or external tools that consume Rstest results.
