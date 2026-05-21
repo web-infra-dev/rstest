@@ -93,6 +93,30 @@ describe('CLI help output', () => {
     expect(parsed.options.config).toBe('rstest.config.ts');
   });
 
+  it('preserves nested coverage options when followed by --coverage', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage.changed=HEAD', '--coverage'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      changed: 'HEAD',
+      enabled: true,
+    });
+  });
+
+  it('allows --coverage=false to be mixed with nested coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage=false', '--coverage.changed=HEAD'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: 'false',
+      changed: 'HEAD',
+    });
+  });
+
   it('keeps --coverage intact for merge-reports command', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'merge-reports', '--coverage'],
@@ -100,6 +124,78 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.coverage).toBe(true);
+  });
+
+  it('allows --pool shorthand to be mixed with nested pool options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool', 'forks', '--pool.maxWorkers', '1'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 1,
+    });
+  });
+
+  it('preserves nested pool options when followed by --pool shorthand', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool.maxWorkers', '1', '--pool', 'forks'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      maxWorkers: 1,
+      type: 'forks',
+    });
+  });
+
+  it('allows --pool= shorthand to be mixed with nested pool options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool=forks', '--pool.maxWorkers=1'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 1,
+    });
+  });
+
+  it('allows --browser shorthand to be mixed with nested browser options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--browser', '--browser.name', 'chromium'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      enabled: true,
+      name: 'chromium',
+    });
+  });
+
+  it('preserves nested browser options when followed by --browser', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--browser.name', 'chromium', '--browser'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      name: 'chromium',
+      enabled: true,
+    });
+  });
+
+  it('allows browser disabling shorthand to be mixed with nested browser options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--no-browser', '--browser.name', 'chromium'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      enabled: false,
+      name: 'chromium',
+    });
   });
 });
 
