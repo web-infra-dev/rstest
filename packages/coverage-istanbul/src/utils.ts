@@ -157,11 +157,13 @@ export async function transformCoverage(
       uncachedFiles,
       SOURCE_MAP_SCAN_CONCURRENCY,
       async (filename) => {
-        const url = await readFile(filename, 'utf8').then(
-          (content) => getSourceMappingURL(content),
-          () => undefined,
-        );
-        sourcemapUrlCache.set(filename, url);
+        try {
+          const content = await readFile(filename, 'utf8');
+          sourcemapUrlCache.set(filename, getSourceMappingURL(content));
+        } catch {
+          // Do not cache failed reads. The file may be temporarily unavailable
+          // during watch-mode rebuilds, so retry it on the next report.
+        }
       },
     );
   }

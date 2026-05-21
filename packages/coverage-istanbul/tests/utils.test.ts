@@ -51,4 +51,39 @@ describe('coverage istanbul utils', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('retries sourcemap reads after filesystem errors', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-retry-'));
+    const file = path.join(root, 'index.js');
+
+    const coverageMap = istanbulCoverage.createCoverageMap({
+      [file]: {
+        path: file,
+        statementMap: {},
+        fnMap: {},
+        branchMap: {},
+        s: {},
+        f: {},
+        b: {},
+      },
+    });
+    const sourcemapUrlCache = new Map<string, string | undefined>();
+
+    try {
+      await expect(
+        transformCoverage(coverageMap, sourcemapUrlCache),
+      ).resolves.toBe(coverageMap);
+      expect(sourcemapUrlCache.has(file)).toBe(false);
+
+      writeFileSync(file, 'export const value = 1;\n');
+
+      await expect(
+        transformCoverage(coverageMap, sourcemapUrlCache),
+      ).resolves.toBe(coverageMap);
+      expect(sourcemapUrlCache.has(file)).toBe(true);
+      expect(sourcemapUrlCache.get(file)).toBe(undefined);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
