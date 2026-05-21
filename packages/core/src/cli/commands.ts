@@ -220,12 +220,58 @@ const normalizeCoverageCliArgs = (argv: string[]): string[] => {
   });
 };
 
-const allowMixedCoverageCliOptions = (cli: CAC): void => {
+const normalizePoolCliArgs = (argv: string[]): string[] => {
+  const hasPoolNestedOption = argv.some((arg) => arg.startsWith('--pool.'));
+
+  if (!hasPoolNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--pool') {
+      return '--pool.type';
+    }
+    if (arg.startsWith('--pool=')) {
+      return `--pool.type=${arg.slice('--pool='.length)}`;
+    }
+
+    return arg;
+  });
+};
+
+const normalizeBrowserCliArgs = (argv: string[]): string[] => {
+  const hasBrowserNestedOption = argv.some((arg) =>
+    arg.startsWith('--browser.'),
+  );
+
+  if (!hasBrowserNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--browser') {
+      return '--browser.enabled';
+    }
+    if (arg.startsWith('--browser=')) {
+      return `--browser.enabled=${arg.slice('--browser='.length)}`;
+    }
+    if (arg === '--no-browser') {
+      return '--browser.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const normalizeCliArgs = (argv: string[]): string[] =>
+  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
+
+const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
   cli.parse = ((argv, options) =>
     originalParse(
-      normalizeCoverageCliArgs(argv ?? process.argv),
+      normalizeCliArgs(argv ?? process.argv),
       options,
     )) as CAC['parse'];
 };
@@ -861,7 +907,7 @@ export function createCli(): CAC {
       }
     });
 
-  allowMixedCoverageCliOptions(cli);
+  normalizeMixedCliOptions(cli);
 
   return cli;
 }
