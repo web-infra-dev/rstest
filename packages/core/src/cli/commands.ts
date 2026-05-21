@@ -55,6 +55,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
   [
+    '--coverage.provider <provider>',
+    'Coverage provider to use (istanbul | v8)',
+  ],
+  [
     '--coverage.changed [commit]',
     'Collect coverage only for changed files, optionally since a commit',
   ],
@@ -196,12 +200,80 @@ const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, poolOptionDefinitions);
 };
 
-const normalizeCoverageCliArgs = (argv: string[]): string[] => {
-  const hasCoverageNestedOption = argv.some((arg) =>
-    arg.startsWith('--coverage.'),
-  );
+const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
 
-  if (!hasCoverageNestedOption) {
+const valueTakingOptions = new Set([
+  '-c',
+  '-r',
+  '-t',
+  '--bail',
+  '--browser.name',
+  '--browser.port',
+  '--changed',
+  '--config',
+  '--config-loader',
+  '--coverage.changed',
+  '--coverage.provider',
+  '--exclude',
+  '--hookTimeout',
+  '--include',
+  '--json',
+  '--maxConcurrency',
+  '--pool',
+  '--pool.execArgv',
+  '--pool.maxWorkers',
+  '--pool.minWorkers',
+  '--pool.type',
+  '--project',
+  '--reporter',
+  '--retry',
+  '--root',
+  '--shard',
+  '--silent',
+  '--slowTestThreshold',
+  '--testEnvironment',
+  '--testNamePattern',
+  '--testTimeout',
+]);
+
+const getCliCommand = (argv: string[]): string | undefined => {
+  for (let index = 2; index < argv.length; index++) {
+    const arg = argv[index];
+
+    if (arg === '--') {
+      return;
+    }
+
+    if (!arg) {
+      continue;
+    }
+
+    if (commands.has(arg)) {
+      return arg;
+    }
+
+    if (!arg.startsWith('-')) {
+      return;
+    }
+
+    const optionName = arg.split('=', 1)[0];
+    if (
+      optionName &&
+      arg === optionName &&
+      valueTakingOptions.has(optionName) &&
+      argv[index + 1] &&
+      !argv[index + 1]!.startsWith('-')
+    ) {
+      index++;
+    }
+  }
+
+  return;
+};
+
+const normalizeCoverageCliArgs = (argv: string[]): string[] => {
+  const command = getCliCommand(argv);
+  if (command === 'init' || command === 'merge-reports') {
     return argv;
   }
 
@@ -913,5 +985,6 @@ export function createCli(): CAC {
 }
 
 export function setupCommands(): void {
-  createCli().parse();
+  const cli = createCli();
+  cli.parse(process.argv);
 }

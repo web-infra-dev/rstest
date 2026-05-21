@@ -60,7 +60,9 @@ Learn more about [Browser mode](/guide/browser-testing).
 
 ## Code coverage
 
-Rstest can collect code coverage with [istanbul](https://istanbul.js.org/). Enable it by setting `coverage.enabled` to `true` in your Rstest configuration file.
+Rstest supports both [istanbul](https://istanbul.js.org/) and `v8` coverage providers. Enable coverage by setting `coverage.enabled` to `true`, then choose the provider that matches your workflow.
+
+Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. Browser Mode does not support `v8` coverage.
 
 Learn more about [Code coverage](/config/test/coverage).
 

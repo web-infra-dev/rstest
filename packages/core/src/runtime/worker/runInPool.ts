@@ -426,6 +426,11 @@ export const runInPool = async (
     isTeardown = true;
   };
 
+  // Initialize coverage collector if coverage is enabled
+  let coverageProvider: Awaited<
+    ReturnType<typeof import('../../coverage').createCoverageProvider>
+  > | null = null;
+
   if (type === 'collect') {
     try {
       const {
@@ -517,19 +522,16 @@ export const runInPool = async (
       };
       return runResult;
     }
-    // Initialize coverage collector if coverage is enabled
-    let coverageProvider: Awaited<
-      ReturnType<typeof import('../../coverage').createCoverageProvider>
-    > | null = null;
+
     if (options.context.runtimeConfig.coverage?.enabled) {
       const { createCoverageProvider } = await import('../../coverage');
       coverageProvider = await createCoverageProvider(
         options.context.runtimeConfig.coverage,
-        options.context.rootPath,
+        options.context.projectRoot,
       );
     }
     if (coverageProvider) {
-      coverageProvider.init();
+      await coverageProvider.init();
     }
 
     tracker.transition('load');
@@ -644,7 +646,11 @@ export const runInPool = async (
     // Collect coverage data after test file completes
     if (coverageProvider) {
       tracker.transition('coverage');
-      const coverageMap = coverageProvider.collect();
+      const coverageMap = await coverageProvider.collect({
+        assetFiles,
+        sourceMaps,
+        outputModule: options.context.outputModule,
+      });
       if (coverageMap) {
         // Attach coverage data to test result
         results.coverage = {};
@@ -654,8 +660,6 @@ export const runInPool = async (
           else results.coverage![key] = value;
         });
       }
-      // Cleanup
-      coverageProvider.cleanup();
     }
 
     runResult = results;
@@ -673,6 +677,10 @@ export const runInPool = async (
     return runResult;
   } finally {
     tracker.transition('teardown');
+    if (coverageProvider) {
+      coverageProvider.cleanup();
+    }
+
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
     await teardown();

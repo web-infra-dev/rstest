@@ -1,5 +1,6 @@
 import type FS from 'node:fs';
-import { normalize, relative } from 'pathe';
+import { isAbsolute, normalize, relative } from 'pathe';
+import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
 import type { RstestContext } from '../types';
 import type {
@@ -38,13 +39,117 @@ export const getIncludedFiles = async (
         !item.startsWith(rootPath) &&
         !item.startsWith('./'),
     );
+
+    const matchesBareExclude = (file: string, exclude: string): boolean => {
+      const normalizedFile = normalize(file);
+      const normalizedExclude = normalize(exclude);
+
+      return (
+        normalizedFile === normalizedExclude ||
+        normalizedFile.endsWith(`/${normalizedExclude}`) ||
+        normalizedFile.includes(`/${normalizedExclude}/`)
+      );
+    };
+
     return allFiles.filter((file) => {
-      return !excludes.some((exclude) => file.includes(exclude));
+      return !excludes.some((exclude) => matchesBareExclude(file, exclude));
     });
   }
 
   return allFiles;
 };
+
+const normalizePathForSubPath = (filePath: string): string => {
+  const normalized = normalize(filePath);
+
+  if (normalized === '/' || /^[A-Za-z]:\/$/.test(normalized)) {
+    return normalized;
+  }
+
+  return normalized.replace(/\/+$/, '');
+};
+
+const isSameOrSubPath = (filePath: string, parentPath: string): boolean => {
+  const normalizedFilePath = normalizePathForSubPath(filePath);
+  const normalizedParentPath = normalizePathForSubPath(parentPath);
+
+  if (normalizedFilePath === normalizedParentPath) {
+    return true;
+  }
+
+  if (normalizedParentPath.endsWith('/')) {
+    return normalizedFilePath.startsWith(normalizedParentPath);
+  }
+
+  return normalizedFilePath.startsWith(`${normalizedParentPath}/`);
+};
+
+const filterExternalFiles = (
+  files: string[],
+  rootPath: string,
+  allowExternal: boolean,
+): string[] => {
+  if (allowExternal) {
+    return files;
+  }
+
+  return files.filter((file) => isSameOrSubPath(file, rootPath));
+};
+
+const getSetupCoverageExcludes = (context: RstestContext): Set<string> => {
+  const setupFiles = context.projects.flatMap(
+    ({ rootPath, normalizedConfig }) => {
+      if (!normalizedConfig) {
+        return [];
+      }
+
+      const files = [
+        ...(normalizedConfig.setupFiles || []),
+        ...(normalizedConfig.globalSetup || []),
+      ];
+
+      return files.map((filePath) =>
+        isAbsolute(filePath) ? filePath : `${rootPath}/${filePath}`,
+      );
+    },
+  );
+
+  return new Set(setupFiles.map((filePath) => normalize(filePath)));
+};
+
+const shouldExcludeSetupCoverageFile = (
+  filePath: string,
+  rootPath: string,
+  setupCoverageExcludes: Set<string>,
+): boolean => {
+  if (!setupCoverageExcludes.size) {
+    return false;
+  }
+
+  const normalizedFilePath = normalize(filePath);
+
+  if (setupCoverageExcludes.has(normalizedFilePath)) {
+    return true;
+  }
+
+  const relativeFilePath = normalize(relative(rootPath, normalizedFilePath));
+  if (relativeFilePath.startsWith('../')) {
+    return false;
+  }
+
+  return Array.from(setupCoverageExcludes).some((setupFile) => {
+    const relativeSetupPath = normalize(relative(rootPath, setupFile));
+    if (relativeSetupPath.startsWith('../')) {
+      return false;
+    }
+    return picomatch.isMatch(relativeFilePath, relativeSetupPath);
+  });
+};
+
+const isRuntimeSentinelCoverageFile = (filePath: string): boolean =>
+  filePath === 'rstest runtime' ||
+  filePath === 'webpack/runtime' ||
+  filePath.startsWith('webpack/runtime/');
 
 export const filterChangedFiles = (
   files: string[],
@@ -83,12 +188,48 @@ export async function generateCoverage(
   try {
     const finalCoverageMap = coverageMap;
 
-    if (!coverage.allowExternal) {
-      finalCoverageMap.filter((filePath) => {
-        const normalizedFile = normalize(filePath);
-        return normalizedFile.startsWith(normalize(rootPath));
-      });
-    }
+    const rawDistPathRoot = context.normalizedConfig.output?.distPath?.root;
+    const distPathRoot = rawDistPathRoot ? normalize(rawDistPathRoot) : '';
+    const normalizedRootPath = normalize(rootPath);
+    const setupCoverageExcludes = getSetupCoverageExcludes(context);
+    const absDistPathRoot = distPathRoot
+      ? normalize(
+          isAbsolute(distPathRoot)
+            ? distPathRoot
+            : `${normalizedRootPath}/${distPathRoot}`,
+        )
+      : '';
+    finalCoverageMap.filter((filePath) => {
+      const normalizedFile = normalize(filePath);
+      const fileRelativeToRoot = normalize(
+        relative(normalizedRootPath, normalizedFile),
+      );
+      if (
+        (distPathRoot && isSameOrSubPath(fileRelativeToRoot, distPathRoot)) ||
+        (absDistPathRoot && isSameOrSubPath(normalizedFile, absDistPathRoot))
+      ) {
+        return false;
+      }
+      if (isRuntimeSentinelCoverageFile(normalizedFile)) {
+        return false;
+      }
+      // Keep setupFiles/globalSetup out of the final report for every provider.
+      // Istanbul already excludes them before instrumentation; V8 needs this
+      // post-collection pruning so both providers converge on the same output.
+      if (
+        shouldExcludeSetupCoverageFile(
+          normalizedFile,
+          normalizedRootPath,
+          setupCoverageExcludes,
+        )
+      ) {
+        return false;
+      }
+      if (!coverage.allowExternal) {
+        return isSameOrSubPath(normalizedFile, normalize(rootPath));
+      }
+      return true;
+    });
 
     if (coverage.include?.length) {
       const coveredFilesSet = new Set(finalCoverageMap.files().map(normalize));
@@ -107,7 +248,11 @@ export async function generateCoverage(
       const allFiles: string[] = [];
       for (const p of projects) {
         const includedFiles = filterChangedFiles(
-          await getIncludedFiles(coverage, p.rootPath),
+          filterExternalFiles(
+            await getIncludedFiles(coverage, p.rootPath),
+            p.rootPath,
+            coverage.allowExternal,
+          ),
           context.changedCoverageFilters,
           p.rootPath,
         );

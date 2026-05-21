@@ -63,6 +63,7 @@ export type CommonOptions = {
     | {
         enabled?: boolean | string;
         allowExternal?: boolean;
+        provider?: 'istanbul' | 'v8';
         changed?: boolean | string;
       };
   passWithNoTests?: boolean;
@@ -90,6 +91,23 @@ export type CommonOptions = {
   bail?: number | boolean;
   shard?: string;
 };
+
+function coerceCliBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+  }
+
+  return undefined;
+}
 
 const normalizeBooleanLikeCliValue = (
   value: boolean | string,
@@ -181,21 +199,32 @@ function mergeWithCLIOptions(
     if (typeof options.coverage === 'boolean') {
       config.coverage.enabled = options.coverage;
     } else {
-      if (options.coverage.enabled !== undefined) {
-        config.coverage.enabled = Boolean(
-          normalizeBooleanLikeCliValue(options.coverage.enabled),
-        );
+      let changed: boolean | string | undefined;
+      let shouldEnableCoverage = false;
+      const coverageEnabled = coerceCliBoolean(options.coverage.enabled);
+      if (coverageEnabled !== undefined) {
+        config.coverage.enabled = coverageEnabled;
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.provider !== undefined) {
+        config.coverage.provider = options.coverage.provider;
+        shouldEnableCoverage = true;
       }
       if (options.coverage.changed !== undefined) {
-        const changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        changed = normalizeBooleanLikeCliValue(options.coverage.changed);
         config.coverage.changed = changed;
+        shouldEnableCoverage ||= changed !== false;
+      }
 
-        if (options.coverage.enabled === undefined && changed !== false) {
-          config.coverage.enabled = true;
-        }
+      if (
+        coverageEnabled === undefined &&
+        options.coverage.enabled === undefined &&
+        shouldEnableCoverage
+      ) {
+        config.coverage.enabled = true;
       }
     }
   }
@@ -214,8 +243,9 @@ function mergeWithCLIOptions(
     if (typeof options.browser === 'boolean') {
       config.browser.enabled = options.browser;
     } else {
-      if (options.browser.enabled !== undefined) {
-        config.browser.enabled = options.browser.enabled;
+      const browserEnabled = coerceCliBoolean(options.browser.enabled);
+      if (browserEnabled !== undefined) {
+        config.browser.enabled = browserEnabled;
       }
       if (options.browser.name !== undefined) {
         config.browser.browser = options.browser.name;
