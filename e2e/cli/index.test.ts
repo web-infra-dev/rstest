@@ -94,6 +94,29 @@ describe.concurrent('test exit code', () => {
     await expectExecSuccess();
   });
 
+  it('should support browser shorthand with nested browser options', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'success.test.ts',
+        '--no-browser',
+        '--browser.name',
+        'chromium',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {

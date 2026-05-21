@@ -239,8 +239,32 @@ const normalizePoolCliArgs = (argv: string[]): string[] => {
   });
 };
 
+const normalizeBrowserCliArgs = (argv: string[]): string[] => {
+  const hasBrowserNestedOption = argv.some((arg) =>
+    arg.startsWith('--browser.'),
+  );
+
+  if (!hasBrowserNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--browser') {
+      return '--browser.enabled';
+    }
+    if (arg.startsWith('--browser=')) {
+      return `--browser.enabled=${arg.slice('--browser='.length)}`;
+    }
+    if (arg === '--no-browser') {
+      return '--browser.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
 const normalizeCliArgs = (argv: string[]): string[] =>
-  normalizePoolCliArgs(normalizeCoverageCliArgs(argv));
+  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
