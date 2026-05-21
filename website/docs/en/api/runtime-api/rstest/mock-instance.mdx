@@ -4,6 +4,8 @@ description: MockInstance is the type of all mock/spy instances, providing a ric
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mock instance
 
 `MockInstance` is the type of all mock/spy instances, providing a rich set of APIs for controlling and inspecting mocks.
@@ -58,7 +60,7 @@ fn.mockReset();
 
 ## mockRestore
 
-- **Type:** `() => MockInstance`
+- **Type:** `() => void`
 
 Restores the original method of a spied object (only effective for spies).
 
@@ -66,6 +68,25 @@ Restores the original method of a spied object (only effective for spies).
 const obj = { foo: () => 1 };
 const spy = rstest.spyOn(obj, 'foo');
 spy.mockRestore();
+```
+
+## Symbol.dispose
+
+<ApiMeta addedVersion="0.10.2" />
+
+- **Type:** `() => void`
+
+Calls `mockRestore()` when the mock leaves a `using` scope.
+
+```ts
+const obj = { foo: () => 1 };
+
+{
+  using spy = rstest.spyOn(obj, 'foo').mockImplementation(() => 2);
+  expect(obj.foo()).toBe(2);
+}
+
+expect(obj.foo()).toBe(1);
 ```
 
 ## getMockImplementation

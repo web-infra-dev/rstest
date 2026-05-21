@@ -117,6 +117,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    */
   mockRestore(): void;
   /**
+   * Restores the mock when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+  /**
    * Returns current mock implementation if there is one.
    */
   getMockImplementation(): NormalizedProcedure<T> | undefined;

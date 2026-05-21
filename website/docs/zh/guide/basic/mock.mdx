@@ -2,6 +2,8 @@
 description: 使用 Rstest mock 函数、对象方法、ESM 模块、CommonJS 模块，并区分 mock 状态和模块状态。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mocking
 
 Mocking 用于在测试中替换依赖、控制返回值，并断言函数或模块的调用行为。Rstest 提供了多组 mock API，分别适用于函数、对象方法、ESM 模块、CommonJS 模块和对象树。
@@ -208,6 +210,30 @@ test('logs a warning when validation fails', () => {
 
   expect(warn).toHaveBeenCalledWith('invalid payload');
   warn.mockRestore();
+});
+```
+
+### `using` 语法
+
+<ApiMeta addedVersion="0.10.2" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复 spy：
+
+```ts title="logger.test.ts"
+import { expect, rstest, test } from '@rstest/core';
+
+test('logs a warning when validation fails', () => {
+  {
+    using warn = rstest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    console.warn('invalid payload');
+
+    expect(warn).toHaveBeenCalledWith('invalid payload');
+  }
+
+  // console.warn 在这里已恢复
 });
 ```
 
