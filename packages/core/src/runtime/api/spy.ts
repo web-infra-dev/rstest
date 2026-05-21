@@ -204,6 +204,15 @@ export const initSpy = (): Pick<
       mockName = mockFn?.name;
     };
 
+    if (Symbol.dispose) {
+      Object.defineProperty(spyFn, Symbol.dispose, {
+        value: () => {
+          spyFn.mockRestore();
+        },
+        configurable: true,
+      });
+    }
+
     mocks.add(spyFn);
 
     return spyFn;
