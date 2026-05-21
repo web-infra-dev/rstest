@@ -126,6 +126,23 @@ describe('CLI help output', () => {
     expect(parsed.options.coverage).toBe(true);
   });
 
+  it('keeps --coverage intact for merge-reports command after global options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        '--config',
+        'rstest.config.ts',
+        'merge-reports',
+        '--coverage',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.config).toBe('rstest.config.ts');
+    expect(parsed.options.coverage).toBe(true);
+  });
+
   it('allows --pool shorthand to be mixed with nested pool options', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--pool', 'forks', '--pool.maxWorkers', '1'],

@@ -200,8 +200,79 @@ const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, poolOptionDefinitions);
 };
 
+const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
+
+const valueTakingOptions = new Set([
+  '-c',
+  '-r',
+  '-t',
+  '--bail',
+  '--browser.name',
+  '--browser.port',
+  '--changed',
+  '--config',
+  '--config-loader',
+  '--coverage.changed',
+  '--coverage.provider',
+  '--exclude',
+  '--hookTimeout',
+  '--include',
+  '--json',
+  '--maxConcurrency',
+  '--pool',
+  '--pool.execArgv',
+  '--pool.maxWorkers',
+  '--pool.minWorkers',
+  '--pool.type',
+  '--project',
+  '--reporter',
+  '--retry',
+  '--root',
+  '--shard',
+  '--silent',
+  '--slowTestThreshold',
+  '--testEnvironment',
+  '--testNamePattern',
+  '--testTimeout',
+]);
+
+const getCliCommand = (argv: string[]): string | undefined => {
+  for (let index = 2; index < argv.length; index++) {
+    const arg = argv[index];
+
+    if (arg === '--') {
+      return;
+    }
+
+    if (!arg) {
+      continue;
+    }
+
+    if (commands.has(arg)) {
+      return arg;
+    }
+
+    if (!arg.startsWith('-')) {
+      return;
+    }
+
+    const optionName = arg.split('=', 1)[0];
+    if (
+      optionName &&
+      arg === optionName &&
+      valueTakingOptions.has(optionName) &&
+      argv[index + 1] &&
+      !argv[index + 1]!.startsWith('-')
+    ) {
+      index++;
+    }
+  }
+
+  return;
+};
+
 const normalizeCoverageCliArgs = (argv: string[]): string[] => {
-  const command = argv[2];
+  const command = getCliCommand(argv);
   if (command === 'init' || command === 'merge-reports') {
     return argv;
   }
