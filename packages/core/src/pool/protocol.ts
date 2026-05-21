@@ -20,8 +20,7 @@ export type WorkerRequest =
       type: 'collect';
       taskId: number;
       options: RunWorkerOptions['options'];
-    }
-  | { type: 'stop' };
+    };
 
 export type CollectTaskResult = {
   tests: Test[];
@@ -49,7 +48,6 @@ export type WorkerResponse =
       result: CollectTaskResult;
       memory?: WorkerMemoryReport;
     }
-  | { type: 'stopped' }
   | {
       type: 'fatal_error';
       error: SerializedError;

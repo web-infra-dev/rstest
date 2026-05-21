@@ -4,6 +4,8 @@ description: MockInstance 是所有 mock 和 spy 实例的类型。
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mock instance
 
 `MockInstance` 是所有 mock 和 spy 实例的类型。
@@ -58,7 +60,7 @@ fn.mockReset();
 
 ## mockRestore
 
-- **类型：** `() => MockInstance`
+- **类型：** `() => void`
 
 恢复被 spy 的对象的原始方法（仅对 spy 有效）。
 
@@ -66,6 +68,25 @@ fn.mockReset();
 const obj = { foo: () => 1 };
 const spy = rstest.spyOn(obj, 'foo');
 spy.mockRestore();
+```
+
+## Symbol.dispose
+
+<ApiMeta addedVersion="0.10.2" />
+
+- **类型：** `() => void`
+
+当 mock 离开 `using` 作用域时调用 `mockRestore()`。
+
+```ts
+const obj = { foo: () => 1 };
+
+{
+  using spy = rstest.spyOn(obj, 'foo').mockImplementation(() => 2);
+  expect(obj.foo()).toBe(2);
+}
+
+expect(obj.foo()).toBe(1);
 ```
 
 ## getMockImplementation

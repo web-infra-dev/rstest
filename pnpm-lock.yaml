@@ -1322,8 +1322,8 @@ importers:
         specifier: 2.0.11
         version: 2.0.11(@rspress/core@2.0.11(@rspack/core@2.0.3(@swc/helpers@0.5.21))(@types/mdast@4.0.4)(@types/react@19.2.14)(micromark-util-types@2.0.2)(micromark@4.0.2))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@rstack-dev/doc-ui':
-        specifier: 1.13.3
-        version: 1.13.3
+        specifier: 1.14.0
+        version: 1.14.0(@rspress/core@2.0.11(@rspack/core@2.0.3(@swc/helpers@0.5.21))(@types/mdast@4.0.4)(@types/react@19.2.14)(micromark-util-types@2.0.2)(micromark@4.0.2))
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
@@ -3110,8 +3110,13 @@ packages:
   '@rspress/shared@2.0.11':
     resolution: {integrity: sha512-7l5Pso4s597utJyisVEnd7n/40h053nfE8DwGQMeS8RLGtSwVgxFwNHsSrvQEGtFlLrg2aWWSITqnAVO1wfTew==}
 
-  '@rstack-dev/doc-ui@1.13.3':
-    resolution: {integrity: sha512-g9T8mG1I5ch3CHnzktl/PPFwJmxgRBLUi8NC6pGDwp3JQfKzaylDNK2LcPM4kjLP60+9fv2gFDSrLHE6jFu8uQ==}
+  '@rstack-dev/doc-ui@1.14.0':
+    resolution: {integrity: sha512-+hfBBuVkvYw9k/jAyhS8iAAF97gRi9YpMHlMmrwBngmZX/BWALILVW+Ykdf88A8lS702y7vmQCypxc5838hIBg==}
+    peerDependencies:
+      '@rspress/core': '>=2.0.0'
+    peerDependenciesMeta:
+      '@rspress/core':
+        optional: true
 
   '@rushstack/node-core-library@5.23.1':
     resolution: {integrity: sha512-wlKmIKIYCKuCASbITvOxLZXepPbwXvrv7S6ig6XNWFchSyhL/E2txmVXspHY49Wu2dzf7nI27a2k/yV5BA3EiA==}
@@ -9942,7 +9947,9 @@ snapshots:
       - '@module-federation/runtime-tools'
       - core-js
 
-  '@rstack-dev/doc-ui@1.13.3': {}
+  '@rstack-dev/doc-ui@1.14.0(@rspress/core@2.0.11(@rspack/core@2.0.3(@swc/helpers@0.5.21))(@types/mdast@4.0.4)(@types/react@19.2.14)(micromark-util-types@2.0.2)(micromark@4.0.2))':
+    optionalDependencies:
+      '@rspress/core': 2.0.11(@rspack/core@2.0.3(@swc/helpers@0.5.21))(@types/mdast@4.0.4)(@types/react@19.2.14)(micromark-util-types@2.0.2)(micromark@4.0.2)
 
   '@rushstack/node-core-library@5.23.1(@types/node@22.18.6)':
     dependencies:

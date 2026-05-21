@@ -14,14 +14,6 @@ const send = (response: WorkerResponse): void => {
 };
 
 let currentTaskId: number | undefined;
-let stopRequested = false;
-/**
- * Set when a stop arrived mid-task. The task handler drains teardown in its
- * own `finally` first; only then do we flush `stopped` and exit. Without the
- * deferral `process.exit(0)` would orphan env/coverage/mock cleanup and the
- * `process.exit` / `process.kill` restoration.
- */
-let exitOnTaskIdle = false;
 /**
  * Set when a task handler has reported `fatal_error` and is on its way to
  * exit. Suppresses the bottom-of-the-stack `fatalExit` from racing in with a
@@ -34,11 +26,6 @@ const sendFatalError = (err: unknown): void => {
     type: 'fatal_error',
     error: serializeError(err),
   });
-};
-
-const finalizeStop = (): void => {
-  send({ type: 'stopped' });
-  setImmediate(() => process.exit(0));
 };
 
 /**
@@ -110,30 +97,12 @@ const runTask = async (
   }
 
   currentTaskId = undefined;
-  if (exitOnTaskIdle) finalizeStop();
 };
 
-const requestGracefulStop = (): void => {
-  if (stopRequested) return;
-  stopRequested = true;
-  if (currentTaskId !== undefined) {
-    // Defer the ack + exit until the task's `finally { await teardown(); }`
-    // runs. PoolRunner's WORKER_STOP_TIMEOUT_MS escalates to SIGKILL if
-    // teardown truly hangs, so this deferral is bounded.
-    exitOnTaskIdle = true;
-    return;
-  }
-  finalizeStop();
-};
-
-// SIGTERM shares the same shutdown path under the forks pool. `PoolRunner.stop`
-// sends SIGTERM alongside the `stop` envelope; without this handler Node's
-// default SIGTERM behavior would terminate the process immediately and skip
-// teardown. Under the threads pool the host uses `worker.terminate()` instead
-// of signals, so this handler is a no-op there. `setup.ts` may install a
-// profiling-specific SIGTERM handler (`--cpu-prof` et al.) that runs first and
-// preempts ours, preserving existing profiling semantics.
-process.on('SIGTERM', requestGracefulStop);
+// No SIGTERM handler — the host owns termination and SIGTERM (default action:
+// exit) is what gets us out. Any handler that didn't unconditionally exit
+// would defeat that contract (rstest#1275). `setup.ts` may install a
+// profiling-specific handler that calls `process.exit()`, which is compatible.
 
 channel.on((message: unknown) => {
   if (!isWorkerRequestEnvelope(message)) {
@@ -151,9 +120,6 @@ channel.on((message: unknown) => {
       break;
     case 'collect':
       void runTask('collect', request);
-      break;
-    case 'stop':
-      requestGracefulStop();
       break;
   }
 });

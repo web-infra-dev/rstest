@@ -2,6 +2,8 @@
 description: Mock functions, object methods, ESM modules, and CommonJS modules in Rstest, and distinguish mock state from module state.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mocking
 
 Mocking lets you replace dependencies in tests, control return values, and assert how functions or modules are called. Rstest provides different mocking APIs for functions, object methods, ESM modules, CommonJS modules, and object trees.
@@ -208,6 +210,30 @@ test('logs a warning when validation fails', () => {
 
   expect(warn).toHaveBeenCalledWith('invalid payload');
   warn.mockRestore();
+});
+```
+
+### `using` syntax
+
+<ApiMeta addedVersion="0.10.2" />
+
+Rstest supports the `using` syntax to restore the spy automatically when the block exits:
+
+```ts title="logger.test.ts"
+import { expect, rstest, test } from '@rstest/core';
+
+test('logs a warning when validation fails', () => {
+  {
+    using warn = rstest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    console.warn('invalid payload');
+
+    expect(warn).toHaveBeenCalledWith('invalid payload');
+  }
+
+  // console.warn is restored here
 });
 ```
 
