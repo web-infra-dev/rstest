@@ -10,7 +10,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color } from '../utils';
+import { color, flushOutputStreams } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logUserConsoleLog } from './utils';
 
@@ -114,13 +114,16 @@ export class DotReporter implements Reporter {
       filterRerunTestPaths,
     });
 
+    if (hasErrorLogs) {
+      await flushOutputStreams();
+    }
+
     printSummaryLog({
       results,
       testResults,
       duration,
       rootPath: this.rootPath,
       snapshotSummary,
-      output: hasErrorLogs ? 'stderr' : 'stdout',
     });
   }
 

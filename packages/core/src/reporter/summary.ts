@@ -96,17 +96,10 @@ export const getPlainSummaryStatusString = (
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
  */
-type SummaryOutput = 'stderr' | 'stdout';
-
-const getSummaryLogger = (output: SummaryOutput) =>
-  output === 'stderr' ? logger.stderr : logger.log;
-
 const printSnapshotSummaryLog = (
   snapshots: SnapshotSummary,
   rootDir: string,
-  output: SummaryOutput,
 ): void => {
-  const log = getSummaryLogger(output);
   const summary: string[] = [];
 
   if (snapshots.added) {
@@ -159,7 +152,7 @@ const printSnapshotSummaryLog = (
 
   for (const [index, snapshot] of summary.entries()) {
     const title = index === 0 ? 'Snapshots' : '';
-    log(`${color.gray(title.padStart(12))} ${snapshot}`);
+    logger.log(`${color.gray(title.padStart(12))} ${snapshot}`);
   }
 };
 
@@ -175,26 +168,22 @@ export const printSummaryLog = ({
   snapshotSummary,
   duration,
   rootPath,
-  output = 'stdout',
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
   rootPath: string;
-  output?: SummaryOutput;
 }): void => {
-  const log = getSummaryLogger(output);
+  logger.log('');
+  printSnapshotSummaryLog(snapshotSummary, rootPath);
+  logger.log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
+  logger.log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
 
-  log('');
-  printSnapshotSummaryLog(snapshotSummary, rootPath, output);
-  log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
-  log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
-
-  log(
+  logger.log(
     `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
-  log('');
+  logger.log('');
 };
 
 export const printSummaryErrorLogs = async ({

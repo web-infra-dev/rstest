@@ -12,7 +12,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { isTTY } from '../utils';
+import { flushOutputStreams, isTTY } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
@@ -171,13 +171,16 @@ export class DefaultReporter implements Reporter {
       filterRerunTestPaths,
     });
 
+    if (hasErrorLogs) {
+      await flushOutputStreams();
+    }
+
     printSummaryLog({
       results,
       testResults,
       duration,
       rootPath: this.rootPath,
       snapshotSummary,
-      output: hasErrorLogs ? 'stderr' : 'stdout',
     });
   }
 }
