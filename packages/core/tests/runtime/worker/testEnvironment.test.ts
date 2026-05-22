@@ -119,6 +119,66 @@ describe('testEnvironment', () => {
     expect(environment.name).toBe('fallback-package-environment');
   });
 
+  it('should continue resolving package candidates after import failures', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const firstPackageDir = join(tempDir, 'node_modules', 'package-marker');
+    const fallbackPackageDir = join(
+      tempDir,
+      'node_modules',
+      'rstest-environment-package-marker',
+    );
+
+    mkdirSync(firstPackageDir, { recursive: true });
+    mkdirSync(fallbackPackageDir, { recursive: true });
+
+    writeFileSync(
+      join(firstPackageDir, 'package.json'),
+      JSON.stringify({
+        name: 'package-marker',
+        type: 'module',
+        exports: './index.mjs',
+      }),
+    );
+    writeFileSync(
+      join(firstPackageDir, 'index.mjs'),
+      'throw new Error("primary package import failed");',
+    );
+
+    writeFileSync(
+      join(fallbackPackageDir, 'package.json'),
+      JSON.stringify({
+        name: 'rstest-environment-package-marker',
+        type: 'module',
+        exports: './index.mjs',
+      }),
+    );
+    writeFileSync(
+      join(fallbackPackageDir, 'index.mjs'),
+      environmentModule('fallback-package-environment'),
+    );
+
+    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPath,
+    );
+
+    expect(resolvedPath).toBe(
+      pathToFileURL(
+        join(
+          realpathSync(tempDir),
+          'node_modules',
+          'rstest-environment-package-marker',
+          'index.mjs',
+        ),
+      ).href,
+    );
+    expect(environment.name).toBe('fallback-package-environment');
+  });
+
   it('should reject named environment exports before worker loading', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 

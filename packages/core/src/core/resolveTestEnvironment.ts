@@ -184,7 +184,12 @@ export const resolveTestEnvironmentPath = async (
     const resolvedPaths = resolvePackageEnvironmentPaths(name, roots);
 
     for (const resolvedPath of resolvedPaths) {
-      const environmentModule = await import(resolvedPath);
+      let environmentModule: unknown;
+      try {
+        environmentModule = await import(resolvedPath);
+      } catch {
+        continue;
+      }
       const environment = resolveEnvironmentExport(environmentModule);
 
       if (environment) {
