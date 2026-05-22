@@ -10,6 +10,8 @@ import type vscode from 'vscode';
 import { masterApi } from '.';
 
 export class ProgressReporter implements Reporter {
+  readonly flushOutputStreams = false;
+
   onTestRunStart = masterApi.onTestRunStart.asEvent;
   onTestRunEnd = () => masterApi.onTestRunEnd.asEvent();
   onTestFileStart = masterApi.onTestFileStart.asEvent;

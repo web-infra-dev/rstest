@@ -19,6 +19,8 @@ import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   protected rootPath: string;
   protected config: NormalizedConfig;
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
@@ -45,6 +47,7 @@ export class DefaultReporter implements Reporter {
     this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
     this.testState = testState;
+    this.flushOutputStreams = !options.logger;
     if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
         rootPath,

@@ -13,7 +13,7 @@ import type {
   TestResult,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
-import { color, logger, prettyTime } from '../utils';
+import { color, flushOutputStreams, logger, prettyTime } from '../utils';
 import type { Rstest } from './rstest';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
@@ -223,6 +223,9 @@ export async function mergeReports(
         : undefined,
       getSourcemap: async () => null,
     });
+    if (reporter.flushOutputStreams !== false) {
+      await flushOutputStreams();
+    }
   }
 
   if (
