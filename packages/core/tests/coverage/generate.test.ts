@@ -9,6 +9,7 @@ import {
 } from '../../src/coverage/generate';
 import type { RstestContext } from '../../src/types';
 import type { CoverageMap, CoverageProvider } from '../../src/types/coverage';
+import type { TraceSpan } from '../../src/utils';
 
 const createFileCoverage = (file: string): FileCoverageData => ({
   path: file,
@@ -367,6 +368,122 @@ describe('generateCoverage', () => {
 
     try {
       await generateCoverage(context, createCoverageMap(), provider);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
+  it('traces coverage generation pipeline steps', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const srcDir = path.join(rootPath, 'src');
+    mkdirSync(srcDir, { recursive: true });
+
+    writeFileSync(
+      path.join(srcDir, 'covered.ts'),
+      'export const covered = 1;\n',
+    );
+    writeFileSync(
+      path.join(srcDir, 'uncovered.ts'),
+      'export const uncovered = 1;\n',
+    );
+
+    const coveredFile = path.join(srcDir, 'covered.ts');
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const coveredFiles = new Map<string, FileCoverageData>([
+      [
+        coveredFile,
+        {
+          path: coveredFile,
+          statementMap: {},
+          fnMap: {},
+          branchMap: {},
+          s: {},
+          f: {},
+          b: {},
+          all: false,
+          _coverageSchema: 'test',
+          hash: coveredFile,
+        },
+      ],
+    ]);
+
+    const createCoverageMap = (): CoverageMap =>
+      ({
+        addFileCoverage(coverage: { path: string }) {
+          coveredFiles.set(coverage.path, coverage);
+        },
+        files() {
+          return Array.from(coveredFiles.keys());
+        },
+        filter(predicate: (filePath: string) => boolean) {
+          for (const filePath of Array.from(coveredFiles.keys())) {
+            if (!predicate(filePath)) {
+              coveredFiles.delete(filePath);
+            }
+          }
+        },
+        merge(coverage: Record<string, FileCoverageData>) {
+          Object.entries(coverage).forEach(([filePath, fileCoverage]) => {
+            coveredFiles.set(filePath, fileCoverage);
+          });
+        },
+      }) as CoverageMap;
+
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateCoverageForUntestedFiles({ files }) {
+        return files.map((file) => ({
+          path: file,
+          statementMap: {},
+          fnMap: {},
+          branchMap: {},
+          s: {},
+          f: {},
+          b: {},
+          all: false,
+          _coverageSchema: 'test',
+          hash: file,
+        }));
+      },
+      async generateReports() {},
+    } satisfies CoverageProvider;
+
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: {
+          ...defaultCoverage,
+          include: ['src/**/*.ts'],
+        },
+      },
+      projects: [
+        {
+          rootPath,
+          environmentName: 'node',
+        },
+      ],
+    } as RstestContext;
+
+    const spans: string[] = [];
+    const traceSpan: TraceSpan = async (name, _cat, fn) => {
+      spans.push(name);
+      return fn();
+    };
+
+    try {
+      await generateCoverage(context, createCoverageMap(), provider, traceSpan);
+      expect(spans).toEqual([
+        'coverage:filter-files',
+        'coverage:collect-covered-files',
+        'coverage:collect-included-files',
+        'coverage:generate-untested-files',
+        'coverage:generate-untested-files-batch',
+        'coverage:filter-included-files',
+        'coverage:generate-reports',
+      ]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
     }
