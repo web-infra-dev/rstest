@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -122,8 +122,8 @@ describe('coverage-v8 provider', () => {
     }
   });
 
-  it('keeps excluded files with inline source maps for remapping', async () => {
-    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map');
+  it('keeps excluded asset files with inline source maps for remapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-asset-map');
     const file = join(root, 'dist', 'bundle.js');
     const originalFile = join(root, 'src', 'original.ts');
     const provider = new CoverageProvider(
@@ -179,6 +179,73 @@ describe('coverage-v8 provider', () => {
           [file]:
             'value();\n//# sourceMappingURL=data:application/json;base64,e30=',
         },
+        sourceMaps: {},
+      });
+
+      expect(coverageMap?.files()).toEqual([originalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps excluded disk files with inline source maps for remapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-disk-map');
+    const file = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const provider = new CoverageProvider(
+      createOptions({
+        include: ['src/**/*.ts'],
+        exclude: ['dist/**'],
+      }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: originalFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {
+        post: async (method: string) => {
+          if (method === 'Profiler.takePreciseCoverage') {
+            return {
+              result: [
+                {
+                  url: pathToFileURL(file).href,
+                  scriptId: '1',
+                  functions: [],
+                },
+              ],
+            };
+          }
+
+          return {};
+        },
+      },
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: fileCoverage,
+      }),
+    });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(
+        file,
+        'value();\n//# sourceMappingURL=data:application/json;base64,e30=',
+      );
+
+      const coverageMap = await provider.collect({
+        assetFiles: {},
         sourceMaps: {},
       });
 

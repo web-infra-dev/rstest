@@ -193,6 +193,20 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
+  private hasInlineSourceMap(code: string): boolean {
+    return /[#@]\s*sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,/m.test(
+      code,
+    );
+  }
+
+  private async hasInlineSourceMapOnDisk(filePath: string): Promise<boolean> {
+    try {
+      return this.hasInlineSourceMap(await fs.readFile(filePath, 'utf-8'));
+    } catch (_err) {
+      return false;
+    }
+  }
+
   private async getTransformedSource(
     filePath: string,
     options?: {
@@ -330,15 +344,14 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
         const assetSource = this.findInDict(options?.assetFiles, filePath);
-        const hasSourceMap = Boolean(
-          sourceMapStr ||
-          (assetSource &&
-            /[#@]\s*sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,/m.test(
-              assetSource,
-            )),
+        let hasSourceMap = Boolean(
+          sourceMapStr || (assetSource && this.hasInlineSourceMap(assetSource)),
         );
 
-        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) return;
+        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) {
+          hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
+          if (!hasSourceMap) return;
+        }
 
         if (!hasSourceMap) {
           const originalTestPath = this.toProjectRelativePath(filePath);
@@ -346,7 +359,8 @@ export class CoverageProvider implements RstestCoverageProvider {
             this.isExcluded(originalTestPath) ||
             !this.isIncluded(originalTestPath)
           ) {
-            return;
+            hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
+            if (!hasSourceMap) return;
           }
         }
 
