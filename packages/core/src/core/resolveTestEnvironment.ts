@@ -34,10 +34,6 @@ export const isTestEnvironment = (value: unknown): value is TestEnvironment => {
 export const resolveEnvironmentExport = (
   environmentModule: unknown,
 ): TestEnvironment | undefined => {
-  if (isTestEnvironment(environmentModule)) {
-    return environmentModule;
-  }
-
   if (!environmentModule || typeof environmentModule !== 'object') {
     return undefined;
   }
@@ -90,6 +86,18 @@ const resolvePackageEnvironmentPaths = (name: string, roots: string[]) => {
 
   return resolvedPaths;
 };
+
+const createImportTestEnvironmentError = (
+  name: string,
+  resolvedPath: string,
+  cause: unknown,
+) =>
+  new Error(
+    `Failed to import testEnvironment module "${name}" from ${resolvedPath}: ${
+      cause instanceof Error ? cause.message : String(cause)
+    }`,
+    { cause },
+  );
 
 const resolvePackageImport = (name: string, root: string) => {
   const [packageName, subpath] = parsePackageName(name);
@@ -183,11 +191,16 @@ export const resolveTestEnvironmentPath = async (
   } else {
     const resolvedPaths = resolvePackageEnvironmentPaths(name, roots);
 
+    let lastImportError: { resolvedPath: string; error: unknown } | undefined;
+    let hasImportedEnvironmentModule = false;
+
     for (const resolvedPath of resolvedPaths) {
       let environmentModule: unknown;
       try {
         environmentModule = await import(resolvedPath);
-      } catch {
+        hasImportedEnvironmentModule = true;
+      } catch (error) {
+        lastImportError = { resolvedPath, error };
         continue;
       }
       const environment = resolveEnvironmentExport(environmentModule);
@@ -195,6 +208,14 @@ export const resolveTestEnvironmentPath = async (
       if (environment) {
         return resolvedPath;
       }
+    }
+
+    if (!hasImportedEnvironmentModule && lastImportError) {
+      throw createImportTestEnvironmentError(
+        name,
+        lastImportError.resolvedPath,
+        lastImportError.error,
+      );
     }
 
     if (resolvedPaths.length > 0) {

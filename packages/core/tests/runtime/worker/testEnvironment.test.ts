@@ -24,6 +24,21 @@ const environmentModule = (name: string) =>
     '};',
   ].join('\n');
 
+const createPackage = (root: string, name: string, source: string) => {
+  const packageDir = join(root, 'node_modules', name);
+
+  mkdirSync(packageDir, { recursive: true });
+  writeFileSync(
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      name,
+      type: 'module',
+      exports: './index.mjs',
+    }),
+  );
+  writeFileSync(join(packageDir, 'index.mjs'), source);
+};
+
 describe('testEnvironment', () => {
   let tempDir: string | undefined;
 
@@ -62,39 +77,14 @@ describe('testEnvironment', () => {
   it('should continue resolving package candidates after invalid matches', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 
-    const firstPackageDir = join(tempDir, 'node_modules', 'package-marker');
-    const fallbackPackageDir = join(
+    createPackage(
       tempDir,
-      'node_modules',
-      'rstest-environment-package-marker',
-    );
-
-    mkdirSync(firstPackageDir, { recursive: true });
-    mkdirSync(fallbackPackageDir, { recursive: true });
-
-    writeFileSync(
-      join(firstPackageDir, 'package.json'),
-      JSON.stringify({
-        name: 'package-marker',
-        type: 'module',
-        exports: './index.mjs',
-      }),
-    );
-    writeFileSync(
-      join(firstPackageDir, 'index.mjs'),
+      'package-marker',
       'export default { name: "not-an-environment" };',
     );
-
-    writeFileSync(
-      join(fallbackPackageDir, 'package.json'),
-      JSON.stringify({
-        name: 'rstest-environment-package-marker',
-        type: 'module',
-        exports: './index.mjs',
-      }),
-    );
-    writeFileSync(
-      join(fallbackPackageDir, 'index.mjs'),
+    createPackage(
+      tempDir,
+      'rstest-environment-package-marker',
       environmentModule('fallback-package-environment'),
     );
 
@@ -122,39 +112,14 @@ describe('testEnvironment', () => {
   it('should continue resolving package candidates after import failures', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 
-    const firstPackageDir = join(tempDir, 'node_modules', 'package-marker');
-    const fallbackPackageDir = join(
+    createPackage(
       tempDir,
-      'node_modules',
-      'rstest-environment-package-marker',
-    );
-
-    mkdirSync(firstPackageDir, { recursive: true });
-    mkdirSync(fallbackPackageDir, { recursive: true });
-
-    writeFileSync(
-      join(firstPackageDir, 'package.json'),
-      JSON.stringify({
-        name: 'package-marker',
-        type: 'module',
-        exports: './index.mjs',
-      }),
-    );
-    writeFileSync(
-      join(firstPackageDir, 'index.mjs'),
+      'package-marker',
       'throw new Error("primary package import failed");',
     );
-
-    writeFileSync(
-      join(fallbackPackageDir, 'package.json'),
-      JSON.stringify({
-        name: 'rstest-environment-package-marker',
-        type: 'module',
-        exports: './index.mjs',
-      }),
-    );
-    writeFileSync(
-      join(fallbackPackageDir, 'index.mjs'),
+    createPackage(
+      tempDir,
+      'rstest-environment-package-marker',
       environmentModule('fallback-package-environment'),
     );
 
@@ -177,6 +142,52 @@ describe('testEnvironment', () => {
       ).href,
     );
     expect(environment.name).toBe('fallback-package-environment');
+  });
+
+  it('should surface import errors when all package candidates fail to import', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    createPackage(
+      tempDir,
+      'package-marker',
+      'throw new Error("primary package import failed");',
+    );
+    createPackage(
+      tempDir,
+      'rstest-environment-package-marker',
+      'throw new Error("fallback package import failed");',
+    );
+
+    const promise = resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+
+    await expect(promise).rejects.toThrow('fallback package import failed');
+    await expect(promise).rejects.toHaveProperty(
+      'cause.message',
+      'fallback package import failed',
+    );
+  });
+
+  it('should reject package modules without a default environment export', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    createPackage(
+      tempDir,
+      'package-marker',
+      [
+        'export const name = "named-export-environment";',
+        'export const setup = async () => ({',
+        '  async teardown() {},',
+        '});',
+      ].join('\n'),
+    );
+
+    await expect(
+      resolveTestEnvironmentPath('package-marker', [realpathSync(tempDir)]),
+    ).rejects.toThrow(
+      'must export a test environment object as the default export',
+    );
   });
 
   it('should reject named environment exports before worker loading', async () => {
