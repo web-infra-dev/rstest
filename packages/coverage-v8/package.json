@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "V8 coverage provider for Rstest",
   "type": "module",
+  "license": "MIT",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
