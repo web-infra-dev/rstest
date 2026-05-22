@@ -81,6 +81,18 @@ describe('CLI help output', () => {
     });
   });
 
+  it('normalizes --coverage before value-taking coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', '--config', 'rstest.config.ts'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+    });
+    expect(parsed.options.config).toBe('rstest.config.ts');
+  });
+
   it('preserves nested coverage options when followed by --coverage', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--coverage.changed=HEAD', '--coverage'],
@@ -103,6 +115,32 @@ describe('CLI help output', () => {
       enabled: 'false',
       changed: 'HEAD',
     });
+  });
+
+  it('keeps --coverage intact for merge-reports command', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'merge-reports', '--coverage'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toBe(true);
+  });
+
+  it('keeps --coverage intact for merge-reports command after global options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        '--config',
+        'rstest.config.ts',
+        'merge-reports',
+        '--coverage',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.config).toBe('rstest.config.ts');
+    expect(parsed.options.coverage).toBe(true);
   });
 
   it('allows --pool shorthand to be mixed with nested pool options', () => {

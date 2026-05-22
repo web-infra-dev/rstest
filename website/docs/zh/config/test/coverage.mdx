@@ -1,5 +1,5 @@
 ---
-description: 选择覆盖率收集方式。目前仅支持 istanbul。
+description: 选择覆盖率收集方式，支持 istanbul 和 v8。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -13,7 +13,7 @@ import { ApiMeta } from '@components/ApiMeta';
 ```ts
 type CoverageOptions = {
   enabled?: boolean;
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
@@ -74,10 +74,11 @@ export default defineConfig({
 
 ### provider
 
-- **类型：** `'istanbul'`
+- **类型：** `'istanbul' | 'v8'`
 - **默认值：** `'istanbul'`
+- **CLI：** `--coverage.provider <provider>`
 
-选择覆盖率收集方式。目前仅支持 [istanbul](https://istanbul.js.org/)。
+选择覆盖率收集方式。Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8`。如果你更关注基于 SWC 插桩的转换性能和稳定的 Istanbul 语义，可以选择 `istanbul`；如果开启 coverage 后主要受内存压力影响，可以选择 `v8`，它通常有更低的运行时内存占用，因为不会为每个执行模块注入覆盖率计数器。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -85,7 +86,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   coverage: {
     enabled: true,
-    provider: 'istanbul',
+    provider: 'v8',
   },
 });
 ```
@@ -100,7 +101,21 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
-`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。
+`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。Rstest 会在 transform 阶段通过 SWC 完成插桩，因此该 provider 具有较好的 transform 性能。但插桩后的代码会在执行时保留用于收集覆盖率的计数器，因此运行时内存占用可能更高。
+
+#### V8 provider
+
+<ApiMeta addedVersion="0.10.2" />
+
+`v8` provider 基于 Node.js inspector precise coverage 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合大型非 Browser Mode 测试套件中 coverage 内存压力明显的场景。
+
+要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。
+
+<PackageManagerTabs command="add @rstest/coverage-v8 -D" />
+
+由于底层覆盖率数据来自 Node.js / V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同 Node.js 或 V8 版本之间可能存在轻微差异。
+
+`v8` provider 仅适用于非 Browser Mode 测试执行，包括 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 不使用 inspector coverage，因此浏览器 coverage 应使用默认的 `istanbul` provider。
 
 ### include
 

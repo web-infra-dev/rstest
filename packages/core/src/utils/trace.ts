@@ -28,6 +28,13 @@ export type TraceEvent = {
   args?: Record<string, string | number | boolean | undefined>;
 };
 
+export type TraceSpan = <T>(
+  name: string,
+  cat: string,
+  fn: () => T | Promise<T>,
+  args?: TraceEvent['args'],
+) => Promise<T>;
+
 // ---------------------------------------------------------------------------
 // File output
 // ---------------------------------------------------------------------------
@@ -242,6 +249,8 @@ export interface TraceRun {
    * disabled, so the pool layer skips collecting events entirely.
    */
   onEvents: ((events: TraceEvent[]) => void) | undefined;
+  /** Record a host-side Perfetto slice in the current run. */
+  span: TraceSpan;
   /**
    * Write the buffered events for this run to disk and (lazily) start or
    * refresh the Perfetto helper server. No-op when nothing was collected.
@@ -288,9 +297,35 @@ export const createTraceController = (options: {
 
   const beginRun = (): TraceRun => {
     if (!enabled) {
-      return { onEvents: undefined, finalize: async () => {} };
+      return {
+        onEvents: undefined,
+        span: async (_name, _cat, fn) => fn(),
+        finalize: async () => {},
+      };
     }
     const events: TraceEvent[] = [];
+    const pushHostSlice: TraceSpan = async (name, cat, fn, args) => {
+      const start = Date.now();
+      try {
+        return await fn();
+      } finally {
+        const end = Date.now();
+        events.push({
+          name,
+          cat,
+          ph: 'X',
+          ts: start * 1000,
+          dur: (end - start) * 1000,
+          pid: process.pid,
+          tid: 0,
+          args: {
+            testPath: '<coverage>',
+            project: 'host',
+            ...args,
+          },
+        });
+      }
+    };
     return {
       // Iterate instead of spreading: a single file with thousands of cases
       // can hand `chunk` a very large array, and `push(...chunk)` would then
@@ -299,6 +334,7 @@ export const createTraceController = (options: {
       onEvents: (chunk) => {
         for (const ev of chunk) events.push(ev);
       },
+      span: pushHostSlice,
       finalize: async () => {
         if (!events.length) return;
         const tracePath = getTraceOutputPath(rootPath);

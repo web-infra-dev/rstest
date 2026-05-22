@@ -13,7 +13,7 @@ import { ApiMeta } from '@components/ApiMeta';
 ```ts
 type CoverageOptions = {
   enabled?: boolean;
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
@@ -74,10 +74,11 @@ export default defineConfig({
 
 ### provider
 
-- **Type:** `'istanbul'`
+- **Type:** `'istanbul' | 'v8'`
 - **Default:** `'istanbul'`
+- **CLI:** `--coverage.provider <provider>`
 
-The coverage provider to use. Currently, only [istanbul](https://istanbul.js.org/) is supported.
+The coverage provider to use. Rstest supports both [istanbul](https://istanbul.js.org/) and `v8`. Choose `istanbul` when you want SWC-based instrumentation performance and stable Istanbul semantics. Choose `v8` when coverage is mainly limited by memory pressure; it usually has lower runtime memory usage because it does not inject coverage counters into every executed module.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -85,7 +86,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   coverage: {
     enabled: true,
-    provider: 'istanbul',
+    provider: 'v8',
   },
 });
 ```
@@ -100,7 +101,21 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
-`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument).
+`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument). Rstest applies instrumentation through SWC during transform, so this provider has good transform-time performance. It can use more runtime memory because the executed code keeps the injected counters needed to collect coverage.
+
+#### V8 provider
+
+<ApiMeta addedVersion="0.10.2" />
+
+The `v8` provider collects precise coverage from the Node.js inspector, then remaps it to Istanbul format. Compared with Istanbul instrumentation, V8 coverage usually has lower runtime memory usage because executed modules do not need extra coverage counters. It is a better fit for large non-browser test suites where coverage memory pressure is the bottleneck.
+
+To enable V8 coverage, install [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8) first.
+
+<PackageManagerTabs command="add @rstest/coverage-v8 -D" />
+
+Because the underlying coverage data comes from Node.js / V8 itself, remapped branch coverage and uncovered line details can vary slightly across different Node.js or V8 versions.
+
+The `v8` provider is only available outside Browser Mode, including `node`, `jsdom`, and `happy-dom` test environments. Browser Mode does not use inspector coverage, so browser coverage should use the default `istanbul` provider.
 
 ### include
 
