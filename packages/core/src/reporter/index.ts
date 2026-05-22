@@ -162,7 +162,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -177,6 +177,7 @@ export class DefaultReporter implements Reporter {
       duration,
       rootPath: this.rootPath,
       snapshotSummary,
+      output: hasErrorLogs ? 'stderr' : 'stdout',
     });
   }
 }

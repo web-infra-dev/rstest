@@ -105,7 +105,7 @@ export class DotReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -120,6 +120,7 @@ export class DotReporter implements Reporter {
       duration,
       rootPath: this.rootPath,
       snapshotSummary,
+      output: hasErrorLogs ? 'stderr' : 'stdout',
     });
   }
 
