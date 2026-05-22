@@ -17,6 +17,7 @@ import {
   getForceRerunTriggerMessage,
   getNoTestFilesMessage,
   isDebug,
+  flushOutputStreams,
   logger,
   resolveShardedEntries,
   type TraceEvent,
@@ -141,6 +142,7 @@ const notifyReportersOnTestRunEnd = async ({
       getSourcemap,
       filterRerunTestPaths,
     });
+    await flushOutputStreams();
   }
 };
 

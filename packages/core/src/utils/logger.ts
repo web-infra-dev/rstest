@@ -118,6 +118,22 @@ export const clearScreen = (force = false): void => {
   }
 };
 
+const waitForStream = (stream: NodeJS.WritableStream): Promise<void> =>
+  new Promise((resolve, reject) => {
+    stream.write('', (error?: Error | null) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+
+export const flushOutputStreams = async (): Promise<void> => {
+  await waitForStream(process.stderr);
+  await waitForStream(process.stdout);
+};
+
 const logger: Logger & { stderr: (message: string, ...args: any[]) => void } = {
   ...rslog,
   stderr: (message: string, ...args: any[]) => {

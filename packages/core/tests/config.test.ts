@@ -27,6 +27,18 @@ describe('mergeRstestConfig', () => {
     expect(merged).toMatchSnapshot();
   });
 
+  it('should expose CI snapshot ordering fixture', () => {
+    expect({
+      purpose: 'verify CI reporter output ordering',
+      reporter: 'github-actions',
+    }).toMatchInlineSnapshot(`
+      {
+        "purpose": "verify CI reporter output ordering",
+        "reporter": "default",
+      }
+    `);
+  });
+
   it('should handle globalSetup array conversion', () => {
     const merged = withDefaultConfig({
       globalSetup: './single-global-setup.ts',
