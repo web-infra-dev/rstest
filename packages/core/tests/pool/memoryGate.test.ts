@@ -1,5 +1,9 @@
 import v8 from 'node:v8';
-import { MemoryGate, createDefaultMemoryGate } from '../../src/pool/memoryGate';
+import {
+  MemoryGate,
+  createDefaultMemoryGate,
+  selectMemoryGate,
+} from '../../src/pool/memoryGate';
 
 const MB = 1024 * 1024;
 
@@ -188,5 +192,26 @@ describe('createDefaultMemoryGate', () => {
     } finally {
       if (prev !== undefined) process.env.RSTEST_MEMORY_AWARE = prev;
     }
+  });
+});
+
+// Locks the rstest#1301 regression: the gate's per-worker RSS sampling premise
+// (each worker reports its own resident memory) is only valid for fork-based
+// pools. For `worker_threads`, `process.memoryUsage().rss` returns the entire
+// host process RSS, which would collapse thread-pool parallelism if fed to the
+// gate. Keep this rule trivially testable so it cannot silently regress.
+describe('selectMemoryGate', () => {
+  it('should attach the gate for the forks pool', () => {
+    const sentinel = new MemoryGate();
+    expect(selectMemoryGate('forks', () => sentinel)).toBe(sentinel);
+  });
+
+  it('should NOT attach the gate for the threads pool, even when one is available', () => {
+    const sentinel = new MemoryGate();
+    expect(selectMemoryGate('threads', () => sentinel)).toBeUndefined();
+  });
+
+  it('should still respect the factory opt-out for forks (e.g. RSTEST_MEMORY_AWARE=0)', () => {
+    expect(selectMemoryGate('forks', () => undefined)).toBeUndefined();
   });
 });

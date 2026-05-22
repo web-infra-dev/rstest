@@ -1,4 +1,5 @@
 import './setup';
+import { isMainThread } from 'node:worker_threads';
 import {
   isWorkerRequestEnvelope,
   serializeError,
@@ -63,9 +64,12 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
-// Read once at worker bootstrap — toggling `RSTEST_MEMORY_AWARE` mid-run is
-// not supported (host samples it at pool construction too).
-const MEMORY_REPORTING_ENABLED = process.env.RSTEST_MEMORY_AWARE !== '0';
+// Skip RSS reporting for thread workers — `process.memoryUsage().rss` is
+// host-wide and would mislead the gate. See rstest#1301. Read once at
+// bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
+// samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED =
+  isMainThread && process.env.RSTEST_MEMORY_AWARE !== '0';
 
 const runTask = async (
   kind: TaskKind,
