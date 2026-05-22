@@ -77,22 +77,52 @@ const createFailureResults = () => {
   return { fileResult, testResult };
 };
 
+const spyOnConsole = () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  rs.spyOn(console, 'log').mockImplementation((...args) => {
+    stdout.push(args.join(' '));
+  });
+  rs.spyOn(console, 'error').mockImplementation((...args) => {
+    stderr.push(args.join(' '));
+  });
+
+  onTestFinished(() => {
+    rs.resetAllMocks();
+  });
+
+  return { stdout, stderr };
+};
+
 describe('DefaultReporter summary streams', () => {
-  it('prints failure details and summary to stderr when the run failed', async () => {
+  it('flushes error output before printing the failed summary to stdout', async () => {
     const { fileResult, testResult } = createFailureResults();
-    const stdout: string[] = [];
-    const stderr: string[] = [];
+    const { stdout, stderr } = spyOnConsole();
+    const writes: string[] = [];
 
-    rs.spyOn(console, 'log').mockImplementation((...args) => {
-      stdout.push(args.join(' '));
-    });
-    rs.spyOn(console, 'error').mockImplementation((...args) => {
-      stderr.push(args.join(' '));
-    });
-
-    onTestFinished(() => {
-      rs.resetAllMocks();
-    });
+    rs.spyOn(process.stderr, 'write').mockImplementation(
+      (_chunk, _encoding, callback) => {
+        writes.push('flush stderr');
+        if (typeof _encoding === 'function') {
+          _encoding();
+        } else {
+          callback?.();
+        }
+        return true;
+      },
+    );
+    rs.spyOn(process.stdout, 'write').mockImplementation(
+      (_chunk, _encoding, callback) => {
+        writes.push('flush stdout');
+        if (typeof _encoding === 'function') {
+          _encoding();
+        } else {
+          callback?.();
+        }
+        return true;
+      },
+    );
 
     const reporter = new DefaultReporter({
       rootPath: '/test/root',
@@ -113,14 +143,16 @@ describe('DefaultReporter summary streams', () => {
     });
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
+    const stdoutText = stripVTControlCharacters(stdout.join('\n'));
 
-    expect(stdout).toEqual([]);
+    expect(writes).toEqual(['flush stderr', 'flush stdout']);
     expect(stderrText).toContain('Summary of all failing tests:');
     expect(stderrText).toContain('FAIL  example.test.ts > suite > should fail');
-    expect(stderrText).toContain('Snapshots 1 failed');
-    expect(stderrText).toContain('Test Files 1 failed');
-    expect(stderrText).toContain('Tests 1 failed');
-    expect(stderrText).toContain('Duration 500ms (build 100ms, tests 300ms)');
+    expect(stderrText).toContain('Error: Snapshot `example 1` mismatched');
+    expect(stdoutText).toContain('Snapshots 1 failed');
+    expect(stdoutText).toContain('Test Files 1 failed');
+    expect(stdoutText).toContain('Tests 1 failed');
+    expect(stdoutText).toContain('Duration 500ms (build 100ms, tests 300ms)');
   });
 
   it('keeps the summary on stdout when there are no failures', async () => {
@@ -141,19 +173,8 @@ describe('DefaultReporter summary streams', () => {
       project: 'default',
       testId: 'file-1',
     };
-    const stdout: string[] = [];
-    const stderr: string[] = [];
-
-    rs.spyOn(console, 'log').mockImplementation((...args) => {
-      stdout.push(args.join(' '));
-    });
-    rs.spyOn(console, 'error').mockImplementation((...args) => {
-      stderr.push(args.join(' '));
-    });
-
-    onTestFinished(() => {
-      rs.resetAllMocks();
-    });
+    const { stdout, stderr } = spyOnConsole();
+    const write = rs.spyOn(process.stdout, 'write');
 
     const reporter = new DefaultReporter({
       rootPath: '/test/root',
@@ -173,6 +194,7 @@ describe('DefaultReporter summary streams', () => {
     const stdoutText = stripVTControlCharacters(stdout.join('\n'));
 
     expect(stderr).toEqual([]);
+    expect(write).not.toHaveBeenCalled();
     expect(stdoutText).toContain('Test Files 1 passed');
     expect(stdoutText).toContain('Tests 1 passed');
     expect(stdoutText).toContain('Duration 500ms (build 100ms, tests 300ms)');
