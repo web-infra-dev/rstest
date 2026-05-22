@@ -22,7 +22,7 @@ function loadBlobFiles(blobDir: string): BlobData[] {
   if (!existsSync(blobDir)) {
     throw new Error(
       `Blob reports directory not found: ${color.cyan(blobDir)}\n` +
-        'Run tests with --reporter=blob first to generate shard reports.',
+        'Run tests with --reporters=blob first to generate shard reports.',
     );
   }
 
@@ -33,7 +33,7 @@ function loadBlobFiles(blobDir: string): BlobData[] {
   if (files.length === 0) {
     throw new Error(
       `No blob report files found in: ${color.cyan(blobDir)}\n` +
-        'Run tests with --reporter=blob first to generate shard reports.',
+        'Run tests with --reporters=blob first to generate shard reports.',
     );
   }
 

@@ -197,7 +197,7 @@ describe('test projects', () => {
           'run',
           '-c',
           'rstest.projectConfig.config.mts',
-          '--reporter',
+          '--reporters',
           'verbose',
         ],
         options: {
@@ -230,7 +230,7 @@ describe('test projects', () => {
           'run',
           '-c',
           'rstest.slowTest.config.mts',
-          '--reporter',
+          '--reporters',
           'verbose',
         ],
         options: {

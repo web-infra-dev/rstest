@@ -9,7 +9,7 @@ import type {
   RstestConfig,
   RstestInstance,
 } from '../types';
-import { bgColor, color, determineAgent, formatError, logger } from '../utils';
+import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -271,13 +271,15 @@ const getCliCommand = (argv: string[]): string | undefined => {
   return;
 };
 
-const hasLegacyReporterFlag = (argv: string[]): boolean =>
-  argv.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='));
-
 const normalizeReporterCliArgs = (argv: string[]): string[] => {
-  if (!hasLegacyReporterFlag(argv)) {
+  const hasLegacyReporterFlag = argv.some(
+    (arg) => arg === '--reporter' || arg.startsWith('--reporter='),
+  );
+
+  if (!hasLegacyReporterFlag) {
     return argv;
   }
+
   return argv.map((arg) => {
     if (arg === '--reporter') {
       return '--reporters';
@@ -286,21 +288,6 @@ const normalizeReporterCliArgs = (argv: string[]): string[] => {
       return `--reporters=${arg.slice('--reporter='.length)}`;
     }
     return arg;
-  });
-};
-
-let reporterDeprecationScheduled = false;
-
-const scheduleReporterDeprecationWarning = (): void => {
-  if (reporterDeprecationScheduled) {
-    return;
-  }
-  reporterDeprecationScheduled = true;
-  process.on('exit', () => {
-    const badge = bgColor('bgYellow', ' DEPRECATED ');
-    logger.warn(
-      `${badge} ${color.yellow('--reporter')} is deprecated and will be removed in ${color.bold('1.0.0')}. Use ${color.green('--reporters')} instead.`,
-    );
   });
 };
 
@@ -378,13 +365,11 @@ const normalizeCliArgs = (argv: string[]): string[] =>
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
-  cli.parse = ((argv, options) => {
-    const rawArgv = argv ?? process.argv;
-    if (options?.run !== false && hasLegacyReporterFlag(rawArgv)) {
-      scheduleReporterDeprecationWarning();
-    }
-    return originalParse(normalizeCliArgs(rawArgv), options);
-  }) as CAC['parse'];
+  cli.parse = ((argv, options) =>
+    originalParse(
+      normalizeCliArgs(argv ?? process.argv),
+      options,
+    )) as CAC['parse'];
 };
 
 const filterHelpOptions = (

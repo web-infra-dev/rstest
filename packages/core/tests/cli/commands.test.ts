@@ -224,7 +224,7 @@ describe('CLI help output', () => {
     expect(parsed.options.reporters).toBe('verbose');
   });
 
-  it('rewrites deprecated --reporter to --reporters', () => {
+  it('accepts legacy --reporter as an alias for --reporters', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--reporter', 'verbose', '--reporter=junit'],
       { run: false },
