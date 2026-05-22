@@ -10,7 +10,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color } from '../utils';
+import { color, flushOutputStreams } from '../utils';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logUserConsoleLog } from './utils';
 
@@ -105,7 +105,7 @@ export class DotReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -113,6 +113,10 @@ export class DotReporter implements Reporter {
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,

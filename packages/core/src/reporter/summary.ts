@@ -200,7 +200,7 @@ export const printSummaryErrorLogs = async ({
   getSourcemap: GetSourcemap;
   filterRerunTestPaths?: string[];
   unhandledErrors?: Error[];
-}): Promise<void> => {
+}): Promise<boolean> => {
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
@@ -220,7 +220,7 @@ export const printSummaryErrorLogs = async ({
   ];
 
   if (failedTests.length === 0 && !unhandledErrors?.length) {
-    return;
+    return false;
   }
 
   logger.stderr('');
@@ -249,4 +249,6 @@ export const printSummaryErrorLogs = async ({
       }
     }
   }
+
+  return true;
 };
