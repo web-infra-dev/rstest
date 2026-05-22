@@ -82,20 +82,27 @@ const sourceMappingURLRegex = new RegExp(
  * @param {string} code source code content
  * @returns {string | undefined} source mapping information
  */
-function getSourceMappingURL(code: string): string | undefined {
-  const lines = code.split(/^/m);
-  let match: RegExpMatchArray | null | undefined = null;
+export function getSourceMappingURL(code: string): string | undefined {
+  let searchIndex = code.lastIndexOf('sourceMappingURL');
 
-  for (let i = lines.length - 1; i >= 0; i--) {
-    match = lines[i]?.match(sourceMappingURLRegex);
+  while (searchIndex !== -1) {
+    const lineStart = code.lastIndexOf('\n', searchIndex);
+    const lineEnd = code.indexOf('\n', searchIndex);
+    const line = code.slice(
+      lineStart + 1,
+      lineEnd === -1 ? code.length : lineEnd,
+    );
+    const match = line.match(sourceMappingURLRegex);
+
     if (match) {
-      break;
+      const sourceMappingURL = match[1] || match[2] || '';
+      return sourceMappingURL ? decodeURI(sourceMappingURL) : undefined;
     }
+
+    searchIndex = code.lastIndexOf('sourceMappingURL', lineStart - 1);
   }
 
-  const sourceMappingURL = match ? match[1] || match[2] || '' : '';
-
-  return sourceMappingURL ? decodeURI(sourceMappingURL) : sourceMappingURL;
+  return undefined;
 }
 
 export function registerSourceMapURL(
@@ -135,28 +142,36 @@ export async function transformCoverage(
   coverageMap: CoverageMap,
   sourcemapUrlCache: Map<string, string | undefined>,
 ): Promise<CoverageMap> {
-  await mapWithConcurrency(
-    coverageMap
-      .files()
-      // process js/cjs/mjs file only
-      .filter((filename) => filename.endsWith('js')),
-    SOURCE_MAP_SCAN_CONCURRENCY,
-    async (filename) => {
-      let url = sourcemapUrlCache.get(filename);
-      if (!url) {
-        const { readFile } = await import('node:fs/promises');
-        url = await readFile(filename, 'utf8').then(
-          (content) => getSourceMappingURL(content),
-          () => undefined,
-        );
-      }
-      sourcemapUrlCache.set(filename, url);
-    },
+  const jsFiles = coverageMap
+    .files()
+    // process js/cjs/mjs file only
+    .filter((filename) => filename.endsWith('js'));
+
+  const uncachedFiles = jsFiles.filter(
+    (filename) => !sourcemapUrlCache.has(filename),
   );
+
+  if (uncachedFiles.length) {
+    const { readFile } = await import('node:fs/promises');
+    await mapWithConcurrency(
+      uncachedFiles,
+      SOURCE_MAP_SCAN_CONCURRENCY,
+      async (filename) => {
+        try {
+          const content = await readFile(filename, 'utf8');
+          sourcemapUrlCache.set(filename, getSourceMappingURL(content));
+        } catch {
+          // Do not cache failed reads. The file may be temporarily unavailable
+          // during watch-mode rebuilds, so retry it on the next report.
+        }
+      },
+    );
+  }
 
   // Call createSourceMapStore as needed
   let store: MapStore | undefined;
-  for (const [filename, url] of sourcemapUrlCache) {
+  for (const filename of jsFiles) {
+    const url = sourcemapUrlCache.get(filename);
     if (url) {
       if (!store) {
         const { createSourceMapStore } =
