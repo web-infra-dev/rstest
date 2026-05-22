@@ -12,7 +12,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { isTTY } from '../utils';
+import { flushOutputStreams, isTTY } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
@@ -162,7 +162,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -170,6 +170,10 @@ export class DefaultReporter implements Reporter {
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,
