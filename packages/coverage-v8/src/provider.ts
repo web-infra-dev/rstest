@@ -328,8 +328,14 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         if (!this.isMatch(filePath)) return;
 
+        const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+        const assetSource = this.findInDict(options?.assetFiles, filePath);
         const hasSourceMap = Boolean(
-          this.findInDict(options?.sourceMaps, filePath),
+          sourceMapStr ||
+          (assetSource &&
+            /[#@]\s*sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,/m.test(
+              assetSource,
+            )),
         );
 
         if (!this.shouldProcessEntry(filePath) && !hasSourceMap) return;

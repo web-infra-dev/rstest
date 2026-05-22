@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { NormalizedCoverageOptions } from '@rstest/core';
+import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { CoverageProvider } from '../src/provider';
 
 const createOptions = (
@@ -24,6 +25,19 @@ type ProviderInternals = CoverageProvider & {
     dict: Record<string, string> | undefined,
     filePath: string,
   ) => string | undefined;
+  convertWithAst: (
+    filePath: string,
+    entry: {
+      url: string;
+      scriptId: string;
+      functions: [];
+    },
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+      outputModule?: boolean;
+    },
+  ) => Promise<Record<string, FileCoverageData>>;
 };
 
 function getProviderInternals(provider: CoverageProvider): ProviderInternals {
@@ -53,7 +67,7 @@ describe('coverage-v8 provider', () => {
   });
 
   it('skips excluded no-sourcemap files before reading or converting them', async () => {
-    const root = join(tmpdir(), 'rstest-coverage-v8-prefilter');
+    const root = join(tmpdir(), 'rstest-coverage-v8-early-filter');
     const file = join(root, 'excluded.js');
     const provider = new CoverageProvider(
       createOptions({
@@ -104,6 +118,72 @@ describe('coverage-v8 provider', () => {
     } finally {
       console.error = originalError;
       process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps excluded files with inline source maps for remapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map');
+    const file = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const provider = new CoverageProvider(
+      createOptions({
+        include: ['src/**/*.ts'],
+        exclude: ['dist/**'],
+      }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: originalFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {
+        post: async (method: string) => {
+          if (method === 'Profiler.takePreciseCoverage') {
+            return {
+              result: [
+                {
+                  url: pathToFileURL(file).href,
+                  scriptId: '1',
+                  functions: [],
+                },
+              ],
+            };
+          }
+
+          return {};
+        },
+      },
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: fileCoverage,
+      }),
+    });
+
+    try {
+      mkdirSync(root, { recursive: true });
+
+      const coverageMap = await provider.collect({
+        assetFiles: {
+          [file]:
+            'value();\n//# sourceMappingURL=data:application/json;base64,e30=',
+        },
+        sourceMaps: {},
+      });
+
+      expect(coverageMap?.files()).toEqual([originalFile]);
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
