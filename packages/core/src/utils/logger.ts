@@ -119,13 +119,12 @@ export const clearScreen = (force = false): void => {
 };
 
 const waitForStream = (stream: NodeJS.WritableStream): Promise<void> =>
-  new Promise((resolve, reject) => {
-    stream.write('', (error?: Error | null) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
+  new Promise((resolve) => {
+    const timeout = setTimeout(resolve, 100);
+
+    stream.write('', () => {
+      clearTimeout(timeout);
+      resolve();
     });
   });
 
