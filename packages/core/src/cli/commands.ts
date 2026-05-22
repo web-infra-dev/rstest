@@ -86,7 +86,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
   ],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   [
     '-t, --testNamePattern <value>',
     'Run only tests with a name that matches the regex',
@@ -170,7 +170,7 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   ['--coverage', 'Enable code coverage collection'],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   ['--cleanup', 'Remove blob reports directory after merging'],
 ];
 
@@ -226,6 +226,7 @@ const valueTakingOptions = new Set([
   '--pool.type',
   '--project',
   '--reporter',
+  '--reporters',
   '--retry',
   '--root',
   '--shard',

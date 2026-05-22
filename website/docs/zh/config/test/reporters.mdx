@@ -23,14 +23,14 @@ process.env.GITHUB_ACTIONS === 'true'
   : ['default'];
 ```
 
-- **CLI：** `--reporter=<name> --reporter=<name1>`
+- **CLI：** `--reporters=<name> --reporters=<name1>`（同时兼容 `--reporter` 作为别名）
 
 配置用于测试结果输出的报告器。
 
 内置报告器名称包括 `default`、`dot`、`verbose`、`md`、`github-actions`、`junit`、`json` 和 `blob`。
 
 :::info AI agent 环境
-未显式配置 reporters（配置文件无 `reporters`，且 CLI 未传 `--reporter`）时，Rstest 会默认使用 `['md']`，将更适合 AI agent 的 markdown 输出到 stdout。
+未显式配置 reporters（配置文件无 `reporters`，且 CLI 未传 `--reporters`）时，Rstest 会默认使用 `['md']`，将更适合 AI agent 的 markdown 输出到 stdout。
 :::
 
 ### 使用方法
@@ -45,7 +45,7 @@ import { Tab, Tabs } from '@theme';
   <Tab label="CLI">
 
 ```bash
-npx rstest --reporter=default
+npx rstest --reporters=default
 ```
 
   </Tab>
@@ -70,7 +70,7 @@ export default defineConfig({
 <Tab label="CLI">
 
 ```bash
-npx rstest --reporter=default --reporter=junit
+npx rstest --reporters=default --reporters=junit
 ```
 
   </Tab>
