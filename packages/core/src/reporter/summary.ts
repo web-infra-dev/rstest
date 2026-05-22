@@ -96,10 +96,17 @@ export const getPlainSummaryStatusString = (
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
  */
+type SummaryOutput = 'stderr' | 'stdout';
+
+const getSummaryLogger = (output: SummaryOutput) =>
+  output === 'stderr' ? logger.stderr : logger.log;
+
 const printSnapshotSummaryLog = (
   snapshots: SnapshotSummary,
   rootDir: string,
+  output: SummaryOutput,
 ): void => {
+  const log = getSummaryLogger(output);
   const summary: string[] = [];
 
   if (snapshots.added) {
@@ -152,7 +159,7 @@ const printSnapshotSummaryLog = (
 
   for (const [index, snapshot] of summary.entries()) {
     const title = index === 0 ? 'Snapshots' : '';
-    logger.log(`${color.gray(title.padStart(12))} ${snapshot}`);
+    log(`${color.gray(title.padStart(12))} ${snapshot}`);
   }
 };
 
@@ -168,22 +175,26 @@ export const printSummaryLog = ({
   snapshotSummary,
   duration,
   rootPath,
+  output = 'stdout',
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
   snapshotSummary: SnapshotSummary;
   duration: Duration;
   rootPath: string;
+  output?: SummaryOutput;
 }): void => {
-  logger.log('');
-  printSnapshotSummaryLog(snapshotSummary, rootPath);
-  logger.log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
-  logger.log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
+  const log = getSummaryLogger(output);
 
-  logger.log(
+  log('');
+  printSnapshotSummaryLog(snapshotSummary, rootPath, output);
+  log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
+  log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
+
+  log(
     `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
-  logger.log('');
+  log('');
 };
 
 export const printSummaryErrorLogs = async ({
@@ -200,7 +211,7 @@ export const printSummaryErrorLogs = async ({
   getSourcemap: GetSourcemap;
   filterRerunTestPaths?: string[];
   unhandledErrors?: Error[];
-}): Promise<void> => {
+}): Promise<boolean> => {
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
@@ -220,7 +231,7 @@ export const printSummaryErrorLogs = async ({
   ];
 
   if (failedTests.length === 0 && !unhandledErrors?.length) {
-    return;
+    return false;
   }
 
   logger.stderr('');
@@ -249,4 +260,6 @@ export const printSummaryErrorLogs = async ({
       }
     }
   }
+
+  return true;
 };

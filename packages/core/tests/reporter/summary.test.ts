@@ -1,0 +1,180 @@
+import { stripVTControlCharacters } from 'node:util';
+import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
+import { DefaultReporter } from '../../src/reporter/index';
+import type {
+  Duration,
+  NormalizedConfig,
+  RstestTestState,
+  SnapshotSummary,
+  TestFileResult,
+  TestResult,
+} from '../../src/types';
+
+const baseConfig = {
+  hideSkippedTestFiles: false,
+  hideSkippedTests: false,
+  slowTestThreshold: 300,
+} as NormalizedConfig;
+
+const emptySnapshotSummary: SnapshotSummary = {
+  added: 0,
+  didUpdate: false,
+  failure: false,
+  filesAdded: 0,
+  filesRemoved: 0,
+  filesRemovedList: [],
+  filesUnmatched: 0,
+  filesUpdated: 0,
+  matched: 0,
+  total: 0,
+  unchecked: 0,
+  uncheckedKeysByFile: [],
+  unmatched: 0,
+  updated: 0,
+};
+
+const duration: Duration = {
+  totalTime: 500,
+  buildTime: 100,
+  testTime: 300,
+};
+
+const createTestState = (results: TestFileResult[]): RstestTestState => ({
+  getRunningModules: () => new Map(),
+  getTestModules: () => results,
+  getTestFiles: () => results.map((result) => result.testPath),
+});
+
+const createFailureResults = () => {
+  const testResult: TestResult = {
+    status: 'fail',
+    name: 'should fail',
+    testPath: '/test/root/example.test.ts',
+    duration: 200,
+    errors: [
+      {
+        message: 'Snapshot `example 1` mismatched',
+        name: 'Error',
+        diff: '- Expected\n+ Received',
+      },
+    ],
+    parentNames: ['suite'],
+    project: 'default',
+    testId: 'case-1',
+  };
+
+  const fileResult: TestFileResult = {
+    status: 'fail',
+    name: 'example.test.ts',
+    testPath: '/test/root/example.test.ts',
+    duration: 300,
+    errors: testResult.errors,
+    results: [testResult],
+    project: 'default',
+    testId: 'file-1',
+  };
+
+  return { fileResult, testResult };
+};
+
+describe('DefaultReporter summary streams', () => {
+  it('prints failure details and summary to stderr when the run failed', async () => {
+    const { fileResult, testResult } = createFailureResults();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      stdout.push(args.join(' '));
+    });
+    rs.spyOn(console, 'error').mockImplementation((...args) => {
+      stderr.push(args.join(' '));
+    });
+
+    onTestFinished(() => {
+      rs.resetAllMocks();
+    });
+
+    const reporter = new DefaultReporter({
+      rootPath: '/test/root',
+      config: baseConfig,
+      options: {},
+      testState: createTestState([fileResult]),
+    });
+
+    await reporter.onTestRunEnd({
+      results: [fileResult],
+      testResults: [testResult],
+      duration,
+      snapshotSummary: {
+        ...emptySnapshotSummary,
+        unmatched: 1,
+      },
+      getSourcemap: async () => null,
+    });
+
+    const stderrText = stripVTControlCharacters(stderr.join('\n'));
+
+    expect(stdout).toEqual([]);
+    expect(stderrText).toContain('Summary of all failing tests:');
+    expect(stderrText).toContain('FAIL  example.test.ts > suite > should fail');
+    expect(stderrText).toContain('Snapshots 1 failed');
+    expect(stderrText).toContain('Test Files 1 failed');
+    expect(stderrText).toContain('Tests 1 failed');
+    expect(stderrText).toContain('Duration 500ms (build 100ms, tests 300ms)');
+  });
+
+  it('keeps the summary on stdout when there are no failures', async () => {
+    const testResult: TestResult = {
+      status: 'pass',
+      name: 'should pass',
+      testPath: '/test/root/example.test.ts',
+      duration: 200,
+      project: 'default',
+      testId: 'case-1',
+    };
+    const fileResult: TestFileResult = {
+      status: 'pass',
+      name: 'example.test.ts',
+      testPath: '/test/root/example.test.ts',
+      duration: 300,
+      results: [testResult],
+      project: 'default',
+      testId: 'file-1',
+    };
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      stdout.push(args.join(' '));
+    });
+    rs.spyOn(console, 'error').mockImplementation((...args) => {
+      stderr.push(args.join(' '));
+    });
+
+    onTestFinished(() => {
+      rs.resetAllMocks();
+    });
+
+    const reporter = new DefaultReporter({
+      rootPath: '/test/root',
+      config: baseConfig,
+      options: {},
+      testState: createTestState([fileResult]),
+    });
+
+    await reporter.onTestRunEnd({
+      results: [fileResult],
+      testResults: [testResult],
+      duration,
+      snapshotSummary: emptySnapshotSummary,
+      getSourcemap: async () => null,
+    });
+
+    const stdoutText = stripVTControlCharacters(stdout.join('\n'));
+
+    expect(stderr).toEqual([]);
+    expect(stdoutText).toContain('Test Files 1 passed');
+    expect(stdoutText).toContain('Tests 1 passed');
+    expect(stdoutText).toContain('Duration 500ms (build 100ms, tests 300ms)');
+  });
+});
