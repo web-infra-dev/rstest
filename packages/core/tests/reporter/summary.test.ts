@@ -155,6 +155,43 @@ describe('DefaultReporter summary streams', () => {
     expect(stdoutText).toContain('Duration 500ms (build 100ms, tests 300ms)');
   });
 
+  it('does not flush process streams when using a custom logger', async () => {
+    const { fileResult, testResult } = createFailureResults();
+    const { stdout, stderr } = spyOnConsole();
+    const stdoutWrite = rs.spyOn(process.stdout, 'write');
+    const stderrWrite = rs.spyOn(process.stderr, 'write');
+
+    const reporter = new DefaultReporter({
+      rootPath: '/test/root',
+      config: baseConfig,
+      options: {
+        logger: {
+          outputStream: process.stdout,
+          errorStream: process.stderr,
+          getColumns: () => 80,
+        },
+      },
+      testState: createTestState([fileResult]),
+    });
+
+    await reporter.onTestRunEnd({
+      results: [fileResult],
+      testResults: [testResult],
+      duration,
+      snapshotSummary: emptySnapshotSummary,
+      getSourcemap: async () => null,
+    });
+
+    expect(stdoutWrite).not.toHaveBeenCalled();
+    expect(stderrWrite).not.toHaveBeenCalled();
+    expect(stripVTControlCharacters(stderr.join('\n'))).toContain(
+      'Summary of all failing tests:',
+    );
+    expect(stripVTControlCharacters(stdout.join('\n'))).toContain(
+      'Test Files 1 failed',
+    );
+  });
+
   it('keeps the summary on stdout when there are no failures', async () => {
     const testResult: TestResult = {
       status: 'pass',

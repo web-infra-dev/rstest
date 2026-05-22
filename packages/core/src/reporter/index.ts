@@ -171,7 +171,7 @@ export class DefaultReporter implements Reporter {
       filterRerunTestPaths,
     });
 
-    if (hasErrorLogs) {
+    if (hasErrorLogs && this.flushOutputStreams) {
       await flushOutputStreams();
     }
 
