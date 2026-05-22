@@ -33,6 +33,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   private isMatch: (filePath: string) => boolean;
   private isIncluded: (filePath: string) => boolean;
   private isExcluded: (filePath: string) => boolean;
+  private dictLookupCache = new WeakMap<
+    Record<string, string>,
+    Map<string, string>
+  >();
 
   constructor(
     public options: NormalizedCoverageOptions,
@@ -94,21 +98,33 @@ export class CoverageProvider implements RstestCoverageProvider {
     if (!dict) return undefined;
     if (dict[filePath]) return dict[filePath];
 
-    for (const [key, value] of Object.entries(dict)) {
-      const normalizedKey = key.replace(/\\/g, '/');
-      if (normalizedKey === filePath) return value;
-      if (
-        filePath.startsWith('/private/') &&
-        normalizedKey === filePath.slice('/private'.length)
-      ) {
-        return value;
+    let lookup = this.dictLookupCache.get(dict);
+    if (!lookup) {
+      lookup = new Map();
+      for (const [key, value] of Object.entries(dict)) {
+        const normalizedKey = key.replace(/\\/g, '/');
+        if (!lookup.has(normalizedKey)) {
+          lookup.set(normalizedKey, value);
+        }
+
+        const lowerKey = normalizedKey.toLowerCase();
+        if (!lookup.has(lowerKey)) {
+          lookup.set(lowerKey, value);
+        }
       }
-      if (normalizedKey.toLowerCase() === filePath.toLowerCase()) {
-        return value;
-      }
+      this.dictLookupCache.set(dict, lookup);
     }
 
-    return undefined;
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const directMatch = lookup.get(normalizedPath);
+    if (directMatch) return directMatch;
+
+    if (filePath.startsWith('/private/')) {
+      const privateMatch = lookup.get(filePath.slice('/private'.length));
+      if (privateMatch) return privateMatch;
+    }
+
+    return lookup.get(normalizedPath.toLowerCase());
   }
 
   private isNodeModulesPath(filePath: string): boolean {
@@ -175,6 +191,20 @@ export class CoverageProvider implements RstestCoverageProvider {
     return sourceMap.sources.every((source) =>
       this.shouldIgnoreOriginalSource(source),
     );
+  }
+
+  private hasInlineSourceMap(code: string): boolean {
+    return /[#@]\s*sourceMappingURL\s*=\s*data:application\/json(?:;[^'",\s]*)*,/i.test(
+      code,
+    );
+  }
+
+  private async hasInlineSourceMapOnDisk(filePath: string): Promise<boolean> {
+    try {
+      return this.hasInlineSourceMap(await fs.readFile(filePath, 'utf-8'));
+    } catch (_err) {
+      return false;
+    }
   }
 
   private async getTransformedSource(
@@ -312,11 +342,27 @@ export class CoverageProvider implements RstestCoverageProvider {
 
         if (!this.isMatch(filePath)) return;
 
-        const hasSourceMap = Boolean(
-          this.findInDict(options?.sourceMaps, filePath),
+        const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+        const assetSource = this.findInDict(options?.assetFiles, filePath);
+        let hasSourceMap = Boolean(
+          sourceMapStr || (assetSource && this.hasInlineSourceMap(assetSource)),
         );
 
-        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) return;
+        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) {
+          hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
+          if (!hasSourceMap) return;
+        }
+
+        if (!hasSourceMap) {
+          const originalTestPath = this.toProjectRelativePath(filePath);
+          if (
+            this.isExcluded(originalTestPath) ||
+            !this.isIncluded(originalTestPath)
+          ) {
+            hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
+            if (!hasSourceMap) return;
+          }
+        }
 
         try {
           const istanbulData = await this.convertWithAst(
