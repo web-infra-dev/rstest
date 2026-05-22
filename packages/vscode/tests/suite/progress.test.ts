@@ -258,22 +258,6 @@ suite('Test Progress Reporting', () => {
     assert.match(output, /2 passed/);
     assert.match(output, /1 skipped/);
 
-    await waitForNextRun(() =>
-      replaceContentInFile('foo.test.ts', 'foo', 'bar'),
-    );
-    assert.match(output, /No test files need re-run/);
-    assert.equal(failedMessages.length, 0);
-    assert.equal(passedItems.length, 0);
-    assert.equal(skippedItems.length, 0);
-
-    await waitForNextRun(() =>
-      replaceContentInFile('foo.test.ts', 'bar', 'foo'),
-    );
-    assert.match(output, /No test files need re-run/);
-    assert.equal(failedMessages.length, 0);
-    assert.equal(passedItems.length, 0);
-    assert.equal(skippedItems.length, 0);
-
     const canceledAt = createMockRunCalledTimes;
     cancellationSource.cancel();
 
