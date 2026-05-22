@@ -29,14 +29,42 @@ const sendFatalError = (err: unknown): void => {
 };
 
 /**
+ * Hand control back to Node's default uncaught-exception path. Best-effort
+ * IPC delivery happens first, then **all** uncaughtException / unhandledRejection
+ * listeners are cleared and the error is re-thrown on the next tick so Node's
+ * built-in handler is what actually terminates the process — printing the
+ * stack to stderr (forks pool: piped to the host's stderr; threads pool:
+ * surfaced via `worker.on('error')`).
+ *
+ * Why clear *all* listeners, not just `fatalExit`: `runInPool` installs its
+ * own per-task uncaughtException handler that silently absorbs errors into
+ * `unhandledErrors` (see `runInPool.ts` ~ line 230). That handler is removed
+ * only when the *next* `preparePool` runs, so for `isolate: true` it stays
+ * installed forever after the first task. If we leave it attached, the
+ * re-thrown error gets absorbed and Node's default never runs — the worker
+ * neither prints a stack nor exits, and `PoolRunner.stopTimer` eventually
+ * SIGTERMs it 60s later with no diagnostic info.
+ *
+ * Why not just `process.exit(1)`: `process.send` is async and a synchronous
+ * exit drops any envelope still queued in the IPC pipe (verified to lose
+ * 100% of envelopes ≥ ~100KB on macOS). Without a fallback the host sees
+ * only `Worker exited unexpectedly (code=1, signal=null)` with no stack.
+ */
+const handOffToNodeDefault = (err: unknown): void => {
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+  process.nextTick(() => {
+    throw err;
+  });
+};
+
+/**
  * Last-resort handlers. The runtime's `runInPool` registers its own
  * uncaught/unhandled handlers that capture errors thrown WHILE a test is
  * running and feed them into the test result. These bottom-of-the-stack
  * handlers fire only when no task is active (e.g., during worker bootstrap,
  * teardown after the result has been flushed, or async leak after the
- * test completes), and surface a structured `fatal_error` to the host
- * before exiting. This is the structured replacement for
- * `patches/tinypool@2.1.0.patch`.
+ * test completes).
  */
 const fatalExit = (err: unknown): void => {
   if (dyingFromFatal) return;
@@ -45,8 +73,9 @@ const fatalExit = (err: unknown): void => {
     // into the test result.
     return;
   }
+  dyingFromFatal = true;
   sendFatalError(err);
-  setImmediate(() => process.exit(1));
+  handOffToNodeDefault(err);
 };
 process.on('uncaughtException', fatalExit);
 process.on('unhandledRejection', fatalExit);
@@ -92,7 +121,7 @@ const runTask = async (
     dyingFromFatal = true;
     sendFatalError(err);
     currentTaskId = undefined;
-    setImmediate(() => process.exit(1));
+    handOffToNodeDefault(err);
     return;
   }
 
