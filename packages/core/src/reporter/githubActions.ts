@@ -30,6 +30,8 @@ import {
 } from './utils';
 
 export class GithubActionsReporter {
+  readonly flushOutputStreams = true;
+
   private readonly onWritePath: (path: string) => string;
   private readonly rootPath: string;
   private readonly stepSummaryPath?: string;

@@ -32,6 +32,8 @@ const COLOR_BY_STATUS: Record<
 };
 
 export class DotReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   private readonly rootPath: string;
   private readonly options: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
   private readonly outputStream: NonNullable<
@@ -53,6 +55,7 @@ export class DotReporter implements Reporter {
   }) {
     this.rootPath = rootPath;
     this.options = options;
+    this.flushOutputStreams = !options.logger;
     this.outputStream = options.logger?.outputStream ?? process.stdout;
     this.getColumns =
       options.logger?.getColumns ??

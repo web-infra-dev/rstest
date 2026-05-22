@@ -223,7 +223,9 @@ export async function mergeReports(
         : undefined,
       getSourcemap: async () => null,
     });
-    await flushOutputStreams();
+    if (reporter.flushOutputStreams !== false) {
+      await flushOutputStreams();
+    }
   }
 
   if (

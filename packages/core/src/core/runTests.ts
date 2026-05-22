@@ -142,7 +142,9 @@ const notifyReportersOnTestRunEnd = async ({
       getSourcemap,
       filterRerunTestPaths,
     });
-    await flushOutputStreams();
+    if (reporter.flushOutputStreams !== false) {
+      await flushOutputStreams();
+    }
   }
 };
 
