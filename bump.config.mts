@@ -14,6 +14,7 @@ export const packageGroups: Record<string, PackageGroup> = {
       'packages/browser/package.json',
       'packages/browser-react/package.json',
       'packages/coverage-istanbul/package.json',
+      'packages/coverage-v8/package.json',
       'packages/adapter-rslib/package.json',
       'packages/adapter-rsbuild/package.json',
       'packages/adapter-rspack/package.json',

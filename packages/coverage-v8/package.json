@@ -2,6 +2,7 @@
   "name": "@rstest/coverage-v8",
   "version": "0.3.0",
   "description": "V8 coverage provider for Rstest",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
