@@ -86,7 +86,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
   ],
-  ['--reporters <name>', 'Specify the reporter(s) to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   [
     '-t, --testNamePattern <value>',
     'Run only tests with a name that matches the regex',
@@ -170,7 +170,7 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   ['--coverage', 'Enable code coverage collection'],
-  ['--reporters <name>', 'Specify the reporter(s) to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   ['--cleanup', 'Remove blob reports directory after merging'],
 ];
 
@@ -225,6 +225,7 @@ const valueTakingOptions = new Set([
   '--pool.minWorkers',
   '--pool.type',
   '--project',
+  '--reporter',
   '--reporters',
   '--retry',
   '--root',
@@ -269,26 +270,6 @@ const getCliCommand = (argv: string[]): string | undefined => {
   }
 
   return;
-};
-
-const normalizeReporterCliArgs = (argv: string[]): string[] => {
-  const hasLegacyReporterFlag = argv.some(
-    (arg) => arg === '--reporter' || arg.startsWith('--reporter='),
-  );
-
-  if (!hasLegacyReporterFlag) {
-    return argv;
-  }
-
-  return argv.map((arg) => {
-    if (arg === '--reporter') {
-      return '--reporters';
-    }
-    if (arg.startsWith('--reporter=')) {
-      return `--reporters=${arg.slice('--reporter='.length)}`;
-    }
-    return arg;
-  });
 };
 
 const normalizeCoverageCliArgs = (argv: string[]): string[] => {
@@ -356,11 +337,7 @@ const normalizeBrowserCliArgs = (argv: string[]): string[] => {
 };
 
 const normalizeCliArgs = (argv: string[]): string[] =>
-  normalizePoolCliArgs(
-    normalizeBrowserCliArgs(
-      normalizeCoverageCliArgs(normalizeReporterCliArgs(argv)),
-    ),
-  );
+  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);

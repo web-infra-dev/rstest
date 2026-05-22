@@ -231,7 +231,6 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
-    expect(parsed.options.reporter).toBeUndefined();
   });
 });
 
