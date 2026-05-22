@@ -7,9 +7,9 @@ description: Rstest 基于 tinyspy 提供了一些工具方法帮助你进行函
 
 Rstest 基于 [tinyspy](https://github.com/tinylibs/tinyspy) 提供了一些工具方法帮助你进行函数的模拟（mock）。
 
-## rstest.fn
+## rs.fn
 
-- **别名：** `rs.fn`
+- **也可用作：** `rstest.fn`
 - **类型：**
 
 ```ts
@@ -23,7 +23,7 @@ export type MockFn = <T extends Function>(fn?: T) => Mock<T>;
 创建一个 mock 函数。
 
 ```ts
-const sayHi = rstest.fn((name: string) => `hi ${name}`);
+const sayHi = rs.fn((name: string) => `hi ${name}`);
 
 const res = sayHi('bob');
 
@@ -32,9 +32,9 @@ expect(res).toBe('hi bob');
 expect(sayHi).toHaveBeenCalledTimes(1);
 ```
 
-## rstest.spyOn
+## rs.spyOn
 
-- **别名：** `rs.spyOn`
+- **也可用作：** `rstest.spyOn`
 - **类型：**
 
 ```ts
@@ -53,37 +53,37 @@ const hi = {
   sayHi,
 };
 
-const spy = rstest.spyOn(hi, 'sayHi');
+const spy = rs.spyOn(hi, 'sayHi');
 
 expect(hi.sayHi()).toBe('hi');
 
 expect(spy).toHaveBeenCalled();
 ```
 
-对同一个方法重复调用 `rstest.spyOn` 时，会返回已有的 spy，而不是重新定义。
+对同一个方法重复调用 `rs.spyOn` 时，会返回已有的 spy，而不是重新定义。
 
 ```ts
 const hi = {
   sayHi: () => 'hi',
 };
-rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+rs.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
 
 expect(hi.sayHi()).toBe('hello');
 
 // 返回的 spy 实例与第一次调用相同
-expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
+expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 ```
 
-## rstest.isMockFunction
+## rs.isMockFunction
 
-- **别名：** `rs.isMockFunction`
+- **也可用作：** `rstest.isMockFunction`
 - **类型：** `(fn: any) => fn is MockInstance`
 
 判断给定的函数是否为 mock 函数。
 
-## rstest.mockObject
+## rs.mockObject
 
-- **别名：** `rs.mockObject`
+- **也可用作：** `rstest.mockObject`
 - **类型：**
 
 ```ts
@@ -110,7 +110,7 @@ const original = {
   prop: 'foo',
 };
 
-const mocked = rstest.mockObject(original);
+const mocked = rs.mockObject(original);
 
 // 方法默认返回 undefined
 expect(mocked.method()).toBe(undefined);
@@ -120,7 +120,7 @@ expect(mocked.nested.getValue()).toBe(undefined);
 expect(mocked.prop).toBe('foo');
 
 // 方法是 mock 函数
-expect(rstest.isMockFunction(mocked.method)).toBe(true);
+expect(rs.isMockFunction(mocked.method)).toBe(true);
 ```
 
 ### Mock 返回值
@@ -128,7 +128,7 @@ expect(rstest.isMockFunction(mocked.method)).toBe(true);
 你可以配置 mock 方法返回特定的值：
 
 ```ts
-const mocked = rstest.mockObject({
+const mocked = rs.mockObject({
   fetchData: () => 'real data',
 });
 
@@ -146,7 +146,7 @@ const original = {
   add: (a: number, b: number) => a + b,
 };
 
-const spied = rstest.mockObject(original, { spy: true });
+const spied = rs.mockObject(original, { spy: true });
 
 // 保留原始实现
 expect(spied.add(1, 2)).toBe(3);
@@ -161,10 +161,10 @@ expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
 默认情况下，数组会被替换为空数组。使用 `{ spy: true }` 时，数组保持其原始值：
 
 ```ts
-const mocked = rstest.mockObject({ array: [1, 2, 3] });
+const mocked = rs.mockObject({ array: [1, 2, 3] });
 expect(mocked.array).toEqual([]);
 
-const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
+const spied = rs.mockObject({ array: [1, 2, 3] }, { spy: true });
 expect(spied.array).toEqual([1, 2, 3]);
 ```
 
@@ -180,7 +180,7 @@ class UserService {
 }
 
 // 使用 { spy: true } 保留原始实现
-const MockedService = rstest.mockObject(UserService, { spy: true });
+const MockedService = rs.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
 // 原始方法正常工作
@@ -191,9 +191,9 @@ rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```
 
-## rstest.mocked
+## rs.mocked
 
-- **别名：** `rs.mocked`
+- **也可用作：** `rstest.mocked`
 - **类型：**
 
 ```ts
@@ -211,30 +211,30 @@ import { myModule } from './myModule';
 rs.mock('./myModule', { spy: true });
 
 // TypeScript 现在知道 myModule.method 是一个 MockInstance
-const mockedModule = rstest.mocked(myModule);
+const mockedModule = rs.mocked(myModule);
 
 mockedModule.method.mockReturnValue('mocked');
 ```
 
 该函数在运行时只是返回相同的对象——它只影响 TypeScript 类型。
 
-## rstest.clearAllMocks
+## rs.clearAllMocks
 
-- **别名：** `rs.clearAllMocks`
+- **也可用作：** `rstest.clearAllMocks`
 - **类型：** `() => Rstest`
 
 清除所有 mock 的 `mock.calls`、`mock.instances`、`mock.contexts` 和 `mock.results` 属性。
 
-## rstest.resetAllMocks
+## rs.resetAllMocks
 
-- **别名：** `rs.resetAllMocks`
+- **也可用作：** `rstest.resetAllMocks`
 - **类型：** `() => Rstest`
 
 清除所有 mock 属性，并将每个 mock 的实现重置为其原始实现。
 
-## rstest.restoreAllMocks
+## rs.restoreAllMocks
 
-- **别名：** `rs.restoreAllMocks`
+- **也可用作：** `rstest.restoreAllMocks`
 - **类型：** `() => Rstest`
 
 重置所有 mock，并恢复被 mock 的对象的原始描述符。

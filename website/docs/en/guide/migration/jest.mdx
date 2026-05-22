@@ -86,10 +86,10 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `injectGlobals`              | [`globals`](/config/test/globals)                                                                                      | Jest defaults to `true`; Rstest's `globals` defaults to `false`. If your tests rely on bare `describe` / `test` / `expect` without imports, set `globals: true` and add `@rstest/core/globals` to `compilerOptions.types` in `tsconfig.json`.                                                                                                                                                                                           |
 | `moduleNameMapper`           | [`resolve.alias`](/config/build/resolve#resolvealias)                                                                  | `resolve.alias` is string-prefix only. Rewrite prefix mappings: `'^@/(.*)$': '<rootDir>/src/$1'` → `resolve: { alias: { '@': './src' } }`. For TypeScript projects, prefer `compilerOptions.paths` in `tsconfig.json` — Rstest reads it automatically. Regex/asset stubs (e.g. `'\\.(css\|svg)$': 'identity-obj-proxy'`) have no direct equivalent; most are unnecessary because Rstest handles CSS/assets natively.                    |
 | `maxWorkers`                 | [`pool.maxWorkers`](/config/test/pool)                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                                             | For per-test overrides, replace `jest.setTimeout(n)` with `rstest.setConfig({ testTimeout: n })`.                                                                                                                                                                                                                                                                                                                                       |
+| `testTimeout`                | [`testTimeout`](/config/test/test-timeout)                                                                             | For per-test overrides, replace `jest.setTimeout(n)` with `rs.setConfig({ testTimeout: n })`.                                                                                                                                                                                                                                                                                                                                           |
 | `slowTestThreshold`          | [`slowTestThreshold`](/config/test/slow-test-threshold)                                                                | Jest measures in seconds (default 5); Rstest measures in milliseconds (default 300). Multiply Jest values by 1000.                                                                                                                                                                                                                                                                                                                      |
 | `detectOpenHandles`          | No exact equivalent; consider [`detectAsyncLeaks`](/config/test/detect-async-leaks) for test-file async leak debugging | Not a 1:1 mapping. Jest's `detectOpenHandles` helps diagnose handles that keep the Jest process from exiting, while Rstest's `detectAsyncLeaks` fails a test file when Node.js async resources remain active after the file finishes.                                                                                                                                                                                                   |
-| `fakeTimers`                 | [`rstest.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rstestusefaketimers)                                      | No config field. Call `rstest.useFakeTimers(opts)` inside a `setupFiles` module or per-test; pair with `rstest.useRealTimers()` to restore.                                                                                                                                                                                                                                                                                             |
+| `fakeTimers`                 | [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers)                                              | No config field. Call `rs.useFakeTimers(opts)` inside a `setupFiles` module or per-test; pair with `rs.useRealTimers()` to restore.                                                                                                                                                                                                                                                                                                     |
 | `bail`                       | [`bail`](/config/test/bail)                                                                                            |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `clearMocks`                 | [`clearMocks`](/config/test/clear-mocks)                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `resetMocks`                 | [`resetMocks`](/config/test/reset-mocks)                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -184,14 +184,14 @@ Your existing Jest test files should work with minimal changes since Rstest prov
 
 ```diff
 - import { describe, expect, it, test } from '@jest/globals';
-+ import { describe, expect, it, test } from '@rstest/core';
++ import { describe, expect, it, test, rs } from '@rstest/core';
 ```
 
-Rstest provides a `rstest` API that you can use to access Rstest's utilities, such as `rstest.fn()` and `rstest.mock()`. Just like Jest's `jest.fn()` and `jest.mock()`. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
+Rstest provides an `rs` API that you can use to access Rstest's utilities, such as `rs.fn()` and `rs.mock()`. The longer `rstest` helper remains available as an alias. More utilities can be found in the [Rstest APIs](/api/runtime-api/).
 
 ```diff
 - const fn = jest.fn();
-+ const fn = rstest.fn();
++ const fn = rs.fn();
 
 fn.mockResolvedValue('foo');
 ```
@@ -232,11 +232,11 @@ The return functions of the `beforeEach` and `beforeAll` hooks in Rstest are use
 
 ### Timeout
 
-If you used `jest.setTimeout()` to set the timeout for a test, you can use `rstest.setConfig()` instead.
+If you used `jest.setTimeout()` to set the timeout for a test, you can use `rs.setConfig()` instead.
 
 ```diff
 - jest.setTimeout(5_000)
-+ rstest.setConfig({ testTimeout: 5_000 })
++ rs.setConfig({ testTimeout: 5_000 })
 ```
 
 ## Snapshot format
@@ -284,13 +284,13 @@ If your project is using CommonJS, Rstest still works, but it is recommended to 
 
 ### ESM vs CJS mocking
 
-In Rstest, `rstest.mock()` targets ESM entries used by `import`, while `rstest.mockRequire()` targets CJS entries used by `require()`.
+In Rstest, `rs.mock()` targets ESM entries used by `import`, while `rs.mockRequire()` targets CJS entries used by `require()`.
 
-For code that uses `require()`, `rstest.mockRequire()` targets the CJS entry:
+For code that uses `require()`, `rs.mockRequire()` targets the CJS entry:
 
 ```ts
 // Mocking a CJS module
-rstest.mockRequire('./math.cjs', () => ({
+rs.mockRequire('./math.cjs', () => ({
   sum: (a, b) => a + b + 100,
 }));
 ```

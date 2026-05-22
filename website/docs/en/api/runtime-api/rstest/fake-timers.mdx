@@ -9,154 +9,154 @@ The fake timers may be useful when a piece of code sets a long timeout that we d
 
 Rstest provides some utility functions to help you fake timers powered by [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers).
 
-## rstest.useFakeTimers
+## rs.useFakeTimers
 
-- **Alias:** `rs.useFakeTimers`
+- **Also available as:** `rstest.useFakeTimers`
 - **Type:** `(config?: FakeTimerInstallOpts) => Rstest`
 
 To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
 ```ts
-rstest.useFakeTimers();
+rs.useFakeTimers();
 ```
 
 You can also pass a configuration object to customize the behavior of the fake timers.
 
-## rstest.useRealTimers
+## rs.useRealTimers
 
-- **Alias:** `rs.useRealTimers`
+- **Also available as:** `rstest.useRealTimers`
 - **Type:** `() => Rstest`
 
 Restores the original timer functions (such as `setTimeout`, `setInterval`, etc.), disabling the fake timers.
 
 ```ts
-rstest.useRealTimers();
+rs.useRealTimers();
 ```
 
-## rstest.isFakeTimers
+## rs.isFakeTimers
 
-- **Alias:** `rs.isFakeTimers`
+- **Also available as:** `rstest.isFakeTimers`
 - **Type:** `() => boolean`
 
 Returns `true` if fake timers are currently enabled, otherwise `false`.
 
 ```ts
-if (rstest.isFakeTimers()) {
+if (rs.isFakeTimers()) {
   // Fake timers are active
 }
 ```
 
-## rstest.setSystemTime
+## rs.setSystemTime
 
-- **Alias:** `rs.setSystemTime`
+- **Also available as:** `rstest.setSystemTime`
 - **Type:** `(now?: number | Date) => Rstest`
 
 Sets the current system time used by fake timers. Useful for testing code that depends on the current date or time.
 
 ```ts
-rstest.useFakeTimers();
-rstest.setSystemTime(new Date('2020-01-01T00:00:00Z'));
+rs.useFakeTimers();
+rs.setSystemTime(new Date('2020-01-01T00:00:00Z'));
 ```
 
-## rstest.getRealSystemTime
+## rs.getRealSystemTime
 
-- **Alias:** `rs.getRealSystemTime`
+- **Also available as:** `rstest.getRealSystemTime`
 - **Type:** `() => number`
 
 Returns the real system time (as a timestamp), even when fake timers are enabled.
 
 ```ts
-const realTime = rstest.getRealSystemTime();
+const realTime = rs.getRealSystemTime();
 ```
 
-## rstest.runAllTicks
+## rs.runAllTicks
 
-- **Alias:** `rs.runAllTicks`
+- **Also available as:** `rstest.runAllTicks`
 - **Type:** `() => Rstest`
 
 Runs all queued microtasks (e.g., `process.nextTick`).
 
-## rstest.runAllTimers
+## rs.runAllTimers
 
-- **Alias:** `rs.runAllTimers`
+- **Also available as:** `rstest.runAllTimers`
 - **Type:** `() => Rstest`
 
 Executes all pending timers (both timeouts and intervals).
 
-## rstest.runAllTimersAsync
+## rs.runAllTimersAsync
 
-- **Alias:** `rs.runAllTimersAsync`
+- **Also available as:** `rstest.runAllTimersAsync`
 - **Type:** `() => Promise<Rstest>`
 
 Asynchronously executes all pending timers.
 
-## rstest.runOnlyPendingTimers
+## rs.runOnlyPendingTimers
 
-- **Alias:** `rs.runOnlyPendingTimers`
+- **Also available as:** `rstest.runOnlyPendingTimers`
 - **Type:** `() => Rstest`
 
 Runs only the currently pending timers (does not schedule new ones).
 
-## rstest.runOnlyPendingTimersAsync
+## rs.runOnlyPendingTimersAsync
 
-- **Alias:** `rs.runOnlyPendingTimersAsync`
+- **Also available as:** `rstest.runOnlyPendingTimersAsync`
 - **Type:** `() => Promise<Rstest>`
 
 Asynchronously runs only the currently pending timers.
 
-## rstest.advanceTimersByTime
+## rs.advanceTimersByTime
 
-- **Alias:** `rs.advanceTimersByTime`
+- **Also available as:** `rstest.advanceTimersByTime`
 - **Type:** `(ms: number) => Rstest`
 
 Advances the fake timers by the specified milliseconds, executing any timers scheduled within that time.
 
-## rstest.advanceTimersByTimeAsync
+## rs.advanceTimersByTimeAsync
 
-- **Alias:** `rs.advanceTimersByTimeAsync`
+- **Also available as:** `rstest.advanceTimersByTimeAsync`
 - **Type:** `(ms: number) => Promise<Rstest>`
 
 Asynchronously advances the fake timers by the specified milliseconds.
 
-## rstest.advanceTimersToNextTimer
+## rs.advanceTimersToNextTimer
 
-- **Alias:** `rs.advanceTimersToNextTimer`
+- **Also available as:** `rstest.advanceTimersToNextTimer`
 - **Type:** `(steps?: number) => Rstest`
 
 Advances the timers to the next scheduled timer, optionally for a given number of steps.
 
-## rstest.advanceTimersToNextTimerAsync
+## rs.advanceTimersToNextTimerAsync
 
-- **Alias:** `rs.advanceTimersToNextTimerAsync`
+- **Also available as:** `rstest.advanceTimersToNextTimerAsync`
 - **Type:** `(steps?: number) => Promise<Rstest>`
 
 Asynchronously advances the timers to the next scheduled timer.
 
-## rstest.advanceTimersToNextFrame
+## rs.advanceTimersToNextFrame
 
-- **Alias:** `rs.advanceTimersToNextFrame`
+- **Also available as:** `rstest.advanceTimersToNextFrame`
 - **Type:** `() => Rstest`
 
 Advances the timers to the next animation frame.
 
-## rstest.getTimerCount
+## rs.getTimerCount
 
-- **Alias:** `rs.getTimerCount`
+- **Also available as:** `rstest.getTimerCount`
 - **Type:** `() => number`
 
 Returns the number of fake timers still left to run.
 
 ```ts
-const count = rstest.getTimerCount();
+const count = rs.getTimerCount();
 ```
 
-## rstest.clearAllTimers
+## rs.clearAllTimers
 
-- **Alias:** `rs.clearAllTimers`
+- **Also available as:** `rstest.clearAllTimers`
 - **Type:** `() => Rstest`
 
 Removes all timers that are scheduled to run.
 
 ```ts
-rstest.clearAllTimers();
+rs.clearAllTimers();
 ```

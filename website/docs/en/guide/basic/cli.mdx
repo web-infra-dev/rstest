@@ -317,8 +317,8 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--clearMocks`                   | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                         |
 | `--resetMocks`                   | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                          |
 | `--restoreMocks`                 | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                                 |
-| `--unstubGlobals`                | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                          |
-| `--unstubEnvs`                   | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                               |
+| `--unstubGlobals`                | Restores all global variables that were changed with `rs.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                              |
+| `--unstubEnvs`                   | Restores all `process.env` values that were changed with `rs.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                                   |
 | `--include <include>`            | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
 | `--logHeapUsage`                 | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
 | `--detectAsyncLeaks`             | Detect async resources that leak after tests finish, see [detectAsyncLeaks](/config/test/detect-async-leaks)                                                          |
