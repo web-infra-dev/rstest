@@ -194,7 +194,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private hasInlineSourceMap(code: string): boolean {
-    return /[#@]\s*sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,/m.test(
+    return /[#@]\s*sourceMappingURL\s*=\s*data:application\/json(?:;[^'",\s]*)*,/i.test(
       code,
     );
   }

@@ -177,7 +177,7 @@ describe('coverage-v8 provider', () => {
       const coverageMap = await provider.collect({
         assetFiles: {
           [file]:
-            'value();\n//# sourceMappingURL=data:application/json;base64,e30=',
+            'value();\n//# sourceMappingURL=data:application/json;charset=UTF-8,%7B%7D',
         },
         sourceMaps: {},
       });
@@ -241,7 +241,7 @@ describe('coverage-v8 provider', () => {
       mkdirSync(join(root, 'dist'), { recursive: true });
       writeFileSync(
         file,
-        'value();\n//# sourceMappingURL=data:application/json;base64,e30=',
+        'value();\n//# sourceMappingURL=data:application/json,%7B%7D',
       );
 
       const coverageMap = await provider.collect({
