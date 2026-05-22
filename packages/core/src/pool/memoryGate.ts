@@ -241,3 +241,23 @@ export const createDefaultMemoryGate = (): MemoryGate | undefined => {
   if (process.env.RSTEST_MEMORY_AWARE === '0') return undefined;
   return new MemoryGate();
 };
+
+/**
+ * Decide whether the memory-aware spawn gate applies to a given pool transport.
+ *
+ * Only `forks` is supported. The gate's per-worker RSS sampling assumes each
+ * worker reports its own resident memory — which holds for `child_process.fork`
+ * but not for `worker_threads`, where `process.memoryUsage().rss` returns the
+ * *entire host process* RSS shared across all threads. Feeding those inflated
+ * samples into the gate collapses thread-pool parallelism to 1–2 workers.
+ * See rstest#1301.
+ *
+ * The `makeGate` indirection exists for unit testing only; production callers
+ * use the default `createDefaultMemoryGate`.
+ */
+export const selectMemoryGate = (
+  workerKind: 'forks' | 'threads',
+  makeGate: () => MemoryGate | undefined = createDefaultMemoryGate,
+): MemoryGate | undefined => {
+  return workerKind === 'forks' ? makeGate() : undefined;
+};
