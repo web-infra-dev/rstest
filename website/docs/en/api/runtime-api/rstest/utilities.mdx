@@ -8,7 +8,7 @@ A set of useful utility functions.
 
 ## rs.stubEnv
 
-- **Also available as:** `rstest.stubEnv`
+- **Alias:** `rstest.stubEnv`
 
 - **Type:** `(name: string, value: string | undefined) => Rstest`
 
@@ -32,7 +32,7 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 ## rs.unstubAllEnvs
 
-- **Also available as:** `rstest.unstubAllEnvs`
+- **Alias:** `rstest.unstubAllEnvs`
 
 - **Type:** `() => Rstest`
 
@@ -52,7 +52,7 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 ## rs.stubGlobal
 
-- **Also available as:** `rstest.stubGlobal`
+- **Alias:** `rstest.stubGlobal`
 
 - **Type:** `(name: string | number | symbol, value: unknown) => Rstest`
 
@@ -73,7 +73,7 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 ## rs.unstubAllGlobals
 
-- **Also available as:** `rstest.unstubAllGlobals`
+- **Alias:** `rstest.unstubAllGlobals`
 
 - **Type:** `() => Rstest`
 
@@ -93,7 +93,7 @@ expect(globalThis.myGlobal).toBeUndefined();
 
 ## rs.setConfig
 
-- **Also available as:** `rstest.setConfig`
+- **Alias:** `rstest.setConfig`
 
 - **Type:**
 
@@ -123,7 +123,7 @@ rs.resetConfig(); // Restore to default config
 
 ## rs.resetConfig
 
-- **Also available as:** `rstest.resetConfig`
+- **Alias:** `rstest.resetConfig`
 
 - **Type:** `() => void`
 
@@ -131,7 +131,7 @@ Resets the runtime configuration that was changed using `rs.setConfig` back to t
 
 ## rs.getConfig
 
-- **Also available as:** `rstest.getConfig`
+- **Alias:** `rstest.getConfig`
 
 - **Type:** `() => RuntimeConfig`
 
@@ -146,7 +146,7 @@ console.log(config);
 
 ## rs.waitFor
 
-- **Also available as:** `rstest.waitFor`
+- **Alias:** `rstest.waitFor`
 
 - **Type:**
 
@@ -181,7 +181,7 @@ await rs.waitFor(
 
 ## rs.waitUntil
 
-- **Also available as:** `rstest.waitUntil`
+- **Alias:** `rstest.waitUntil`
 
 - **Type:**
 

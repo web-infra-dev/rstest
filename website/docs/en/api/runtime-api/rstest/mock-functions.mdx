@@ -9,7 +9,7 @@ Rstest provides some utility functions to help you mock functions powered by [ti
 
 ## rs.fn
 
-- **Also available as:** `rstest.fn`
+- **Alias:** `rstest.fn`
 - **Type:**
 
 ```ts
@@ -34,7 +34,7 @@ expect(sayHi).toHaveBeenCalledTimes(1);
 
 ## rs.spyOn
 
-- **Also available as:** `rstest.spyOn`
+- **Alias:** `rstest.spyOn`
 - **Type:**
 
 ```ts
@@ -75,14 +75,14 @@ expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 
 ## rs.isMockFunction
 
-- **Also available as:** `rstest.isMockFunction`
+- **Alias:** `rstest.isMockFunction`
 - **Type:** `(fn: any) => fn is MockInstance`
 
 Determines if the given function is a mocked function.
 
 ## rs.mockObject
 
-- **Also available as:** `rstest.mockObject`
+- **Alias:** `rstest.mockObject`
 - **Type:**
 
 ```ts
@@ -192,7 +192,7 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 
 ## rs.mocked
 
-- **Also available as:** `rstest.mocked`
+- **Alias:** `rstest.mocked`
 - **Type:**
 
 ```ts
@@ -219,21 +219,21 @@ The function simply returns the same object at runtime - it only affects TypeScr
 
 ## rs.clearAllMocks
 
-- **Also available as:** `rstest.clearAllMocks`
+- **Alias:** `rstest.clearAllMocks`
 - **Type:** `() => Rstest`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
 ## rs.resetAllMocks
 
-- **Also available as:** `rstest.resetAllMocks`
+- **Alias:** `rstest.resetAllMocks`
 - **Type:** `() => Rstest`
 
 Clears all mocks properties and reset each mock's implementation to its original.
 
 ## rs.restoreAllMocks
 
-- **Also available as:** `rstest.restoreAllMocks`
+- **Alias:** `rstest.restoreAllMocks`
 - **Type:** `() => Rstest`
 
 Reset all mocks and restore original descriptors of spied-on objects.
