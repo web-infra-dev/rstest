@@ -15,7 +15,7 @@
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "playwright": "^1.60.0",
     "typescript": "^6.0.3"
