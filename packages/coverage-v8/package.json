@@ -33,7 +33,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "acorn": "^8.15.0",
+    "acorn": "^8.16.0",
     "ast-v8-to-istanbul": "^1.0.0",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
@@ -42,7 +42,7 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.0.6",
+    "@rsbuild/core": "^2.0.7",
     "@rslib/core": "0.21.5",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",

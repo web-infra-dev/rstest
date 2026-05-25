@@ -6,7 +6,7 @@
     "@rsbuild/plugin-react": "^2.0.0",
     "@rstest/core": "workspace:*",
     "@testing-library/react": "^16.3.2",
-    "@types/react": "^18.3.28",
+    "@types/react": "^18.3.29",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
