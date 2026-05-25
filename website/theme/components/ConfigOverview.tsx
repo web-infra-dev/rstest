@@ -74,13 +74,18 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
-      'silent',
       'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
       'hideSkippedTestFiles',
       'slowTestThreshold',
       'chaiConfig',
+    ],
+  },
+  {
+    name: 'console',
+    items: [
+      'silent',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
