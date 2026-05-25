@@ -50,6 +50,30 @@ const createFileCoverage = (file: string) => ({
   hash: 'same',
 });
 
+const createUnhashedFileCoverage = (file: string) => {
+  const coverage = createFileCoverage(file);
+  return {
+    ...coverage,
+    hash: undefined,
+  };
+};
+
+const trackNativeMerge = (
+  coverageMap: ReturnType<CoverageProvider['createCoverageMap']>,
+  file: string,
+) => {
+  const fileCoverage = coverageMap.fileCoverageFor(file);
+  const merge = fileCoverage.merge.bind(fileCoverage);
+  let mergeCalls = 0;
+
+  fileCoverage.merge = (coverage) => {
+    mergeCalls++;
+    merge(coverage);
+  };
+
+  return () => mergeCalls;
+};
+
 type ProviderInternals = CoverageProvider & {
   findInDict: (
     dict: Record<string, string> | undefined,
@@ -95,6 +119,89 @@ describe('coverage-v8 provider', () => {
     });
 
     expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
+      s: { 0: 6 },
+      f: { 0: 9 },
+      b: { 0: [14, 17] },
+    });
+  });
+
+  it('falls back when converted coverage metadata differs', () => {
+    const file = '/project/src/index.ts';
+    const provider = new CoverageProvider(createOptions());
+    const coverageMap = provider.createCoverageMap();
+
+    coverageMap.merge({
+      [file]: createUnhashedFileCoverage(file),
+    });
+    const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
+
+    coverageMap.merge({
+      [file]: {
+        ...createUnhashedFileCoverage(file),
+        fnMap: {
+          0: {
+            ...createFileCoverage(file).fnMap[0],
+            name: 'renamed',
+          },
+        },
+        branchMap: {
+          0: {
+            ...createFileCoverage(file).branchMap[0],
+            loc: {
+              start: { line: 1, column: 0 },
+              end: { line: 1, column: 11 },
+            },
+            line: 2,
+          },
+        },
+        s: { 0: 5 },
+        f: { 0: 7 },
+        b: { 0: [11, 13] },
+      },
+    });
+
+    expect(getNativeMergeCalls()).toBe(1);
+    expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
+      s: { 0: 6 },
+      f: { 0: 9 },
+      b: { 0: [14, 17] },
+      fnMap: {
+        0: {
+          name: 'fn',
+        },
+      },
+      branchMap: {
+        0: {
+          line: 1,
+        },
+      },
+    });
+  });
+
+  it('falls back when converted branch truthiness shape differs', () => {
+    const file = '/project/src/index.ts';
+    const provider = new CoverageProvider(createOptions());
+    const coverageMap = provider.createCoverageMap();
+
+    coverageMap.merge({
+      [file]: createUnhashedFileCoverage(file),
+    });
+    const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
+
+    coverageMap.merge({
+      [file]: {
+        ...createUnhashedFileCoverage(file),
+        bT: { 0: [17, 19] },
+        s: { 0: 5 },
+        f: { 0: 7 },
+        b: { 0: [11, 13] },
+      },
+    });
+
+    expect(getNativeMergeCalls()).toBe(1);
+    const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();
+    expect(fileCoverage).not.toHaveProperty('bT');
+    expect(fileCoverage).toMatchObject({
       s: { 0: 6 },
       f: { 0: 9 },
       b: { 0: [14, 17] },

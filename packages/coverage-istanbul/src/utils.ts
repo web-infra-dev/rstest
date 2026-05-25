@@ -172,6 +172,21 @@ const hasSameBranchHitShape = (a: BranchHits, b: BranchHits): boolean => {
   return Object.keys(a).every((key) => a[key]!.length === b[key]!.length);
 };
 
+const hasSameOptionalBranchHitShape = (
+  a: BranchHits | undefined,
+  b: BranchHits | undefined,
+): boolean => {
+  if (!a && !b) {
+    return true;
+  }
+
+  if (!a || !b) {
+    return false;
+  }
+
+  return hasSameBranchHitShape(a, b);
+};
+
 const isSameRange = (a: Range, b: Range): boolean =>
   a.start.line === b.start.line &&
   a.start.column === b.start.column &&
@@ -190,7 +205,16 @@ const hasSameFunctionMap = (
   b: FileCoverageData['fnMap'],
 ): boolean =>
   hasSameKeys(a, b) &&
-  Object.keys(a).every((key) => isSameRange(a[key]!.loc, b[key]!.loc));
+  Object.keys(a).every((key) => {
+    const aFunction = a[key]!;
+    const bFunction = b[key]!;
+    return (
+      aFunction.name === bFunction.name &&
+      aFunction.line === bFunction.line &&
+      isSameRange(aFunction.decl, bFunction.decl) &&
+      isSameRange(aFunction.loc, bFunction.loc)
+    );
+  });
 
 const hasSameBranchMap = (
   a: FileCoverageData['branchMap'],
@@ -202,6 +226,8 @@ const hasSameBranchMap = (
     const bBranch = b[key]!;
     return (
       aBranch.type === bBranch.type &&
+      aBranch.line === bBranch.line &&
+      isSameRange(aBranch.loc, bBranch.loc) &&
       aBranch.locations.length === bBranch.locations.length &&
       aBranch.locations.every((loc, index) =>
         isSameRange(loc, bBranch.locations[index]!),
@@ -221,6 +247,10 @@ const canFastMergeCoverage = (
     return false;
   }
 
+  if (!hasSameOptionalBranchHitShape(existing.bT, incoming.bT)) {
+    return false;
+  }
+
   if (existing.hash && incoming.hash) {
     return existing.hash === incoming.hash;
   }
@@ -228,10 +258,7 @@ const canFastMergeCoverage = (
   if (
     !hasSameKeys(existing.s, incoming.s) ||
     !hasSameKeys(existing.f, incoming.f) ||
-    !hasSameBranchHitShape(existing.b, incoming.b) ||
-    (existing.bT && incoming.bT
-      ? !hasSameBranchHitShape(existing.bT, incoming.bT)
-      : false)
+    !hasSameBranchHitShape(existing.b, incoming.b)
   ) {
     return false;
   }
