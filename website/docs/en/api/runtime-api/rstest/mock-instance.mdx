@@ -17,7 +17,7 @@ import { ApiMeta } from '@components/ApiMeta';
 Returns the mock name string set by `.mockName()`.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockName('myMock');
 expect(fn.getMockName()).toBe('myMock');
 ```
@@ -29,7 +29,7 @@ expect(fn.getMockName()).toBe('myMock');
 Sets the mock name for this mock instance, useful for debugging and output.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockName('logger');
 ```
 
@@ -40,7 +40,7 @@ fn.mockName('logger');
 Clears all information about every call (calls, instances, contexts, results, etc.).
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn(1);
 fn.mockClear();
 expect(fn.mock.calls.length).toBe(0);
@@ -53,7 +53,7 @@ expect(fn.mock.calls.length).toBe(0);
 Clears all call information and resets the implementation to the initial state.
 
 ```ts
-const fn = rstest.fn().mockImplementation(() => 1);
+const fn = rs.fn().mockImplementation(() => 1);
 fn.mockReset();
 // Implementation is reset
 ```
@@ -66,7 +66,7 @@ Restores the original method of a spied object (only effective for spies).
 
 ```ts
 const obj = { foo: () => 1 };
-const spy = rstest.spyOn(obj, 'foo');
+const spy = rs.spyOn(obj, 'foo');
 spy.mockRestore();
 ```
 
@@ -82,7 +82,7 @@ Calls `mockRestore()` when the mock leaves a `using` scope.
 const obj = { foo: () => 1 };
 
 {
-  using spy = rstest.spyOn(obj, 'foo').mockImplementation(() => 2);
+  using spy = rs.spyOn(obj, 'foo').mockImplementation(() => 2);
   expect(obj.foo()).toBe(2);
 }
 
@@ -96,7 +96,7 @@ expect(obj.foo()).toBe(1);
 Returns the current mock implementation function, if any.
 
 ```ts
-const fn = rstest.fn(() => 123);
+const fn = rs.fn(() => 123);
 const impl = fn.getMockImplementation();
 ```
 
@@ -107,7 +107,7 @@ const impl = fn.getMockImplementation();
 Sets the implementation function for the mock.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockImplementation((a, b) => a + b);
 ```
 
@@ -118,7 +118,7 @@ fn.mockImplementation((a, b) => a + b);
 Sets the implementation function for the next call only.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockImplementationOnce(() => 1);
 fn(); // returns 1
 fn(); // returns undefined
@@ -131,7 +131,7 @@ fn(); // returns undefined
 Temporarily replaces the mock implementation while the callback is executed, then restores the original implementation.
 
 ```ts
-const fn = rstest.fn(() => 1);
+const fn = rs.fn(() => 1);
 fn.withImplementation(
   () => 2,
   () => {
@@ -148,7 +148,7 @@ expect(fn()).toBe(1);
 Makes the mock return `this` when called.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnThis();
 const obj = { fn };
 expect(obj.fn()).toBe(obj);
@@ -161,7 +161,7 @@ expect(obj.fn()).toBe(obj);
 Makes the mock always return the specified value.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnValue(42);
 expect(fn()).toBe(42);
 ```
@@ -173,7 +173,7 @@ expect(fn()).toBe(42);
 Makes the mock return the specified value for the next call only.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnValueOnce(1);
 expect(fn()).toBe(1);
 expect(fn()).toBe(undefined);
@@ -186,7 +186,7 @@ expect(fn()).toBe(undefined);
 Makes the mock return a Promise that resolves to the specified value.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockResolvedValue(123);
 await expect(fn()).resolves.toBe(123);
 ```
@@ -198,7 +198,7 @@ await expect(fn()).resolves.toBe(123);
 Makes the mock return a Promise that resolves to the specified value for the next call only.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockResolvedValueOnce(1);
 await expect(fn()).resolves.toBe(1);
 await expect(fn()).resolves.toBe(undefined);
@@ -211,7 +211,7 @@ await expect(fn()).resolves.toBe(undefined);
 Makes the mock return a Promise that rejects with the specified error.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockRejectedValue(new Error('fail'));
 await expect(fn()).rejects.toThrow('fail');
 ```
@@ -223,7 +223,7 @@ await expect(fn()).rejects.toThrow('fail');
 Makes the mock return a Promise that rejects with the specified error for the next call only.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockRejectedValueOnce(new Error('fail'));
 await expect(fn()).rejects.toThrow('fail');
 await expect(fn()).resolves.toBe(undefined);
@@ -234,7 +234,7 @@ await expect(fn()).resolves.toBe(undefined);
 The context of the mock, including call arguments, return values, instances, contexts, etc.
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 expect(fn.mock.calls[0]).toEqual([1, 2]);
 ```
@@ -246,7 +246,7 @@ expect(fn.mock.calls[0]).toEqual([1, 2]);
 An array containing the arguments for each call to the mock function.
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 fn(3, 4);
 console.log(fn.mock.calls); // [[1, 2], [3, 4]]
@@ -259,7 +259,7 @@ console.log(fn.mock.calls); // [[1, 2], [3, 4]]
 An array containing the instances that have been instantiated from the mock (when used as a constructor).
 
 ```ts
-const Fn = rstest.fn(function () {
+const Fn = rs.fn(function () {
   this.x = 1;
 });
 const a = new Fn();
@@ -274,7 +274,7 @@ console.log(Fn.mock.instances); // [a, b]
 An array containing the `this` context for each call to the mock function.
 
 ```ts
-const fn = vi.fn();
+const fn = rs.fn();
 const context = {};
 
 fn.apply(context);
@@ -291,8 +291,8 @@ fn.mock.contexts[1] === context;
 An array of numbers representing the order in which the mock was called, shared across all mocks. The index starts from `1`.
 
 ```ts
-const fn1 = rstest.fn();
-const fn2 = rstest.fn();
+const fn1 = rs.fn();
+const fn2 = rs.fn();
 fn1();
 fn2();
 fn1();
@@ -307,7 +307,7 @@ console.log(fn2.mock.invocationCallOrder); // [2]
 The arguments of the last call to the mock function, or `undefined` if it has not been called.
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn(1, 2);
 fn(3, 4);
 console.log(fn.mock.lastCall); // [3, 4]
@@ -320,7 +320,7 @@ console.log(fn.mock.lastCall); // [3, 4]
 An array containing the result of each call to the mock function, including returned values, thrown errors, or incomplete calls.
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 try {
   fn();
@@ -337,7 +337,7 @@ console.log(fn.mock.results);
 An array containing the settled results (fulfilled or rejected) of all async calls to the mock function.
 
 ```ts
-const fn = rstest.fn(async (x) => {
+const fn = rs.fn(async (x) => {
   if (x > 0) return x;
   throw new Error('fail');
 });

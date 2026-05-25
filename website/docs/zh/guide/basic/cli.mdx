@@ -317,8 +317,8 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--clearMocks`                   | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                        |
 | `--resetMocks`                   | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                            |
 | `--restoreMocks`                 | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                                  |
-| `--unstubGlobals`                | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                               |
-| `--unstubEnvs`                   | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                  |
+| `--unstubGlobals`                | 每个测试前恢复被 `rs.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                                   |
+| `--unstubEnvs`                   | 每个测试前恢复被 `rs.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                      |
 | `--include <include>`            | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                           |
 | `--logHeapUsage`                 | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
 | `--detectAsyncLeaks`             | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                           |
