@@ -219,13 +219,13 @@ c.test.ts > test c it skipIf
 
 ```bash
 # 在 CI 机器 1 上
-npx rstest run --shard 1/3 --reporter=blob
+npx rstest run --shard 1/3 --reporters=blob
 
 # 在 CI 机器 2 上
-npx rstest run --shard 2/3 --reporter=blob
+npx rstest run --shard 2/3 --reporters=blob
 
 # 在 CI 机器 3 上
-npx rstest run --shard 3/3 --reporter=blob
+npx rstest run --shard 3/3 --reporters=blob
 ```
 
 2. 将所有 `.rstest-reports/` 目录收集到同一位置，然后合并：
@@ -312,13 +312,13 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--browser.headless`             | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser)                                                                  |
 | `--browser.port <port>`          | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser)                                                                                     |
 | `--browser.strictPort`           | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser)                                                                                     |
-| `--reporter <reporter>`          | 指定测试报告器，详见 [reporters](/config/test/reporters)                                                                                             |
+| `--reporters <name>`             | 指定一个或多个测试报告器，详见 [reporters](/config/test/reporters)                                                                                   |
 | `--maxConcurrency <value>`       | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                                  |
 | `--clearMocks`                   | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                        |
 | `--resetMocks`                   | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                            |
 | `--restoreMocks`                 | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                                  |
-| `--unstubGlobals`                | 每个测试前恢复被 `rstest.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                               |
-| `--unstubEnvs`                   | 每个测试前恢复被 `rstest.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                  |
+| `--unstubGlobals`                | 每个测试前恢复被 `rs.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                                   |
+| `--unstubEnvs`                   | 每个测试前恢复被 `rs.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                      |
 | `--include <include>`            | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                           |
 | `--logHeapUsage`                 | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
 | `--detectAsyncLeaks`             | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                           |
@@ -355,7 +355,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--config-loader <loader>` | 指定配置加载器 （`auto` \| `jiti` \| `native`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
 | `-r, --root <root>`        | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
 | `--coverage`               | 合并完成后生成覆盖率报告，详见 [coverage](/config/test/coverage)                                                                                     |
-| `--reporter <reporter>`    | 指定在合并结果上运行的报告器，详见 [reporters](/config/test/reporters)                                                                               |
+| `--reporters <name>`       | 指定在合并结果上运行的一个或多个报告器，详见 [reporters](/config/test/reporters)                                                                     |
 | `--cleanup`                | 合并完成后删除 blob 报告目录                                                                                                                         |
 | `-h, --help`               | 显示帮助信息                                                                                                                                         |
 

@@ -219,13 +219,13 @@ When used with `--json`, `--summary` changes the JSON output shape from an array
 
 ```bash
 # On CI machine 1
-npx rstest run --shard 1/3 --reporter=blob
+npx rstest run --shard 1/3 --reporters=blob
 
 # On CI machine 2
-npx rstest run --shard 2/3 --reporter=blob
+npx rstest run --shard 2/3 --reporters=blob
 
 # On CI machine 3
-npx rstest run --shard 3/3 --reporter=blob
+npx rstest run --shard 3/3 --reporters=blob
 ```
 
 2. Collect all `.rstest-reports/` directories into a single location, then merge:
@@ -290,7 +290,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--changed [commit]`             | Run tests related to changed files in the current Git repository, optionally since a commit                                                                           |
 | `--globals`                      | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
 | `--isolate`                      | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
-| `--reporter <reporter>`          | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                    |
+| `--reporters <name>`             | Specify the test reporter(s), see [reporters](/config/test/reporters)                                                                                                 |
 | `--exclude <exclude>`            | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                          |
 | `-u, --update`                   | Update snapshot files, see [update](/config/test/update)                                                                                                              |
 | `--coverage`                     | Enable code coverage collection, see [coverage](/config/test/coverage)                                                                                                |
@@ -317,8 +317,8 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--clearMocks`                   | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                         |
 | `--resetMocks`                   | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                          |
 | `--restoreMocks`                 | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                                 |
-| `--unstubGlobals`                | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                          |
-| `--unstubEnvs`                   | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                               |
+| `--unstubGlobals`                | Restores all global variables that were changed with `rs.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                              |
+| `--unstubEnvs`                   | Restores all `process.env` values that were changed with `rs.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                                   |
 | `--include <include>`            | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
 | `--logHeapUsage`                 | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
 | `--detectAsyncLeaks`             | Detect async resources that leak after tests finish, see [detectAsyncLeaks](/config/test/detect-async-leaks)                                                          |
@@ -355,7 +355,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--config-loader <loader>` | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
 | `-r, --root <root>`        | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
 | `--coverage`               | Enable coverage generation after merging, see [coverage](/config/test/coverage)                                                                                       |
-| `--reporter <reporter>`    | Specify which reporters run on merged results, see [reporters](/config/test/reporters)                                                                                |
+| `--reporters <name>`       | Specify which reporter(s) run on merged results, see [reporters](/config/test/reporters)                                                                              |
 | `--cleanup`                | Remove the blob reports directory after merging                                                                                                                       |
 | `-h, --help`               | Display help for command                                                                                                                                              |
 

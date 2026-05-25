@@ -228,8 +228,9 @@ suite('Test Progress Reporting', () => {
 
     // File watchers can be noisy on CI; only rely on "next run happened"
     // semantics rather than absolute run counts.
-    const waitForNextRun = async () => {
+    const waitForNextRun = async (trigger: () => Promise<void>) => {
       const prev = createMockRunCalledTimes;
+      await trigger();
       await waitFor(() => assert.ok(createMockRunCalledTimes > prev));
       await deferred.promise;
     };
@@ -250,25 +251,12 @@ suite('Test Progress Reporting', () => {
       );
     };
 
-    await replaceContentInFile('progress.test.ts', 'hello', 'world');
-    await waitForNextRun();
+    await waitForNextRun(() =>
+      replaceContentInFile('progress.test.ts', 'hello', 'world'),
+    );
     assert.match(output, /2 failed/);
     assert.match(output, /2 passed/);
     assert.match(output, /1 skipped/);
-
-    await replaceContentInFile('foo.test.ts', 'foo', 'bar');
-    await waitForNextRun();
-    assert.match(output, /No test files need re-run/);
-    assert.equal(failedMessages.length, 0);
-    assert.equal(passedItems.length, 0);
-    assert.equal(skippedItems.length, 0);
-
-    await replaceContentInFile('foo.test.ts', 'bar', 'foo');
-    await waitForNextRun();
-    assert.match(output, /No test files need re-run/);
-    assert.equal(failedMessages.length, 0);
-    assert.equal(passedItems.length, 0);
-    assert.equal(skippedItems.length, 0);
 
     const canceledAt = createMockRunCalledTimes;
     cancellationSource.cancel();

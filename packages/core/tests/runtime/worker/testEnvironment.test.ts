@@ -169,6 +169,31 @@ describe('testEnvironment', () => {
     );
   });
 
+  it('should surface fallback import errors after invalid package matches', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    createPackage(
+      tempDir,
+      'package-marker',
+      'export default { name: "not-an-environment" };',
+    );
+    createPackage(
+      tempDir,
+      'rstest-environment-package-marker',
+      'throw new Error("fallback package import failed");',
+    );
+
+    const promise = resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+
+    await expect(promise).rejects.toThrow('fallback package import failed');
+    await expect(promise).rejects.toHaveProperty(
+      'cause.message',
+      'fallback package import failed',
+    );
+  });
+
   it('should reject package modules without a default environment export', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 

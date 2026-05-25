@@ -7,9 +7,9 @@ description: Rstest provides some utility functions to help you mock functions p
 
 Rstest provides some utility functions to help you mock functions powered by [tinyspy](https://github.com/tinylibs/tinyspy).
 
-## rstest.fn
+## rs.fn
 
-- **Alias:** `rs.fn`
+- **Alias:** `rstest.fn`
 - **Type:**
 
 ```ts
@@ -23,7 +23,7 @@ export type MockFn = <T extends Function>(fn?: T) => Mock<T>;
 Creates a spy on a function.
 
 ```ts
-const sayHi = rstest.fn((name: string) => `hi ${name}`);
+const sayHi = rs.fn((name: string) => `hi ${name}`);
 
 const res = sayHi('bob');
 
@@ -32,9 +32,9 @@ expect(res).toBe('hi bob');
 expect(sayHi).toHaveBeenCalledTimes(1);
 ```
 
-## rstest.spyOn
+## rs.spyOn
 
-- **Alias:** `rs.spyOn`
+- **Alias:** `rstest.spyOn`
 - **Type:**
 
 ```ts
@@ -53,36 +53,36 @@ const hi = {
   sayHi,
 };
 
-const spy = rstest.spyOn(hi, 'sayHi');
+const spy = rs.spyOn(hi, 'sayHi');
 
 expect(hi.sayHi()).toBe('hi');
 
 expect(spy).toHaveBeenCalled();
 ```
 
-If you call `rstest.spyOn` multiple times for the same method, Rstest reuses the existing spy instead of redefining it.
+If you call `rs.spyOn` multiple times for the same method, Rstest reuses the existing spy instead of redefining it.
 
 ```ts
 const hi = {
   sayHi: () => 'hi',
 };
-rstest.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
+rs.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
 
 expect(hi.sayHi()).toBe('hello');
 // should get the same spy instance
-expect(rstest.spyOn(hi, 'sayHi')).toBeCalled();
+expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 ```
 
-## rstest.isMockFunction
+## rs.isMockFunction
 
-- **Alias:** `rs.isMockFunction`
+- **Alias:** `rstest.isMockFunction`
 - **Type:** `(fn: any) => fn is MockInstance`
 
 Determines if the given function is a mocked function.
 
-## rstest.mockObject
+## rs.mockObject
 
-- **Alias:** `rs.mockObject`
+- **Alias:** `rstest.mockObject`
 - **Type:**
 
 ```ts
@@ -109,7 +109,7 @@ const original = {
   prop: 'foo',
 };
 
-const mocked = rstest.mockObject(original);
+const mocked = rs.mockObject(original);
 
 // Methods return undefined by default
 expect(mocked.method()).toBe(undefined);
@@ -119,7 +119,7 @@ expect(mocked.nested.getValue()).toBe(undefined);
 expect(mocked.prop).toBe('foo');
 
 // Methods are mock functions
-expect(rstest.isMockFunction(mocked.method)).toBe(true);
+expect(rs.isMockFunction(mocked.method)).toBe(true);
 ```
 
 ### Mocking return values
@@ -127,7 +127,7 @@ expect(rstest.isMockFunction(mocked.method)).toBe(true);
 You can configure mocked methods to return specific values:
 
 ```ts
-const mocked = rstest.mockObject({
+const mocked = rs.mockObject({
   fetchData: () => 'real data',
 });
 
@@ -145,7 +145,7 @@ const original = {
   add: (a: number, b: number) => a + b,
 };
 
-const spied = rstest.mockObject(original, { spy: true });
+const spied = rs.mockObject(original, { spy: true });
 
 // Original implementation is preserved
 expect(spied.add(1, 2)).toBe(3);
@@ -160,10 +160,10 @@ expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
 By default, arrays are replaced with empty arrays. With `{ spy: true }`, arrays keep their original values:
 
 ```ts
-const mocked = rstest.mockObject({ array: [1, 2, 3] });
+const mocked = rs.mockObject({ array: [1, 2, 3] });
 expect(mocked.array).toEqual([]);
 
-const spied = rstest.mockObject({ array: [1, 2, 3] }, { spy: true });
+const spied = rs.mockObject({ array: [1, 2, 3] }, { spy: true });
 expect(spied.array).toEqual([1, 2, 3]);
 ```
 
@@ -179,7 +179,7 @@ class UserService {
 }
 
 // Use { spy: true } to keep original implementation
-const MockedService = rstest.mockObject(UserService, { spy: true });
+const MockedService = rs.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
 // Original method works
@@ -190,9 +190,9 @@ rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```
 
-## rstest.mocked
+## rs.mocked
 
-- **Alias:** `rs.mocked`
+- **Alias:** `rstest.mocked`
 - **Type:**
 
 ```ts
@@ -210,30 +210,30 @@ import { myModule } from './myModule';
 rs.mock('./myModule', { spy: true });
 
 // TypeScript now knows myModule.method is a MockInstance
-const mockedModule = rstest.mocked(myModule);
+const mockedModule = rs.mocked(myModule);
 
 mockedModule.method.mockReturnValue('mocked');
 ```
 
 The function simply returns the same object at runtime - it only affects TypeScript types.
 
-## rstest.clearAllMocks
+## rs.clearAllMocks
 
-- **Alias:** `rs.clearAllMocks`
+- **Alias:** `rstest.clearAllMocks`
 - **Type:** `() => Rstest`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
-## rstest.resetAllMocks
+## rs.resetAllMocks
 
-- **Alias:** `rs.resetAllMocks`
+- **Alias:** `rstest.resetAllMocks`
 - **Type:** `() => Rstest`
 
 Clears all mocks properties and reset each mock's implementation to its original.
 
-## rstest.restoreAllMocks
+## rs.restoreAllMocks
 
-- **Alias:** `rs.restoreAllMocks`
+- **Alias:** `rstest.restoreAllMocks`
 - **Type:** `() => Rstest`
 
 Reset all mocks and restore original descriptors of spied-on objects.

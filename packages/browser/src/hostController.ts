@@ -184,9 +184,10 @@ type FatalPayload = {
   stack?: string;
 };
 
-type ReporterHookArg<THook extends keyof Reporter> = Parameters<
-  NonNullable<Reporter[THook]>
->[0];
+type ReporterHookArg<THook extends keyof Reporter> =
+  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
+    ? TArgs[0]
+    : never;
 
 type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;

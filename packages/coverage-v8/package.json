@@ -1,7 +1,21 @@
 {
   "name": "@rstest/coverage-v8",
-  "version": "0.3.0",
+  "version": "0.10.2",
   "description": "V8 coverage provider for Rstest",
+  "keywords": [
+    "rstest",
+    "coverage",
+    "v8"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/coverage-v8"
+  },
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
@@ -15,6 +29,7 @@
   ],
   "scripts": {
     "build": "rslib build",
+    "test": "rstest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -40,5 +55,9 @@
   },
   "peerDependencies": {
     "@rstest/core": "workspace:~"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

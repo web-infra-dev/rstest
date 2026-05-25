@@ -12,13 +12,15 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { isTTY } from '../utils';
+import { flushOutputStreams, isTTY } from '../utils';
 import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
 import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   protected rootPath: string;
   protected config: NormalizedConfig;
   protected projectConfigs: Map<string, NormalizedProjectConfig>;
@@ -45,6 +47,7 @@ export class DefaultReporter implements Reporter {
     this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
     this.testState = testState;
+    this.flushOutputStreams = !options.logger;
     if (isTTY() || options.logger) {
       this.statusRenderer = new StatusRenderer(
         rootPath,
@@ -159,7 +162,7 @@ export class DefaultReporter implements Reporter {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
       unhandledErrors,
@@ -167,6 +170,10 @@ export class DefaultReporter implements Reporter {
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,

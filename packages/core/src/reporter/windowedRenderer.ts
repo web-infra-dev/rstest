@@ -206,7 +206,10 @@ export class WindowRenderer {
     const original = stream.write.bind(stream);
 
     // @ts-expect-error -- not sure how 2 overloads should be typed
-    stream.write = (chunk, _, callback) => {
+    stream.write = (chunk, encoding, callback) => {
+      const writeCallback =
+        typeof encoding === 'function' ? encoding : callback;
+
       if (chunk) {
         if (this.finished || !this.started || this.hiddenForOutputCount > 0) {
           this.write(chunk.toString(), type);
@@ -214,7 +217,8 @@ export class WindowRenderer {
           this.buffer.push({ type, message: chunk.toString() });
         }
       }
-      callback?.();
+      writeCallback?.();
+      return true;
     };
 
     return function restore() {

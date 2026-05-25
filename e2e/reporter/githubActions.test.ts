@@ -15,7 +15,7 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
 
   const { cli } = await runRstestCli({
     command: 'rstest',
-    args: ['run', 'githubActions', '--reporter', 'github-actions'],
+    args: ['run', 'githubActions', '--reporters', 'github-actions'],
     options: {
       nodeOptions: {
         cwd: __dirname,
@@ -93,7 +93,7 @@ it.skipIf(!process.env.CI)(
   async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      args: ['run', 'githubActions', '--reporters', 'github-actions'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -133,7 +133,7 @@ it.skipIf(!process.env.CI)('github-actions summary on pass', async () => {
       'run',
       '-c',
       './rstest.agentMd.pass.config.mts',
-      '--reporter',
+      '--reporters',
       'github-actions',
     ],
     options: {
@@ -198,7 +198,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.githubActions.flaky.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -255,7 +255,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.githubActions.namedProject.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -303,7 +303,7 @@ it.skipIf(!process.env.CI)(
     try {
       const { cli } = await runRstestCli({
         command: 'rstest',
-        args: ['run', 'githubActions', '--reporter', 'github-actions'],
+        args: ['run', 'githubActions', '--reporters', 'github-actions'],
         options: {
           nodeOptions: {
             cwd: __dirname,
@@ -348,7 +348,7 @@ it.skipIf(!process.env.CI)(
         'run',
         '-c',
         './rstest.agentMd.pass.config.mts',
-        '--reporter',
+        '--reporters',
         'github-actions',
       ],
       options: {
@@ -368,7 +368,7 @@ it.skipIf(!process.env.CI)(
 
     const failingRun = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'githubActions', '--reporter', 'github-actions'],
+      args: ['run', 'githubActions', '--reporters', 'github-actions'],
       options: {
         nodeOptions: {
           cwd: __dirname,

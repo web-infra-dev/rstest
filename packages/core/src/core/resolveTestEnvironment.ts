@@ -192,13 +192,11 @@ export const resolveTestEnvironmentPath = async (
     const resolvedPaths = resolvePackageEnvironmentPaths(name, roots);
 
     let lastImportError: { resolvedPath: string; error: unknown } | undefined;
-    let hasImportedEnvironmentModule = false;
 
     for (const resolvedPath of resolvedPaths) {
       let environmentModule: unknown;
       try {
         environmentModule = await import(resolvedPath);
-        hasImportedEnvironmentModule = true;
       } catch (error) {
         lastImportError = { resolvedPath, error };
         continue;
@@ -210,7 +208,7 @@ export const resolveTestEnvironmentPath = async (
       }
     }
 
-    if (!hasImportedEnvironmentModule && lastImportError) {
+    if (lastImportError) {
       throw createImportTestEnvironmentError(
         name,
         lastImportError.resolvedPath,

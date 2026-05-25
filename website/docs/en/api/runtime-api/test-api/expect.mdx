@@ -105,7 +105,7 @@ Repeatedly calls `actual` and retries the matcher until it passes or times out.
 Notes:
 
 - `expect.poll(...)` assertions are asynchronous and **must** be awaited.
-- `expect.poll(...)` does not support `resolves`/`rejects`, `toThrow*`, or snapshot matchers. Use `rstest.waitFor()` for those unstable conditions.
+- `expect.poll(...)` does not support `resolves`/`rejects`, `toThrow*`, or snapshot matchers. Use `rs.waitFor()` for those unstable conditions.
 
 ```ts
 await expect.poll(() => getStatus()).toBe('ready');
@@ -293,7 +293,7 @@ expect(() => {
 
 ### Mock matchers
 
-Mock matchers verify interactions with `rstest.fn` / `rstest.spyOn`: calls, call order, return values, and async outcomes.
+Mock matchers verify interactions with `rs.fn` / `rs.spyOn`: calls, call order, return values, and async outcomes.
 
 Call assertions:
 
@@ -328,7 +328,7 @@ Notes:
 - These matchers require a mock/spied function, not a plain function.
 
 ```ts
-const sum = rstest.fn((a: number, b: number) => a + b);
+const sum = rs.fn((a: number, b: number) => a + b);
 sum(1, 2);
 sum(2, 3);
 
@@ -338,15 +338,15 @@ expect(sum).toHaveBeenLastCalledWith(2, 3);
 expect(sum).toHaveReturnedWith(3);
 expect(sum).toHaveLastReturnedWith(5);
 
-const fetchUser = rstest.fn(async (id: number) => ({ id, name: 'alice' }));
+const fetchUser = rs.fn(async (id: number) => ({ id, name: 'alice' }));
 await fetchUser(1);
 await fetchUser(2);
 
 expect(fetchUser).toHaveResolvedTimes(2);
 expect(fetchUser).toHaveNthResolvedWith(1, { id: 1, name: 'alice' });
 
-const before = rstest.fn();
-const after = rstest.fn();
+const before = rs.fn();
+const after = rs.fn();
 before();
 after();
 expect(before).toHaveBeenCalledBefore(after);

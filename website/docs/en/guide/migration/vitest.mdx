@@ -46,18 +46,18 @@ Next, update the test script in your `package.json` to use [rstest](/guide/basic
 
 Some Vitest CLI flags map directly to Rstest, while others change shape. Use this table for the common option differences you are likely to hit during migration:
 
-| Vitest CLI option                            | Rstest equivalent                           | Notes                                                                     |
-| -------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------- |
-| `vitest run` / `vitest --run`                | `rstest`                                    | No `--run` flag — `rstest` already runs once and exits.                   |
-| `vitest` / `vitest watch` / `vitest --watch` | `rstest --watch` or `rstest watch`          | Rstest does not auto-enable watch mode — pass `--watch` explicitly.       |
-| `vitest --coverage`                          | `rstest --coverage`                         | Also install `@rstest/coverage-istanbul` (see the `coverage` config row). |
-| `vitest --environment=jsdom`                 | `rstest --testEnvironment jsdom`            |                                                                           |
-| `vitest --reporter=verbose`                  | `rstest --reporter verbose`                 |                                                                           |
-| `vitest --globals`                           | `rstest --globals`                          |                                                                           |
-| `vitest -t <pattern>` / `--testNamePattern`  | `rstest -t <pattern>` / `--testNamePattern` |                                                                           |
-| `vitest -u` / `--update`                     | `rstest -u` / `--update`                    |                                                                           |
-| `vitest -c <path>` / `--config`              | `rstest -c <path>` / `--config`             |                                                                           |
-| `vitest --project <name>`                    | `rstest --project <name>`                   |                                                                           |
+| Vitest CLI option                            | Rstest equivalent                           | Notes                                                                                       |
+| -------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `vitest run` / `vitest --run`                | `rstest`                                    | No `--run` flag — `rstest` already runs once and exits.                                     |
+| `vitest` / `vitest watch` / `vitest --watch` | `rstest --watch` or `rstest watch`          | Rstest does not auto-enable watch mode — pass `--watch` explicitly.                         |
+| `vitest --coverage`                          | `rstest --coverage`                         | Also install the provider package that matches your config (see the `coverage` config row). |
+| `vitest --environment=jsdom`                 | `rstest --testEnvironment jsdom`            |                                                                                             |
+| `vitest --reporter=verbose`                  | `rstest --reporters verbose`                |                                                                                             |
+| `vitest --globals`                           | `rstest --globals`                          |                                                                                             |
+| `vitest -t <pattern>` / `--testNamePattern`  | `rstest -t <pattern>` / `--testNamePattern` |                                                                                             |
+| `vitest -u` / `--update`                     | `rstest -u` / `--update`                    |                                                                                             |
+| `vitest -c <path>` / `--config`              | `rstest -c <path>` / `--config`             |                                                                                             |
+| `vitest --project <name>`                    | `rstest --project <name>`                   |                                                                                             |
 
 ## Configuration migration
 
@@ -199,16 +199,16 @@ For the full utility API list, see [Rstest APIs](/api/runtime-api/).
 When `globals: true` is enabled, `vi` and `vitest` are available as globals in Vitest. In Rstest, use this mapping order:
 
 - `vi.<api>` → `rs.<api>`
-- `vitest.<api>` → `rstest.<api>`
+- `vitest.<api>` → `rs.<api>`
 
-`rs` and `rstest` are equivalent global aliases, but keeping this one-to-one mapping is easier to read during migration.
+`rs` and `rstest` are equivalent global aliases, but using `rs` keeps migrated examples consistent with import style.
 
 ```diff
 - vi.fn()
 + rs.fn()
 
 - vitest.spyOn(console, 'error')
-+ rstest.spyOn(console, 'error')
++ rs.spyOn(console, 'error')
 ```
 
 If your tests import APIs from `@rstest/core`, prefer `rs.<api>` in import style and avoid mixing import style and global style in the same file.

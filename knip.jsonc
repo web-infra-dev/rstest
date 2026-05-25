@@ -94,9 +94,15 @@
         "tests/**/*.ts",
       ],
     },
+    "packages/coverage-v8": {
+      "entry": [
+        // Test files
+        "tests/**/*.ts",
+      ],
+    },
     // No explicit entry needed for the following packages — knip auto-infers from package.json exports:
-    // packages/browser-react, packages/adapter-rslib,
-    // packages/adapter-rsbuild, packages/adapter-rspack
+    // packages/browser-react, packages/adapter-rslib, packages/adapter-rsbuild,
+    // packages/adapter-rspack
 
     "packages/vscode": {
       "entry": [
