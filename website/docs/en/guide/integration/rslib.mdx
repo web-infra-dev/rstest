@@ -51,6 +51,7 @@ This will automatically:
 - Load your `rslib.config.ts` file
 - Extract and map test-relevant Rslib options to Rstest configuration
 - Merge with any additional Rstest config you provide
+- Add the loaded Rslib config file to [`forceRerunTriggers`](/config/test/force-rerun-triggers), so `--changed` runs the full test suite when that config changes
 
 When `performance.buildCache` is enabled in your Rslib config, `withRslibConfig()` passes it through to Rstest and Rstest will still append its own cache defaults, such as runtime digest inputs and config-file-based invalidation.
 

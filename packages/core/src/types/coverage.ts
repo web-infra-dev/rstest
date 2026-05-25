@@ -70,6 +70,14 @@ export type CoverageOptions = {
   include?: string[];
 
   /**
+   * Collect coverage only for files changed since a specified commit or branch.
+   * When enabled from `--changed`, it inherits the changed files collected by `--changed`.
+   *
+   * @default undefined
+   */
+  changed?: boolean | string;
+
+  /**
    * A list of glob patterns that should be excluded from coverage collection.
    *
    * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
@@ -91,7 +99,7 @@ export type CoverageOptions = {
    * The provider to use for coverage collection.
    * @default 'istanbul'
    */
-  provider?: 'istanbul';
+  provider?: 'istanbul' | 'v8';
 
   /**
    * The reporters to use for coverage collection.
@@ -143,23 +151,28 @@ export type CoverageOptions = {
 };
 
 export type NormalizedCoverageOptions = Required<
-  Omit<CoverageOptions, 'thresholds' | 'include'>
+  Omit<CoverageOptions, 'thresholds' | 'include' | 'changed'>
 > & {
   thresholds?: CoverageThresholds;
   include?: string[];
+  changed?: boolean | string;
 };
 
 export declare class CoverageProvider {
-  constructor(options: CoverageOptions);
+  constructor(options: CoverageOptions, root?: string);
   /**
    * Initialize coverage collection
    */
-  init(): void;
+  init(): void | Promise<void>;
 
   /**
    * Collect coverage data from global coverage object
    */
-  collect(): CoverageMap | null;
+  collect(options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+    outputModule?: boolean;
+  }): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

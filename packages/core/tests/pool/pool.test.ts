@@ -244,7 +244,7 @@ describe('Pool - exit-based lifecycle (not close)', () => {
       // Task 1: worker spawns a 30s grandchild that inherits stdout/stderr,
       // then sends its result and exits. With a `close`-based lifecycle this
       // would block slot reclaim until the grandchild exits (30s), causing
-      // task 2 to hang until WORKER_STOP_TIMEOUT_MS.
+      // task 2 to hang.
       const start = Date.now();
       const r1 = await pool.runTest(
         createTask('run', { __testMode: 'spawn-orphan' }),
@@ -312,32 +312,28 @@ describe('Pool - failure recovery', () => {
 // ── close() behavior ──────────────────────────────────────────────────────
 
 describe('Pool - close()', () => {
-  it('should not drop in-flight task result', async () => {
-    // Use isolate: false so the warm-up run establishes a reusable worker.
-    // The slow task then dispatches instantly on the existing process,
-    // eliminating the fork+handshake race that makes timer-based
-    // synchronization unreliable on slow CI.
-    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
-    // Warm up: ensure the worker is started and idle.
-    await pool.runTest(createTask());
-
-    const taskPromise = pool.runTest(
-      createTask('run', { __testMode: 'slow', __delayMs: 500 }),
-    );
-    // The reused worker receives the run request on an already-open IPC
-    // channel, so a short delay is enough for the message to arrive.
-    await new Promise((r) => setTimeout(r, 50));
-    const closePromise = pool.close();
-    // The task should still resolve (worker sends result before stopping).
-    const result = await taskPromise;
-    expect(result.status).toBe('pass');
-    await closePromise;
-  });
-
   it('should reject subsequent submissions after close()', async () => {
     const pool = new Pool(createPoolOptions());
     await pool.close();
     await expect(pool.runTest(createTask())).rejects.toThrow(/closed/);
+  });
+
+  // Regression: rstest#1275. The host owns worker termination via SIGTERM
+  // and does not wait for any IPC ack. Previously the host waited the full
+  // 60s WORKER_STOP_TIMEOUT_MS plus a 5s SIGKILL escalation for workers
+  // that couldn't self-exit (e.g. rspack tokio threads ref'ing the loop),
+  // producing the 60–65s hang reported in the issue.
+  it('should close promptly under the forks pool (rstest#1275)', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    await pool.runTest(createTask()); // warm up: worker is now alive and idle
+
+    const start = Date.now();
+    await pool.close();
+    const elapsed = Date.now() - start;
+
+    // Idle close should be SIGTERM-fast (sub-second). Allow generous CI
+    // headroom but require it to be well below the 60s graceful budget.
+    expect(elapsed).toBeLessThan(5000);
   });
 });
 
@@ -395,5 +391,86 @@ describe('Pool - capacity', () => {
     }
 
     await pool.close();
+  });
+});
+
+// ── worker-id slot semantics (rstest#1273) ──────────────────────────────────
+
+describe('Pool - worker-id slot', () => {
+  it('should keep RSTEST_WORKER_ID bounded by maxWorkers under isolate=true', async () => {
+    const maxWorkers = 2;
+    const taskCount = 6;
+    const pool = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+
+    try {
+      const ids: number[] = [];
+      for (let i = 0; i < taskCount; i++) {
+        const result = await pool.runTest(createTask());
+        ids.push((result as any)._workerId as number);
+      }
+
+      expect(ids).toHaveLength(taskCount);
+      for (const id of ids) {
+        expect(id).toBeGreaterThanOrEqual(1);
+        expect(id).toBeLessThanOrEqual(maxWorkers);
+      }
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should assign distinct ids to concurrent workers within [1, maxWorkers]', async () => {
+    const maxWorkers = 3;
+    const pool = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+
+    try {
+      const results = await Promise.all(
+        Array.from({ length: maxWorkers }, () =>
+          pool.runTest(
+            createTask('run', { __testMode: 'slow', __delayMs: 100 }),
+          ),
+        ),
+      );
+      const ids = results.map((r) => (r as any)._workerId as number);
+      // All concurrent workers alive at the same time must have distinct ids.
+      expect(new Set(ids).size).toBe(maxWorkers);
+      // And those ids exactly fill [1, maxWorkers].
+      expect([...ids].sort()).toEqual([1, 2, 3]);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should keep RSTEST_WORKER_ID stable across reuses under isolate=false', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      const r1 = await pool.runTest(createTask());
+      const r2 = await pool.runTest(createTask());
+      const r3 = await pool.runTest(createTask());
+      // Same process → same workerId across all reuses.
+      expect((r1 as any)._workerIdentity).toBe((r2 as any)._workerIdentity);
+      expect((r1 as any)._workerId).toBe((r2 as any)._workerId);
+      expect((r1 as any)._workerId).toBe((r3 as any)._workerId);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should reset worker-id allocator per Pool instance', async () => {
+    const maxWorkers = 2;
+    const poolA = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+    const r1 = await poolA.runTest(createTask());
+    await poolA.close();
+
+    const poolB = new Pool(createPoolOptions({ maxWorkers, isolate: true }));
+    try {
+      const r2 = await poolB.runTest(createTask());
+      // A fresh Pool restarts the allocator at 1 — there is no cross-pool
+      // module-level counter (rstest#1273 regression).
+      expect((r1 as any)._workerId).toBe(1);
+      expect((r2 as any)._workerId).toBe(1);
+    } finally {
+      await poolB.close();
+    }
   });
 });

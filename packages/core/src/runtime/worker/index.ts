@@ -1,4 +1,5 @@
 import './setup';
+import { isMainThread } from 'node:worker_threads';
 import {
   isWorkerRequestEnvelope,
   serializeError,
@@ -14,14 +15,6 @@ const send = (response: WorkerResponse): void => {
 };
 
 let currentTaskId: number | undefined;
-let stopRequested = false;
-/**
- * Set when a stop arrived mid-task. The task handler drains teardown in its
- * own `finally` first; only then do we flush `stopped` and exit. Without the
- * deferral `process.exit(0)` would orphan env/coverage/mock cleanup and the
- * `process.exit` / `process.kill` restoration.
- */
-let exitOnTaskIdle = false;
 /**
  * Set when a task handler has reported `fatal_error` and is on its way to
  * exit. Suppresses the bottom-of-the-stack `fatalExit` from racing in with a
@@ -36,9 +29,34 @@ const sendFatalError = (err: unknown): void => {
   });
 };
 
-const finalizeStop = (): void => {
-  send({ type: 'stopped' });
-  setImmediate(() => process.exit(0));
+/**
+ * Hand control back to Node's default uncaught-exception path. Best-effort
+ * IPC delivery happens first, then **all** uncaughtException / unhandledRejection
+ * listeners are cleared and the error is re-thrown on the next tick so Node's
+ * built-in handler is what actually terminates the process — printing the
+ * stack to stderr (forks pool: piped to the host's stderr; threads pool:
+ * surfaced via `worker.on('error')`).
+ *
+ * Why clear *all* listeners, not just `fatalExit`: `runInPool` installs its
+ * own per-task uncaughtException handler that silently absorbs errors into
+ * `unhandledErrors` (see `runInPool.ts` ~ line 230). That handler is removed
+ * only when the *next* `preparePool` runs, so for `isolate: true` it stays
+ * installed forever after the first task. If we leave it attached, the
+ * re-thrown error gets absorbed and Node's default never runs — the worker
+ * neither prints a stack nor exits, and `PoolRunner.stopTimer` eventually
+ * SIGTERMs it 60s later with no diagnostic info.
+ *
+ * Why not just `process.exit(1)`: `process.send` is async and a synchronous
+ * exit drops any envelope still queued in the IPC pipe (verified to lose
+ * 100% of envelopes ≥ ~100KB on macOS). Without a fallback the host sees
+ * only `Worker exited unexpectedly (code=1, signal=null)` with no stack.
+ */
+const handOffToNodeDefault = (err: unknown): void => {
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+  process.nextTick(() => {
+    throw err;
+  });
 };
 
 /**
@@ -47,9 +65,7 @@ const finalizeStop = (): void => {
  * running and feed them into the test result. These bottom-of-the-stack
  * handlers fire only when no task is active (e.g., during worker bootstrap,
  * teardown after the result has been flushed, or async leak after the
- * test completes), and surface a structured `fatal_error` to the host
- * before exiting. This is the structured replacement for
- * `patches/tinypool@2.1.0.patch`.
+ * test completes).
  */
 const fatalExit = (err: unknown): void => {
   if (dyingFromFatal) return;
@@ -58,8 +74,9 @@ const fatalExit = (err: unknown): void => {
     // into the test result.
     return;
   }
+  dyingFromFatal = true;
   sendFatalError(err);
-  setImmediate(() => process.exit(1));
+  handOffToNodeDefault(err);
 };
 process.on('uncaughtException', fatalExit);
 process.on('unhandledRejection', fatalExit);
@@ -76,9 +93,12 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
   collect: 'collectFinished',
 };
 
-// Read once at worker bootstrap — toggling `RSTEST_MEMORY_AWARE` mid-run is
-// not supported (host samples it at pool construction too).
-const MEMORY_REPORTING_ENABLED = process.env.RSTEST_MEMORY_AWARE !== '0';
+// Skip RSS reporting for thread workers — `process.memoryUsage().rss` is
+// host-wide and would mislead the gate. See rstest#1301. Read once at
+// bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
+// samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED =
+  isMainThread && process.env.RSTEST_MEMORY_AWARE !== '0';
 
 const runTask = async (
   kind: TaskKind,
@@ -105,35 +125,17 @@ const runTask = async (
     dyingFromFatal = true;
     sendFatalError(err);
     currentTaskId = undefined;
-    setImmediate(() => process.exit(1));
+    handOffToNodeDefault(err);
     return;
   }
 
   currentTaskId = undefined;
-  if (exitOnTaskIdle) finalizeStop();
 };
 
-const requestGracefulStop = (): void => {
-  if (stopRequested) return;
-  stopRequested = true;
-  if (currentTaskId !== undefined) {
-    // Defer the ack + exit until the task's `finally { await teardown(); }`
-    // runs. PoolRunner's WORKER_STOP_TIMEOUT_MS escalates to SIGKILL if
-    // teardown truly hangs, so this deferral is bounded.
-    exitOnTaskIdle = true;
-    return;
-  }
-  finalizeStop();
-};
-
-// SIGTERM shares the same shutdown path under the forks pool. `PoolRunner.stop`
-// sends SIGTERM alongside the `stop` envelope; without this handler Node's
-// default SIGTERM behavior would terminate the process immediately and skip
-// teardown. Under the threads pool the host uses `worker.terminate()` instead
-// of signals, so this handler is a no-op there. `setup.ts` may install a
-// profiling-specific SIGTERM handler (`--cpu-prof` et al.) that runs first and
-// preempts ours, preserving existing profiling semantics.
-process.on('SIGTERM', requestGracefulStop);
+// No SIGTERM handler — the host owns termination and SIGTERM (default action:
+// exit) is what gets us out. Any handler that didn't unconditionally exit
+// would defeat that contract (rstest#1275). `setup.ts` may install a
+// profiling-specific handler that calls `process.exit()`, which is compatible.
 
 channel.on((message: unknown) => {
   if (!isWorkerRequestEnvelope(message)) {
@@ -151,9 +153,6 @@ channel.on((message: unknown) => {
       break;
     case 'collect':
       void runTask('collect', request);
-      break;
-    case 'stop':
-      requestGracefulStop();
       break;
   }
 });

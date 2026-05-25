@@ -191,6 +191,11 @@ export type ReporterWithOptions<
 
 export interface Reporter {
   /**
+   * Set to `false` when the reporter does not write to process stdout/stderr.
+   * @default true
+   */
+  flushOutputStreams?: boolean;
+  /**
    * Called before test file run.
    */
   onTestFileStart?: (test: TestFileInfo) => void;

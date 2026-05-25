@@ -117,7 +117,7 @@ async function createNonInteractive(
   const provider: BrowserProvider = 'playwright';
 
   console.log();
-  console.log(color.cyan('◆'), color.bold('rstest init browser --yes'));
+  console.log(color.bold(color.magenta('Set up Rstest browser mode')));
   console.log();
 
   // Show detection results
@@ -169,7 +169,7 @@ async function createInteractive(
   const effectiveFramework: Framework =
     framework === 'react' ? 'react' : 'vanilla';
 
-  intro(color.bgCyan(color.black(' rstest init browser ')));
+  intro(color.bold(color.magenta('Set up Rstest browser mode')));
 
   // Step 1: Show detection results
   const detectionLines: string[] = [];

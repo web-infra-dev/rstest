@@ -1,0 +1,63 @@
+{
+  "name": "@rstest/coverage-v8",
+  "version": "0.10.2",
+  "description": "V8 coverage provider for Rstest",
+  "keywords": [
+    "rstest",
+    "coverage",
+    "v8"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/coverage-v8"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "test": "rstest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "acorn": "^8.16.0",
+    "ast-v8-to-istanbul": "^1.0.0",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-reports": "^3.2.0",
+    "picomatch": "^4.0.4",
+    "v8-to-istanbul": "^9.3.0"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.7",
+    "@rslib/core": "0.21.5",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-reports": "^3.0.4",
+    "@types/node": "^22.16.5",
+    "@types/picomatch": "^4.0.3",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:~"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

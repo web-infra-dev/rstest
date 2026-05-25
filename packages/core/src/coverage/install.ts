@@ -8,6 +8,7 @@ import {
 
 export const CoverageProviderMap: Record<string, string> = {
   istanbul: '@rstest/coverage-istanbul',
+  v8: '@rstest/coverage-v8',
 };
 
 type CoverageProviderInstaller = (

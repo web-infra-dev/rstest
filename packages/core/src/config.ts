@@ -31,6 +31,11 @@ type ResolvedExtendEntry =
       userConfig: Readonly<RstestConfig>,
     ) => Promise<ExtendConfig> | ExtendConfig);
 
+const DEFAULT_FORCE_RERUN_TRIGGERS = [
+  '**/package.json/**',
+  '**/rstest.config.*',
+];
+
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
     fs.existsSync,
@@ -123,7 +128,24 @@ export const resolveExtends = async (
     extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
   );
 
-  return mergeRstestConfig(...resolvedExtends, config);
+  const merged = mergeRstestConfig(...resolvedExtends, config);
+
+  if (config.forceRerunTriggers === undefined) {
+    const extendedForceRerunTriggers = resolvedExtends.flatMap(
+      (entry) => entry.forceRerunTriggers || [],
+    );
+
+    if (extendedForceRerunTriggers.length) {
+      merged.forceRerunTriggers = Array.from(
+        new Set([
+          ...DEFAULT_FORCE_RERUN_TRIGGERS,
+          ...extendedForceRerunTriggers,
+        ]),
+      );
+    }
+  }
+
+  return merged;
 };
 
 export const mergeProjectConfig = (
@@ -159,6 +181,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
 
     // The following configurations need overrides
     merged.include = config.include ?? merged.include;
+    merged.forceRerunTriggers =
+      config.forceRerunTriggers ?? merged.forceRerunTriggers;
     merged.reporters = config.reporters ?? merged.reporters;
     if (merged.coverage) {
       merged.coverage.reporters =
@@ -184,6 +208,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   setupFiles: [],
   globalSetup: [],
   includeSource: [],
+  forceRerunTriggers: DEFAULT_FORCE_RERUN_TRIGGERS,
   pool: {
     type: 'forks',
   },
@@ -221,6 +246,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   hideSkippedTests: false,
   hideSkippedTestFiles: false,
   logHeapUsage: false,
+  detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
   browser: {
@@ -246,6 +272,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
       '**/*.{test,spec}.[cm][jt]sx',
     ],
     enabled: false,
+    changed: undefined,
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',
@@ -331,6 +358,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
     globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
+      formatRootStr(p, merged.root),
+    ),
+    forceRerunTriggers: merged.forceRerunTriggers.map((p) =>
       formatRootStr(p, merged.root),
     ),
   };

@@ -16,6 +16,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -39,6 +40,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -51,6 +53,10 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [
     "./global-setup.ts",
   ],

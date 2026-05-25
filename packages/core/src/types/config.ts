@@ -292,6 +292,13 @@ export interface RstestConfig {
    */
   includeSource?: string[];
   /**
+   * A list of glob patterns that trigger running the whole test suite when
+   * matched by changed files collected from `--changed`.
+   *
+   * @default ['**\/package.json/**', '**\/rstest.config.*']
+   */
+  forceRerunTriggers?: string[];
+  /**
    * Path to setup files. They will be run before each test file.
    */
   setupFiles?: string[] | string;
@@ -448,6 +455,13 @@ export interface RstestConfig {
    * @default 300
    */
   slowTestThreshold?: number;
+
+  /**
+   * Detect async resources that are still active after a test file finishes.
+   * This may slow down tests and should be used for debugging leaks.
+   * @default false
+   */
+  detectAsyncLeaks?: boolean;
 
   /**
    * Restores all global variables that were changed with `rstest.stubGlobal` before every test.

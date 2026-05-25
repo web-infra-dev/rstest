@@ -58,6 +58,7 @@ const onHostMessage = (handler) => {
 // per spawned worker) as the per-worker id in threads mode. Forks each have
 // their own pid.
 const workerIdentity = isThreadWorker ? threadId : process.pid;
+let assignedWorkerId = null;
 
 let runCount = 0;
 
@@ -73,23 +74,13 @@ const makeRunResult = (request, extra) => ({
   // Test-only fields so the test can verify pool behavior. Under threads
   // mode this is `threadId`; under forks it is `process.pid`.
   _workerIdentity: workerIdentity,
+  _workerId: assignedWorkerId,
   _runCount: ++runCount,
   ...extra,
 });
 
-// Mirrors the real worker: track whether a task is in-flight and defer
-// stop until the task completes.
-let taskInFlight = false;
-let exitOnTaskIdle = false;
-
-const finalizeStop = () => {
-  send({ type: 'stopped' });
-  setTimeout(() => process.exit(0), 10);
-};
-
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
-  taskInFlight = true;
 
   const finish = (extra) => {
     send({
@@ -97,12 +88,9 @@ const handleRun = (request) => {
       taskId: request.taskId,
       result: makeRunResult(request, extra),
     });
-    taskInFlight = false;
-    if (exitOnTaskIdle) finalizeStop();
   };
 
   if (mode === 'fatal') {
-    taskInFlight = false;
     send({
       type: 'fatal_error',
       error: {
@@ -187,24 +175,13 @@ const handleCollect = (request) => {
   });
 };
 
-let stopRequested = false;
-const requestGracefulStop = () => {
-  if (stopRequested) return;
-  stopRequested = true;
-  if (taskInFlight) {
-    // Defer until the in-flight task finishes, just like the real worker.
-    exitOnTaskIdle = true;
-    return;
-  }
-  finalizeStop();
-};
-
 onHostMessage((message) => {
   if (!message || message[REQ_TAG] !== true) return;
   const request = message.request;
 
   switch (request.type) {
     case 'start':
+      assignedWorkerId = request.workerId;
       send({ type: 'started', pid: workerIdentity });
       break;
     case 'run':
@@ -213,13 +190,7 @@ onHostMessage((message) => {
     case 'collect':
       handleCollect(request);
       break;
-    case 'stop':
-      requestGracefulStop();
-      break;
   }
 });
 
-// SIGTERM is meaningful only under the forks pool. In threads mode signals
-// are delivered to the parent process, not the worker thread, so this
-// handler is a harmless no-op there.
-process.on('SIGTERM', requestGracefulStop);
+// No SIGTERM handler — mirrors worker/index.ts.

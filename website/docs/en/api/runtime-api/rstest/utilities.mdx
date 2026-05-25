@@ -6,9 +6,9 @@ description: A set of useful utility functions. Includes practical guidance, opt
 
 A set of useful utility functions.
 
-## rstest.stubEnv
+## rs.stubEnv
 
-- **Alias:** `rs.stubEnv`
+- **Alias:** `rstest.stubEnv`
 
 - **Type:** `(name: string, value: string | undefined) => Rstest`
 
@@ -16,27 +16,27 @@ Temporarily sets an environment variable in `process.env` and `import.meta.env` 
 
 - If `value` is `undefined`, the variable will be removed from `process.env` and `import.meta.env`.
 - You can call this multiple times to stub multiple variables.
-- Use `rstest.unstubAllEnvs()` to restore all environment variables changed by this method.
+- Use `rs.unstubAllEnvs()` to restore all environment variables changed by this method.
 
 **Example:**
 
 ```ts
-rstest.stubEnv('NODE_ENV', 'test');
+rs.stubEnv('NODE_ENV', 'test');
 expect(process.env.NODE_ENV).toBe('test');
 expect(import.meta.env.NODE_ENV).toBe('test');
 
-rstest.stubEnv('MY_VAR', undefined);
+rs.stubEnv('MY_VAR', undefined);
 expect(process.env.MY_VAR).toBeUndefined();
 expect(import.meta.env.MY_VAR).toBeUndefined();
 ```
 
-## rstest.unstubAllEnvs
+## rs.unstubAllEnvs
 
-- **Alias:** `rs.unstubAllEnvs`
+- **Alias:** `rstest.unstubAllEnvs`
 
 - **Type:** `() => Rstest`
 
-Restores all environment variables that were changed using `rstest.stubEnv` to their original values.
+Restores all environment variables that were changed using `rs.stubEnv` to their original values.
 
 - Call this after your test to clean up any environment changes.
 - Automatically called before each test if `unstubEnvs` config is enabled.
@@ -44,40 +44,40 @@ Restores all environment variables that were changed using `rstest.stubEnv` to t
 **Example:**
 
 ```ts
-rstest.stubEnv('NODE_ENV', 'test');
+rs.stubEnv('NODE_ENV', 'test');
 // ... run some code
-rstest.unstubAllEnvs();
+rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).not.toBe('test');
 ```
 
-## rstest.stubGlobal
+## rs.stubGlobal
 
-- **Alias:** `rs.stubGlobal`
+- **Alias:** `rstest.stubGlobal`
 
 - **Type:** `(name: string | number | symbol, value: unknown) => Rstest`
 
 Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
 
 - You can call this multiple times to stub multiple globals.
-- Use `rstest.unstubAllGlobals()` to restore all globals changed by this method.
+- Use `rs.unstubAllGlobals()` to restore all globals changed by this method.
 
 **Example:**
 
 ```ts
-rstest.stubGlobal('myGlobal', 123);
+rs.stubGlobal('myGlobal', 123);
 expect(globalThis.myGlobal).toBe(123);
 
-rstest.stubGlobal(Symbol.for('foo'), 'bar');
+rs.stubGlobal(Symbol.for('foo'), 'bar');
 expect(globalThis[Symbol.for('foo')]).toBe('bar');
 ```
 
-## rstest.unstubAllGlobals
+## rs.unstubAllGlobals
 
-- **Alias:** `rs.unstubAllGlobals`
+- **Alias:** `rstest.unstubAllGlobals`
 
 - **Type:** `() => Rstest`
 
-Restores all global variables that were changed using `rstest.stubGlobal` to their original values.
+Restores all global variables that were changed using `rs.stubGlobal` to their original values.
 
 - Call this after your test to clean up any global changes.
 - Automatically called before each test if `unstubGlobals` config is enabled.
@@ -85,15 +85,15 @@ Restores all global variables that were changed using `rstest.stubGlobal` to the
 **Example:**
 
 ```ts
-rstest.stubGlobal('myGlobal', 123);
+rs.stubGlobal('myGlobal', 123);
 // ... run some code
-rstest.unstubAllGlobals();
+rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
 
-## rstest.setConfig
+## rs.setConfig
 
-- **Alias:** `rs.setConfig`
+- **Alias:** `rstest.setConfig`
 
 - **Type:**
 
@@ -116,22 +116,22 @@ Dynamically updates the runtime configuration for the current test file. Useful 
 **Example:**
 
 ```ts
-rstest.setConfig({ testTimeout: 1000, retry: 2 });
+rs.setConfig({ testTimeout: 1000, retry: 2 });
 // ... run some code with the new config
-rstest.resetConfig(); // Restore to default config
+rs.resetConfig(); // Restore to default config
 ```
 
-## rstest.resetConfig
+## rs.resetConfig
 
-- **Alias:** `rs.resetConfig`
+- **Alias:** `rstest.resetConfig`
 
 - **Type:** `() => void`
 
-Resets the runtime configuration that was changed using `rstest.setConfig` back to the default values.
+Resets the runtime configuration that was changed using `rs.setConfig` back to the default values.
 
-## rstest.getConfig
+## rs.getConfig
 
-- **Alias:** `rs.getConfig`
+- **Alias:** `rstest.getConfig`
 
 - **Type:** `() => RuntimeConfig`
 
@@ -140,13 +140,13 @@ Retrieves the current runtime configuration for the test file. Useful for inspec
 **Example:**
 
 ```ts
-const config = rstest.getConfig();
+const config = rs.getConfig();
 console.log(config);
 ```
 
-## rstest.waitFor
+## rs.waitFor
 
-- **Alias:** `rs.waitFor`
+- **Alias:** `rstest.waitFor`
 
 - **Type:**
 
@@ -179,9 +179,9 @@ await rs.waitFor(
 );
 ```
 
-## rstest.waitUntil
+## rs.waitUntil
 
-- **Alias:** `rs.waitUntil`
+- **Alias:** `rstest.waitUntil`
 
 - **Type:**
 

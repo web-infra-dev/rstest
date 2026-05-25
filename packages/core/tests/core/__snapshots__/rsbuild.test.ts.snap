@@ -170,6 +170,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         ],
         "oneOf": [
           {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -745,6 +754,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
         "oneOf": [
           {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1306,6 +1324,15 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1869,6 +1896,15 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           /\\\\\\.\\(\\?:ts\\|tsx\\|jsx\\|mts\\|cts\\)\\$/,
         ],
         "oneOf": [
+          {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -2770,6 +2806,15 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
         "oneOf": [
           {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3332,6 +3377,15 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
         "oneOf": [
           {
+            "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "javascript/auto",
+            "use": [
+              {
+                "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+              },
+            ],
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3743,6 +3797,15 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       /node_modules\\[\\\\\\\\/\\]query-string\\[\\\\\\\\/\\]/,
     ],
     "oneOf": [
+      {
+        "resourceQuery": /\\[\\?&\\]worker\\(\\?:&\\|=\\|\\$\\)/,
+        "type": "javascript/auto",
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
+          },
+        ],
+      },
       {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",

@@ -69,6 +69,7 @@ export default defineConfig({
       cacheDigest: ['file-digest'],
       buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
     });
+    expect(config.forceRerunTriggers).toEqual([testConfigPath]);
     expect(config.testEnvironment).toBe('happy-dom');
   });
 

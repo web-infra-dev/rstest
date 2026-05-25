@@ -28,7 +28,7 @@ import {
 } from '../utils';
 import type { TraceEvent } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { createDefaultMemoryGate } from './memoryGate';
+import { selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
@@ -73,6 +73,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     snapshotFormat,
     env,
     logHeapUsage,
+    detectAsyncLeaks,
     bail,
     chaiConfig,
     includeTaskLocation,
@@ -104,6 +105,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
+    detectAsyncLeaks,
     bail,
     chaiConfig,
     includeTaskLocation,
@@ -382,7 +384,7 @@ export const createPool = async ({
       ...getForceColorEnv(),
       ...process.env,
     } as Record<string, string>,
-    memoryGate: createDefaultMemoryGate(),
+    memoryGate: selectMemoryGate(workerKind),
   });
 
   const createRpcMethods = ({

@@ -20,7 +20,7 @@ describe('json reporter', () => {
   it('should print structured JSON to stdout', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'junit', '--reporter', 'json'],
+      args: ['run', 'junit', '--reporters', 'json'],
       options: {
         nodeOptions: {
           cwd: __dirname,

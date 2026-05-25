@@ -51,7 +51,7 @@ export type CommonOptions = {
   isolate?: boolean;
   include?: string[];
   exclude?: string[];
-  reporter?: string[];
+  reporters?: string | string[];
   project?: string[];
   /**
    * Coverage options.
@@ -61,13 +61,16 @@ export type CommonOptions = {
   coverage?:
     | boolean
     | {
-        enabled?: boolean;
+        enabled?: boolean | string;
         allowExternal?: boolean;
+        provider?: 'istanbul' | 'v8';
+        changed?: boolean | string;
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
+  detectAsyncLeaks?: boolean;
   trace?: boolean;
   disableConsoleIntercept?: boolean;
   update?: boolean;
@@ -87,6 +90,37 @@ export type CommonOptions = {
   hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
   shard?: string;
+};
+
+function coerceCliBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+  }
+
+  return undefined;
+}
+
+const normalizeBooleanLikeCliValue = (
+  value: boolean | string,
+): boolean | string => {
+  if (value === 'false') {
+    return false;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  return value;
 };
 
 function mergeWithCLIOptions(
@@ -117,6 +151,7 @@ function mergeWithCLIOptions(
     'hideSkippedTests',
     'hideSkippedTestFiles',
     'logHeapUsage',
+    'detectAsyncLeaks',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -128,8 +163,8 @@ function mergeWithCLIOptions(
     config.passWithNoTests ??= true;
   }
 
-  if (options.reporter) {
-    config.reporters = castArray(options.reporter) as typeof config.reporters;
+  if (options.reporters) {
+    config.reporters = castArray(options.reporters) as typeof config.reporters;
   }
 
   if (options.shard) {
@@ -164,11 +199,32 @@ function mergeWithCLIOptions(
     if (typeof options.coverage === 'boolean') {
       config.coverage.enabled = options.coverage;
     } else {
-      if (options.coverage.enabled !== undefined) {
-        config.coverage.enabled = options.coverage.enabled;
+      let changed: boolean | string | undefined;
+      let shouldEnableCoverage = false;
+      const coverageEnabled = coerceCliBoolean(options.coverage.enabled);
+      if (coverageEnabled !== undefined) {
+        config.coverage.enabled = coverageEnabled;
       }
       if (options.coverage.allowExternal !== undefined) {
         config.coverage.allowExternal = options.coverage.allowExternal;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.provider !== undefined) {
+        config.coverage.provider = options.coverage.provider;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.changed !== undefined) {
+        changed = normalizeBooleanLikeCliValue(options.coverage.changed);
+        config.coverage.changed = changed;
+        shouldEnableCoverage ||= changed !== false;
+      }
+
+      if (
+        coverageEnabled === undefined &&
+        options.coverage.enabled === undefined &&
+        shouldEnableCoverage
+      ) {
+        config.coverage.enabled = true;
       }
     }
   }
@@ -187,8 +243,9 @@ function mergeWithCLIOptions(
     if (typeof options.browser === 'boolean') {
       config.browser.enabled = options.browser;
     } else {
-      if (options.browser.enabled !== undefined) {
-        config.browser.enabled = options.browser.enabled;
+      const browserEnabled = coerceCliBoolean(options.browser.enabled);
+      if (browserEnabled !== undefined) {
+        config.browser.enabled = browserEnabled;
       }
       if (options.browser.name !== undefined) {
         config.browser.browser = options.browser.name;
@@ -471,10 +528,10 @@ export async function initCli(options: CommonOptions): Promise<{
   });
 
   // In agent environments, default to markdown output when the user didn't
-  // explicitly set reporters (no `reporters` in config and no `--reporter`).
+  // explicitly set reporters (no `reporters` in config and no `--reporters`).
   if (
     determineAgent().isAgent &&
-    !options.reporter &&
+    !options.reporters &&
     config.reporters == null
   ) {
     config.reporters = ['md'];

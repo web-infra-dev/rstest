@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.9.10",
+  "version": "0.10.2",
   "description": "React component testing support for Rstest browser mode",
   "keywords": [
     "rstest",
@@ -44,10 +44,10 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.4",
+    "@rslib/core": "0.21.5",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

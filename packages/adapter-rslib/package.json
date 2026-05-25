@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.9.10",
+  "version": "0.10.2",
   "description": "Rstest adapter for rslib configuration",
   "keywords": [
     "rstest",
@@ -36,7 +36,7 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/adapter-rslib/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.21.4",
+    "@rslib/core": "0.21.5",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "tsconfck": "3.1.6",

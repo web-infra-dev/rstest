@@ -108,6 +108,7 @@ export type {
   RstestExpect as Expect,
   RstestUtilities,
   TestCaseInfo,
+  TestContext,
   TestFileInfo,
   TestFileResult,
   TestInfo,

@@ -12,6 +12,7 @@ import {
   color,
   createCoverageProvider,
   type FormattedError,
+  getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
   isDebug,
@@ -183,9 +184,10 @@ type FatalPayload = {
   stack?: string;
 };
 
-type ReporterHookArg<THook extends keyof Reporter> = Parameters<
-  NonNullable<Reporter[THook]>
->[0];
+type ReporterHookArg<THook extends keyof Reporter> =
+  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
+    ? TArgs[0]
+    : never;
 
 type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
@@ -821,6 +823,7 @@ const getRuntimeConfigFromProject = (
     env,
     bail,
     logHeapUsage,
+    detectAsyncLeaks,
     chaiConfig,
     includeTaskLocation,
     silent,
@@ -854,6 +857,7 @@ const getRuntimeConfigFromProject = (
     snapshotFormat,
     bail,
     logHeapUsage,
+    detectAsyncLeaks,
     chaiConfig,
     includeTaskLocation,
     silent,
@@ -1945,7 +1949,11 @@ export const runBrowserController = async (
     if (!skipOnTestRunEnd) {
       const message = shouldKeepWatchingWithEmptySet
         ? 'No test files found.'
-        : `No test files found, exiting with code ${code}.`;
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {

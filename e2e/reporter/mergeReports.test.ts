@@ -21,7 +21,7 @@ describe('merge-reports', () => {
     // Run shard 1/2 with blob reporter
     const { expectExecSuccess: shard1Success } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '1/2', '--reporter=blob'],
+      args: ['run', '--shard', '1/2', '--reporters=blob'],
       options: {
         nodeOptions: {
           cwd: fixturesDir,
@@ -38,7 +38,7 @@ describe('merge-reports', () => {
     // Run shard 2/2 with blob reporter
     const { expectExecSuccess: shard2Success } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '2/2', '--reporter=blob'],
+      args: ['run', '--shard', '2/2', '--reporters=blob'],
       options: {
         nodeOptions: {
           cwd: fixturesDir,
@@ -93,7 +93,7 @@ describe('merge-reports', () => {
         'run',
         '--shard',
         '1/2',
-        '--reporter=blob',
+        '--reporters=blob',
         '-c',
         'rstest.coverage.config.mts',
       ],
@@ -118,7 +118,7 @@ describe('merge-reports', () => {
         'run',
         '--shard',
         '2/2',
-        '--reporter=blob',
+        '--reporters=blob',
         '-c',
         'rstest.coverage.config.mts',
       ],

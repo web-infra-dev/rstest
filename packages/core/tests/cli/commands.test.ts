@@ -5,6 +5,9 @@ import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
   createCli,
+  getForceRerunTriggerFiles,
+  getForceRerunTriggers,
+  hasForceRerunTrigger,
   normalizeCliFilters,
   resolveChangedFiles,
   validateRelatedCliOptions,
@@ -33,6 +36,7 @@ describe('CLI help output', () => {
     expect(help).toContain('--summary');
     expect(help).toContain('--filesOnly');
     expect(help).toContain('--changed');
+    expect(help).toContain('--coverage.changed');
     expect(help).not.toContain('--cleanup');
   });
 
@@ -63,6 +67,170 @@ describe('CLI help output', () => {
     expect(() =>
       cli.parse(['node', 'rstest', 'init', '--coverage'], { run: true }),
     ).toThrow('Unknown option `--coverage`');
+  });
+
+  it('allows --coverage to be mixed with nested coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', '--coverage.changed=HEAD'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+      changed: 'HEAD',
+    });
+  });
+
+  it('normalizes --coverage before value-taking coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', '--config', 'rstest.config.ts'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+    });
+    expect(parsed.options.config).toBe('rstest.config.ts');
+  });
+
+  it('preserves nested coverage options when followed by --coverage', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage.changed=HEAD', '--coverage'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      changed: 'HEAD',
+      enabled: true,
+    });
+  });
+
+  it('allows --coverage=false to be mixed with nested coverage options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage=false', '--coverage.changed=HEAD'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: 'false',
+      changed: 'HEAD',
+    });
+  });
+
+  it('keeps --coverage intact for merge-reports command', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'merge-reports', '--coverage'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toBe(true);
+  });
+
+  it('keeps --coverage intact for merge-reports command after global options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        '--config',
+        'rstest.config.ts',
+        'merge-reports',
+        '--coverage',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.config).toBe('rstest.config.ts');
+    expect(parsed.options.coverage).toBe(true);
+  });
+
+  it('allows --pool shorthand to be mixed with nested pool options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool', 'forks', '--pool.maxWorkers', '1'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 1,
+    });
+  });
+
+  it('preserves nested pool options when followed by --pool shorthand', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool.maxWorkers', '1', '--pool', 'forks'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      maxWorkers: 1,
+      type: 'forks',
+    });
+  });
+
+  it('allows --pool= shorthand to be mixed with nested pool options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--pool=forks', '--pool.maxWorkers=1'],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 1,
+    });
+  });
+
+  it('allows --browser shorthand to be mixed with nested browser options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--browser', '--browser.name', 'chromium'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      enabled: true,
+      name: 'chromium',
+    });
+  });
+
+  it('preserves nested browser options when followed by --browser', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--browser.name', 'chromium', '--browser'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      name: 'chromium',
+      enabled: true,
+    });
+  });
+
+  it('allows browser disabling shorthand to be mixed with nested browser options', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--no-browser', '--browser.name', 'chromium'],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      enabled: false,
+      name: 'chromium',
+    });
+  });
+
+  it('accepts --reporters and populates options.reporters', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--reporters', 'verbose'],
+      { run: false },
+    );
+
+    expect(parsed.options.reporters).toBe('verbose');
+  });
+
+  it('accepts legacy --reporter as an alias for --reporters', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--reporter', 'verbose', '--reporter=junit'],
+      { run: false },
+    );
+
+    expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
   });
 });
 
@@ -109,6 +277,98 @@ const createGitFixture = async () => {
 
   return cwd;
 };
+
+describe('getForceRerunTriggers', () => {
+  it('includes project-level force rerun triggers', () => {
+    expect(
+      getForceRerunTriggers({
+        rootTriggers: ['**/package.json/**', 'shared/rstest.config.ts'],
+        projects: [
+          {
+            normalizedConfig: {
+              forceRerunTriggers: ['apps/a/rsbuild.config.ts'],
+            },
+          },
+          {
+            normalizedConfig: {
+              forceRerunTriggers: [
+                'apps/b/rspack.config.ts',
+                'shared/rstest.config.ts',
+              ],
+            },
+          },
+        ],
+      }),
+    ).toEqual([
+      '**/package.json/**',
+      'shared/rstest.config.ts',
+      'apps/a/rsbuild.config.ts',
+      'apps/b/rspack.config.ts',
+    ]);
+  });
+});
+
+describe('hasForceRerunTrigger', () => {
+  it('matches changed files relative to the project root', () => {
+    const rootPath = normalize(join('workspace', 'project'));
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'packages/app/package.json'))],
+        triggers: ['**/package.json/**'],
+        rootPath,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'rstest.config.ts'))],
+        triggers: [normalize(join(rootPath, 'rstest.config.ts'))],
+        rootPath,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: [normalize(join(rootPath, 'src/index.ts'))],
+        triggers: ['package.json'],
+        rootPath,
+      }),
+    ).toBe(false);
+  });
+
+  it('matches Windows-style absolute triggers', () => {
+    const rootPath = 'C:\\repo';
+
+    expect(
+      hasForceRerunTrigger({
+        changedFiles: ['C:\\repo\\rsbuild.config.ts'],
+        triggers: ['C:\\repo\\rsbuild.config.ts'],
+        rootPath,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('getForceRerunTriggerFiles', () => {
+  it('returns only changed files that match force rerun triggers', () => {
+    const rootPath = normalize(join('workspace', 'project'));
+    const packageJson = normalize(join(rootPath, 'package.json'));
+    const configFile = normalize(join(rootPath, 'rstest.config.ts'));
+
+    expect(
+      getForceRerunTriggerFiles({
+        changedFiles: [
+          packageJson,
+          normalize(join(rootPath, 'src/index.ts')),
+          configFile,
+        ],
+        triggers: ['package.json', configFile],
+        rootPath,
+      }),
+    ).toEqual([packageJson, configFile]);
+  });
+});
 
 describe('related CLI options', () => {
   it('rejects related aliases used together', () => {

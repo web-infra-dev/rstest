@@ -4,6 +4,8 @@ description: MockInstance 是所有 mock 和 spy 实例的类型。
 overviewHeaders: [2, 3]
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Mock instance
 
 `MockInstance` 是所有 mock 和 spy 实例的类型。
@@ -15,7 +17,7 @@ overviewHeaders: [2, 3]
 返回通过 `.mockName()` 设置的 mock 名称字符串。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockName('myMock');
 expect(fn.getMockName()).toBe('myMock');
 ```
@@ -27,7 +29,7 @@ expect(fn.getMockName()).toBe('myMock');
 为此 mock 实例设置名称，便于调试和输出。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockName('logger');
 ```
 
@@ -38,7 +40,7 @@ fn.mockName('logger');
 清除所有关于每次调用的信息（调用、实例、上下文、结果等）。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn(1);
 fn.mockClear();
 expect(fn.mock.calls.length).toBe(0);
@@ -51,21 +53,40 @@ expect(fn.mock.calls.length).toBe(0);
 清除所有调用信息，并将实现重置为初始状态。
 
 ```ts
-const fn = rstest.fn().mockImplementation(() => 1);
+const fn = rs.fn().mockImplementation(() => 1);
 fn.mockReset();
 // 实现已被重置
 ```
 
 ## mockRestore
 
-- **类型：** `() => MockInstance`
+- **类型：** `() => void`
 
 恢复被 spy 的对象的原始方法（仅对 spy 有效）。
 
 ```ts
 const obj = { foo: () => 1 };
-const spy = rstest.spyOn(obj, 'foo');
+const spy = rs.spyOn(obj, 'foo');
 spy.mockRestore();
+```
+
+## Symbol.dispose
+
+<ApiMeta addedVersion="0.10.2" />
+
+- **类型：** `() => void`
+
+当 mock 离开 `using` 作用域时调用 `mockRestore()`。
+
+```ts
+const obj = { foo: () => 1 };
+
+{
+  using spy = rs.spyOn(obj, 'foo').mockImplementation(() => 2);
+  expect(obj.foo()).toBe(2);
+}
+
+expect(obj.foo()).toBe(1);
 ```
 
 ## getMockImplementation
@@ -75,7 +96,7 @@ spy.mockRestore();
 返回当前的 mock 实现函数（如有）。
 
 ```ts
-const fn = rstest.fn(() => 123);
+const fn = rs.fn(() => 123);
 const impl = fn.getMockImplementation();
 ```
 
@@ -86,7 +107,7 @@ const impl = fn.getMockImplementation();
 为 mock 设置实现函数。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockImplementation((a, b) => a + b);
 ```
 
@@ -97,7 +118,7 @@ fn.mockImplementation((a, b) => a + b);
 仅为下一次调用设置实现函数。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockImplementationOnce(() => 1);
 fn(); // 返回 1
 fn(); // 返回 undefined
@@ -110,7 +131,7 @@ fn(); // 返回 undefined
 临时替换 mock 的实现函数，在 callback 执行期间生效，执行完毕后恢复原实现。
 
 ```ts
-const fn = rstest.fn(() => 1);
+const fn = rs.fn(() => 1);
 fn.withImplementation(
   () => 2,
   () => {
@@ -127,7 +148,7 @@ expect(fn()).toBe(1);
 使 mock 在调用时返回 `this`。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnThis();
 const obj = { fn };
 expect(obj.fn()).toBe(obj);
@@ -140,7 +161,7 @@ expect(obj.fn()).toBe(obj);
 使 mock 总是返回指定的值。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnValue(42);
 expect(fn()).toBe(42);
 ```
@@ -152,7 +173,7 @@ expect(fn()).toBe(42);
 使 mock 仅在下一次调用时返回指定的值。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockReturnValueOnce(1);
 expect(fn()).toBe(1);
 expect(fn()).toBe(undefined);
@@ -165,7 +186,7 @@ expect(fn()).toBe(undefined);
 使 mock 返回一个 Promise，resolve 为指定的值。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockResolvedValue(123);
 await expect(fn()).resolves.toBe(123);
 ```
@@ -177,7 +198,7 @@ await expect(fn()).resolves.toBe(123);
 使 mock 仅在下一次调用时返回一个 Promise，resolve 为指定的值。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockResolvedValueOnce(1);
 await expect(fn()).resolves.toBe(1);
 await expect(fn()).resolves.toBe(undefined);
@@ -190,7 +211,7 @@ await expect(fn()).resolves.toBe(undefined);
 使 mock 返回一个 Promise，reject 为指定的错误。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockRejectedValue(new Error('fail'));
 await expect(fn()).rejects.toThrow('fail');
 ```
@@ -202,7 +223,7 @@ await expect(fn()).rejects.toThrow('fail');
 使 mock 仅在下一次调用时返回一个 Promise，reject 为指定的错误。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn.mockRejectedValueOnce(new Error('fail'));
 await expect(fn()).rejects.toThrow('fail');
 await expect(fn()).resolves.toBe(undefined);
@@ -213,7 +234,7 @@ await expect(fn()).resolves.toBe(undefined);
 mock 的上下文，包括调用参数、返回值、实例、上下文等。
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 expect(fn.mock.calls[0]).toEqual([1, 2]);
 ```
@@ -225,7 +246,7 @@ expect(fn.mock.calls[0]).toEqual([1, 2]);
 包含每次调用 mock 函数的参数的数组。
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 fn(3, 4);
 console.log(fn.mock.calls); // [[1, 2], [3, 4]]
@@ -238,7 +259,7 @@ console.log(fn.mock.calls); // [[1, 2], [3, 4]]
 包含通过 mock 作为构造函数实例化的所有实例的数组。
 
 ```ts
-const Fn = rstest.fn(function () {
+const Fn = rs.fn(function () {
   this.x = 1;
 });
 const a = new Fn();
@@ -253,7 +274,7 @@ console.log(Fn.mock.instances); // [a, b]
 包含每次调用 mock 函数时的 `this` 上下文的数组。
 
 ```ts
-const fn = vi.fn();
+const fn = rs.fn();
 const context = {};
 
 fn.apply(context);
@@ -270,8 +291,8 @@ fn.mock.contexts[1] === context;
 表示 mock 被调用顺序的数字数组，所有 mock 共享。索引从 `1` 开始。
 
 ```ts
-const fn1 = rstest.fn();
-const fn2 = rstest.fn();
+const fn1 = rs.fn();
+const fn2 = rs.fn();
 fn1();
 fn2();
 fn1();
@@ -286,7 +307,7 @@ console.log(fn2.mock.invocationCallOrder); // [2]
 mock 函数最后一次调用的参数，若未调用则为 `undefined`。
 
 ```ts
-const fn = rstest.fn();
+const fn = rs.fn();
 fn(1, 2);
 fn(3, 4);
 console.log(fn.mock.lastCall); // [3, 4]
@@ -299,7 +320,7 @@ console.log(fn.mock.lastCall); // [3, 4]
 包含每次调用 mock 函数的结果（返回值、抛出的错误或未完成调用）的数组。
 
 ```ts
-const fn = rstest.fn((a, b) => a + b);
+const fn = rs.fn((a, b) => a + b);
 fn(1, 2);
 try {
   fn();
@@ -316,7 +337,7 @@ console.log(fn.mock.results);
 包含所有异步调用的最终结果（fulfilled 或 rejected）的数组。
 
 ```ts
-const fn = rstest.fn(async (x) => {
+const fn = rs.fn(async (x) => {
   if (x > 0) return x;
   throw new Error('fail');
 });

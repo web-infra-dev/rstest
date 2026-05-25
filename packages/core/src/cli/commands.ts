@@ -1,5 +1,6 @@
 import cac, { type CAC, type Command } from 'cac';
-import { normalize, resolve } from 'pathe';
+import { normalize, relative, resolve } from 'pathe';
+import picomatch from 'picomatch';
 import type {
   FileFilterMode,
   ListCommandOptions,
@@ -54,6 +55,14 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
   [
+    '--coverage.provider <provider>',
+    'Coverage provider to use (istanbul | v8)',
+  ],
+  [
+    '--coverage.changed [commit]',
+    'Collect coverage only for changed files, optionally since a commit',
+  ],
+  [
     '--project <name>',
     'Run only projects that match the name, can be a full name or wildcards pattern',
   ],
@@ -71,12 +80,13 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ],
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
+  ['--detectAsyncLeaks', 'Detect async resources that leak after tests finish'],
   ['--trace', 'Dump a Perfetto-compatible performance trace JSON file'],
   [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
   ],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   [
     '-t, --testNamePattern <value>',
     'Run only tests with a name that matches the regex',
@@ -160,7 +170,7 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   ['--coverage', 'Enable code coverage collection'],
-  ['--reporter <reporter>', 'Specify the reporter to use'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
   ['--cleanup', 'Remove blob reports directory after merging'],
 ];
 
@@ -188,6 +198,155 @@ const applyOptions = (
 const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, runtimeOptionDefinitions);
   applyOptions(command, poolOptionDefinitions);
+};
+
+const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
+
+const valueTakingOptions = new Set([
+  '-c',
+  '-r',
+  '-t',
+  '--bail',
+  '--browser.name',
+  '--browser.port',
+  '--changed',
+  '--config',
+  '--config-loader',
+  '--coverage.changed',
+  '--coverage.provider',
+  '--exclude',
+  '--hookTimeout',
+  '--include',
+  '--json',
+  '--maxConcurrency',
+  '--pool',
+  '--pool.execArgv',
+  '--pool.maxWorkers',
+  '--pool.minWorkers',
+  '--pool.type',
+  '--project',
+  '--reporter',
+  '--reporters',
+  '--retry',
+  '--root',
+  '--shard',
+  '--silent',
+  '--slowTestThreshold',
+  '--testEnvironment',
+  '--testNamePattern',
+  '--testTimeout',
+]);
+
+const getCliCommand = (argv: string[]): string | undefined => {
+  for (let index = 2; index < argv.length; index++) {
+    const arg = argv[index];
+
+    if (arg === '--') {
+      return;
+    }
+
+    if (!arg) {
+      continue;
+    }
+
+    if (commands.has(arg)) {
+      return arg;
+    }
+
+    if (!arg.startsWith('-')) {
+      return;
+    }
+
+    const optionName = arg.split('=', 1)[0];
+    if (
+      optionName &&
+      arg === optionName &&
+      valueTakingOptions.has(optionName) &&
+      argv[index + 1] &&
+      !argv[index + 1]!.startsWith('-')
+    ) {
+      index++;
+    }
+  }
+
+  return;
+};
+
+const normalizeCoverageCliArgs = (argv: string[]): string[] => {
+  const command = getCliCommand(argv);
+  if (command === 'init' || command === 'merge-reports') {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--coverage') {
+      return '--coverage.enabled';
+    }
+    if (arg.startsWith('--coverage=')) {
+      return `--coverage.enabled=${arg.slice('--coverage='.length)}`;
+    }
+    if (arg === '--no-coverage') {
+      return '--coverage.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const normalizePoolCliArgs = (argv: string[]): string[] => {
+  const hasPoolNestedOption = argv.some((arg) => arg.startsWith('--pool.'));
+
+  if (!hasPoolNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--pool') {
+      return '--pool.type';
+    }
+    if (arg.startsWith('--pool=')) {
+      return `--pool.type=${arg.slice('--pool='.length)}`;
+    }
+
+    return arg;
+  });
+};
+
+const normalizeBrowserCliArgs = (argv: string[]): string[] => {
+  const hasBrowserNestedOption = argv.some((arg) =>
+    arg.startsWith('--browser.'),
+  );
+
+  if (!hasBrowserNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--browser') {
+      return '--browser.enabled';
+    }
+    if (arg.startsWith('--browser=')) {
+      return `--browser.enabled=${arg.slice('--browser='.length)}`;
+    }
+    if (arg === '--no-browser') {
+      return '--browser.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const normalizeCliArgs = (argv: string[]): string[] =>
+  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
+
+const normalizeMixedCliOptions = (cli: CAC): void => {
+  const originalParse = cli.parse.bind(cli);
+
+  cli.parse = ((argv, options) =>
+    originalParse(
+      normalizeCliArgs(argv ?? process.argv),
+      options,
+    )) as CAC['parse'];
 };
 
 const filterHelpOptions = (
@@ -279,6 +438,57 @@ const formatGitError = (error: unknown): string | undefined => {
   return undefined;
 };
 
+export const getForceRerunTriggers = ({
+  rootTriggers,
+  projects,
+}: {
+  rootTriggers: string[];
+  projects: Array<{ normalizedConfig: { forceRerunTriggers: string[] } }>;
+}): string[] =>
+  Array.from(
+    new Set([
+      ...rootTriggers,
+      ...projects.flatMap(
+        (project) => project.normalizedConfig.forceRerunTriggers,
+      ),
+    ]),
+  );
+
+export const getForceRerunTriggerFiles = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): string[] => {
+  if (!triggers.length || !changedFiles.length) {
+    return [];
+  }
+
+  const matcher = picomatch(
+    triggers.map((trigger) => normalize(trigger)),
+    { windows: true },
+  );
+
+  return changedFiles.filter(
+    (file) =>
+      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
+  );
+};
+
+export const hasForceRerunTrigger = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): boolean =>
+  getForceRerunTriggerFiles({ changedFiles, triggers, rootPath }).length > 0;
+
 export const resolveChangedFiles = async (
   cwd: string,
   since?: string,
@@ -348,6 +558,14 @@ export const resolveChangedFiles = async (
   }
 };
 
+const getCoverageChangedOption = (options: CommonOptions) => {
+  if (options.coverage === undefined || typeof options.coverage === 'boolean') {
+    return undefined;
+  }
+
+  return options.coverage.changed;
+};
+
 const resolveEffectiveCliFilters = async ({
   options,
   filters,
@@ -374,7 +592,11 @@ const resolveEffectiveCliFilters = async ({
   effectiveFilters: string[];
   fileFilterMode: FileFilterMode;
   relatedFilters?: string[];
+  relatedMode?: 'related' | 'changed';
   relatedResolutionEmpty?: boolean;
+  changedCoverageFilters?: string[];
+  relatedRerunReason?: 'forceRerunTrigger';
+  relatedRerunFiles?: string[];
 }> => {
   const normalizedFilters = normalizeCliFilters(filters);
 
@@ -401,18 +623,76 @@ const resolveEffectiveCliFilters = async ({
         )
       : normalizedFilters;
 
+  const forceRerunTriggerFiles =
+    options.changed !== undefined
+      ? getForceRerunTriggerFiles({
+          changedFiles: sourceFilters,
+          triggers: getForceRerunTriggers({
+            rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
+            projects: rstest.context.projects,
+          }),
+          rootPath: rstest.context.rootPath,
+        })
+      : [];
+
+  if (forceRerunTriggerFiles.length) {
+    return {
+      effectiveFilters: [],
+      fileFilterMode: 'fuzzy',
+      relatedFilters: sourceFilters,
+      relatedMode: 'changed',
+      relatedResolutionEmpty: false,
+      relatedRerunReason: 'forceRerunTrigger',
+      relatedRerunFiles: forceRerunTriggerFiles.map((file) =>
+        normalize(relative(rstest.context.rootPath, file)),
+      ),
+    };
+  }
+
   const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
     sourceFilters,
     filterLabel: options.changed !== undefined ? '--changed' : '--related',
     allowEmpty: options.changed !== undefined,
   });
+  const coverageChanged = getCoverageChangedOption(options);
 
   return {
     effectiveFilters: relatedFiles,
     fileFilterMode: 'exact',
     relatedFilters: sourceFilters,
+    relatedMode: options.changed !== undefined ? 'changed' : 'related',
     relatedResolutionEmpty: relatedFiles.length === 0,
+    changedCoverageFilters:
+      options.changed !== undefined && coverageChanged === undefined
+        ? sourceFilters
+        : undefined,
   };
+};
+
+const resolveCoverageChangedFilters = async (
+  rstest: RstestInstance,
+): Promise<string[] | undefined> => {
+  const { changed } = rstest.context.normalizedConfig.coverage;
+
+  if (changed === undefined) {
+    return rstest.context.changedCoverageFilters;
+  }
+  if (changed === false) {
+    return undefined;
+  }
+
+  try {
+    return await resolveChangedFiles(
+      rstest.context.rootPath,
+      typeof changed === 'string' ? changed : undefined,
+    );
+  } catch (error) {
+    const reason = formatGitError(error);
+    logger.warn(
+      `Failed to resolve changed files for \`coverage.changed\`, falling back to full coverage.${reason ? ` Git error: ${reason}` : ''}`,
+    );
+    return undefined;
+  }
 };
 
 export const runRest = async ({
@@ -436,7 +716,11 @@ export const runRest = async ({
       effectiveFilters,
       fileFilterMode,
       relatedFilters,
+      relatedMode,
       relatedResolutionEmpty,
+      changedCoverageFilters,
+      relatedRerunReason,
+      relatedRerunFiles,
     } = await resolveEffectiveCliFilters({
       options,
       filters,
@@ -453,7 +737,15 @@ export const runRest = async ({
       fileFilterMode,
     );
     rstest.context.relatedFilters = relatedFilters;
+    rstest.context.relatedMode = relatedMode;
     rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+    rstest.context.changedCoverageFilters = changedCoverageFilters;
+    rstest.context.changedCoverageFilters =
+      await resolveCoverageChangedFilters(rstest);
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -561,7 +853,11 @@ export function createCli(): CAC {
           effectiveFilters,
           fileFilterMode,
           relatedFilters,
+          relatedMode,
           relatedResolutionEmpty,
+          changedCoverageFilters,
+          relatedRerunReason,
+          relatedRerunFiles,
         } = await resolveEffectiveCliFilters({
           options,
           filters,
@@ -578,7 +874,15 @@ export function createCli(): CAC {
           fileFilterMode,
         );
         rstest.context.relatedFilters = relatedFilters;
+        rstest.context.relatedMode = relatedMode;
         rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+        rstest.context.changedCoverageFilters = changedCoverageFilters;
+        rstest.context.changedCoverageFilters =
+          await resolveCoverageChangedFilters(rstest);
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
@@ -676,9 +980,12 @@ export function createCli(): CAC {
       }
     });
 
+  normalizeMixedCliOptions(cli);
+
   return cli;
 }
 
 export function setupCommands(): void {
-  createCli().parse();
+  const cli = createCli();
+  cli.parse(process.argv);
 }

@@ -1,0 +1,203 @@
+---
+description: 'Rstest 0.10 让测试运行更快、更可靠：新增 threads pool、--changed / --related 测试过滤、持久化构建缓存、基于内存状态的 worker 启动控制、--trace profiling，以及更清晰的 worker 输出归属。'
+date: 2026-05-14 10:00:00
+sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+    github: '9aoy'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
+    github: 'fi3ework'
+---
+
+import { BlogAuthors } from '@rstack-dev/doc-ui/blog-authors';
+
+# Rstest 0.10 发布
+
+_2026 年 5 月 14 日_
+
+<BlogAuthors />
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-10.png"
+  alt="Rstest 0.10"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
+
+Rstest 0.10 已经发布。
+
+主要变更：
+
+- [新增 `threads` pool，基于 `worker_threads`](#threads-pool)
+- [通过 `--changed` / `--related` 运行变更或相关的测试](#run-changed-tests)
+- [支持持久化构建缓存](#build-cache)
+- [基于内存状态的 worker 启动控制](#memory-gate)
+- [支持静默通过测试的 console 输出](#silent-logs)
+- [通过 `--trace` 分析测试运行](#trace-profiling)
+- [更清晰的 worker 输出归属](#worker-pool)
+
+## 全新的 threads pool \{#threads-pool}
+
+Rstest 0.10 现已支持在 worker 线程中运行测试，对以小文件为主的测试套件可以显著降低冷启动时间。
+
+在 0.10 之前，每个测试文件都在独立的 Node.js 子进程中运行，即 `forks` pool。`child_process.fork` 启动相对较慢（`worker_threads` 约快 10 倍），并且每个 fork 各自持有一份 V8 heap，在高并发下可能触发 OOM。
+
+新的 `threads` pool 基于 `node:worker_threads`，worker 与父进程共享 V8 heap 和 stdio，启动多个 worker 时的启动耗时与内存占用均更低。
+
+要启用，将 `pool` 设置为 `threads`：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: 'threads',
+});
+```
+
+`forks` 仍然是默认值。大多数现有测试代码依赖按文件维度的进程隔离，而 threads 不提供这种隔离。当测试不会修改 `process.chdir`、环境变量或 signal handlers 时，可以切换至 `threads`。请参考 [pool](/config/test/pool) 了解更多。
+
+## 运行变更或相关的测试 \{#run-changed-tests}
+
+Rstest 0.10 新增了两个 flag，仅运行受源码改动影响的测试，可以缩短大型测试套件 inner loop 的反馈时间。
+
+`--related` 把位置参数当作源文件，只运行依赖这些源文件的测试。依赖关系来自 build module graph，因此同一个 filter 在 Node mode 和 Browser Mode 下都可用。`--findRelatedTests` 是 Jest 兼容的别名：
+
+```bash
+npx rstest run --related src/button.ts
+npx rstest run --findRelatedTests src/button.ts
+```
+
+`--changed` 采用同样的方式，但由 Rstest 从 Git 工作区自动检测源文件。默认包含 unstaged、staged 和 untracked 文件，即当前工作区中尚未提交的改动：
+
+```bash
+npx rstest run --changed
+```
+
+也可以传入一个 commit 或 branch 来扩展范围：
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+如果只想预览将要运行的测试而不实际执行，可以把这两个 flag 任意一个与 `rstest list` 组合：
+
+```bash
+npx rstest list --changed --filesOnly
+npx rstest list --related src/button.ts --filesOnly
+```
+
+请参考 [Run related tests](/guide/basic/cli#run-related-tests) 与 [Run changed tests](/guide/basic/cli#run-changed-tests) 了解更多。
+
+## 支持持久化构建缓存 \{#build-cache}
+
+Rstest 0.10 现已支持测试构建的持久化构建缓存，让同一项目的重复测试跳过未变化的构建工作。
+
+在 antd + three.js 示例项目中，开启 build cache 后 warm run 的 build 阶段大约缩短到原来的一半：
+
+| Run  | Build   | Total  |
+| ---- | ------- | ------ |
+| Cold | ~385 ms | ~2.1 s |
+| Warm | ~182 ms | ~1.7 s |
+
+由于 Rspack 的持久化 cache 仍处于实验阶段，build cache 默认关闭，需要显式开启：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+Rstest 会在 Rsbuild 默认值之上叠加一组 Rstest 专属默认值，多数项目无需额外配置。如果你同时使用 [@rstest/adapter-rslib](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rslib)，Rslib 配置中的 build cache 设置会自动透传过来。请参考 [performance.buildCache](/config/build/performance) 了解更多。
+
+## 基于内存状态的 worker 启动控制 \{#memory-gate}
+
+Rstest 0.10 会在启动新 worker 前检查系统内存和主进程 heap 余量；如果当前资源不足，就会延迟启动，避免高并发下的低内存机器被推进 OOM。
+
+该机制在 CI container 和资源受限的开发机器上最为关键。在此前仅按 CPU 数扩容的策略下，worker RSS 累积可能耗尽系统内存，或在多个 IPC payload 同时到达时使宿主进程触发 V8 heap-limit 崩溃。现在 Rstest 会在每次新建 worker 前检查内存状态，并在判定启动下一个 worker 不安全时延迟启动。
+
+内存充足时没有任何公开 API 或默认行为变化，这套机制在内存未承压的机器上基本不可感知。如果需要禁用（例如做 benchmark、debug，或在严格隔离环境中），可以通过环境变量关闭：
+
+```bash
+RSTEST_MEMORY_AWARE=0 npx rstest run
+```
+
+## 支持静默通过测试的 console 输出 \{#silent-logs}
+
+Rstest 0.10 新增了可选的 `silent` 配置，用于控制测试运行时的 console 输出。当通过的测试会产生大量调试日志，而仍需要保留失败测试的日志用于排查时，可以启用该配置。
+
+使用 `silent: 'passed-only'` 后，Rstest 会先缓存 `console.*` 输出。如果文件、suite 或测试用例最终通过，对应日志会被丢弃；如果任务失败，相关日志会随失败信息一并输出：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  silent: 'passed-only',
+});
+```
+
+也可以通过 CLI 启用：
+
+```bash
+npx rstest --silent=passed-only
+```
+
+例如下列测试文件：
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+运行时只会输出 `fail log`，`pass log` 会被丢弃。
+
+该机制同样适用于并发测试。Rstest 会在记录日志时追踪当前活跃的文件、suite 或测试用例，因此通过的并发用例可以保持静默，失败用例的日志仍会被保留。
+
+如果你希望连失败任务的日志也不输出，可以改用 `silent: true`。请参考 [silent](/config/test/silent) 了解更多。
+
+## 使用 --trace 分析测试运行 \{#trace-profiling}
+
+Rstest 0.10 新增了 `--trace` CLI flag，可以将一次运行拆分为 per-phase、per-suite、per-case slices，并导出一份 Perfetto-compatible profile。当 reporter 末尾的 `Duration` 单值不足以判断时间分布时，可以使用这个 flag 定位瓶颈：
+
+```bash
+npx rstest run --trace
+```
+
+`--trace` 是 CLI-only 的可选开关。开启后每次运行会为每个文件生成 per-phase slices（`prepare` → `teardown`）、带 status 和 retry count 标注的 per-suite / per-case slices，并在每个 phase 边界采样一次 heap 计数。
+
+![Perfetto UI 中显示在 rstest 仓库执行 npx rstest --trace 产出的 trace](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
+
+在 TTY 下，Rstest 会启动一个本地 helper，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下，trace 会写入 `<rootPath>/.rstest/trace-<ts>.json`，方便作为 artifact 上传。
+
+对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/advanced/profiling#profiler) 一节。
+
+## 更清晰的 worker 输出归属 \{#worker-pool}
+
+Rstest 0.10 重构了 worker pool 的内部实现，让 worker 的输出和 crash 在 reporter 里有更清晰的归属。当 worker 写 stderr 或失败时：
+
+- **按 task 归属**：输出会携带产生它的 task 标识经由 reporter 输出，而非作为未标记的文本直接写入终端。
+- **结构化 crash 信号**：worker crash 现在是带 task 身份的类型化事件，无需再从原始 stderr 推断。
+
+重构后的 pool 也改为 spawn-on-demand：未使用的 worker 槽不会产生启动开销和内存占用。这也是 [基于内存状态的 worker 启动控制](#memory-gate) 得以实现的前提，同时也是新 [`threads` pool](#threads-pool) 实现的一部分。
+
+---
+
+完整变更请参考 [v0.10.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.10.0)。

@@ -12,6 +12,7 @@ import type {
 import { globalApis } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import { createAsyncLeakDetector } from './asyncLeaks';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
@@ -383,7 +384,7 @@ export const runInPool = async (
     type,
     context: {
       project,
-      runtimeConfig: { isolate, bail },
+      runtimeConfig: { isolate, bail, detectAsyncLeaks },
     },
   } = options;
 
@@ -424,6 +425,11 @@ export const runInPool = async (
 
     isTeardown = true;
   };
+
+  // Initialize coverage collector if coverage is enabled
+  let coverageProvider: Awaited<
+    ReturnType<typeof import('../../coverage').createCoverageProvider>
+  > | null = null;
 
   if (type === 'collect') {
     try {
@@ -484,6 +490,7 @@ export const runInPool = async (
       : undefined,
   );
   let runResult: TestFileResult | undefined;
+  let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
 
   try {
     tracker.transition('prepare');
@@ -499,6 +506,10 @@ export const runInPool = async (
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
+    if (detectAsyncLeaks) {
+      asyncLeakDetector = createAsyncLeakDetector(taskContext);
+      asyncLeakDetector.enable();
+    }
 
     if (bail && (await rpc.getCountOfFailedTests()) >= bail) {
       runResult = {
@@ -511,19 +522,16 @@ export const runInPool = async (
       };
       return runResult;
     }
-    // Initialize coverage collector if coverage is enabled
-    let coverageProvider: Awaited<
-      ReturnType<typeof import('../../coverage').createCoverageProvider>
-    > | null = null;
+
     if (options.context.runtimeConfig.coverage?.enabled) {
       const { createCoverageProvider } = await import('../../coverage');
       coverageProvider = await createCoverageProvider(
         options.context.runtimeConfig.coverage,
-        options.context.rootPath,
+        options.context.projectRoot,
       );
     }
     if (coverageProvider) {
-      coverageProvider.init();
+      await coverageProvider.init();
     }
 
     tracker.transition('load');
@@ -609,6 +617,17 @@ export const runInPool = async (
       api,
     );
 
+    if (asyncLeakDetector) {
+      if (api.rstest.isFakeTimers()) {
+        api.rstest.useRealTimers();
+      }
+      const asyncLeakErrors = await asyncLeakDetector.collectErrors();
+      if (asyncLeakErrors.length > 0) {
+        results.status = 'fail';
+        results.errors = (results.errors || []).concat(asyncLeakErrors);
+      }
+    }
+
     if (unhandledErrors.length > 0) {
       results.status = 'fail';
       results.errors = (results.errors || []).concat(
@@ -627,7 +646,11 @@ export const runInPool = async (
     // Collect coverage data after test file completes
     if (coverageProvider) {
       tracker.transition('coverage');
-      const coverageMap = coverageProvider.collect();
+      const coverageMap = await coverageProvider.collect({
+        assetFiles,
+        sourceMaps,
+        outputModule: options.context.outputModule,
+      });
       if (coverageMap) {
         // Attach coverage data to test result
         results.coverage = {};
@@ -637,8 +660,6 @@ export const runInPool = async (
           else results.coverage![key] = value;
         });
       }
-      // Cleanup
-      coverageProvider.cleanup();
     }
 
     runResult = results;
@@ -656,7 +677,12 @@ export const runInPool = async (
     return runResult;
   } finally {
     tracker.transition('teardown');
+    if (coverageProvider) {
+      coverageProvider.cleanup();
+    }
+
     taskContext?.setFallback(undefined);
+    asyncLeakDetector?.disable();
     await teardown();
     tracker.end();
     if (runResult) {

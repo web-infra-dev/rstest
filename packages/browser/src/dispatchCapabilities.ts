@@ -18,9 +18,10 @@ type RunnerPayload<TType extends BrowserClientMessage['type']> =
     ? TPayload
     : never;
 
-type ReporterHookArg<THook extends keyof Reporter> = Parameters<
-  NonNullable<Reporter[THook]>
->[0];
+type ReporterHookArg<THook extends keyof Reporter> =
+  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
+    ? TArgs[0]
+    : never;
 
 type RunnerDispatchFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 type RunnerDispatchSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;

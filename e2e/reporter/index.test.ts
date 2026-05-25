@@ -45,7 +45,7 @@ describe.concurrent('reporters', () => {
   it('verbose', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/index.test.ts', '--reporter=verbose'],
+      args: ['run', 'fixtures/index.test.ts', '--reporters=verbose'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -62,7 +62,7 @@ describe.concurrent('reporters', () => {
   it('dot', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/index.test.ts', '--reporter=dot'],
+      args: ['run', 'fixtures/index.test.ts', '--reporters=dot'],
       onTestFinished,
       options: {
         nodeOptions: {
@@ -110,7 +110,7 @@ describe.concurrent('reporters', () => {
       args: [
         'run',
         'fixtures/silent.test.ts',
-        '--reporter=dot',
+        '--reporters=dot',
         '--silent=passed-only',
       ],
       onTestFinished,
@@ -237,7 +237,7 @@ describe.concurrent('reporters', () => {
       args: [
         'run',
         'fixtures/index.test.ts',
-        '--reporter=verbose',
+        '--reporters=verbose',
         '--hideSkippedTests',
       ],
       onTestFinished,
