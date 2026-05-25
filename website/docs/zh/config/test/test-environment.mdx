@@ -6,7 +6,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # testEnvironment
 
-- **类型：** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions }`
+- **类型：** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, transformMode?: 'node' | 'browser' }`
 - **默认值：** `'node'`
 - **CLI：** `--testEnvironment=node`
 
@@ -96,6 +96,38 @@ export default defineConfig({
 - 对于 `jsdom`，它会传递给 `JSDOM` 构造函数。你可以在 [jsdom 文档](https://github.com/jsdom/jsdom#customizing-jsdom)中找到可用的选项。
 - 对于 `happy-dom`，它会传递给 `Window` 构造函数。你可以在 [happy-dom 文档](https://github.com/capricorn86/happy-dom/wiki/Window)中找到可用的选项。
 
+### transformMode
+
+<ApiMeta addedVersion="0.10.2" />
+
+`transformMode` 用于控制 Rstest 是否应该针对当前测试环境使用类 Node 或类浏览器的默认转换和解析行为。
+
+内置 environment 会自动推断：
+
+- `node` 使用 `transformMode: 'node'`。
+- `jsdom` 和 `happy-dom` 使用 `transformMode: 'browser'`。
+- 自定义 environment 默认使用 `transformMode: 'node'`，除非你显式配置。
+
+当 environment 使用 Node.js module 语义运行时，使用 `transformMode: 'node'`。在这个模式下，Rstest 会保留面向 Node 的解析默认值，并默认 externalize `node_modules` 中的第三方依赖。
+
+当 environment 是 DOM 或类浏览器环境时，使用 `transformMode: 'browser'`。在这个模式下，如果没有自定义 `resolve.conditionNames`，Rstest 会添加 `browser` condition 来解析面向浏览器的 package entry，并默认 bundle 第三方依赖，从而让 browser field 替换和被打包的资源生效。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: './my-environment.mjs',
+    transformMode: 'browser',
+    options: {
+      url: 'https://example.com',
+    },
+  },
+});
+```
+
+`transformMode` 本身不会创建 DOM API，也不会启用 [browser 模式](/config/test/browser)。它只选择默认的转换和解析行为。environment 实现本身仍然需要负责安装 `window`、`document` 等全局对象。
+
 ### 自定义 environment
 
 <ApiMeta addedVersion="0.10.2" />
@@ -151,6 +183,46 @@ export default defineConfig({
 Rstest 当前会按 JavaScript module 加载自定义 environment 文件，因此暂不支持直接传 `.ts` custom environment 文件路径。如果你需要类型检查，可以先用 TypeScript 编写，再编译成 `.mjs` 或 `.js`，或者在 JavaScript 文件里使用 JSDoc 标注类型。
 
 Rstest 暂不支持文件级 `@vitest-environment` 或 `@jest-environment` 注释。如果你需要按文件切换环境，当前建议用不同的 project 或不同的配置文件来拆分。
+
+#### 从 Jest 或 Vitest 迁移自定义 environment
+
+从 Jest 自定义 environment 迁移时，需要把 class-based API 改成 Rstest 默认导出的 environment 对象：
+
+| Jest 自定义 environment                           | Rstest 自定义 environment                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `testEnvironment: './env.js'`                     | `testEnvironment: { name: './env.mjs' }`                                           |
+| `testEnvironmentOptions`                          | `testEnvironment.options`                                                          |
+| `class CustomEnvironment extends NodeEnvironment` | `export default { name, setup(global, options) }`                                  |
+| `this.global`                                     | 传给 `setup` 和 `teardown` 的 `global` 参数                                        |
+| `await super.setup()` / `await super.teardown()`  | 调用 `builtinEnvironments.node/jsdom/happy-dom.setup(...)` 以及它返回的 `teardown` |
+
+Jest 特有的 `handleTestEvent`、`getVmContext`、构造函数 `context` 以及文件级 `@jest-environment` pragma 在 Rstest 中没有直接等价能力。测试运行时初始化优先使用 `setupFiles`，观察测试事件优先使用 reporter，需要为不同文件使用不同 environment 时优先拆成不同的 Rstest project。
+
+从 Vitest 自定义 environment 迁移时，对象形态更接近，但 transform mode 需要迁移到 Rstest 配置中：
+
+| Vitest 自定义 environment        | Rstest 自定义 environment                                       |
+| -------------------------------- | --------------------------------------------------------------- |
+| `environment: 'custom'`          | `testEnvironment: { name: 'custom' }`                           |
+| `environmentOptions`             | `testEnvironment.options`                                       |
+| `viteEnvironment: 'ssr'`         | 省略 `transformMode`，或设置 `transformMode: 'node'`            |
+| `viteEnvironment: 'client'`      | 设置 `transformMode: 'browser'`                                 |
+| `vitest-environment-foo` package | 使用完整 package 名，或发布 / 重命名为 `rstest-environment-foo` |
+
+例如，原本使用 `viteEnvironment: 'client'` 的 Vitest environment，在 Rstest 中通常应该这样配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: './custom-client-environment.mjs',
+    transformMode: 'browser',
+    options: {
+      marker: 'custom-marker',
+    },
+  },
+});
+```
 
 ### 对比自定义 environment 和 setupFiles \{#custom-environment-vs-setup-files}
 
