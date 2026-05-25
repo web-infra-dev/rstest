@@ -3,17 +3,16 @@ import type {
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
-import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
+  createFastCoverageMap,
   mapWithConcurrency,
   readInitialCoverage,
   registerSourceMapURL,
   transformCoverage,
 } from './utils';
 
-const { createCoverageMap } = istanbulLibCoverage;
 const UNTESTED_FILES_CONCURRENCY = 4;
 
 // Global type declaration for coverage
@@ -22,7 +21,7 @@ declare global {
 }
 
 export class CoverageProvider implements RstestCoverageProvider {
-  private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
+  private coverageMap: CoverageMap | null = null;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -71,7 +70,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   createCoverageMap(): CoverageMap {
-    return createCoverageMap({});
+    return createFastCoverageMap();
   }
 
   collect(_options?: {
@@ -84,7 +83,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     try {
       if (!this.coverageMap) {
-        this.coverageMap = createCoverageMap();
+        this.coverageMap = this.createCoverageMap();
       }
       // Merge current coverage data
       if (this.coverageMap) {
