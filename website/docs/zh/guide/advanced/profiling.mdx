@@ -6,6 +6,16 @@ description: Rstest 提供了多种工具和方法来分析测试运行的性能
 
 Rstest 提供了多种工具和方法来分析测试运行的性能，帮助你识别和解决性能瓶颈。
 
+## 使用 Agent Skills
+
+如果你在使用支持 Skills 的 Coding Agent，可以安装 [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging) 技能来系统化 Debug Rstest 问题，包括性能回归。当 Rstest 比预期更慢、比 Jest 或 Vitest 更慢，或需要在尝试配置或代码改动前判断瓶颈是在构建启动还是测试执行中时，可以使用该 Skill 辅助排查。
+
+```bash
+npx skills add rstackjs/agent-skills --skill rstest-debugging
+```
+
+安装后，让 Coding Agent 协助完成性能问题排查即可。
+
 ## 常见性能瓶颈
 
 当测试运行出现明显性能下降时，通常应先区分瓶颈位于“构建阶段”还是“测试执行阶段”：

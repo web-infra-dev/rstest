@@ -6,6 +6,16 @@ description: Rstest provides various tools and methods to analyze the performanc
 
 Rstest provides various tools and methods to analyze the performance of test runs, helping you identify and resolve performance bottlenecks.
 
+## Using Agent Skills
+
+If you are using a Coding Agent that supports Skills, install the [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging) skill to debug Rstest issues systematically, including performance regressions. Use this skill when Rstest is slower than expected, slower than Jest or Vitest, or when you need to determine whether the bottleneck is in build startup or test execution before trying config or code changes.
+
+```bash
+npx skills add rstackjs/agent-skills --skill rstest-debugging
+```
+
+After installation, let the Coding Agent help you investigate performance issues.
+
 ## Common performance bottlenecks
 
 When a test run becomes noticeably slower, first determine whether the bottleneck is in the build stage or the test execution stage:
