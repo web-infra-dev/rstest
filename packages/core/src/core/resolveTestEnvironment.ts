@@ -4,9 +4,6 @@ import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { BuiltinEnvironmentName, TestEnvironment } from '../types';
 
-// `import.meta.resolve()` needs a parent module URL. We synthesize one under
-// each root so package resolution follows that root's node_modules without
-// requiring a real file to exist on disk.
 const environmentResolveBaseName = '__rstest_environment_resolve__.mjs';
 
 const builtinEnvironmentNames = {
@@ -60,26 +57,22 @@ const resolvePackageEnvironmentPaths = (name: string, roots: string[]) => {
     const require = createRequire(resolveBase);
 
     for (const candidate of candidates) {
+      const resolvedImportPath = resolvePackageImport(candidate, root);
+
+      if (resolvedImportPath && !seenPaths.has(resolvedImportPath)) {
+        seenPaths.add(resolvedImportPath);
+        resolvedPaths.push(resolvedImportPath);
+        continue;
+      }
+
       try {
-        const resolvedPath = import.meta.resolve(candidate, resolveBase);
+        const resolvedPath = pathToFileURL(require.resolve(candidate)).href;
         if (!seenPaths.has(resolvedPath)) {
           seenPaths.add(resolvedPath);
           resolvedPaths.push(resolvedPath);
         }
       } catch {
-        try {
-          const resolvedPath = pathToFileURL(require.resolve(candidate)).href;
-          if (!seenPaths.has(resolvedPath)) {
-            seenPaths.add(resolvedPath);
-            resolvedPaths.push(resolvedPath);
-          }
-        } catch {
-          const resolvedPath = resolvePackageImport(candidate, root);
-          if (resolvedPath && !seenPaths.has(resolvedPath)) {
-            seenPaths.add(resolvedPath);
-            resolvedPaths.push(resolvedPath);
-          }
-        }
+        continue;
       }
     }
   }

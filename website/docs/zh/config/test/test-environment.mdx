@@ -100,6 +100,10 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.10.2" />
 
+:::warning 实验性 API
+自定义 environment API 在 Rstest 1.0 之前仍处于实验阶段。它的核心形态预期会保持稳定，但类型签名和配置细节可能会根据迁移反馈做小幅调整。
+:::
+
 Rstest 也支持通过 `testEnvironment.name` 加载自定义 environment。
 
 - 可以传包名。
@@ -178,7 +182,7 @@ export default defineConfig({
 
 Rstest 暂不支持文件级 `@vitest-environment` 或 `@jest-environment` 注释。如果你需要按文件切换环境，当前建议用不同的 project 或不同的配置文件来拆分。
 
-#### 从 Jest 或 Vitest 迁移自定义 environment
+#### 从 Jest 或 Vitest 迁移自定义 environment \{#migrating-custom-environments}
 
 从 Jest 自定义 environment 迁移时，需要把 class-based API 改成 Rstest 默认导出的 environment 对象：
 

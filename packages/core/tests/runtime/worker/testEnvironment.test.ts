@@ -41,11 +41,16 @@ const createPackage = (root: string, name: string, source: string) => {
 
 describe('testEnvironment', () => {
   let tempDir: string | undefined;
+  let sourcePackageDir: string | undefined;
 
   afterEach(() => {
     if (tempDir) {
       rmSync(tempDir, { force: true, recursive: true });
       tempDir = undefined;
+    }
+    if (sourcePackageDir) {
+      rmSync(sourcePackageDir, { force: true, recursive: true });
+      sourcePackageDir = undefined;
     }
   });
 
@@ -107,6 +112,53 @@ describe('testEnvironment', () => {
       ).href,
     );
     expect(environment.name).toBe('fallback-package-environment');
+  });
+
+  it('should resolve package environments from configured roots before source tree packages', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+    sourcePackageDir = join(
+      process.cwd(),
+      'packages/core/src/core/node_modules/package-marker',
+    );
+
+    mkdirSync(sourcePackageDir, { recursive: true });
+    writeFileSync(
+      join(sourcePackageDir, 'package.json'),
+      JSON.stringify({
+        name: 'package-marker',
+        type: 'module',
+        exports: './index.mjs',
+      }),
+    );
+    writeFileSync(
+      join(sourcePackageDir, 'index.mjs'),
+      'export default { name: "source-tree-package" };',
+    );
+    createPackage(
+      tempDir,
+      'package-marker',
+      environmentModule('configured-root-package'),
+    );
+
+    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPath,
+    );
+
+    expect(resolvedPath).toBe(
+      pathToFileURL(
+        join(
+          realpathSync(tempDir),
+          'node_modules',
+          'package-marker',
+          'index.mjs',
+        ),
+      ).href,
+    );
+    expect(environment.name).toBe('configured-root-package');
   });
 
   it('should continue resolving package candidates after import failures', async () => {

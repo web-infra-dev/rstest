@@ -100,6 +100,10 @@ The `options` object is passed directly to the environment's constructor.
 
 <ApiMeta addedVersion="0.10.2" />
 
+:::warning Experimental API
+Custom environment APIs are experimental before Rstest 1.0. Their core shape is expected to stay stable, but type signatures and config details may receive minor adjustments based on migration feedback.
+:::
+
 Rstest also supports custom environments through `testEnvironment.name`.
 
 - Use a package name.
@@ -178,7 +182,7 @@ export default defineConfig({
 
 Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
 
-#### Migrating custom environments from Jest or Vitest
+#### Migrating custom environments from Jest or Vitest \{#migrating-custom-environments}
 
 When migrating a Jest custom environment, replace the class-based API with Rstest's default-exported environment object:
 
