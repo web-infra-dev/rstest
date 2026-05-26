@@ -27,13 +27,6 @@ const fixturesRoot = resolve(__dirname, 'fixtures');
 
 const { initCli, createRstest } = await import('@rstest/core');
 
-const benchmarkOptions = {
-  // Empty `reporters` silences default reporters during the bench. Note the
-  // option key is `reporters` (plural) — `reporter` is silently ignored, which
-  // would leak reporter formatting/stdout work into the Callgrind window.
-  reporters: [],
-};
-
 const bench = withCodSpeed(
   new Bench({
     time: 0,
@@ -46,7 +39,6 @@ const bench = withCodSpeed(
 async function runFixture(fixtureName) {
   const { config, configFilePath, projects } = await initCli({
     root: resolve(fixturesRoot, fixtureName),
-    ...benchmarkOptions,
   });
 
   const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
