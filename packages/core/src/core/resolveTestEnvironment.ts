@@ -59,12 +59,10 @@ const resolvePackageImport = (name: string, root: string) => {
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
     exports?: unknown;
     main?: string;
-    module?: string;
   };
   const entry =
     subpath ??
     resolveExportsEntry(packageJson.exports) ??
-    packageJson.module ??
     packageJson.main ??
     'index.js';
   const entryPath = join(packageDir, entry);
