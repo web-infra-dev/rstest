@@ -83,9 +83,9 @@ export type TestCase = TestCaseInfo & {
   result?: TaskResult;
 };
 
-export type SuiteContext = {
+export interface SuiteContext {
   filepath: TestPath;
-};
+}
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
 

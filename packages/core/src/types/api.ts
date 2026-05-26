@@ -10,7 +10,7 @@ import type {
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
-export type TestContext = {
+export interface TestContext {
   /**
    * Metadata of the current test
    */
@@ -25,7 +25,7 @@ export type TestContext = {
   expect: RstestExpect;
   onTestFinished: RunnerAPI['onTestFinished'];
   onTestFailed: RunnerAPI['onTestFailed'];
-};
+}
 
 export type TestCallbackFn<ExtraContext = object> = (
   context: TestContext & ExtraContext,
