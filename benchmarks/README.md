@@ -52,6 +52,11 @@ The CPU benchmark tracks CodSpeed CPU simulation, not wall-clock time. That
 means the primary CPU metric focuses on user-space CPU work and should not be
 read as full end-to-end runtime including all system-call-heavy overhead.
 
+Each fixture pins `pool: 'threads'` so the test pipeline runs inside the bench
+process. CodSpeed CPU simulation runs Callgrind with `--instr-atstart=no`, and
+forked workers (`fork+execve`) restart with instrumentation off; threads share
+the host process's Callgrind state, so their instructions are counted.
+
 Relevant CodSpeed docs:
 
 - Instruments overview: https://codspeed.io/docs/instruments

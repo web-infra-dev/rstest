@@ -4,6 +4,15 @@
  * Instead of one large mixed suite, we keep focused fixtures for compile,
  * runner, and a small end-to-end integration flow.
  *
+ * Runs under CodSpeed CPU simulation (Callgrind) on `ubuntu-latest`. The
+ * runner invokes Valgrind with `--instr-atstart=no` and the tinybench plugin
+ * toggles instrumentation around each task via `callgrind_start_instrumentation`
+ * — a process-wide Callgrind client request. Forked workers go through
+ * `fork+execve`, which resets the new process's instrumentation state to the
+ * CLI default (off); they never call the start hook, so their work would not
+ * be measured. Each fixture therefore opts into `pool: 'threads'` so the whole
+ * test pipeline stays in the bench process and counts toward the measurement.
+ *
  * Usage:
  *   pnpm --filter @rstest/benchmarks bench:cpu
  */
@@ -19,7 +28,10 @@ const fixturesRoot = resolve(__dirname, 'fixtures');
 const { initCli, createRstest } = await import('@rstest/core');
 
 const benchmarkOptions = {
-  reporter: [],
+  // Empty `reporters` silences default reporters during the bench. Note the
+  // option key is `reporters` (plural) — `reporter` is silently ignored, which
+  // would leak reporter formatting/stdout work into the Callgrind window.
+  reporters: [],
 };
 
 const bench = withCodSpeed(

@@ -7,9 +7,6 @@ on:
         description: 'Git ref to benchmark.'
         required: false
         type: string
-  schedule:
-    # Run once a week on main to build a continuous baseline for CPU benchmark
-    - cron: '0 0 * * 0'
   # Allow manual runs on any branch (CodSpeed backtest + on-demand profiling)
   workflow_dispatch:
     inputs:
@@ -19,7 +16,9 @@ on:
         type: string
 
 concurrency:
-  group: codspeed-${{ github.event.pull_request.number || inputs.ref || github.sha }}
+  # Include event_name so a manual workflow_dispatch on the same SHA as an
+  # in-flight push/PR run doesn't cancel or collide with it.
+  group: codspeed-${{ github.event_name }}-${{ github.event.pull_request.number || inputs.ref || github.sha }}
   cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
@@ -28,47 +27,17 @@ permissions:
   id-token: write
 
 jobs:
-  # Skip the entire workflow when the current HEAD has already been benchmarked
-  # (e.g. a schedule run fires but no new commits landed since the last run).
-  check-skip:
-    name: Check duplicate run
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.check.outputs.should_skip }}
-    steps:
-      - name: Check for existing successful run
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Always run when manually triggered
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_skip=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Query completed runs of this workflow for the current commit
-          count=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/codspeed.yml/runs?head_sha=${{ github.sha }}&status=success&per_page=1" \
-            --jq '.total_count')
-          if [ "$count" -gt 0 ]; then
-            echo "should_skip=true" >> "$GITHUB_OUTPUT"
-            echo "Skipping: commit ${{ github.sha }} already benchmarked."
-          else
-            echo "should_skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
   codspeed-cpu:
     name: Run CPU benchmarks
-    needs: check-skip
-    # CPU walltime benchmark runs on codspeed-macro (expensive), only on schedule or manual trigger
+    # CPU simulation (Callgrind) runs on a regular GitHub-hosted runner; the
+    # bench fixtures select `pool: 'threads'` so the whole test pipeline stays
+    # in the bench process and is captured by the instrumentation. See
+    # `benchmarks/suiteRun.mjs` for the full mechanism. Runs on every PR and
+    # push to main for per-commit regression tracking.
     if: |
-      needs.check-skip.outputs.should_skip != 'true' &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    # Walltime mode requires CodSpeed bare-metal runners for stable measurements.
-    # CPU simulation (Valgrind) is incompatible with child_process.fork — rstest's
-    # worker pool generates excessive system calls, making flame graphs unavailable.
-    runs-on: codspeed-macro
-    timeout-minutes: 30
+      github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -95,16 +64,17 @@ jobs:
       - name: Run benchmarks
         uses: CodSpeedHQ/action@3194d9a39c4d46684cb44bf7207fc56626aad8fd # v4.15.1
         with:
-          mode: walltime
+          mode: simulation
           run: node benchmarks/suiteRun.mjs
 
   codspeed-memory:
     name: Run memory benchmark
-    needs: check-skip
-    # Memory benchmark builds baseline on push to main, runs on PRs for comparison
+    # Memory benchmark only runs on push to main (and manual dispatch) — the
+    # large jsdom fixture is too slow for per-PR feedback, and current memory
+    # measurement does not see forked worker allocations, so per-PR comparison
+    # would carry more noise than signal. Push-to-main builds a baseline.
     if: |
-      needs.check-skip.outputs.should_skip != 'true' &&
-      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

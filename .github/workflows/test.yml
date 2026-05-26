@@ -233,11 +233,11 @@ jobs:
         run: pnpm run test:vscode
 
   # ======== codspeed ========
-  # Temporarily disabled: CodSpeed runner quota exhausted.
-  # Re-enable once quota resets.
   codspeed:
     needs: e2e
-    if: false
+    if: |
+      needs.e2e.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     permissions:
       actions: read
       contents: read

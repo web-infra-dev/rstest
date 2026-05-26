@@ -6,12 +6,14 @@ apos
 applescript
 Asus
 atrules
+atstart
 autodocs
 Birpc
 brotli
 browserslistrc
 bundleless
 bytedance
+Callgrind
 caniuse
 canyonjs
 cdup
@@ -46,6 +48,7 @@ elifecycle
 endgroup
 envinfo
 estree
+execve
 facti
 fastpaths
 fi3ework
