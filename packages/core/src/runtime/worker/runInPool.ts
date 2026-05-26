@@ -153,7 +153,7 @@ const preparePool = async (
       disableConsoleIntercept,
       silent,
       testEnvironment,
-      resolvedTestEnvironmentPath,
+      resolvedTestEnvironmentPaths,
       snapshotFormat,
       env,
     },
@@ -248,7 +248,7 @@ const preparePool = async (
   tracker?.transition('envSetup');
   const environment = await loadTestEnvironment(
     testEnvironment.name,
-    resolvedTestEnvironmentPath,
+    resolvedTestEnvironmentPaths,
   );
   const { teardown } = await environment.setup(
     global,

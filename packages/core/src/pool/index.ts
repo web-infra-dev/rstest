@@ -114,7 +114,7 @@ const getRuntimeConfig = async (
     chaiConfig,
     includeTaskLocation,
     silent,
-    resolvedTestEnvironmentPath: await resolveTestEnvironmentPath(
+    resolvedTestEnvironmentPaths: await resolveTestEnvironmentPath(
       testEnvironment.name,
       [project.rootPath, context.rootPath],
     ),

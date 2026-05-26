@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it } from '@rstest/core';
 import { resolveTestEnvironmentPath } from '../../../src/core/resolveTestEnvironment';
 import { loadTestEnvironment } from '../../../src/runtime/worker/testEnvironment';
 
+const controllerImportMarker = '__RSTEST_CONTROLLER_ENV_IMPORT_COUNT__';
+
 const environmentModule = (name: string) =>
   [
     'export default {',
@@ -39,6 +41,12 @@ const createPackage = (root: string, name: string, source: string) => {
   writeFileSync(join(packageDir, 'index.mjs'), source);
 };
 
+const packageEnvironmentPath = (
+  root: string,
+  name: string,
+  file = 'index.mjs',
+) => pathToFileURL(join(realpathSync(root), 'node_modules', name, file)).href;
+
 describe('testEnvironment', () => {
   let tempDir: string | undefined;
   let sourcePackageDir: string | undefined;
@@ -52,6 +60,7 @@ describe('testEnvironment', () => {
       rmSync(sourcePackageDir, { force: true, recursive: true });
       sourcePackageDir = undefined;
     }
+    Reflect.deleteProperty(globalThis, controllerImportMarker);
   });
 
   it('should continue resolving relative environment files across roots', async () => {
@@ -66,16 +75,16 @@ describe('testEnvironment', () => {
     mkdirSync(environmentDir, { recursive: true });
     writeFileSync(environmentPath, environmentModule('fallback-environment'));
 
-    const resolvedPath = await resolveTestEnvironmentPath(
+    const resolvedPaths = await resolveTestEnvironmentPath(
       './fixtures/custom-environment.mjs',
       [firstRoot, secondRoot],
     );
     const environment = await loadTestEnvironment(
       './fixtures/custom-environment.mjs',
-      resolvedPath,
+      resolvedPaths,
     );
 
-    expect(resolvedPath).toBe(pathToFileURL(environmentPath).href);
+    expect(resolvedPaths).toEqual([pathToFileURL(environmentPath).href]);
     expect(environment.name).toBe('fallback-environment');
   });
 
@@ -93,24 +102,18 @@ describe('testEnvironment', () => {
       environmentModule('fallback-package-environment'),
     );
 
-    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
     const environment = await loadTestEnvironment(
       'package-marker',
-      resolvedPath,
+      resolvedPaths,
     );
 
-    expect(resolvedPath).toBe(
-      pathToFileURL(
-        join(
-          realpathSync(tempDir),
-          'node_modules',
-          'rstest-environment-package-marker',
-          'index.mjs',
-        ),
-      ).href,
-    );
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker'),
+      packageEnvironmentPath(tempDir, 'rstest-environment-package-marker'),
+    ]);
     expect(environment.name).toBe('fallback-package-environment');
   });
 
@@ -140,25 +143,93 @@ describe('testEnvironment', () => {
       environmentModule('configured-root-package'),
     );
 
-    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
     const environment = await loadTestEnvironment(
       'package-marker',
-      resolvedPath,
+      resolvedPaths,
     );
 
-    expect(resolvedPath).toBe(
-      pathToFileURL(
-        join(
-          realpathSync(tempDir),
-          'node_modules',
-          'package-marker',
-          'index.mjs',
-        ),
-      ).href,
-    );
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker'),
+    ]);
     expect(environment.name).toBe('configured-root-package');
+  });
+
+  it('should prefer node export conditions over default conditions', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const packageDir = join(tempDir, 'node_modules', 'package-marker');
+
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        name: 'package-marker',
+        type: 'module',
+        exports: {
+          '.': {
+            node: './node.mjs',
+            default: './browser.mjs',
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(packageDir, 'node.mjs'),
+      environmentModule('node-entry'),
+    );
+    writeFileSync(
+      join(packageDir, 'browser.mjs'),
+      environmentModule('browser-entry'),
+    );
+
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPaths,
+    );
+
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker', 'node.mjs'),
+    ]);
+    expect(environment.name).toBe('node-entry');
+  });
+
+  it('should not import environment modules while resolving paths', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const environmentPath = join(tempDir, 'side-effect-environment.mjs');
+
+    writeFileSync(
+      environmentPath,
+      [
+        `globalThis.${controllerImportMarker} =`,
+        `  (globalThis.${controllerImportMarker} ?? 0) + 1;`,
+        environmentModule('side-effect-environment'),
+      ].join('\n'),
+    );
+
+    const resolvedPaths = await resolveTestEnvironmentPath(
+      './side-effect-environment.mjs',
+      [realpathSync(tempDir)],
+    );
+
+    expect(resolvedPaths).toEqual([
+      pathToFileURL(realpathSync(environmentPath)).href,
+    ]);
+    expect(Reflect.get(globalThis, controllerImportMarker)).toBeUndefined();
+
+    const environment = await loadTestEnvironment(
+      './side-effect-environment.mjs',
+      resolvedPaths,
+    );
+
+    expect(environment.name).toBe('side-effect-environment');
+    expect(Reflect.get(globalThis, controllerImportMarker)).toBe(1);
   });
 
   it('should continue resolving package candidates after import failures', async () => {
@@ -175,24 +246,18 @@ describe('testEnvironment', () => {
       environmentModule('fallback-package-environment'),
     );
 
-    const resolvedPath = await resolveTestEnvironmentPath('package-marker', [
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
     const environment = await loadTestEnvironment(
       'package-marker',
-      resolvedPath,
+      resolvedPaths,
     );
 
-    expect(resolvedPath).toBe(
-      pathToFileURL(
-        join(
-          realpathSync(tempDir),
-          'node_modules',
-          'rstest-environment-package-marker',
-          'index.mjs',
-        ),
-      ).href,
-    );
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker'),
+      packageEnvironmentPath(tempDir, 'rstest-environment-package-marker'),
+    ]);
     expect(environment.name).toBe('fallback-package-environment');
   });
 
@@ -210,9 +275,10 @@ describe('testEnvironment', () => {
       'throw new Error("fallback package import failed");',
     );
 
-    const promise = resolveTestEnvironmentPath('package-marker', [
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
+    const promise = loadTestEnvironment('package-marker', resolvedPaths);
 
     await expect(promise).rejects.toThrow('fallback package import failed');
     await expect(promise).rejects.toHaveProperty(
@@ -235,9 +301,10 @@ describe('testEnvironment', () => {
       'throw new Error("fallback package import failed");',
     );
 
-    const promise = resolveTestEnvironmentPath('package-marker', [
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
       realpathSync(tempDir),
     ]);
+    const promise = loadTestEnvironment('package-marker', resolvedPaths);
 
     await expect(promise).rejects.toThrow('fallback package import failed');
     await expect(promise).rejects.toHaveProperty(
@@ -260,14 +327,18 @@ describe('testEnvironment', () => {
       ].join('\n'),
     );
 
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+
     await expect(
-      resolveTestEnvironmentPath('package-marker', [realpathSync(tempDir)]),
+      loadTestEnvironment('package-marker', resolvedPaths),
     ).rejects.toThrow(
       'must export a test environment object as the default export',
     );
   });
 
-  it('should reject named environment exports before worker loading', async () => {
+  it('should reject named environment exports in worker loading', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 
     const environmentPath = join(tempDir, 'named-environment.mjs');
@@ -280,10 +351,13 @@ describe('testEnvironment', () => {
       ),
     );
 
+    const resolvedPaths = await resolveTestEnvironmentPath(
+      './named-environment.mjs',
+      [realpathSync(tempDir)],
+    );
+
     await expect(
-      resolveTestEnvironmentPath('./named-environment.mjs', [
-        realpathSync(tempDir),
-      ]),
+      loadTestEnvironment('./named-environment.mjs', resolvedPaths),
     ).rejects.toThrow(
       'must export a test environment object as the default export',
     );

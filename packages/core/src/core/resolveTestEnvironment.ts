@@ -12,11 +12,6 @@ const builtinEnvironmentNames = {
   'happy-dom': true,
 } satisfies Record<BuiltinEnvironmentName, true>;
 
-const createInvalidTestEnvironmentError = (name: string) =>
-  new Error(
-    `Invalid testEnvironment module "${name}". It must export a test environment object as the default export.`,
-  );
-
 export const isTestEnvironment = (value: unknown): value is TestEnvironment => {
   return Boolean(
     value &&
@@ -80,18 +75,6 @@ const resolvePackageEnvironmentPaths = (name: string, roots: string[]) => {
   return resolvedPaths;
 };
 
-const createImportTestEnvironmentError = (
-  name: string,
-  resolvedPath: string,
-  cause: unknown,
-) =>
-  new Error(
-    `Failed to import testEnvironment module "${name}" from ${resolvedPath}: ${
-      cause instanceof Error ? cause.message : String(cause)
-    }`,
-    { cause },
-  );
-
 const resolvePackageImport = (name: string, root: string) => {
   const [packageName, subpath] = parsePackageName(name);
   const packageDir = join(root, 'node_modules', packageName);
@@ -140,16 +123,16 @@ const resolveExportsEntry = (exports: unknown): string | undefined => {
     return undefined;
   }
 
-  if ('import' in exports && typeof exports.import === 'string') {
-    return exports.import;
+  const exportsRecord = exports as Record<string, unknown>;
+
+  for (const condition of ['import', 'node', 'default']) {
+    if (condition in exportsRecord) {
+      return resolveExportsEntry(exportsRecord[condition]);
+    }
   }
 
-  if ('default' in exports && typeof exports.default === 'string') {
-    return exports.default;
-  }
-
-  if ('.' in exports) {
-    return resolveExportsEntry(exports['.']);
+  if ('.' in exportsRecord) {
+    return resolveExportsEntry(exportsRecord['.']);
   }
 
   return undefined;
@@ -158,7 +141,7 @@ const resolveExportsEntry = (exports: unknown): string | undefined => {
 export const resolveTestEnvironmentPath = async (
   name: string,
   roots: string[],
-): Promise<string | undefined> => {
+): Promise<string[] | undefined> => {
   if (Object.hasOwn(builtinEnvironmentNames, name)) {
     return undefined;
   }
@@ -171,46 +154,13 @@ export const resolveTestEnvironmentPath = async (
         continue;
       }
 
-      const resolvedPath = pathToFileURL(candidatePath).href;
-      const environmentModule = await import(resolvedPath);
-      const environment = resolveEnvironmentExport(environmentModule);
-
-      if (environment) {
-        return resolvedPath;
-      }
-
-      throw createInvalidTestEnvironmentError(name);
+      return [pathToFileURL(candidatePath).href];
     }
   } else {
     const resolvedPaths = resolvePackageEnvironmentPaths(name, roots);
 
-    let lastImportError: { resolvedPath: string; error: unknown } | undefined;
-
-    for (const resolvedPath of resolvedPaths) {
-      let environmentModule: unknown;
-      try {
-        environmentModule = await import(resolvedPath);
-      } catch (error) {
-        lastImportError = { resolvedPath, error };
-        continue;
-      }
-      const environment = resolveEnvironmentExport(environmentModule);
-
-      if (environment) {
-        return resolvedPath;
-      }
-    }
-
-    if (lastImportError) {
-      throw createImportTestEnvironmentError(
-        name,
-        lastImportError.resolvedPath,
-        lastImportError.error,
-      );
-    }
-
     if (resolvedPaths.length > 0) {
-      throw createInvalidTestEnvironmentError(name);
+      return resolvedPaths;
     }
   }
 

@@ -66,7 +66,7 @@ export type RuntimeConfig = Pick<
   | 'includeTaskLocation'
   | 'silent'
 > & {
-  resolvedTestEnvironmentPath?: string;
+  resolvedTestEnvironmentPaths?: string[];
 };
 
 export type CurrentTaskInfo = Pick<
