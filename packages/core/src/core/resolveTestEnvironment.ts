@@ -2,7 +2,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { BuiltinEnvironmentName, TestEnvironment } from '../types';
+import type { BuiltinEnvironmentName } from '../types';
 
 const environmentResolveBaseName = '__rstest_environment_resolve__.mjs';
 
@@ -11,34 +11,6 @@ const builtinEnvironmentNames = {
   jsdom: true,
   'happy-dom': true,
 } satisfies Record<BuiltinEnvironmentName, true>;
-
-export const isTestEnvironment = (value: unknown): value is TestEnvironment => {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    'name' in value &&
-    typeof value.name === 'string' &&
-    'setup' in value &&
-    typeof value.setup === 'function',
-  );
-};
-
-export const resolveEnvironmentExport = (
-  environmentModule: unknown,
-): TestEnvironment | undefined => {
-  if (!environmentModule || typeof environmentModule !== 'object') {
-    return undefined;
-  }
-
-  if (
-    'default' in environmentModule &&
-    isTestEnvironment(environmentModule.default)
-  ) {
-    return environmentModule.default;
-  }
-
-  return undefined;
-};
 
 const resolvePackageEnvironmentPaths = (name: string, roots: string[]) => {
   const candidates = [name, `rstest-environment-${name}`];

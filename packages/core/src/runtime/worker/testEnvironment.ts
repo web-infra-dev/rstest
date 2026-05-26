@@ -1,6 +1,33 @@
 import { builtinEnvironments } from '../environments';
-import { resolveEnvironmentExport } from '../../core/resolveTestEnvironment';
 import type { TestEnvironment } from '../../types';
+
+const isTestEnvironment = (value: unknown): value is TestEnvironment => {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'setup' in value &&
+    typeof value.setup === 'function',
+  );
+};
+
+const resolveEnvironmentExport = (
+  environmentModule: unknown,
+): TestEnvironment | undefined => {
+  if (!environmentModule || typeof environmentModule !== 'object') {
+    return undefined;
+  }
+
+  if (
+    'default' in environmentModule &&
+    isTestEnvironment(environmentModule.default)
+  ) {
+    return environmentModule.default;
+  }
+
+  return undefined;
+};
 
 const createInvalidTestEnvironmentError = (name: string) =>
   new Error(
