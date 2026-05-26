@@ -50,6 +50,14 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
+  /**
+   * When true, `runTests()` will not mutate `process.exitCode` or attach
+   * `process.on('exit' | 'SIG*')` handlers. Used by the programmatic API so
+   * test failures don't poison the host process.
+   *
+   * @internal
+   */
+  embedded?: boolean;
 };
 
 export class Rstest implements RstestContext {
@@ -64,6 +72,8 @@ export class Rstest implements RstestContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
+  /** @internal */
+  public embedded: boolean;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
@@ -103,6 +113,7 @@ export class Rstest implements RstestContext {
       configFilePath,
       projects,
       trace = false,
+      embedded = false,
     }: Options,
     userConfig: RstestConfig,
   ) {
@@ -112,6 +123,7 @@ export class Rstest implements RstestContext {
     this.fileFilters = fileFilters;
     this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
+    this.embedded = embedded;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)

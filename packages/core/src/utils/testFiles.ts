@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
-import { glob } from 'tinyglobby';
+import { glob, isDynamicPattern } from 'tinyglobby';
 import type { FileFilterMode, Project } from '../types';
 import { castArray, parsePosix } from './helper';
 import { color } from './logger';
@@ -111,13 +111,32 @@ export const getTestEntries = async ({
   fileFilterMode?: FileFilterMode;
   projectRoot: string;
 }): Promise<Record<string, string>> => {
-  const testFiles = await glob(include, {
-    cwd: projectRoot,
-    absolute: true,
-    ignore: exclude,
-    dot: true,
-    expandDirectories: false,
-  });
+  // Literal include entries are treated as explicit paths (real file or virtual
+  // module backed by `experiments.VirtualModulesPlugin`). They bypass fs
+  // existence checks so virtual modules pass through tinyglobby's filter.
+  // Use tinyglobby's own `isDynamicPattern` to stay consistent with the glob
+  // call below.
+  const literalIncludes: string[] = [];
+  const globIncludes: string[] = [];
+  for (const pattern of include) {
+    (isDynamicPattern(pattern) ? globIncludes : literalIncludes).push(pattern);
+  }
+
+  const globbedFiles = globIncludes.length
+    ? await glob(globIncludes, {
+        cwd: projectRoot,
+        absolute: true,
+        ignore: exclude,
+        dot: true,
+        expandDirectories: false,
+      })
+    : [];
+
+  const literalFiles = literalIncludes.map((p) =>
+    pathe.isAbsolute(p) ? pathe.normalize(p) : pathe.resolve(projectRoot, p),
+  );
+
+  const testFiles = Array.from(new Set([...globbedFiles, ...literalFiles]));
 
   if (includeSource?.length) {
     const sourceFiles = await glob(includeSource, {

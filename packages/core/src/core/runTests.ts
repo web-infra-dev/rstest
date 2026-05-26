@@ -760,7 +760,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const isFailure = nodeHasFailure || browserHasFailure;
 
-      if (isFailure) {
+      if (isFailure && !context.embedded) {
         process.exitCode = 1;
       }
 
@@ -1072,7 +1072,9 @@ export async function runTests(context: Rstest): Promise<void> {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
 
-        process.exitCode = 1;
+        if (!context.embedded) {
+          process.exitCode = 1;
+        }
       }
     };
 
@@ -1083,10 +1085,21 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('exit', unExpectedExit);
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so this is a no-op pair.
+    const uninstallProcessHandlers = (() => {
+      if (context.embedded) return () => {};
+      process.on('exit', unExpectedExit);
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+      return () => {
+        process.off('exit', unExpectedExit);
+        process.off('SIGINT', handleSignal);
+        process.off('SIGTERM', handleSignal);
+        process.off('SIGTSTP', handleSignal);
+      };
+    })();
 
     try {
       await run();
@@ -1097,10 +1110,7 @@ export async function runTests(context: Rstest): Promise<void> {
       // Run global teardown after all tests are done
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
     } finally {
-      process.off('exit', unExpectedExit);
-      process.off('SIGINT', handleSignal);
-      process.off('SIGTERM', handleSignal);
-      process.off('SIGTSTP', handleSignal);
+      uninstallProcessHandlers();
     }
 
     await runLifecycleStep('trace wait for exit', () =>
