@@ -121,6 +121,19 @@ describe('TestOptions', () => {
     await expectExecSuccess();
   });
 
+  it('onTestFinished/onTestFailed do not leak across retries or repeats', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/testOptionsOnFinishedScope.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
   it('options.timeout matches numeric shorthand behavior', async () => {
     const { cli, expectStderrLog } = await runRstestCli({
       command: 'rstest',

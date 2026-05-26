@@ -101,6 +101,13 @@ export class TestRunner {
 
       let result: TestResult | undefined;
 
+      // `onTestFinished` / `onTestFailed` are registered from inside the test
+      // body, so each retry / repeat would otherwise stack new handlers on
+      // top of leftovers from prior attempts and rerun them. Snapshot the
+      // current lengths and truncate back after the attempt completes.
+      const onFinishedSnapshot = test.onFinished.length;
+      const onFailedSnapshot = test.onFailed.length;
+
       this.beforeEach(test, state, api);
 
       const cleanups: AfterEachListener[] = [];
@@ -227,6 +234,9 @@ export class TestRunner {
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
+
+      test.onFinished.length = onFinishedSnapshot;
+      test.onFailed.length = onFailedSnapshot;
 
       this.resetCurrentTest();
 
