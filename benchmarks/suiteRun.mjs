@@ -25,6 +25,17 @@ import { Bench } from 'tinybench';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = resolve(__dirname, 'fixtures');
 
+// CodSpeed simulation mode injects V8 introspection flags (e.g.
+// `--allow-natives-syntax`, `--predictable`, `--hash-seed=1`) into the parent
+// process's CLI for deterministic Callgrind measurement. Those flags have
+// already taken effect on the parent's V8 engine, but `node:worker_threads`
+// rejects any execArgv entry outside its allow list, so propagating the
+// parent's `process.execArgv` to the threads pool's Worker throws
+// `Initiated Worker with invalid execArgv flags`. Clearing the snapshot is
+// safe: parent determinism is preserved, and the bench fixtures don't need
+// any inherited Node flags in their workers.
+process.execArgv = [];
+
 const { initCli, createRstest } = await import('@rstest/core');
 
 const bench = withCodSpeed(
