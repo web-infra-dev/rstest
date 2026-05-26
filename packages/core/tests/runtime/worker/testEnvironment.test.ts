@@ -237,6 +237,45 @@ describe('testEnvironment', () => {
     expect(environment.name).toBe('node-entry');
   });
 
+  it('should not select require export conditions for imported environments', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const packageDir = join(tempDir, 'node_modules', 'package-marker');
+
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        name: 'package-marker',
+        type: 'module',
+        exports: {
+          '.': {
+            require: './require.cjs',
+            import: './import.mjs',
+          },
+        },
+      }),
+    );
+    writeFileSync(join(packageDir, 'require.cjs'), 'module.exports = {};');
+    writeFileSync(
+      join(packageDir, 'import.mjs'),
+      environmentModule('import-entry'),
+    );
+
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPaths,
+    );
+
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker', 'import.mjs'),
+    ]);
+    expect(environment.name).toBe('import-entry');
+  });
+
   it('should not import environment modules while resolving paths', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 

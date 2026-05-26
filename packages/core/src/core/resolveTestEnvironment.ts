@@ -13,7 +13,7 @@ const builtinEnvironmentNames = {
 const { resolver } = rspack.experiments;
 
 const packageResolver = new resolver.ResolverFactory({
-  conditionNames: ['node', 'import', 'require'],
+  conditionNames: ['node', 'import'],
   mainFields: ['main'],
 });
 
