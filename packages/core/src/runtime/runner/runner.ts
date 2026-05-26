@@ -30,6 +30,7 @@ import {
   getTestStatus,
   limitConcurrency,
   markAllTestAsSkipped,
+  sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
 
@@ -408,7 +409,17 @@ export class TestRunner {
           },
           async () => {
             const start = RealDate.now();
-            let retryCount = 0;
+            // Per-test override wins over config.retry. `retry` (the runtime
+            // config) is the suite-wide default.
+            const retryBudget = sanitizeAttemptCount(test.retry ?? retry);
+            // Treat negative / NaN / fractional repeats as 0 so the outer
+            // loop always runs at least once. Without this, an invalid
+            // `repeats` value would silently report the case as skipped.
+            const repeats = sanitizeAttemptCount(test.repeats ?? 0);
+            let totalRetryCount = 0;
+            // `retryErrors` aggregates every failed attempt across all
+            // repeats so a final pass can surface the full flakiness picture
+            // via `result.retryErrors`.
             const retryErrors: FormattedError[] = [];
 
             hooks.onTestCaseStart?.({
@@ -424,26 +435,41 @@ export class TestRunner {
               runMode: test.runMode,
             });
 
-            do {
-              const currentResult = await runTestsCase(test, parentHooks);
+            for (let repeat = 0; repeat <= repeats; repeat++) {
+              let retryCount = 0;
+              // Scoped per repeat so a terminal failure does not get
+              // attributed errors from earlier repeats that already passed.
+              const repeatRetryErrors: FormattedError[] = [];
+              do {
+                const currentResult = await runTestsCase(test, parentHooks);
 
-              if (currentResult.status === 'fail') {
-                retryErrors.push(...(currentResult.errors || []));
+                if (currentResult.status === 'fail') {
+                  repeatRetryErrors.push(...(currentResult.errors || []));
+                }
+
+                result = {
+                  ...currentResult,
+                  errors:
+                    currentResult.status === 'fail'
+                      ? [...repeatRetryErrors]
+                      : currentResult.errors,
+                };
+
+                retryCount++;
+              } while (retryCount <= retryBudget && result.status === 'fail');
+
+              totalRetryCount += retryCount - 1;
+              retryErrors.push(...repeatRetryErrors);
+
+              // `repeats` semantics: any failure short-circuits remaining
+              // repeats. Pass/skip/todo continue to the next repeat.
+              if (result.status === 'fail') {
+                break;
               }
-
-              result = {
-                ...currentResult,
-                errors:
-                  currentResult.status === 'fail'
-                    ? [...retryErrors]
-                    : currentResult.errors,
-              };
-
-              retryCount++;
-            } while (retryCount <= retry && result.status === 'fail');
+            }
 
             result.duration = RealDate.now() - start;
-            result.retryCount = retryCount - 1;
+            result.retryCount = totalRetryCount;
             if (result.status === 'pass' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }

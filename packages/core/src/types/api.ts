@@ -31,10 +31,39 @@ export type TestCallbackFn<ExtraContext = object> = (
   context: TestContext & ExtraContext,
 ) => MaybePromise<void>;
 
+/**
+ * Per-test options accepted as the third argument of `test` / `it` / `test.each` /
+ * `test.for`. Passing a plain `number` is equivalent to `{ timeout: n }`.
+ *
+ * Declared as an `interface` so consumers can use module augmentation to add
+ * fields in the future without breaking source compatibility.
+ */
+export interface TestOptions {
+  /**
+   * Per-test timeout in milliseconds. Overrides `test.testTimeout`.
+   */
+  timeout?: number;
+  /**
+   * Number of times to retry the test if it fails. Overrides `test.retry`.
+   *
+   * @default 0
+   */
+  retry?: number;
+  /**
+   * Number of times to re-run the test after it has already passed. The test is
+   * considered failed as soon as any run fails. Total executions per case is
+   * `repeats + 1`. Orthogonal to `retry`: each repeat independently honors the
+   * configured retry budget.
+   *
+   * @default 0
+   */
+  repeats?: number;
+}
+
 type TestFn<ExtraContext = object> = (
   description: string,
   fn?: TestCallbackFn<ExtraContext>,
-  timeout?: number,
+  options?: number | TestOptions,
 ) => void;
 
 export interface TestEachFn {
@@ -43,21 +72,21 @@ export interface TestEachFn {
   ): (
     description: string,
     fn?: (param: T) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
   ): (
     description: string,
     fn: (...args: [...T]) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
   <T>(
     cases: readonly T[],
   ): (
     description: string,
     fn: (...args: T[]) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
@@ -65,7 +94,7 @@ export interface TestEachFn {
   ): (
     description: string,
     fn?: (param: T) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
 }
 
@@ -75,7 +104,7 @@ export interface TestForFn<ExtraContext = object> {
   ): (
     description: string,
     fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
@@ -83,7 +112,7 @@ export interface TestForFn<ExtraContext = object> {
   ): (
     description: string,
     fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-    timeout?: number,
+    options?: number | TestOptions,
   ) => void;
 }
 

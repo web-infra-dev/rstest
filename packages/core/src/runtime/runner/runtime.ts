@@ -22,6 +22,7 @@ import type {
   TestCase,
   TestEachFn,
   TestForFn,
+  TestOptions,
   TestRunMode,
   TestSuite,
 } from '../../types';
@@ -30,6 +31,7 @@ import { castArray, generateFilePathHash } from '../../utils/helper';
 import {
   formatName,
   isTemplateStringsArray,
+  normalizeTestOptions,
   parseTemplateTable,
   TestRegisterError,
 } from '../util';
@@ -330,6 +332,8 @@ class RunnerRuntime {
     originalFn = fn,
     fixtures,
     timeout = this.runtimeConfig.testTimeout,
+    retry,
+    repeats,
     runMode = 'run',
     fails = false,
     each = false,
@@ -342,6 +346,8 @@ class RunnerRuntime {
     originalFn?: TestCallbackFn;
     fn?: TestCallbackFn;
     timeout?: number;
+    retry?: number;
+    repeats?: number;
     runMode?: TestRunMode;
     each?: boolean;
     fails?: boolean;
@@ -359,6 +365,8 @@ class RunnerRuntime {
       runMode,
       type: 'case',
       timeout,
+      retry,
+      repeats,
       fixtures,
       concurrent,
       sequential,
@@ -429,8 +437,13 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
-    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
+  }): (
+    name: string,
+    fn?: (...args: any[]) => any,
+    testOptions?: number | TestOptions,
+  ) => void {
+    return (name, fn, testOptions) => {
+      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
         const params = castArray(param) as any[];
@@ -439,7 +452,9 @@ class RunnerRuntime {
           name: formatName(name, param, i),
           originalFn: fn,
           fn: () => fn?.(...params),
-          timeout,
+          timeout: timeout ?? this.runtimeConfig.testTimeout,
+          retry,
+          repeats,
           ...options,
           each: true,
         });
@@ -457,8 +472,13 @@ class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn?: (...args: any[]) => any, timeout?: number) => void {
-    return (name, fn, timeout = this.runtimeConfig.testTimeout) => {
+  }): (
+    name: string,
+    fn?: (...args: any[]) => any,
+    testOptions?: number | TestOptions,
+  ) => void {
+    return (name, fn, testOptions) => {
+      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
@@ -466,7 +486,9 @@ class RunnerRuntime {
           name: formatName(name, param, i),
           originalFn: fn,
           fn: (context) => fn?.(param, context),
-          timeout,
+          timeout: timeout ?? this.runtimeConfig.testTimeout,
+          retry,
+          repeats,
           ...options,
           each: true,
         });
@@ -536,14 +558,18 @@ export const createRuntimeAPI = ({
       location?: Location;
     } = {},
   ): TestAPI => {
-    const testFn = ((name, fn, timeout) =>
+    const testFn = ((name, fn, testOptions) => {
+      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
       runtimeInstance.it({
         name,
         fn,
         timeout,
+        retry,
+        repeats,
         ...options,
         location: options.location ?? getLocation(),
-      })) as TestAPI;
+      });
+    }) as TestAPI;
 
     for (const { name, overrides } of [
       { name: 'fails', overrides: { fails: true } },
