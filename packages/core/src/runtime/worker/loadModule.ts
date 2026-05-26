@@ -14,6 +14,44 @@ import {
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    // `origin` is the absolute path of the source module that produced the
+    // `require.resolve()` call, injected by rspack's `RstestPlugin` when
+    // `injectRequireResolveOrigin` is enabled. Falling back keeps native
+    // `require.resolve` semantics for un-rewritten calls.
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(joinedPath);
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
+
 const createRequire = (
   filename: string,
   distPath: string,
@@ -59,7 +97,11 @@ const createRequire = (
     const resolved = _require.resolve(id);
     return _require(resolved);
   }) as NodeJS.Require;
-  require.resolve = _require.resolve;
+  require.resolve = defineRstestRequireResolve({
+    testPath: filename,
+    distPath,
+    assetFiles,
+  }) as NodeJS.RequireResolve;
   require.main = _require.main;
   return require;
 };
@@ -213,6 +255,11 @@ export const loadModule = ({
     __rstest_dynamic_import__: defineRstestDynamicImport({
       testPath,
       interopDefault,
+      assetFiles,
+    }),
+    __rstest_require_resolve__: defineRstestRequireResolve({
+      testPath,
+      distPath,
       assetFiles,
     }),
     __dirname: fileDir,
