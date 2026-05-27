@@ -93,6 +93,18 @@ describe('CLI help output', () => {
     expect(parsed.options.config).toBe('rstest.config.ts');
   });
 
+  it('does not consume positional filters after --coverage', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage', 'path/to/file.test.ts'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+    });
+    expect(parsed.args).toEqual(['path/to/file.test.ts']);
+  });
+
   it('preserves nested coverage options when followed by --coverage', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--coverage.changed=HEAD', '--coverage'],
@@ -112,7 +124,7 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.coverage).toEqual({
-      enabled: 'false',
+      enabled: false,
       changed: 'HEAD',
     });
   });
