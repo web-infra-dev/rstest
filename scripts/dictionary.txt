@@ -171,6 +171,7 @@ tsconfck
 tsdoc
 tsup
 unencapsulated
+Unhashed
 unocss
 unpatch
 unplugin

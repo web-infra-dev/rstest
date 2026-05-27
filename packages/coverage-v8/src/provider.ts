@@ -9,14 +9,12 @@ import type {
 } from '@rstest/core';
 import astV8ToIstanbul from 'ast-v8-to-istanbul';
 import { Parser } from 'acorn';
-import istanbulLibCoverage, {
-  type CoverageMap,
-  type FileCoverageData,
-} from 'istanbul-lib-coverage';
+import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
+import { createFastCoverageMap } from './utils';
 
 type SourceMapLike = {
   version: number;
@@ -384,7 +382,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   createCoverageMap(): CoverageMap {
-    return istanbulLibCoverage.createCoverageMap({});
+    return createFastCoverageMap();
   }
 
   async generateCoverageForUntestedFiles({

@@ -1,4 +1,5 @@
 import { defineConfig } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
   lib: [
@@ -8,4 +9,9 @@ export default defineConfig({
       dts: true,
     },
   ],
+  tools: {
+    rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
+    },
+  },
 });

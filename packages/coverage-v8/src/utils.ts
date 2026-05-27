@@ -1,4 +1,3 @@
-import { runInNewContext } from 'node:vm';
 import type {
   CoverageMap,
   CoverageMapData,
@@ -7,9 +6,7 @@ import type {
   Range,
 } from 'istanbul-lib-coverage';
 import istanbulLibCoverage from 'istanbul-lib-coverage';
-import type { MapStore } from 'istanbul-lib-source-maps';
 
-const SOURCE_MAP_SCAN_CONCURRENCY = 8;
 const { createCoverageMap } = istanbulLibCoverage;
 
 type BranchHits = Record<string, number[]>;
@@ -19,119 +16,6 @@ type IstanbulFileCoverageData = FileCoverageData & {
   hash?: string;
 };
 type FileCoverageInput = FileCoverage | FileCoverageData;
-
-// ATTENTION: when swc-plugin-coverage-instrument version changed, magic value should be updated too
-// https://github.com/kwonoj/swc-plugin-coverage-instrument/blob/63e9d5e16dbe61073c62af4b7dfed3c1779cbafa/spec/util/constants.ts#L1-L2
-const COVERAGE_MAGIC_KEY = '_coverageSchema';
-const COVERAGE_MAGIC_VALUE = '11020577277169172593';
-
-// generated code looks like this:
-
-// var coverageData = { <--- find until open brace
-//   all: false,
-//   path: '',
-//   statementMap: {},
-//   fnMap: {},
-//   branchMap: {},
-//   s: {},
-//   f: {},
-//   b: {},
-//   _coverageSchema: '11020577277169172593', <--- from here
-//   hash: '',
-// }; <--- and until close brace
-
-export function readInitialCoverage(
-  code: string,
-): FileCoverageData | undefined {
-  const magicValueIndex = code.indexOf(COVERAGE_MAGIC_VALUE);
-  if (magicValueIndex === -1) throw new Error('cannot find magic value');
-
-  let openBraceIndex = magicValueIndex;
-  let remainOpenBraceCount = 1;
-  while (remainOpenBraceCount > 0) {
-    openBraceIndex--;
-    if (openBraceIndex < 0) throw new Error('cannot find open brace');
-    const char = code[openBraceIndex];
-    if (char === '}') remainOpenBraceCount++;
-    else if (char === '{') remainOpenBraceCount--;
-  }
-
-  let closeBraceIndex = magicValueIndex;
-  let remainCloseBraceCount = 1;
-  while (remainCloseBraceCount > 0) {
-    closeBraceIndex++;
-    if (closeBraceIndex >= code.length)
-      throw new Error('cannot find close brace');
-    const char = code[closeBraceIndex];
-    if (char === '{') remainCloseBraceCount++;
-    else if (char === '}') remainCloseBraceCount--;
-  }
-
-  const coverageDataStr = code.slice(openBraceIndex, closeBraceIndex + 1);
-  const coverageData = runInNewContext(`Object(${coverageDataStr})`);
-  if (coverageData?.[COVERAGE_MAGIC_KEY] !== COVERAGE_MAGIC_VALUE)
-    throw new Error('invalid coverageData');
-
-  return coverageData;
-}
-
-// https://github.com/webpack/webpack/blob/99c36fab8e8b21885f02cca76c253f51b97997eb/lib/util/extractSourceMap.js#L53
-
-// Matches only the last occurrence of sourceMappingURL
-const innerRegex = /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
-
-const sourceMappingURLRegex = new RegExp(
-  '(?:' +
-    '/\\*' +
-    '(?:\\s*\r?\n(?://)?)?' +
-    `(?:${innerRegex.source})` +
-    '\\s*' +
-    '\\*/' +
-    '|' +
-    `//(?:${innerRegex.source})` +
-    ')' +
-    '\\s*',
-);
-
-/**
- * Extract source mapping URL from code comments
- * @param {string} code source code content
- * @returns {string | undefined} source mapping information
- */
-export function getSourceMappingURL(code: string): string | undefined {
-  let searchIndex = code.lastIndexOf('sourceMappingURL');
-
-  while (searchIndex !== -1) {
-    const lineStart = code.lastIndexOf('\n', searchIndex);
-    const lineEnd = code.indexOf('\n', searchIndex);
-    const line = code.slice(
-      lineStart + 1,
-      lineEnd === -1 ? code.length : lineEnd,
-    );
-    const match = line.match(sourceMappingURLRegex);
-
-    if (match) {
-      const sourceMappingURL = match[1] || match[2] || '';
-      return sourceMappingURL ? decodeURI(sourceMappingURL) : undefined;
-    }
-
-    searchIndex = code.lastIndexOf('sourceMappingURL', lineStart - 1);
-  }
-
-  return undefined;
-}
-
-export function registerSourceMapURL(
-  filename: string,
-  code: string,
-  sourcemapUrlCache: Map<string, string | undefined>,
-): void {
-  // process js/cjs/mjs file only
-  if (!filename.endsWith('js')) return;
-
-  const url = getSourceMappingURL(code);
-  sourcemapUrlCache.set(filename, url);
-}
 
 const isCoverageMap = (
   coverage: CoverageMap | CoverageMapData,
@@ -351,75 +235,6 @@ export function createFastCoverageMap(): CoverageMap {
       coverageMap.addFileCoverage(fileCoverage);
     }
   };
-
-  return coverageMap;
-}
-
-export async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex++;
-      results[currentIndex] = await mapper(items[currentIndex]!, currentIndex);
-    }
-  };
-
-  const workerCount = Math.min(Math.max(concurrency, 1), items.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-  return results;
-}
-
-export async function transformCoverage(
-  coverageMap: CoverageMap,
-  sourcemapUrlCache: Map<string, string | undefined>,
-): Promise<CoverageMap> {
-  const jsFiles = coverageMap
-    .files()
-    // process js/cjs/mjs file only
-    .filter((filename) => filename.endsWith('js'));
-
-  const uncachedFiles = jsFiles.filter(
-    (filename) => !sourcemapUrlCache.has(filename),
-  );
-
-  if (uncachedFiles.length) {
-    const { readFile } = await import('node:fs/promises');
-    await mapWithConcurrency(
-      uncachedFiles,
-      SOURCE_MAP_SCAN_CONCURRENCY,
-      async (filename) => {
-        try {
-          const content = await readFile(filename, 'utf8');
-          sourcemapUrlCache.set(filename, getSourceMappingURL(content));
-        } catch {
-          // Do not cache failed reads. The file may be temporarily unavailable
-          // during watch-mode rebuilds, so retry it on the next report.
-        }
-      },
-    );
-  }
-
-  // Call createSourceMapStore as needed
-  let store: MapStore | undefined;
-  for (const filename of jsFiles) {
-    const url = sourcemapUrlCache.get(filename);
-    if (url) {
-      if (!store) {
-        const { createSourceMapStore } =
-          await import('istanbul-lib-source-maps');
-        store = createSourceMapStore();
-      }
-      store.registerURL(filename, url);
-    }
-  }
-  if (store) return store.transformCoverage(coverageMap);
 
   return coverageMap;
 }

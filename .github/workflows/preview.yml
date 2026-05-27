@@ -13,6 +13,10 @@ on:
 
 permissions:
   contents: read
+  # Required so the workflow can post / update the preview-release comment
+  # on the PR associated with the dispatched commit. See `Comment on
+  # associated PR` step below.
+  pull-requests: write
 
 jobs:
   preview:
@@ -31,33 +35,25 @@ jobs:
           npm install -g corepack@latest --force
           corepack enable
 
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
-        id: changes
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            changed:
-              - "packages/**"
-              - "!packages/document/**"
-
       - name: Setup Node.js
-        if: steps.changes.outputs.changed == 'true'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 22.x
           cache: 'pnpm'
 
       - name: Install Dependencies
-        if: steps.changes.outputs.changed == 'true'
         run: pnpm install
 
       - name: Publish Preview
         id: publish
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpx pkg-pr-new publish --pnpm ./packages/*
+        # `pnpm exec` (not `pnpx`/`pnpm dlx`) per pkg.pr.new CAUTION:
+        # https://github.com/stackblitz-labs/pkg.pr.new#setup
+        # `--comment=off` because this workflow is dispatched manually, so
+        # pkg.pr.new's webhook never sees a PR context and can't auto-comment.
+        # We post the comment ourselves in the next step via `commits/{sha}/pulls`.
+        run: pnpm exec pkg-pr-new publish --pnpm --comment=off ./packages/*
 
       - name: Preview summary
-        if: steps.changes.outputs.changed == 'true'
         run: |
           sha='${{ steps.publish.outputs.sha }}'
           packages='${{ steps.publish.outputs.packages }}'
@@ -90,3 +86,41 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "::notice title=pkg.pr.new::sha=$shaDisplay (see Summary for packages/urls)"
+
+      - name: Comment on associated PR
+        if: steps.publish.outputs.sha != ''
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SHA: ${{ steps.publish.outputs.sha }}
+          URLS: ${{ steps.publish.outputs.urls }}
+        with:
+          script: |
+            const { SHA, URLS } = process.env;
+            // `listPullRequestsAssociatedWithCommit` returns both `open` and
+            // `merged` PRs — pick the first `open` one so we never re-comment
+            // on an already-merged PR.
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              ...context.repo,
+              commit_sha: SHA,
+            });
+            const pr = prs.find((p) => p.state === 'open');
+            if (!pr) {
+              core.info(`No open PR contains ${SHA} — skipping comment.`);
+              return;
+            }
+            const { owner, repo } = context.repo;
+            // PR-scoped commit URL lands inside the PR's commit list (highlighted)
+            // rather than the bare repo commit page.
+            const commitUrl = `${context.serverUrl}/${owner}/${repo}/pull/${pr.number}/commits/${SHA}`;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              `## pkg.pr.new preview [\`${SHA}\`](${commitUrl}) · [workflow run](${runUrl})`,
+              '',
+              ...URLS.split(/\s+/).filter(Boolean).map((u) => `- \`pnpm add ${u}\``),
+            ].join('\n');
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: pr.number,
+              body,
+            });
+            core.info(`Posted preview comment to PR #${pr.number}.`);
