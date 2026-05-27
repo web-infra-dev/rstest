@@ -1,8 +1,27 @@
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import v8 from 'node:v8';
-import { isDebug, logger } from '../utils/logger';
+import { logger } from '../utils/logger';
 import { isWorkerResponseEnvelope } from './protocol';
+
+// [DIAG #1326] Helpers for the diagnostic logging added in this pre-release.
+// All `// [DIAG #1326]` markers can be grepped and reverted after we collect
+// the data needed for https://github.com/web-infra-dev/rstest/issues/1326.
+const fmtMB = (bytes: number): string => `${Math.round(bytes / 1024 / 1024)}MB`;
+const summarize = (
+  samples: number[],
+): { min: number; median: number; p90: number; max: number } => {
+  if (samples.length === 0) return { min: 0, median: 0, p90: 0, max: 0 };
+  const sorted = [...samples].sort((a, b) => a - b);
+  const pick = (q: number): number =>
+    sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+  return {
+    min: sorted[0]!,
+    median: pick(0.5),
+    p90: pick(0.9),
+    max: sorted[sorted.length - 1]!,
+  };
+};
 
 // Hard-coded internal tuning. Intentionally not exposed as config or env var
 // — see plan #1160. WHY values where non-obvious:
@@ -72,6 +91,17 @@ export class MemoryGate {
   private heapDeltaP90Cache: number | undefined;
   private heapHeadroomCache: Cached | undefined;
   private pollTimer: NodeJS.Timeout | undefined;
+  // [DIAG #1326] Per-decision counters surfaced on dispose so a single CI
+  // run yields the full decision distribution without per-call log spam.
+  private readonly stats = {
+    bypassDeadlock: 0,
+    bypassColdStart: 0,
+    fastLaneAllow: 0,
+    slowLaneAllow: 0,
+    deferredSystemMem: 0,
+    deferredHeap: 0,
+  };
+  private slowLaneAnnounced = false;
 
   constructor(deps: MemoryGateDeps = {}) {
     this.freememFn = deps.freemem ?? os.freemem;
@@ -109,10 +139,16 @@ export class MemoryGate {
 
   canSpawnNewWorker(activeCount: number): boolean {
     // Deadlock guard: at least one worker must always be allowed.
-    if (activeCount === 0) return true;
+    if (activeCount === 0) {
+      this.stats.bypassDeadlock++;
+      return true;
+    }
 
     // Cold-start bypass: don't defend until the first sample lands.
-    if (this.rssSamples.length <= WARMUP_SAMPLES) return true;
+    if (this.rssSamples.length <= WARMUP_SAMPLES) {
+      this.stats.bypassColdStart++;
+      return true;
+    }
 
     const estRss = (this.rssP90Cache ??= p90(this.rssSamples));
 
@@ -121,14 +157,34 @@ export class MemoryGate {
     // into the slow lane earlier than strictly necessary; never a wrong
     // fast-pass.
     const freemem = this.cachedFreemem();
-    if (freemem >= estRss * FAST_LANE_FACTOR) return true;
+    if (freemem >= estRss * FAST_LANE_FACTOR) {
+      this.stats.fastLaneAllow++;
+      return true;
+    }
+
+    // [DIAG #1326] First fast-lane miss — announce the slow-lane transition
+    // once so timelines show when the gate flipped into defensive mode.
+    if (!this.slowLaneAnnounced) {
+      this.slowLaneAnnounced = true;
+      logger.info(
+        `[rstest:diag] gate entered slow lane: ` +
+          `estRss=${fmtMB(estRss)} freemem=${fmtMB(freemem)} ` +
+          `threshold(estRss*${FAST_LANE_FACTOR})=${fmtMB(estRss * FAST_LANE_FACTOR)} ` +
+          `activeCount=${activeCount} rssSamples=${this.rssSamples.length}`,
+      );
+    }
 
     // Slow lane enables lazy heap tracking — see recordDispatch/recordResolve.
     this.heapTrackingEnabled = true;
 
     const available = this.accurateAvailableMemory();
     if (available < estRss) {
-      this.logDeferred('system memory', { estRss, available });
+      this.stats.deferredSystemMem++;
+      this.logDeferred(
+        'system memory',
+        { estRss, freemem, available },
+        { activeCount, rssSamples: this.rssSamples.length },
+      );
       return false;
     }
 
@@ -138,11 +194,25 @@ export class MemoryGate {
         this.heapDeltaSamples,
       ));
       if (heapHeadroom < estHeapDelta * HEAP_SAFETY_FACTOR) {
-        this.logDeferred('main heap', { heapHeadroom, estHeapDelta });
+        this.stats.deferredHeap++;
+        this.logDeferred(
+          'main heap',
+          {
+            heapHeadroom,
+            estHeapDelta,
+            threshold: estHeapDelta * HEAP_SAFETY_FACTOR,
+            available,
+          },
+          {
+            activeCount,
+            heapDeltaSamples: this.heapDeltaSamples.length,
+          },
+        );
         return false;
       }
     }
 
+    this.stats.slowLaneAllow++;
     return true;
   }
 
@@ -173,6 +243,44 @@ export class MemoryGate {
       clearInterval(this.pollTimer);
       this.pollTimer = undefined;
     }
+    // [DIAG #1326] Decision-distribution summary on pool close. Skipped when
+    // the gate was never consulted (e.g. immediate close in unit tests) to
+    // keep test output clean.
+    const decisions =
+      this.stats.bypassDeadlock +
+      this.stats.bypassColdStart +
+      this.stats.fastLaneAllow +
+      this.stats.slowLaneAllow +
+      this.stats.deferredSystemMem +
+      this.stats.deferredHeap;
+    if (decisions === 0) return;
+    const rssStats = summarize(this.rssSamples);
+    const heapStats = summarize(this.heapDeltaSamples);
+    const freememNow = os.freemem();
+    logger.info(
+      `[rstest:diag] gate summary (decisions=${decisions}): ` +
+        `fast-allow=${this.stats.fastLaneAllow} ` +
+        `slow-allow=${this.stats.slowLaneAllow} ` +
+        `deferred(sys)=${this.stats.deferredSystemMem} ` +
+        `deferred(heap)=${this.stats.deferredHeap} ` +
+        `bypass(deadlock)=${this.stats.bypassDeadlock} ` +
+        `bypass(cold-start)=${this.stats.bypassColdStart}`,
+    );
+    logger.info(
+      `[rstest:diag] gate samples: ` +
+        `rss n=${this.rssSamples.length} ` +
+        `min=${fmtMB(rssStats.min)} median=${fmtMB(rssStats.median)} ` +
+        `p90=${fmtMB(rssStats.p90)} max=${fmtMB(rssStats.max)}`,
+    );
+    logger.info(
+      `[rstest:diag] gate samples: ` +
+        `heap-delta n=${this.heapDeltaSamples.length} ` +
+        `min=${fmtMB(heapStats.min)} median=${fmtMB(heapStats.median)} ` +
+        `p90=${fmtMB(heapStats.p90)} max=${fmtMB(heapStats.max)}`,
+    );
+    logger.info(
+      `[rstest:diag] gate end-state: freemem(os)=${fmtMB(freememNow)}`,
+    );
   }
 
   private pushSample(arr: number[], value: number): void {
@@ -225,13 +333,19 @@ export class MemoryGate {
     return value;
   }
 
-  private logDeferred(reason: string, details: Record<string, number>): void {
-    if (!isDebug()) return;
-    const parts = Object.entries(details).map(
-      ([k, v]) => `${k}=${(v / 1024 / 1024).toFixed(0)}MB`,
-    );
-    logger.debug(
-      `[pool] deferred worker spawn (${reason}): ${parts.join(', ')}`,
+  // [DIAG #1326] Was DEBUG-gated; now unconditional so users can confirm in a
+  // single CI run whether the gate is deferring spawns. `bytes` values are
+  // formatted as MB; `counts` are printed as-is.
+  private logDeferred(
+    reason: string,
+    bytes: Record<string, number>,
+    counts: Record<string, number> = {},
+  ): void {
+    const countParts = Object.entries(counts).map(([k, v]) => `${k}=${v}`);
+    const byteParts = Object.entries(bytes).map(([k, v]) => `${k}=${fmtMB(v)}`);
+    logger.info(
+      `[rstest:diag] gate deferred spawn (${reason}): ` +
+        [...countParts, ...byteParts].join(' '),
     );
   }
 }
@@ -260,4 +374,96 @@ export const selectMemoryGate = (
   makeGate: () => MemoryGate | undefined = createDefaultMemoryGate,
 ): MemoryGate | undefined => {
   return workerKind === 'forks' ? makeGate() : undefined;
+};
+
+// [DIAG #1326] One-shot startup banner. Unconditional (no DEBUG required) so
+// a single CI run is enough to (a) determine whether RSTEST_MEMORY_AWARE took
+// effect and (b) surface adjacent perf factors (coverage provider, isolate,
+// command, load average) that explain under-utilization even with the gate
+// disabled.
+//
+// Intentionally NOT wired into `selectMemoryGate` itself so unit tests
+// exercising the factory don't print this banner.
+export const logMemoryGateDiagnostics = (
+  workerKind: 'forks' | 'threads',
+  gate: MemoryGate | undefined,
+  runInfo: {
+    maxWorkers: number;
+    minWorkers: number;
+    isolate: boolean;
+    command: string;
+    coverage: { enabled: boolean; provider?: string };
+    globalSetupCount: number;
+  },
+): void => {
+  const envVal = process.env.RSTEST_MEMORY_AWARE;
+  const ciVal = process.env.CI;
+  const totalmem = os.totalmem();
+  const freemem = os.freemem();
+  const heapLimit = v8.getHeapStatistics().heap_size_limit;
+  const cpus = os.cpus();
+  const cpuCount = cpus.length;
+  const cpuModel = cpus[0]?.model ?? 'unknown';
+  const loadAvg = os.loadavg();
+
+  let memAvailable: number | undefined;
+  let memFree: number | undefined;
+  let meminfoErr: string | undefined;
+  try {
+    const meminfo = readFileSync('/proc/meminfo', 'utf-8');
+    const availMatch = meminfo.match(/^MemAvailable:\s+(\d+)\s+kB/m);
+    if (availMatch) memAvailable = Number(availMatch[1]) * 1024;
+    const freeMatch = meminfo.match(/^MemFree:\s+(\d+)\s+kB/m);
+    if (freeMatch) memFree = Number(freeMatch[1]) * 1024;
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    meminfoErr = err.code ?? err.message;
+  }
+
+  const status =
+    workerKind === 'threads'
+      ? 'N/A (workerKind=threads — gate only applies to forks)'
+      : gate
+        ? 'ENABLED'
+        : 'DISABLED via RSTEST_MEMORY_AWARE=0';
+
+  const meminfoLine =
+    memAvailable !== undefined || memFree !== undefined
+      ? `MemAvailable=${memAvailable !== undefined ? fmtMB(memAvailable) : '?'} MemFree=${memFree !== undefined ? fmtMB(memFree) : '?'}`
+      : meminfoErr
+        ? `unavailable (${meminfoErr})`
+        : 'no MemAvailable/MemFree fields';
+
+  const coverageLine = runInfo.coverage.enabled
+    ? `coverage=ENABLED provider=${runInfo.coverage.provider ?? 'unknown'}`
+    : 'coverage=disabled';
+
+  logger.info(`[rstest:diag] memory-aware gate: ${status}`);
+  logger.info(
+    `[rstest:diag]   env RSTEST_MEMORY_AWARE=${envVal ?? '<unset>'} CI=${ciVal ?? '<unset>'}`,
+  );
+  logger.info(
+    `[rstest:diag]   command=${runInfo.command} workerKind=${workerKind} ` +
+      `maxWorkers=${runInfo.maxWorkers} minWorkers=${runInfo.minWorkers} ` +
+      `isolate=${runInfo.isolate}`,
+  );
+  logger.info(
+    `[rstest:diag]   ${coverageLine} globalSetup=${runInfo.globalSetupCount}`,
+  );
+  logger.info(
+    `[rstest:diag]   cpus=${cpuCount} (${cpuModel}) loadavg=${loadAvg.map((n) => n.toFixed(2)).join('/')}`,
+  );
+  logger.info(
+    `[rstest:diag]   totalmem=${fmtMB(totalmem)} freemem(os)=${fmtMB(freemem)} ` +
+      `heap_size_limit=${fmtMB(heapLimit)}`,
+  );
+  logger.info(`[rstest:diag]   /proc/meminfo: ${meminfoLine}`);
+  logger.info(
+    `[rstest:diag]   node=${process.version} platform=${process.platform} arch=${process.arch}`,
+  );
+  logger.info(
+    `[rstest:diag]   tuning: FAST_LANE_FACTOR=${FAST_LANE_FACTOR} ` +
+      `HEAP_SAFETY_FACTOR=${HEAP_SAFETY_FACTOR} ` +
+      `RSS_QUANTILE=${RSS_QUANTILE} WINDOW_SIZE=${WINDOW_SIZE}`,
+  );
 };

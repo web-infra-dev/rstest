@@ -28,7 +28,7 @@ import {
 } from '../utils';
 import type { TraceEvent } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { selectMemoryGate } from './memoryGate';
+import { logMemoryGateDiagnostics, selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
@@ -338,7 +338,14 @@ export const createPool = async ({
   const numCpus = getNumCpus();
 
   const {
-    normalizedConfig: { pool: poolOptions, isolate },
+    normalizedConfig: {
+      pool: poolOptions,
+      isolate,
+      // [DIAG #1326] Surfaced in the startup banner so users can see whether
+      // coverage / globalSetup are inflating the run cost.
+      coverage: coverageConfig,
+      globalSetup,
+    },
     reporters,
   } = context;
 
@@ -369,6 +376,21 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
+  // [DIAG #1326] Emit the gate startup banner before constructing the pool
+  // so the diagnostic output lands before any worker activity.
+  const memoryGate = selectMemoryGate(workerKind);
+  logMemoryGateDiagnostics(workerKind, memoryGate, {
+    maxWorkers,
+    minWorkers,
+    isolate,
+    command: context.command,
+    coverage: {
+      enabled: coverageConfig?.enabled ?? false,
+      provider: coverageConfig?.provider,
+    },
+    globalSetupCount: globalSetup.length,
+  });
+
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
     isolate,
@@ -384,7 +406,7 @@ export const createPool = async ({
       ...getForceColorEnv(),
       ...process.env,
     } as Record<string, string>,
-    memoryGate: selectMemoryGate(workerKind),
+    memoryGate,
   });
 
   const createRpcMethods = ({
