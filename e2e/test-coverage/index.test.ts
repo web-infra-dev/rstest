@@ -90,6 +90,45 @@ describe('test coverage-istanbul', () => {
     expectLog('Coverage enabled with istanbul', logs);
   });
 
+  it('should treat positional argument after `--coverage` as a file filter', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage', 'date'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+
+    expectLog('Test Files 1 passed', logs);
+  });
+
+  it('should treat positional argument before `--coverage` as a file filter', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'date', '--coverage'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+    expectLog('Test Files 1 passed', logs);
+  });
+
   it('should switch coverage provider with `--coverage.provider v8`', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

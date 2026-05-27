@@ -54,6 +54,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--exclude <exclude>', 'Exclude files from test'],
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
+  ['--coverage.enabled', 'Enable code coverage collection'],
   [
     '--coverage.provider <provider>',
     'Coverage provider to use (istanbul | v8)',
