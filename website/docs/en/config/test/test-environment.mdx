@@ -156,13 +156,14 @@ Rstest currently loads custom environment files as JavaScript modules. Direct `.
 
 #### transformMode
 
-`transformMode` controls whether a custom environment should use Node-like or browser-like transform and resolution defaults.
+- **Type:** `'node' | 'browser'`
+- **Default:** `'node'`
 
-Custom environments use `transformMode: 'node'` by default unless you set it explicitly. Built-in environments infer the value automatically, so you usually only need this option when configuring a custom environment.
+`transformMode` controls whether a custom environment should use Node-like or browser-like transform and resolution defaults. Built-in environments infer this value automatically, so you usually only need this option when configuring a custom environment.
 
-Use `transformMode: 'node'` for environments that run with Node.js module semantics. In this mode, Rstest keeps Node-oriented resolution defaults and externalizes third-party dependencies from `node_modules` by default.
+Use `transformMode: 'node'` when the custom environment should use the same transform defaults as the built-in `node` environment. In this mode, Rstest keeps Node-oriented resolution defaults and externalizes third-party dependencies from `node_modules` by default.
 
-Use `transformMode: 'browser'` for DOM or browser-like custom environments. In this mode, Rstest resolves browser-oriented package entrypoints by adding the `browser` condition when `resolve.conditionNames` is not customized, and bundles third-party dependencies by default so browser field replacements and bundled assets can take effect.
+Use `transformMode: 'browser'` when the custom environment should use the shared browser-like transform defaults of the built-in `jsdom` and `happy-dom` environments. In this mode, Rstest resolves browser-oriented package entrypoints by adding the `browser` condition when `resolve.conditionNames` is not customized, and bundles third-party dependencies by default so browser field replacements and bundled assets can take effect.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -182,105 +183,7 @@ export default defineConfig({
 
 Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
 
-#### Migrating custom environments from Jest or Vitest \{#migrating-custom-environments}
-
-When migrating a Jest custom environment, replace the class-based API with Rstest's default-exported environment object:
-
-```diff title="Jest to Rstest custom environment"
-- const NodeEnvironment = require('jest-environment-node').TestEnvironment;
--
-- class CustomEnvironment extends NodeEnvironment {
--   async setup() {
--     await super.setup();
--     this.global.__MARKER__ = this.globalConfig.testEnvironmentOptions.marker;
--   }
--
--   async teardown() {
--     delete this.global.__MARKER__;
--     await super.teardown();
--   }
-- }
--
-- module.exports = CustomEnvironment;
-+ import { builtinEnvironments } from '@rstest/core';
-+
-+ export default {
-+   name: 'custom-node',
-+   async setup(global, options) {
-+     const base = await builtinEnvironments.node.setup(global, options);
-+     global.__MARKER__ = options.marker;
-+
-+     return {
-+       async teardown() {
-+         delete global.__MARKER__;
-+         await base.teardown();
-+       },
-+     };
-+   },
-+ };
-```
-
-```diff title="Jest config to Rstest config"
-- module.exports = {
--   testEnvironment: './custom-environment.js',
--   testEnvironmentOptions: {
--     marker: 'custom-marker',
--   },
-- };
-+ import { defineConfig } from '@rstest/core';
-+
-+ export default defineConfig({
-+   testEnvironment: {
-+     name: './custom-environment.mjs',
-+     options: {
-+       marker: 'custom-marker',
-+     },
-+   },
-+ });
-```
-
-Jest-specific hooks such as `handleTestEvent`, `getVmContext`, constructor `context`, and file-level `@jest-environment` pragmas do not have direct Rstest equivalents. Prefer `setupFiles` for test-runtime initialization, reporters for test event observation, and separate Rstest projects when different files need different environments.
-
-When migrating a Vitest custom environment, the object shape is closer, but the transform mode must be moved into Rstest config:
-
-```diff title="Vitest to Rstest custom environment"
-  export default {
-    name: 'custom-client',
--   viteEnvironment: 'client',
-    async setup(global, options) {
-      global.__MARKER__ = options.marker;
-
-      return {
-        async teardown() {
-          delete global.__MARKER__;
-        },
-      };
-    },
-  };
-```
-
-```diff title="Vitest config to Rstest config"
-- import { defineConfig } from 'vitest/config';
-+ import { defineConfig } from '@rstest/core';
-
-  export default defineConfig({
--   test: {
--     environment: './custom-client-environment.mjs',
--     environmentOptions: {
--       marker: 'custom-marker',
--     },
--   },
-+   testEnvironment: {
-+     name: './custom-client-environment.mjs',
-+     transformMode: 'browser',
-+     options: {
-+       marker: 'custom-marker',
-+     },
-+   },
-  });
-```
-
-Map `viteEnvironment: 'ssr'` to `transformMode: 'node'` or omit `transformMode`, and map `viteEnvironment: 'client'` to `transformMode: 'browser'`. For `vitest-environment-foo` packages, use the full package name or publish/rename them to `rstest-environment-foo`.
+If you are migrating a custom environment from Jest or Vitest, see [Migrating Jest custom environments](/guide/migration/jest#custom-environments) or [Migrating Vitest custom environments](/guide/migration/vitest#custom-environments).
 
 ### Custom environment vs setupFiles
 
