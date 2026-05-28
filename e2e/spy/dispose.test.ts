@@ -54,17 +54,17 @@ describe('utility dispose', () => {
 
     {
       using _global = rstest.stubGlobal(name, 'outer');
-      expect(globalThis[name]).toBe('outer');
+      expect(Reflect.get(globalThis, name)).toBe('outer');
 
       {
         using _nestedGlobal = rstest.stubGlobal(name, 'inner');
-        expect(globalThis[name]).toBe('inner');
+        expect(Reflect.get(globalThis, name)).toBe('inner');
       }
 
-      expect(globalThis[name]).toBe('outer');
+      expect(Reflect.get(globalThis, name)).toBe('outer');
     }
 
-    expect(globalThis[name]).toBeUndefined();
+    expect(Reflect.get(globalThis, name)).toBeUndefined();
   });
 
   it('restores real timers when leaving a using scope', () => {
