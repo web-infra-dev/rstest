@@ -64,6 +64,7 @@ export type CommonOptions = {
         enabled?: boolean | string;
         allowExternal?: boolean;
         provider?: 'istanbul' | 'v8';
+        reporters?: string | string[];
         changed?: boolean | string;
       };
   passWithNoTests?: boolean;
@@ -211,6 +212,12 @@ function mergeWithCLIOptions(
       }
       if (options.coverage.provider !== undefined) {
         config.coverage.provider = options.coverage.provider;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reporters !== undefined) {
+        config.coverage.reporters = castArray(
+          options.coverage.reporters,
+        ) as typeof config.coverage.reporters;
         shouldEnableCoverage = true;
       }
       if (options.coverage.changed !== undefined) {
