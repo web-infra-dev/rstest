@@ -12,7 +12,17 @@ import {
   shouldInterop,
 } from './interop';
 
+const importMetaResolve = import.meta.resolve;
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const resolveModule = (specifier: string, resolveBase: string): string | URL =>
+  importMetaResolve(
+    specifier,
+    resolveBase.startsWith('file:')
+      ? resolveBase
+      : pathToFileURL(resolveBase).href,
+  );
 
 const createRequire = (
   filename: string,
@@ -88,8 +98,8 @@ const defineRstestDynamicImport =
     // to pass) working as before.
     const resolveBase = origin ?? testPath;
     const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(resolveBase));
+      ? pathToFileURL(specifier).href
+      : resolveModule(specifier, resolveBase);
 
     // Use `.href` rather than `.pathname` so Windows absolute specifiers
     // round-trip through Node's ESM loader as valid `file:///D:/...` URLs
