@@ -12,6 +12,8 @@ import {
   shouldInterop,
 } from './interop';
 
+const importMetaResolve = import.meta.resolve;
+
 export enum EsmMode {
   Unknown = 0,
   Evaluated = 1,
@@ -27,6 +29,16 @@ const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const isBuiltinSpecifier = (specifier: string) =>
   specifier.startsWith('node:') || builtinModules.includes(specifier);
+
+const resolveModule = (specifier: string, resolveBase: string): string | URL =>
+  // Node's loader hook worker clones the parent URL when native TypeScript
+  // loading is active. Passing URL objects can throw DataCloneError there.
+  importMetaResolve(
+    specifier,
+    resolveBase.startsWith('file:')
+      ? resolveBase
+      : pathToFileURL(resolveBase).href,
+  );
 
 export const appendSourceURL = (
   codeContent: string,
@@ -117,10 +129,10 @@ const defineRstestDynamicImport =
     // (which have no origin to pass) working as before.
     const resolveBase = origin ?? testPath;
     const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
+      ? pathToFileURL(specifier).href
       : isBuiltinSpecifier(specifier)
         ? specifier
-        : import.meta.resolve(specifier, pathToFileURL(resolveBase));
+        : resolveModule(specifier, resolveBase);
 
     // Use `.href` (full file:// URL) rather than `.pathname` so absolute
     // Windows specifiers (`D:\a\foo.mjs`) remain valid import targets. With
@@ -262,7 +274,7 @@ export const loadModule = async ({
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
-      })(specifier, referencingModule as ImportCallOptions),
+      })(specifier, {}, referencingModule.identifier),
     );
   }
 

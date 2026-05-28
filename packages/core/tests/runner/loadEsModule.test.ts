@@ -116,6 +116,24 @@ describe('loadEsModule', () => {
     expect(mod.default.bar).toBe('bar-val');
   });
 
+  it('should resolve external ESM after Node native TypeScript loader is used', async () => {
+    await import(fixturePath('nativeTsLoader.ts'));
+
+    const mod = await loadModule({
+      codeContent: [
+        `import { foo } from ${JSON.stringify(fixturePath('namedOnly.mjs'))};`,
+        'export default foo;',
+      ].join('\n'),
+      distPath: '/virtual/dist/entry.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+    });
+
+    expect(mod.default).toBe('foo-val');
+  });
+
   it('should preserve the real default export of a real native ESM module', async () => {
     const mod = await loadModule({
       codeContent: [
