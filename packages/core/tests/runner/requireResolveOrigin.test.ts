@@ -2,14 +2,18 @@ import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'pathe';
 import {
-  clearModuleCache,
+  clearModuleCache as clearEsModuleCache,
   loadModule as loadEsModule,
 } from '../../src/runtime/worker/loadEsModule';
-import { loadModule } from '../../src/runtime/worker/loadModule';
+import {
+  clearModuleCache as clearCjsModuleCache,
+  loadModule,
+} from '../../src/runtime/worker/loadModule';
 
 describe('require.resolve origin runtime helper', () => {
   afterEach(() => {
-    clearModuleCache();
+    clearEsModuleCache();
+    clearCjsModuleCache();
   });
 
   it('resolves relative specifiers against injected source module origin', () => {
