@@ -60,6 +60,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Coverage provider to use (istanbul | v8)',
   ],
   [
+    '--coverage.reporters <reporter>',
+    'Coverage reporter to use (repeat the flag for multiple reporters)',
+  ],
+  [
     '--coverage.changed [commit]',
     'Collect coverage only for changed files, optionally since a commit',
   ],
@@ -215,6 +219,7 @@ const valueTakingOptions = new Set([
   '--config-loader',
   '--coverage.changed',
   '--coverage.provider',
+  '--coverage.reporters',
   '--exclude',
   '--hookTimeout',
   '--include',

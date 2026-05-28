@@ -3,6 +3,8 @@ title: Test
 description: test defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Test
 
 `test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
@@ -11,7 +13,7 @@ Alias: `it`.
 
 ## test
 
-- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Defines a test case.
 
@@ -23,6 +25,53 @@ test('should add two numbers correctly', () => {
   expect(1 + 2).toBe(3);
 });
 ```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.10.3" />
+
+The third argument tunes the behavior of a single test. Passing a number is shorthand for `{ timeout: n }` so existing code keeps working:
+
+```ts
+test('runs within 3s', async () => {
+  /* ... */
+}, 3000);
+
+// equivalent to:
+test(
+  'runs within 3s',
+  async () => {
+    /* ... */
+  },
+  { timeout: 3000 },
+);
+```
+
+`TestOptions` accepts:
+
+- `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
+- `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
+- `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
+
+```ts
+test(
+  'flaky network call',
+  async () => {
+    /* ... */
+  },
+  { retry: 3 },
+);
+
+test(
+  'stays green across runs',
+  async () => {
+    /* ... */
+  },
+  { repeats: 9 },
+); // 10 total runs; first failure short-circuits the rest
+```
+
+`test.each` and `test.for` accept the same third argument and apply it to every generated case.
 
 ## test.only
 
@@ -54,7 +103,7 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Runs the same test logic for each item in the provided array.
 
@@ -150,7 +199,7 @@ test.each([
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Alternative to `test.each` to provide `TestContext`.
 
