@@ -64,8 +64,13 @@ export type CommonOptions = {
         enabled?: boolean | string;
         allowExternal?: boolean;
         provider?: 'istanbul' | 'v8';
-        reporters?: string | string[];
+        include?: string | string[];
         changed?: boolean | string;
+        exclude?: string | string[];
+        reporters?: string | string[];
+        reportsDirectory?: string;
+        reportOnFailure?: boolean | string;
+        clean?: boolean | string;
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
@@ -214,11 +219,39 @@ function mergeWithCLIOptions(
         config.coverage.provider = options.coverage.provider;
         shouldEnableCoverage = true;
       }
+      if (options.coverage.include !== undefined) {
+        config.coverage.include = castArray(options.coverage.include);
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.exclude !== undefined) {
+        config.coverage.exclude = castArray(options.coverage.exclude);
+        shouldEnableCoverage = true;
+      }
       if (options.coverage.reporters !== undefined) {
         config.coverage.reporters = castArray(
           options.coverage.reporters,
         ) as typeof config.coverage.reporters;
         shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportsDirectory !== undefined) {
+        config.coverage.reportsDirectory = options.coverage.reportsDirectory;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportOnFailure !== undefined) {
+        const reportOnFailure = coerceCliBoolean(
+          options.coverage.reportOnFailure,
+        );
+        if (reportOnFailure !== undefined) {
+          config.coverage.reportOnFailure = reportOnFailure;
+          shouldEnableCoverage = true;
+        }
+      }
+      if (options.coverage.clean !== undefined) {
+        const clean = coerceCliBoolean(options.coverage.clean);
+        if (clean !== undefined) {
+          config.coverage.clean = clean;
+          shouldEnableCoverage = true;
+        }
       }
       if (options.coverage.changed !== undefined) {
         changed = normalizeBooleanLikeCliValue(options.coverage.changed);

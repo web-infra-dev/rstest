@@ -619,6 +619,48 @@ describe('resolveProjects', () => {
         reporters: ['lcov'],
       });
     });
+
+    it('should override coverage options from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                include: ['old-include/**'],
+                exclude: ['old-exclude/**'],
+                reporters: ['html'],
+                reportsDirectory: 'old-coverage',
+                clean: true,
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            include: ['src/**', 'test/**'],
+            exclude: ['src/generated/**'],
+            reporters: ['text', 'json'],
+            reportsDirectory: 'custom-coverage',
+            reportOnFailure: 'true',
+            clean: 'false',
+            allowExternal: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        include: ['src/**', 'test/**'],
+        exclude: ['src/generated/**'],
+        reporters: ['text', 'json'],
+        reportsDirectory: 'custom-coverage',
+        reportOnFailure: true,
+        clean: false,
+        allowExternal: true,
+      });
+    });
   });
 
   describe('pool CLI options', () => {
