@@ -2,6 +2,8 @@
 description: A set of useful utility functions. Includes practical guidance, options, and examples for real projects.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Utilities
 
 A set of useful utility functions.
@@ -10,13 +12,16 @@ A set of useful utility functions.
 
 - **Alias:** `rstest.stubEnv`
 
-- **Type:** `(name: string, value: string | undefined) => Rstest`
+- **Type:** `(name: string, value: string | undefined) => Rstest & Disposable`
+
+<ApiMeta addedVersion="0.10.2" />
 
 Temporarily sets an environment variable in `process.env` and `import.meta.env` to the specified value. Useful for testing code that depends on environment variables.
 
 - If `value` is `undefined`, the variable will be removed from `process.env` and `import.meta.env`.
 - You can call this multiple times to stub multiple variables.
 - Use `rs.unstubAllEnvs()` to restore all environment variables changed by this method.
+- Rstest supports the `using` syntax to restore the scoped env stub automatically when the block exits.
 
 **Example:**
 
@@ -28,6 +33,13 @@ expect(import.meta.env.NODE_ENV).toBe('test');
 rs.stubEnv('MY_VAR', undefined);
 expect(process.env.MY_VAR).toBeUndefined();
 expect(import.meta.env.MY_VAR).toBeUndefined();
+```
+
+```ts
+{
+  using _env = rs.stubEnv('NODE_ENV', 'test');
+  expect(process.env.NODE_ENV).toBe('test');
+}
 ```
 
 ## rs.unstubAllEnvs
@@ -54,12 +66,15 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 - **Alias:** `rstest.stubGlobal`
 
-- **Type:** `(name: string | number | symbol, value: unknown) => Rstest`
+- **Type:** `(name: string | number | symbol, value: unknown) => Rstest & Disposable`
+
+<ApiMeta addedVersion="0.10.2" />
 
 Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
 
 - You can call this multiple times to stub multiple globals.
 - Use `rs.unstubAllGlobals()` to restore all globals changed by this method.
+- Rstest supports the `using` syntax to restore the scoped global stub automatically when the block exits.
 
 **Example:**
 
@@ -69,6 +84,13 @@ expect(globalThis.myGlobal).toBe(123);
 
 rs.stubGlobal(Symbol.for('foo'), 'bar');
 expect(globalThis[Symbol.for('foo')]).toBe('bar');
+```
+
+```ts
+{
+  using _global = rs.stubGlobal('myGlobal', 123);
+  expect(globalThis.myGlobal).toBe(123);
+}
 ```
 
 ## rs.unstubAllGlobals

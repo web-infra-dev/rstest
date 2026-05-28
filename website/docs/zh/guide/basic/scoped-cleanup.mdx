@@ -1,0 +1,123 @@
+---
+description: 使用 `using` 和 `await using` 在代码块退出时自动清理测试中的临时资源。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# 作用域清理
+
+<ApiMeta addedVersion="0.10.2" />
+
+Rstest 支持对测试中的临时变更进行作用域清理。当运行时或工具链支持 explicit resource management 时，你可以使用 `using` 在代码块退出时自动恢复资源。
+
+这适用于测试中临时修改共享状态的场景，例如 spy、环境变量、全局变量或 fake timers。
+
+## Spy 清理
+
+Mock 和 spy 实现了 `Symbol.dispose`，因此通过 `rs.spyOn()` 创建的 spy 会在 `using` 代码块退出时自动恢复。
+
+```ts title="logger.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('logs a warning', () => {
+  {
+    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    console.warn('invalid payload');
+    expect(warn).toHaveBeenCalledWith('invalid payload');
+  }
+
+  // console.warn 在这里已恢复
+});
+```
+
+更多 spy 示例可以参考 [Mock](/guide/basic/mock#using-语法)。
+
+## 环境变量
+
+`rs.stubEnv()` 会返回一个可释放资源。当它离开 `using` 作用域时，只会恢复当前作用域内的 env stub。
+
+```ts title="env.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('uses test env', () => {
+  {
+    using _env = rs.stubEnv('NODE_ENV', 'test');
+
+    expect(process.env.NODE_ENV).toBe('test');
+  }
+
+  // NODE_ENV 在这里已恢复
+});
+```
+
+嵌套的 env stub 会按相反顺序恢复：
+
+```ts
+using _outer = rs.stubEnv('FEATURE_FLAG', 'on');
+expect(process.env.FEATURE_FLAG).toBe('on');
+
+{
+  using _inner = rs.stubEnv('FEATURE_FLAG', 'off');
+  expect(process.env.FEATURE_FLAG).toBe('off');
+}
+
+expect(process.env.FEATURE_FLAG).toBe('on');
+```
+
+你仍然可以调用 [rs.unstubAllEnvs()](/api/runtime-api/rstest/utilities#rsunstuballenvs) 来恢复当前测试中的所有 env stub。
+
+## 全局变量
+
+`rs.stubGlobal()` 同样会返回一个可释放资源，适合临时替换全局 API。
+
+```ts title="global.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('uses a global feature flag', () => {
+  {
+    using _global = rs.stubGlobal('__FEATURE_ENABLED__', true);
+
+    expect(globalThis.__FEATURE_ENABLED__).toBe(true);
+  }
+
+  // __FEATURE_ENABLED__ 在这里已恢复
+});
+```
+
+你仍然可以调用 [rs.unstubAllGlobals()](/api/runtime-api/rstest/utilities#rsunstuballglobals) 来恢复当前测试中的所有 global stub。
+
+## Fake timers
+
+`rs.useFakeTimers()` 会返回一个可释放资源，在代码块退出时恢复真实定时器。
+
+```ts title="timer.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('runs delayed work', () => {
+  {
+    using _timers = rs.useFakeTimers();
+
+    const fn = rs.fn();
+    setTimeout(fn, 1000);
+
+    rs.advanceTimersByTime(1000);
+    expect(fn).toHaveBeenCalledTimes(1);
+  }
+
+  expect(rs.isFakeTimers()).toBe(false);
+});
+```
+
+## 异步资源
+
+对于实现了 `Symbol.asyncDispose` 的异步资源，可以使用 `await using`。Rstest 的 browser provider 资源已在内部支持异步释放，因此 provider page、context 和 browser 可以通过相同的 explicit resource management 协议关闭。
+
+```ts
+await using resource = createAsyncResource();
+
+await resource.run();
+// 这里会等待 resource[Symbol.asyncDispose]() 执行完成
+```
+
+同步清理使用 `using`，需要等待异步清理完成时使用 `await using`。

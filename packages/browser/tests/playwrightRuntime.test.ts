@@ -3,11 +3,19 @@ import { chromium } from 'playwright';
 import { launchPlaywrightBrowser } from '../src/providers/playwright/runtime';
 
 type FakeContext = {
-  newPage: () => Promise<never>;
+  newPage: () => Promise<FakePage>;
   on: () => void;
   close: () => Promise<void>;
   setDefaultTimeout: (...args: unknown[]) => void;
   setDefaultNavigationTimeout: (...args: unknown[]) => void;
+};
+
+type FakePage = {
+  goto: () => Promise<void>;
+  exposeFunction: () => Promise<void>;
+  addInitScript: () => Promise<void>;
+  on: () => void;
+  close: () => Promise<void>;
 };
 
 describe('launchPlaywrightBrowser', () => {
@@ -126,5 +134,56 @@ describe('launchPlaywrightBrowser', () => {
         headless: true,
       },
     ]);
+  });
+
+  it('adds async disposal to browser, context, and page resources', async () => {
+    const closeCalls: string[] = [];
+    const fakePage: FakePage = {
+      async goto() {},
+      async exposeFunction() {},
+      async addInitScript() {},
+      on() {},
+      async close() {
+        closeCalls.push('page');
+      },
+    };
+    const fakeContext: FakeContext = {
+      async newPage() {
+        return fakePage;
+      },
+      on() {},
+      async close() {
+        closeCalls.push('context');
+      },
+      setDefaultTimeout() {},
+      setDefaultNavigationTimeout() {},
+    };
+
+    chromium.launch = (async () => {
+      return {
+        async close() {
+          closeCalls.push('browser');
+        },
+        async newContext() {
+          return fakeContext as never;
+        },
+      } as never;
+    }) as typeof chromium.launch;
+
+    const runtime = await launchPlaywrightBrowser({
+      browserName: 'chromium',
+      headless: true,
+      providerOptions: {},
+    });
+    const context = await runtime.browser.newContext({
+      viewport: null,
+    });
+    const page = await context.newPage();
+
+    await page[Symbol.asyncDispose]();
+    await context[Symbol.asyncDispose]();
+    await runtime.browser[Symbol.asyncDispose]();
+
+    expect(closeCalls).toEqual(['page', 'context', 'browser']);
   });
 });

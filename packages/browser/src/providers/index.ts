@@ -44,6 +44,7 @@ export type BrowserProviderPage = {
     ): void;
   };
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
 };
 
 /** Minimal browser context API surface required by hostController. */
@@ -51,11 +52,13 @@ export type BrowserProviderContext = {
   newPage: () => Promise<BrowserProviderPage>;
   on: (event: 'page', listener: (page: BrowserProviderPage) => void) => void;
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
 };
 
 /** Minimal browser API surface required by hostController. */
 export type BrowserProviderBrowser = {
   close: () => Promise<void>;
+  [Symbol.asyncDispose]: () => Promise<void>;
   newContext: (options: {
     viewport: { width: number; height: number } | null;
     providerOptions?: Record<string, unknown>;
