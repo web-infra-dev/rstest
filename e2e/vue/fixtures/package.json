@@ -11,8 +11,8 @@
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.7",
-    "@rsbuild/plugin-babel": "^1.1.2",
+    "@rsbuild/core": "~2.0.8",
+    "@rsbuild/plugin-babel": "^1.2.0",
     "@rsbuild/plugin-vue": "^1.2.8",
     "@rsbuild/plugin-vue-jsx": "^2.0.0",
     "@rstest/core": "workspace:*",
