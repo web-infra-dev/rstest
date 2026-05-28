@@ -24,59 +24,68 @@ type PlaywrightContextLike = Omit<
   newPage: () => Promise<PlaywrightPageLike>;
 };
 
-function addPageListener(
-  page: PlaywrightPageLike,
-  event: 'popup',
-  listener: (page: BrowserProviderPage) => void,
-): void;
-function addPageListener(
-  page: PlaywrightPageLike,
-  event: 'console',
-  listener: (message: BrowserConsoleMessage) => void,
-): void;
-function addPageListener(
-  page: PlaywrightPageLike,
-  event: 'popup' | 'console',
-  listener:
-    | ((page: BrowserProviderPage) => void)
-    | ((message: BrowserConsoleMessage) => void),
-): void;
-function addPageListener(
-  page: PlaywrightPageLike,
-  event: 'popup' | 'console',
-  listener:
-    | ((page: BrowserProviderPage) => void)
-    | ((message: BrowserConsoleMessage) => void),
-) {
-  if (event === 'popup') {
-    page.on(event, (popup) => {
-      (listener as (page: BrowserProviderPage) => void)(wrapPage(popup));
-    });
-    return;
+type AsyncDisposableResource<T> = T & {
+  [Symbol.asyncDispose]: () => Promise<void>;
+};
+
+const patchedPages = new WeakSet<PlaywrightPageLike>();
+const patchedContexts = new WeakSet<PlaywrightContextLike>();
+
+const withAsyncDispose = <T extends { close: () => Promise<void> }>(
+  resource: T,
+): AsyncDisposableResource<T> => {
+  Object.defineProperty(resource, Symbol.asyncDispose, {
+    configurable: true,
+    value: () => resource.close(),
+  });
+
+  return resource as AsyncDisposableResource<T>;
+};
+
+const wrapPage = (page: PlaywrightPageLike): BrowserProviderPage => {
+  if (patchedPages.has(page)) {
+    return withAsyncDispose(page) as BrowserProviderPage;
   }
 
-  page.on(event, listener as (message: BrowserConsoleMessage) => void);
-}
+  patchedPages.add(page);
+  const originalOn = page.on.bind(page);
+  page.on = ((
+    event: 'popup' | 'console',
+    listener:
+      | ((page: BrowserProviderPage) => void)
+      | ((message: BrowserConsoleMessage) => void),
+  ) => {
+    if (event === 'popup') {
+      originalOn(event, (popup) => {
+        (listener as (page: BrowserProviderPage) => void)(wrapPage(popup));
+      });
+      return;
+    }
 
-const wrapPage = (page: PlaywrightPageLike): BrowserProviderPage => ({
-  goto: (url, options) => page.goto(url, options),
-  exposeFunction: (name, fn) => page.exposeFunction(name, fn),
-  addInitScript: (script) => page.addInitScript(script),
-  on: (event, listener) => addPageListener(page, event, listener),
-  close: () => page.close(),
-  [Symbol.asyncDispose]: () => page.close(),
-});
+    originalOn(event, listener as (message: BrowserConsoleMessage) => void);
+  }) as PlaywrightPageLike['on'];
+
+  return withAsyncDispose(page) as BrowserProviderPage;
+};
 
 const wrapContext = (
   context: PlaywrightContextLike,
-): BrowserProviderContext => ({
-  newPage: async () => wrapPage(await context.newPage()),
-  on: (event, listener) => {
-    context.on(event, (page) => listener(wrapPage(page)));
-  },
-  close: () => context.close(),
-  [Symbol.asyncDispose]: () => context.close(),
-});
+): BrowserProviderContext => {
+  if (patchedContexts.has(context)) {
+    return withAsyncDispose(context) as BrowserProviderContext;
+  }
+
+  patchedContexts.add(context);
+  const originalNewPage = context.newPage.bind(context);
+  context.newPage = async () => wrapPage(await originalNewPage());
+
+  const originalOn = context.on.bind(context);
+  context.on = (event, listener) => {
+    originalOn(event, (page) => listener(wrapPage(page)));
+  };
+
+  return withAsyncDispose(context) as BrowserProviderContext;
+};
 
 export async function launchPlaywrightBrowser({
   browserName,

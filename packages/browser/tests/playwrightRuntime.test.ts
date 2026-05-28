@@ -16,6 +16,7 @@ type FakePage = {
   addInitScript: () => Promise<void>;
   on: () => void;
   close: () => Promise<void>;
+  getByRole: () => string;
 };
 
 describe('launchPlaywrightBrowser', () => {
@@ -146,6 +147,9 @@ describe('launchPlaywrightBrowser', () => {
       async close() {
         closeCalls.push('page');
       },
+      getByRole() {
+        return 'locator';
+      },
     };
     const fakeContext: FakeContext = {
       async newPage() {
@@ -179,6 +183,8 @@ describe('launchPlaywrightBrowser', () => {
       viewport: null,
     });
     const page = await context.newPage();
+
+    expect((page as FakePage).getByRole()).toBe('locator');
 
     await page[Symbol.asyncDispose]();
     await context[Symbol.asyncDispose]();
