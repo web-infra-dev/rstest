@@ -25,10 +25,11 @@ export function createRstest(
     /** Working directory; defaults to `process.cwd()`. */
     cwd?: string;
     /**
-     * When true, `runTests()` will not mutate `process.exitCode` or attach
-     * process signal handlers. Set by the `@rstest/core/api` adapter.
-     *
-     * @internal
+     * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
+     * and config errors throw instead of calling `process.exit()`, so a
+     * programmatic run can't kill the host process. (`process.exitCode` is
+     * still written; `runRstest` restores it via try/finally.) Set by the
+     * `@rstest/core/api` adapter.
      */
     embedded?: boolean;
   },

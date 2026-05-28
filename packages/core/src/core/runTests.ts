@@ -44,6 +44,7 @@ async function runBrowserModeTests(
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
@@ -857,9 +858,13 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+    }
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));

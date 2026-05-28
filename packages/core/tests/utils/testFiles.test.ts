@@ -118,6 +118,21 @@ describe('getTestEntries literal/glob handling', () => {
       ].sort(),
     );
   });
+
+  test('glob exclude applies to a literal include pointing to a real file', async () => {
+    mkdirSync(path.join(rootPath, 'generated'), { recursive: true });
+    writeFileSync(path.join(rootPath, 'generated', 'foo.test.ts'), 'export {}');
+
+    const entries = await getTestEntries({
+      ...baseArgs(rootPath),
+      include: ['generated/foo.test.ts'], // literal, real file on disk
+      exclude: ['**/generated/**'], // glob exclude that matches it
+    });
+
+    // The real file must be filtered by the glob `exclude`, exactly as it would
+    // be for a glob include. (Virtual literals — absent from disk — still pass.)
+    expect(Object.values(entries)).toEqual([]);
+  });
 });
 
 test('filterProjects', () => {

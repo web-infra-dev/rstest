@@ -102,6 +102,8 @@ export type RstestContext = {
    * @internal
    */
   trace: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;

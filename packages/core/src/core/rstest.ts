@@ -63,13 +63,7 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
-  /**
-   * When true, `runTests()` will not mutate `process.exitCode` or attach
-   * `process.on('exit' | 'SIG*')` handlers. Used by the programmatic API so
-   * test failures don't poison the host process.
-   *
-   * @internal
-   */
+  /** See the `embedded` option on `createRstest`. */
   embedded?: boolean;
 };
 
@@ -85,7 +79,6 @@ export class Rstest implements RstestContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
-  /** @internal */
   public embedded: boolean;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;

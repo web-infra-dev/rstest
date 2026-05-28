@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import pathe from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
@@ -111,43 +112,39 @@ export const getTestEntries = async ({
   fileFilterMode?: FileFilterMode;
   projectRoot: string;
 }): Promise<Record<string, string>> => {
-  // Literal include entries are treated as explicit paths (real file or virtual
-  // module backed by `experiments.VirtualModulesPlugin`). They bypass fs
-  // existence checks so virtual modules pass through tinyglobby's filter.
-  // Use tinyglobby's own `isDynamicPattern` to stay consistent with the glob
-  // call below.
-  const literalIncludes: string[] = [];
-  const globIncludes: string[] = [];
-  for (const pattern of include) {
-    (isDynamicPattern(pattern) ? globIncludes : literalIncludes).push(pattern);
-  }
-
   const globOptions = {
     cwd: projectRoot,
     absolute: true,
     ignore: exclude,
     dot: true,
     expandDirectories: false,
-  } as const;
+  };
 
-  // The include glob and the in-source glob are independent, so run them
-  // concurrently rather than serializing two filesystem walks.
+  // The include glob and the in-source glob are independent filesystem walks,
+  // so run them concurrently. Passing the full `include` (literal entries
+  // included) keeps `exclude` behaving exactly as before for real files.
   const [globbedFiles, sourceFiles] = await Promise.all([
-    globIncludes.length ? glob(globIncludes, globOptions) : [],
+    glob(include, globOptions),
     includeSource?.length ? glob(includeSource, globOptions) : [],
   ]);
 
-  // Literal includes bypass tinyglobby's `ignore: exclude`, so apply an
-  // exact-string exclude filter here. Glob exclude patterns against literal
-  // includes are not supported (would require pulling in picomatch).
-  const excludeSet = new Set(exclude);
-  const literalFiles = literalIncludes
-    .filter((p) => !excludeSet.has(p))
-    .map((p) =>
-      pathe.isAbsolute(p) ? pathe.normalize(p) : pathe.resolve(projectRoot, p),
-    );
+  // Virtual modules (backed by `experiments.VirtualModulesPlugin`) are listed
+  // as literal includes but don't exist on disk, so the glob above drops them
+  // — add those back. Real literal includes already flowed through the glob, so
+  // `exclude` applies to them; only genuinely-missing paths qualify as virtual
+  // here, and `exclude` does not apply to those. `isDynamicPattern` mirrors
+  // tinyglobby's own glob/literal split, so a glob that matches nothing is
+  // never mistaken for a virtual path.
+  const virtualFiles = include
+    .filter((pattern) => !isDynamicPattern(pattern))
+    .map((p) => pathe.resolve(projectRoot, p))
+    .filter((abs) => !existsSync(abs));
 
-  const testFiles = Array.from(new Set([...globbedFiles, ...literalFiles]));
+  // glob already returns a unique list (as on `main`), so only build a Set to
+  // dedupe when virtual entries are actually present.
+  const testFiles = virtualFiles.length
+    ? Array.from(new Set([...globbedFiles, ...virtualFiles]))
+    : globbedFiles;
 
   if (sourceFiles.length) {
     await Promise.all<void>(

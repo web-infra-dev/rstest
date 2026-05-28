@@ -308,6 +308,7 @@ const collectBrowserTests = async ({
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return listBrowserTests(context, { shardedEntries });

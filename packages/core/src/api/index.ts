@@ -1,6 +1,4 @@
 /**
- * @module @rstest/core/api
- *
  * Programmatic Node API for running Rstest in-process.
  *
  * @experimental
@@ -327,6 +325,7 @@ export async function runRstest(
   };
 
   let files: TestFileResult[] = [];
+  let rstest: ReturnType<typeof createRstest> | undefined;
 
   try {
     const { content: userConfig, filePath: configFilePath } =
@@ -355,7 +354,7 @@ export async function runRstest(
     const fileFilters = options.files ?? [];
     const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
 
-    const rstest = createRstest(
+    rstest = createRstest(
       {
         config: userConfig,
         configFilePath,
@@ -371,11 +370,17 @@ export async function runRstest(
     rstest.context.reporters.push(captureReporter);
 
     await rstest.runTests();
-
-    files = rstest.context.reporterResults.results.map(toPublicTestFileResult);
   } catch (err) {
     captured.unhandledErrors.unshift(toSerializedError(err));
   } finally {
+    // Read collected per-file results here (not at the end of `try`) so a
+    // failure in a post-run step — coverage report, global teardown, pool or
+    // server cleanup — doesn't discard results already gathered during the run.
+    if (rstest) {
+      files = rstest.context.reporterResults.results.map(
+        toPublicTestFileResult,
+      );
+    }
     process.exitCode = originalExitCode;
   }
 
