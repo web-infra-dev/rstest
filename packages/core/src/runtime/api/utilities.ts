@@ -98,15 +98,17 @@ export const createRstestUtilities: (
   ): DisposableRstestUtilities => {
     let disposed = false;
     const disposableRstest = Object.create(rstest) as DisposableRstestUtilities;
-    Object.defineProperty(disposableRstest, Symbol.dispose, {
-      configurable: true,
-      value: () => {
-        if (!disposed) {
-          disposed = true;
-          dispose();
-        }
-      },
-    });
+    if (Symbol.dispose) {
+      Object.defineProperty(disposableRstest, Symbol.dispose, {
+        configurable: true,
+        value: () => {
+          if (!disposed) {
+            disposed = true;
+            dispose();
+          }
+        },
+      });
+    }
     return disposableRstest;
   };
 

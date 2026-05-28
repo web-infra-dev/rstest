@@ -28,6 +28,11 @@ type AsyncDisposableResource<T> = T & {
   [Symbol.asyncDispose]: () => Promise<void>;
 };
 
+type PlaywrightBrowserLike = Omit<
+  BrowserProviderRuntime['browser'],
+  typeof Symbol.asyncDispose
+>;
+
 const patchedPages = new WeakSet<PlaywrightPageLike>();
 const patchedContexts = new WeakSet<PlaywrightContextLike>();
 
@@ -35,7 +40,10 @@ const withAsyncDispose = <T extends { close: () => Promise<void> }>(
   resource: T,
 ): AsyncDisposableResource<T> => {
   if (typeof Symbol.asyncDispose === 'symbol') {
-    const existing = Object.getOwnPropertyDescriptor(resource, Symbol.asyncDispose);
+    const existing = Object.getOwnPropertyDescriptor(
+      resource,
+      Symbol.asyncDispose,
+    );
     if (!existing) {
       Object.defineProperty(resource, Symbol.asyncDispose, {
         configurable: true,
@@ -122,9 +130,8 @@ export async function launchPlaywrightBrowser({
     args: launchArgs,
   });
 
-  const wrappedBrowser: BrowserProviderRuntime['browser'] = {
+  const wrappedBrowser = withAsyncDispose({
     close: async () => browser.close(),
-    [Symbol.asyncDispose]: async () => browser.close(),
     newContext: async ({
       providerOptions: contextProviderOptions,
       viewport,
@@ -139,7 +146,7 @@ export async function launchPlaywrightBrowser({
 
       return wrapContext(context as unknown as PlaywrightContextLike);
     },
-  };
+  } satisfies PlaywrightBrowserLike) as BrowserProviderRuntime['browser'];
 
   return {
     browser: wrappedBrowser,
