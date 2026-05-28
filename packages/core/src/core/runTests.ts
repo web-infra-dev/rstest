@@ -81,6 +81,10 @@ const reportNoTestFiles = ({
       logger.error(color.red(message));
     }
 
+    // `process.exitCode` mutations here (and in deeper layers such as
+    // globalSetup teardown, coverage threshold checks) are restored to their
+    // pre-run value by `runRstest` in the embedded path via try/finally, so
+    // we don't need to gate them per-call site.
     process.exitCode = code;
   }
 
@@ -760,7 +764,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const isFailure = nodeHasFailure || browserHasFailure;
 
-      if (isFailure && !context.embedded) {
+      if (isFailure) {
         process.exitCode = 1;
       }
 
@@ -1072,9 +1076,7 @@ export async function runTests(context: Rstest): Promise<void> {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
 
-        if (!context.embedded) {
-          process.exitCode = 1;
-        }
+        process.exitCode = 1;
       }
     };
 
@@ -1086,20 +1088,13 @@ export async function runTests(context: Rstest): Promise<void> {
     };
 
     // In embedded (programmatic) mode the caller owns process lifecycle and
-    // signal routing, so this is a no-op pair.
-    const uninstallProcessHandlers = (() => {
-      if (context.embedded) return () => {};
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
       process.on('exit', unExpectedExit);
       process.on('SIGINT', handleSignal);
       process.on('SIGTERM', handleSignal);
       process.on('SIGTSTP', handleSignal);
-      return () => {
-        process.off('exit', unExpectedExit);
-        process.off('SIGINT', handleSignal);
-        process.off('SIGTERM', handleSignal);
-        process.off('SIGTSTP', handleSignal);
-      };
-    })();
+    }
 
     try {
       await run();
@@ -1110,7 +1105,12 @@ export async function runTests(context: Rstest): Promise<void> {
       // Run global teardown after all tests are done
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
     } finally {
-      uninstallProcessHandlers();
+      if (!context.embedded) {
+        process.off('exit', unExpectedExit);
+        process.off('SIGINT', handleSignal);
+        process.off('SIGTERM', handleSignal);
+        process.off('SIGTSTP', handleSignal);
+      }
     }
 
     await runLifecycleStep('trace wait for exit', () =>

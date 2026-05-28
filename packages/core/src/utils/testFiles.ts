@@ -132,9 +132,15 @@ export const getTestEntries = async ({
       })
     : [];
 
-  const literalFiles = literalIncludes.map((p) =>
-    pathe.isAbsolute(p) ? pathe.normalize(p) : pathe.resolve(projectRoot, p),
-  );
+  // Literal includes bypass tinyglobby's `ignore: exclude`, so apply an
+  // exact-string exclude filter here. Glob exclude patterns against literal
+  // includes are not supported (would require pulling in picomatch).
+  const excludeSet = new Set(exclude);
+  const literalFiles = literalIncludes
+    .filter((p) => !excludeSet.has(p))
+    .map((p) =>
+      pathe.isAbsolute(p) ? pathe.normalize(p) : pathe.resolve(projectRoot, p),
+    );
 
   const testFiles = Array.from(new Set([...globbedFiles, ...literalFiles]));
 

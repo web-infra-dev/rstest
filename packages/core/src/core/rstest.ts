@@ -140,7 +140,11 @@ export class Rstest implements RstestContext {
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      logger.error('Test sharding is not supported in watch mode.');
+      const message = 'Test sharding is not supported in watch mode.';
+      if (embedded) {
+        throw new Error(message);
+      }
+      logger.error(message);
       process.exit(1);
     }
 
@@ -162,13 +166,16 @@ export class Rstest implements RstestContext {
             (project.config.shard.count !== rstestConfig.shard?.count ||
               project.config.shard.index !== rstestConfig.shard?.index)
           ) {
-            logger.error(
+            const message =
               'The `shard` option is a global option and cannot be set per-project.\n' +
-                'global `shard` option:\n' +
-                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
-                `project "${project.config.name}" shard option:\n` +
-                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
-            );
+              'global `shard` option:\n' +
+              `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
+              `project "${project.config.name}" shard option:\n` +
+              `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`;
+            if (embedded) {
+              throw new Error(message);
+            }
+            logger.error(message);
             process.exit(1);
           }
 

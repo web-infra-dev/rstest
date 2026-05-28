@@ -1,13 +1,17 @@
 /**
+ * @module @rstest/core/api
+ *
  * Programmatic Node API for running Rstest in-process.
  *
- * Stability: Public surface; field-frozen at 1.0.0. Adding optional fields is
- * a minor change; removing or repurposing fields requires a major bump.
- *
- * @see RFC-programmatic-node-api.md
+ * @experimental
+ * All exports from this entrypoint are **experimental** and subject to change
+ * in any release until Rstest reaches 1.0.0, at which point this surface will
+ * be stabilized. Field additions are non-breaking; field removals, renames, or
+ * semantic changes may land in any minor release in the 0.x line. Pin the
+ * exact patch version of `@rstest/core` if you depend on these APIs today.
  */
-import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
 import { resolveProjects } from '../cli/init';
+import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
 import { createRstest } from '../core';
 import type {
   CoverageMapData,
@@ -15,18 +19,37 @@ import type {
   Reporter,
   RstestConfig,
   SnapshotSummary,
-  TestFileResult,
+  TestFileResult as InternalTestFileResult,
+  TestResult as InternalTestResult,
+  TestResultStatus,
 } from '../types';
 import { getAbsolutePath } from '../utils';
 
-export type { Reporter, TestFileResult } from '../types';
-/** Inline configuration shape; same type the `rstest.config.ts` exports. */
+/**
+ * @experimental Subject to change until 1.0.0.
+ */
+export type { Reporter } from '../types';
+
+/**
+ * Inline configuration shape; same type the `rstest.config.ts` exports.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
 export type { RstestConfig as RstestUserConfig } from '../types';
 
 /**
- * Cross-IPC-safe error shape. Returned in `TestRunResult.unhandledErrors`.
- * Assertion-specific fields (`diff`, `actual`, `expected`) are only set for
- * `@vitest/expect`-style errors.
+ * Per-test result status.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export type { TestResultStatus } from '../types';
+
+/**
+ * Cross-IPC-safe error shape. Returned in `TestRunResult.unhandledErrors` and
+ * in per-test `errors`/`retryErrors`. Assertion-specific fields (`diff`,
+ * `actual`, `expected`) are only set for `@vitest/expect`-style errors.
+ *
+ * @experimental Subject to change until 1.0.0.
  */
 export interface SerializedError {
   name: string;
@@ -38,6 +61,50 @@ export interface SerializedError {
   cause?: SerializedError;
 }
 
+/**
+ * Public per-test result. Intentionally a curated subset of the internal
+ * reporter type so refactors of internal reporter state do not break this
+ * surface.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface TestResult {
+  /** Final state of the test case. */
+  status: TestResultStatus;
+  /** Test case name (no parent suite names included). */
+  name: string;
+  /** Absolute path to the test file. */
+  testPath: string;
+  /** Names of parent `describe` blocks, outermost first. */
+  parentNames?: string[];
+  /** Wall-clock duration in ms; absent for skipped/todo tests. */
+  duration?: number;
+  /** Errors from the final attempt. */
+  errors?: SerializedError[];
+  /** Errors from previous failed attempts when `retry` is configured. */
+  retryErrors?: SerializedError[];
+  /** Number of retries performed (0 when the first attempt passed). */
+  retryCount?: number;
+  /** Project name from `projects` config; default project is `'default'`. */
+  project: string;
+}
+
+/**
+ * Public per-file result. Extends {@link TestResult} with the per-case
+ * breakdown.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface TestFileResult extends TestResult {
+  /** Flattened list of test cases discovered in this file. */
+  results: TestResult[];
+}
+
+/**
+ * Options for {@link runRstest}.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
 export interface RunRstestOptions {
   /** Working directory. Defaults to `process.cwd()`. */
   cwd?: string;
@@ -68,8 +135,13 @@ export interface RunRstestOptions {
   testNamePattern?: RegExp | string;
 }
 
+/**
+ * Result of a {@link runRstest} call.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
 export interface TestRunResult {
-  /** `stats.tests.failed === 0 && unhandledErrors.length === 0`. */
+  /** `stats.tests.failed === 0 && stats.files.failed === 0 && unhandledErrors.length === 0`. */
   ok: boolean;
 
   /** Per-file aggregate results. */
@@ -103,10 +175,17 @@ export interface TestRunResult {
   coverage?: CoverageMapData;
 }
 
-const toSerializedError = (err: unknown): SerializedError => {
+const toSerializedError = (
+  err: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): SerializedError => {
   if (!err || typeof err !== 'object') {
     return { name: 'Error', message: String(err) };
   }
+  if (seen.has(err)) {
+    return { name: 'Error', message: '[Circular]' };
+  }
+  seen.add(err);
   const e = err as Partial<FormattedError> & { cause?: unknown };
   return {
     name: e.name || 'Error',
@@ -115,9 +194,26 @@ const toSerializedError = (err: unknown): SerializedError => {
     diff: e.diff,
     actual: e.actual,
     expected: e.expected,
-    cause: e.cause !== undefined ? toSerializedError(e.cause) : undefined,
+    cause: e.cause !== undefined ? toSerializedError(e.cause, seen) : undefined,
   };
 };
+
+const toPublicTestResult = (r: InternalTestResult): TestResult => ({
+  status: r.status,
+  name: r.name,
+  testPath: r.testPath,
+  parentNames: r.parentNames,
+  duration: r.duration,
+  errors: r.errors?.map((err) => toSerializedError(err)),
+  retryErrors: r.retryErrors?.map((err) => toSerializedError(err)),
+  retryCount: r.retryCount,
+  project: r.project,
+});
+
+const toPublicTestFileResult = (f: InternalTestFileResult): TestFileResult => ({
+  ...toPublicTestResult(f),
+  results: f.results.map(toPublicTestResult),
+});
 
 const computeStats = (
   files: readonly TestFileResult[],
@@ -169,14 +265,15 @@ const loadConfigForApi = async ({
     filePath = loaded.filePath ?? undefined;
   }
 
-  let merged = mergeRstestConfig(diskContent, inlineConfig ?? {});
-
-  // `loadConfig` already resolved `extends` on disk content. If the inline
-  // config introduced its own `extends`, resolve them here so the final
-  // merged config is fully expanded.
-  if (inlineConfig?.extends) {
-    merged = await resolveExtends(merged);
+  // `loadConfig` already resolved `extends` on disk content. Resolve inline
+  // extends *before* merging so the merged result doesn't carry both copies
+  // (which would double-apply disk extends if we re-ran resolveExtends here).
+  let resolvedInline: RstestConfig = inlineConfig ?? {};
+  if (resolvedInline.extends) {
+    resolvedInline = await resolveExtends(resolvedInline);
   }
+
+  const merged = mergeRstestConfig(diskContent, resolvedInline);
 
   return { content: merged, filePath };
 };
@@ -187,6 +284,8 @@ const loadConfigForApi = async ({
  * Resolves on every termination path — including config errors and worker
  * crashes — with `ok` reflecting overall success. The returned promise only
  * rejects for programmer errors (e.g. invalid argument types).
+ *
+ * @experimental Subject to change until 1.0.0.
  */
 export async function runRstest(
   options: RunRstestOptions = {},
@@ -194,6 +293,12 @@ export async function runRstest(
   const cwd = options.cwd
     ? getAbsolutePath(process.cwd(), options.cwd)
     : process.cwd();
+
+  // Snapshot `process.exitCode` and restore it in `finally`. Belt-and-suspenders
+  // against unconditional `process.exitCode = 1` mutations in deeper layers
+  // (globalSetup teardown, coverage threshold failures, etc.) that don't
+  // consult `context.embedded`. The CLI path never goes through this function.
+  const originalExitCode = process.exitCode;
 
   const captured: {
     unhandledErrors: SerializedError[];
@@ -212,7 +317,9 @@ export async function runRstest(
       coverage,
       snapshotSummary,
     }) => {
-      captured.unhandledErrors = (unhandledErrors ?? []).map(toSerializedError);
+      captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
+        toSerializedError(err),
+      );
       captured.duration = { total: duration.totalTime };
       captured.coverage = coverage;
       captured.snapshot = snapshotSummary;
@@ -220,69 +327,75 @@ export async function runRstest(
   };
 
   let files: TestFileResult[] = [];
-  let initError: SerializedError | undefined;
 
   try {
-    const { content: userConfig, filePath: configFilePath } =
-      await loadConfigForApi({
-        cwd,
-        configPath: options.config,
-        inlineConfig: options.inlineConfig,
+    try {
+      const { content: userConfig, filePath: configFilePath } =
+        await loadConfigForApi({
+          cwd,
+          configPath: options.config,
+          inlineConfig: options.inlineConfig,
+        });
+
+      if (!userConfig.root) {
+        userConfig.root = cwd;
+      }
+
+      if (options.testNamePattern !== undefined) {
+        userConfig.testNamePattern = options.testNamePattern;
+      }
+
+      const projects = await resolveProjects({
+        config: userConfig,
+        root: userConfig.root,
+        options: {},
       });
 
-    if (!userConfig.root) {
-      userConfig.root = cwd;
+      // `options.files !== undefined` (not `?.length`) so an explicit empty
+      // array runs zero files instead of falling back to fuzzy/no-filter mode.
+      const fileFilters = options.files ?? [];
+      const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
+
+      const rstest = createRstest(
+        {
+          config: userConfig,
+          configFilePath,
+          projects,
+          cwd,
+          embedded: true,
+        },
+        'run',
+        fileFilters,
+        fileFilterMode,
+      );
+
+      rstest.context.reporters.push(captureReporter);
+
+      await rstest.runTests();
+
+      files = rstest.context.reporterResults.results.map(
+        toPublicTestFileResult,
+      );
+    } catch (err) {
+      captured.unhandledErrors.unshift(toSerializedError(err));
     }
 
-    if (options.testNamePattern !== undefined) {
-      userConfig.testNamePattern = options.testNamePattern;
-    }
+    const stats = computeStats(files);
+    const ok =
+      stats.tests.failed === 0 &&
+      stats.files.failed === 0 &&
+      captured.unhandledErrors.length === 0;
 
-    const projects = await resolveProjects({
-      config: userConfig,
-      root: userConfig.root,
-      options: {},
-    });
-
-    const fileFilters = options.files ?? [];
-    const fileFilterMode = options.files?.length ? 'exact' : 'fuzzy';
-
-    const rstest = createRstest(
-      {
-        config: userConfig,
-        configFilePath,
-        projects,
-        cwd,
-        embedded: true,
-      },
-      'run',
-      fileFilters,
-      fileFilterMode,
-    );
-
-    rstest.context.reporters.push(captureReporter);
-
-    await rstest.runTests();
-
-    files = rstest.context.reporterResults.results;
-  } catch (err) {
-    initError = toSerializedError(err);
+    return {
+      ok,
+      files,
+      stats,
+      unhandledErrors: captured.unhandledErrors,
+      duration: captured.duration,
+      snapshot: captured.snapshot,
+      coverage: captured.coverage,
+    };
+  } finally {
+    process.exitCode = originalExitCode;
   }
-
-  const allErrors = initError
-    ? [initError, ...captured.unhandledErrors]
-    : captured.unhandledErrors;
-
-  const stats = computeStats(files);
-  const ok = stats.tests.failed === 0 && allErrors.length === 0;
-
-  return {
-    ok,
-    files,
-    stats,
-    unhandledErrors: allErrors,
-    duration: captured.duration,
-    snapshot: captured.snapshot,
-    coverage: captured.coverage,
-  };
 }
