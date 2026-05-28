@@ -72,7 +72,7 @@ importers:
     dependencies:
       '@codspeed/tinybench-plugin':
         specifier: ^5.4.0
-        version: 5.4.0(tinybench@5.1.0)
+        version: 5.4.0(tinybench@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -89,8 +89,8 @@ importers:
         specifier: ^0.184.0
         version: 0.184.0
       tinybench:
-        specifier: ^5.1.0
-        version: 5.1.0
+        specifier: ^6.0.2
+        version: 6.0.2
 
   e2e:
     devDependencies:
@@ -1211,6 +1211,8 @@ importers:
       webpack-license-plugin:
         specifier: ^4.5.1
         version: 4.5.1(webpack@5.107.2)
+
+  packages/core/tests/runner/fixtures/bare-parent: {}
 
   packages/coverage-istanbul:
     dependencies:
@@ -7645,8 +7647,8 @@ packages:
     resolution: {integrity: sha512-9phl76Cqm6FhSX9Xe1ZUAMLtm1BLkKj2Qd5ApyWkXzsMRaA7dgr81kf4wJmQf/hAvg8EEyJxDo3du/0KlhPiKQ==}
     engines: {node: '>=0.6.0'}
 
-  tinybench@5.1.0:
-    resolution: {integrity: sha512-LXKNtFualiKOm6gADe1UXPtf8+Nfn1CtPMEHAT33Fd2YjQatrujkDcK0+4wRC1X6t7fxUDXUs6BsvuIgfkDgDg==}
+  tinybench@6.0.2:
+    resolution: {integrity: sha512-FlHoQpcFvCzeXK5kVPvV7IVgW/hs/B36QWTz876iSdeJguBDfdTSRQmYmaHX+fQNt4hp+gEFB2XXw+8hT4/y8A==}
     engines: {node: '>=20.0.0'}
 
   tinyexec@1.2.2:
@@ -8593,11 +8595,11 @@ snapshots:
       - debug
       - supports-color
 
-  '@codspeed/tinybench-plugin@5.4.0(tinybench@5.1.0)':
+  '@codspeed/tinybench-plugin@5.4.0(tinybench@6.0.2)':
     dependencies:
       '@codspeed/core': 5.4.0
       stack-trace: 1.0.0-pre2
-      tinybench: 5.1.0
+      tinybench: 6.0.2
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -15189,7 +15191,7 @@ snapshots:
     dependencies:
       setimmediate: 1.0.5
 
-  tinybench@5.1.0: {}
+  tinybench@6.0.2: {}
 
   tinyexec@1.2.2: {}
 
