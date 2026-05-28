@@ -57,6 +57,16 @@ export type TestCase = TestCaseInfo & {
   inTestEach?: boolean;
   context: TestContext;
   only?: boolean;
+  /**
+   * Per-test override for the number of retries on failure. When undefined,
+   * the runner falls back to `runtimeConfig.retry`.
+   */
+  retry?: number;
+  /**
+   * Number of additional runs to perform on top of the first run; any failure
+   * short-circuits remaining repeats. Currently per-test only.
+   */
+  repeats?: number;
   onFinished: OnTestFinishedHandler[];
   onFailed: OnTestFailedHandler[];
   /**
@@ -73,9 +83,9 @@ export type TestCase = TestCaseInfo & {
   result?: TaskResult;
 };
 
-export type SuiteContext = {
+export interface SuiteContext {
   filepath: TestPath;
-};
+}
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
 

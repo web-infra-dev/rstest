@@ -54,9 +54,14 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--exclude <exclude>', 'Exclude files from test'],
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
+  ['--coverage.enabled', 'Enable code coverage collection'],
   [
     '--coverage.provider <provider>',
     'Coverage provider to use (istanbul | v8)',
+  ],
+  [
+    '--coverage.reporters <reporter>',
+    'Coverage reporter to use (repeat the flag for multiple reporters)',
   ],
   [
     '--coverage.changed [commit]',
@@ -214,6 +219,7 @@ const valueTakingOptions = new Set([
   '--config-loader',
   '--coverage.changed',
   '--coverage.provider',
+  '--coverage.reporters',
   '--exclude',
   '--hookTimeout',
   '--include',

@@ -11,6 +11,18 @@ import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 
+/**
+ * Coerce a user-supplied retry/repeats count into a non-negative integer.
+ * Negative, NaN, Infinity, and fractional values collapse to 0 so loop
+ * bounds stay well-defined.
+ */
+export const sanitizeAttemptCount = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.floor(value);
+};
+
 export const getTestStatus = (
   results: TestResult[],
   defaultStatus: TestResultStatus,
