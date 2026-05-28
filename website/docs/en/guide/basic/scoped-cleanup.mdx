@@ -6,11 +6,15 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Scoped cleanup
 
-<ApiMeta addedVersion="0.10.2" />
-
 Rstest supports scoped cleanup for temporary test changes. When your runtime or toolchain supports explicit resource management, you can use `using` to automatically restore resources at the end of a block.
 
 This is useful when a test temporarily changes shared state, such as spies, environment variables, globals, or fake timers.
+
+## Disposable `using` syntax
+
+<ApiMeta addedVersion="0.10.3" />
+
+`rs.stubEnv()`, `rs.stubGlobal()`, and `rs.useFakeTimers()` return disposable resources that work with `using`.
 
 ## Spy cleanup
 

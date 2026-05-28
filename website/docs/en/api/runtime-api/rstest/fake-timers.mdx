@@ -16,8 +16,6 @@ Rstest provides some utility functions to help you fake timers powered by [@sino
 - **Alias:** `rstest.useFakeTimers`
 - **Type:** `(config?: FakeTimerInstallOpts) => Rstest & Disposable`
 
-<ApiMeta addedVersion="0.10.2" />
-
 To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
 ```ts
@@ -25,6 +23,10 @@ rs.useFakeTimers();
 ```
 
 You can also pass a configuration object to customize the behavior of the fake timers.
+
+**Disposable / `using` syntax**
+
+<ApiMeta addedVersion="0.10.3" />
 
 Rstest supports the `using` syntax to restore real timers automatically when the block exits:
 

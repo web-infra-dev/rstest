@@ -14,14 +14,17 @@ import { ApiMeta } from '@components/ApiMeta';
 
 - **类型：** `(name: string, value: string | undefined) => Rstest & Disposable`
 
-<ApiMeta addedVersion="0.10.2" />
-
 临时设置 `process.env` 和 `import.meta.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
 
 - 如果 `value` 为 `undefined`，该变量会从 `process.env` 和 `import.meta.env` 中移除。
 - 可多次调用以模拟多个环境变量。
 - 使用 `rs.unstubAllEnvs()` 可恢复所有通过此方法更改的环境变量。
-- Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 env stub。
+
+**Disposable / `using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 env stub。
 
 **示例：**
 
@@ -68,13 +71,16 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 - **类型：** `(name: string | number | symbol, value: unknown) => Rstest & Disposable`
 
-<ApiMeta addedVersion="0.10.2" />
-
 临时设置全局变量为指定值。适用于模拟全局对象或函数。
 
 - 可多次调用以模拟多个全局变量。
 - 使用 `rs.unstubAllGlobals()` 可恢复所有通过此方法更改的全局变量。
-- Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 global stub。
+
+**Disposable / `using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 global stub。
 
 **示例：**
 

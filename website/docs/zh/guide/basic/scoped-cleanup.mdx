@@ -6,11 +6,15 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # 作用域清理
 
-<ApiMeta addedVersion="0.10.2" />
-
 Rstest 支持对测试中的临时变更进行作用域清理。当运行时或工具链支持 explicit resource management 时，你可以使用 `using` 在代码块退出时自动恢复资源。
 
 这适用于测试中临时修改共享状态的场景，例如 spy、环境变量、全局变量或 fake timers。
+
+## Disposable / `using` 语法
+
+<ApiMeta addedVersion="0.10.3" />
+
+`rs.stubEnv()`、`rs.stubGlobal()` 和 `rs.useFakeTimers()` 会返回可释放资源，可配合 `using` 使用。
 
 ## Spy 清理
 
