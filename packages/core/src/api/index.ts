@@ -329,73 +329,69 @@ export async function runRstest(
   let files: TestFileResult[] = [];
 
   try {
-    try {
-      const { content: userConfig, filePath: configFilePath } =
-        await loadConfigForApi({
-          cwd,
-          configPath: options.config,
-          inlineConfig: options.inlineConfig,
-        });
-
-      if (!userConfig.root) {
-        userConfig.root = cwd;
-      }
-
-      if (options.testNamePattern !== undefined) {
-        userConfig.testNamePattern = options.testNamePattern;
-      }
-
-      const projects = await resolveProjects({
-        config: userConfig,
-        root: userConfig.root,
-        options: {},
+    const { content: userConfig, filePath: configFilePath } =
+      await loadConfigForApi({
+        cwd,
+        configPath: options.config,
+        inlineConfig: options.inlineConfig,
       });
 
-      // `options.files !== undefined` (not `?.length`) so an explicit empty
-      // array runs zero files instead of falling back to fuzzy/no-filter mode.
-      const fileFilters = options.files ?? [];
-      const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
-
-      const rstest = createRstest(
-        {
-          config: userConfig,
-          configFilePath,
-          projects,
-          cwd,
-          embedded: true,
-        },
-        'run',
-        fileFilters,
-        fileFilterMode,
-      );
-
-      rstest.context.reporters.push(captureReporter);
-
-      await rstest.runTests();
-
-      files = rstest.context.reporterResults.results.map(
-        toPublicTestFileResult,
-      );
-    } catch (err) {
-      captured.unhandledErrors.unshift(toSerializedError(err));
+    if (!userConfig.root) {
+      userConfig.root = cwd;
     }
 
-    const stats = computeStats(files);
-    const ok =
-      stats.tests.failed === 0 &&
-      stats.files.failed === 0 &&
-      captured.unhandledErrors.length === 0;
+    if (options.testNamePattern !== undefined) {
+      userConfig.testNamePattern = options.testNamePattern;
+    }
 
-    return {
-      ok,
-      files,
-      stats,
-      unhandledErrors: captured.unhandledErrors,
-      duration: captured.duration,
-      snapshot: captured.snapshot,
-      coverage: captured.coverage,
-    };
+    const projects = await resolveProjects({
+      config: userConfig,
+      root: userConfig.root,
+      options: {},
+    });
+
+    // `options.files !== undefined` (not `?.length`) so an explicit empty
+    // array runs zero files instead of falling back to fuzzy/no-filter mode.
+    const fileFilters = options.files ?? [];
+    const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
+
+    const rstest = createRstest(
+      {
+        config: userConfig,
+        configFilePath,
+        projects,
+        cwd,
+        embedded: true,
+      },
+      'run',
+      fileFilters,
+      fileFilterMode,
+    );
+
+    rstest.context.reporters.push(captureReporter);
+
+    await rstest.runTests();
+
+    files = rstest.context.reporterResults.results.map(toPublicTestFileResult);
+  } catch (err) {
+    captured.unhandledErrors.unshift(toSerializedError(err));
   } finally {
     process.exitCode = originalExitCode;
   }
+
+  const stats = computeStats(files);
+  const ok =
+    stats.tests.failed === 0 &&
+    stats.files.failed === 0 &&
+    captured.unhandledErrors.length === 0;
+
+  return {
+    ok,
+    files,
+    stats,
+    unhandledErrors: captured.unhandledErrors,
+    duration: captured.duration,
+    snapshot: captured.snapshot,
+    coverage: captured.coverage,
+  };
 }

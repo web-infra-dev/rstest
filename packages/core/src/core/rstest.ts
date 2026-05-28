@@ -42,6 +42,19 @@ function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
 }
 
+/**
+ * Report a fatal configuration error. In embedded (programmatic) mode the
+ * caller owns the process, so throw and let `runRstest` surface it; otherwise
+ * log and exit the CLI process.
+ */
+function failConfig(embedded: boolean, message: string): never {
+  if (embedded) {
+    throw new Error(message);
+  }
+  logger.error(message);
+  process.exit(1);
+}
+
 type Options = {
   cwd: string;
   command: RstestCommand;
@@ -140,12 +153,7 @@ export class Rstest implements RstestContext {
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      const message = 'Test sharding is not supported in watch mode.';
-      if (embedded) {
-        throw new Error(message);
-      }
-      logger.error(message);
-      process.exit(1);
+      failConfig(embedded, 'Test sharding is not supported in watch mode.');
     }
 
     const snapshotManager = new SnapshotManager({
@@ -166,17 +174,14 @@ export class Rstest implements RstestContext {
             (project.config.shard.count !== rstestConfig.shard?.count ||
               project.config.shard.index !== rstestConfig.shard?.index)
           ) {
-            const message =
+            failConfig(
+              embedded,
               'The `shard` option is a global option and cannot be set per-project.\n' +
-              'global `shard` option:\n' +
-              `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
-              `project "${project.config.name}" shard option:\n` +
-              `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`;
-            if (embedded) {
-              throw new Error(message);
-            }
-            logger.error(message);
-            process.exit(1);
+                'global `shard` option:\n' +
+                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
+                `project "${project.config.name}" shard option:\n` +
+                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
+            );
           }
 
           // TODO: support extend projects config

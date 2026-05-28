@@ -122,15 +122,20 @@ export const getTestEntries = async ({
     (isDynamicPattern(pattern) ? globIncludes : literalIncludes).push(pattern);
   }
 
-  const globbedFiles = globIncludes.length
-    ? await glob(globIncludes, {
-        cwd: projectRoot,
-        absolute: true,
-        ignore: exclude,
-        dot: true,
-        expandDirectories: false,
-      })
-    : [];
+  const globOptions = {
+    cwd: projectRoot,
+    absolute: true,
+    ignore: exclude,
+    dot: true,
+    expandDirectories: false,
+  } as const;
+
+  // The include glob and the in-source glob are independent, so run them
+  // concurrently rather than serializing two filesystem walks.
+  const [globbedFiles, sourceFiles] = await Promise.all([
+    globIncludes.length ? glob(globIncludes, globOptions) : [],
+    includeSource?.length ? glob(includeSource, globOptions) : [],
+  ]);
 
   // Literal includes bypass tinyglobby's `ignore: exclude`, so apply an
   // exact-string exclude filter here. Glob exclude patterns against literal
@@ -144,15 +149,7 @@ export const getTestEntries = async ({
 
   const testFiles = Array.from(new Set([...globbedFiles, ...literalFiles]));
 
-  if (includeSource?.length) {
-    const sourceFiles = await glob(includeSource, {
-      cwd: projectRoot,
-      absolute: true,
-      ignore: exclude,
-      dot: true,
-      expandDirectories: false,
-    });
-
+  if (sourceFiles.length) {
     await Promise.all<void>(
       sourceFiles.map(async (file) => {
         try {
