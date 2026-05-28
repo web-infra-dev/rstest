@@ -34,10 +34,15 @@ const patchedContexts = new WeakSet<PlaywrightContextLike>();
 const withAsyncDispose = <T extends { close: () => Promise<void> }>(
   resource: T,
 ): AsyncDisposableResource<T> => {
-  Object.defineProperty(resource, Symbol.asyncDispose, {
-    configurable: true,
-    value: () => resource.close(),
-  });
+  if (typeof Symbol.asyncDispose === 'symbol') {
+    const existing = Object.getOwnPropertyDescriptor(resource, Symbol.asyncDispose);
+    if (!existing) {
+      Object.defineProperty(resource, Symbol.asyncDispose, {
+        configurable: true,
+        value: () => resource.close(),
+      });
+    }
+  }
 
   return resource as AsyncDisposableResource<T>;
 };
