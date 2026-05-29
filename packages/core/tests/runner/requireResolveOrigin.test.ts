@@ -84,6 +84,21 @@ describe('require.resolve origin runtime helper', () => {
     expect(exports).toEqual(createRequire(testPath).resolve.paths('foo'));
   });
 
+  it('binds top-level this to exports in CommonJS modules', () => {
+    const dir = path.join(os.tmpdir(), `rstest-cjs-this-${Date.now()}`);
+
+    const exports = loadModule({
+      codeContent: `this.foo = 'bar';`,
+      distPath: path.join(dir, 'bundle.js'),
+      testPath: path.join(dir, 'test.spec.ts'),
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+    });
+
+    expect(exports).toEqual({ foo: 'bar' });
+  });
+
   it('attaches the helper to import.meta in esm mode', async () => {
     const dir = path.join(
       os.tmpdir(),

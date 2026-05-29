@@ -295,7 +295,7 @@ export const loadModule = ({
       })(specifier, importAttributes as ImportCallOptions);
     },
   });
-  fn(...Object.values(context));
+  fn.call(localModule.exports, ...Object.values(context));
 
   return localModule.exports;
 };
