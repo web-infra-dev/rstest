@@ -279,14 +279,11 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
-  const code = `${codeDefinition}${codeContent}\n}`;
-
-  const fn = vm.runInThisContext(code, {
+  const fn = vm.compileFunction(codeContent, Object.keys(context), {
     // Used in stack traces produced by this script.
     filename: distPath,
     lineOffset: 0,
-    columnOffset: -codeDefinition.length,
+    columnOffset: 0,
     importModuleDynamically: (specifier, _referencer, importAttributes) => {
       return defineRstestDynamicImport({
         testPath,
