@@ -121,8 +121,9 @@ import { PackageManagerTabs } from '@theme';
 
 - **类型：** `string[]`
 - **默认值：** `undefined`
+- **CLI：** `--coverage.include <pattern>`
 
-对匹配 glob 规则的文件进行测试覆盖率收集。
+对匹配 glob 规则的文件进行测试覆盖率收集。重复传入 CLI 参数可以指定多个模式。
 
 默认情况下，Rstest 会收集已测试文件的覆盖率。如果你希望在覆盖率报告中包含未测试的文件，可以使用 `include` 选项指定要包含的文件或模式。
 
@@ -212,6 +213,7 @@ npx rstest run --coverage.changed=origin/main
 ### exclude
 
 - **类型：** `string[]`
+- **CLI：** `--coverage.exclude <pattern>`
 - **默认值：**
 
 ```ts
@@ -249,6 +251,12 @@ export default defineConfig({
 
 用于覆盖率收集的报告器。每个报告器可以是字符串（报告器名称）或包含报告器名称及其选项的元组。
 
+CLI 仅支持传入报告器名称。如需指定多个报告器，可以重复使用该参数：
+
+```bash
+npx rstest run --coverage.reporters text --coverage.reporters=json
+```
+
 - 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
 - 有关报告器选项的详细信息，可参考 [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
 
@@ -271,6 +279,7 @@ export default defineConfig({
 
 - **类型：** `string`
 - **默认值：** `'./coverage'`
+- **CLI：** `--coverage.reportsDirectory <dir>`
 
 存储覆盖率报告的目录。
 
@@ -289,6 +298,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `false`
+- **CLI：** `--coverage.reportOnFailure`
 
 在测试失败时是否生成覆盖率报告并检查阈值。
 
@@ -329,6 +339,7 @@ export default defineConfig({
 
 - **类型：** `boolean`
 - **默认值：** `true`
+- **CLI：** `--coverage.clean`、`--coverage.clean=false`
 
 是否在运行测试之前清理覆盖率目录。
 

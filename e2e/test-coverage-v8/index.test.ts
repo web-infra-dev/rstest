@@ -215,6 +215,165 @@ describe('test coverage-v8', () => {
     fs.removeSync(join(__dirname, 'fixtures/test-temp-coverage'));
   });
 
+  it('overrides coverage reports directory from CLI', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.enable.config.ts',
+        '--coverage.reporters',
+        'json',
+        '--coverage.reportsDirectory',
+        'cli-coverage',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expect(
+      fs.existsSync(
+        join(__dirname, 'fixtures/cli-coverage/coverage-final.json'),
+      ),
+    ).toBeTruthy();
+    expect(
+      fs.existsSync(join(__dirname, 'fixtures/coverage/coverage-final.json')),
+    ).toBeFalsy();
+
+    fs.removeSync(join(__dirname, 'fixtures/cli-coverage'));
+  });
+
+  it('overrides coverage include and exclude from CLI', async () => {
+    const ignoredNodeModule = join(
+      __dirname,
+      'fixtures/node_modules/ignored-package/index.ts',
+    );
+    fs.outputFileSync(
+      ignoredNodeModule,
+      'export const ignored = () => "ignored";\n',
+    );
+
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.enable.config.ts',
+        '--coverage.reporters',
+        'text',
+        '--coverage.include',
+        'src/**',
+        '--coverage.exclude',
+        '**/date.ts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expect(
+      logs.find((log) => log.includes('index.ts') && log.includes('|')),
+    ).toBeTruthy();
+    expect(
+      logs.find((log) => log.includes('date.ts') && log.includes('|')),
+    ).toBeFalsy();
+    expect(
+      logs.find((log) => log.includes('ignored-package') && log.includes('|')),
+    ).toBeFalsy();
+
+    fs.removeSync(join(__dirname, 'fixtures/node_modules/ignored-package'));
+    fs.removeSync(join(__dirname, 'fixtures/coverage'));
+  });
+
+  it('overrides coverage clean from CLI', async () => {
+    const staleCoverageFile = join(
+      __dirname,
+      'fixtures/coverage/stale-coverage.json',
+    );
+    fs.ensureFileSync(staleCoverageFile);
+
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.enable.config.ts',
+        '--coverage.reporters',
+        'json',
+        '--coverage.clean=false',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expect(fs.existsSync(staleCoverageFile)).toBeTruthy();
+    expect(
+      fs.existsSync(join(__dirname, 'fixtures/coverage/coverage-final.json')),
+    ).toBeTruthy();
+
+    fs.removeSync(join(__dirname, 'fixtures/coverage'));
+  });
+
+  it('overrides coverage reporters from CLI', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.enable.config.ts',
+        '--coverage.reporters',
+        'text',
+        '--coverage.reporters=json',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with v8', logs);
+    expectLog('% Stmts', logs);
+    expect(
+      fs.existsSync(join(__dirname, 'fixtures/coverage/coverage-final.json')),
+    ).toBeTruthy();
+    expect(
+      fs.existsSync(join(__dirname, 'fixtures/coverage/index.html')),
+    ).toBeFalsy();
+    expect(
+      fs.existsSync(join(__dirname, 'fixtures/coverage/clover.xml')),
+    ).toBeFalsy();
+
+    fs.removeSync(join(__dirname, 'fixtures/coverage'));
+  });
+
   it('should show 0% coverage when no source files match coverage include patterns', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

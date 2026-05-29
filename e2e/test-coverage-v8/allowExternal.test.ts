@@ -29,7 +29,7 @@ describe('test coverage allowExternal option', () => {
     ).toBeFalsy();
   });
 
-  it('should include external files when allowExternal is true', async () => {
+  it('should include external files when allowExternal is set from CLI', async () => {
     const { expectExecSuccess, cli } = await runRstestCli({
       command: 'rstest',
       args: ['run', '--coverage.allowExternal'],
