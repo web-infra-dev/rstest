@@ -107,11 +107,13 @@ const createRequire = (
     const resolved = _require.resolve(id);
     return _require(resolved);
   }) as NodeJS.Require;
-  require.resolve = defineRstestRequireResolve({
+  const requireResolve = defineRstestRequireResolve({
     testPath: filename,
     distPath,
     assetFiles,
   }) as NodeJS.RequireResolve;
+  requireResolve.paths = _require.resolve.paths.bind(_require.resolve);
+  require.resolve = requireResolve;
   require.main = _require.main;
   return require;
 };

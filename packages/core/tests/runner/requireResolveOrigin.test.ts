@@ -1,4 +1,5 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'pathe';
 import {
@@ -61,6 +62,26 @@ describe('require.resolve origin runtime helper', () => {
     });
 
     expect(exports).toBe(realpathSync(path.join(packageDir, 'index.js')));
+  });
+
+  it('preserves require.resolve.paths on the shimmed require', () => {
+    const dir = path.join(
+      os.tmpdir(),
+      `rstest-require-resolve-paths-${Date.now()}`,
+    );
+    mkdirSync(dir, { recursive: true });
+
+    const testPath = path.join(dir, 'test.spec.ts');
+    const exports = loadModule({
+      codeContent: `module.exports = require.resolve.paths('foo');`,
+      distPath: path.join(dir, 'bundle.js'),
+      testPath,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+    });
+
+    expect(exports).toEqual(createRequire(testPath).resolve.paths('foo'));
   });
 
   it('attaches the helper to import.meta in esm mode', async () => {
