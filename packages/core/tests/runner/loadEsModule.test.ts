@@ -116,6 +116,43 @@ describe('loadEsModule', () => {
     expect(mod.default.bar).toBe('bar-val');
   });
 
+  it('should resolve external ESM after Node native TypeScript loader is used', async () => {
+    await import(fixturePath('nativeTsLoader.ts'));
+
+    const mod = await loadModule({
+      codeContent: [
+        `import { foo } from ${JSON.stringify(fixturePath('namedOnly.mjs'))};`,
+        'export default foo;',
+      ].join('\n'),
+      distPath: '/virtual/dist/entry.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+    });
+
+    expect(mod.default).toBe('foo-val');
+  });
+
+  it('should resolve bare static imports from the test path', async () => {
+    const testPath = fixturePath('bare-parent/index.test.ts');
+    const distPath = '/virtual/dist/.rstest-temp/bare-parent_index~test~ts.mjs';
+
+    const mod = await loadModule({
+      codeContent: [
+        "import { value } from '#fixture-pkg';",
+        'export default value;',
+      ].join('\n'),
+      distPath,
+      testPath,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+    });
+
+    expect(mod.default).toBe('fixture-pkg-value');
+  });
+
   it('should preserve the real default export of a real native ESM module', async () => {
     const mod = await loadModule({
       codeContent: [

@@ -76,9 +76,9 @@ if (!process.env.CODSPEED_ENV) {
   console.table(
     bench.tasks.map((t) => ({
       name: t.name,
-      'avg (ms)': Number((t.result?.mean ?? 0).toFixed(2)),
-      'p99 (ms)': Number((t.result?.p99 ?? 0).toFixed(2)),
-      iterations: t.result?.samples?.length ?? 0,
+      'avg (ms)': Number((t.result?.latency?.mean ?? 0).toFixed(2)),
+      'p99 (ms)': Number((t.result?.latency?.p99 ?? 0).toFixed(2)),
+      iterations: t.result?.latency?.samplesCount ?? 0,
     })),
   );
 }

@@ -1,0 +1,7 @@
+{
+  "name": "bare-parent",
+  "type": "module",
+  "imports": {
+    "#fixture-pkg": "./bare-parent-pkg/index.mjs"
+  }
+}
