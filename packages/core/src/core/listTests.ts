@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
+import { relative } from 'pathe';
 import { createPool } from '../pool';
 import type {
   FormattedError,
@@ -308,6 +309,7 @@ const collectBrowserTests = async ({
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return listBrowserTests(context, { shardedEntries });

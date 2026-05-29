@@ -44,6 +44,7 @@ async function runBrowserModeTests(
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
@@ -81,6 +82,10 @@ const reportNoTestFiles = ({
       logger.error(color.red(message));
     }
 
+    // `process.exitCode` mutations here (and in deeper layers such as
+    // globalSetup teardown, coverage threshold checks) are restored to their
+    // pre-run value by `runRstest` in the embedded path via try/finally, so
+    // we don't need to gate them per-call site.
     process.exitCode = code;
   }
 
@@ -853,9 +858,13 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+    }
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -1083,10 +1092,14 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('exit', unExpectedExit);
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
+      process.on('exit', unExpectedExit);
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+    }
 
     try {
       await run();
@@ -1096,11 +1109,23 @@ export async function runTests(context: Rstest): Promise<void> {
 
       // Run global teardown after all tests are done
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
+    } catch (error) {
+      // In embedded (programmatic) mode the caller's process keeps running, so
+      // release the worker pool, Rsbuild server, and run global teardown here
+      // when `run()` (or a post-run step) throws — otherwise they leak into the
+      // host. `cleanup()` is idempotent, so this won't double-close on the happy
+      // path. The CLI path relies on process exit + its `exit` handler instead.
+      if (context.embedded) {
+        await cleanup();
+      }
+      throw error;
     } finally {
-      process.off('exit', unExpectedExit);
-      process.off('SIGINT', handleSignal);
-      process.off('SIGTERM', handleSignal);
-      process.off('SIGTSTP', handleSignal);
+      if (!context.embedded) {
+        process.off('exit', unExpectedExit);
+        process.off('SIGINT', handleSignal);
+        process.off('SIGTERM', handleSignal);
+        process.off('SIGTSTP', handleSignal);
+      }
     }
 
     await runLifecycleStep('trace wait for exit', () =>

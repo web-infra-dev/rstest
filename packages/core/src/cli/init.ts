@@ -124,7 +124,7 @@ const normalizeBooleanLikeCliValue = (
   return value;
 };
 
-function mergeWithCLIOptions(
+export function mergeWithCLIOptions(
   config: RstestConfig,
   options: CommonOptions,
 ): RstestConfig {

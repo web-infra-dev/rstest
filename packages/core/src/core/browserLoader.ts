@@ -35,6 +35,11 @@ interface LoadBrowserModuleOptions {
    * This allows resolving from project-specific node_modules in monorepo setups.
    */
   projectRoots?: string[];
+  /**
+   * When true, a missing or version-mismatched `@rstest/browser` throws instead
+   * of calling `process.exit(1)`. See the `embedded` option on `createRstest`.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -50,7 +55,7 @@ export async function loadBrowserModule(
   options: LoadBrowserModuleOptions = {},
 ): Promise<BrowserModule> {
   const coreVersion = RSTEST_VERSION;
-  const { projectRoots = [] } = options;
+  const { projectRoots = [], embedded = false } = options;
 
   let browserModule: BrowserModule;
   let browserVersion: string;
@@ -84,6 +89,13 @@ export async function loadBrowserModule(
 
       // Successfully resolved, validate version and return
       if (browserVersion !== coreVersion) {
+        if (embedded) {
+          throw new Error(
+            `Version mismatch between @rstest/core (${coreVersion}) and ` +
+              `@rstest/browser (${browserVersion}). Install matching versions: ` +
+              `npm install @rstest/browser@${coreVersion}`,
+          );
+        }
         logger.error(
           `\n${color.red('Error:')} Version mismatch between ${color.cyan('@rstest/core')} and ${color.cyan('@rstest/browser')}.\n`,
         );
@@ -111,6 +123,12 @@ export async function loadBrowserModule(
   }
 
   // All resolution strategies failed
+  if (embedded) {
+    throw new Error(
+      `Browser mode requires @rstest/browser to be installed: ` +
+        `npm install @rstest/browser@${coreVersion}`,
+    );
+  }
   logger.error(
     `\n${color.red('Error:')} Browser mode requires ${color.cyan('@rstest/browser')} to be installed.\n`,
   );
