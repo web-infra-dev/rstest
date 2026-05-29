@@ -565,6 +565,7 @@ export async function runTests(context: Rstest): Promise<void> {
     // the previous rerun's `finalize`) so browser events emitted before
     // `run()` are captured.
     const traceRun = activeTraceRun;
+    const traceSpan = traceRun.onEvents ? traceRun.span : undefined;
 
     const returns = await Promise.all(
       projects.map(async (p) => {
@@ -577,10 +578,21 @@ export async function runTests(context: Rstest): Promise<void> {
           getSourceMaps,
           affectedEntries,
           deletedEntries,
-        } = await getRsbuildStats({
-          environmentName: p.environmentName,
-          fileFilters,
-        });
+        } = traceSpan
+          ? await traceSpan(
+              'host:get-rsbuild-stats',
+              'host',
+              () =>
+                getRsbuildStats({
+                  environmentName: p.environmentName,
+                  fileFilters,
+                }),
+              { project: p.name, testPath: '<project>' },
+            )
+          : await getRsbuildStats({
+              environmentName: p.environmentName,
+              fileFilters,
+            });
 
         testStart ??= Date.now();
 
@@ -589,20 +601,29 @@ export async function runTests(context: Rstest): Promise<void> {
         if (entries.length && globalSetupEntries.length && !p._globalSetups) {
           p._globalSetups = true;
           const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
+          const [assetFiles, sourceMaps] = traceSpan
+            ? await traceSpan(
+                'host:global-setup-assets',
+                'host',
+                () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+                { project: p.name, testPath: '<globalSetup>' },
+              )
+            : await Promise.all([getAssetFiles(files), getSourceMaps(files)]);
 
-          const { success, errors } = await runGlobalSetup({
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: p.outputModule,
-          });
+          const runSetup = () =>
+            runGlobalSetup({
+              globalSetupEntries,
+              assetFiles,
+              sourceMaps,
+              interopDefault: true,
+              outputModule: p.outputModule,
+            });
+          const { success, errors } = traceSpan
+            ? await traceSpan('host:global-setup', 'host', runSetup, {
+                project: p.name,
+                testPath: '<globalSetup>',
+              })
+            : await runSetup();
           if (!success) {
             return {
               results: [],
@@ -655,6 +676,7 @@ export async function runTests(context: Rstest): Promise<void> {
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,
+          traceSpan,
         });
 
         return {

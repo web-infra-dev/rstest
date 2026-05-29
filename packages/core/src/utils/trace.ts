@@ -319,7 +319,7 @@ export const createTraceController = (options: {
           pid: process.pid,
           tid: 0,
           args: {
-            testPath: '<coverage>',
+            testPath: '<host>',
             project: 'host',
             ...args,
           },
