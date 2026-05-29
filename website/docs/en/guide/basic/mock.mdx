@@ -104,15 +104,17 @@ If you want to keep the real implementation and still assert calls, you can use 
 
 ```ts title="calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
-import { add, calculate } from './calculator';
+import { calculate } from './calculator';
 
 rs.mock('./calculator', { spy: true });
 
-test('tracks the internal call to add', () => {
+test('keeps the real implementation while tracking calls', () => {
   expect(calculate(1, 2)).toBe(3);
-  expect(add).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveBeenCalledWith(1, 2);
 });
 ```
+
+Note that the spy only tracks calls made **through an export** — calls between functions inside the same module are not tracked.
 
 ### Partially mock modules
 
