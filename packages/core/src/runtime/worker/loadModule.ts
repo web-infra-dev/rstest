@@ -279,10 +279,12 @@ export const loadModule = ({
     ...rstestContext,
   };
 
-  const fn = vm.compileFunction(codeContent, Object.keys(context), {
+  const code = `'use strict';\n${codeContent}`;
+
+  const fn = vm.compileFunction(code, Object.keys(context), {
     // Used in stack traces produced by this script.
     filename: distPath,
-    lineOffset: 0,
+    lineOffset: -1,
     columnOffset: 0,
     importModuleDynamically: (specifier, _referencer, importAttributes) => {
       return defineRstestDynamicImport({
