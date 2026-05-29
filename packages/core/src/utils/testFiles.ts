@@ -13,7 +13,9 @@ export const filterFiles = (
   mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
-    return testFiles;
+    // `exact` mode: an empty filter list matches zero files; `fuzzy` mode keeps
+    // the "no filter = all files" convenience.
+    return mode === 'exact' ? [] : testFiles;
   }
 
   const fileFilters =

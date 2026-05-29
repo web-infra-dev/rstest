@@ -9,6 +9,7 @@
  * exact patch version of `@rstest/core` if you depend on these APIs today.
  */
 import { resolveProjects } from '../cli/init';
+import { initRstestEnv } from '../cli/prepare';
 import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
 import { createRstest } from '../core';
 import type {
@@ -288,6 +289,10 @@ const loadConfigForApi = async ({
 export async function runRstest(
   options: RunRstestOptions = {},
 ): Promise<TestRunResult> {
+  // Match the CLI's environment setup so tests run through the programmatic
+  // API observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env`).
+  initRstestEnv();
+
   const cwd = options.cwd
     ? getAbsolutePath(process.cwd(), options.cwd)
     : process.cwd();
@@ -385,10 +390,20 @@ export async function runRstest(
   }
 
   const stats = computeStats(files);
+
+  // Mirror the CLI: discovering no test files is a failure unless
+  // `passWithNoTests` is set. `process.exitCode` is restored in `finally`, so
+  // `ok` must derive this independently rather than reading the exit code.
+  const noTestsFailure =
+    !!rstest &&
+    files.length === 0 &&
+    !rstest.context.normalizedConfig.passWithNoTests;
+
   const ok =
     stats.tests.failed === 0 &&
     stats.files.failed === 0 &&
-    captured.unhandledErrors.length === 0;
+    captured.unhandledErrors.length === 0 &&
+    !noTestsFailure;
 
   return {
     ok,
