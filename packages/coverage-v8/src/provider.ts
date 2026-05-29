@@ -26,7 +26,17 @@ type SourceMapLike = {
   sourcesContent?: (string | null)[];
 };
 
+/**
+ * Absolute path to the bundled off-main-thread coverage merge worker. Built as
+ * a sibling entry (`dist/coverageMergeWorker.js`) by rslib. See issue #1326.
+ */
+const COVERAGE_MERGE_WORKER = fileURLToPath(
+  new URL('./coverageMergeWorker.js', import.meta.url),
+);
+
 export class CoverageProvider implements RstestCoverageProvider {
+  /** @see {@link RstestCoverageProvider.coverageMergeWorker} */
+  readonly coverageMergeWorker: string = COVERAGE_MERGE_WORKER;
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
   private isIncluded: (filePath: string) => boolean;

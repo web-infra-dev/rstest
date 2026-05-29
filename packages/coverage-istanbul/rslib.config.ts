@@ -18,6 +18,21 @@ export default defineConfig({
         sourceMap: process.env.SOURCEMAP === 'true',
       },
     },
+    {
+      // Off-main-thread coverage merge worker (issue #1326). Built as a
+      // standalone, self-contained entry so the host can spawn it by absolute
+      // path via `worker_threads`. Not a public export — referenced internally
+      // through `CoverageProvider.coverageMergeWorker`.
+      format: 'esm',
+      syntax: 'es2023',
+      dts: false,
+      source: {
+        entry: { coverageMergeWorker: './src/coverageMergeWorker.ts' },
+      },
+      output: {
+        sourceMap: process.env.SOURCEMAP === 'true',
+      },
+    },
   ],
   tools: {
     rspack: {
