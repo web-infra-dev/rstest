@@ -3,6 +3,8 @@ title: Fake timers
 description: The fake timers may be useful when a piece of code sets a long timeout that we don't want to wait for in a test.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Fake timers
 
 The fake timers may be useful when a piece of code sets a long timeout that we don't want to wait for in a test.
@@ -12,7 +14,7 @@ Rstest provides some utility functions to help you fake timers powered by [@sino
 ## rs.useFakeTimers
 
 - **Alias:** `rstest.useFakeTimers`
-- **Type:** `(config?: FakeTimerInstallOpts) => Rstest`
+- **Type:** `(config?: FakeTimerInstallOpts) => Rstest & Disposable`
 
 To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
@@ -21,6 +23,19 @@ rs.useFakeTimers();
 ```
 
 You can also pass a configuration object to customize the behavior of the fake timers.
+
+**Disposable / `using` syntax**
+
+<ApiMeta addedVersion="0.10.3" />
+
+Rstest supports the `using` syntax to restore real timers automatically when the block exits:
+
+```ts
+{
+  using _timers = rs.useFakeTimers();
+  // Fake timers are active in this block.
+}
+```
 
 ## rs.useRealTimers
 
