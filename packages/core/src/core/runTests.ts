@@ -1109,6 +1109,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
       // Run global teardown after all tests are done
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
+    } catch (error) {
+      // In embedded (programmatic) mode the caller's process keeps running, so
+      // release the worker pool, Rsbuild server, and run global teardown here
+      // when `run()` (or a post-run step) throws — otherwise they leak into the
+      // host. `cleanup()` is idempotent, so this won't double-close on the happy
+      // path. The CLI path relies on process exit + its `exit` handler instead.
+      if (context.embedded) {
+        await cleanup();
+      }
+      throw error;
     } finally {
       if (!context.embedded) {
         process.off('exit', unExpectedExit);

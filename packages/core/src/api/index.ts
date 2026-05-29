@@ -282,6 +282,36 @@ const loadConfigForApi = async ({
 };
 
 /**
+ * Snapshot the process-global state an embedded run mutates and return a
+ * `restore()` that puts it back. `runRstest` runs inside a long-lived host, so —
+ * unlike the CLI, which exits — it must contain every global the engine touches
+ * in one place: add future globals here rather than as another inline
+ * save/restore pair at the call site.
+ *
+ * - `process.exitCode`: deep layers (globalSetup teardown, coverage thresholds,
+ *   no-test-files) set this unconditionally without consulting `embedded`.
+ * - `process.env`: `initRstestEnv` sets NODE_ENV/RSTEST and `globalSetup` may
+ *   mutate arbitrary vars before workers inherit them.
+ */
+const snapshotProcessGuards = (): (() => void) => {
+  const exitCode = process.exitCode;
+  const env = { ...process.env };
+
+  return () => {
+    process.exitCode = exitCode;
+    // Drop keys added during the run (e.g. by globalSetup) and reset mutated
+    // ones. Workers already inherited the run-time env when they spawned, so
+    // this only affects the host process.
+    for (const key of Object.keys(process.env)) {
+      if (!(key in env)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, env);
+  };
+};
+
+/**
  * Run Rstest in-process and return structured results.
  *
  * Resolves on every termination path — including config errors and worker
@@ -293,151 +323,140 @@ const loadConfigForApi = async ({
 export async function runRstest(
   options: RunRstestOptions = {},
 ): Promise<TestRunResult> {
-  // Match the CLI's environment setup so tests run through the programmatic
-  // API observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env`
-  // at spawn time). Snapshot and restore around the run so a long-lived
-  // embedding host isn't left with these mutated globally after we resolve.
-  const envSnapshot = {
-    NODE_ENV: process.env.NODE_ENV,
-    RSTEST: process.env.RSTEST,
-  };
+  // Capture host process globals up front; `restoreProcessGuards` puts them back
+  // in the outer `finally` so an embedding host isn't left with leaked state.
+  const restoreProcessGuards = snapshotProcessGuards();
+
+  // Match the CLI's environment setup so tests run through the programmatic API
+  // observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env` at
+  // spawn time).
   initRstestEnv();
 
-  const cwd = options.cwd
-    ? getAbsolutePath(process.cwd(), options.cwd)
-    : process.cwd();
-
-  // Snapshot `process.exitCode` and restore it in `finally`. Belt-and-suspenders
-  // against unconditional `process.exitCode = 1` mutations in deeper layers
-  // (globalSetup teardown, coverage threshold failures, etc.) that don't
-  // consult `context.embedded`. The CLI path never goes through this function.
-  const originalExitCode = process.exitCode;
-
-  const captured: {
-    unhandledErrors: SerializedError[];
-    duration: { total: number };
-    coverage?: CoverageMapData;
-    snapshot?: SnapshotSummary;
-  } = {
-    unhandledErrors: [],
-    duration: { total: 0 },
-  };
-
-  const captureReporter: Reporter = {
-    onTestRunEnd: ({
-      unhandledErrors,
-      duration,
-      coverage,
-      snapshotSummary,
-    }) => {
-      captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
-        toSerializedError(err),
-      );
-      captured.duration = { total: duration.totalTime };
-      captured.coverage = coverage;
-      captured.snapshot = snapshotSummary;
-    },
-  };
-
-  let files: TestFileResult[] = [];
-  let rstest: ReturnType<typeof createRstest> | undefined;
-
   try {
-    const { content: userConfig, filePath: configFilePath } =
-      await loadConfigForApi({
-        cwd,
-        configPath: options.config,
-        inlineConfig: options.inlineConfig,
+    const cwd = options.cwd
+      ? getAbsolutePath(process.cwd(), options.cwd)
+      : process.cwd();
+
+    const captured: {
+      unhandledErrors: SerializedError[];
+      duration: { total: number };
+      coverage?: CoverageMapData;
+      snapshot?: SnapshotSummary;
+    } = {
+      unhandledErrors: [],
+      duration: { total: 0 },
+    };
+
+    const captureReporter: Reporter = {
+      onTestRunEnd: ({
+        unhandledErrors,
+        duration,
+        coverage,
+        snapshotSummary,
+      }) => {
+        captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
+          toSerializedError(err),
+        );
+        captured.duration = { total: duration.totalTime };
+        captured.coverage = coverage;
+        captured.snapshot = snapshotSummary;
+      },
+    };
+
+    let files: TestFileResult[] = [];
+    let rstest: ReturnType<typeof createRstest> | undefined;
+
+    try {
+      const { content: userConfig, filePath: configFilePath } =
+        await loadConfigForApi({
+          cwd,
+          configPath: options.config,
+          inlineConfig: options.inlineConfig,
+        });
+
+      // Resolve config + projects through the same pipeline the CLI uses
+      // (`mergeWithCLIOptions` + `resolveProjects`) so CLI-style options
+      // propagate to the root config AND every project config from one place,
+      // instead of being re-derived per API option. Map the API surface onto
+      // `CommonOptions`; `mergeWithCLIOptions`/`resolveProjects` skip `undefined`.
+      const cliOptions: CommonOptions = {
+        testNamePattern: options.testNamePattern,
+      };
+      mergeWithCLIOptions(userConfig, cliOptions);
+
+      // Absolutize `root` against the API cwd exactly like `createRstest` does,
+      // so `resolveProjects` runs its filesystem lookups (existsSync/glob) from
+      // the same base where tests will actually run.
+      userConfig.root = userConfig.root
+        ? getAbsolutePath(cwd, userConfig.root)
+        : cwd;
+
+      const projects = await resolveProjects({
+        config: userConfig,
+        root: userConfig.root,
+        options: cliOptions,
       });
 
-    // Resolve config + projects through the same pipeline the CLI uses
-    // (`mergeWithCLIOptions` + `resolveProjects`) so CLI-style options propagate
-    // to the root config AND every project config from one place, instead of
-    // being re-derived per API option. Map the API surface onto `CommonOptions`;
-    // `mergeWithCLIOptions`/`resolveProjects` skip `undefined` values.
-    const cliOptions: CommonOptions = {
-      testNamePattern: options.testNamePattern,
-    };
-    mergeWithCLIOptions(userConfig, cliOptions);
+      // `options.files !== undefined` (not `?.length`) so an explicit empty
+      // array runs zero files instead of falling back to fuzzy/no-filter mode.
+      const fileFilters = options.files ?? [];
+      const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
 
-    // Absolutize `root` against the API cwd exactly like `createRstest` does, so
-    // `resolveProjects` runs its filesystem lookups (existsSync/glob) from the
-    // same base where tests will actually run.
-    userConfig.root = userConfig.root
-      ? getAbsolutePath(cwd, userConfig.root)
-      : cwd;
-
-    const projects = await resolveProjects({
-      config: userConfig,
-      root: userConfig.root,
-      options: cliOptions,
-    });
-
-    // `options.files !== undefined` (not `?.length`) so an explicit empty
-    // array runs zero files instead of falling back to fuzzy/no-filter mode.
-    const fileFilters = options.files ?? [];
-    const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
-
-    rstest = createRstest(
-      {
-        config: userConfig,
-        configFilePath,
-        projects,
-        cwd,
-        embedded: true,
-      },
-      'run',
-      fileFilters,
-      fileFilterMode,
-    );
-
-    rstest.context.reporters.push(captureReporter);
-
-    await rstest.runTests();
-  } catch (err) {
-    captured.unhandledErrors.unshift(toSerializedError(err));
-  } finally {
-    // Read collected per-file results here (not at the end of `try`) so a
-    // failure in a post-run step — coverage report, global teardown, pool or
-    // server cleanup — doesn't discard results already gathered during the run.
-    if (rstest) {
-      files = rstest.context.reporterResults.results.map(
-        toPublicTestFileResult,
+      rstest = createRstest(
+        {
+          config: userConfig,
+          configFilePath,
+          projects,
+          cwd,
+          embedded: true,
+        },
+        'run',
+        fileFilters,
+        fileFilterMode,
       );
-    }
-    process.exitCode = originalExitCode;
-    for (const [key, value] of Object.entries(envSnapshot)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
+
+      rstest.context.reporters.push(captureReporter);
+
+      await rstest.runTests();
+    } catch (err) {
+      captured.unhandledErrors.unshift(toSerializedError(err));
+    } finally {
+      // Read collected per-file results here (not at the end of `try`) so a
+      // failure in a post-run step — coverage report, global teardown, pool or
+      // server cleanup — doesn't discard results already gathered during the run.
+      if (rstest) {
+        files = rstest.context.reporterResults.results.map(
+          toPublicTestFileResult,
+        );
       }
     }
+
+    const stats = computeStats(files);
+
+    // Mirror the CLI: discovering no test files is a failure unless
+    // `passWithNoTests` is set. `process.exitCode` is restored by the guards, so
+    // `ok` must derive this independently rather than reading the exit code.
+    const noTestsFailure =
+      !!rstest &&
+      files.length === 0 &&
+      !rstest.context.normalizedConfig.passWithNoTests;
+
+    const ok =
+      stats.tests.failed === 0 &&
+      stats.files.failed === 0 &&
+      captured.unhandledErrors.length === 0 &&
+      !noTestsFailure;
+
+    return {
+      ok,
+      files,
+      stats,
+      unhandledErrors: captured.unhandledErrors,
+      duration: captured.duration,
+      snapshot: captured.snapshot,
+      coverage: captured.coverage,
+    };
+  } finally {
+    restoreProcessGuards();
   }
-
-  const stats = computeStats(files);
-
-  // Mirror the CLI: discovering no test files is a failure unless
-  // `passWithNoTests` is set. `process.exitCode` is restored in `finally`, so
-  // `ok` must derive this independently rather than reading the exit code.
-  const noTestsFailure =
-    !!rstest &&
-    files.length === 0 &&
-    !rstest.context.normalizedConfig.passWithNoTests;
-
-  const ok =
-    stats.tests.failed === 0 &&
-    stats.files.failed === 0 &&
-    captured.unhandledErrors.length === 0 &&
-    !noTestsFailure;
-
-  return {
-    ok,
-    files,
-    stats,
-    unhandledErrors: captured.unhandledErrors,
-    duration: captured.duration,
-    snapshot: captured.snapshot,
-    coverage: captured.coverage,
-  };
 }
