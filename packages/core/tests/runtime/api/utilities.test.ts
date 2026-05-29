@@ -203,4 +203,26 @@ describe('rstest utility scoped cleanup', () => {
 
     rs.useRealTimers();
   });
+
+  it('preserves pending timers after nested fake timer scoped disposal', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    rs.useFakeTimers({ now: 100 });
+    const callback = rs.fn();
+
+    globalThis.setTimeout(callback, 50);
+
+    expect(rs.getTimerCount()).toBe(1);
+
+    const disposable = rs.useFakeTimers({ now: 200 });
+    disposable[Symbol.dispose]();
+
+    expect(rs.getTimerCount()).toBe(1);
+
+    rs.advanceTimersByTime(50);
+
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    rs.useRealTimers();
+  });
 });

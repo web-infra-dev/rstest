@@ -8,7 +8,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { getRealTimers } from '../util';
-import type { FakeTimerInstallOpts } from './fakeTimers';
+import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
@@ -57,7 +57,7 @@ export const createRstestUtilities: (
   type GlobalStackEntry = { descriptor: PropertyDescriptor | undefined };
   type TimerStackEntry = {
     config: FakeTimerInstallOpts | undefined;
-    now: number | undefined;
+    snapshot: FakeTimersSnapshot | undefined;
     wasFakeTimers: boolean;
   };
 
@@ -206,7 +206,7 @@ export const createRstestUtilities: (
       const nextEntry = timerStack[index + 1];
       if (nextEntry) {
         nextEntry.config = entry.config;
-        nextEntry.now = entry.now;
+        nextEntry.snapshot = entry.snapshot;
         nextEntry.wasFakeTimers = entry.wasFakeTimers;
       }
       timerStack.splice(index, 1);
@@ -216,8 +216,8 @@ export const createRstestUtilities: (
     timerStack.pop();
     if (entry.wasFakeTimers) {
       timers().useFakeTimers(entry.config);
-      if (entry.now !== undefined) {
-        timers().setSystemTime(entry.now);
+      if (entry.snapshot) {
+        timers().restore(entry.snapshot);
       }
       currentFakeTimersConfig = entry.config;
     } else {
@@ -411,14 +411,15 @@ export const createRstestUtilities: (
       return rstest;
     },
     useFakeTimers: (opts?: FakeTimerInstallOpts) => {
-      const wasFakeTimers = _timers ? timers().isFakeTimers() : false;
+      const timerApi = timers();
+      const wasFakeTimers = timerApi.isFakeTimers();
       const entry = {
         config: currentFakeTimersConfig,
-        now: wasFakeTimers ? timers().now() : undefined,
+        snapshot: wasFakeTimers ? timerApi.snapshot() : undefined,
         wasFakeTimers,
       };
       timerStack.push(entry);
-      timers().useFakeTimers(opts);
+      timerApi.useFakeTimers(opts);
       currentFakeTimersConfig = opts;
       return createDisposableRstestUtilities(() => restoreFakeTimers(entry));
     },

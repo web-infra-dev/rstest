@@ -9,12 +9,24 @@ import type {
   Config as FakeTimerInstallOpts,
   FakeTimers as FakeTimerWithContext,
   Clock as InstalledClock,
+  Timer as FakeTimerRecord,
 } from '@sinonjs/fake-timers';
 
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
 type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
+
+export type FakeTimersSnapshot = {
+  now: number;
+  timers: [number, FakeTimerRecord][];
+  jobs: FakeTimerRecord[];
+};
+
+const cloneFakeTimerRecord = (record: FakeTimerRecord): FakeTimerRecord => ({
+  ...record,
+  args: record.args ? [...record.args] : undefined,
+});
 
 const loadFakeTimersModule = () => {
   // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
@@ -184,6 +196,40 @@ export class FakeTimers {
   setSystemTime(now?: number | Date): void {
     if (this._checkFakeTimers()) {
       this._clock.setSystemTime(now);
+    }
+  }
+
+  snapshot(): FakeTimersSnapshot | undefined {
+    if (!this._fakingTime) {
+      return undefined;
+    }
+
+    return {
+      now: this._clock.now,
+      timers: [...(this._clock.timers ?? new Map())].map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]),
+      jobs: (this._clock.jobs ?? []).map(cloneFakeTimerRecord),
+    };
+  }
+
+  restore(snapshot: FakeTimersSnapshot): void {
+    if (this._checkFakeTimers()) {
+      this._clock.setSystemTime(snapshot.now);
+      const timerEntries = snapshot.timers.map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]) as [number, FakeTimerRecord][];
+      const timers = timerEntries.map(([, timer]) => timer);
+      this._clock.timers = new Map(timerEntries);
+      if (this._clock.timerHeap) {
+        this._clock.timerHeap.timers = [];
+        for (const timer of timers) {
+          this._clock.timerHeap.push(timer);
+        }
+      }
+      this._clock.jobs = snapshot.jobs.map(cloneFakeTimerRecord);
     }
   }
 
