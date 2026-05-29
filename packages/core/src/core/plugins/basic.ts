@@ -128,17 +128,27 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.devtool = 'nosources-source-map';
               }
 
+              const rstestPluginOptions = {
+                injectModulePathName: true,
+                importMetaPathName: true,
+                hoistMockModule: true,
+                manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                // The runtime hook below resolves relative dynamic-import
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #1207.
+                injectDynamicImportOrigin: true,
+                // The runtime hook below resolves relative require.resolve
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #848.
+                injectRequireResolveOrigin: {
+                  functionName: outputModule
+                    ? 'import.meta.__rstest_require_resolve__'
+                    : '__rstest_require_resolve__',
+                },
+              };
+
               config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
-                  // The runtime hook below resolves relative dynamic-import
-                  // specifiers against the source module that produced the
-                  // call, instead of the test entry, fixing #1207.
-                  injectDynamicImportOrigin: true,
-                }),
+                new rspack.experiments.RstestPlugin(rstestPluginOptions),
               );
 
               config.module.rules ??= [];

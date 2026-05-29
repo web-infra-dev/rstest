@@ -1,4 +1,7 @@
-import { builtinModules, createRequire } from 'node:module';
+import {
+  builtinModules,
+  createRequire as createNativeRequire,
+} from 'node:module';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
@@ -39,7 +42,8 @@ const resolveModule = (
     : pathToFileURL(resolveBase).href;
 
   if (!importMetaResolve) {
-    return pathToFileURL(createRequire(parentURL).resolve(specifier)).href;
+    return pathToFileURL(createNativeRequire(parentURL).resolve(specifier))
+      .href;
   }
 
   // Node's loader hook worker clones the parent URL when native TypeScript
@@ -64,6 +68,42 @@ export const appendSourceURL = (
     ? `${codeContent}${suffix}`
     : `${codeContent}\n${suffix}`;
 };
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(
+      joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
+    );
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const defineRstestDynamicImport =
   ({
@@ -233,6 +273,12 @@ export const loadModule = async ({
           interopDefault,
           returnModule: false,
           esmMode: EsmMode.Unknown,
+        });
+        // @ts-expect-error
+        meta.__rstest_require_resolve__ = defineRstestRequireResolve({
+          assetFiles,
+          testPath,
+          distPath: distPath || testPath,
         });
         // @ts-expect-error
         meta.readWasmFile = (
