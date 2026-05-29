@@ -8,7 +8,11 @@
  * semantic changes may land in any minor release in the 0.x line. Pin the
  * exact patch version of `@rstest/core` if you depend on these APIs today.
  */
-import { resolveProjects } from '../cli/init';
+import {
+  type CommonOptions,
+  mergeWithCLIOptions,
+  resolveProjects,
+} from '../cli/init';
 import { initRstestEnv } from '../cli/prepare';
 import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
 import { createRstest } from '../core';
@@ -290,7 +294,13 @@ export async function runRstest(
   options: RunRstestOptions = {},
 ): Promise<TestRunResult> {
   // Match the CLI's environment setup so tests run through the programmatic
-  // API observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env`).
+  // API observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env`
+  // at spawn time). Snapshot and restore around the run so a long-lived
+  // embedding host isn't left with these mutated globally after we resolve.
+  const envSnapshot = {
+    NODE_ENV: process.env.NODE_ENV,
+    RSTEST: process.env.RSTEST,
+  };
   initRstestEnv();
 
   const cwd = options.cwd
@@ -340,18 +350,27 @@ export async function runRstest(
         inlineConfig: options.inlineConfig,
       });
 
-    if (!userConfig.root) {
-      userConfig.root = cwd;
-    }
+    // Resolve config + projects through the same pipeline the CLI uses
+    // (`mergeWithCLIOptions` + `resolveProjects`) so CLI-style options propagate
+    // to the root config AND every project config from one place, instead of
+    // being re-derived per API option. Map the API surface onto `CommonOptions`;
+    // `mergeWithCLIOptions`/`resolveProjects` skip `undefined` values.
+    const cliOptions: CommonOptions = {
+      testNamePattern: options.testNamePattern,
+    };
+    mergeWithCLIOptions(userConfig, cliOptions);
 
-    if (options.testNamePattern !== undefined) {
-      userConfig.testNamePattern = options.testNamePattern;
-    }
+    // Absolutize `root` against the API cwd exactly like `createRstest` does, so
+    // `resolveProjects` runs its filesystem lookups (existsSync/glob) from the
+    // same base where tests will actually run.
+    userConfig.root = userConfig.root
+      ? getAbsolutePath(cwd, userConfig.root)
+      : cwd;
 
     const projects = await resolveProjects({
       config: userConfig,
       root: userConfig.root,
-      options: {},
+      options: cliOptions,
     });
 
     // `options.files !== undefined` (not `?.length`) so an explicit empty
@@ -387,6 +406,13 @@ export async function runRstest(
       );
     }
     process.exitCode = originalExitCode;
+    for (const [key, value] of Object.entries(envSnapshot)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   }
 
   const stats = computeStats(files);
