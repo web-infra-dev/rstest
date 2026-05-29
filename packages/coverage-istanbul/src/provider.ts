@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
@@ -15,12 +16,22 @@ import {
 
 const UNTESTED_FILES_CONCURRENCY = 4;
 
+/**
+ * Absolute path to the bundled off-main-thread coverage merge worker. Built as
+ * a sibling entry (`dist/coverageMergeWorker.js`) by rslib. See issue #1326.
+ */
+const COVERAGE_MERGE_WORKER = fileURLToPath(
+  new URL('./coverageMergeWorker.js', import.meta.url),
+);
+
 // Global type declaration for coverage
 declare global {
   var __coverage__: any;
 }
 
 export class CoverageProvider implements RstestCoverageProvider {
+  /** @see {@link RstestCoverageProvider.coverageMergeWorker} */
+  readonly coverageMergeWorker: string = COVERAGE_MERGE_WORKER;
   private coverageMap: CoverageMap | null = null;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();

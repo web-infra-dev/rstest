@@ -1,5 +1,9 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { isMainThread, threadId } from 'node:worker_threads';
+import { join } from 'pathe';
 import { install } from 'source-map-support';
 import type {
   MaybePromise,
@@ -652,13 +656,28 @@ export const runInPool = async (
         outputModule: options.context.outputModule,
       });
       if (coverageMap) {
-        // Attach coverage data to test result
-        results.coverage = {};
+        // Build the plain coverage object (the istanbul `CoverageMapData` shape).
+        const covObj: Record<string, FileCoverageData> = {};
         Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
           if ('toJSON' in value)
-            results.coverage![key] = value.toJSON() as FileCoverageData;
-          else results.coverage![key] = value;
+            covObj[key] = value.toJSON() as FileCoverageData;
+          else covObj[key] = value;
         });
+        // [#1326] When the provider supplies an off-main-thread merge worker,
+        // write this file's coverage to disk and ship only the PATH. This keeps
+        // the host from V8-deserializing a full per-file coverage object graph
+        // on its single event loop during the run — the measured cause of the
+        // worker-pool plateau when coverage is enabled. A `randomUUID` filename
+        // is collision-proof across pool kinds (forks share nothing, but threads
+        // share `process.pid` and `taskId` resets per project). Providers without
+        // a merge worker keep shipping the inline IPC payload.
+        if (coverageProvider.coverageMergeWorker) {
+          const file = join(tmpdir(), `rstest-cov-${randomUUID()}.json`);
+          await writeFile(file, JSON.stringify(covObj));
+          (results as unknown as { coverageFile?: string }).coverageFile = file;
+        } else {
+          results.coverage = covObj;
+        }
       }
     }
 

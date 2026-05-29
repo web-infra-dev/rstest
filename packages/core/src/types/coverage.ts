@@ -180,6 +180,18 @@ export declare class CoverageProvider {
   createCoverageMap(): CoverageMap;
 
   /**
+   * Optional absolute path to a `worker_threads` entry used for off-main-thread
+   * coverage ingest. The worker receives `{ files: string[] }` via `workerData`
+   * (paths to per-file coverage JSON written by test workers), reads + parses +
+   * merges them with the provider's own merge, and `postMessage`s the merged
+   * `CoverageMapData`. When present, the host parses/merges coverage off its
+   * event loop (and in parallel), so coverage ingest no longer competes with
+   * worker-pool scheduling. When absent, the host falls back to a main-thread
+   * merge. See issue #1326.
+   */
+  coverageMergeWorker?: string;
+
+  /**
    * Generate coverage for untested files
    */
   generateCoverageForUntestedFiles(params: {
