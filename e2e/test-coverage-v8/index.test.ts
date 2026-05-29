@@ -252,6 +252,15 @@ describe('test coverage-v8', () => {
   });
 
   it('overrides coverage include and exclude from CLI', async () => {
+    const ignoredNodeModule = join(
+      __dirname,
+      'fixtures/node_modules/ignored-package/index.ts',
+    );
+    fs.outputFileSync(
+      ignoredNodeModule,
+      'export const ignored = () => "ignored";\n',
+    );
+
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
       args: [
@@ -283,7 +292,11 @@ describe('test coverage-v8', () => {
     expect(
       logs.find((log) => log.includes('date.ts') && log.includes('|')),
     ).toBeFalsy();
+    expect(
+      logs.find((log) => log.includes('ignored-package') && log.includes('|')),
+    ).toBeFalsy();
 
+    fs.removeSync(join(__dirname, 'fixtures/node_modules/ignored-package'));
     fs.removeSync(join(__dirname, 'fixtures/coverage'));
   });
 

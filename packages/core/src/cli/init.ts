@@ -224,7 +224,10 @@ function mergeWithCLIOptions(
         shouldEnableCoverage = true;
       }
       if (options.coverage.exclude !== undefined) {
-        config.coverage.exclude = castArray(options.coverage.exclude);
+        config.coverage.exclude = [
+          ...(config.coverage.exclude || []),
+          ...castArray(options.coverage.exclude),
+        ];
         shouldEnableCoverage = true;
       }
       if (options.coverage.reporters !== undefined) {

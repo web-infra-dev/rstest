@@ -653,7 +653,7 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.coverage).toMatchObject({
         enabled: true,
         include: ['src/**', 'test/**'],
-        exclude: ['src/generated/**'],
+        exclude: ['old-exclude/**', 'src/generated/**'],
         reporters: ['text', 'json'],
         reportsDirectory: 'custom-coverage',
         reportOnFailure: true,
