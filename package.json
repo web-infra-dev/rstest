@@ -50,10 +50,6 @@
       "allowAny": [
         "@rspack/*"
       ]
-    },
-    "overrides": {
-      "@rspack/core": "npm:@rspack-canary/core@2.0.6-canary-d1fbdb50-20260529183711",
-      "@swc/helpers": "^0.5.22"
     }
   }
 }
