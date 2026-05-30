@@ -24,7 +24,6 @@ hoistPattern: ['@secretlint/*']
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@rspack/*'
-  - '@rspack-canary/*'
   - '@rsbuild/*'
   - '@rslib/*'
   - '@rspress/*'
