@@ -42,6 +42,19 @@ function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
 }
 
+/**
+ * Report a fatal configuration error. In embedded (programmatic) mode the
+ * caller owns the process, so throw and let `runRstest` surface it; otherwise
+ * log and exit the CLI process.
+ */
+function failConfig(embedded: boolean, message: string): never {
+  if (embedded) {
+    throw new Error(message);
+  }
+  logger.error(message);
+  process.exit(1);
+}
+
 type Options = {
   cwd: string;
   command: RstestCommand;
@@ -50,6 +63,8 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded?: boolean;
 };
 
 export class Rstest implements RstestContext {
@@ -64,6 +79,7 @@ export class Rstest implements RstestContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
+  public embedded: boolean;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
@@ -103,6 +119,7 @@ export class Rstest implements RstestContext {
       configFilePath,
       projects,
       trace = false,
+      embedded = false,
     }: Options,
     userConfig: RstestConfig,
   ) {
@@ -112,6 +129,7 @@ export class Rstest implements RstestContext {
     this.fileFilters = fileFilters;
     this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
+    this.embedded = embedded;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
@@ -128,8 +146,7 @@ export class Rstest implements RstestContext {
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      logger.error('Test sharding is not supported in watch mode.');
-      process.exit(1);
+      failConfig(embedded, 'Test sharding is not supported in watch mode.');
     }
 
     const snapshotManager = new SnapshotManager({
@@ -150,14 +167,14 @@ export class Rstest implements RstestContext {
             (project.config.shard.count !== rstestConfig.shard?.count ||
               project.config.shard.index !== rstestConfig.shard?.index)
           ) {
-            logger.error(
+            failConfig(
+              embedded,
               'The `shard` option is a global option and cannot be set per-project.\n' +
                 'global `shard` option:\n' +
                 `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
                 `project "${project.config.name}" shard option:\n` +
                 `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
             );
-            process.exit(1);
           }
 
           // TODO: support extend projects config

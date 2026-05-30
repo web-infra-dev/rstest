@@ -102,8 +102,9 @@ export const prettyTime = (milliseconds: number): string => {
     return `${seconds.toFixed(digits)}s`;
   };
 
-  const minutes = Math.floor(seconds / 60);
-  const secondsRemainder = seconds % 60;
+  const roundedSeconds = Math.round(seconds);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const secondsRemainder = minutes > 0 ? roundedSeconds % 60 : seconds;
   let time = '';
 
   if (minutes > 0) {

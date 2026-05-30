@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -60,7 +60,7 @@
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260523.1",
+    "@typescript/native-preview": "7.0.0-dev.20260527.1",
     "@vitest/snapshot": "^3.2.4",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.4",

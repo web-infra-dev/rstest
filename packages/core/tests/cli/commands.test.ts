@@ -244,6 +244,41 @@ describe('CLI help output', () => {
 
     expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
   });
+
+  it('accepts --coverage.* and populates nested coverage options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'run',
+        '--coverage.include',
+        'src/**',
+        '--coverage.include=test/**',
+        '--coverage.exclude',
+        'src/generated/**',
+        '--coverage.exclude=**/*.d.ts',
+        '--coverage.reporters',
+        'text',
+        '--coverage.reporters=json',
+        '--coverage.reportsDirectory',
+        'custom-coverage',
+        '--coverage.reportOnFailure',
+        '--coverage.clean=false',
+        '--coverage.allowExternal',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      include: ['src/**', 'test/**'],
+      exclude: ['src/generated/**', '**/*.d.ts'],
+      reporters: ['text', 'json'],
+      reportsDirectory: 'custom-coverage',
+      reportOnFailure: true,
+      clean: false,
+      allowExternal: true,
+    });
+  });
 });
 
 describe('normalizeCliFilters', () => {

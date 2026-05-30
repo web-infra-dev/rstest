@@ -1,4 +1,7 @@
-import { builtinModules } from 'node:module';
+import {
+  builtinModules,
+  createRequire as createNativeRequire,
+} from 'node:module';
 import { isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
@@ -11,6 +14,8 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
+
+const importMetaResolve = import.meta.resolve?.bind(import.meta);
 
 export enum EsmMode {
   Unknown = 0,
@@ -27,6 +32,24 @@ const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
 const isBuiltinSpecifier = (specifier: string) =>
   specifier.startsWith('node:') || builtinModules.includes(specifier);
+
+const resolveModule = (
+  specifier: string,
+  resolveBase: string,
+): string | URL => {
+  const parentURL = resolveBase.startsWith('file:')
+    ? resolveBase
+    : pathToFileURL(resolveBase).href;
+
+  if (!importMetaResolve) {
+    return pathToFileURL(createNativeRequire(parentURL).resolve(specifier))
+      .href;
+  }
+
+  // Node's loader hook worker clones the parent URL when native TypeScript
+  // loading is active. Passing URL objects can throw DataCloneError there.
+  return importMetaResolve(specifier, parentURL);
+};
 
 export const appendSourceURL = (
   codeContent: string,
@@ -45,6 +68,42 @@ export const appendSourceURL = (
     ? `${codeContent}${suffix}`
     : `${codeContent}\n${suffix}`;
 };
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(
+      joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
+    );
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const defineRstestDynamicImport =
   ({
@@ -117,10 +176,10 @@ const defineRstestDynamicImport =
     // (which have no origin to pass) working as before.
     const resolveBase = origin ?? testPath;
     const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
+      ? pathToFileURL(specifier).href
       : isBuiltinSpecifier(specifier)
         ? specifier
-        : import.meta.resolve(specifier, pathToFileURL(resolveBase));
+        : resolveModule(specifier, resolveBase);
 
     // Use `.href` (full file:// URL) rather than `.pathname` so absolute
     // Windows specifiers (`D:\a\foo.mjs`) remain valid import targets. With
@@ -216,6 +275,12 @@ export const loadModule = async ({
           esmMode: EsmMode.Unknown,
         });
         // @ts-expect-error
+        meta.__rstest_require_resolve__ = defineRstestRequireResolve({
+          assetFiles,
+          testPath,
+          distPath: distPath || testPath,
+        });
+        // @ts-expect-error
         meta.readWasmFile = (
           wasmPath: URL,
           callback: (err: Error | null, data?: Buffer) => void,
@@ -262,7 +327,11 @@ export const loadModule = async ({
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
-      })(specifier, referencingModule as ImportCallOptions),
+      })(
+        specifier,
+        {},
+        isRelativePath(specifier) ? referencingModule.identifier : undefined,
+      ),
     );
   }
 

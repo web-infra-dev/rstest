@@ -514,6 +514,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "import.meta.__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -1098,6 +1101,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -1668,6 +1674,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -2243,6 +2252,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -3150,6 +3162,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],
@@ -3721,6 +3736,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
           "injectModulePathName": true,
+          "injectRequireResolveOrigin": {
+            "functionName": "__rstest_require_resolve__",
+          },
           "manualMockRoot": "<ROOT>/packages/core/__mocks__",
         },
       ],

@@ -158,20 +158,26 @@ This is useful when you want to assert that a function was called correctly with
 
 ```ts title="src/calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
-import { calculate, add } from './calculator';
+import { calculate } from './calculator';
 
 rs.mock('./calculator', { spy: true });
 
-test('calculate calls add with correct arguments', () => {
+test('keeps the real implementation while tracking calls', () => {
   // Original implementation still works
   const result = calculate(1, 2);
   expect(result).toBe(3);
 
-  // But we can also assert on the calls
-  expect(add).toHaveBeenCalledWith(1, 2);
-  expect(add).toHaveReturnedWith(3);
+  // We can also assert on the call, since calculate is called directly
+  expect(calculate).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveReturnedWith(3);
 });
 ```
+
+:::note Internal calls are not tracked
+
+The spy wraps the module's **exports**. When one export calls another inside the same module (e.g. `calculate` internally calls `add`), that internal call goes through the module's local binding rather than the wrapped export, so it is **not** tracked. Assert on exports you call directly (or from another module). This is an inherent limitation of ESM module spying.
+
+:::
 
 :::note ESM and CommonJS modules
 

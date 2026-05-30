@@ -60,8 +60,8 @@ if (!process.env.CODSPEED_ENV) {
   console.table(
     bench.tasks.map((task) => ({
       name: task.name,
-      'avg (ms)': Number((task.result?.mean ?? 0).toFixed(2)),
-      iterations: task.result?.samples?.length ?? 0,
+      'avg (ms)': Number((task.result?.latency?.mean ?? 0).toFixed(2)),
+      iterations: task.result?.latency?.samplesCount ?? 0,
     })),
   );
 

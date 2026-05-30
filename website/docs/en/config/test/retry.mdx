@@ -11,6 +11,8 @@ overviewHeaders: []
 
 Retry the test specific number of times if it fails. This is useful for some flaky or non-deterministic test failures.
 
+A single test can override this with [`TestOptions.retry`](/api/runtime-api/test-api/test#testoptions), including `{ retry: 0 }` to disable retries for one test even when this config is set.
+
 ## Example
 
 You can get two retries by setting `retry:2` when the test fails:
