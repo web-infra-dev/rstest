@@ -286,8 +286,8 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Stress watch/restart
-        run: cd e2e && pnpm exec rstest run watch/restart.test.ts
+      - name: Stress all watch tests
+        run: cd e2e && pnpm exec rstest run watch/
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
