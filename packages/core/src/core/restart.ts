@@ -93,6 +93,12 @@ export async function watchFilesForRestart({
     ignoreInitial: true,
     // If watching fails due to read permissions, the errors will be suppressed silently.
     ignorePermissionErrors: true,
+    // chokidar v5 dropped fsevents and relies on Node's fs.watch(), which is
+    // unreliable for single-file watching on macOS (kqueue silently drops
+    // change events). Poll the small set of config files instead — 100ms is
+    // fast enough for restarts while adding negligible CPU.
+    usePolling: true,
+    interval: 100,
     ...watchOptions,
   });
 

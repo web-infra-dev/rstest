@@ -241,15 +241,6 @@ export async function runRstestCli({
   };
 }
 
-// macOS only: give every prepareFixtures call a fresh sibling directory and
-// expose it via an in-repo symlink. Reusing the same distPath across retries
-// makes file watchers observe a Delete+Create batch on the same path, which
-// the macOS FSEvents per-path ring buffer can replay onto later watcher
-// streams as spurious change events. A fresh path has no FSEvents history.
-let fixtureRunCounter = 0;
-const uniqueSuffix = () =>
-  `-r${process.pid}-${++fixtureRunCounter}-${Date.now().toString(36)}`;
-
 export async function prepareFixtures({
   fixturesPath,
   fixturesTargetPath,
@@ -258,17 +249,7 @@ export async function prepareFixtures({
   fixturesTargetPath?: string;
 }) {
   const root = path.dirname(fixturesPath);
-  const exposedPath =
-    fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
-
-  // distPath is a fresh sibling next to exposedPath; the hard-coded
-  // exposedPath in test code is materialised as a symlink pointing at it.
-  // Both live in the same parent dir to avoid macOS firmlink quirks
-  // (e.g. /tmp -> /private/tmp) that interact poorly with rstest watch.
-  const distPath =
-    process.platform === 'darwin'
-      ? `${exposedPath}${uniqueSuffix()}`
-      : exposedPath;
+  const distPath = fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
 
   // Clean up any leftover fixtures from previous runs
   // On Windows, file handles may not be fully released, causing EBUSY errors
@@ -280,16 +261,6 @@ export async function prepareFixtures({
       maxRetries: 10,
       retryDelay: 500,
     });
-    if (distPath !== exposedPath) {
-      // Remove old symlink/dir at the exposed path (rmSync does not follow
-      // symlinks recursively — it removes the link itself).
-      fs.rmSync(exposedPath, {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 500,
-      });
-    }
   } catch (err) {
     if (process.platform !== 'win32') {
       throw err;
@@ -306,11 +277,6 @@ export async function prepareFixtures({
     // to avoid race conditions (e.g., ENOENT when a directory is deleted mid-copy)
     filter: (src) => !path.basename(src).startsWith('fixtures-test-'),
   });
-
-  if (distPath !== exposedPath) {
-    await fs.promises.mkdir(path.dirname(exposedPath), { recursive: true });
-    await fs.promises.symlink(distPath, exposedPath, 'dir');
-  }
 
   const update = (
     relativePath: string,
