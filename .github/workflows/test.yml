@@ -232,6 +232,41 @@ jobs:
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
+  # ======== stress test for watch/restart flake ========
+  # Temporary job: 20 rounds × node {22, 24} on macOS to confirm the
+  # chokidar-ready race fix. Remove this block after stress passes.
+  stress-restart:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: macos-14
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node_version: ['22', '24']
+        round: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+
+      - name: Setup Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node_version }}
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Stress watch/restart
+        run: cd e2e && pnpm exec rstest run watch/restart.test.ts
+
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
   # Re-enable once quota resets.
