@@ -232,41 +232,22 @@ jobs:
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
-  # ======== stress test for watch/restart flake ========
-  # Temporary job: 20 rounds × node {22, 24} on macOS to confirm the
-  # chokidar-ready race fix. Remove this block after stress passes.
+  # ======== stress test for watch flake ========
+  # Temporary: matrix sweeps polling × unique-dir on both macOS and Linux to
+  # measure flake rate per combo. Remove this block after analysis.
   stress-restart:
     needs: prepare
     if: needs.prepare.outputs.changed == 'true'
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        os: [macos-14, ubuntu-latest]
         node_version: ['22', '24']
-        round:
-          [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            16,
-            17,
-            18,
-            19,
-            20,
-          ]
+        round: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        polling: ['on', 'off']
+        unique_dir: ['on', 'off']
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -287,6 +268,9 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Stress all watch tests
+        env:
+          STRESS_NO_POLLING: ${{ matrix.polling == 'off' && '1' || '' }}
+          STRESS_NO_UNIQUE_DIR: ${{ matrix.unique_dir == 'off' && '1' || '' }}
         run: cd e2e && pnpm exec rstest run watch/
 
   # ======== codspeed ========

@@ -88,6 +88,8 @@ export async function watchFilesForRestart({
   }
 
   const root = rstest.context.rootPath;
+  // STRESS_NO_POLLING is a temporary stress-test gate; default is polling ON.
+  const usePolling = process.env.STRESS_NO_POLLING !== '1';
   const watcher = await createChokidar(configFilePaths, root, {
     // do not trigger add for initial files
     ignoreInitial: true,
@@ -97,7 +99,7 @@ export async function watchFilesForRestart({
     // unreliable for single-file watching on macOS (kqueue silently drops
     // change events). Poll the small set of config files instead — 100ms is
     // fast enough for restarts while adding negligible CPU.
-    usePolling: true,
+    usePolling,
     interval: 100,
     ...watchOptions,
   });

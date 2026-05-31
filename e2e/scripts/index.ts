@@ -241,6 +241,16 @@ export async function runRstestCli({
   };
 }
 
+// macOS only (gated by STRESS_NO_UNIQUE_DIR for the stress matrix):
+// give every prepareFixtures call a fresh sibling directory and expose it
+// via an in-repo symlink. Reusing the same distPath across retries makes
+// file watchers observe a Delete+Create batch on the same path, which the
+// macOS FSEvents per-path ring buffer can replay onto later watcher streams
+// as spurious change events. A fresh path has no FSEvents history.
+let fixtureRunCounter = 0;
+const uniqueSuffix = () =>
+  `-r${process.pid}-${++fixtureRunCounter}-${Date.now().toString(36)}`;
+
 export async function prepareFixtures({
   fixturesPath,
   fixturesTargetPath,
@@ -249,7 +259,14 @@ export async function prepareFixtures({
   fixturesTargetPath?: string;
 }) {
   const root = path.dirname(fixturesPath);
-  const distPath = fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
+  const exposedPath =
+    fixturesTargetPath || path.resolve(`${fixturesPath}-test`);
+
+  const useUniqueDir =
+    process.platform === 'darwin' && process.env.STRESS_NO_UNIQUE_DIR !== '1';
+  const distPath = useUniqueDir
+    ? `${exposedPath}${uniqueSuffix()}`
+    : exposedPath;
 
   // Clean up any leftover fixtures from previous runs
   // On Windows, file handles may not be fully released, causing EBUSY errors
@@ -261,6 +278,14 @@ export async function prepareFixtures({
       maxRetries: 10,
       retryDelay: 500,
     });
+    if (distPath !== exposedPath) {
+      fs.rmSync(exposedPath, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 500,
+      });
+    }
   } catch (err) {
     if (process.platform !== 'win32') {
       throw err;
@@ -277,6 +302,11 @@ export async function prepareFixtures({
     // to avoid race conditions (e.g., ENOENT when a directory is deleted mid-copy)
     filter: (src) => !path.basename(src).startsWith('fixtures-test-'),
   });
+
+  if (distPath !== exposedPath) {
+    await fs.promises.mkdir(path.dirname(exposedPath), { recursive: true });
+    await fs.promises.symlink(distPath, exposedPath, 'dir');
+  }
 
   const update = (
     relativePath: string,
