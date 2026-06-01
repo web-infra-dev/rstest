@@ -32,6 +32,12 @@ declare global {
 export class CoverageProvider implements RstestCoverageProvider {
   /** @see {@link RstestCoverageProvider.coverageMergeWorker} */
   readonly coverageMergeWorker: string = COVERAGE_MERGE_WORKER;
+  /**
+   * This provider's merge worker implements the streaming ingest protocol, so
+   * the host consumes per-file coverage incrementally during the run instead of
+   * fanning out at end-of-run. @see {@link RstestCoverageProvider.coverageMergeWorkerStreaming}
+   */
+  readonly coverageMergeWorkerStreaming = true;
   private coverageMap: CoverageMap | null = null;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();

@@ -656,6 +656,8 @@ export async function runTests(context: Rstest): Promise<void> {
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,
           coverageMergeWorker: coverageProvider?.coverageMergeWorker,
+          coverageMergeWorkerStreaming:
+            coverageProvider?.coverageMergeWorkerStreaming,
         });
 
         return {

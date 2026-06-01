@@ -192,6 +192,16 @@ export declare class CoverageProvider {
   coverageMergeWorker?: string;
 
   /**
+   * Whether {@link coverageMergeWorker} understands the STREAMING ingest
+   * protocol (`workerData.streaming`, `{ type: 'file' | 'done' }` messages).
+   * Only providers that opt in are driven in streaming mode; a provider that
+   * exposes a batch-only merge worker (e.g. v8) leaves this falsy and always
+   * uses the end-of-run fan-out — it is never mis-driven into a streaming
+   * worker it cannot speak (which would silently drop coverage). See #1326.
+   */
+  coverageMergeWorkerStreaming?: boolean;
+
+  /**
    * Generate coverage for untested files
    */
   generateCoverageForUntestedFiles(params: {

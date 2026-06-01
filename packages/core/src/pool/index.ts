@@ -2,6 +2,7 @@ import { readFile, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import type { Worker } from 'node:worker_threads';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
 import { getFileTaskId } from '../runtime/runner';
@@ -297,6 +298,12 @@ export const createPool = async ({
      * #1326.
      */
     coverageMergeWorker?: string;
+    /**
+     * Whether {@link coverageMergeWorker} supports the streaming ingest
+     * protocol. Gates the streaming path so a batch-only worker (e.g. v8) is
+     * never driven in streaming mode. See issue #1326.
+     */
+    coverageMergeWorkerStreaming?: boolean;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -510,6 +517,7 @@ export const createPool = async ({
       onCoverageResult,
       onTraceEvents,
       coverageMergeWorker,
+      coverageMergeWorkerStreaming,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
@@ -533,6 +541,60 @@ export const createPool = async ({
       const diag = isDebug();
       const eld = diag ? monitorEventLoopDelay({ resolution: 20 }) : undefined;
       eld?.enable();
+
+      // [#1326 follow-up — experimental, RSTEST_COV_INGEST=stream] Streaming
+      // ingest: a single long-lived merge thread consumes per-file coverage
+      // paths AS THEY ARRIVE and unlinks each temp file immediately, so the
+      // corpus never accumulates on disk and only ONE deduped map is ever
+      // resident — vs the end-of-run fan-out which materializes the whole
+      // corpus and up to N partial maps (N× amplification). The host loop still
+      // only handles path strings, so utilization stays high.
+      // Streaming is gated on a provider CAPABILITY flag, not the mere presence
+      // of a merge worker — a batch-only worker (v8) must never be handed the
+      // streaming protocol (it would crash async and silently drop coverage).
+      // Default ON for capable providers; `RSTEST_COV_INGEST=batch` forces the
+      // #1348 end-of-run fan-out, `=stream` is explicit opt-in.
+      let streamingIngest =
+        process.env.RSTEST_COV_INGEST !== 'batch' &&
+        !!coverageMergeWorker &&
+        coverageMergeWorkerStreaming === true;
+      let streamWorker: Worker | undefined;
+      let streamFinal: Promise<CoverageMapData | undefined> | undefined;
+      let streamedCount = 0;
+      if (streamingIngest) {
+        try {
+          const { Worker } = await import('node:worker_threads');
+          streamWorker = new Worker(coverageMergeWorker!, {
+            workerData: { streaming: true },
+          });
+          streamFinal = new Promise<CoverageMapData | undefined>(
+            (resolveFinal, rejectFinal) => {
+              let settled = false;
+              streamWorker!.once('message', (m: CoverageMapData) => {
+                settled = true;
+                resolveFinal(m);
+              });
+              streamWorker!.once('error', (e) => {
+                settled = true;
+                rejectFinal(e);
+              });
+              // Unlike the #1348 fan-out, register `exit` too: a worker that
+              // dies without posting (OOM-kill, load failure) can never orphan
+              // the awaiter — it rejects instead of hanging forever.
+              streamWorker!.once('exit', (code) => {
+                if (!settled)
+                  rejectFinal(
+                    new Error(`coverage merge worker exited (code ${code})`),
+                  );
+              });
+            },
+          );
+        } catch {
+          // worker_threads unavailable / merge worker failed to load: fall back
+          // to the batch path by collecting paths into `coverageFiles`.
+          streamingIngest = false;
+        }
+      }
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
@@ -565,12 +627,17 @@ export const createPool = async ({
           // path to its on-disk coverage; collect it (cheap) and defer all
           // read + parse + merge to end-of-run, off the scheduling loop, so no
           // per-file coverage graph is deserialized on the host during the run.
-          const covFile = (result as unknown as { coverageFile?: string })
-            .coverageFile;
+          const covFile = result.coverageFile;
           if (covFile) {
-            coverageFiles.push(covFile);
-            delete (result as unknown as { coverageFile?: string })
-              .coverageFile;
+            if (streamingIngest && streamWorker) {
+              // Hand the path to the long-lived consumer immediately (cheap —
+              // the host only posts a string; the worker reads+merges+unlinks).
+              streamWorker.postMessage({ type: 'file', path: covFile });
+              streamedCount++;
+            } else {
+              coverageFiles.push(covFile);
+            }
+            delete result.coverageFile;
           }
           if (result.coverage) {
             onCoverageResult?.(result.coverage);
@@ -594,13 +661,40 @@ export const createPool = async ({
         );
       }
 
-      // [#1326] Off-main-thread coverage ingest. All test workers have exited
-      // (Promise.all resolved), so reading + parsing + merging the per-file
-      // coverage now runs off the scheduling critical path — a terminal tail,
-      // not a during-run plateau. With a provider-supplied merge worker, the
-      // expensive JSON.parse runs in a worker_threads pool and only a few small
-      // merged partials cross back to the host.
-      if (coverageFiles.length) {
+      // [#1326 follow-up] Streaming ingest: most merging already happened during
+      // the run; just drain the consumer's small backlog, take the single
+      // merged map, and tear it down. No corpus on disk, no N× amplification.
+      if (streamingIngest && streamWorker && streamFinal) {
+        const ingestStart = diag ? performance.now() : 0;
+        streamWorker.postMessage({ type: 'done' });
+        const finalMap = await streamFinal.catch((error) => {
+          // The streaming consumer already unlinked the temp files it merged, so
+          // we cannot fall back to a batch re-read here. Surface a real WARNING
+          // (not a debug-only line) so a partial/empty coverage report is never
+          // silent — the user can re-run with RSTEST_COV_INGEST=batch.
+          logger.warn(
+            `coverage(${projectName}): streaming ingest failed (${
+              toError(error).message
+            }) — coverage for this project may be incomplete. Re-run with RSTEST_COV_INGEST=batch to use the end-of-run merge.`,
+          );
+          return undefined;
+        });
+        if (finalMap) {
+          onCoverageResult?.(finalMap);
+        }
+        await streamWorker.terminate();
+        if (diag) {
+          logger.debug(
+            `coverage(${projectName}): ingest strategy=streaming files=${streamedCount} took=${(performance.now() - ingestStart).toFixed(0)}ms (drain tail)`,
+          );
+        }
+      } else if (coverageFiles.length) {
+        // [#1326] Off-main-thread coverage ingest. All test workers have exited
+        // (Promise.all resolved), so reading + parsing + merging the per-file
+        // coverage now runs off the scheduling critical path — a terminal tail,
+        // not a during-run plateau. With a provider-supplied merge worker, the
+        // expensive JSON.parse runs in a worker_threads pool and only a few small
+        // merged partials cross back to the host.
         const ingestStart = diag ? performance.now() : 0;
         let ingestStrategy: 'worker-threads' | 'main-thread' = 'main-thread';
         let ingestThreads = 0;

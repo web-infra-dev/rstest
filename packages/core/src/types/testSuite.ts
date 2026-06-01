@@ -173,6 +173,14 @@ export type TestFileResult = TestResult & {
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;
   /**
+   * Path to this file's on-disk coverage JSON, shipped instead of the inline
+   * `coverage` payload when the provider supplies an off-main-thread merge
+   * worker (see #1326). Read and stripped at the pool boundary.
+   *
+   * @internal
+   */
+  coverageFile?: string;
+  /**
    * Perfetto-compatible trace events. Stripped at the pool boundary.
    *
    * @internal

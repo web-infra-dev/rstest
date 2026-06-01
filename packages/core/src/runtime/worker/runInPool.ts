@@ -674,7 +674,7 @@ export const runInPool = async (
         if (coverageProvider.coverageMergeWorker) {
           const file = join(tmpdir(), `rstest-cov-${randomUUID()}.json`);
           await writeFile(file, JSON.stringify(covObj));
-          (results as unknown as { coverageFile?: string }).coverageFile = file;
+          results.coverageFile = file;
         } else {
           results.coverage = covObj;
         }
