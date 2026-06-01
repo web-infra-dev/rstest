@@ -60,6 +60,7 @@ When writing or editing documentation, follow these principles:
 - For TypeScript API signatures in docs, prefer `T[]` over `Array<T>`. For unions that allow either a single value or an array, prefer `A | B | (A | B)[]` over `A | B | Array<A | B>`.
 - When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`.
 - If a config option has a corresponding CLI flag, surface it alongside type and default in both EN and ZH, matching the style of neighboring config pages.
+- **Punctuation by language**: In `docs/zh/`, use full-width punctuation (`：，。；（）`) for Chinese prose — including the `**类型：**` / `**默认值：**` / `**CLI：**` metadata lines and `**标签**：` bullet lead-ins. Keep half-width only inside code and inline code. In `docs/en/`, use half-width punctuation only. In both languages, keep the metadata colon inside the bold (`**Type:**` / `**类型：**`, not `**Type**:`).
 
 ### Logical grouping
 
