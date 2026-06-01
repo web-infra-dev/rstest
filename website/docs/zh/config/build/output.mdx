@@ -220,15 +220,39 @@ export default defineConfig({
 
 ### 与 output.externals 的关系
 
-`output.bundleDependencies` 控制所有 `node_modules` 依赖的整体打包策略，而 [`output.externals`](#outputexternals) 允许对单个包进行细粒度控制。当两者同时配置时，`output.externals` 的优先级更高：
+这两个配置都能决定「某个依赖是被打包还是被 external」，但它们工作在不同的层面，可以理解为「先定基调，再开例外」：
 
-- `bundleDependencies: true` + `externals: ['lodash']`：打包所有依赖，但外部化 `lodash`。
-- `bundleDependencies: false` + `externals` 无需配置，因为所有依赖已被外部化。
+- **`output.bundleDependencies` 定整体基调**：一次性决定所有 `node_modules` 依赖默认是打包还是 external。
+- **[`output.externals`](#outputexternals) 做逐包例外**：在基调之上，针对个别包精确指定，且优先级更高。
 
-实际使用时，这两个配置更适合相反的场景：
+#### 列出同一个包，效果正好相反
 
-- 当大部分依赖都应该保持 external，只有少量包或子路径需要被打包时，更适合使用 `bundleDependencies` pattern。
-- 当大部分依赖都应该保持打包，只有少量包需要被 externalize 时，更适合使用 `output.externals`。
+当你只需要调整少数几个包时，这两个配置表达的意图正好相反：
+
+- `bundleDependencies: ['foo']`：默认将所有依赖 external，仅打包 `foo`。
+- `externals: ['foo']`：默认打包所有依赖，仅将 `foo` external。
+
+选择哪一个，取决于大多数依赖应当保持的处理方式：
+
+- 大多数依赖需保持 external，仅少数需要打包 → 在 `bundleDependencies` 中列出需要打包的包。
+- 大多数依赖需保持打包，仅少数需要 external → 在 `output.externals` 中列出需要 external 的包。
+
+#### 同时配置时，`output.externals` 优先级更高
+
+`output.externals` 是 Rspack 原生能力，会先于 Rstest 的整体策略生效。因此你可以用 `bundleDependencies` 定一个宽泛的基调，再用 `externals` 精确覆盖个别包：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    // 基调：打包所有第三方依赖
+    bundleDependencies: true,
+    // 例外：唯独 lodash 仍然保持 external
+    externals: ['lodash'],
+  },
+});
+```
 
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
