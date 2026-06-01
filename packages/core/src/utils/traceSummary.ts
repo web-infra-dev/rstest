@@ -1,11 +1,18 @@
 import { displayPath } from './helper';
 import type { TraceEvent } from './trace';
 
-/** A `ph: 'X'` slice of category `cat` with a numeric `dur`. */
+/** A `ph: 'X'` (complete) trace event with a numeric `dur`. */
 type Slice = TraceEvent & { dur: number };
 
-const isSlice = (ev: TraceEvent, cat: string): ev is Slice =>
-  ev.ph === 'X' && ev.cat === cat && typeof ev.dur === 'number';
+const isSlice = (ev: TraceEvent): ev is Slice =>
+  ev.ph === 'X' && typeof ev.dur === 'number';
+
+/**
+ * Slice categories the worker `PhaseTracker` emits per test file. Everything
+ * else carried on a `ph: 'X'` slice (`host:*`, `coverage:*`, and any future
+ * host-side category) is a host-side span — see {@link summarizeTrace}.
+ */
+const WORKER_SLICE_CATS = new Set(['phase', 'suite', 'case']);
 
 // ---------------------------------------------------------------------------
 // Summary model
@@ -40,7 +47,11 @@ export interface TraceCaseEntry {
 export interface TraceSummary {
   /** Per-file lifecycle phases (`cat: 'phase'`), grouped by phase name. */
   phases: TraceSummaryGroup[];
-  /** Host-side spans (`cat: 'host'`, e.g. rsbuild build), grouped by name. */
+  /**
+   * Host-side spans (`host:*`, `coverage:*`, …, i.e. any non-worker slice
+   * category — e.g. rsbuild build, coverage report generation), grouped by
+   * name.
+   */
   host: TraceSummaryGroup[];
   /** Per-file wall time (sum of the file's phase slices), ranked desc. */
   files: TraceFileEntry[];
@@ -55,7 +66,8 @@ export interface TraceSummary {
 // ---------------------------------------------------------------------------
 
 /**
- * Group `ph: 'X'` slices of a given category by `name`, summing durations.
+ * Group `ph: 'X'` slices whose category matches `matchCat` by `name`, summing
+ * durations.
  *
  * Phases and host spans are non-overlapping within their own track and are
  * aggregated across all workers, so summed durations exceed wall-clock time
@@ -65,12 +77,12 @@ export interface TraceSummary {
  */
 const groupByName = (
   events: TraceEvent[],
-  cat: string,
+  matchCat: (cat: string) => boolean,
 ): TraceSummaryGroup[] => {
   const byName = new Map<string, { totalUs: number; count: number }>();
   let total = 0;
   for (const ev of events) {
-    if (!isSlice(ev, cat)) continue;
+    if (!isSlice(ev) || !matchCat(ev.cat)) continue;
     const cur = byName.get(ev.name) ?? { totalUs: 0, count: 0 };
     cur.totalUs += ev.dur;
     cur.count += 1;
@@ -97,15 +109,18 @@ export const summarizeTrace = (
   events: TraceEvent[],
   rootPath: string,
 ): TraceSummary => {
-  const phases = groupByName(events, 'phase');
-  const host = groupByName(events, 'host');
+  const phases = groupByName(events, (cat) => cat === 'phase');
+  // Host-side spans are every other `ph: 'X'` category (`host:*`, `coverage:*`,
+  // …); aggregating by exclusion keeps coverage and future host categories in
+  // the summary instead of silently dropping them.
+  const host = groupByName(events, (cat) => !WORKER_SLICE_CATS.has(cat));
 
   // Per-file wall time = sum of that file's phase slices (phases are
   // sequential and cover the file's lifetime). Keyed by the file's testPath.
   const fileUs = new Map<string, number>();
   let phaseTotal = 0;
   for (const ev of events) {
-    if (!isSlice(ev, 'phase')) continue;
+    if (!isSlice(ev) || ev.cat !== 'phase') continue;
     const testPath =
       typeof ev.args?.testPath === 'string' ? ev.args.testPath : undefined;
     if (!testPath) continue;
@@ -121,7 +136,7 @@ export const summarizeTrace = (
     .sort((a, b) => b.totalUs - a.totalUs);
 
   const cases: TraceCaseEntry[] = events
-    .filter((ev): ev is Slice => isSlice(ev, 'case'))
+    .filter((ev): ev is Slice => isSlice(ev) && ev.cat === 'case')
     .map((ev) => ({
       name: ev.name,
       path:

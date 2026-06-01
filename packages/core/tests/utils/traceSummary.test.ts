@@ -62,6 +62,11 @@ it('ranks files by summed phase wall time, relative to repo root', () => {
 it('collects host spans and slowest cases separately from phases', () => {
   const events: TraceEvent[] = [
     slice('host:get-rsbuild-stats', 'host', 500, '<project>'),
+    // Coverage records host-side spans under `cat: 'coverage'`; they belong in
+    // the host section, not silently dropped.
+    slice('coverage:generate-reports', 'coverage', 300, '<host>'),
+    // Suite slices are intermediate worker nodes — excluded from every section.
+    slice('describe block', 'suite', 999, 'src/a.test.ts'),
     slice('load', 'phase', 100, 'src/a.test.ts'),
     slice('fast case', 'case', 5, 'src/a.test.ts'),
     slice('slow case', 'case', 80, 'src/a.test.ts'),
@@ -69,14 +74,18 @@ it('collects host spans and slowest cases separately from phases', () => {
 
   const { host, cases } = summarizeTrace(events, ROOT);
 
+  // host + coverage, ranked desc, percentages relative to their 800ms total.
   expect(host).toEqual([
+    { name: 'host:get-rsbuild-stats', totalUs: 500_000, count: 1, pct: 62.5 },
     {
-      name: 'host:get-rsbuild-stats',
-      totalUs: 500_000,
+      name: 'coverage:generate-reports',
+      totalUs: 300_000,
       count: 1,
-      pct: 100,
+      pct: 37.5,
     },
   ]);
+  // Suite slices never surface as host spans or cases.
+  expect(host.some((h) => h.name === 'describe block')).toBe(false);
   expect(cases.map((c) => c.name)).toEqual(['slow case', 'fast case']);
   expect(cases[0]).toEqual({
     name: 'slow case',
