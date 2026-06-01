@@ -232,21 +232,22 @@ jobs:
         if: matrix.test_script == 'test'
         run: pnpm run test:vscode
 
-  # ======== stress test for watch flake ========
-  # Temporary: matrix sweeps polling × unique-dir on both macOS and Linux to
-  # measure flake rate per combo. Remove this block after analysis.
+  # ======== stress test with RSPACK_WATCHER_TRACE ========
+  # macOS polling=on × unique-dir on/off × 20 rounds × node 22/24 = 80 jobs.
+  # We focus on the residual nativeWatcher flake (polling=off failures are
+  # unrelated chokidar issues already explained). All jobs set
+  # RSPACK_WATCHER_TRACE=1 so failing jobs dump the full event pipeline log.
   stress-restart:
     needs: prepare
     if: needs.prepare.outputs.changed == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, ubuntu-latest]
         node_version: ['22', '24']
-        round: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        polling: ['on', 'off']
+        round:
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
         unique_dir: ['on', 'off']
     steps:
       - name: Checkout
@@ -269,9 +270,17 @@ jobs:
 
       - name: Stress all watch tests
         env:
-          STRESS_NO_POLLING: ${{ matrix.polling == 'off' && '1' || '' }}
           STRESS_NO_UNIQUE_DIR: ${{ matrix.unique_dir == 'off' && '1' || '' }}
-        run: cd e2e && pnpm exec rstest run watch/
+          RSPACK_WATCHER_TRACE: '1'
+        run: cd e2e && pnpm exec rstest run watch/ 2>&1 | tee /tmp/stress-watch.log
+        continue-on-error: false
+
+      - name: Dump trace on failure
+        if: failure()
+        run: |
+          echo '===== RSPACK_WATCHER_TRACE excerpt ====='
+          grep -E "RSPACK_WATCHER_TRACE|FAIL|Duration|index\.test\.ts|other\.test\.ts" /tmp/stress-watch.log | tail -200 || true
+          echo '===== END trace excerpt ====='
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
