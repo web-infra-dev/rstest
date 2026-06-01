@@ -565,6 +565,9 @@ export async function runTests(context: Rstest): Promise<void> {
     // the previous rerun's `finalize`) so browser events emitted before
     // `run()` are captured.
     const traceRun = activeTraceRun;
+    // `span` is a transparent pass-through when tracing is disabled
+    // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
+    const { span } = traceRun;
 
     const returns = await Promise.all(
       projects.map(async (p) => {
@@ -577,10 +580,16 @@ export async function runTests(context: Rstest): Promise<void> {
           getSourceMaps,
           affectedEntries,
           deletedEntries,
-        } = await getRsbuildStats({
-          environmentName: p.environmentName,
-          fileFilters,
-        });
+        } = await span(
+          'host:get-rsbuild-stats',
+          'host',
+          () =>
+            getRsbuildStats({
+              environmentName: p.environmentName,
+              fileFilters,
+            }),
+          { project: p.name, testPath: '<project>' },
+        );
 
         testStart ??= Date.now();
 
@@ -589,20 +598,30 @@ export async function runTests(context: Rstest): Promise<void> {
         if (entries.length && globalSetupEntries.length && !p._globalSetups) {
           p._globalSetups = true;
           const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
+          const globalSetupTraceArgs = {
+            project: p.name,
+            testPath: '<globalSetup>',
+          };
+          const [assetFiles, sourceMaps] = await span(
+            'host:global-setup-assets',
+            'host',
+            () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+            globalSetupTraceArgs,
+          );
 
-          const { success, errors } = await runGlobalSetup({
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: p.outputModule,
-          });
+          const { success, errors } = await span(
+            'host:global-setup',
+            'host',
+            () =>
+              runGlobalSetup({
+                globalSetupEntries,
+                assetFiles,
+                sourceMaps,
+                interopDefault: true,
+                outputModule: p.outputModule,
+              }),
+            globalSetupTraceArgs,
+          );
           if (!success) {
             return {
               results: [],
@@ -655,6 +674,7 @@ export async function runTests(context: Rstest): Promise<void> {
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,
+          traceSpan: span,
         });
 
         return {
