@@ -830,11 +830,15 @@ const getRuntimeConfigFromProject = (
   } = project.normalizedConfig;
 
   return {
-    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
-    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
-    // wins so explicit overrides still take effect.
+    // Propagate NODE_ENV and the RSTEST flag from the host so
+    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
+    // `rstest.env` symbol store) resolve in browser tests the same way they do
+    // in Node mode, where `prepare.ts` sets them on the real `process.env`.
+    // User-supplied `env` wins so explicit overrides still take effect.
+    // See https://github.com/web-infra-dev/rstest/issues/1351
     env: {
       NODE_ENV: process.env.NODE_ENV,
+      RSTEST: 'true',
       ...env,
     },
     testNamePattern,
