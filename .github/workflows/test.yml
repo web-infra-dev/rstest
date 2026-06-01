@@ -271,16 +271,7 @@ jobs:
       - name: Stress all watch tests
         env:
           STRESS_NO_UNIQUE_DIR: ${{ matrix.unique_dir == 'off' && '1' || '' }}
-          RSPACK_WATCHER_TRACE: '1'
-        run: cd e2e && pnpm exec rstest run watch/ 2>&1 | tee /tmp/stress-watch.log
-        continue-on-error: false
-
-      - name: Dump trace on failure
-        if: failure()
-        run: |
-          echo '===== RSPACK_WATCHER_TRACE excerpt ====='
-          grep -E "RSPACK_WATCHER_TRACE|FAIL|Duration|index\.test\.ts|other\.test\.ts" /tmp/stress-watch.log | tail -200 || true
-          echo '===== END trace excerpt ====='
+        run: cd e2e && pnpm exec rstest run watch/
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
