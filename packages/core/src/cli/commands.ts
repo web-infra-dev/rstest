@@ -98,7 +98,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
   ['--detectAsyncLeaks', 'Detect async resources that leak after tests finish'],
-  ['--trace', 'Dump a Perfetto-compatible performance trace JSON file'],
+  [
+    '--trace',
+    'Dump a Perfetto-compatible performance trace JSON file, plus a ranked markdown timing summary printed to the terminal and written next to it',
+  ],
   [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',

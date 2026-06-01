@@ -337,7 +337,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--testEnvironment <name>`          | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                                  |
 | `-t, --testNamePattern <value>`     | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                                     |
 | `--testTimeout <value>`             | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                        |
-| `--trace`                           | 导出 Perfetto 兼容的性能 trace JSON 文件                                                                                                             |
+| `--trace`                           | 导出 Perfetto 兼容的性能 trace JSON 文件，并附带一份按耗时排序的 markdown 摘要（打印到终端并写入 trace 同目录）                                      |
 | `--unstubEnvs`                      | 每个测试前恢复被 `rs.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                      |
 | `--unstubGlobals`                   | 每个测试前恢复被 `rs.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                                   |
 | `-u, --update`                      | 更新快照文件，详见 [update](/config/test/update)                                                                                                     |
