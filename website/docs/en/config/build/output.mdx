@@ -237,7 +237,7 @@ When you only need to adjust a few packages, the two options express opposite in
 Which one to use depends on the behavior most of your dependencies should keep:
 
 - Most dependencies should stay externalized, and only a few need bundling → list the packages to bundle in `bundleDependencies`.
-- Most dependencies should stay bundled, and only a few need externalizing → list the packages to externalize in `output.externals`.
+- Most dependencies should stay bundled, and only a few need externalizing → list the packages to externalize in `output.externals`. This assumes a bundling baseline (a browser-like environment, or `bundleDependencies: true`), since `output.externals` only adds exceptions on top of the current baseline and does not change it.
 
 #### When both are set, `output.externals` wins
 

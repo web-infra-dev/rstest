@@ -235,7 +235,7 @@ export default defineConfig({
 选择哪一个，取决于大多数依赖应当保持的处理方式：
 
 - 大多数依赖需保持 external，仅少数需要打包 → 在 `bundleDependencies` 中列出需要打包的包。
-- 大多数依赖需保持打包，仅少数需要 external → 在 `output.externals` 中列出需要 external 的包。
+- 大多数依赖需保持打包，仅少数需要 external → 在 `output.externals` 中列出需要 external 的包。这里假设基调本身已是「打包」（类浏览器环境，或设置了 `bundleDependencies: true`），因为 `output.externals` 只在现有基调之上添加例外，并不会改变基调。
 
 #### 同时配置时，`output.externals` 优先级更高
 
