@@ -26,7 +26,7 @@ import {
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
-import type { TraceEvent, TraceSpan } from '../utils/trace';
+import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
@@ -185,7 +185,7 @@ const buildTask = async ({
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
-  traceSpan?: TraceSpan;
+  traceSpan: TraceSpan;
 }) => {
   const getAssets = () =>
     filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
@@ -214,24 +214,20 @@ const buildTask = async ({
       updateSnapshot,
       /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
       assets: isMemorySufficient()
-        ? traceSpan
-          ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-              ...traceArgs,
-              mode: 'eager',
-            })
-          : await getAssets()
+        ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+            ...traceArgs,
+            mode: 'eager',
+          })
         : undefined,
     },
     rpcMethods: {
       ...rpcMethods,
       // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-      getAssetsByEntry: traceSpan
-        ? () =>
-            traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-              ...traceArgs,
-              mode: 'rpc',
-            })
-        : getAssets,
+      getAssetsByEntry: () =>
+        traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+          ...traceArgs,
+          mode: 'rpc',
+        }),
     },
   };
 };
@@ -299,7 +295,7 @@ export const createPool = async ({
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
     /** Records host-side pool slices in the caller-owned Perfetto trace. */
-    traceSpan?: TraceSpan;
+    traceSpan: TraceSpan;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -502,30 +498,11 @@ export const createPool = async ({
             project: projectName,
             testPath: entryInfo.testPath,
           };
-          const task = traceSpan
-            ? await traceSpan(
-                'host:build-task',
-                'host',
-                () =>
-                  buildTask({
-                    type: 'run',
-                    workerKind,
-                    entryInfo,
-                    index,
-                    context,
-                    project,
-                    runtimeConfig,
-                    setupEntries,
-                    setupAssets,
-                    updateSnapshot,
-                    getAssetFiles,
-                    getSourceMaps,
-                    rpcMethods,
-                    traceSpan,
-                  }),
-                traceArgs,
-              )
-            : await buildTask({
+          const task = await traceSpan(
+            'host:build-task',
+            'host',
+            () =>
+              buildTask({
                 type: 'run',
                 workerKind,
                 entryInfo,
@@ -539,20 +516,16 @@ export const createPool = async ({
                 getAssetFiles,
                 getSourceMaps,
                 rpcMethods,
-              });
+                traceSpan,
+              }),
+            traceArgs,
+          );
 
-          const result = await (
-            traceSpan
-              ? traceSpan(
-                  'host:pool-run-test',
-                  'host',
-                  () => pool.runTest(task),
-                  {
-                    ...traceArgs,
-                    worker: task.worker,
-                  },
-                )
-              : pool.runTest(task)
+          const result = await traceSpan(
+            'host:pool-run-test',
+            'host',
+            () => pool.runTest(task),
+            { ...traceArgs, worker: task.worker },
           ).catch((err: unknown) => {
             return workerErrorToResult(
               err,
@@ -618,6 +591,8 @@ export const createPool = async ({
             getAssetFiles,
             getSourceMaps,
             rpcMethods,
+            // `collect` does not participate in tracing.
+            traceSpan: noopTraceSpan,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {

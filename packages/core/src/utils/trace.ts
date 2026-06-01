@@ -35,6 +35,12 @@ export type TraceSpan = <T>(
   args?: TraceEvent['args'],
 ) => Promise<T>;
 
+/**
+ * Transparent pass-through span used when tracing is disabled, so call sites
+ * can always invoke `span(...)` without branching on whether `--trace` is on.
+ */
+export const noopTraceSpan: TraceSpan = async (_name, _cat, fn) => fn();
+
 // ---------------------------------------------------------------------------
 // File output
 // ---------------------------------------------------------------------------
@@ -299,7 +305,7 @@ export const createTraceController = (options: {
     if (!enabled) {
       return {
         onEvents: undefined,
-        span: async (_name, _cat, fn) => fn(),
+        span: noopTraceSpan,
         finalize: async () => {},
       };
     }
