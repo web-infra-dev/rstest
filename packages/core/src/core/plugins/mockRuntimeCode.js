@@ -88,12 +88,13 @@ const defineExportsWithCjsInterop = (
 };
 
 //#region rs.unmock
-// `request` is the clean specifier the plugin emits as the trailing argument
-// (`rstest_unmock(id, request)`); it is `undefined` for legacy/2-arg call
-// shapes, in which case only the primary `id` is restored.
 __webpack_require__.rstest_unmock = (id, request) => {
   restoreOriginalFactory(id);
 
+  // TODO(compat): `request` is `undefined` only under an OLDER @rspack/core that
+  // omits the trailing request literal (`rstest_unmock(id)`). Drop this
+  // `request !== undefined` guard — running the body unconditionally — once the
+  // minimum @rspack/core always emits the request literal.
   if (request !== undefined) {
     delete __webpack_require__.rstest_mocked_by_request[request];
     // Restore every dynamic-import sibling id that was lazily redirected to the
@@ -147,12 +148,13 @@ const getMockImplementation = (mockType = 'mock') => {
     mockType === 'mockRequire' || mockType === 'doMockRequire';
 
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
-  // `request` is the clean specifier the plugin emits as the trailing argument so that
-  // dynamic-import siblings (which carry a different hashed id) can be intercepted by request.
   return (id, modFactory, request) => {
     // Register `factory` under the clean request, so a dynamic `import(request)`
     // (which carries a different external module id) can resolve to the mock via
-    // rstest_dynamic_require. No-op when `request` is absent (legacy 2-arg shape).
+    // rstest_dynamic_require.
+    // TODO(compat): the `request !== undefined` guard no-ops under an OLDER
+    // @rspack/core that omits the trailing request literal; drop it (assign
+    // unconditionally) once the minimum @rspack/core always emits it.
     const registerByRequest = (factory) => {
       if (request !== undefined) {
         __webpack_require__.rstest_mocked_by_request[request] = factory;
