@@ -277,12 +277,16 @@ jobs:
       - name: Dump rspack-watcher trace on failure
         if: failure()
         run: |
-          echo '===== /tmp/rspack-watcher-trace.log (last 500 lines) ====='
-          if [ -f /tmp/rspack-watcher-trace.log ]; then
-            tail -500 /tmp/rspack-watcher-trace.log
-          else
-            echo "(file not present)"
+          if [ ! -f /tmp/rspack-watcher-trace.log ]; then
+            echo "(trace file not present)"
+            exit 0
           fi
+          echo '===== trace stats ====='
+          wc -l /tmp/rspack-watcher-trace.log
+          echo '===== js_event_handle calls (Rust → JS dispatch boundary) ====='
+          grep "js_event_handle" /tmp/rspack-watcher-trace.log || true
+          echo '===== source/fixture events (filter out .rstest-temp build noise) ====='
+          grep -E "src/(index|other|shared|late)\.ts|rstest.*config" /tmp/rspack-watcher-trace.log | tail -300 || true
           echo '===== END trace ====='
 
   # ======== codspeed ========
