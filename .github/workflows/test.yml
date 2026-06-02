@@ -271,7 +271,19 @@ jobs:
       - name: Stress all watch tests
         env:
           STRESS_NO_UNIQUE_DIR: ${{ matrix.unique_dir == 'off' && '1' || '' }}
+          RSPACK_WATCHER_TRACE_FILE: /tmp/rspack-watcher-trace.log
         run: cd e2e && pnpm exec rstest run watch/
+
+      - name: Dump rspack-watcher trace on failure
+        if: failure()
+        run: |
+          echo '===== /tmp/rspack-watcher-trace.log (last 500 lines) ====='
+          if [ -f /tmp/rspack-watcher-trace.log ]; then
+            tail -500 /tmp/rspack-watcher-trace.log
+          else
+            echo "(file not present)"
+          fi
+          echo '===== END trace ====='
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
