@@ -1,21 +1,14 @@
-import {
-  builtinModules,
-  createRequire as createNativeRequire,
-} from 'node:module';
-import { isAbsolute } from 'node:path';
+import { createRequire as createNativeRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
+import { clearSyntheticModuleCache } from './interop';
 import {
-  asModule,
-  clearSyntheticModuleCache,
-  createInteropProxy,
-  interopModule,
-  shouldInterop,
-} from './interop';
-
-const importMetaResolve = import.meta.resolve?.bind(import.meta);
+  finalizeDynamicImport,
+  loadWasmFromContent,
+  resolveImportSpecifier,
+} from './resolveDynamicImport';
 
 export enum EsmMode {
   Unknown = 0,
@@ -29,27 +22,6 @@ export const shouldInjectSourceURL = (): boolean => {
 };
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
-
-const isBuiltinSpecifier = (specifier: string) =>
-  specifier.startsWith('node:') || builtinModules.includes(specifier);
-
-const resolveModule = (
-  specifier: string,
-  resolveBase: string,
-): string | URL => {
-  const parentURL = resolveBase.startsWith('file:')
-    ? resolveBase
-    : pathToFileURL(resolveBase).href;
-
-  if (!importMetaResolve) {
-    return pathToFileURL(createNativeRequire(parentURL).resolve(specifier))
-      .href;
-  }
-
-  // Node's loader hook worker clones the parent URL when native TypeScript
-  // loading is active. Passing URL objects can throw DataCloneError there.
-  return importMetaResolve(specifier, parentURL);
-};
 
 export const appendSourceURL = (
   codeContent: string,
@@ -142,13 +114,7 @@ const defineRstestDynamicImport =
     if (content) {
       try {
         if (specifier.endsWith('.wasm')) {
-          const wasmBuffer = Buffer.from(content, 'base64');
-          const wasmModule = await WebAssembly.compile(wasmBuffer);
-          const wasmInstance = await WebAssembly.instantiate(wasmModule);
-          const exports = wasmInstance.exports as Record<string, any>;
-          return returnModule
-            ? await asModule(exports, joinedPath, exports)
-            : exports;
+          return loadWasmFromContent(content, joinedPath, returnModule);
         }
         return await loadModule({
           codeContent: content,
@@ -168,66 +134,12 @@ const defineRstestDynamicImport =
       }
     }
 
-    // `origin` is the absolute path of the source module that produced the
-    // `import()` call. It is injected by rspack's `RstestPlugin` when
-    // `injectDynamicImportOrigin` is enabled, so relative specifiers in
-    // bundled deps resolve against the dep's own directory rather than the
-    // test entry's. Fallback to `testPath` keeps the link/vm-callback paths
-    // (which have no origin to pass) working as before.
-    const resolveBase = origin ?? testPath;
-    const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier).href
-      : isBuiltinSpecifier(specifier)
-        ? specifier
-        : resolveModule(specifier, resolveBase);
-
-    // Use `.href` (full file:// URL) rather than `.pathname` so absolute
-    // Windows specifiers (`D:\a\foo.mjs`) remain valid import targets. With
-    // `.pathname` the URL object yielded `/D:/a/foo.mjs`, which Node later
-    // re-resolved as `D:\D:\a\foo.mjs` (double drive letter).
-    const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.href;
-
-    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
-    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-    if (importAttributes?.with?.rstest) {
-      delete importAttributes.with.rstest;
-    }
-
-    if (modulePath.endsWith('.json')) {
-      const importedModule = await import(modulePath, {
-        with: { type: 'json' },
-      });
-
-      return returnModule
-        ? asModule(importedModule.default, modulePath, importedModule.default)
-        : {
-            ...importedModule.default,
-            default: importedModule.default,
-          };
-    }
-    const importedModule = await import(modulePath, importAttributes);
-
-    if (
-      shouldInterop({
-        interopDefault,
-        modulePath,
-        mod: importedModule,
-      }) &&
-      !modulePath.startsWith('node:')
-    ) {
-      const { mod, defaultExport } = interopModule(importedModule);
-      if (returnModule) {
-        return asModule(mod, modulePath, defaultExport);
-      }
-
-      return createInteropProxy(mod, defaultExport);
-    }
-
-    if (returnModule) {
-      return asModule(importedModule, modulePath, importedModule.default);
-    }
-    return importedModule;
+    return finalizeDynamicImport({
+      modulePath: resolveImportSpecifier({ specifier, origin, testPath }),
+      importAttributes,
+      interopDefault,
+      returnModule,
+    });
   };
 
 const esmCache = new Map<string, SourceTextModule>();
