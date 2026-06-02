@@ -40,13 +40,18 @@ __webpack_require__.rstest_original_module_factories = {};
  * a DIFFERENT external module id than the hoisted `rs.mock` — can still resolve
  * to the mock. See {@link rstest_dynamic_require} for the full two-id-split
  * rationale. Fixes #1327 (node builtins) and #1328 (ESM-only npm packages).
+ *
+ * Null-prototype: keys are user-controlled request strings, so a specifier like
+ * `constructor`/`__proto__` must not collide with inherited `Object.prototype`
+ * members (which would make the unguarded lookups below see a phantom factory).
  */
-__webpack_require__.rstest_mocked_by_request = {};
+__webpack_require__.rstest_mocked_by_request = Object.create(null);
 /**
  * request -> ids that {@link rstest_dynamic_require} lazily redirected to the
- * mock, so `rs.unmock` can restore their real factories.
+ * mock, so `rs.unmock` can restore their real factories. Null-prototype for the
+ * same request-key-pollution reason as {@link rstest_mocked_by_request}.
  */
-__webpack_require__.rstest_redirected_ids = {};
+__webpack_require__.rstest_redirected_ids = Object.create(null);
 
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 
