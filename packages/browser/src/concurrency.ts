@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { Rstest } from '@rstest/core/browser';
+import type { Rstest } from '@rstest/core/internal/browser';
 
 // Shared headless concurrency policy.
 // Keep this in one place so executors reuse the same worker semantics.

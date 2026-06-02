@@ -1,10 +1,10 @@
-import type { DevicePreset } from '@rstest/core/browser';
+import type { DevicePreset } from '@rstest/core/internal/browser';
 import type {
   RuntimeConfig,
   TestFileResult,
   TestInfo,
   TestResult,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 export type {

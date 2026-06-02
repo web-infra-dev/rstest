@@ -12,13 +12,13 @@ import type {
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import {
   createBrowserTaskContext,
   createRstestRuntime,
   globalApis,
   setRealTimers,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,

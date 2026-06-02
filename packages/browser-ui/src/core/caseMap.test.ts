@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import type { TestInfo } from '@rstest/core/browser-runtime';
+import type { TestInfo } from '@rstest/core/internal/browser-runtime';
 import type { CaseInfo } from '../utils/constants';
 import { buildCollectedCaseMap, upsertRunningCase } from './caseMap';
 

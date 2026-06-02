@@ -1,4 +1,4 @@
-import type { Reporter } from '@rstest/core/browser';
+import type { Reporter } from '@rstest/core/internal/browser';
 import { HostDispatchRouter } from './dispatchRouter';
 import type {
   BrowserClientMessage,

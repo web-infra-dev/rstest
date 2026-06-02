@@ -27,11 +27,11 @@
       "types": "./dist/api/index.d.ts",
       "default": "./dist/api/index.js"
     },
-    "./browser": {
+    "./internal/browser": {
       "types": "./dist/browser.d.ts",
       "default": "./dist/browser.js"
     },
-    "./browser-runtime": {
+    "./internal/browser-runtime": {
       "types": "./dist/browser-runtime/index.d.ts",
       "default": "./dist/browser-runtime/index.js"
     },

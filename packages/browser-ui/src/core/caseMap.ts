@@ -1,4 +1,4 @@
-import type { TestInfo } from '@rstest/core/browser-runtime';
+import type { TestInfo } from '@rstest/core/internal/browser-runtime';
 import type { CaseInfo } from '../utils/constants';
 
 type CollectedCaseInfo = Extract<TestInfo, { type: 'case' }>;

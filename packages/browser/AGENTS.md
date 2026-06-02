@@ -105,7 +105,7 @@ pnpm --filter @rstest/browser typecheck
 
 ## Dependencies
 
-This package requires `@rstest/core` as a peer dependency. The browser client code uses internal APIs from `@rstest/core/browser`:
+This package requires `@rstest/core` as a peer dependency. The browser client code uses internal APIs from `@rstest/core/internal/browser`:
 
 - `createRstestRuntime` - Creates test runtime
 - `setRealTimers` - Preserves real timer references
