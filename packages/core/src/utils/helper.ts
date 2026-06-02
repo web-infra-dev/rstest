@@ -1,4 +1,12 @@
-import { isAbsolute, join, normalize, parse, sep } from 'pathe';
+import {
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from 'pathe';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
@@ -40,6 +48,17 @@ export const formatRootStr = (rootStr: string, root: string): string => {
 export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
+
+/**
+ * Render a path relative to `rootPath` when it lives inside the root, otherwise
+ * fall back to the original path. Used for trace labels and summary tables so
+ * in-repo files show as short relative paths while external/sentinel paths
+ * (e.g. `<host>`) pass through unchanged.
+ */
+export const displayPath = (filePath: string, rootPath: string): string => {
+  const rel = relative(rootPath, resolve(rootPath, filePath));
+  return rel && !rel.startsWith('..') ? rel : filePath;
+};
 
 export const parsePosix = (filePath: string): { dir: string; base: string } => {
   const { dir, base } = parse(filePath);

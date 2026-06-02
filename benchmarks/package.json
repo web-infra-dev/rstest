@@ -7,7 +7,7 @@
     "bench:memory": "node memorySuiteRun.mjs"
   },
   "dependencies": {
-    "@codspeed/tinybench-plugin": "^5.4.0",
+    "@codspeed/tinybench-plugin": "^5.5.0",
     "@rstest/core": "workspace:*",
     "antd": "^6.4.3",
     "react": "^19.2.6",

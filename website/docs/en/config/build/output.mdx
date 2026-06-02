@@ -222,15 +222,39 @@ Patterns only affect dependency requests that rstest can still process in the cu
 
 ### Relationship with output.externals
 
-`output.bundleDependencies` controls the overall bundling strategy for all `node_modules` dependencies, while [`output.externals`](#outputexternals) allows fine-grained control over individual packages. When both are configured, `output.externals` takes higher priority:
+Both options decide whether a dependency is bundled or externalized, but they work at different levels. Think of it as "set the baseline first, then make exceptions":
 
-- `bundleDependencies: true` + `externals: ['lodash']`: Bundle all dependencies, but externalize `lodash`.
-- `bundleDependencies: false` + `externals` is not needed, since all dependencies are already externalized.
+- **`output.bundleDependencies` sets the overall baseline**: it decides, in one shot, whether all `node_modules` dependencies default to being bundled or externalized.
+- **[`output.externals`](#outputexternals) makes per-package exceptions**: on top of that baseline, it targets individual packages, and takes higher priority.
 
-In practice, the two options are most useful in opposite situations:
+#### Listing a package has the opposite effect
 
-- Use `bundleDependencies` patterns when most dependencies should stay external, and you only want to bundle a small set of packages or subpaths.
-- Use `output.externals` when most dependencies should stay bundled, and you only want to externalize a small set of packages.
+When you only need to adjust a few packages, the two options express opposite intents:
+
+- `bundleDependencies: ['foo']` externalizes every dependency by default and bundles only `foo`.
+- `externals: ['foo']` bundles every dependency by default and externalizes only `foo`.
+
+Which one to use depends on the behavior most of your dependencies should keep:
+
+- Most dependencies should stay externalized, and only a few need bundling → list the packages to bundle in `bundleDependencies`.
+- Most dependencies should stay bundled, and only a few need externalizing → list the packages to externalize in `output.externals`. This assumes a bundling baseline (a browser-like environment, or `bundleDependencies: true`), since `output.externals` only adds exceptions on top of the current baseline and does not change it.
+
+#### When both are set, `output.externals` wins
+
+`output.externals` is a native Rspack capability and takes effect before Rstest's overall strategy. So you can use `bundleDependencies` to set a broad baseline, then use `externals` to precisely override individual packages:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  output: {
+    // Baseline: bundle all third-party dependencies
+    bundleDependencies: true,
+    // Exception: keep lodash externalized
+    externals: ['lodash'],
+  },
+});
+```
 
 ## output.cssModules <RsbuildDocBadge path="/config/output/css-modules" text="output.cssModules" />
 
