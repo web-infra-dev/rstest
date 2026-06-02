@@ -105,9 +105,13 @@ export const loadWasmFromContent = async (
  * - `false` — return the namespace (or an interop Proxy) directly for the
  *   `import()` call site.
  *
- * Builtin (`node:`) namespaces are never interop-wrapped: Node already exposes
- * a proper namespace with both named and default exports, so wrapping it would
- * only diverge from the real Module Namespace shape.
+ * Builtin namespaces are never interop-wrapped — both the `node:`-prefixed and
+ * the bare spelling (`path`, `fs/promises`), so `import('path')` and
+ * `import('node:path')` resolve identically. Node already exposes a proper
+ * namespace with named + default exports, and `interopModule` is a no-op for
+ * them (their default carries no `__esModule`), so wrapping would only add a
+ * redundant, transparent Proxy. `isBuiltinSpecifier` keeps both spellings on
+ * the same branch.
  */
 export const finalizeDynamicImport = async ({
   modulePath,
@@ -149,7 +153,7 @@ export const finalizeDynamicImport = async ({
       modulePath,
       mod: importedModule,
     }) &&
-    !modulePath.startsWith('node:')
+    !isBuiltinSpecifier(modulePath)
   ) {
     const { mod, defaultExport } = interopModule(importedModule);
     if (returnModule) {
