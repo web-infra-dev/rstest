@@ -28,6 +28,17 @@ const importMetaResolve = import.meta.resolve?.bind(import.meta);
 const isBuiltinSpecifier = (specifier: string): boolean =>
   specifier.startsWith('node:') || builtinModules.includes(specifier);
 
+/**
+ * Normalize a builtin specifier to its `node:` canonical form. Node treats the
+ * bare (`path`) and prefixed (`node:path`) spellings as one module, but the
+ * `returnModule` path keys its `SyntheticModule` cache by this id, so a bare id
+ * would split `import('path')` and `import('node:path')` into two distinct
+ * module instances. Every `builtinModules` entry is importable with the `node:`
+ * prefix, so prefixing is always safe.
+ */
+const toNodeBuiltin = (specifier: string): string =>
+  specifier.startsWith('node:') ? specifier : `node:${specifier}`;
+
 const resolveModule = (specifier: string, resolveBase: string): string => {
   const parentURL = resolveBase.startsWith('file:')
     ? resolveBase
@@ -47,8 +58,9 @@ const resolveModule = (specifier: string, resolveBase: string): string => {
  * Resolve a dynamic-import specifier to the module path that Node's loader (or
  * the interop tail below) should consume.
  *
- * - Absolute specifiers and builtins are kept verbatim; everything else is
- *   resolved against the source module's origin.
+ * - Absolute specifiers are kept verbatim (as a `file://` href); builtins are
+ *   normalized to their `node:` canonical form; everything else is resolved
+ *   against the source module's origin.
  * - `origin` is the absolute path of the source module that produced the
  *   `import()` call, injected by rspack's `RstestPlugin` when
  *   `injectDynamicImportOrigin` is enabled, so relative specifiers in bundled
@@ -74,7 +86,7 @@ export const resolveImportSpecifier = ({
   return isAbsolute(specifier)
     ? pathToFileURL(specifier).href
     : isBuiltinSpecifier(specifier)
-      ? specifier
+      ? toNodeBuiltin(specifier)
       : resolveModule(specifier, resolveBase);
 };
 

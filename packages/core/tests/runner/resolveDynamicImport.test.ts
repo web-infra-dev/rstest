@@ -15,7 +15,8 @@ import {
 describe('resolveImportSpecifier', () => {
   const testPath = '/virtual/tests/runtime.test.ts';
 
-  it('keeps builtin specifiers verbatim (both `node:`-prefixed and bare)', () => {
+  it('normalizes bare builtins to their `node:` canonical form', () => {
+    // Already-prefixed builtins are unchanged (no double prefix).
     expect(
       resolveImportSpecifier({
         specifier: 'node:fs',
@@ -23,13 +24,23 @@ describe('resolveImportSpecifier', () => {
         testPath,
       }),
     ).toBe('node:fs');
+    // Bare builtins are normalized so `import('path')` and `import('node:path')`
+    // share one SyntheticModule cache key on the returnModule path.
     expect(
       resolveImportSpecifier({
         specifier: 'path',
         origin: undefined,
         testPath,
       }),
-    ).toBe('path');
+    ).toBe('node:path');
+    // Slash subpaths (e.g. `fs/promises`) are builtins too.
+    expect(
+      resolveImportSpecifier({
+        specifier: 'fs/promises',
+        origin: undefined,
+        testPath,
+      }),
+    ).toBe('node:fs/promises');
   });
 
   it('returns a file:// href for absolute specifiers (Windows-safe)', () => {
@@ -55,6 +66,33 @@ describe('finalizeDynamicImport — node: interop skip', () => {
     });
 
     expect(result).toBe(ns);
+  });
+});
+
+describe('builtin spelling is canonicalized on the returnModule (link) path', () => {
+  // `import x from 'path'` and `import x from 'node:path'` must link to the
+  // SAME vm.SyntheticModule, matching Node where both resolve to one module.
+  // asModule's smCache is keyed by the resolved id, so resolveImportSpecifier
+  // has to hand both spellings the same `node:` id — otherwise the two would
+  // become distinct module instances on the link / importModuleDynamically path.
+  afterEach(() => {
+    clearCjsModuleCache();
+  });
+
+  const link = (specifier: string) =>
+    finalizeDynamicImport({
+      modulePath: resolveImportSpecifier({
+        specifier,
+        origin: undefined,
+        testPath: '/virtual/tests/runtime.test.ts',
+      }),
+      importAttributes: {},
+      interopDefault: true,
+      returnModule: true,
+    });
+
+  it('bare and node: spelling share one synthetic module', async () => {
+    expect(await link('path')).toBe(await link('node:path'));
   });
 });
 
