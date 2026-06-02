@@ -4,6 +4,11 @@
  * IMPORTANT: Keep this list/map in sync with `DevicePreset` typing in
  * `@rstest/core` (`packages/core/src/types/config.ts`) so `defineConfig`
  * autocomplete and runtime validation stay consistent.
+ *
+ * Upstream source of truth for ids/dimensions is the Chrome DevTools emulated
+ * device list — mirror each device's `screen.vertical` `{ width, height }`:
+ * https://github.com/ChromeDevTools/devtools-frontend/blob/main/front_end/models/emulation/EmulatedDevices.ts
+ * Last verified in sync (all 17): 2026-04-22, devtools-frontend commit abaac05e.
  */
 export const BROWSER_VIEWPORT_PRESET_IDS = [
   'iPhoneSE',
