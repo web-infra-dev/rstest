@@ -30,7 +30,7 @@ export default defineConfig({
         externals: {
           // Keep @rstest/core as external
           '@rstest/core': '@rstest/core',
-          '@rstest/core/browser': '@rstest/core/browser',
+          '@rstest/core/internal/browser': '@rstest/core/internal/browser',
           // Keep @rsbuild/core as external (provided by @rstest/core)
           '@rsbuild/core': '@rsbuild/core',
         },

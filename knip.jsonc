@@ -32,7 +32,7 @@
     },
     "packages/core": {
       "entry": [
-        // Package export: "./browser-runtime" (separate rslib env targeting web)
+        // Package export: "./internal/browser-runtime" (separate rslib env targeting web)
         "src/browserRuntime.ts",
         // Worker entries bundled by rslib
         "src/runtime/worker/index.ts",

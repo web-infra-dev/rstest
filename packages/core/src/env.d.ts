@@ -5,10 +5,12 @@ declare const RSTEST_SELF_CI: boolean;
 declare const PLAYWRIGHT_VERSION: string;
 
 /**
- * Module declaration for @rstest/browser (optional peer dependency).
+ * Module declaration for @rstest/browser/internal (optional peer dependency).
+ * These host-side entries live on the `./internal` subpath, not the public `.`
+ * entry; core loads them via `@rstest/browser/internal` (see browserLoader.ts).
  * The actual types come from the package when installed.
  */
-declare module '@rstest/browser' {
+declare module '@rstest/browser/internal' {
   import type { ListCommandResult, RstestContext } from './types';
 
   export function validateBrowserConfig(context: RstestContext): void;

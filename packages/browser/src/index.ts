@@ -2,7 +2,7 @@ import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   Rstest,
-} from '@rstest/core/browser';
+} from '@rstest/core/internal/browser';
 import {
   type ListBrowserTestsResult,
   listBrowserTests as listBrowserTestsImpl,

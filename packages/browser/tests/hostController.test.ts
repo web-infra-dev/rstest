@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, Rstest } from '@rstest/core/browser';
+import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,

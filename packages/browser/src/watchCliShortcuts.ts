@@ -1,4 +1,4 @@
-import { color, logger } from '@rstest/core/browser';
+import { color, logger } from '@rstest/core/internal/browser';
 
 const isTTY = (): boolean => Boolean(process.stdin.isTTY && !process.env.CI);
 

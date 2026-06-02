@@ -31,7 +31,7 @@ import {
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
-} from '@rstest/core/browser';
+} from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
@@ -1257,7 +1257,7 @@ const createBrowserRuntime = async ({
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
-    import.meta.resolve('@rstest/core/browser-runtime'),
+    import.meta.resolve('@rstest/core/internal/browser-runtime'),
   );
 
   const rstestInternalAliases = {
@@ -1268,7 +1268,7 @@ const createBrowserRuntime = async ({
     '@rstest/browser': resolveBrowserFile('browser.ts'),
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
-    '@rstest/core/browser-runtime': browserRuntimePath,
+    '@rstest/core/internal/browser-runtime': browserRuntimePath,
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 

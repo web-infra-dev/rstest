@@ -1,4 +1,4 @@
-import type { Rstest } from '@rstest/core/browser';
+import type { Rstest } from '@rstest/core/internal/browser';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
 const SUPPORTED_PROVIDERS = ['playwright'] as const;
