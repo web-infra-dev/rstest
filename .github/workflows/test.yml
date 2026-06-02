@@ -285,8 +285,8 @@ jobs:
           wc -l /tmp/rspack-watcher-trace.log
           echo '===== js_event_handle calls (Rust → JS dispatch boundary) ====='
           grep "js_event_handle" /tmp/rspack-watcher-trace.log || true
-          echo '===== source/fixture events (filter out .rstest-temp build noise) ====='
-          grep -E "src/(index|other|shared|late)\.ts|rstest.*config" /tmp/rspack-watcher-trace.log | tail -300 || true
+          echo '===== fixture-scoped events (no .rstest-temp build noise, no tail) ====='
+          grep -E "fixtures-test-(0|dynamic)-module-r[0-9]+" /tmp/rspack-watcher-trace.log | grep -v "\.rstest-temp" | grep -v "node_modules" || true
           echo '===== END trace ====='
 
   # ======== codspeed ========
