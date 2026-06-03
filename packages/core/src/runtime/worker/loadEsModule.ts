@@ -9,6 +9,10 @@ import {
   loadWasmFromContent,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
 
 export enum EsmMode {
   Unknown = 0,
@@ -177,7 +181,7 @@ export const loadModule = async ({
           distPath === runtimeDistPath ? distPath : testPath,
         ).toString();
         // @ts-expect-error
-        meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
+        meta[RSTEST_DYNAMIC_IMPORT_HOOK] = defineRstestDynamicImport({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
@@ -187,7 +191,7 @@ export const loadModule = async ({
           esmMode: EsmMode.Unknown,
         });
         // @ts-expect-error
-        meta.__rstest_require_resolve__ = defineRstestRequireResolve({
+        meta[RSTEST_REQUIRE_RESOLVE_HOOK] = defineRstestRequireResolve({
           assetFiles,
           testPath,
           distPath: distPath || testPath,

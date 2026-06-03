@@ -1,10 +1,14 @@
 import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
+import {
+  importMetaHook,
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from '../../runtime/worker/runtimeHooks';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
-
-export const RUNTIME_CHUNK_NAME = 'runtime';
+import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -116,8 +120,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               // the dynamic-import-origin rewrite onto a dedicated rspack
               // option so the two concerns stop sharing one identifier.
               config.output.importFunctionName = outputModule
-                ? 'import.meta.__rstest_dynamic_import__'
-                : '__rstest_dynamic_import__';
+                ? importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)
+                : RSTEST_DYNAMIC_IMPORT_HOOK;
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
@@ -142,8 +146,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 // call, instead of the test entry, fixing #848.
                 injectRequireResolveOrigin: {
                   functionName: outputModule
-                    ? 'import.meta.__rstest_require_resolve__'
-                    : '__rstest_require_resolve__',
+                    ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
+                    : RSTEST_REQUIRE_RESOLVE_HOOK,
                 },
               };
 
@@ -216,7 +220,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                  name: runtimeChunkNameForEnvironment(name),
                 },
               };
             },

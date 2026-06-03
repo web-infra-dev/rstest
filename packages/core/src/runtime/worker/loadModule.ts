@@ -9,6 +9,10 @@ import {
   loadWasmFromContent,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
@@ -204,12 +208,12 @@ export const loadModule = ({
         );
       }
     },
-    __rstest_dynamic_import__: defineRstestDynamicImport({
+    [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
       assetFiles,
     }),
-    __rstest_require_resolve__: defineRstestRequireResolve({
+    [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
       testPath,
       distPath,
       assetFiles,

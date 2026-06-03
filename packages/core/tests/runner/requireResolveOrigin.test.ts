@@ -10,6 +10,10 @@ import {
   clearModuleCache as clearCjsModuleCache,
   loadModule,
 } from '../../src/runtime/worker/loadModule';
+import {
+  importMetaHook,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from '../../src/runtime/worker/runtimeHooks';
 
 describe('require.resolve origin runtime helper', () => {
   afterEach(() => {
@@ -26,7 +30,7 @@ describe('require.resolve origin runtime helper', () => {
     const testPath = path.join(dir, 'test', 'template.spec.ts');
     const origin = path.join(depDir, 'index.js');
     const exports = loadModule({
-      codeContent: `module.exports = __rstest_require_resolve__('./exportHelper', ${JSON.stringify(origin)});`,
+      codeContent: `module.exports = ${RSTEST_REQUIRE_RESOLVE_HOOK}('./exportHelper', ${JSON.stringify(origin)});`,
       distPath: path.join(dir, 'bundle.js'),
       testPath,
       rstestContext: {},
@@ -53,7 +57,7 @@ describe('require.resolve origin runtime helper', () => {
 
     const origin = path.join(dir, 'src', 'index.js');
     const exports = loadModule({
-      codeContent: `module.exports = __rstest_require_resolve__('foo', { paths: [${JSON.stringify(targetDir)}] }, ${JSON.stringify(origin)});`,
+      codeContent: `module.exports = ${RSTEST_REQUIRE_RESOLVE_HOOK}('foo', { paths: [${JSON.stringify(targetDir)}] }, ${JSON.stringify(origin)});`,
       distPath: path.join(dir, 'bundle.js'),
       testPath: path.join(dir, 'test.spec.ts'),
       rstestContext: {},
@@ -95,7 +99,7 @@ describe('require.resolve origin runtime helper', () => {
 
     const origin = path.join(depDir, 'index.mjs');
     const mod = await loadEsModule({
-      codeContent: `export default import.meta.__rstest_require_resolve__('./exportHelper', ${JSON.stringify(origin)});`,
+      codeContent: `export default ${importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)}('./exportHelper', ${JSON.stringify(origin)});`,
       distPath: path.join(dir, 'bundle.mjs'),
       testPath: path.join(dir, 'test.spec.ts'),
       rstestContext: {},

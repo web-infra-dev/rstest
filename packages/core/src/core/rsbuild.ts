@@ -16,7 +16,7 @@ import type {
 } from '../types';
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
+import { pluginBasic } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
@@ -24,6 +24,7 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,10 +46,7 @@ const getRuntimeChunkFiles = ({
   const runtimeChunkFiles = new Set<string>();
 
   for (const chunk of chunks || []) {
-    const isRuntimeChunk =
-      chunk.id === runtimeChunkName || chunk.names?.includes(runtimeChunkName);
-
-    if (!isRuntimeChunk) {
+    if (!isRuntimeChunk(chunk, runtimeChunkName)) {
       continue;
     }
 
@@ -221,14 +219,13 @@ const calcEntriesToRerun = (
   const runtimeChunkFiles = new Set(buildData.runtimeChunkFiles || []);
 
   for (const chunk of chunks || []) {
-    const isRuntimeChunk =
-      chunk.id === runtimeChunkName || chunk.names?.includes(runtimeChunkName);
+    const chunkIsRuntime = isRuntimeChunk(chunk, runtimeChunkName);
 
     for (const file of chunk.files || []) {
       const filePath = path.join(outputPath, String(file));
       chunkHashesByFile.set(filePath, chunk.hash ?? '');
 
-      if (isRuntimeChunk) {
+      if (chunkIsRuntime) {
         runtimeChunkFiles.add(filePath);
       }
     }
@@ -539,7 +536,7 @@ export const createRsbuildServer = async ({
     const runtimeChunkFiles = getRuntimeChunkFiles({
       chunks,
       outputPath: outputPath!,
-      runtimeChunkName: `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+      runtimeChunkName: runtimeChunkNameForEnvironment(environmentName),
     });
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
@@ -623,7 +620,7 @@ export const createRsbuildServer = async ({
           chunks,
           buildData[environmentName],
           outputPath!,
-          `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+          runtimeChunkNameForEnvironment(environmentName),
           setupEntries,
         )
       : { affectedEntries: [], deletedEntries: [] };
