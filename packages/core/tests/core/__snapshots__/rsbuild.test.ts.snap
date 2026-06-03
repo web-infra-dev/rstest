@@ -1738,6 +1738,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
+  "experiments": {
+    "nativeWatcher": true,
+  },
   "externals": [
     [Function],
     {
@@ -2301,7 +2304,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   },
   "target": "node",
   "watchOptions": {
-    "aggregateTimeout": 5,
+    "aggregateTimeout": 100,
     "ignored": [
       "**/.git",
       "**/node_modules",

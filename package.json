@@ -44,5 +44,10 @@
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=10.34.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "@rspack/core": "npm:@rspack-canary/core@2.0.6-canary-30a80444-20260603210320"
+    }
   }
 }
