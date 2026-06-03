@@ -28,7 +28,11 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
+import {
+  claimGlobalSetupOnce,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -593,10 +597,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
         testStart ??= Date.now();
 
-        // Global setup only run once per project
-        // Global setup runs only if there is at least one running test
-        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
-          p._globalSetups = true;
+        // Global setup runs once per project, only if there is at least one
+        // running test.
+        if (
+          claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
+        ) {
           const files = globalSetupEntries.flatMap((e) => e.files!);
           const globalSetupTraceArgs = {
             project: p.name,
@@ -725,6 +730,12 @@ export async function runTests(context: Rstest): Promise<void> {
         return sourceMap ? JSON.parse(sourceMap) : null;
       };
 
+      // Reduce the per-environment worker returns (and, when unifying reporter
+      // output, the browser result) into the run verdict. The only side effects
+      // are merging browser coverage into `mergedCoverageMap` and stripping it
+      // from the browser results to avoid reporter/state cache bloat (mirrors
+      // the node-side pool layer's `delete result.coverage`).
+
       // When unifying reporter output, combine browser and node durations
       const duration: Duration =
         shouldUnifyReporter && browserResult
@@ -765,12 +776,6 @@ export async function runTests(context: Rstest): Promise<void> {
         errors.push(...browserResult.unhandledErrors);
       }
 
-      context.updateReporterResultState(
-        results,
-        testResults,
-        currentDeletedEntries,
-      );
-
       // Check for failures including browser results when unified
       const nodeHasFailure =
         results.some((r) => r.status === 'fail') || errors.length;
@@ -779,11 +784,17 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const noTestsDiscovered = results.length === 0 && !errors.length;
 
+      const isFailure = nodeHasFailure || browserHasFailure;
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        currentDeletedEntries,
+      );
+
       if (noTestsDiscovered) {
         reportNoTestFiles({ context, mode });
       }
-
-      const isFailure = nodeHasFailure || browserHasFailure;
 
       if (isFailure) {
         process.exitCode = 1;
