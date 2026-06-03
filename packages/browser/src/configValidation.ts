@@ -1,4 +1,4 @@
-import type { Rstest } from '@rstest/core/internal/browser';
+import type { RstestContext } from '@rstest/core/internal/browser';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
 const SUPPORTED_PROVIDERS = ['playwright'] as const;
@@ -42,7 +42,7 @@ const validateViewport = (viewport: unknown): void => {
   );
 };
 
-export const validateBrowserConfig = (context: Rstest): void => {
+export const validateBrowserConfig = (context: RstestContext): void => {
   for (const project of context.projects) {
     const { browser, output } = project.normalizedConfig;
     if (!browser.enabled) {

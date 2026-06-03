@@ -111,6 +111,12 @@ export type RstestContext = {
     results: TestFileResult[];
     testResults: TestResult[];
   };
+  /** Merge a batch of file/test results into `reporterResults`. */
+  updateReporterResultState: (
+    results: TestFileResult[],
+    testResults: TestResult[],
+    deletedEntries?: string[],
+  ) => void;
 };
 
 export type ListCommandOptions = {

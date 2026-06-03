@@ -1,4 +1,3 @@
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
@@ -28,28 +27,13 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
+import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const getNumCpus = (): number => {
-  return os.availableParallelism?.() ?? os.cpus().length;
-};
-
-const parseWorkers = (maxWorkers: string | number): number => {
-  const parsed = Number.parseInt(maxWorkers.toString(), 10);
-
-  if (typeof maxWorkers === 'string' && maxWorkers.trim().endsWith('%')) {
-    const numCpus = getNumCpus();
-    const workers = Math.floor((parsed / 100) * numCpus);
-    return Math.max(workers, 1);
-  }
-
-  return parsed > 0 ? parsed : 1;
-};
 
 const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   const {
@@ -374,11 +358,11 @@ export const createPool = async ({
       : Math.min(recommendWorkerCount, threadsCount);
 
   const maxWorkers = poolOptions.maxWorkers
-    ? parseWorkers(poolOptions.maxWorkers)
+    ? parseWorkers(poolOptions.maxWorkers, numCpus)
     : recommendCount;
 
   const minWorkers = poolOptions.minWorkers
-    ? parseWorkers(poolOptions.minWorkers)
+    ? parseWorkers(poolOptions.minWorkers, numCpus)
     : maxWorkers < recommendCount
       ? maxWorkers
       : recommendCount;
