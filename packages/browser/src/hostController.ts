@@ -2401,7 +2401,9 @@ export const runBrowserController = async (
   };
 
   const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
-    return context.normalizedConfig.onConsoleLog?.(log.content) !== false;
+    return (
+      context.normalizedConfig.onConsoleLog?.(log.content, log.type) !== false
+    );
   };
 
   const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
