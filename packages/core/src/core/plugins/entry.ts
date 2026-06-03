@@ -86,7 +86,10 @@ export const pluginEntryWatch: (params: {
         );
 
         config.experiments ??= {};
-        config.experiments.nativeWatcher = true;
+        // [EXPERIMENT] temporarily disabled to A/B compare watchpack vs
+        // rspack nativeWatcher on the macos-14 stress matrix. Revert after
+        // baselining.
+        config.experiments.nativeWatcher = false;
 
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
