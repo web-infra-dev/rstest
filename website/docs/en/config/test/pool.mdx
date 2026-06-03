@@ -69,7 +69,7 @@ Consider switching to `threads` when:
 Stick with `forks` when:
 
 - Your tests mutate `process.chdir`, env vars, or signal handlers and rely on per-file isolation.
-- Your project depends on native modules that assume per-process initialization (e.g. `better-sqlite3`, `sharp`, `canvas`).
+- Your project uses native addons (e.g. `better-sqlite3`, `sharp`, `canvas`) — one not built for worker threads can abort the whole run under `threads` (`SIGSEGV` / `SIGABRT`, not a catchable error).
 - You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
 
 ## Control file-level parallelism
