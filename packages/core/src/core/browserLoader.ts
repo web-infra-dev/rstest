@@ -4,25 +4,30 @@ import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   ListCommandResult,
+  RstestContext,
 } from '../types';
 import { color, logger } from '../utils';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 
 /**
- * Type definition for the @rstest/browser internal exports.
+ * Core-owned contract for the `@rstest/browser/internal` host module.
+ *
+ * This is the single source of truth for the core↔browser load boundary:
+ * `loadBrowserModule` returns it, and `@rstest/browser`'s public entry
+ * constrains its exports against it via `satisfies`. The `context` is typed
+ * as {@link RstestContext} (not `unknown`) so drift between the two sides —
+ * such as a dropped `options` argument — surfaces as a type error.
  */
-interface BrowserModule {
-  validateBrowserConfig: (context: unknown) => void;
+export interface BrowserHostModule {
+  validateBrowserConfig: (context: RstestContext) => void;
   runBrowserTests: (
-    context: unknown,
+    context: RstestContext,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (
-    context: unknown,
-    options?: {
-      shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    },
+    context: RstestContext,
+    options?: Pick<BrowserTestRunOptions, 'shardedEntries'>,
   ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
@@ -53,11 +58,11 @@ interface LoadBrowserModuleOptions {
  */
 export async function loadBrowserModule(
   options: LoadBrowserModuleOptions = {},
-): Promise<BrowserModule> {
+): Promise<BrowserHostModule> {
   const coreVersion = RSTEST_VERSION;
   const { projectRoots = [], embedded = false } = options;
 
-  let browserModule: BrowserModule;
+  let browserModule: BrowserHostModule;
   let browserVersion: string;
 
   // Build resolution bases list with project roots first
@@ -83,7 +88,11 @@ export async function loadBrowserModule(
         '@rstest/browser/package.json',
       );
 
-      browserModule = await import(pathToFileURL(browserPath).href);
+      // The dynamic import namespace is unknown-shaped; the runtime contract is
+      // guaranteed on the `@rstest/browser` side via `satisfies BrowserHostModule`.
+      browserModule = (await import(
+        pathToFileURL(browserPath).href
+      )) as BrowserHostModule;
       const browserPkg = userRequire(browserPkgPath);
       browserVersion = browserPkg.version;
 

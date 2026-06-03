@@ -22,7 +22,7 @@ import {
   PhaseTracker,
   type ProjectContext,
   type Reporter,
-  type Rstest,
+  type RstestContext,
   type RuntimeConfig,
   resolveProjectBuildCache,
   rsbuild,
@@ -868,7 +868,7 @@ const getRuntimeConfigFromProject = (
   };
 };
 
-const getBrowserProjects = (context: Rstest): ProjectContext[] => {
+const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
   return context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
@@ -940,7 +940,7 @@ const resolveProviderForTestPath = ({
 };
 
 const collectProjectEntries = async (
-  context: Rstest,
+  context: RstestContext,
 ): Promise<BrowserProjectEntries[]> => {
   // Only collect entries for browser mode projects
   const browserProjects = getBrowserProjects(context);
@@ -1215,7 +1215,7 @@ const createBrowserRuntime = async ({
   containerDevServer,
   forceHeadless,
 }: {
-  context: Rstest;
+  context: RstestContext;
   manifestPath: string;
   manifestSource: string;
   tempDir: string;
@@ -1681,7 +1681,7 @@ const createBrowserRuntime = async ({
 };
 
 async function resolveProjectEntries(
-  context: Rstest,
+  context: RstestContext,
   shardedEntries?: Map<string, { entries: Record<string, string> }>,
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
@@ -1711,7 +1711,7 @@ async function resolveProjectEntries(
 // ============================================================================
 
 export const runBrowserController = async (
-  context: Rstest,
+  context: RstestContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
   const {
@@ -3606,7 +3606,7 @@ export type ListBrowserTestsResult = {
  * and collects their test structure (describe/test declarations).
  */
 export const listBrowserTests = async (
-  context: Rstest,
+  context: RstestContext,
   options?: {
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
   },

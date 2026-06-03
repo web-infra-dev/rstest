@@ -1,8 +1,6 @@
-import { color, logger } from '@rstest/core/internal/browser';
+import { color, isTTY, logger } from '@rstest/core/internal/browser';
 
-const isTTY = (): boolean => Boolean(process.stdin.isTTY && !process.env.CI);
-
-export const isBrowserWatchCliShortcutsEnabled = (): boolean => isTTY();
+export const isBrowserWatchCliShortcutsEnabled = (): boolean => isTTY('stdin');
 
 export const getBrowserWatchCliShortcutsHintMessage = (): string => {
   return `  ${color.dim('press')} ${color.bold('q')} ${color.dim('to quit')}\n`;
