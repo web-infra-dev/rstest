@@ -317,7 +317,7 @@ export const createPool = async ({
     log: UserConsoleLog;
     projectConfig: ProjectContext['normalizedConfig'];
   }): boolean => {
-    return projectConfig.onConsoleLog?.(log.content) !== false;
+    return projectConfig.onConsoleLog?.(log.content, log.type) !== false;
   };
 
   const emitUserConsoleLog = async ({

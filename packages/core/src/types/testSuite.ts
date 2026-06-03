@@ -6,7 +6,7 @@ import type {
   OnTestFinishedHandler,
   TestContext,
 } from './api';
-import type { MaybePromise, TestPath } from './utils';
+import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
@@ -189,5 +189,5 @@ export interface UserConsoleLog {
   taskType?: 'file' | 'suite' | 'case';
   trace?: string;
   testPath: TestPath;
-  type: 'stdout' | 'stderr';
+  type: ConsoleStreamType;
 }
