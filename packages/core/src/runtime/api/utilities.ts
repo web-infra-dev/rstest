@@ -46,6 +46,57 @@ const normalizeWaitOptions = (
   ),
 });
 
+/**
+ * Shared LIFO index-lifecycle for the three scoped-restore stacks behind
+ * `stubEnv`, `stubGlobal`, and `useFakeTimers`. Each stub pushes an entry and
+ * hands back a disposer; the disposer calls this to unwind. The three stacks
+ * keep identical bookkeeping but distinct restore actions, so this primitive
+ * owns ONLY the index management and delegates the restore itself:
+ *
+ *  - entry already removed (out-of-order dispose): no-op.
+ *  - entry shadowed by a newer stub: forward this entry's saved payload onto
+ *    the newer entry via `onSupersede` and drop this one — the live binding is
+ *    left untouched because the newer stub still owns it.
+ *  - entry is the newest (LIFO tail): pop it, re-apply its saved value via
+ *    `onTail`, then, only when the stack has fully drained, run `onEmpty`
+ *    (the two Map-backed stacks delete their now-empty key here; the bare
+ *    timer array passes none).
+ *
+ * The per-stack supersede payload (env value vs global descriptor vs the timer
+ * triple) and tail-restore action stay in the caller closures, so the
+ * behavioral split between the three stacks is preserved exactly.
+ */
+export const restoreScopedEntry = <E>(
+  stack: E[] | undefined,
+  entry: E,
+  handlers: {
+    onSupersede: (laterEntry: E) => void;
+    onTail: () => void;
+    onEmpty?: () => void;
+  },
+): void => {
+  if (!stack) {
+    return;
+  }
+  const index = stack.lastIndexOf(entry);
+  if (index === -1) {
+    return;
+  }
+
+  if (index !== stack.length - 1) {
+    // `index` is not the tail, so `index + 1` is always in-bounds.
+    handlers.onSupersede(stack[index + 1]!);
+    stack.splice(index, 1);
+    return;
+  }
+
+  stack.pop();
+  handlers.onTail();
+  if (stack.length === 0) {
+    handlers.onEmpty?.();
+  }
+};
+
 export const createRstestUtilities: (
   workerState: WorkerState,
 ) => Promise<RstestUtilities> = async (workerState) => {
@@ -141,89 +192,57 @@ export const createRstestUtilities: (
 
   const restoreEnvValue = (name: string, entry: EnvStackEntry) => {
     const runtimeEnv = resolveRuntimeEnv();
-    const envStack = originalEnvValues.get(name);
-    const index = envStack?.lastIndexOf(entry) ?? -1;
-    if (!envStack || index === -1) {
-      return;
-    }
-
-    if (index !== envStack.length - 1) {
-      const nextEntry = envStack[index + 1];
-      if (nextEntry) {
-        nextEntry.value = entry.value;
-      }
-      envStack.splice(index, 1);
-      return;
-    }
-
-    envStack.pop();
-    if (entry.value === undefined) {
-      Reflect.deleteProperty(runtimeEnv, name);
-    } else {
-      runtimeEnv[name] = entry.value;
-    }
-
-    if (envStack.length === 0) {
-      originalEnvValues.delete(name);
-    }
+    restoreScopedEntry(originalEnvValues.get(name), entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.value = entry.value;
+      },
+      onTail: () => {
+        if (entry.value === undefined) {
+          Reflect.deleteProperty(runtimeEnv, name);
+        } else {
+          runtimeEnv[name] = entry.value;
+        }
+      },
+      onEmpty: () => originalEnvValues.delete(name),
+    });
   };
 
   const restoreGlobalValue = (name: PropertyKey, entry: GlobalStackEntry) => {
-    const descriptorStack = originalGlobalValues.get(name);
-    const index = descriptorStack?.lastIndexOf(entry) ?? -1;
-    if (!descriptorStack || index === -1) {
-      return;
-    }
-
-    if (index !== descriptorStack.length - 1) {
-      const nextEntry = descriptorStack[index + 1];
-      if (nextEntry) {
-        nextEntry.descriptor = entry.descriptor;
-      }
-      descriptorStack.splice(index, 1);
-      return;
-    }
-
-    descriptorStack.pop();
-    if (!entry.descriptor) {
-      Reflect.deleteProperty(globalThis, name);
-    } else {
-      Object.defineProperty(globalThis, name, entry.descriptor);
-    }
-
-    if (descriptorStack.length === 0) {
-      originalGlobalValues.delete(name);
-    }
+    restoreScopedEntry(originalGlobalValues.get(name), entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.descriptor = entry.descriptor;
+      },
+      onTail: () => {
+        if (!entry.descriptor) {
+          Reflect.deleteProperty(globalThis, name);
+        } else {
+          Object.defineProperty(globalThis, name, entry.descriptor);
+        }
+      },
+      onEmpty: () => originalGlobalValues.delete(name),
+    });
   };
 
   const restoreFakeTimers = (entry: TimerStackEntry) => {
-    const index = timerStack.lastIndexOf(entry);
-    if (index === -1) {
-      return;
-    }
-
-    if (index !== timerStack.length - 1) {
-      const nextEntry = timerStack[index + 1];
-      if (nextEntry) {
-        nextEntry.config = entry.config;
-        nextEntry.snapshot = entry.snapshot;
-        nextEntry.wasFakeTimers = entry.wasFakeTimers;
-      }
-      timerStack.splice(index, 1);
-      return;
-    }
-
-    timerStack.pop();
-    if (entry.wasFakeTimers) {
-      timers().useFakeTimers(entry.config);
-      if (entry.snapshot) {
-        timers().restore(entry.snapshot);
-      }
-      currentFakeTimersConfig = entry.config;
-    } else {
-      timers().useRealTimers();
-      currentFakeTimersConfig = undefined;
-    }
+    restoreScopedEntry(timerStack, entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.config = entry.config;
+        laterEntry.snapshot = entry.snapshot;
+        laterEntry.wasFakeTimers = entry.wasFakeTimers;
+      },
+      onTail: () => {
+        if (entry.wasFakeTimers) {
+          timers().useFakeTimers(entry.config);
+          if (entry.snapshot) {
+            timers().restore(entry.snapshot);
+          }
+          currentFakeTimersConfig = entry.config;
+        } else {
+          timers().useRealTimers();
+          currentFakeTimersConfig = undefined;
+        }
+      },
+    });
   };
 
   const { fn, spyOn, isMockFunction, mocks, createMockInstance } = initSpy();

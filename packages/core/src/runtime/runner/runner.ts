@@ -20,12 +20,11 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
-import { getTaskNameWithPrefix } from '../../utils/helper';
+import { getFileTaskId, getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
-import { getFileTaskId } from './index';
 import {
   getTestStatus,
   limitConcurrency,
