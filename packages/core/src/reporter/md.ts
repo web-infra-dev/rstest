@@ -100,6 +100,7 @@ import type {
 import {
   buildPackageManagerReproCommand,
   collectFailures,
+  deriveRunCounts,
   detectPackageManagerAgent,
   ensureSingleBlankLine,
   type FailureItem,
@@ -909,17 +910,14 @@ export class MdReporter implements Reporter {
       ? await detectPackageManagerAgent(rootPath)
       : 'npm';
 
-    const failedTests = testResults.filter(
-      (result) => result.status === 'fail',
-    );
-    const passedTests = testResults.filter(
-      (result) => result.status === 'pass',
-    );
-    const skippedTests = testResults.filter(
-      (result) => result.status === 'skip',
-    );
-    const todoTests = testResults.filter((result) => result.status === 'todo');
-    const failedFiles = results.filter((result) => result.status === 'fail');
+    const {
+      failedTests,
+      passedTests,
+      skippedTests,
+      todoTests,
+      failedFiles,
+      counts,
+    } = deriveRunCounts({ results, testResults });
     const status =
       failedTests.length || failedFiles.length || unhandledErrors?.length
         ? 'fail'
@@ -929,15 +927,7 @@ export class MdReporter implements Reporter {
 
     const summaryPayload: Record<string, unknown> = {
       status,
-      counts: {
-        testFiles: results.length,
-        failedFiles: failedFiles.length,
-        tests: testResults.length,
-        failedTests: failedTests.length,
-        passedTests: passedTests.length,
-        skippedTests: skippedTests.length,
-        todoTests: todoTests.length,
-      },
+      counts,
       durationMs: {
         total: duration.totalTime,
         build: duration.buildTime,
