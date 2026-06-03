@@ -39,6 +39,7 @@ dedupe
 deepmerge
 desync
 desynced
+dgimsuvy
 distpath
 DNSCHANNEL
 docgen

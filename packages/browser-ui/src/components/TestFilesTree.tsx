@@ -3,6 +3,12 @@ import type { GlobalToken } from 'antd/es/theme/interface';
 import type { DataNode } from 'antd/es/tree';
 import { ChevronDown, ChevronRight, Package } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
+import {
+  appendSuiteSegment,
+  caseKey,
+  emptyKey,
+  projectKey as toProjectKey,
+} from '../core/treeNodeKey';
 import type { BrowserProjectRuntime, TestFileInfo } from '../types';
 import { openInEditor, toRelativePath } from '../utils';
 import {
@@ -117,7 +123,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       if (cases.length === 0) {
         return [
           {
-            key: `${file}::__empty`,
+            key: emptyKey(file),
             title: (
               <span className="text-xs text-(--muted-foreground)">
                 No test cases reported yet
@@ -184,7 +190,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         for (const child of node.children.values()) {
           const suiteStatus = calcStatus(child);
           const suiteMeta = CASE_STATUS_META[suiteStatus];
-          const suiteKey = `${keyPrefix}::suite::${child.fullPath.join('::')}`;
+          const suiteKey = appendSuiteSegment(keyPrefix, child.fullPath);
           const suiteFullName = child.fullPath.join('  ');
 
           result.push({
@@ -214,7 +220,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         for (const testCase of node.cases) {
           const caseMeta = CASE_STATUS_META[testCase.status];
           result.push({
-            key: `${keyPrefix}::case::${testCase.id}`,
+            key: caseKey(keyPrefix, testCase.id),
             title: (
               <TestCaseTitle
                 icon={caseMeta.icon}
@@ -300,7 +306,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         const projectFiles = filteredTestFiles.filter(
           (f) => f.projectName === projectName,
         );
-        const projectKey = `__project__${projectName}`;
+        const projectKey = toProjectKey(projectName);
         const projectRoot = projectRootMap.get(projectName);
 
         // Calculate project status based on file statuses

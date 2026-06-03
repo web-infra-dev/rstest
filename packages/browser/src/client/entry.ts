@@ -17,21 +17,21 @@ import {
   createBrowserTaskContext,
   createRstestRuntime,
   globalApis,
+  RSTEST_ENV_SYMBOL_KEY,
   setRealTimers,
+  unwrapRegex,
 } from '@rstest/core/internal/browser-runtime';
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
-  BrowserDispatchRequest,
   BrowserProjectRuntime,
   RunnerLifecycleMethod,
 } from '../protocol';
+import { DISPATCH_MESSAGE_TYPE, RSTEST_CONFIG_MESSAGE_TYPE } from '../protocol';
 import {
-  DISPATCH_MESSAGE_TYPE,
-  DISPATCH_NAMESPACE_RUNNER,
-  DISPATCH_RPC_REQUEST_TYPE,
-  RSTEST_CONFIG_MESSAGE_TYPE,
-} from '../protocol';
+  createRunnerLifecycleRequest,
+  sendRunnerLifecycle,
+} from './dispatchTransport';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -45,8 +45,6 @@ declare global {
   var __coverage__: Record<string, unknown> | undefined;
 }
 
-let runnerDispatchRequestId = 0;
-
 /**
  * Debug logger for browser client.
  * Only logs when debug mode is enabled (DEBUG=rstest on server side).
@@ -58,26 +56,12 @@ const debugLog = (...args: unknown[]): void => {
 };
 
 type RuntimeEnvStore = Record<string, string | undefined>;
-const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
 
 type GlobalWithRuntimeEnv = typeof globalThis &
   Record<symbol, unknown> & {
     global?: typeof globalThis;
   };
-
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const unwrapRegex = (value: string): string | RegExp => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const raw = value.slice(REGEXP_FLAG_PREFIX.length);
-    const match = raw.match(/^\/(.+)\/([gimuy]*)$/);
-    if (match) {
-      const [, pattern, flags] = match;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
 
 const restoreRuntimeConfig = (
   config: BrowserProjectRuntime['runtimeConfig'],
@@ -225,42 +209,30 @@ const send = (message: BrowserClientMessage): void => {
   }
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
-  window.__rstest_dispatch__?.(message);
+  window[DISPATCH_MESSAGE_TYPE]?.(message);
 };
 
 const dispatchRunnerLifecycle = (
   method: RunnerLifecycleMethod,
   payload: unknown,
 ): void => {
-  const request: BrowserDispatchRequest = {
-    requestId: `runner-lifecycle-${++runnerDispatchRequestId}`,
-    namespace: DISPATCH_NAMESPACE_RUNNER,
-    method,
-    args: payload,
-  };
-
-  if (window.parent === window) {
-    const dispatchBridge = window.__rstest_dispatch_rpc__;
-    if (!dispatchBridge) {
-      debugLog(
-        '[Runner] Missing dispatch bridge for lifecycle method:',
-        method,
-      );
-      return;
-    }
-    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+  sendRunnerLifecycle(
+    createRunnerLifecycleRequest(method, payload),
+    (error: unknown) => {
       debugLog('[Runner] Failed to dispatch lifecycle method:', method, error);
-    });
-    return;
-  }
-
-  send({
-    type: DISPATCH_RPC_REQUEST_TYPE,
-    payload: request,
-  });
+    },
+  );
 };
 
-/** Timeout for waiting for browser config from container (30 seconds) */
+/**
+ * Timeout for waiting for browser config from container (30 seconds).
+ *
+ * Coincidentally equal to the RPC default (client/dispatchTransport.ts) and the
+ * host's RUNNER_FRAMES_READY_TIMEOUT_MS (hostController.ts), but semantically
+ * distinct and in a different runtime, so deliberately not shared. Implicit
+ * invariant: this must not exceed the host's frames-ready timeout, or the host
+ * declares the runner un-ready before it can even receive its config.
+ */
 const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 
 /**

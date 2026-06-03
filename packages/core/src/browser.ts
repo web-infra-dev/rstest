@@ -20,6 +20,7 @@ export { PhaseTracker } from './runtime/worker/phaseTracker';
 export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  BrowserViewport,
   CoverageMapData,
   DevicePreset,
   FormattedError,
@@ -47,7 +48,12 @@ export {
 // Worker concurrency primitives shared with @rstest/browser
 export { getNumCpus, parseWorkers } from './utils/workers';
 // Constants
-export { resolveProjectBuildCache } from './utils/constants';
+export {
+  BROWSER_PROVIDERS,
+  resolveProjectBuildCache,
+  RSTEST_ENV_SYMBOL_KEY,
+} from './utils/constants';
+export type { BrowserProvider } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };

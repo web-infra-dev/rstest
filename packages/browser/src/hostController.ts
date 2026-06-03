@@ -25,6 +25,7 @@ import {
   type RstestContext,
   type RuntimeConfig,
   resolveProjectBuildCache,
+  RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
   type Test,
@@ -52,6 +53,7 @@ import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   BrowserHostConfig,
+  BrowserLogPayload,
   BrowserProjectRuntime,
   BrowserRpcRequest,
   BrowserViewport,
@@ -60,6 +62,7 @@ import type {
 } from './protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_BROWSER,
   DISPATCH_NAMESPACE_RUNNER,
   validateBrowserRpcRequest,
 } from './protocol';
@@ -96,6 +99,15 @@ type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Extra time added on top of a file's `testTimeout` before the host gives up
+ * waiting for that file's RPC to settle. Covers fixed per-file overhead (page
+ * navigation, runner boot) that is not part of the user's test budget. The
+ * headless and headed scheduling paths both apply this same buffer, so it lives
+ * here as one constant to keep their per-file timeout semantics identical.
+ */
+const PER_FILE_TIMEOUT_BUFFER_MS = 30_000;
 
 /**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
@@ -165,18 +177,8 @@ type TestFileStartPayload = {
   projectName: string;
 };
 
-/** Payload for log event */
-type LogPayload = {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  content: string;
-  taskId?: string;
-  taskName?: string;
-  taskParentNames?: string[];
-  taskType?: 'file' | 'suite' | 'case';
-  testPath: string;
-  type: 'stdout' | 'stderr';
-  trace?: string;
-};
+/** Payload for log event — single-sourced from the wire protocol. */
+type LogPayload = BrowserLogPayload;
 
 /** Payload for fatal error event */
 type FatalPayload = {
@@ -832,8 +834,9 @@ const getRuntimeConfigFromProject = (
   return {
     // Propagate NODE_ENV and the RSTEST flag from the host so
     // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
-    // `rstest.env` symbol store) resolve in browser tests the same way they do
-    // in Node mode, where `prepare.ts` sets them on the real `process.env`.
+    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
+    // way they do in Node mode, where `prepare.ts` sets them on the real
+    // `process.env`.
     // User-supplied `env` wins so explicit overrides still take effect.
     // See https://github.com/web-infra-dev/rstest/issues/1351
     env: {
@@ -1333,6 +1336,13 @@ const createBrowserRuntime = async ({
                 project.rootPath,
               ),
             );
+            // rspack `define` replaces `process.env` / `import.meta.env` with
+            // this literal expression. JSON.stringify reproduces the exact
+            // double-quoted `"rstest.env"` text, so the owned key can never
+            // drift from the runtime `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
+            const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
+              RSTEST_ENV_SYMBOL_KEY,
+            )})]`;
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
             const merged = mergeEnvironmentConfig(
               config,
@@ -1351,8 +1361,8 @@ const createBrowserRuntime = async ({
                 },
                 source: {
                   define: {
-                    'process.env': 'globalThis[Symbol.for("rstest.env")]',
-                    'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                    'process.env': rstestEnvDefine,
+                    'import.meta.env': rstestEnvDefine,
                   },
                 },
                 output: {
@@ -2165,13 +2175,16 @@ export const runBrowserController = async (
     }
   };
 
-  runtime.dispatchHandlers.set('browser', async (dispatchRequest) => {
-    const request = validateBrowserRpcRequest(dispatchRequest.args);
-    return dispatchBrowserRpcRequest({
-      request,
-      target: dispatchRequest.target,
-    });
-  });
+  runtime.dispatchHandlers.set(
+    DISPATCH_NAMESPACE_BROWSER,
+    async (dispatchRequest) => {
+      const request = validateBrowserRpcRequest(dispatchRequest.args);
+      return dispatchBrowserRpcRequest({
+        request,
+        target: dispatchRequest.target,
+      });
+    },
+  );
 
   runtime.setContainerOptions(hostOptions);
 
@@ -2606,7 +2619,7 @@ export const runBrowserController = async (
       message: BrowserClientMessage,
     ): Promise<void> => {
       const response = await dispatchRouter.dispatch({
-        requestId: nextDispatchRequestId('runner'),
+        requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
         runToken: run.token,
         namespace: DISPATCH_NAMESPACE_RUNNER,
         method: message.type,
@@ -2663,7 +2676,7 @@ export const runBrowserController = async (
       );
       const perFileTimeoutMs =
         (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-        30_000;
+        PER_FILE_TIMEOUT_BUFFER_MS;
 
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -3062,6 +3075,12 @@ export const runBrowserController = async (
   }
 
   let currentTestFiles = allTestFiles;
+  // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
+  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // semantically distinct and in a different runtime, so deliberately NOT shared
+  // with them. Invariant worth preserving: a runner must be able to receive its
+  // config (config-wait) before the host declares its frames un-ready, i.e.
+  // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
   let currentRunnerFramesSignature: string | null = null;
   const runnerFramesWaiters = new Map<string, Set<() => void>>();
@@ -3149,7 +3168,7 @@ export const runBrowserController = async (
     );
     return (
       (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-      30_000
+      PER_FILE_TIMEOUT_BUFFER_MS
     );
   };
 

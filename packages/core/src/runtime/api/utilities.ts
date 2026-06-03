@@ -7,6 +7,7 @@ import type {
   WaitUntilOptions,
   WorkerState,
 } from '../../types';
+import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { getRealTimers } from '../util';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
@@ -101,7 +102,7 @@ export const createRstestUtilities: (
   workerState: WorkerState,
 ) => Promise<RstestUtilities> = async (workerState) => {
   type RuntimeEnvStore = Record<string, string | undefined>;
-  const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+  const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
   type GlobalWithRuntimeEnv = typeof globalThis & Record<symbol, unknown>;
   type PropertyKey = string | symbol | number;
   type EnvStackEntry = { value: string | undefined };
