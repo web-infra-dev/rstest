@@ -22,6 +22,7 @@ import {
   color,
   getForceColorEnv,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
@@ -311,13 +312,24 @@ export const createPool = async ({
     log: UserConsoleLog;
     projectConfig: ProjectContext['normalizedConfig'];
   }): Promise<void> => {
-    if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
-      return;
-    }
+    // The worker forwards console output fire-and-forget (see `emitInterceptedLog`
+    // in runInPool): a delivery failure is dropped silently in the worker, and an
+    // error thrown here cannot travel back to fail the originating test — the
+    // worker's swallow would hide it. A user `onConsoleLog` filter or a reporter
+    // `onUserConsoleLog` that throws is a real defect, though, so surface it here
+    // on the host — where it occurs — rather than letting it vanish. This keeps
+    // console handling best-effort without hiding bugs.
+    try {
+      if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
+        return;
+      }
 
-    await Promise.all(
-      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-    );
+      await Promise.all(
+        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+      );
+    } catch (error) {
+      logger.error(color.red('Failed to handle console log:'), toError(error));
+    }
   };
 
   // Propagate parent execArgv to workers, except flags known to cause issues
