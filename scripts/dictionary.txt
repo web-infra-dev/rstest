@@ -14,6 +14,7 @@ bundleless
 bytedance
 caniuse
 canyonjs
+catchable
 cdup
 CEHQ
 chunkhash
