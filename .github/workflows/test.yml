@@ -96,7 +96,7 @@ jobs:
     strategy:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -128,7 +128,7 @@ jobs:
         # tsc is OS-independent, so PR runs it on macOS only; the post-merge
         # FULL run still typechecks both OSes so push-to-main stays a literal
         # superset of PR coverage.
-        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-14'
+        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-latest'
         run: pnpm run typecheck
 
       - name: Run Test
@@ -147,7 +147,7 @@ jobs:
       fail-fast: false
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
         # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
         #
         #   trigger      | node_version | test_script                           | exclude
