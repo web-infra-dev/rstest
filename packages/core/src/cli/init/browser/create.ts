@@ -14,9 +14,13 @@ import { color, determineAgent } from '../../../utils';
 import { detectProject } from './detect';
 import type { BrowserProvider, Framework } from './templates';
 import {
+  BROWSER_TEST_SCRIPT_KEY,
+  DEFAULT_COMPONENT_BASE_NAME,
+  getBrowserTestScript,
   getConfigFileName,
   getConfigTemplate,
   getDependenciesWithVersions,
+  getFileExtensions,
   getInstallCommand,
   getPlaywrightInstallCommand,
   getReactComponentTemplate,
@@ -24,6 +28,8 @@ import {
   getRunCommand,
   getVanillaComponentTemplate,
   getVanillaTestTemplate,
+  resolveEffectiveFramework,
+  rewriteComponentImport,
 } from './templates';
 import {
   ensureDir,
@@ -78,25 +84,21 @@ function computeFilePreview(
   projectInfo: ProjectInfo,
 ): FilePreview {
   const { language, testDir, framework } = projectInfo;
-  const effectiveFramework: Framework =
-    framework === 'react' ? 'react' : 'vanilla';
+  const effectiveFramework = resolveEffectiveFramework(framework);
 
   const configFile = getConfigFileName();
 
-  // Determine file extensions based on framework and language
-  let componentExt: string;
-  let testExt: string;
-
-  if (effectiveFramework === 'react') {
-    componentExt = language === 'ts' ? '.tsx' : '.jsx';
-    testExt = language === 'ts' ? '.test.tsx' : '.test.jsx';
-  } else {
-    componentExt = language === 'ts' ? '.ts' : '.js';
-    testExt = language === 'ts' ? '.test.ts' : '.test.js';
-  }
+  const { componentExt, testExt } = getFileExtensions(
+    effectiveFramework,
+    language,
+  );
 
   const testDirPath = path.join(cwd, testDir);
-  const baseName = getUniqueBaseName(testDirPath, 'Counter', componentExt);
+  const baseName = getUniqueBaseName(
+    testDirPath,
+    DEFAULT_COMPONENT_BASE_NAME,
+    componentExt,
+  );
 
   return {
     configFile,
@@ -166,8 +168,7 @@ async function createInteractive(
   isAgent: boolean,
 ): Promise<void> {
   const { agent, language, testDir, framework, reactVersion } = projectInfo;
-  const effectiveFramework: Framework =
-    framework === 'react' ? 'react' : 'vanilla';
+  const effectiveFramework = resolveEffectiveFramework(framework);
 
   intro(color.bold(color.magenta('Set up Rstest browser mode')));
 
@@ -287,8 +288,7 @@ async function generateFiles(
   provider: BrowserProvider,
 ): Promise<string[]> {
   const { language, testDir, framework } = projectInfo;
-  const effectiveFramework: Framework =
-    framework === 'react' ? 'react' : 'vanilla';
+  const effectiveFramework = resolveEffectiveFramework(framework);
   const createdFiles: string[] = [];
 
   // 1. Create config file
@@ -302,19 +302,17 @@ async function generateFiles(
   ensureDir(testDirPath);
 
   // 3. Create example files based on framework
-  let componentExt: string;
-  let testExt: string;
-
-  if (effectiveFramework === 'react') {
-    componentExt = language === 'ts' ? '.tsx' : '.jsx';
-    testExt = language === 'ts' ? '.test.tsx' : '.test.jsx';
-  } else {
-    componentExt = language === 'ts' ? '.ts' : '.js';
-    testExt = language === 'ts' ? '.test.ts' : '.test.js';
-  }
+  const { componentExt, testExt } = getFileExtensions(
+    effectiveFramework,
+    language,
+  );
 
   // Get unique base name to avoid conflicts
-  const baseName = getUniqueBaseName(testDirPath, 'Counter', componentExt);
+  const baseName = getUniqueBaseName(
+    testDirPath,
+    DEFAULT_COMPONENT_BASE_NAME,
+    componentExt,
+  );
 
   // Create component file
   const componentFileName = `${baseName}${componentExt}`;
@@ -331,32 +329,18 @@ async function generateFiles(
   const testFileName = `${baseName}${testExt}`;
   const testPath = path.join(testDirPath, testFileName);
 
-  let testContent: string;
-  if (effectiveFramework === 'react') {
-    testContent = getReactTestTemplate(language);
-    // Update import path if using non-default name
-    if (baseName !== 'Counter') {
-      testContent = testContent.replace(
-        /from '\.\/Counter\.(tsx|jsx)'/,
-        `from './${baseName}.$1'`,
-      );
-    }
-  } else {
-    testContent = getVanillaTestTemplate(language);
-    // Update import path if using non-default name
-    if (baseName !== 'Counter') {
-      testContent = testContent.replace(
-        /from '\.\/Counter\.(ts|js)'/,
-        `from './${baseName}.$1'`,
-      );
-    }
-  }
+  const baseTestContent =
+    effectiveFramework === 'react'
+      ? getReactTestTemplate(language)
+      : getVanillaTestTemplate(language);
+  // Point the example-component import at the deduplicated base name.
+  const testContent = rewriteComponentImport(baseTestContent, baseName);
   writeFile(testPath, testContent);
   createdFiles.push(`${testDir}/${testFileName}`);
 
   // 4. Update package.json scripts
   updatePackageJsonScripts(cwd, {
-    'test:browser': 'rstest --config=rstest.browser.config.mts',
+    [BROWSER_TEST_SCRIPT_KEY]: getBrowserTestScript(),
   });
 
   // 5. Add devDependencies to package.json

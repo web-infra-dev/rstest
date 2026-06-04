@@ -220,45 +220,54 @@ const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, poolOptionDefinitions);
 };
 
+/**
+ * Derives the set of option names that consume a following value-bearing
+ * argument, directly from the cac option definitions. cac treats an option as
+ * value-taking when its rawName carries a `<required>` or `[optional]` token,
+ * so any rawName containing a `<` or `[` is value-taking — the same way cac
+ * classifies each option when it parses the rawName. Every comma-separated
+ * alias before the first such token (e.g. both `-c` and `--config`) is
+ * registered.
+ *
+ * Single owner: previously this was a hand-maintained literal that had to be
+ * kept byte-for-byte in sync with the five option-definition arrays — adding a
+ * new value-taking flag silently desynced argument splitting in
+ * {@link getCliCommand}. Tokens stay RAW (no de-dashing/camelCasing) because
+ * they are matched against `arg.split('=', 1)[0]`.
+ */
+const valueTakingOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      // The aliases end at the first `<required>` / `[optional]` token; an
+      // option with neither token is a boolean flag, which is not value-taking.
+      const lt = rawName.indexOf('<');
+      const sq = rawName.indexOf('[');
+      if (lt < 0 && sq < 0) {
+        continue;
+      }
+      const tokenAt = lt < 0 ? sq : sq < 0 ? lt : Math.min(lt, sq);
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
 const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
 
-const valueTakingOptions = new Set([
-  '-c',
-  '-r',
-  '-t',
-  '--bail',
-  '--browser.name',
-  '--browser.port',
-  '--changed',
-  '--config',
-  '--config-loader',
-  '--coverage.changed',
-  '--coverage.exclude',
-  '--coverage.include',
-  '--coverage.provider',
-  '--coverage.reporters',
-  '--coverage.reportsDirectory',
-  '--exclude',
-  '--hookTimeout',
-  '--include',
-  '--json',
-  '--maxConcurrency',
-  '--pool',
-  '--pool.execArgv',
-  '--pool.maxWorkers',
-  '--pool.minWorkers',
-  '--pool.type',
-  '--project',
-  '--reporter',
-  '--reporters',
-  '--retry',
-  '--root',
-  '--shard',
-  '--silent',
-  '--slowTestThreshold',
-  '--testEnvironment',
-  '--testNamePattern',
-  '--testTimeout',
+export const valueTakingOptions: Set<string> = valueTakingOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
 ]);
 
 const getCliCommand = (argv: string[]): string | undefined => {

@@ -17,6 +17,58 @@ import {
   prettyTime,
 } from '../utils';
 
+/**
+ * Single owner of the run-end per-status partition and the 7-field counts
+ * struct shared by the md and json reporters (previously hand-copied,
+ * byte-identical, in both). Only the count derivation is shared — the pass/fail
+ * verdict deliberately stays per-reporter because md and json disagree on the
+ * empty-run case.
+ */
+export const deriveRunCounts = ({
+  results,
+  testResults,
+}: {
+  results: TestFileResult[];
+  testResults: TestResult[];
+}): {
+  failedTests: TestResult[];
+  passedTests: TestResult[];
+  skippedTests: TestResult[];
+  todoTests: TestResult[];
+  failedFiles: TestFileResult[];
+  counts: {
+    testFiles: number;
+    failedFiles: number;
+    tests: number;
+    failedTests: number;
+    passedTests: number;
+    skippedTests: number;
+    todoTests: number;
+  };
+} => {
+  const failedTests = testResults.filter((result) => result.status === 'fail');
+  const passedTests = testResults.filter((result) => result.status === 'pass');
+  const skippedTests = testResults.filter((result) => result.status === 'skip');
+  const todoTests = testResults.filter((result) => result.status === 'todo');
+  const failedFiles = results.filter((result) => result.status === 'fail');
+  return {
+    failedTests,
+    passedTests,
+    skippedTests,
+    todoTests,
+    failedFiles,
+    counts: {
+      testFiles: results.length,
+      failedFiles: failedFiles.length,
+      tests: testResults.length,
+      failedTests: failedTests.length,
+      passedTests: passedTests.length,
+      skippedTests: skippedTests.length,
+      todoTests: todoTests.length,
+    },
+  };
+};
+
 const statusStr = {
   fail: '✗',
   pass: '✓',
