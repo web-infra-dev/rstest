@@ -1,4 +1,4 @@
-import type { DevicePreset } from '@rstest/core/internal/browser';
+import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
   RuntimeConfig,
   TestFileResult,
@@ -30,12 +30,10 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
-export type BrowserViewport =
-  | {
-      width: number;
-      height: number;
-    }
-  | DevicePreset;
+// `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
+// definition used by `NormalizedBrowserModeConfig`). Re-export it so the host
+// assigns the SAME type across the seam instead of a hand-copied duplicate.
+export type { BrowserViewport };
 
 export type BrowserProjectRuntime = {
   name: string;
@@ -60,6 +58,25 @@ export type TestFileInfo = {
  * - 'collect': Only collect test metadata without running
  */
 export type BrowserExecutionMode = 'run' | 'collect';
+
+/**
+ * Wire shape of a `log` client message payload. The host receives this and maps
+ * it onto core's {@link UserConsoleLog} (notably `level` → `name`); that mapper
+ * (`hostController.ts` `handleLog`) annotates its result as `UserConsoleLog`, so
+ * the map→core direction is compiler-checked. Owning the wire shape here as one
+ * named type keeps the host's input type from drifting away from the producer.
+ */
+export type BrowserLogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
 
 export type BrowserHostConfig = {
   rootPath: string;
@@ -104,20 +121,7 @@ export type BrowserClientMessage =
     }
   | { type: 'case-result'; payload: TestResult }
   | { type: 'file-complete'; payload: TestFileResult }
-  | {
-      type: 'log';
-      payload: {
-        level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-        content: string;
-        taskId?: string;
-        taskName?: string;
-        taskParentNames?: string[];
-        taskType?: 'file' | 'suite' | 'case';
-        testPath: string;
-        type: 'stdout' | 'stderr';
-        trace?: string;
-      };
-    }
+  | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
       payload: { message: string; stack?: string };
@@ -182,6 +186,11 @@ export type BrowserDispatchRequest = {
   namespace: string;
   method: string;
   args?: unknown;
+  // Routing reads `namespace`, `method`, `runToken`, and `target.sessionId`
+  // (see dispatchRouter.ts / dispatchBrowserRpcRequest). `target.testFile` and
+  // `target.projectName` are carried for diagnostics / forward-compatibility and
+  // are NOT consulted for routing today — adding a routing-relevant field here
+  // means wiring a reader on the host side, which structural typing won't force.
   target?: {
     testFile?: string;
     sessionId?: string;

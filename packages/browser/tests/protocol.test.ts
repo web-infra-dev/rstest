@@ -6,7 +6,25 @@ import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
 } from '../src/protocol';
-import { validateBrowserRpcRequest } from '../src/protocol';
+import {
+  DISPATCH_METHOD_RPC,
+  DISPATCH_NAMESPACE_BROWSER,
+  DISPATCH_NAMESPACE_RUNNER,
+  DISPATCH_NAMESPACE_SNAPSHOT,
+  validateBrowserRpcRequest,
+} from '../src/protocol';
+
+describe('dispatch namespace wire values', () => {
+  // The host registrations (dispatchCapabilities, hostController), the router
+  // Map keys, and the client producers all reference these constants. Pin the
+  // wire values so a rename of any identifier cannot silently change the bytes.
+  it('pins the namespace and method wire strings', () => {
+    expect(DISPATCH_NAMESPACE_RUNNER).toBe('runner');
+    expect(DISPATCH_NAMESPACE_BROWSER).toBe('browser');
+    expect(DISPATCH_NAMESPACE_SNAPSHOT).toBe('snapshot');
+    expect(DISPATCH_METHOD_RPC).toBe('rpc');
+  });
+});
 
 describe('browser protocol types', () => {
   describe('BrowserProjectRuntime', () => {

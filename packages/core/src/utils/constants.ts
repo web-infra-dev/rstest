@@ -15,6 +15,31 @@ export const POINTER = '➜';
 
 export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 
+/**
+ * Description key of the well-known `Symbol.for(...)` under which Rstest stores
+ * the runtime env store on `globalThis`. Single owner of the string, shared by
+ * three contexts that must resolve the SAME registry symbol: the core worker
+ * runtime and the browser client both call `Symbol.for(RSTEST_ENV_SYMBOL_KEY)`,
+ * while the host bakes it into the rspack `define` text via
+ * `JSON.stringify(RSTEST_ENV_SYMBOL_KEY)`. Kept a plain string (not a Symbol) so
+ * it serves both the runtime and the build-define codegen path. Re-exported from
+ * both `./internal/browser-runtime` and `./internal/browser` barrels.
+ */
+export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
+
+/**
+ * Single source of truth for the built-in browser provider identifiers.
+ *
+ * Core owns this list because the peer-dependency direction is one-way
+ * (`@rstest/browser` depends on `@rstest/core`, never the reverse), so the CLI
+ * `init` templates here cannot import the registry from `@rstest/browser`.
+ * `@rstest/browser` re-exports {@link BrowserProvider} and keys its provider
+ * registry by it (`Record<BrowserProvider, …>`), so adding a provider here
+ * forces a matching implementation there — a missing key is a compile error.
+ */
+export const BROWSER_PROVIDERS = ['playwright'] as const;
+export type BrowserProvider = (typeof BROWSER_PROVIDERS)[number];
+
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
 const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(

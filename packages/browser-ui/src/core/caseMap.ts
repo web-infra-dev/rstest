@@ -3,7 +3,15 @@ import type { CaseInfo } from '../utils/constants';
 
 type CollectedCaseInfo = Extract<TestInfo, { type: 'case' }>;
 
-const createCaseInfo = ({
+/**
+ * Single owner of the inbound case → {@link CaseInfo} projection used by every
+ * protocol path that materializes a case (file-ready, case-start, case-result,
+ * file-complete). Callers that omit `previousCase` get exactly the two-tier
+ * `testPath || filePath` and bare-`location` behavior the case-result and
+ * file-complete handlers previously hand-rolled inline; passing `previousCase`
+ * additionally falls back to the prior case's `filePath`/`location`.
+ */
+export const projectCaseInfo = ({
   filePath,
   test,
   status,
@@ -55,7 +63,7 @@ export const buildCollectedCaseMap = ({
 
     const previous = previousCases[test.testId];
 
-    nextFile[test.testId] = createCaseInfo({
+    nextFile[test.testId] = projectCaseInfo({
       filePath,
       test,
       status: previous?.status ?? 'idle',
@@ -83,7 +91,7 @@ export const upsertRunningCase = ({
 
   return {
     ...previousCases,
-    [test.testId]: createCaseInfo({
+    [test.testId]: projectCaseInfo({
       filePath,
       test,
       status: 'running',

@@ -1,8 +1,12 @@
 import type { Agent } from 'package-manager-detector';
 import { resolveCommand } from 'package-manager-detector/commands';
+import {
+  BROWSER_PROVIDERS,
+  type BrowserProvider,
+} from '../../../utils/constants';
 
 export type Framework = 'react' | 'vanilla';
-export type BrowserProvider = 'playwright';
+export type { BrowserProvider };
 
 /** Base name of the example component emitted by the init templates. */
 export const DEFAULT_COMPONENT_BASE_NAME = 'Counter';
@@ -69,7 +73,7 @@ export function getConfigTemplate(): string {
 export default defineConfig({
   browser: {
     enabled: true,
-    provider: 'playwright',
+    provider: '${BROWSER_PROVIDERS[0]}',
   },
 });
 `;

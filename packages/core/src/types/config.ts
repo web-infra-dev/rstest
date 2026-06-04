@@ -8,6 +8,7 @@ import type {
   ReporterWithOptions,
 } from './reporter';
 import type { ConsoleStreamType, MaybePromise } from './utils';
+import type { BrowserProvider } from '../utils/constants';
 
 // TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
@@ -168,7 +169,7 @@ export type BrowserModeConfig = {
    *
    * Currently only 'playwright' is supported.
    */
-  provider: 'playwright';
+  provider: BrowserProvider;
   /**
    * Which browser to use for testing.
    *
@@ -580,7 +581,7 @@ type OptionalKeys =
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
-  provider: 'playwright';
+  provider: BrowserProvider;
   browser: BrowserName;
   headless: boolean;
   port?: number;

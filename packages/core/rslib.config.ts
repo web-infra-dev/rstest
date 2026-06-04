@@ -2,9 +2,27 @@ import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
-import { peerDependencies } from '../browser/package.json';
+import {
+  peerDependencies,
+  version as browserVersion,
+} from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
+
+// `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
+// from each package's own package.json, and the browser-mode runtime gate
+// (core/src/core/browserLoader.ts) refuses to load a browser build whose version
+// differs from core's. Those two reads can only drift if the packages are
+// versioned independently — which a single build cannot otherwise detect — so
+// assert the peer pair is in lockstep here, surfacing a mismatch at build time
+// instead of as a runtime version-gate false negative for the user.
+if (version !== browserVersion) {
+  throw new Error(
+    `@rstest/core (${version}) and @rstest/browser (${browserVersion}) versions ` +
+      'are out of sync. They are published as a peer pair and must match; ' +
+      'bump packages/core/package.json and packages/browser/package.json together.',
+  );
+}
 
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');

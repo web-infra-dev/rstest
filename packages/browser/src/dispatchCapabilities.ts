@@ -1,5 +1,9 @@
 import type { Reporter } from '@rstest/core/internal/browser';
 import { HostDispatchRouter } from './dispatchRouter';
+import {
+  DISPATCH_NAMESPACE_RUNNER,
+  DISPATCH_NAMESPACE_SNAPSHOT,
+} from './protocol';
 import type {
   BrowserClientMessage,
   BrowserDispatchHandler,
@@ -142,22 +146,28 @@ export const createHostDispatchRouter = ({
     fatal: (args) => runnerCallbacks.onFatal(args as RunnerPayload<'fatal'>),
   };
 
-  router.register('runner', async (request: BrowserDispatchRequest) => {
-    // `request.method` is untrusted wire data, so the lookup may miss. Unknown
-    // methods are ignored for forward-compatibility with newer runners, matching
-    // the previous `default: break`.
-    await runnerMethodHandlers[request.method as RunnerDispatchMethod]?.(
-      request.args,
-    );
-  });
+  router.register(
+    DISPATCH_NAMESPACE_RUNNER,
+    async (request: BrowserDispatchRequest) => {
+      // `request.method` is untrusted wire data, so the lookup may miss. Unknown
+      // methods are ignored for forward-compatibility with newer runners,
+      // matching the previous `default: break`.
+      await runnerMethodHandlers[request.method as RunnerDispatchMethod]?.(
+        request.args,
+      );
+    },
+  );
 
-  router.register('snapshot', async (request: BrowserDispatchRequest) => {
-    const snapshotRequest = toSnapshotRpcRequest(request);
-    if (!snapshotRequest) {
-      return undefined;
-    }
-    return runSnapshotRpc(snapshotRequest);
-  });
+  router.register(
+    DISPATCH_NAMESPACE_SNAPSHOT,
+    async (request: BrowserDispatchRequest) => {
+      const snapshotRequest = toSnapshotRpcRequest(request);
+      if (!snapshotRequest) {
+        return undefined;
+      }
+      return runSnapshotRpc(snapshotRequest);
+    },
+  );
 
   for (const [namespace, handler] of extensionHandlers ?? []) {
     if (router.has(namespace)) {

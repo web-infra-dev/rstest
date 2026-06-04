@@ -28,4 +28,7 @@ export type {
   WorkerState,
 } from './types';
 // Constants needed by browser client
-export { globalApis } from './utils/constants';
+export { globalApis, RSTEST_ENV_SYMBOL_KEY } from './utils/constants';
+// Browser-safe regexp wire-format decoder (mirrors the host-side encoder used
+// by `serializableConfig`). Kept here so the client never re-declares it.
+export { unwrapRegex } from './utils/regexpWireFormat';
