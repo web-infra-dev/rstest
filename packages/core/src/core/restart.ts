@@ -88,11 +88,19 @@ export async function watchFilesForRestart({
   }
 
   const root = rstest.context.rootPath;
+  // STRESS_NO_POLLING is a temporary stress-test gate; default is polling ON.
+  const usePolling = process.env.STRESS_NO_POLLING !== '1';
   const watcher = await createChokidar(configFilePaths, root, {
     // do not trigger add for initial files
     ignoreInitial: true,
     // If watching fails due to read permissions, the errors will be suppressed silently.
     ignorePermissionErrors: true,
+    // chokidar v5 dropped fsevents and relies on Node's fs.watch(), which is
+    // unreliable for single-file watching on macOS (kqueue silently drops
+    // change events). Poll the small set of config files instead — 100ms is
+    // fast enough for restarts while adding negligible CPU.
+    usePolling,
+    interval: 100,
     ...watchOptions,
   });
 

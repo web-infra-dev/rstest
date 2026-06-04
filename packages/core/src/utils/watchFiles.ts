@@ -35,5 +35,10 @@ export async function createChokidar(
     }
   }
 
-  return chokidar.watch(Array.from(watchFiles), options);
+  const watcher = chokidar.watch(Array.from(watchFiles), options);
+  // Await the initial scan so callers can rely on events being emitted for
+  // subsequent modifications — chokidar may drop events before 'ready',
+  // especially on macOS where FSEvents setup is async.
+  await new Promise<void>((resolve) => watcher.once('ready', () => resolve()));
+  return watcher;
 }
