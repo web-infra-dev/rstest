@@ -85,7 +85,11 @@ jobs:
 
   # ======== ut ========
   ut:
-    needs: prepare
+    # Gate behind lint so a lint failure skips the (billed-premium) macOS +
+    # Windows ut runners — and transitively e2e — before they start; e2e already
+    # needs lint. Trade-off: any lint nit (prettier/spell/dedupe/knip) now blocks
+    # ut+e2e too, instead of running them in parallel with lint.
+    needs: [prepare, lint]
     if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -110,32 +114,21 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: pnpm fetch
-        run: pnpm fetch
-
       - name: Install Dependencies
+        # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
+        # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
+        # store (~26s/job of no gain). Install still runs the root `prepare`
+        # lifecycle (`pnpm run build`), so packages are built as before.
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Set Playwright cache path
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache Playwright Browsers
-        continue-on-error: true
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium webkit
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
 
       - name: Run Type Check
+        # tsc is OS-independent, so PR runs it on macOS only; the post-merge
+        # FULL run still typechecks both OSes so push-to-main stays a literal
+        # superset of PR coverage.
+        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-14'
         run: pnpm run typecheck
 
       - name: Run Test
@@ -159,7 +152,7 @@ jobs:
         #
         #   trigger      | node_version | test_script                           | exclude
         #   -------------+--------------+---------------------------------------+-----------
-        #   PR (regular) | [20, 24]     | [test]                                | -
+        #   PR (regular) | [24]         | [test]                                | -
         #   push to main | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
         #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
         #
@@ -169,7 +162,7 @@ jobs:
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
               && '["20","22","24"]'
-            || '["20","24"]'
+            || '["24"]'
           ) }}
         test_script: >-
           ${{ fromJson(
@@ -200,36 +193,24 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: pnpm fetch
-        run: pnpm fetch
-
       - name: Install Dependencies
+        # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
+        # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
+        # store (~26s/job of no gain). Install still runs the root `prepare`
+        # lifecycle (`pnpm run build`), so packages are built as before.
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Set Playwright cache path
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache Playwright Browsers
-        continue-on-error: true
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium webkit
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
 
       - name: E2E Test (${{ matrix.test_script }})
         run: cd e2e && pnpm ${{ matrix.test_script }}
 
       - name: VS Code Extension Test
-        if: matrix.test_script == 'test'
+        # OS-sensitive (Extension Host) but node-insensitive: on PR, pin to a
+        # single combo (Windows + node 24) instead of every e2e row. FULL runs
+        # still exercise it on every 'test' row.
+        if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
         run: pnpm run test:vscode
 
   # ======== codspeed ========
@@ -255,6 +236,7 @@ jobs:
       - name: Check test requirement
         run: |
           for result in \
+            "${{ needs.prepare.result }}" \
             "${{ needs.lint.result }}" \
             "${{ needs.ut.result }}" \
             "${{ needs.e2e.result }}"; do
