@@ -1,6 +1,7 @@
 import { sep } from 'node:path';
 import {
   getWorkerSerialization,
+  needFlagExperimentalDetectModule,
   parsePosix,
   prettyTime,
 } from '../../src/utils/helper';
@@ -51,6 +52,55 @@ it('should use json serialization in Bun', () => {
       Reflect.deleteProperty(process.versions, 'bun');
     } else {
       process.versions.bun = originalBunVersion;
+    }
+  }
+});
+
+// `--experimental-detect-module` is injected into every worker (see
+// `getNodeExecArgv` in src/pool/index.ts) only on Node versions where it is
+// meaningful: 20.10+ (opt-in) and 22.x < 7 (before it became default-on). It
+// must NEVER be injected on Node 24+. Faking `process.versions.node` pins the
+// version gate so this default-on worker path keeps coverage even though PR CI
+// only runs Node 24 (the actual runtime behavior is covered by the post-merge
+// full run on Node 20).
+it('needFlagExperimentalDetectModule gates on the Node version', () => {
+  // `process.versions.node` is read-only (writable: false) but configurable,
+  // so override it via defineProperty and restore the original descriptor.
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    process.versions,
+    'node',
+  );
+  const evaluate = (version: string) => {
+    Object.defineProperty(process.versions, 'node', {
+      value: version,
+      writable: false,
+      enumerable: true,
+      configurable: true,
+    });
+    return needFlagExperimentalDetectModule();
+  };
+
+  try {
+    expect({
+      '20.9.0': evaluate('20.9.0'),
+      '20.10.0': evaluate('20.10.0'),
+      '20.19.0': evaluate('20.19.0'),
+      '22.6.0': evaluate('22.6.0'),
+      '22.7.0': evaluate('22.7.0'),
+      '22.12.0': evaluate('22.12.0'),
+      '24.0.0': evaluate('24.0.0'),
+    }).toEqual({
+      '20.9.0': false, // before 20.10.0
+      '20.10.0': true, // introduced
+      '20.19.0': true, // engines floor (^20.19.0)
+      '22.6.0': true, // 22.x before default-on
+      '22.7.0': false, // default-on since 22.7.0
+      '22.12.0': false,
+      '24.0.0': false, // never injected on Node 24+
+    });
+  } finally {
+    if (originalDescriptor) {
+      Object.defineProperty(process.versions, 'node', originalDescriptor);
     }
   }
 });
