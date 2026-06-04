@@ -11,6 +11,10 @@ import {
   finalizeDynamicImport,
   resolveImportSpecifier,
 } from '../../src/runtime/worker/resolveDynamicImport';
+import {
+  importMetaHook,
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+} from '../../src/runtime/worker/runtimeHooks';
 
 describe('resolveImportSpecifier', () => {
   const testPath = '/virtual/tests/runtime.test.ts';
@@ -104,7 +108,7 @@ describe('node: dynamic import is consistent across both worker loaders', () => 
 
   it('CJS loader returns the raw node: namespace', async () => {
     const exported = loadCjsModule({
-      codeContent: `module.exports = __rstest_dynamic_import__('node:path');`,
+      codeContent: `module.exports = ${RSTEST_DYNAMIC_IMPORT_HOOK}('node:path');`,
       distPath: '/virtual/dist/entry.js',
       testPath: '/virtual/tests/runtime.test.ts',
       rstestContext: {},
@@ -118,7 +122,7 @@ describe('node: dynamic import is consistent across both worker loaders', () => 
   it('ESM loader returns the raw node: namespace', async () => {
     const mod = await loadEsModule({
       codeContent: [
-        "const path = await import.meta.__rstest_dynamic_import__('node:path');",
+        `const path = await ${importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)}('node:path');`,
         'export default path;',
       ].join('\n'),
       distPath: '/virtual/dist/entry.mjs',
