@@ -1,5 +1,7 @@
 import { resolve } from 'pathe';
 import {
+  getDefaultReporters,
+  isGithubActions,
   mergeRstestConfig,
   resolveExtends,
   withDefaultConfig,
@@ -520,5 +522,26 @@ describe('withDefaultConfig browser normalization', () => {
     const config: RstestConfig = {};
 
     expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+});
+
+describe('default reporter selection', () => {
+  // `getDefaultReporters` takes the GitHub Actions flag as a parameter so both
+  // branches can be asserted directly — the build-time `GITHUB_ACTIONS` define
+  // (forced to 'false' for this package's own tests) makes the inline runtime
+  // check otherwise impossible to exercise for the `true` branch here.
+  it('adds the github-actions reporter under GitHub Actions', () => {
+    expect(getDefaultReporters(true)).toEqual(['default', 'github-actions']);
+  });
+
+  it('uses only the default reporter outside GitHub Actions', () => {
+    expect(getDefaultReporters(false)).toEqual(['default']);
+  });
+
+  it('defaults to the GITHUB_ACTIONS env signal', () => {
+    // In this package's test build the define pins GITHUB_ACTIONS off, so the
+    // env-driven default must match the non-CI branch and `isGithubActions()`.
+    expect(isGithubActions()).toBe(false);
+    expect(getDefaultReporters()).toEqual(['default']);
   });
 });

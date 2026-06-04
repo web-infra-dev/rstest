@@ -12,6 +12,7 @@ import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  BuiltInReporterNames,
   FileFilterMode,
   NormalizedConfig,
   NormalizedProjectConfig,
@@ -312,16 +313,14 @@ export class Rstest implements RstestContext {
   }
 }
 
-const reportersMap: {
-  default: typeof DefaultReporter;
-  dot: typeof DotReporter;
-  verbose: typeof VerboseReporter;
-  'github-actions': typeof GithubActionsReporter;
-  junit: typeof JUnitReporter;
-  json: typeof JsonReporter;
-  md: typeof MdReporter;
-  blob: typeof BlobReporter;
-} = {
+// `satisfies Record<BuiltInReporterNames, …>` keeps this map in lockstep with
+// the BuiltInReporterNames union (the single source of truth): a name added to
+// the union without a class here is a missing-key compile error, and a class
+// added here without a union entry is an excess-key error. The previous explicit
+// object-type annotation duplicated the key list and let the two drift, surfacing
+// only as a runtime "Reporter X not found". `satisfies` (not `:`) preserves each
+// value's concrete constructor type for the `new reportersMap[name](…)` call.
+const reportersMap = {
   default: DefaultReporter,
   dot: DotReporter,
   verbose: VerboseReporter,
@@ -330,7 +329,7 @@ const reportersMap: {
   json: JsonReporter,
   md: MdReporter,
   blob: BlobReporter,
-};
+} satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;
 
 function createReporters(
   reporters: RstestConfig['reporters'],
