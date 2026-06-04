@@ -5,6 +5,8 @@
   // `export type *` re-exports; flagging them as unused on every same-file
   // reference is noise after the knip v5 → v6 bump.
   "ignoreExportsUsedInFile": true,
+  // pnpm 11 stage is a pnpm subcommand, but knip currently reports it as a binary in GitHub workflows.
+  "ignoreBinaries": ["stage"],
   "workspaces": {
     ".": {
       "entry": [

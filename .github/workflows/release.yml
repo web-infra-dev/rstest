@@ -58,7 +58,7 @@ jobs:
 
       - name: Publish to npm
         run: |
-          pnpm stage publish --filter './packages/*' -r --tag ${{ github.event.inputs.npm_tag }} --no-git-checks
+          pnpm --filter './packages/*' -r stage publish --tag ${{ github.event.inputs.npm_tag }} --no-git-checks
 
   release_vscode_extension:
     name: Release VS Code Extension (${{ matrix.vsce-target }})
