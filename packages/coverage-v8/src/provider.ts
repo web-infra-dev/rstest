@@ -3,7 +3,6 @@ import inspector from 'node:inspector/promises';
 import { posix, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  CoverageOptions,
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
@@ -429,18 +428,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     return results.filter((res): res is FileCoverageData => res !== null);
   }
 
-  async generateReports(
-    coverageMap: CoverageMap,
-    options?: CoverageOptions,
-  ): Promise<void> {
-    const opts = { ...this.options, ...(options || {}) };
-
+  async generateReports(coverageMap: CoverageMap): Promise<void> {
     const context = createContext({
-      dir: opts.reportsDirectory,
+      dir: this.options.reportsDirectory,
       coverageMap: coverageMap,
     });
 
-    const reportersList = opts.reporters || ['text', 'html', 'json'];
+    const reportersList = this.options.reporters;
     for (const reporter of reportersList) {
       if (typeof reporter === 'object' && 'execute' in reporter) {
         reporter.execute(context);
