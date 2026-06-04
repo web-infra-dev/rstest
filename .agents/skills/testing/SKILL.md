@@ -74,10 +74,10 @@ Important:
 
 ## Fixture strategy
 
-- **Prefer reusing** an existing fixture when the scenario can be expressed by extending it
-- Add a new fixture only when the scenario truly needs different config, dependencies, or file layout
-- Keep fixtures minimal and representative of the behavior under test
-- Don't create near-duplicate fixtures just to add one extra test case
+Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fixtures`) and name the closest match. Prefer extending it:
+
+- Adding a project, config flag, or test file is additive reuse — "different config" alone does not justify a new fixture. **After extending, re-run every test using that fixture** to confirm none broke.
+- A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent.
 
 ## E2E rstest spawns with persistent `dist/.rstest-temp/`
 
