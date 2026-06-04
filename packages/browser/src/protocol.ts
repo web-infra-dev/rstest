@@ -10,6 +10,9 @@ import type { SnapshotUpdateState } from '@vitest/snapshot';
 export type {
   BrowserLocatorIR,
   BrowserRpcRequest,
+  SnapshotRpcCall,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodArgs,
   SnapshotRpcRequest,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';

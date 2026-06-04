@@ -2511,8 +2511,12 @@ export const runBrowserController = async (
         );
       case 'removeSnapshotFile':
         return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
-      default:
-        return undefined;
+      default: {
+        // Exhaustiveness guard: a new SnapshotRpcRequest method without a case
+        // here fails to compile rather than silently returning undefined.
+        const _exhaustive: never = request;
+        return _exhaustive;
+      }
     }
   };
 
