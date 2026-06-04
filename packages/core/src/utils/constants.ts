@@ -254,7 +254,10 @@ export const DEFAULT_CONFIG_EXTENSIONS = [
   '.cts',
 ] as const;
 
-export const globalApis: (keyof Rstest)[] = [
+// Literal tuple kept private so `(typeof globalApiList)[number]` is the exact
+// key union (the exported alias below is widened for consumers); `satisfies`
+// rejects a *wrong* key here.
+const globalApiList = [
   'test',
   'describe',
   'it',
@@ -268,6 +271,31 @@ export const globalApis: (keyof Rstest)[] = [
   'assert',
   'onTestFinished',
   'onTestFailed',
-];
+] as const satisfies readonly (keyof Rstest)[];
+
+export const globalApis: readonly (keyof Rstest)[] = globalApiList;
+
+/**
+ * Exhaustiveness guard for {@link globalApis}. `satisfies` above rejects a
+ * *wrong* key, but a short array still compiles — a new {@link Rstest} API
+ * silently missing here is never registered onto `globalThis` under
+ * `globals: true`. This alias resolves to a descriptive tuple (not `true`) when
+ * any `Rstest` key is absent, failing the assignment below at compile time.
+ */
+type MissingGlobalApis = Exclude<keyof Rstest, (typeof globalApiList)[number]>;
+type GlobalApisAreExhaustive = [MissingGlobalApis] extends [never]
+  ? true
+  : ['globalApis is missing keys of Rstest:', MissingGlobalApis];
+const _globalApisAreExhaustive: GlobalApisAreExhaustive = true;
+void _globalApisAreExhaustive;
+
+/** Shared marker message for synthetic errors used only to capture a stack
+ * trace. The value is a placeholder: the runner reads it back via
+ * `error.message`, so every synthetic-stack site must use this same constant. */
+export const SYNTHETIC_STACK_ERROR_MESSAGE = 'STACK_TRACE_ERROR';
+
+/** Default per-test timeout (ms). Single source for the config default and any
+ * downstream fallback. */
+export const DEFAULT_TEST_TIMEOUT = 5_000;
 
 export const TS_CONFIG_FILE = 'tsconfig.json';

@@ -20,6 +20,7 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
+import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getFileTaskId, getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError } from '../util';
@@ -664,7 +665,7 @@ export class TestRunner {
         name: 'onTestFinished hook',
         fn,
         timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
@@ -682,7 +683,7 @@ export class TestRunner {
         name: 'onTestFailed hook',
         fn,
         timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }

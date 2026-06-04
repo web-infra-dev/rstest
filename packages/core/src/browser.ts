@@ -50,6 +50,7 @@ export { getNumCpus, parseWorkers } from './utils/workers';
 // Constants
 export {
   BROWSER_PROVIDERS,
+  DEFAULT_TEST_TIMEOUT,
   resolveProjectBuildCache,
   RSTEST_ENV_SYMBOL_KEY,
 } from './utils/constants';

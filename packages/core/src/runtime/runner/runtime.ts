@@ -26,7 +26,10 @@ import type {
   TestRunMode,
   TestSuite,
 } from '../../types';
-import { ROOT_SUITE_NAME } from '../../utils/constants';
+import {
+  ROOT_SUITE_NAME,
+  SYNTHETIC_STACK_ERROR_MESSAGE,
+} from '../../utils/constants';
 import { castArray, generateFilePathHash } from '../../utils/helper';
 import {
   formatName,
@@ -39,6 +42,21 @@ import { normalizeFixtures } from './fixtures';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
+
+/**
+ * Run-mode / concurrency modifiers shared by the `test` and `describe` APIs.
+ * Both factories install these as chainable getters (`test.skip`,
+ * `describe.only`, …), so listing them once here keeps the two installs from
+ * drifting — a new shared modifier is added in a single place. API-specific
+ * modifiers (e.g. `test.fails`) stay inline at their call site.
+ */
+const SHARED_RUN_MODIFIERS = [
+  { name: 'only', overrides: { runMode: 'only' } },
+  { name: 'todo', overrides: { runMode: 'todo' } },
+  { name: 'skip', overrides: { runMode: 'skip' } },
+  { name: 'concurrent', overrides: { concurrent: true } },
+  { name: 'sequential', overrides: { sequential: true } },
+] as const;
 
 class RunnerRuntime {
   /** all test cases */
@@ -109,7 +127,7 @@ class RunnerRuntime {
         name: `${key} hook`,
         fn,
         timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
+        stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
@@ -343,7 +361,7 @@ class RunnerRuntime {
       name,
       originalFn,
       fn,
-      stackTraceError: new Error('STACK_TRACE_ERROR'),
+      stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       runMode,
       type: 'case',
       timeout,
@@ -555,11 +573,7 @@ export const createRuntimeAPI = ({
 
     for (const { name, overrides } of [
       { name: 'fails', overrides: { fails: true } },
-      { name: 'concurrent', overrides: { concurrent: true } },
-      { name: 'sequential', overrides: { sequential: true } },
-      { name: 'skip', overrides: { runMode: 'skip' as const } },
-      { name: 'todo', overrides: { runMode: 'todo' as const } },
-      { name: 'only', overrides: { runMode: 'only' as const } },
+      ...SHARED_RUN_MODIFIERS,
     ]) {
       Object.defineProperty(testFn, name, {
         get: () => {
@@ -636,13 +650,7 @@ export const createRuntimeAPI = ({
         location: options.location ?? getLocation(),
       })) as DescribeAPI;
 
-    for (const { name, overrides } of [
-      { name: 'only', overrides: { runMode: 'only' as const } },
-      { name: 'todo', overrides: { runMode: 'todo' as const } },
-      { name: 'skip', overrides: { runMode: 'skip' as const } },
-      { name: 'concurrent', overrides: { concurrent: true } },
-      { name: 'sequential', overrides: { sequential: true } },
-    ]) {
+    for (const { name, overrides } of SHARED_RUN_MODIFIERS) {
       Object.defineProperty(describeFn, name, {
         get: () => {
           return createDescribeAPI({ ...options, ...overrides });
