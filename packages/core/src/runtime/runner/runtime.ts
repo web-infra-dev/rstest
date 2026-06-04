@@ -88,16 +88,25 @@ class RunnerRuntime {
     }
   }
 
-  afterAll(
-    fn: AfterAllListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
+  /**
+   * Register a suite hook listener. The explicit `void` return keeps the body
+   * strictly checked — a contextual `void` would silently ignore an accidental
+   * `Promise` return.
+   */
+  private registerHook(
+    key: 'beforeAll' | 'afterAll' | 'beforeEach' | 'afterEach',
+    fn:
+      | AfterAllListener
+      | BeforeAllListener
+      | AfterEachListener
+      | BeforeEachListener,
+    timeout: number,
   ): void {
-    const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
-      currentSuite,
-      'afterAll',
+      this.getCurrentSuite(),
+      key,
       wrapTimeout({
-        name: 'afterAll hook',
+        name: `${key} hook`,
         fn,
         timeout,
         stackTraceError: new Error('STACK_TRACE_ERROR'),
@@ -105,56 +114,29 @@ class RunnerRuntime {
     );
   }
 
-  beforeAll(
-    fn: BeforeAllListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): void {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'beforeAll',
-      wrapTimeout({
-        name: 'beforeAll hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  // Hook registration signatures derive from the public `RunnerAPI` contract so
+  // the implementation cannot drift from it. Arrow fields are used so the
+  // signature can be borrowed from a type (methods cannot) and so `this` stays
+  // bound without an explicit `.bind` at the call site.
+  afterAll: RunnerAPI['afterAll'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('afterAll', fn, timeout);
 
-  afterEach(
-    fn: AfterEachListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): void {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'afterEach',
-      wrapTimeout({
-        name: 'afterEach hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  beforeAll: RunnerAPI['beforeAll'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('beforeAll', fn, timeout);
 
-  beforeEach(
-    fn: BeforeEachListener,
-    timeout: number = this.runtimeConfig.hookTimeout,
-  ): void {
-    const currentSuite = this.getCurrentSuite();
-    registerTestSuiteListener(
-      currentSuite,
-      'beforeEach',
-      wrapTimeout({
-        name: 'beforeEach hook',
-        fn,
-        timeout,
-        stackTraceError: new Error('STACK_TRACE_ERROR'),
-      }),
-    );
-  }
+  afterEach: RunnerAPI['afterEach'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('afterEach', fn, timeout);
+
+  beforeEach: RunnerAPI['beforeEach'] = (
+    fn,
+    timeout = this.runtimeConfig.hookTimeout,
+  ) => this.registerHook('beforeEach', fn, timeout);
 
   private getDefaultRootSuite(): Omit<TestSuite, 'testId'> {
     return {
@@ -708,10 +690,10 @@ export const createRuntimeAPI = ({
       describe,
       it,
       test: it,
-      afterAll: runtimeInstance.afterAll.bind(runtimeInstance),
-      beforeAll: runtimeInstance.beforeAll.bind(runtimeInstance),
-      afterEach: runtimeInstance.afterEach.bind(runtimeInstance),
-      beforeEach: runtimeInstance.beforeEach.bind(runtimeInstance),
+      afterAll: runtimeInstance.afterAll,
+      beforeAll: runtimeInstance.beforeAll,
+      afterEach: runtimeInstance.afterEach,
+      beforeEach: runtimeInstance.beforeEach,
     },
     instance: runtimeInstance,
   };
