@@ -5,53 +5,53 @@ import type { WorkerInitOptions } from '../types';
 import { logger } from './logger';
 import { CoverageReporter, ProgressLogger, ProgressReporter } from './reporter';
 
-// fix ESM import path issue on windows
-// Only URLs with a scheme in: file, data, and node are supported by the default ESM loader.
-const normalizeImportPath = (path: string) => {
-  return pathToFileURL(path).toString();
-};
-
 export class Worker {
   private async init({
     configFilePath,
-    fileFilters,
+    // `fileFilters`/`command` are per-invocation concerns handled by
+    // `run()`/`listTests()`; destructure them out so they don't leak into the
+    // inline config. The rest is `RstestConfig`-shaped override content.
+    fileFilters: _fileFilters,
     rstestPath,
-    command = 'run',
+    command: _command = 'run',
     ...overrideConfig
   }: WorkerInitOptions) {
-    const rstestModule = (await import(
-      normalizeImportPath(rstestPath)
-    )) as typeof import('@rstest/core');
-    logger.debug('Loaded Rstest module');
-    const { createRstest, initCli } = rstestModule;
+    // Load the programmatic API from the resolved core package (sibling of the
+    // main entry under `dist/api/index.js`).
+    const rstestApiUrl = new URL('./api/index.js', pathToFileURL(rstestPath))
+      .href;
+    const rstestApi = (await import(
+      rstestApiUrl
+    )) as typeof import('@rstest/core/api');
+    logger.debug('Loaded Rstest API module');
+    const { createRstest } = rstestApi;
 
-    const initializedOptions = await initCli({
+    const coverageEnabled = !!overrideConfig.coverage?.enabled;
+
+    const rstest = await createRstest({
       config: configFilePath,
-    });
-    const { projects, config: initializedConfig } = initializedOptions;
-    logger.debug('initializedOptions', initializedOptions);
-
-    const rstest = createRstest(
-      {
-        config: {
-          ...initializedConfig,
-          ...overrideConfig,
-          reporters: [
-            // place default reporter first to ensure output is flushed
-            ['default', { logger: new ProgressLogger() }],
-            new ProgressReporter(),
-          ],
-          coverage: {
-            ...initializedConfig.coverage,
-            ...overrideConfig.coverage,
-          },
+      inlineConfig: {
+        ...overrideConfig,
+        reporters: [
+          // place default reporter first to ensure output is flushed
+          ['default', { logger: new ProgressLogger() }],
+          new ProgressReporter(),
+        ],
+        coverage: {
+          ...overrideConfig.coverage,
+          // The coverage report runs per `run()`, so the reporter must be part
+          // of the resolved config rather than pushed after construction.
+          ...(coverageEnabled
+            ? {
+                reporters: [
+                  ...(overrideConfig.coverage?.reporters ?? []),
+                  new CoverageReporter(),
+                ],
+              }
+            : {}),
         },
-        configFilePath,
-        projects,
       },
-      command,
-      fileFilters ?? [],
-    );
+    });
 
     return rstest;
   }
@@ -69,12 +69,7 @@ export class Worker {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
     try {
       const rstest = await this.init(data);
-      if (data.coverage?.enabled) {
-        rstest.context.normalizedConfig.coverage.reporters.push(
-          new CoverageReporter(),
-        );
-      }
-      const res = await rstest.runTests();
+      const res = await rstest.run({ filters: data.fileFilters });
       logger.debug('Test run completed', { result: res });
     } catch (error) {
       logger.error('Test run failed', error);
@@ -83,8 +78,8 @@ export class Worker {
   }
 
   public async listTests(data: WorkerInitOptions) {
-    const rstest = await this.init({ ...data, command: 'list' });
-    const res = await rstest.listTests({});
+    const rstest = await this.init(data);
+    const res = await rstest.listTests({ filters: data.fileFilters });
     return res;
   }
 }

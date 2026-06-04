@@ -14,13 +14,13 @@ const parsePayload = (stdout: string) => {
   const payload = match?.[1];
   if (!payload) {
     throw new Error(
-      `runRstest payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
+      `createRstest payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
     );
   }
   return JSON.parse(payload) as Record<string, any>;
 };
 
-describe('programmatic runRstest', () => {
+describe('programmatic createRstest', () => {
   it('runs disk tests via inlineConfig + returns nested stats', async ({
     onTestFinished,
   }) => {

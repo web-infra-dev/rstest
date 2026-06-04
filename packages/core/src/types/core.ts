@@ -134,7 +134,13 @@ export type ListCommandResult = {
   errors?: FormattedError[];
 };
 
-export type RstestInstance = {
+/**
+ * Internal runner returned by the sync `createRstestContext` factory: a context
+ * bound to one command + filter set, plus the side-effecting drive methods. The
+ * public, async, instance-shaped API (`run`/`addReporter`/`close`) lives in
+ * `@rstest/core/api` and is built on top of this.
+ */
+export type RstestRunner = {
   context: RstestContext;
   runTests: () => Promise<void>;
   listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;

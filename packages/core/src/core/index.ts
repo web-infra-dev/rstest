@@ -4,11 +4,16 @@ import type {
   Project,
   RstestCommand,
   RstestConfig,
-  RstestInstance,
+  RstestRunner,
 } from '../types';
 import { Rstest } from './rstest';
 
-export function createRstest(
+/**
+ * Build an internal {@link RstestRunner} for a single command + filter set. The
+ * public, async, instance-shaped `createRstest` (with `run`/`addReporter`/
+ * `close`) lives in `@rstest/core/api` and composes this factory.
+ */
+export function createRstestContext(
   {
     config,
     projects,
@@ -36,7 +41,7 @@ export function createRstest(
   command: RstestCommand,
   fileFilters: string[],
   fileFilterMode?: FileFilterMode,
-): RstestInstance {
+): RstestRunner {
   const context = new Rstest(
     {
       cwd,

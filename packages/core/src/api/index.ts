@@ -9,24 +9,46 @@
  * exact patch version of `@rstest/core` if you depend on these APIs today.
  */
 import {
+  applyResolvedFilters,
+  isRelatedRun,
+  resolveEffectiveCliFilters,
+} from '../cli/commands';
+import {
   type CommonOptions,
   mergeWithCLIOptions,
   resolveProjects,
 } from '../cli/init';
 import { initRstestEnv } from '../cli/prepare';
 import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
-import { createRstest } from '../core';
+import { createRstestContext } from '../core';
 import type {
-  CoverageMapData,
-  FormattedError,
+  FileFilterMode,
+  ListCommandOptions,
+  ListCommandResult,
   Reporter,
+  RstestCommand,
   RstestConfig,
-  SnapshotSummary,
-  TestFileResult as InternalTestFileResult,
-  TestResult as InternalTestResult,
-  TestResultStatus,
+  RstestContext,
+  RstestRunner,
 } from '../types';
 import { getAbsolutePath } from '../utils';
+import {
+  assembleTestRunResult,
+  createCaptureReporter,
+  createCapturedRunState,
+  type TestFileResult,
+  type TestRunResult,
+  toPublicTestFileResult,
+  toSerializedError,
+} from './result';
+
+/**
+ * The single CLI entry — jest-compatible, used by the `rstest` bin. Parses one
+ * argv and resolves to a {@link TestRunResult} for test-running commands.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export { runCli } from '../cli';
 
 /**
  * @experimental Subject to change until 1.0.0.
@@ -47,208 +69,124 @@ export type { RstestConfig as RstestUserConfig } from '../types';
  */
 export type { TestResultStatus } from '../types';
 
-/**
- * Cross-IPC-safe error shape. Returned in `TestRunResult.unhandledErrors` and
- * in per-test `errors`/`retryErrors`. Assertion-specific fields (`diff`,
- * `actual`, `expected`) are only set for `@vitest/expect`-style errors.
- *
- * @experimental Subject to change until 1.0.0.
- */
-export interface SerializedError {
-  name: string;
-  message: string;
-  stack?: string;
-  diff?: string;
-  actual?: string;
-  expected?: string;
-  cause?: SerializedError;
-}
+export type {
+  SerializedError,
+  TestFileResult,
+  TestResult,
+  TestRunResult,
+} from './result';
 
 /**
- * Public per-test result. Intentionally a curated subset of the internal
- * reporter type so refactors of internal reporter state do not break this
- * surface.
+ * Options for {@link createRstest}. Construction carries only the static
+ * config + host wiring; per-invocation selection/control lives in
+ * {@link RunOptions}.
  *
  * @experimental Subject to change until 1.0.0.
  */
-export interface TestResult {
-  /** Final state of the test case. */
-  status: TestResultStatus;
-  /** Test case name (no parent suite names included). */
-  name: string;
-  /** Absolute path to the test file. */
-  testPath: string;
-  /** Names of parent `describe` blocks, outermost first. */
-  parentNames?: string[];
-  /** Wall-clock duration in ms; absent for skipped/todo tests. */
-  duration?: number;
-  /** Errors from the final attempt. */
-  errors?: SerializedError[];
-  /** Errors from previous failed attempts when `retry` is configured. */
-  retryErrors?: SerializedError[];
-  /** Number of retries performed (0 when the first attempt passed). */
-  retryCount?: number;
-  /** Project name from `projects` config; default project is `'default'`. */
-  project: string;
-}
-
-/**
- * Public per-file result. Extends {@link TestResult} with the per-case
- * breakdown.
- *
- * @experimental Subject to change until 1.0.0.
- */
-export interface TestFileResult extends TestResult {
-  /** Flattened list of test cases discovered in this file. */
-  results: TestResult[];
-}
-
-/**
- * Options for {@link runRstest}.
- *
- * @experimental Subject to change until 1.0.0.
- */
-export interface RunRstestOptions {
-  /** Working directory. Defaults to `process.cwd()`. */
+export interface CreateRstestOptions {
+  /** Working directory. Defaults to `process.cwd()`. Base for absolutizing `root`. */
   cwd?: string;
 
   /**
    * Path to a config file. Unlike the CLI, the programmatic API does NOT
-   * auto-discover a config file from `cwd` — pass an explicit path or omit
-   * to run with `inlineConfig` only.
+   * auto-discover a config file from `cwd` — pass an explicit path or omit to
+   * run with `inlineConfig` only.
    */
   config?: string;
 
   /**
    * Inline configuration. Shallow-merged with disk config (inline wins for
-   * scalars; arrays follow `mergeRstestConfig` semantics — see `src/config.ts`).
+   * scalars; arrays follow `mergeRstestConfig` semantics). The single override
+   * channel for all config content — including `projects` and `reporters`.
    */
   inlineConfig?: RstestConfig;
 
   /**
-   * Exact test file paths to run. When provided, only matching paths
-   * execute; other discovered entries are ignored.
+   * When `false`, install host `process.on('exit' | 'SIG*')` handlers and call
+   * `process.exit()` on config errors (CLI behavior). Defaults to `true` for
+   * the programmatic API so a run can't kill the embedding host.
    */
-  files?: string[];
+  embedded?: boolean;
 
   /**
-   * Regex (or string-coerced regex) matched against test names. Equivalent
-   * to the CLI's `-t, --testNamePattern` flag.
+   * CLI-only `--trace`; dumps a Perfetto-compatible performance trace. Not
+   * exposed via user config.
+   *
+   * @internal
    */
-  testNamePattern?: RegExp | string;
+  trace?: boolean;
 }
 
 /**
- * Result of a {@link runRstest} call.
+ * Per-invocation options for {@link RstestInstance.run} / `listTests`. These
+ * map to the CLI's positional args + per-run flags. `related` / `changed` and
+ * positional `filters` are mutually exclusive (validated at run time).
  *
  * @experimental Subject to change until 1.0.0.
  */
-export interface TestRunResult {
-  /** `stats.tests.failed === 0 && stats.files.failed === 0 && unhandledErrors.length === 0`. */
-  ok: boolean;
+export interface RunOptions {
+  /** Positional test-file filters; matched per `filterMode`. */
+  filters?: string[];
 
-  /** Per-file aggregate results. */
-  files: TestFileResult[];
+  /**
+   * Matching strategy for `filters`: `'fuzzy'` (default; case-insensitive
+   * substring) or `'exact'` (normalized path equality). Ignored for
+   * `related`/`changed`, which always match exactly.
+   */
+  filterMode?: FileFilterMode;
 
-  /** Pre-computed counts. Add optional fields under `stats.*` in minor releases. */
-  stats: {
-    tests: {
-      total: number;
-      passed: number;
-      failed: number;
-      skipped: number;
-      todo: number;
-    };
-    files: {
-      total: number;
-      failed: number;
-    };
-  };
+  /** Run only tests whose full name matches (string coerced via `new RegExp`). */
+  testNamePattern?: RegExp | string;
 
-  /** Errors not attributable to a single test (worker crash, config load). */
-  unhandledErrors: SerializedError[];
+  /** Treat positional `filters` as source files and run only their related tests. */
+  related?: boolean;
 
-  /** Wall-clock duration in ms. Sub-phase fields may be added under `duration.*`. */
-  duration: { total: number };
+  /** Derive the run set from git: `true` = working-tree + staged; a string = a `since` ref. */
+  changed?: boolean | string;
 
-  /** Snapshot summary. Absent only when the run aborted before any test executed (e.g. config load error). */
-  snapshot?: SnapshotSummary;
+  /** Update outdated snapshots. */
+  update?: boolean;
 
-  /** Coverage data. Only present when `coverage.enabled` in the resolved config. */
-  coverage?: CoverageMapData;
+  /** Stop the run after N failing tests (`0`/`false` = run all). */
+  bail?: number | boolean;
+
+  /** Run only a slice of files, as `<index>/<count>` (1-based) or `{ index, count }`. */
+  shard?: string | { index: number; count: number };
+
+  /** Run only the named projects (`*` wildcards, `!` negation). */
+  project?: string[];
+
+  /** Treat a run that matched no files as pass instead of failure. */
+  passWithNoTests?: boolean;
 }
 
-const toSerializedError = (
-  err: unknown,
-  seen: WeakSet<object> = new WeakSet(),
-): SerializedError => {
-  if (!err || typeof err !== 'object') {
-    return { name: 'Error', message: String(err) };
-  }
-  if (seen.has(err)) {
-    return { name: 'Error', message: '[Circular]' };
-  }
-  seen.add(err);
-  const e = err as Partial<FormattedError> & { cause?: unknown };
-  return {
-    name: e.name || 'Error',
-    message: e.message ?? String(err),
-    stack: e.stack,
-    diff: e.diff,
-    actual: e.actual,
-    expected: e.expected,
-    cause: e.cause !== undefined ? toSerializedError(e.cause, seen) : undefined,
-  };
-};
+/**
+ * A programmatic Rstest instance. Created by {@link createRstest}; holds the
+ * resolved config identity and runs tests against it per invocation.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RstestInstance {
+  /** Resolved host context for the most recent build (config, projects, command). */
+  readonly context: RstestContext;
 
-const toPublicTestResult = (r: InternalTestResult): TestResult => ({
-  status: r.status,
-  name: r.name,
-  testPath: r.testPath,
-  parentNames: r.parentNames,
-  duration: r.duration,
-  errors: r.errors?.map((err) => toSerializedError(err)),
-  retryErrors: r.retryErrors?.map((err) => toSerializedError(err)),
-  retryCount: r.retryCount,
-  project: r.project,
-});
+  /** Run tests once with `options`; resolves a structured {@link TestRunResult}. */
+  run(options?: RunOptions): Promise<TestRunResult>;
 
-const toPublicTestFileResult = (f: InternalTestFileResult): TestFileResult => ({
-  ...toPublicTestResult(f),
-  results: f.results.map(toPublicTestResult),
-});
+  /** Collect matching test files / cases without executing. */
+  listTests(
+    options?: ListCommandOptions & RunOptions,
+  ): Promise<ListCommandResult[]>;
 
-const computeStats = (
-  files: readonly TestFileResult[],
-): TestRunResult['stats'] => {
-  const stats: TestRunResult['stats'] = {
-    tests: { total: 0, passed: 0, failed: 0, skipped: 0, todo: 0 },
-    files: { total: files.length, failed: 0 },
-  };
-  for (const file of files) {
-    if (file.status === 'fail') {
-      stats.files.failed++;
-    }
-    for (const t of file.results) {
-      stats.tests.total++;
-      switch (t.status) {
-        case 'pass':
-          stats.tests.passed++;
-          break;
-        case 'fail':
-          stats.tests.failed++;
-          break;
-        case 'skip':
-          stats.tests.skipped++;
-          break;
-        case 'todo':
-          stats.tests.todo++;
-          break;
-      }
-    }
-  }
-  return stats;
-};
+  /** Merge on-disk blob reports into a single aggregate report. */
+  mergeReports(options?: { path?: string; cleanup?: boolean }): Promise<void>;
+
+  /** Register an extra reporter applied to subsequent runs. */
+  addReporter(reporter: Reporter): void;
+
+  /** Release instance resources. No-op on the 1.0 happy path (each run self-cleans). */
+  close(): Promise<void>;
+}
 
 const loadConfigForApi = async ({
   cwd,
@@ -283,10 +221,10 @@ const loadConfigForApi = async ({
 
 /**
  * Snapshot the process-global state an embedded run mutates and return a
- * `restore()` that puts it back. `runRstest` runs inside a long-lived host, so —
- * unlike the CLI, which exits — it must contain every global the engine touches
- * in one place: add future globals here rather than as another inline
- * save/restore pair at the call site.
+ * `restore()` that puts it back. A programmatic run lives inside a long-lived
+ * host, so — unlike the CLI, which exits — it must contain every global the
+ * engine touches in one place: add future globals here rather than as another
+ * inline save/restore pair at the call site.
  *
  * - `process.exitCode`: deep layers (globalSetup teardown, coverage thresholds,
  *   no-test-files) set this unconditionally without consulting `embedded`.
@@ -311,152 +249,182 @@ const snapshotProcessGuards = (): (() => void) => {
   };
 };
 
+/** Map per-invocation {@link RunOptions} onto the internal CLI option bag. */
+const toCommonOptions = (options: RunOptions): CommonOptions => ({
+  testNamePattern: options.testNamePattern,
+  related: options.related,
+  changed: options.changed,
+  update: options.update,
+  bail: options.bail,
+  passWithNoTests: options.passWithNoTests,
+  project: options.project,
+  shard:
+    options.shard === undefined
+      ? undefined
+      : typeof options.shard === 'string'
+        ? options.shard
+        : `${options.shard.index}/${options.shard.count}`,
+});
+
 /**
- * Run Rstest in-process and return structured results.
+ * Create a programmatic Rstest instance. Resolves the config file + inline
+ * config + projects up front (the instance's stable identity); each `run()` /
+ * `listTests()` performs a full build → execute → teardown against it.
  *
- * Resolves on every termination path — including config errors and worker
- * crashes — with `ok` reflecting overall success. The returned promise only
- * rejects for programmer errors (e.g. invalid argument types).
+ * Resolves config-load errors at creation time. `run()` resolves on every
+ * termination path — including worker crashes — with `ok` reflecting success.
  *
  * @experimental Subject to change until 1.0.0.
  */
-export async function runRstest(
-  options: RunRstestOptions = {},
-): Promise<TestRunResult> {
-  // Capture host process globals up front; `restoreProcessGuards` puts them back
-  // in the outer `finally` so an embedding host isn't left with leaked state.
-  const restoreProcessGuards = snapshotProcessGuards();
-
-  // Match the CLI's environment setup so tests run through the programmatic API
-  // observe `NODE_ENV=test` / `RSTEST=true` (workers inherit `process.env` at
-  // spawn time).
+export async function createRstest(
+  options: CreateRstestOptions = {},
+): Promise<RstestInstance> {
+  // Match the CLI's environment setup so workers (spawned per run) observe
+  // `NODE_ENV=test` / `RSTEST=true`.
   initRstestEnv();
 
-  try {
-    const cwd = options.cwd
-      ? getAbsolutePath(process.cwd(), options.cwd)
-      : process.cwd();
+  const cwd = options.cwd
+    ? getAbsolutePath(process.cwd(), options.cwd)
+    : process.cwd();
+  const embedded = options.embedded ?? true;
+  const trace = options.trace ?? false;
+  const extraReporters: Reporter[] = [];
 
-    const captured: {
-      unhandledErrors: SerializedError[];
-      duration: { total: number };
-      coverage?: CoverageMapData;
-      snapshot?: SnapshotSummary;
-    } = {
-      unhandledErrors: [],
-      duration: { total: 0 },
-    };
+  // Holds the most recent build's context, exposed via `instance.context`.
+  let context!: RstestContext;
 
-    const captureReporter: Reporter = {
-      onTestRunEnd: ({
-        unhandledErrors,
-        duration,
-        coverage,
-        snapshotSummary,
-      }) => {
-        captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
-          toSerializedError(err),
-        );
-        captured.duration = { total: duration.totalTime };
-        captured.coverage = coverage;
-        captured.snapshot = snapshotSummary;
-      },
-    };
+  // Resolve config + projects from the static inputs and build an internal
+  // runner for `command`, applying the per-invocation `runOptions`. Re-runs the
+  // full resolution each call so no mutable state is shared across runs.
+  const build = async (
+    command: RstestCommand,
+    runOptions: RunOptions,
+  ): Promise<RstestRunner> => {
+    const commonOptions = toCommonOptions(runOptions);
 
-    let files: TestFileResult[] = [];
-    let rstest: ReturnType<typeof createRstest> | undefined;
-
-    try {
-      const { content: userConfig, filePath: configFilePath } =
-        await loadConfigForApi({
-          cwd,
-          configPath: options.config,
-          inlineConfig: options.inlineConfig,
-        });
-
-      // Resolve config + projects through the same pipeline the CLI uses
-      // (`mergeWithCLIOptions` + `resolveProjects`) so CLI-style options
-      // propagate to the root config AND every project config from one place,
-      // instead of being re-derived per API option. Map the API surface onto
-      // `CommonOptions`; `mergeWithCLIOptions`/`resolveProjects` skip `undefined`.
-      const cliOptions: CommonOptions = {
-        testNamePattern: options.testNamePattern,
-      };
-      mergeWithCLIOptions(userConfig, cliOptions);
-
-      // Absolutize `root` against the API cwd exactly like `createRstest` does,
-      // so `resolveProjects` runs its filesystem lookups (existsSync/glob) from
-      // the same base where tests will actually run.
-      userConfig.root = userConfig.root
-        ? getAbsolutePath(cwd, userConfig.root)
-        : cwd;
-
-      const projects = await resolveProjects({
-        config: userConfig,
-        root: userConfig.root,
-        options: cliOptions,
+    const { content: userConfig, filePath: configFilePath } =
+      await loadConfigForApi({
+        cwd,
+        configPath: options.config,
+        inlineConfig: options.inlineConfig,
       });
 
-      // `options.files !== undefined` (not `?.length`) so an explicit empty
-      // array runs zero files instead of falling back to fuzzy/no-filter mode.
-      const fileFilters = options.files ?? [];
-      const fileFilterMode = options.files !== undefined ? 'exact' : 'fuzzy';
+    // Propagate per-invocation config-shaped options to the root config and —
+    // via `resolveProjects` — to every project config.
+    mergeWithCLIOptions(userConfig, commonOptions);
+    userConfig.root = userConfig.root
+      ? getAbsolutePath(cwd, userConfig.root)
+      : cwd;
 
-      rstest = createRstest(
-        {
-          config: userConfig,
-          configFilePath,
-          projects,
-          cwd,
-          embedded: true,
-        },
-        'run',
-        fileFilters,
-        fileFilterMode,
-      );
+    const projects = await resolveProjects({
+      config: userConfig,
+      root: userConfig.root,
+      options: commonOptions,
+    });
 
-      rstest.context.reporters.push(captureReporter);
+    const resolved = await resolveEffectiveCliFilters({
+      options: commonOptions,
+      filters: runOptions.filters ?? [],
+      createRstest: createRstestContext,
+      config: userConfig,
+      configFilePath,
+      projects,
+    });
 
-      await rstest.runTests();
+    // Related/changed runs force exact matching; otherwise honor an explicit
+    // `filterMode` (default fuzzy, matching the CLI's positional behavior).
+    const finalMode = isRelatedRun(commonOptions)
+      ? resolved.fileFilterMode
+      : (runOptions.filterMode ?? resolved.fileFilterMode);
+
+    const runner = createRstestContext(
+      { config: userConfig, configFilePath, projects, cwd, embedded, trace },
+      command,
+      resolved.effectiveFilters,
+      finalMode,
+    );
+
+    await applyResolvedFilters(runner, resolved);
+
+    for (const reporter of extraReporters) {
+      runner.context.reporters.push(reporter);
+    }
+
+    context = runner.context;
+    return runner;
+  };
+
+  // Resolve up front so `context` is available for inspection and config-load
+  // errors surface at creation time rather than on first run.
+  await build('run', {});
+
+  const run = async (runOptions: RunOptions = {}): Promise<TestRunResult> => {
+    // Capture host globals up front; restore them in `finally` so the embedding
+    // host isn't left with leaked exitCode/env state.
+    const restoreProcessGuards = snapshotProcessGuards();
+    const captured = createCapturedRunState();
+    let files: TestFileResult[] = [];
+    let runner: RstestRunner | undefined;
+
+    try {
+      runner = await build('run', runOptions);
+      runner.context.reporters.push(createCaptureReporter(captured));
+      await runner.runTests();
     } catch (err) {
       captured.unhandledErrors.unshift(toSerializedError(err));
     } finally {
-      // Read collected per-file results here (not at the end of `try`) so a
-      // failure in a post-run step — coverage report, global teardown, pool or
-      // server cleanup — doesn't discard results already gathered during the run.
-      if (rstest) {
-        files = rstest.context.reporterResults.results.map(
+      // Read collected results here (not at the end of `try`) so a failure in a
+      // post-run step doesn't discard results already gathered during the run.
+      if (runner) {
+        files = runner.context.reporterResults.results.map(
           toPublicTestFileResult,
         );
       }
+      restoreProcessGuards();
     }
 
-    const stats = computeStats(files);
+    return assembleTestRunResult(files, captured, runner?.context);
+  };
 
-    // Mirror the CLI: discovering no test files is a failure unless
-    // `passWithNoTests` is set. `process.exitCode` is restored by the guards, so
-    // `ok` must derive this independently rather than reading the exit code.
-    const noTestsFailure =
-      !!rstest &&
-      files.length === 0 &&
-      !rstest.context.normalizedConfig.passWithNoTests;
+  const listTests = async (
+    listOptions: ListCommandOptions & RunOptions = {},
+  ): Promise<ListCommandResult[]> => {
+    const runner = await build('list', listOptions);
+    return runner.listTests({
+      filesOnly: listOptions.filesOnly,
+      json: listOptions.json,
+      includeSuites: listOptions.includeSuites,
+      printLocation: listOptions.printLocation,
+      summary: listOptions.summary,
+    });
+  };
 
-    const ok =
-      stats.tests.failed === 0 &&
-      stats.files.failed === 0 &&
-      captured.unhandledErrors.length === 0 &&
-      !noTestsFailure;
+  const mergeReports = async (mergeOptions?: {
+    path?: string;
+    cleanup?: boolean;
+  }): Promise<void> => {
+    const runner = await build('merge-reports', {});
+    return runner.mergeReports(mergeOptions);
+  };
 
-    return {
-      ok,
-      files,
-      stats,
-      unhandledErrors: captured.unhandledErrors,
-      duration: captured.duration,
-      snapshot: captured.snapshot,
-      coverage: captured.coverage,
-    };
-  } finally {
-    restoreProcessGuards();
-  }
+  const addReporter = (reporter: Reporter): void => {
+    extraReporters.push(reporter);
+  };
+
+  const close = async (): Promise<void> => {
+    // Each run() builds and tears down its own worker pool + Rsbuild server, so
+    // there are no instance-held resources to release in 1.0. Kept as a stable
+    // forward-compat hook (load-bearing once build-graph reuse lands).
+  };
+
+  return {
+    get context() {
+      return context;
+    },
+    run,
+    listTests,
+    mergeReports,
+    addReporter,
+    close,
+  };
 }

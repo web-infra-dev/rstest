@@ -1,13 +1,20 @@
 import cac, { type CAC, type Command } from 'cac';
 import { normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
+import {
+  assembleTestRunResult,
+  createCaptureReporter,
+  createCapturedRunState,
+  type TestRunResult,
+  toPublicTestFileResult,
+} from '../api/result';
 import type {
   FileFilterMode,
   ListCommandOptions,
   Project,
   RstestCommand,
   RstestConfig,
-  RstestInstance,
+  RstestRunner,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
@@ -396,7 +403,7 @@ const filterHelpOptions = (
     };
   });
 
-const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
+const handleUnexpectedExit = (rstest: RstestRunner | undefined, err: any) => {
   for (const reporter of rstest?.context.reporters || []) {
     reporter.onExit?.();
   }
@@ -405,18 +412,18 @@ const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
   process.exit(1);
 };
 
-const resolveCliRuntime = async (options: CommonOptions) => {
-  const [{ initCli }, { createRstest }] = await Promise.all([
+const resolveCliRuntime = async (options: CommonOptions, cwd?: string) => {
+  const [{ initCli }, { createRstestContext }] = await Promise.all([
     import('./init'),
     import('../core'),
   ]);
-  const { config, configFilePath, projects } = await initCli(options);
+  const { config, configFilePath, projects } = await initCli(options, cwd);
 
   return {
     config,
     configFilePath,
     projects,
-    createRstest,
+    createRstest: createRstestContext,
   };
 };
 
@@ -590,7 +597,7 @@ const getCoverageChangedOption = (options: CommonOptions) => {
   return options.coverage.changed;
 };
 
-const resolveEffectiveCliFilters = async ({
+export const resolveEffectiveCliFilters = async ({
   options,
   filters,
   createRstest,
@@ -608,7 +615,7 @@ const resolveEffectiveCliFilters = async ({
     },
     command: RstestCommand,
     fileFilters: string[],
-  ) => RstestInstance;
+  ) => RstestRunner;
   config: RstestConfig;
   configFilePath?: string;
   projects: Project[];
@@ -693,8 +700,8 @@ const resolveEffectiveCliFilters = async ({
   };
 };
 
-const resolveCoverageChangedFilters = async (
-  rstest: RstestInstance,
+export const resolveCoverageChangedFilters = async (
+  rstest: RstestRunner,
 ): Promise<string[] | undefined> => {
   const { changed } = rstest.context.normalizedConfig.coverage;
 
@@ -719,33 +726,51 @@ const resolveCoverageChangedFilters = async (
   }
 };
 
+/**
+ * Apply a {@link resolveEffectiveCliFilters} result onto a freshly-built
+ * runner's context. Shared by the CLI `run`/`list` paths and the programmatic
+ * `createRstest` build so the related/changed context wiring lives in one place.
+ *
+ * `changedCoverageFilters` is assigned twice on purpose: the first seeds the
+ * value `resolveCoverageChangedFilters` reads back through its
+ * `changed === undefined` branch.
+ */
+export const applyResolvedFilters = async (
+  rstest: RstestRunner,
+  resolved: Awaited<ReturnType<typeof resolveEffectiveCliFilters>>,
+): Promise<void> => {
+  const { context } = rstest;
+  context.relatedFilters = resolved.relatedFilters;
+  context.relatedMode = resolved.relatedMode;
+  context.relatedResolutionEmpty = resolved.relatedResolutionEmpty;
+  context.changedCoverageFilters = resolved.changedCoverageFilters;
+  context.changedCoverageFilters = await resolveCoverageChangedFilters(rstest);
+  context.relatedRerunReason = resolved.relatedRerunReason;
+  context.relatedRerunFiles = resolved.relatedRerunFiles;
+};
+
 export const runRest = async ({
   options,
   filters,
   command,
+  cwd,
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
   command: RstestCommand;
-}): Promise<void> => {
-  let rstest: RstestInstance | undefined;
+  cwd?: string;
+}): Promise<TestRunResult | undefined> => {
+  let rstest: RstestRunner | undefined;
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };
 
+  const captured = createCapturedRunState();
+
   try {
     const { config, configFilePath, projects, createRstest } =
-      await resolveCliRuntime(options);
-    const {
-      effectiveFilters,
-      fileFilterMode,
-      relatedFilters,
-      relatedMode,
-      relatedResolutionEmpty,
-      changedCoverageFilters,
-      relatedRerunReason,
-      relatedRerunFiles,
-    } = await resolveEffectiveCliFilters({
+      await resolveCliRuntime(options, cwd);
+    const resolved = await resolveEffectiveCliFilters({
       options,
       filters,
       createRstest,
@@ -757,19 +782,14 @@ export const runRest = async ({
     rstest = createRstest(
       { config, configFilePath, projects, trace: options.trace },
       command,
-      effectiveFilters,
-      fileFilterMode,
+      resolved.effectiveFilters,
+      resolved.fileFilterMode,
     );
-    rstest.context.relatedFilters = relatedFilters;
-    rstest.context.relatedMode = relatedMode;
-    rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-    rstest.context.changedCoverageFilters = changedCoverageFilters;
-    rstest.context.changedCoverageFilters =
-      await resolveCoverageChangedFilters(rstest);
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
+    await applyResolvedFilters(rstest, resolved);
+
+    // Capture the run summary so `runCli` can return a structured result; the
+    // reporter is additive and doesn't affect configured reporter output.
+    rstest.context.reporters.push(createCaptureReporter(captured));
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -795,9 +815,14 @@ export const runRest = async ({
   } catch (err) {
     handleUnexpectedExit(rstest, err);
   }
+
+  const files = rstest
+    ? rstest.context.reporterResults.results.map(toPublicTestFileResult)
+    : [];
+  return assembleTestRunResult(files, captured, rstest?.context);
 };
 
-export function createCli(): CAC {
+export function createCli({ cwd }: { cwd?: string } = {}): CAC {
   const cli = cac('rstest');
 
   cli.help((sections) => {
@@ -825,11 +850,12 @@ export function createCli(): CAC {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      if (options.watch) {
-        await runRest({ options, filters, command: 'watch' });
-      } else {
-        await runRest({ options, filters, command: 'run' });
-      }
+      return runRest({
+        options,
+        filters,
+        command: options.watch ? 'watch' : 'run',
+        cwd,
+      });
     },
   );
 
@@ -842,7 +868,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'run' });
+    return runRest({ options, filters, command: 'run', cwd });
   });
 
   const watchCommand = cli.command(
@@ -854,7 +880,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'watch' });
+    return runRest({ options, filters, command: 'watch', cwd });
   });
 
   const listCommand = cli.command(
@@ -867,22 +893,13 @@ export function createCli(): CAC {
     async (filters: string[], options: CommonOptions & ListCommandOptions) => {
       try {
         const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
+          await resolveCliRuntime(options, cwd);
 
         if (options.printLocation) {
           config.includeTaskLocation = true;
         }
 
-        const {
-          effectiveFilters,
-          fileFilterMode,
-          relatedFilters,
-          relatedMode,
-          relatedResolutionEmpty,
-          changedCoverageFilters,
-          relatedRerunReason,
-          relatedRerunFiles,
-        } = await resolveEffectiveCliFilters({
+        const resolved = await resolveEffectiveCliFilters({
           options,
           filters,
           createRstest,
@@ -894,19 +911,10 @@ export function createCli(): CAC {
         const rstest = createRstest(
           { config, configFilePath, projects },
           'list',
-          effectiveFilters,
-          fileFilterMode,
+          resolved.effectiveFilters,
+          resolved.fileFilterMode,
         );
-        rstest.context.relatedFilters = relatedFilters;
-        rstest.context.relatedMode = relatedMode;
-        rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-        rstest.context.changedCoverageFilters = changedCoverageFilters;
-        rstest.context.changedCoverageFilters =
-          await resolveCoverageChangedFilters(rstest);
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
+        await applyResolvedFilters(rstest, resolved);
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
@@ -939,7 +947,7 @@ export function createCli(): CAC {
       }
       try {
         const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
+          await resolveCliRuntime(options, cwd);
         const rstest = createRstest(
           { config, configFilePath, projects },
           'merge-reports',
@@ -1009,7 +1017,19 @@ export function createCli(): CAC {
   return cli;
 }
 
-export function setupCommands(): void {
-  const cli = createCli();
-  cli.parse(process.argv);
+/**
+ * Build the CLI, parse `argv`, and return the run-path result (when the matched
+ * command runs tests). `list` / `merge-reports` / `init` resolve to `undefined`.
+ *
+ * `parse(..., { run: false })` splits parsing (including `--help` / `--version`
+ * short-circuit) from execution, so the matched action's return value flows back
+ * through cac's own `runMatchedCommand()` instead of a side channel.
+ */
+export async function setupCommands(
+  argv: string[] = process.argv,
+  cwd?: string,
+): Promise<TestRunResult | undefined> {
+  const cli = createCli({ cwd });
+  cli.parse(argv, { run: false });
+  return cli.runMatchedCommand();
 }
