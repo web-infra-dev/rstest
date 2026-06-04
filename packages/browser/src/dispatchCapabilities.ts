@@ -4,6 +4,7 @@ import type {
   BrowserClientMessage,
   BrowserDispatchHandler,
   BrowserDispatchRequest,
+  RunnerDispatchMethod,
   SnapshotRpcMethod,
   SnapshotRpcMethodArgs,
   SnapshotRpcRequest,
@@ -109,52 +110,45 @@ export const createHostDispatchRouter = ({
 }: CreateHostDispatchRouterOptions): HostDispatchRouter => {
   const router = new HostDispatchRouter(routerOptions);
 
+  // Keyed by RunnerDispatchMethod so adding a runner method to that union forces
+  // a handler entry here (a missing key is a compile error) — the previous
+  // `switch` with `default: break` silently dropped unhandled methods. The
+  // `args` casts are checked against each callback's parameter type, so a wrong
+  // payload type also fails to compile.
+  const runnerMethodHandlers: {
+    [M in RunnerDispatchMethod]: (
+      args: BrowserDispatchRequest['args'],
+    ) => Promise<void>;
+  } = {
+    'file-start': (args) =>
+      runnerCallbacks.onTestFileStart(args as RunnerPayload<'file-start'>),
+    'file-ready': (args) =>
+      runnerCallbacks.onTestFileReady(args as RunnerDispatchFileReadyPayload),
+    'suite-start': (args) =>
+      runnerCallbacks.onTestSuiteStart(args as RunnerDispatchSuiteStartPayload),
+    'suite-result': (args) =>
+      runnerCallbacks.onTestSuiteResult(
+        args as RunnerDispatchSuiteResultPayload,
+      ),
+    'case-start': (args) =>
+      runnerCallbacks.onTestCaseStart(args as RunnerDispatchCaseStartPayload),
+    'case-result': (args) =>
+      runnerCallbacks.onTestCaseResult(args as RunnerPayload<'case-result'>),
+    'file-complete': (args) =>
+      runnerCallbacks.onTestFileComplete(
+        args as RunnerPayload<'file-complete'>,
+      ),
+    log: (args) => runnerCallbacks.onLog(args as RunnerPayload<'log'>),
+    fatal: (args) => runnerCallbacks.onFatal(args as RunnerPayload<'fatal'>),
+  };
+
   router.register('runner', async (request: BrowserDispatchRequest) => {
-    switch (request.method) {
-      case 'file-start':
-        await runnerCallbacks.onTestFileStart(
-          request.args as RunnerPayload<'file-start'>,
-        );
-        break;
-      case 'file-ready':
-        await runnerCallbacks.onTestFileReady(
-          request.args as RunnerDispatchFileReadyPayload,
-        );
-        break;
-      case 'suite-start':
-        await runnerCallbacks.onTestSuiteStart(
-          request.args as RunnerDispatchSuiteStartPayload,
-        );
-        break;
-      case 'suite-result':
-        await runnerCallbacks.onTestSuiteResult(
-          request.args as RunnerDispatchSuiteResultPayload,
-        );
-        break;
-      case 'case-start':
-        await runnerCallbacks.onTestCaseStart(
-          request.args as RunnerDispatchCaseStartPayload,
-        );
-        break;
-      case 'case-result':
-        await runnerCallbacks.onTestCaseResult(
-          request.args as RunnerPayload<'case-result'>,
-        );
-        break;
-      case 'file-complete':
-        await runnerCallbacks.onTestFileComplete(
-          request.args as RunnerPayload<'file-complete'>,
-        );
-        break;
-      case 'log':
-        await runnerCallbacks.onLog(request.args as RunnerPayload<'log'>);
-        break;
-      case 'fatal':
-        await runnerCallbacks.onFatal(request.args as RunnerPayload<'fatal'>);
-        break;
-      default:
-        break;
-    }
+    // `request.method` is untrusted wire data, so the lookup may miss. Unknown
+    // methods are ignored for forward-compatibility with newer runners, matching
+    // the previous `default: break`.
+    await runnerMethodHandlers[request.method as RunnerDispatchMethod]?.(
+      request.args,
+    );
   });
 
   router.register('snapshot', async (request: BrowserDispatchRequest) => {
