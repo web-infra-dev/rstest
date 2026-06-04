@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import v8 from 'node:v8';
+import { ENV } from '../utils/env';
 import { isDebug, logger } from '../utils/logger';
 import { isWorkerResponseEnvelope } from './protocol';
 
@@ -238,7 +239,7 @@ export class MemoryGate {
 
 /** Honors `RSTEST_MEMORY_AWARE=0` (emergency kill switch). */
 export const createDefaultMemoryGate = (): MemoryGate | undefined => {
-  if (process.env.RSTEST_MEMORY_AWARE === '0') return undefined;
+  if (process.env[ENV.MEMORY_AWARE] === '0') return undefined;
   return new MemoryGate();
 };
 

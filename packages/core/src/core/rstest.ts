@@ -28,6 +28,7 @@ import type {
 } from '../types';
 import {
   castArray,
+  ENV,
   getAbsolutePath,
   logger,
   normalizeBuildCache,
@@ -228,7 +229,7 @@ export class Rstest implements RstestContext {
             _globalSetups: false,
             outputModule:
               config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
             environmentName,
             normalizedConfig: config,
           };
@@ -241,7 +242,7 @@ export class Rstest implements RstestContext {
             name: rstestConfig.name,
             outputModule:
               rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
