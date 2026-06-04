@@ -21,7 +21,11 @@ import {
   ROOT_SUITE_NAME,
   resolveShardedEntries,
 } from '../utils';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
+import {
+  claimGlobalSetupOnce,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 type ListedTest = {
@@ -220,11 +224,8 @@ const collectNodeTests = async ({
       } = await getRsbuildStats({ environmentName: project.environmentName });
 
       if (
-        entries.length &&
-        globalSetupEntries.length &&
-        !project._globalSetups
+        claimGlobalSetupOnce(project, entries.length, globalSetupEntries.length)
       ) {
-        project._globalSetups = true;
         const files = globalSetupEntries.flatMap((e) => e.files!);
         const assetFilesPromise = getAssetFiles(files);
         const sourceMapsPromise = getSourceMaps(files);
