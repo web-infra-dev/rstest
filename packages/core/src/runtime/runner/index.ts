@@ -7,14 +7,11 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
+import { getFileTaskId } from '../../utils/helper';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
 import { createRuntimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
-
-export const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
-};
 
 export function createRunner({
   workerState,

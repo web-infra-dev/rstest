@@ -148,6 +148,17 @@ export const getTaskNameWithPrefix = (
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
+/**
+ * Single source of truth for the `file:` task-id grammar. The value is an
+ * opaque pass-through label (never equality-checked across processes), so the
+ * grammar only needs to stay self-consistent — owning it here keeps the worker,
+ * pool, and runner copies from drifting.
+ *
+ * The browser package keeps its own copy on purpose (it must not import core
+ * runtime internals across the provider-agnostic barrier).
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
+
 const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
 
 const wrapRegex = (value: RegExp): string =>

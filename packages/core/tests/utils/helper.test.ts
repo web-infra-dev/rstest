@@ -1,10 +1,17 @@
 import { sep } from 'node:path';
 import {
+  getFileTaskId,
   getWorkerSerialization,
   needFlagExperimentalDetectModule,
   parsePosix,
   prettyTime,
 } from '../../src/utils/helper';
+
+it('getFileTaskId builds the file: task-id grammar', () => {
+  // Locks the single source of truth so the worker/pool/runner consumers and
+  // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift.
+  expect(getFileTaskId('/abs/foo.test.ts')).toBe('file:/abs/foo.test.ts');
+});
 
 it('parsePosix correctly', () => {
   const splitPaths = ['packages', 'core', 'tests', 'index.test.ts'];
