@@ -27,6 +27,10 @@
       "types": "./dist/api/index.d.ts",
       "default": "./dist/api/index.js"
     },
+    "./internal/adapter": {
+      "types": "./dist/adapter.d.ts",
+      "default": "./dist/adapter.js"
+    },
     "./internal/browser": {
       "types": "./dist/browser.d.ts",
       "default": "./dist/browser.js"

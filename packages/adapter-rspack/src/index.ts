@@ -7,6 +7,10 @@ import type {
   RspackOptions,
 } from '@rspack/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
+import {
+  resolveCacheDependency,
+  resolveTestEnvironmentFromTarget,
+} from '@rstest/core/internal/adapter';
 
 type RspackConfig = RspackOptions | MultiRspackOptions;
 
@@ -68,24 +72,6 @@ const findDefaultConfig = (cwd: string): string | null => {
   return null;
 };
 
-const normalizeTargets = (target: RspackOptions['target']): string[] => {
-  if (!target) {
-    return [];
-  }
-  if (Array.isArray(target)) {
-    return target.filter(Boolean) as string[];
-  }
-  if (typeof target === 'string') {
-    return [target];
-  }
-  return [];
-};
-
-const isNodeTarget = (targets: string[]): boolean =>
-  targets.some(
-    (target) => target === 'async-node' || target.startsWith('node'),
-  );
-
 const isHtmlRspackPlugin = (plugin: unknown): boolean =>
   plugin && (plugin as { constructor?: { name?: string } }).constructor
     ? (plugin as { constructor: { name?: string } }).constructor.name ===
@@ -96,20 +82,6 @@ const isPersistentCacheConfig = (
   cache: RspackOptions['cache'],
 ): cache is PersistentRspackCacheConfig =>
   typeof cache === 'object' && cache?.type === 'persistent';
-
-const getCachePath = ({
-  cachePath,
-  root,
-}: {
-  cachePath: string;
-  root?: string;
-}): string => {
-  if (path.isAbsolute(cachePath)) {
-    return path.normalize(cachePath);
-  }
-
-  return root ? path.normalize(path.resolve(root, cachePath)) : cachePath;
-};
 
 const getCacheRoot = (
   rspackConfig: RspackOptions,
@@ -150,9 +122,12 @@ const updateCacheConfig = ({
     return undefined;
   }
 
+  // Rspack resolves cache paths relative to the build `context` (root), so only
+  // `root` is passed — never `configPath` — to keep the shared resolver's
+  // context-based behavior.
   const buildDependencies = cache.buildDependencies?.map((dependency) =>
-    getCachePath({
-      cachePath: dependency,
+    resolveCacheDependency({
+      dependency,
       root,
     }),
   );
@@ -164,8 +139,8 @@ const updateCacheConfig = ({
 
   return {
     cacheDirectory: cache.storage?.directory
-      ? getCachePath({
-          cachePath: cache.storage.directory,
+      ? resolveCacheDependency({
+          dependency: cache.storage.directory,
           root,
         })
       : undefined,
@@ -341,8 +316,7 @@ export function toRstestConfig({
     ? modifyRspackConfig(rspackConfig)
     : rspackConfig;
 
-  const targets = normalizeTargets(finalConfig.target);
-  const testEnvironment = isNodeTarget(targets) ? 'node' : 'happy-dom';
+  const testEnvironment = resolveTestEnvironmentFromTarget(finalConfig.target);
 
   // Extract resolve config — rspack's ResolveOptions is mostly compatible
   // with rsbuild's resolve type, cast to align minor differences (e.g. alias: false)
