@@ -24,6 +24,7 @@ import type {
   BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserProjectRuntime,
+  RunnerLifecycleMethod,
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
@@ -43,12 +44,6 @@ declare global {
   // eslint-disable-next-line no-var
   var __coverage__: Record<string, unknown> | undefined;
 }
-
-type RunnerLifecycleMethod =
-  | 'file-ready'
-  | 'suite-start'
-  | 'suite-result'
-  | 'case-start';
 
 let runnerDispatchRequestId = 0;
 

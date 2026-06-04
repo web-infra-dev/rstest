@@ -138,6 +138,38 @@ export type BrowserClientMessage =
     };
 
 /**
+ * Lifecycle methods the runner emits via `dispatchRunnerLifecycle()` as
+ * dispatch-rpc-requests on the `runner` namespace (as opposed to the
+ * {@link BrowserClientMessage} types it `send()`s). The runner client imports
+ * this instead of redeclaring the list, so the emit site cannot drift from the
+ * host router.
+ */
+export type RunnerLifecycleMethod =
+  | 'file-ready'
+  | 'suite-start'
+  | 'suite-result'
+  | 'case-start';
+
+/**
+ * {@link BrowserClientMessage} types that are forwarded to the `runner`
+ * namespace (by message `type`) rather than handled at the transport layer.
+ * `Extract` keeps this a checked subset of the message union — renaming a
+ * message type drops it here, surfacing as a missing handler downstream.
+ */
+type RunnerMessageMethod = Extract<
+  BrowserClientMessage['type'],
+  'file-start' | 'case-result' | 'file-complete' | 'log' | 'fatal'
+>;
+
+/**
+ * Single source of truth for every method handled by the `runner` dispatch
+ * namespace. The host handler table is keyed by this union (a missing key is a
+ * compile error), so adding a runner method here forces a matching handler and
+ * cannot silently no-op at runtime.
+ */
+export type RunnerDispatchMethod = RunnerLifecycleMethod | RunnerMessageMethod;
+
+/**
  * Transport-agnostic envelope used by host routing.
  * `namespace + method + args + target` describes an operation independent of
  * the underlying message channel, and `runToken` provides run-level isolation.
