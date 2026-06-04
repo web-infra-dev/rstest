@@ -5,11 +5,11 @@ describe('Test Chain', () => {
     expect(Object.keys(it)).toMatchInlineSnapshot(`
       [
         "fails",
+        "only",
+        "todo",
+        "skip",
         "concurrent",
         "sequential",
-        "skip",
-        "todo",
-        "only",
         "runIf",
         "skipIf",
         "each",
@@ -20,11 +20,11 @@ describe('Test Chain', () => {
     expect(Object.keys(it.only)).toMatchInlineSnapshot(`
       [
         "fails",
+        "only",
+        "todo",
+        "skip",
         "concurrent",
         "sequential",
-        "skip",
-        "todo",
-        "only",
         "runIf",
         "skipIf",
         "each",

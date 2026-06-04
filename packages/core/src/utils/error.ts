@@ -14,7 +14,7 @@ const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 const hintNotDefinedError = (message: string): string => {
   const [, varName] = /(\w+) is not defined/.exec(message) || [];
   if (varName) {
-    if ((globalApis as string[]).includes(varName)) {
+    if ((globalApis as readonly string[]).includes(varName)) {
       return message.replace(
         `${varName} is not defined`,
         `${varName} is not defined. Did you forget to enable "globals" configuration?`,

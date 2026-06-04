@@ -17,6 +17,7 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_TEST_TIMEOUT,
   formatRootStr,
   getOutputDistPathRoot,
   getTempRstestOutputDirGlob,
@@ -216,7 +217,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   update: false,
-  testTimeout: 5_000,
+  testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
   testEnvironment: {
     name: 'node',

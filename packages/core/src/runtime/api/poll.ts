@@ -19,6 +19,7 @@
 import type { Assertion } from '@vitest/expect';
 import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, TestCase } from '../../types';
+import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
 
 // these matchers are not supported because they don't make sense with poll
@@ -77,7 +78,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
         }
 
         return function (this: any, ...args: any[]) {
-          const STACK_TRACE_ERROR = new Error('STACK_TRACE_ERROR');
+          const STACK_TRACE_ERROR = new Error(SYNTHETIC_STACK_ERROR_MESSAGE);
           const promise = () =>
             new Promise<void>((resolve, reject) => {
               let intervalId: any;

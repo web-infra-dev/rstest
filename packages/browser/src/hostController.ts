@@ -11,6 +11,7 @@ import {
   type CoverageMapData,
   color,
   createCoverageProvider,
+  DEFAULT_TEST_TIMEOUT,
   type FormattedError,
   getNoTestFilesMessage,
   getSetupFiles,
@@ -2087,7 +2088,9 @@ export const runBrowserController = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {
@@ -3710,7 +3713,9 @@ export const listBrowserTests = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {
