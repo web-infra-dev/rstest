@@ -40,9 +40,9 @@
     "rsbuild-plugin-publint": "^0.3.4",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@10.34.1",
+  "packageManager": "pnpm@11.5.1",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=10.34.1"
+    "node": ">=22.13.0",
+    "pnpm": ">=11.0.0"
   }
 }
