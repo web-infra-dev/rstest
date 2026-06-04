@@ -341,7 +341,7 @@ export async function generateCoverage(
 
     // Generate coverage reports
     await traceSpan('coverage:generate-reports', 'coverage', () =>
-      coverageProvider.generateReports(finalCoverageMap, coverage),
+      coverageProvider.generateReports(finalCoverageMap),
     );
 
     if (coverage.thresholds) {

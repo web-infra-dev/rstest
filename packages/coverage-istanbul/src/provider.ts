@@ -92,7 +92,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
       return this.coverageMap;
     } catch (error) {
-      console.warn('Failed to collect coverage data:', error);
+      // Surface collection failures the same way the v8 provider does: log to
+      // stderr and mark the run as failed, so a broken coverage map never
+      // passes silently with a zero exit code.
+      console.error('Failed to collect coverage data:', error);
+      process.exitCode = 1;
       return null;
     }
   }

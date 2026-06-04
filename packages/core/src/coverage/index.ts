@@ -61,7 +61,7 @@ export function cleanCoverageReports(options: NormalizedCoverageOptions): void {
 }
 
 export async function createCoverageProvider(
-  options: CoverageOptions,
+  options: NormalizedCoverageOptions,
   root: string,
 ): Promise<CoverageProvider | null> {
   if (!options.enabled) {
