@@ -91,7 +91,7 @@ class RunnerRuntime {
   afterAll(
     fn: AfterAllListener,
     timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
+  ): void {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
       currentSuite,
@@ -108,7 +108,7 @@ class RunnerRuntime {
   beforeAll(
     fn: BeforeAllListener,
     timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
+  ): void {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
       currentSuite,
@@ -125,7 +125,7 @@ class RunnerRuntime {
   afterEach(
     fn: AfterEachListener,
     timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
+  ): void {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
       currentSuite,
@@ -142,7 +142,7 @@ class RunnerRuntime {
   beforeEach(
     fn: BeforeEachListener,
     timeout: number = this.runtimeConfig.hookTimeout,
-  ): MaybePromise<void> {
+  ): void {
     const currentSuite = this.getCurrentSuite();
     registerTestSuiteListener(
       currentSuite,

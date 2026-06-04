@@ -233,10 +233,10 @@ export type RunnerAPI = {
   describe: DescribeAPI;
   it: TestAPIs;
   test: TestAPIs;
-  beforeAll: (fn: BeforeAllListener, timeout?: number) => MaybePromise<void>;
-  afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
-  beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
-  afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
+  beforeAll: (fn: BeforeAllListener, timeout?: number) => void;
+  afterAll: (fn: AfterAllListener, timeout?: number) => void;
+  beforeEach: (fn: BeforeEachListener, timeout?: number) => void;
+  afterEach: (fn: AfterEachListener, timeout?: number) => void;
   onTestFinished: (fn: OnTestFinishedHandler, timeout?: number) => void;
   onTestFailed: (fn: OnTestFailedHandler, timeout?: number) => void;
 };
