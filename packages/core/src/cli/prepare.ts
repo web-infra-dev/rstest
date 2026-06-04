@@ -1,3 +1,4 @@
+import { ENV } from '../utils/env';
 import { logger } from '../utils/logger';
 
 function initNodeEnv() {
@@ -13,7 +14,7 @@ function initNodeEnv() {
  */
 export function initRstestEnv(): void {
   initNodeEnv();
-  process.env.RSTEST = 'true';
+  process.env[ENV.RSTEST] = 'true';
 }
 
 export function prepareCli(): void {
