@@ -12,6 +12,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
+import { deriveRunCounts } from './utils';
 
 type JsonReport = {
   tool: 'rstest';
@@ -99,17 +100,10 @@ export class JsonReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
   }): JsonReport {
-    const failedTests = testResults.filter(
-      (result) => result.status === 'fail',
-    );
-    const passedTests = testResults.filter(
-      (result) => result.status === 'pass',
-    );
-    const skippedTests = testResults.filter(
-      (result) => result.status === 'skip',
-    );
-    const todoTests = testResults.filter((result) => result.status === 'todo');
-    const failedFiles = results.filter((result) => result.status === 'fail');
+    const { failedTests, failedFiles, counts } = deriveRunCounts({
+      results,
+      testResults,
+    });
     const noTestsDiscovered = results.length === 0 && testResults.length === 0;
     const hasFailedStatus =
       failedTests.length > 0 ||
@@ -121,15 +115,7 @@ export class JsonReporter implements Reporter {
       tool: 'rstest',
       version: RSTEST_VERSION,
       status: hasFailedStatus ? 'fail' : 'pass',
-      summary: {
-        testFiles: results.length,
-        failedFiles: failedFiles.length,
-        tests: testResults.length,
-        failedTests: failedTests.length,
-        passedTests: passedTests.length,
-        skippedTests: skippedTests.length,
-        todoTests: todoTests.length,
-      },
+      summary: counts,
       durationMs: {
         total: duration.totalTime,
         build: duration.buildTime,

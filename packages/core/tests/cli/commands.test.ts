@@ -11,6 +11,7 @@ import {
   normalizeCliFilters,
   resolveChangedFiles,
   validateRelatedCliOptions,
+  valueTakingOptions,
 } from '../../src/cli/commands';
 
 const renderHelp = (argv: string[]): string => {
@@ -28,6 +29,57 @@ const renderHelp = (argv: string[]): string => {
 
   return logs.join('\n');
 };
+
+describe('valueTakingOptions (derived from option definitions)', () => {
+  it('derives exactly the value-taking option names across all definition groups', () => {
+    expect([...valueTakingOptions].sort()).toEqual(
+      [
+        '-c',
+        '-r',
+        '-t',
+        '--bail',
+        '--browser.name',
+        '--browser.port',
+        '--changed',
+        '--config',
+        '--config-loader',
+        '--coverage.changed',
+        '--coverage.exclude',
+        '--coverage.include',
+        '--coverage.provider',
+        '--coverage.reporters',
+        '--coverage.reportsDirectory',
+        '--exclude',
+        '--hookTimeout',
+        '--include',
+        '--json',
+        '--maxConcurrency',
+        '--pool',
+        '--pool.execArgv',
+        '--pool.maxWorkers',
+        '--pool.minWorkers',
+        '--pool.type',
+        '--project',
+        '--reporter',
+        '--reporters',
+        '--retry',
+        '--root',
+        '--shard',
+        '--silent',
+        '--slowTestThreshold',
+        '--testEnvironment',
+        '--testNamePattern',
+        '--testTimeout',
+      ].sort(),
+    );
+  });
+
+  it('excludes boolean flags that take no value', () => {
+    expect(valueTakingOptions.has('--globals')).toBe(false);
+    expect(valueTakingOptions.has('--isolate')).toBe(false);
+    expect(valueTakingOptions.has('--coverage')).toBe(false);
+  });
+});
 
 describe('CLI help output', () => {
   it('shows list-specific options for list help', () => {

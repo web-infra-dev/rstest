@@ -37,6 +37,8 @@ ctsx
 datauri
 dedupe
 deepmerge
+desync
+desynced
 distpath
 DNSCHANNEL
 docgen
@@ -179,6 +181,7 @@ unocss
 unpatch
 unplugin
 unpredictibly
+unsharded
 unshift
 unstub
 upath

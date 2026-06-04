@@ -26,6 +26,21 @@ export type BlobData = {
 
 const DEFAULT_OUTPUT_DIR = '.rstest-reports';
 
+/**
+ * Single owner of the on-disk blob filename grammar. The writer (this module)
+ * and the merge reader (`mergeReports.ts`) previously encoded the
+ * `blob[-index-count].json` shape independently — a string template here and a
+ * hand-written regexp there — so a rename would silently desync the two sides.
+ */
+export const blobFileName = (shard?: {
+  index: number;
+  count: number;
+}): string => (shard ? `blob-${shard.index}-${shard.count}.json` : 'blob.json');
+
+export const BLOB_FILE_RE: RegExp = /^blob(-\d+-\d+)?\.json$/;
+
+export const isBlobFile = (name: string): boolean => BLOB_FILE_RE.test(name);
+
 export class BlobReporter implements Reporter {
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
@@ -66,9 +81,7 @@ export class BlobReporter implements Reporter {
     unhandledErrors?: Error[];
   }): Promise<void> {
     const shard = this.config.shard;
-    const fileName = shard
-      ? `blob-${shard.index}-${shard.count}.json`
-      : 'blob.json';
+    const fileName = blobFileName(shard);
 
     const blobData: BlobData = {
       version: RSTEST_VERSION,
