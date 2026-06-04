@@ -4,6 +4,8 @@ import type {
   BrowserClientMessage,
   BrowserDispatchHandler,
   BrowserDispatchRequest,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodArgs,
   SnapshotRpcRequest,
 } from './protocol';
 
@@ -52,37 +54,50 @@ type CreateHostDispatchRouterOptions = {
   onDuplicateNamespace?: (namespace: string) => void;
 };
 
+/**
+ * Builds a typed {@link SnapshotRpcRequest} from the untrusted wire envelope,
+ * one builder per method. Keyed by {@link SnapshotRpcMethod}, so adding or
+ * renaming a method in the union forces a matching entry here — a stale name
+ * becomes a compile error instead of silently falling through to `null`. The
+ * `args` casts are the unavoidable trust boundary for inbound wire data.
+ */
+const snapshotRequestBuilders: {
+  [M in SnapshotRpcMethod]: (
+    id: string,
+    args: BrowserDispatchRequest['args'],
+  ) => Extract<SnapshotRpcRequest, { method: M }>;
+} = {
+  resolveSnapshotPath: (id, args) => ({
+    id,
+    method: 'resolveSnapshotPath',
+    args: args as SnapshotRpcMethodArgs['resolveSnapshotPath'],
+  }),
+  readSnapshotFile: (id, args) => ({
+    id,
+    method: 'readSnapshotFile',
+    args: args as SnapshotRpcMethodArgs['readSnapshotFile'],
+  }),
+  saveSnapshotFile: (id, args) => ({
+    id,
+    method: 'saveSnapshotFile',
+    args: args as SnapshotRpcMethodArgs['saveSnapshotFile'],
+  }),
+  removeSnapshotFile: (id, args) => ({
+    id,
+    method: 'removeSnapshotFile',
+    args: args as SnapshotRpcMethodArgs['removeSnapshotFile'],
+  }),
+};
+
 const toSnapshotRpcRequest = (
   request: BrowserDispatchRequest,
 ): SnapshotRpcRequest | null => {
-  switch (request.method) {
-    case 'resolveSnapshotPath':
-      return {
-        id: request.requestId,
-        method: 'resolveSnapshotPath',
-        args: request.args as { testPath: string },
-      };
-    case 'readSnapshotFile':
-      return {
-        id: request.requestId,
-        method: 'readSnapshotFile',
-        args: request.args as { filepath: string },
-      };
-    case 'saveSnapshotFile':
-      return {
-        id: request.requestId,
-        method: 'saveSnapshotFile',
-        args: request.args as { filepath: string; content: string },
-      };
-    case 'removeSnapshotFile':
-      return {
-        id: request.requestId,
-        method: 'removeSnapshotFile',
-        args: request.args as { filepath: string },
-      };
-    default:
-      return null;
-  }
+  const builder = snapshotRequestBuilders[
+    request.method as SnapshotRpcMethod
+  ] as
+    | ((id: string, args: BrowserDispatchRequest['args']) => SnapshotRpcRequest)
+    | undefined;
+  return builder ? builder(request.requestId, request.args) : null;
 };
 
 export const createHostDispatchRouter = ({
