@@ -97,7 +97,11 @@ function headVsOriginMain(cwd) {
   try {
     const head = run('git', ['rev-parse', 'HEAD'], { cwd }).trim();
     const main = run('git', ['rev-parse', 'origin/main'], { cwd }).trim();
-    return { head: head.slice(0, 8), main: main.slice(0, 8), same: head === main };
+    return {
+      head: head.slice(0, 8),
+      main: main.slice(0, 8),
+      same: head === main,
+    };
   } catch {
     return null;
   }
@@ -116,7 +120,11 @@ function preflight() {
       report('✅', label, detail);
       return detail;
     } catch (e) {
-      report(blocking ? '❌' : '⚠️', label, String(e.message || e).split('\n')[0]);
+      report(
+        blocking ? '❌' : '⚠️',
+        label,
+        String(e.message || e).split('\n')[0],
+      );
       if (blocking) failed = true;
       return null;
     }
@@ -153,9 +161,16 @@ function preflight() {
   const lastTag = check('latest release tag resolved', () => {
     const releases = JSON.parse(
       run('gh', [
-        'release', 'list', '--repo', REPO,
-        '--exclude-drafts', '--exclude-pre-releases',
-        '--limit', '1', '--json', 'tagName',
+        'release',
+        'list',
+        '--repo',
+        REPO,
+        '--exclude-drafts',
+        '--exclude-pre-releases',
+        '--limit',
+        '1',
+        '--json',
+        'tagName',
       ]),
     );
     const tag = releases[0]?.tagName;
@@ -186,7 +201,9 @@ function preflight() {
   });
 
   if (failed) {
-    console.log('Preflight failed — resolve the issues above before releasing.');
+    console.log(
+      'Preflight failed — resolve the issues above before releasing.',
+    );
     process.exit(1);
   }
   console.log(`Preflight OK. Last release: ${lastTag}, current: ${version}`);
@@ -218,7 +235,9 @@ function bumpMenu() {
   if (statusAfter !== statusBefore) {
     console.error("ERROR: bump-menu modified the working tree — bumpp's");
     console.error('EOF-abort behavior has changed. Inspect `git status`,');
-    console.error('restore the touched package.json files, and update this script.');
+    console.error(
+      'restore the touched package.json files, and update this script.',
+    );
     process.exit(1);
   }
   const lines = stripVTControlCharacters(
@@ -255,14 +274,18 @@ function prepareReleaseBranch(releaseArg) {
   // self-heal worktree registrations left behind by crashed runs
   run('git', ['worktree', 'prune'], { cwd: root });
   const dir = join(mkdtempSync(join(tmpdir(), 'rstest-release-')), 'wt');
-  run('git', ['worktree', 'add', '--detach', dir, 'origin/main'], { cwd: root });
+  run('git', ['worktree', 'add', '--detach', dir, 'origin/main'], {
+    cwd: root,
+  });
 
   let version;
   let branch;
   try {
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
 
-    console.log(`Bumping (${releaseArg}) in an isolated worktree (from origin/main)...`);
+    console.log(
+      `Bumping (${releaseArg}) in an isolated worktree (from origin/main)...`,
+    );
     // bumpp owns the version arithmetic — the release type passes straight
     // through and the resulting version is read back afterwards.
     // --no-verify: the shared pre-commit hook runs pnpm-backed checks
@@ -285,7 +308,9 @@ function prepareReleaseBranch(releaseArg) {
     run('git', ['switch', '-c', branch], { cwd: dir });
   } catch (e) {
     console.error(String(e.message || e));
-    console.error(`\nThe worktree is left at ${dir} for inspection (git -C ${dir} show HEAD).`);
+    console.error(
+      `\nThe worktree is left at ${dir} for inspection (git -C ${dir} show HEAD).`,
+    );
     console.error(`Clean up with: git worktree remove --force ${dir}`);
     process.exit(1);
   }
@@ -303,7 +328,9 @@ function prepareReleaseBranch(releaseArg) {
 
   console.log(`\nBranch ${branch} is ready (local only). Next:`);
   console.log(`  git push -u origin ${branch}`);
-  console.log(`  gh pr create --title "release: ${version}" --body "Release ${version}" --head ${branch}`);
+  console.log(
+    `  gh pr create --title "release: ${version}" --body "Release ${version}" --head ${branch}`,
+  );
   console.log(`  gh pr checks ${branch} --watch`);
 }
 
@@ -369,8 +396,13 @@ function extractStageIds(runId) {
     );
     const releaseJob = jobs.find((j) => j.name === 'Release');
     log = run('gh', [
-      'run', 'view', '--repo', REPO,
-      '--job', String(releaseJob.databaseId), '--log',
+      'run',
+      'view',
+      '--repo',
+      REPO,
+      '--job',
+      String(releaseJob.databaseId),
+      '--log',
     ]);
   } catch {
     log = run('gh', ['run', 'view', runId, '--repo', REPO, '--log']);
@@ -391,7 +423,9 @@ function extractStageIds(runId) {
       mismatch = [
         missing.length ? `missing: ${missing.join(', ')}` : '',
         unexpected.length ? `unexpected: ${unexpected.join(', ')}` : '',
-      ].filter(Boolean).join('; ');
+      ]
+        .filter(Boolean)
+        .join('; ');
     }
   }
   return { entries, mismatch };
@@ -437,7 +471,9 @@ async function approveStaged(runId) {
   if (mismatch) console.error('Continue only if you understand why.');
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const otp = (await rl.question('\nEnter OTP (from your authenticator): ')).trim();
+  const otp = (
+    await rl.question('\nEnter OTP (from your authenticator): ')
+  ).trim();
   rl.close();
 
   let failures = 0;
@@ -454,7 +490,9 @@ async function approveStaged(runId) {
     }
   }
   const { version } = splitSpec(entries[0][0]);
-  console.log(`\nDone (${entries.length - failures}/${entries.length} approved).`);
+  console.log(
+    `\nDone (${entries.length - failures}/${entries.length} approved).`,
+  );
   console.log(`Verify with: node ${process.argv[1]} verify-live ${version}`);
   process.exit(failures > 0 ? 1 : 0);
 }
@@ -469,7 +507,9 @@ async function verifyLive(version) {
     publicPackageManifests().map(async ({ name }) => {
       try {
         const { stdout } = await execFileAsync('npm', [
-          'view', `${name}@${version}`, 'version',
+          'view',
+          `${name}@${version}`,
+          'version',
         ]);
         return [name, stdout.trim() === version];
       } catch {
@@ -479,11 +519,15 @@ async function verifyLive(version) {
   );
   let missing = 0;
   for (const [name, live] of results) {
-    console.log(live ? `  ✅ ${name}@${version}` : `  ⏳ ${name}@${version} not live yet`);
+    console.log(
+      live ? `  ✅ ${name}@${version}` : `  ⏳ ${name}@${version} not live yet`,
+    );
     if (!live) missing += 1;
   }
   if (missing > 0) {
-    console.log('Not all packages are live. Staged versions stay invisible until approved.');
+    console.log(
+      'Not all packages are live. Staged versions stay invisible until approved.',
+    );
     process.exit(1);
   }
   console.log(`All packages live on npm at ${version}.`);

@@ -10,6 +10,7 @@ autodocs
 Birpc
 brotli
 browserslistrc
+bumpp
 bundleless
 bytedance
 callees
@@ -191,5 +192,6 @@ vnode
 watchpack
 webm
 webp
+worktree
 worktrees
 Zenbook

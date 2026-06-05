@@ -1,6 +1,8 @@
 ---
 name: release
 description: 'Release a new version of all rstest packages: bump, release PR, staged npm publish, maintainer approval, merge, and release notes. Use whenever the user wants to release, publish, ship, bump, or cut a new rstest version, asks to "发版", wants to approve staged npm packages, or wants to resume a release that is stuck partway (e.g. CI done but packages not yet approved or PR not yet merged).'
+metadata:
+  internal: true
 ---
 
 # Rstest release workflow
