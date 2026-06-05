@@ -15,6 +15,7 @@ import type {
   RstestContext,
 } from '../types';
 import { isDebug } from '../utils';
+import { collectSetupPaths } from '../utils/getSetupFiles';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
 import { pluginEntryWatch } from './plugins/entry';
@@ -160,12 +161,7 @@ export const prepareRsbuild = async (
         }),
         pluginExternal(context),
         !isolate
-          ? pluginCacheControl(
-              Object.values({
-                ...setupFiles,
-                ...globalSetupFiles,
-              }).flatMap((files) => Object.values(files)),
-            )
+          ? pluginCacheControl(collectSetupPaths(setupFiles, globalSetupFiles))
           : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
         ...extraPlugins,
@@ -180,10 +176,7 @@ export const prepareRsbuild = async (
       context.rootPath,
     );
     coverage.exclude.push(
-      ...Object.values(setupFiles).flatMap((files) => Object.values(files)),
-      ...Object.values(globalSetupFiles || {}).flatMap((files) =>
-        Object.values(files),
-      ),
+      ...collectSetupPaths(setupFiles, globalSetupFiles || {}),
     );
 
     rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
