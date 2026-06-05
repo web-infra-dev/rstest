@@ -31,6 +31,7 @@ import {
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
 import { castArray, generateFilePathHash } from '../../utils/helper';
+import { fileContext } from '../fileContext';
 import {
   formatName,
   isTemplateStringsArray,
@@ -58,7 +59,7 @@ const SHARED_RUN_MODIFIERS = [
   { name: 'sequential', overrides: { sequential: true } },
 ] as const;
 
-class RunnerRuntime {
+export class RunnerRuntime {
   /** all test cases */
   private readonly tests: Test[] = [];
   /** a calling stack of the current test suites and case */
@@ -94,6 +95,31 @@ class RunnerRuntime {
 
   updateStatus(status: 'running' | 'collect'): void {
     this.status = status;
+  }
+
+  /**
+   * Resolve the source location of the current registration call within this
+   * file. Lives on the runner (not a per-file closure) so a late-bound test API
+   * computes the location against the current file's `testPath`.
+   */
+  getLocation(): Location | undefined {
+    if (!this.runtimeConfig.includeTaskLocation) return undefined;
+    const stack = new Error().stack;
+    if (stack) {
+      const frames = stackTraceParse(stack);
+      for (const frame of frames) {
+        let filename = frame.file ?? '';
+        if (filename.startsWith('file://')) filename = fileURLToPath(filename);
+        // testPath is always unix path style, so convert filename with same way
+        filename = normalize(filename);
+        if (filename === this.testPath) {
+          const line = frame.lineNumber;
+          const column = frame.column;
+          if (line != null && column != null) return { line, column };
+        }
+      }
+    }
+    return undefined;
   }
 
   private checkStatus(name: string, type: 'case' | 'suite'): void {
@@ -510,44 +536,21 @@ class RunnerRuntime {
   }
 }
 
-export const createRuntimeAPI = ({
-  testPath,
-  runtimeConfig,
-  project,
-}: {
-  testPath: string;
-  runtimeConfig: RuntimeConfig;
-  project: string;
-}): {
-  api: Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
-  instance: RunnerRuntime;
-} => {
-  const runtimeInstance: RunnerRuntime = new RunnerRuntime({
-    project,
-    testPath,
-    runtimeConfig,
-  });
+// The running file's collection-phase registrar (see the live-binding
+// contract in `../api`; `createRunner` publishes the context per file).
+const currentRuntime = (): RunnerRuntime => fileContext().runnerRuntime;
 
-  const getLocation = (): Location | undefined => {
-    if (!runtimeConfig.includeTaskLocation) return undefined;
-    const stack = new Error().stack;
-    if (stack) {
-      const frames = stackTraceParse(stack);
-      for (const frame of frames) {
-        let filename = frame.file ?? '';
-        if (filename.startsWith('file://')) filename = fileURLToPath(filename);
-        // testPath is always unix path style, so convert filename with same way
-        filename = normalize(filename);
-        if (filename === testPath) {
-          const line = frame.lineNumber;
-          const column = frame.column;
-          if (line != null && column != null) return { line, column };
-        }
-      }
-    }
-    return undefined;
-  };
+/**
+ * The collection-phase subset of the runner API — everything except the
+ * execution-phase `onTestFinished`/`onTestFailed`, which are added in
+ * runner/index.ts to form the full `runnerAPI`.
+ */
+type CollectionAPI = Omit<RunnerAPI, 'onTestFinished' | 'onTestFailed'>;
 
+// Build the collection-phase surface ONCE at module load (`runtimeAPI` below).
+// Every leaf registration resolves `currentRuntime()` at call time and closes
+// over nothing per-file (see the live-binding contract in `../api`).
+const buildRuntimeAPI = (): CollectionAPI => {
   const createTestAPI = (
     options: {
       concurrent?: boolean;
@@ -560,14 +563,15 @@ export const createRuntimeAPI = ({
   ): TestAPI => {
     const testFn = ((name, fn, testOptions) => {
       const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
-      runtimeInstance.it({
+      const rt = currentRuntime();
+      rt.it({
         name,
         fn,
         timeout,
         retry,
         repeats,
         ...options,
-        location: options.location ?? getLocation(),
+        location: options.location ?? rt.getLocation(),
       });
     }) as TestAPI;
 
@@ -586,31 +590,33 @@ export const createRuntimeAPI = ({
     testFn.runIf = (condition: boolean) =>
       createTestAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? options.runMode : 'skip',
       });
 
     testFn.skipIf = (condition: boolean) =>
       createTestAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? 'skip' : options.runMode,
       });
 
     testFn.each = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.each({ cases, ...options, location });
+      return rt.each({ cases, ...options, location });
     }) as TestEachFn;
 
     testFn.for = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.for({ cases, ...options, location });
+      return rt.for({ cases, ...options, location });
     }) as TestForFn;
 
     return testFn;
@@ -642,13 +648,15 @@ export const createRuntimeAPI = ({
       location?: Location;
     } = {},
   ): DescribeAPI => {
-    const describeFn = ((name, fn) =>
-      runtimeInstance.describe({
+    const describeFn = ((name, fn) => {
+      const rt = currentRuntime();
+      rt.describe({
         name,
         fn,
         ...options,
-        location: options.location ?? getLocation(),
-      })) as DescribeAPI;
+        location: options.location ?? rt.getLocation(),
+      });
+    }) as DescribeAPI;
 
     for (const { name, overrides } of SHARED_RUN_MODIFIERS) {
       Object.defineProperty(describeFn, name, {
@@ -662,30 +670,32 @@ export const createRuntimeAPI = ({
     describeFn.skipIf = (condition: boolean) =>
       createDescribeAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? 'skip' : options.runMode,
       });
     describeFn.runIf = (condition: boolean) =>
       createDescribeAPI({
         ...options,
-        location: getLocation(),
+        location: currentRuntime().getLocation(),
         runMode: condition ? options.runMode : 'skip',
       });
 
     describeFn.each = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.describeEach({ cases, ...options, location });
+      return rt.describeEach({ cases, ...options, location });
     }) as DescribeEachFn;
 
     describeFn.for = ((...args: any[]) => {
-      const location = getLocation();
+      const rt = currentRuntime();
+      const location = rt.getLocation();
       const cases = isTemplateStringsArray(args[0])
         ? parseTemplateTable(args[0], ...args.slice(1))
         : args[0];
-      return runtimeInstance.describeFor({ cases, ...options, location });
+      return rt.describeFor({ cases, ...options, location });
     }) as DescribeForFn;
 
     return describeFn;
@@ -694,15 +704,32 @@ export const createRuntimeAPI = ({
   const describe = createDescribeAPI();
 
   return {
-    api: {
-      describe,
-      it,
-      test: it,
-      afterAll: runtimeInstance.afterAll,
-      beforeAll: runtimeInstance.beforeAll,
-      afterEach: runtimeInstance.afterEach,
-      beforeEach: runtimeInstance.beforeEach,
-    },
-    instance: runtimeInstance,
+    describe,
+    it,
+    test: it,
+    afterAll: (...args) => currentRuntime().afterAll(...args),
+    beforeAll: (...args) => currentRuntime().beforeAll(...args),
+    afterEach: (...args) => currentRuntime().afterEach(...args),
+    beforeEach: (...args) => currentRuntime().beforeEach(...args),
   };
 };
+
+/** The stable collection-phase surface. Built once; see `buildRuntimeAPI`. */
+export const runtimeAPI: CollectionAPI = buildRuntimeAPI();
+
+// Construct this file's `RunnerRuntime`; the caller (`createRunner`) publishes
+// it as part of the file's `FileContext`.
+export const createRuntimeAPI = ({
+  testPath,
+  runtimeConfig,
+  project,
+}: {
+  testPath: string;
+  runtimeConfig: RuntimeConfig;
+  project: string;
+}): RunnerRuntime =>
+  new RunnerRuntime({
+    project,
+    testPath,
+    runtimeConfig,
+  });

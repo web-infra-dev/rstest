@@ -1,4 +1,5 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import path from 'pathe';
 
 class RstestCacheControlPlugin {
   apply(compiler: Rspack.Compiler) {
@@ -56,16 +57,30 @@ export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
   name: 'rstest:cache-control',
   setup: (api) => {
     if (setupFiles.length) {
-      api.transform({ test: setupFiles }, ({ code }) => {
-        // register setup's moduleId
-        return {
-          code: `${code}
+      // `setupFiles` are posix-style paths (pathe), but rspack matches `test`
+      // against the native resource path, which uses `\` on Windows — a raw
+      // string/array `test` would never match there, so the `setupIds` marker
+      // below would not be injected and setup files would stop re-running per
+      // file under `isolate: false`. Compare paths normalized to posix instead.
+      const setupFileSet = new Set(
+        setupFiles.map((file) => path.normalize(file)),
+      );
+      api.transform(
+        {
+          test: (resourcePath) =>
+            setupFileSet.has(path.normalize(resourcePath)),
+        },
+        ({ code }) => {
+          // register setup's moduleId
+          return {
+            code: `${code}
          if (global.setupIds && __webpack_module__.id) {
   global.setupIds.push(__webpack_module__.id);
 }
         `,
-        };
-      });
+          };
+        },
+      );
     }
 
     api.modifyRspackConfig((config) => {

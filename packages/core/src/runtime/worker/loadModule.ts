@@ -153,13 +153,18 @@ const defineRstestDynamicImport =
     });
   };
 
+// Persistent asset map for the kept runtime chunk under `isolate: false` (the
+// per-module hooks closed over this reference). Mirrors the ESM loader — see
+// `loadEsModule.ts` for the full rationale.
+const accumulatedAssetFiles: Record<string, string> = {};
+
 // setup and rstest module should not be cached
 export const loadModule = ({
   codeContent,
   distPath,
   testPath,
   rstestContext,
-  assetFiles,
+  assetFiles: assetFilesArg,
   interopDefault,
 }: {
   interopDefault: boolean;
@@ -169,6 +174,12 @@ export const loadModule = ({
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): any => {
+  // Fold this file's assets into the persistent map. Recursive loads (require /
+  // dynamic imports) re-pass that same map, so skip the no-op self-merge.
+  if (assetFilesArg !== accumulatedAssetFiles) {
+    Object.assign(accumulatedAssetFiles, assetFilesArg);
+  }
+  const assetFiles = accumulatedAssetFiles;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -277,7 +288,27 @@ export const cacheableLoadModule = ({
   return mod;
 };
 
-export const clearModuleCache = (): void => {
-  moduleCache.clear();
+/**
+ * Reset the per-worker module cache between test files.
+ *
+ * Mirrors the ESM loader: with `isolate: false` the shared runtime chunk owns
+ * the only `__webpack_module_cache__`, so keeping it (via `keep`) preserves the
+ * module-scope state of every already-evaluated non-entry module across files.
+ * See https://github.com/web-infra-dev/rstest/issues/1373.
+ */
+export const clearModuleCache = (keep?: string): void => {
+  if (keep) {
+    for (const key of moduleCache.keys()) {
+      if (key !== keep) {
+        moduleCache.delete(key);
+      }
+    }
+  } else {
+    moduleCache.clear();
+    // Nothing is kept, so no hook holds a reference to the accumulated assets.
+    for (const key of Object.keys(accumulatedAssetFiles)) {
+      delete accumulatedAssetFiles[key];
+    }
+  }
   clearSyntheticModuleCache();
 };

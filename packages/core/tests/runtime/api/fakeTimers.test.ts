@@ -1,20 +1,5 @@
-import { createRstestUtilities } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
-import type { WorkerState } from '../../../src/types';
-
-function createWorkerState(): WorkerState {
-  return {
-    runtimeConfig: {
-      testTimeout: 1_000,
-      hookTimeout: 1_000,
-      clearMocks: false,
-      resetMocks: false,
-      restoreMocks: false,
-      maxConcurrency: 5,
-      retry: 0,
-    },
-  } as WorkerState;
-}
+import { createUtilities } from './helpers';
 
 describe('fake timers API', () => {
   beforeEach(() => {
@@ -22,7 +7,7 @@ describe('fake timers API', () => {
   });
 
   it('useFakeTimers not throws when specifies `toNotFake`', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     expect(() =>
       rs.useFakeTimers({ toNotFake: ['setImmediate'] }),
@@ -32,7 +17,7 @@ describe('fake timers API', () => {
   });
 
   it('useFakeTimers filters out timers in toNotFake', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     rs.useFakeTimers({ toNotFake: ['setTimeout'] });
 
